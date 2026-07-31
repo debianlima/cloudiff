@@ -1,0 +1,13 @@
+[Unit]
+Description=CloudIF automatic project backups
+After=docker.service network-online.target
+Wants=network-online.target
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/cloudif-project-backup-auto.py
+User=root
+Group=root
+UMask=0077
+Nice=15
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7

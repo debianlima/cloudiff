@@ -1,0 +1,94 @@
+{
+  "ok": true,
+  "hosts": {
+    "control": {
+      "current-apps": {
+        "live": 42,
+        "repository": 42,
+        "missing": []
+      },
+      "sbin": {
+        "live": 68,
+        "repository": 68,
+        "missing": []
+      },
+      "systemd": {
+        "live": 114,
+        "repository": 121,
+        "missing": []
+      },
+      "lib": {
+        "live": 25,
+        "repository": 25,
+        "missing": []
+      },
+      "tests": {
+        "live": 3,
+        "repository": 3,
+        "missing": []
+      },
+      "bin": {
+        "live": 30,
+        "repository": 30,
+        "missing": []
+      },
+      "staging": {
+        "live": 1,
+        "repository": 1,
+        "missing": []
+      }
+    },
+    "runtime": {
+      "current-apps": {
+        "live": 9,
+        "repository": 9,
+        "missing": []
+      },
+      "sbin": {
+        "live": 11,
+        "repository": 11,
+        "missing": []
+      },
+      "systemd": {
+        "live": 19,
+        "repository": 20,
+        "missing": []
+      },
+      "test-fixtures": {
+        "live": 4,
+        "repository": 4,
+        "missing": []
+      }
+    },
+    "proxy": {
+      "current-apps": {
+        "live": 4,
+        "repository": 4,
+        "missing": []
+      },
+      "sbin": {
+        "live": 10,
+        "repository": 10,
+        "missing": []
+      },
+      "systemd": {
+        "live": 21,
+        "repository": 21,
+        "missing": []
+      },
+      "nginx-custom": {
+        "live": 1,
+        "repository": 1,
+        "missing": []
+      }
+    }
+  },
+  "intentional_exclusions": [
+    "credentials and .env values",
+    "private keys and certificates",
+    "databases and logs",
+    "backups and historical releases",
+    "Trivy cache and generated scan reports",
+    "runtime volumes and published snapshots"
+  ]
+}

@@ -1,0 +1,16 @@
+[Unit]
+Description=CloudIF Machine Administration PostgreSQL Backup
+After=docker.service cloudif-machine-controller.service
+Requires=docker.service
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/cloudif-machine-admin-db-backup.sh
+User=root
+Group=root
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadOnlyPaths=/etc/cloudif
+ReadWritePaths=/srv/cloudif/managed-backups/machine-admin-postgres /tmp

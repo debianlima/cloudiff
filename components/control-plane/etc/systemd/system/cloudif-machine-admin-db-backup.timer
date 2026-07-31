@@ -1,0 +1,9 @@
+[Unit]
+Description=Daily CloudIF Machine Administration PostgreSQL Backup
+[Timer]
+OnCalendar=*-*-* 02:20:00 UTC
+RandomizedDelaySec=20m
+Persistent=true
+Unit=cloudif-machine-admin-db-backup.service
+[Install]
+WantedBy=timers.target

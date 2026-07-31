@@ -1,0 +1,43 @@
+{
+  "remote_endpoints": [
+    {
+      "name": "Painel administrativo",
+      "host": "127.0.0.1",
+      "port": 443,
+      "server_name": "admin.cloudiff.duckdns.org"
+    },
+    {
+      "name": "Portal CloudIF",
+      "host": "127.0.0.1",
+      "port": 443,
+      "server_name": "cloudiff.duckdns.org"
+    },
+    {
+      "name": "Authentik",
+      "host": "127.0.0.1",
+      "port": 443,
+      "server_name": "authiff.duckdns.org"
+    },
+    {
+      "name": "Komodo",
+      "host": "127.0.0.1",
+      "port": 443,
+      "server_name": "komodoiff.duckdns.org"
+    },
+    {
+      "name": "Supabase",
+      "host": "127.0.0.1",
+      "port": 443,
+      "server_name": "supabaseiff.duckdns.org"
+    }
+  ],
+  "local_paths": [
+    "/srv/cloudif/proxy/npm/letsencrypt/live",
+    "/etc/cloudif/certificates",
+    "/etc/cloudif/machine-agent"
+  ],
+  "warning_days": 30,
+  "critical_days": 14,
+  "urgent_days": 7,
+  "max_local_files": 80
+}

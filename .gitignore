@@ -2,6 +2,7 @@
 .env
 .env.*
 *.env
+!*.env.example
 *.pem
 *.key
 *.crt
@@ -34,8 +35,12 @@ jobs/
 *.bak
 *.bkp*
 *.old
-*backup*
 __pycache__/
 *.pyc
 node_modules/
 .DS_Store
+
+!config/**/*.env.example
+!components/runtime/srv/cloudif/scanners/*.env.example
+
+!components/proxy/srv/cloudif/proxy/npm/data/nginx/custom/http.conf

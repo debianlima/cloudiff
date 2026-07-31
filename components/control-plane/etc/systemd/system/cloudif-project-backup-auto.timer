@@ -1,0 +1,8 @@
+[Unit]
+Description=Daily CloudIF project backups
+[Timer]
+OnCalendar=*-*-* 02:50:00
+Persistent=true
+RandomizedDelaySec=10m
+[Install]
+WantedBy=timers.target

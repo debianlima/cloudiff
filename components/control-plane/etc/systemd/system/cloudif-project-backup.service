@@ -1,0 +1,14 @@
+[Unit]
+Description=CloudIF automatic project backups
+After=docker.service cloudif-admin-portal.service
+Requires=docker.service
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/cloudif-project-backup.py run-enabled
+User=root
+Group=root
+Nice=10
+IOSchedulingClass=idle
+PrivateTmp=yes
+NoNewPrivileges=yes
+ProtectHome=yes

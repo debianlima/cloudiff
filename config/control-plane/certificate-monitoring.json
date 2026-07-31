@@ -1,0 +1,47 @@
+{
+  "remote_endpoints": [
+    {
+      "name": "Painel administrativo",
+      "host": "admin.cloudiff.duckdns.org",
+      "port": 443
+    },
+    {
+      "name": "Portal CloudIF",
+      "host": "cloudiff.duckdns.org",
+      "port": 443
+    },
+    {
+      "name": "Authentik",
+      "host": "authiff.duckdns.org",
+      "port": 443
+    },
+    {
+      "name": "Komodo",
+      "host": "komodoiff.duckdns.org",
+      "port": 443
+    },
+    {
+      "name": "Supabase",
+      "host": "supabaseiff.duckdns.org",
+      "port": 443
+    },
+    {
+      "name": "Samba AD LDAPS",
+      "host": "10.68.128.252",
+      "server_name": "PELEGO.laboratorios.bomjesus.iff.edu.br",
+      "port": 636
+    }
+  ],
+  "local_paths": [
+    "/etc/cloudif/certificates",
+    "/srv/cloudif/certificates",
+    "/etc/cloudif/machine-agent",
+    "/var/lib/cloudif-agent-pki/root/certs",
+    "/var/lib/cloudif-agent-pki/issuing/certs",
+    "/var/lib/cloudif-agent-pki/issued"
+  ],
+  "warning_days": 30,
+  "critical_days": 14,
+  "urgent_days": 7,
+  "max_local_files": 40
+}

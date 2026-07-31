@@ -1,0 +1,10 @@
+[Unit]
+Description=Daily CloudIF NPM backup
+
+[Timer]
+OnCalendar=*-*-* 02:40:00
+Persistent=true
+RandomizedDelaySec=10m
+
+[Install]
+WantedBy=timers.target

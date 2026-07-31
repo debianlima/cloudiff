@@ -1,0 +1,14 @@
+[Unit]
+Description=CloudIF restorable backup of tenant PostgreSQL databases
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/cloudif-tenant-db-backup-v2.sh
+Nice=15
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+UMask=0077
+PrivateTmp=true
+ProtectHome=true

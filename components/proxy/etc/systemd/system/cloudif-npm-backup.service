@@ -1,0 +1,14 @@
+[Unit]
+Description=CloudIF Nginx Proxy Manager backup
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/cloudif-npm-backup.sh
+UMask=0077
+Nice=15
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+PrivateTmp=true
+ProtectHome=true

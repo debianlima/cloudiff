@@ -1,0 +1,9 @@
+[Unit]
+Description=Daily CloudIF Machine Administration DR Backup
+[Timer]
+OnCalendar=*-*-* 03:10:00 UTC
+RandomizedDelaySec=20m
+Persistent=true
+Unit=cloudif-machine-admin-dr-backup.service
+[Install]
+WantedBy=timers.target

@@ -2,26 +2,33 @@
   "repository": "cloudiff",
   "visibility": "public",
   "sanitized": true,
+  "validation": "scripts/validate.sh",
+  "coverage_audit": "docs/COVERAGE_AUDIT.json",
   "sections": {
     "components/control-plane": {
-      "files": 247,
-      "directories": 46,
-      "bytes": 2220570
+      "files": 299,
+      "directories": 48,
+      "bytes": 2505604
     },
     "components/runtime": {
-      "files": 88,
-      "directories": 49,
-      "bytes": 585943
+      "files": 95,
+      "directories": 54,
+      "bytes": 587190
     },
     "components/proxy": {
-      "files": 32,
-      "directories": 9,
-      "bytes": 64899
+      "files": 36,
+      "directories": 16,
+      "bytes": 104930
     },
     "tenant-templates": {
       "files": 129,
       "directories": 19,
       "bytes": 1446094
+    },
+    "config": {
+      "files": 50,
+      "directories": 3,
+      "bytes": 23579
     }
   }
 }

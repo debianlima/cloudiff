@@ -1,0 +1,24 @@
+{
+  "remote_endpoints": [
+    {
+      "name": "Authentik público",
+      "host": "authiff.duckdns.org",
+      "port": 443
+    },
+    {
+      "name": "Authentik local",
+      "host": "127.0.0.1",
+      "server_name": "authiff.duckdns.org",
+      "port": 9443
+    }
+  ],
+  "local_paths": [
+    "/etc/cloudif/certificates",
+    "/srv/cloudif/certificates",
+    "/etc/cloudif/machine-agent"
+  ],
+  "warning_days": 30,
+  "critical_days": 14,
+  "urgent_days": 7,
+  "max_local_files": 40
+}

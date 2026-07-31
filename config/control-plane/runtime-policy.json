@@ -1,0 +1,27 @@
+{
+  "schema_version":1,
+  "policy_version":"2026.07.28.1",
+  "production_effects_enabled":false,
+  "runtimes":{"node":{"versions":["20","22","24"],"default":"24"}},
+  "images":{"static":{"reference":"nginx@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10","non_root":true}},
+  "frameworks":{
+    "static":{"runtime":null,"package_managers":[],"install":null,"build":null,"output":"site","start":null,"port":80},
+    "react":{"runtime":"node","package_managers":["npm","pnpm","yarn"],"install":{"npm":"npm ci","pnpm":"pnpm install --frozen-lockfile","yarn":"yarn install --frozen-lockfile"},"build":{"npm":"npm run build","pnpm":"pnpm build","yarn":"yarn build"},"output":"build","port":80},
+    "vite":{"runtime":"node","package_managers":["npm","pnpm","yarn"],"install":{"npm":"npm ci","pnpm":"pnpm install --frozen-lockfile","yarn":"yarn install --frozen-lockfile"},"build":{"npm":"npm run build","pnpm":"pnpm build","yarn":"yarn build"},"output":"dist","port":80},
+    "nextjs":{"runtime":"node","package_managers":["npm","pnpm","yarn"],"install":{"npm":"npm ci","pnpm":"pnpm install --frozen-lockfile","yarn":"yarn install --frozen-lockfile"},"build":{"npm":"npm run build","pnpm":"pnpm build","yarn":"yarn build"},"start":{"npm":"npm start","pnpm":"pnpm start","yarn":"yarn start"},"output":".next","port":3000},
+    "vue":{"runtime":"node","package_managers":["npm","pnpm","yarn"],"output":"dist","port":80},
+    "nuxt":{"runtime":"node","package_managers":["npm","pnpm","yarn"],"output":".output","port":3000},
+    "angular":{"runtime":"node","package_managers":["npm","pnpm","yarn"],"output":"dist","port":80},
+    "svelte":{"runtime":"node","package_managers":["npm","pnpm","yarn"],"output":"public","port":80},
+    "sveltekit":{"runtime":"node","package_managers":["npm","pnpm","yarn"],"output":"build","port":3000},
+    "astro":{"runtime":"node","package_managers":["npm","pnpm","yarn"],"output":"dist","port":80},
+    "express":{"runtime":"node","package_managers":["npm","pnpm","yarn"],"output":null,"port":3000},
+    "nestjs":{"runtime":"node","package_managers":["npm","pnpm","yarn"],"output":"dist","port":3000},
+    "node":{"runtime":"node","package_managers":["npm","pnpm","yarn"],"output":null,"port":3000}
+  },
+  "ports":[80,3000,4173,8080],
+  "limits":{"cpu":2,"memory_mb":2048,"pids":256,"build_timeout_seconds":900,"max_image_mb":1024},
+  "lockfiles":{"npm":"package-lock.json","pnpm":"pnpm-lock.yaml","yarn":"yarn.lock"},
+  "required_scanners":["sbom","vulnerability"],
+  "severity_policy":{"critical":"block","high":"block"}
+}

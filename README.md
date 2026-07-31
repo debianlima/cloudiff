@@ -56,3 +56,18 @@ O código foi exportado dos nós ativos da plataforma e sanitizado antes do comm
 ## Licença e uso
 
 Uso institucional. Antes de publicar este repositório como público, revise políticas internas, dependências de terceiros e informações de arquitetura.
+
+## Validação e manutenção
+
+Antes de enviar alterações:
+
+```bash
+scripts/validate.sh
+```
+
+Consulte:
+
+- `docs/MAINTENANCE.md` para o fluxo de edição e promoção;
+- `docs/REPOSITORY_AUDIT.md` para a auditoria de cobertura;
+- `docs/COVERAGE_AUDIT.json` para a comparação com os hosts ativos;
+- `docs/INVENTORY.json` para o inventário de arquivos.
