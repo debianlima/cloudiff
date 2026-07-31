@@ -1,0 +1,15 @@
+[Unit]
+Description=CloudIF UI and security review
+After=network-online.target cloudif-admin-portal.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/cloudif-ui-security-review-run.sh
+User=root
+Group=root
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=full
+ReadWritePaths=/srv/cloudif/documentacao/security-reviews /var/lib/cloudif-machine-admin /usr/local/sbin/__pycache__ /srv/cloudif/lib/__pycache__
+ProtectHome=yes

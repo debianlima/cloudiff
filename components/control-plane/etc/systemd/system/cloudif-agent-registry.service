@@ -1,0 +1,16 @@
+[Unit]
+Description=CloudIF internal agent client registry
+After=network.target
+[Service]
+Type=simple
+User=cloudif-control
+Group=cloudif-control
+EnvironmentFile=/etc/cloudif/agent-registry.env
+ExecStart=/usr/bin/python3 /srv/cloudif/app-pointers/agent-registry-current/cloudif-agent-registry.py
+Restart=on-failure
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/cloudif/agents
+ReadOnlyPaths=/srv/cloudif/app-releases/agent-registry /srv/cloudif/app-pointers
+[Install]
+WantedBy=multi-user.target

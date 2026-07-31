@@ -1,0 +1,10 @@
+[Unit]
+Description=CloudIF Machine Guardian schedule
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=3min
+RandomizedDelaySec=20s
+Persistent=true
+Unit=cloudif-machine-guardian.service
+[Install]
+WantedBy=timers.target

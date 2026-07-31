@@ -1,0 +1,18 @@
+[Unit]
+Description=CloudIF read-only project control plane API
+After=network.target cloudif-control-plane-sync.service
+[Service]
+Type=simple
+User=cloudif-control
+Group=cloudif-control
+EnvironmentFile=/etc/cloudif/control-plane.env
+ExecStart=/usr/bin/python3 /usr/local/sbin/cloudif-control-plane-api.py
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadOnlyPaths=/var/lib/cloudif/control-plane
+[Install]
+WantedBy=multi-user.target

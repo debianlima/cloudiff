@@ -1,0 +1,10 @@
+[Unit]
+Description=CloudIF NPM healthcheck every 10 minutes
+
+[Timer]
+OnBootSec=3m
+OnUnitActiveSec=10m
+Persistent=true
+
+[Install]
+WantedBy=timers.target

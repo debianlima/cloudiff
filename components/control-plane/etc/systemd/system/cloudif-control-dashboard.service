@@ -1,0 +1,19 @@
+[Unit]
+Description=CloudIF internal mobile-first control dashboard
+After=cloudif-control-plane-api.service cloudif-monitor-api.service cloudif-academic-audit.service cloudif-notification-api.service cloudif-agent-registry.service cloudif-approval-api.service cloudif-evaluation-api.service
+Wants=cloudif-control-plane-api.service cloudif-monitor-api.service cloudif-academic-audit.service cloudif-notification-api.service cloudif-agent-registry.service cloudif-approval-api.service cloudif-evaluation-api.service
+[Service]
+Type=simple
+User=cloudif-control
+Group=cloudif-control
+EnvironmentFile=/etc/cloudif/control-dashboard.env
+ExecStart=/usr/bin/python3 /srv/cloudif/app-pointers/control-dashboard-current/cloudif-control-dashboard.py
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadOnlyPaths=/var/lib/cloudif/access-ingest /srv/cloudif/app-releases/control-dashboard /srv/cloudif/app-pointers
+[Install]
+WantedBy=multi-user.target

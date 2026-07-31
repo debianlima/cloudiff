@@ -1,0 +1,18 @@
+[Unit]
+Description=CloudIF Agent PKI CRL Refresh
+After=docker.service cloudif-machine-controller.service
+Requires=docker.service
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/cloudif/machine-controller-db.env
+Environment=PYTHONPATH=/srv/cloudif/lib
+ExecStart=/usr/local/sbin/cloudif-agent-pki.py refresh-crl --actor system:crl-timer
+User=root
+Group=root
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadOnlyPaths=/etc/cloudif /srv/cloudif/lib
+ReadWritePaths=/var/lib/cloudif-agent-pki /srv/cloudif/router/mtls /srv/cloudif/router/logs /var/run/docker.sock /tmp

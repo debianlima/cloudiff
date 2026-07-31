@@ -1,0 +1,15 @@
+[Unit]
+Description=Monthly CloudIF disposable restore validation
+After=docker.service cloudif-tenant-db-backup-v2.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/cloudif-monthly-restore-test.sh
+Nice=15
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+UMask=0077
+PrivateTmp=false
+ProtectHome=true
+TimeoutStartSec=45min

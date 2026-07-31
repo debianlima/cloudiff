@@ -1,0 +1,19 @@
+[Unit]
+Description=CloudIF reconcile all projects into identities and connectors
+After=cloudif-agent-registry.service cloudif-control-plane-sync.service
+[Service]
+Type=oneshot
+User=root
+Group=root
+EnvironmentFile=/etc/cloudif/project-onboarding.env
+ExecStartPre=+/usr/bin/systemctl start cloudif-control-plane-sync.service
+ExecStart=/usr/bin/python3 /srv/cloudif/app-pointers/project-onboarding-current/cloudif-project-onboarding-run.py
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadOnlyPaths=/var/lib/cloudif/control-plane /srv/cloudif/app-releases/project-onboarding /srv/cloudif/app-pointers /etc/cloudif
+ReadWritePaths=/var/lib/cloudif/onboarding
+IPAddressDeny=any
+IPAddressAllow=127.0.0.0/8
+IPAddressAllow=10.62.92.7/32
+IPAddressAllow=10.62.91.2/32

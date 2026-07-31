@@ -1,0 +1,14 @@
+[Unit]
+Description=CloudIF Forja Integration Agent v4
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/cloudif/forja-agent.env
+ExecStart=/usr/bin/python3 /srv/cloudif/app-pointers/forja-agent-current/cloudif-forja-agent.py
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

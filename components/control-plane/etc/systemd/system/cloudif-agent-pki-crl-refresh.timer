@@ -1,0 +1,9 @@
+[Unit]
+Description=Daily CloudIF Agent PKI CRL Refresh
+[Timer]
+OnCalendar=*-*-* 01:40:00 UTC
+RandomizedDelaySec=15m
+Persistent=true
+Unit=cloudif-agent-pki-crl-refresh.service
+[Install]
+WantedBy=timers.target

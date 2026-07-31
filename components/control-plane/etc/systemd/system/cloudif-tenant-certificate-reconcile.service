@@ -1,0 +1,10 @@
+[Unit]
+Description=CloudIF tenant TLS certificate reconciliation
+After=network-online.target docker.service cloudif-admin-portal.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/cloudif-reconcile-tenant-certificates.py
+TimeoutStartSec=45min
+Nice=10

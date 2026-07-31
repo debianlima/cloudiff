@@ -1,0 +1,8 @@
+services:
+  web:
+    image: nginx:1.27-alpine
+    container_name: cloudif-teste-2-web
+    restart: unless-stopped
+    labels:
+      - "cloudif.project=teste-2"
+      - "cloudif.generated=portal"

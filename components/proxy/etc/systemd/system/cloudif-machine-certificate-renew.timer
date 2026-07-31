@@ -1,0 +1,9 @@
+[Unit]
+Description=Daily CloudIF Machine Agent mTLS Certificate Renewal Check
+[Timer]
+OnCalendar=*-*-* 04:10:00 UTC
+RandomizedDelaySec=30m
+Persistent=true
+Unit=cloudif-machine-certificate-renew.service
+[Install]
+WantedBy=timers.target

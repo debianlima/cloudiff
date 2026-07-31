@@ -1,0 +1,7 @@
+[Unit]
+Description=CloudIF conservative data retention
+After=cloudif-control-plane-smoke.service
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /usr/local/sbin/cloudif-data-retention.py
+TimeoutStartSec=10min

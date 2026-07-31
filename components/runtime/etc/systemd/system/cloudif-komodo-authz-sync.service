@@ -1,0 +1,13 @@
+[Unit]
+Description=CloudIF sync Authentik administrative groups to Komodo permissions
+After=docker.service network-online.target
+Requires=docker.service
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/cloudif-komodo-authz-sync.py
+User=root
+Group=root
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ReadWritePaths=/var/lib/cloudif

@@ -1,0 +1,22 @@
+[Unit]
+Description=CloudIF Portal QA isolated
+After=network-online.target
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/cloudif/portal-qa.env
+ExecStart=/usr/bin/python3 /srv/cloudif-qa/cloudif-admin-portal.py
+Restart=always
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictRealtime=true
+
+[Install]
+WantedBy=multi-user.target

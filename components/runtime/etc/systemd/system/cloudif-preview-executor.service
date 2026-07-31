@@ -1,0 +1,19 @@
+[Unit]
+Description=CloudIF isolated preview executor
+After=docker.service network-online.target
+Requires=docker.service
+[Service]
+Type=simple
+User=root
+Group=root
+EnvironmentFile=/etc/cloudif/preview-executor.env
+ExecStart=/usr/bin/python3 /srv/cloudif/app-pointers/preview-executor-current/cloudif-preview-executor.py
+Restart=on-failure
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/cloudif/preview-executor /var/run/docker.sock
+ReadOnlyPaths=/etc/cloudif/preview-executor.env /etc/komodo/stacks /srv/cloudif/app-releases/preview-executor /srv/cloudif/app-pointers
+[Install]
+WantedBy=multi-user.target

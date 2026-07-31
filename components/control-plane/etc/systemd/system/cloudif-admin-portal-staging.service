@@ -1,0 +1,30 @@
+[Unit]
+Description=CloudIF Admin Portal Staging Read-Only
+After=network.target
+
+[Service]
+Type=simple
+User=cloudif-staging
+Group=cloudif-staging
+Environment=CLOUDIF_PORTAL_HOST=127.0.0.1
+Environment=CLOUDIF_PORTAL_PORT=18194
+Environment=CLOUDIF_PORTAL_BASE_PATH=/cloudiff/staging
+Environment=CLOUDIF_PORTAL_DB=/var/lib/cloudif/staging/cloudif-portal-staging.db
+Environment=CLOUDIF_BASE=/srv/cloudif
+ExecStart=/usr/bin/python3 /srv/cloudif/staging/cloudif-admin-portal-staging.py
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+ReadOnlyPaths=/srv/cloudif /usr/local/sbin
+ReadWritePaths=/var/lib/cloudif/staging
+
+[Install]
+WantedBy=multi-user.target

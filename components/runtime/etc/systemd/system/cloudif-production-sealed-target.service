@@ -1,0 +1,20 @@
+[Unit]
+Description=CloudIF sealed real production target
+After=network-online.target
+[Service]
+Type=simple
+User=root
+Group=root
+ExecStart=/usr/bin/python3 /srv/cloudif/app-pointers/production-sealed-target-current/cloudif-production-sealed-target.py
+Restart=on-failure
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadOnlyPaths=/srv/cloudif/app-releases/production-sealed-target /srv/cloudif/app-pointers /var/lib/cloudif/production-sealed-target/state.json
+IPAddressDeny=any
+IPAddressAllow=localhost
+IPAddressAllow=10.62.91.2/32
+IPAddressAllow=10.62.91.3/32
+[Install]
+WantedBy=multi-user.target

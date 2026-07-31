@@ -1,0 +1,15 @@
+[Unit]
+Description=CloudIF preview expiry cleanup with dedicated credential
+After=cloudif-preview-broker.service
+Requires=cloudif-preview-broker.service
+[Service]
+Type=oneshot
+User=cloudif-control
+Group=cloudif-control
+EnvironmentFile=/etc/cloudif/preview-cleanup.env
+ExecStart=/usr/bin/python3 /srv/cloudif/app-pointers/preview-broker-current/cloudif-preview-cleanup-client.py
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadOnlyPaths=/etc/cloudif/preview-cleanup.env /srv/cloudif/app-releases/preview-broker /srv/cloudif/app-pointers

@@ -1,0 +1,7 @@
+[Unit]
+Description=CloudIF publication certificate renewal
+After=docker.service
+Requires=docker.service
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/cloudif-publication-cert-renew.sh

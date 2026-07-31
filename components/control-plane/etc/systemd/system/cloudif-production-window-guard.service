@@ -1,0 +1,17 @@
+[Unit]
+Description=CloudIF production window guard and automatic reseal
+After=network-online.target
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /srv/cloudif/app-pointers/production-window-guard-current/cloudif-production-window-guard.py
+User=root
+Group=root
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadOnlyPaths=/srv/cloudif/app-releases/production-window-guard /srv/cloudif/app-pointers
+ReadWritePaths=/etc/cloudif /var/lib/cloudif/production-window-guard
+IPAddressDeny=any
+IPAddressAllow=localhost
+IPAddressAllow=10.62.91.3/32

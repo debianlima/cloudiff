@@ -1,0 +1,19 @@
+[Unit]
+Description=CloudIF disposable production homologation executor
+After=docker.service network-online.target
+Requires=docker.service
+[Service]
+Type=simple
+User=root
+Group=root
+EnvironmentFile=/etc/cloudif/production-homologation-executor.env
+ExecStart=/usr/bin/python3 /srv/cloudif/app-pointers/production-homologation-executor-current/cloudif-production-homologation-executor.py
+Restart=on-failure
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/cloudif/production-homologation /var/run/docker.sock /var/lib/cloudif/artifact-executor
+ReadOnlyPaths=/etc/cloudif/production-homologation-executor.env /srv/cloudif/app-releases/production-homologation-executor /srv/cloudif/app-pointers
+[Install]
+WantedBy=multi-user.target

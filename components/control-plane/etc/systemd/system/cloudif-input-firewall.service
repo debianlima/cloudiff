@@ -1,0 +1,12 @@
+[Unit]
+Description=CloudIF restricted input policy
+After=network-online.target docker.service cloudif-firewall-8099.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/cloudif-input-firewall.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

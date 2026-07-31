@@ -1,0 +1,10 @@
+[Unit]
+Description=CloudIF Machine Harvester schedule
+[Timer]
+OnBootSec=45s
+OnUnitActiveSec=2min
+RandomizedDelaySec=15s
+Persistent=true
+Unit=cloudif-machine-harvester.service
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,8 @@
+[Unit]
+Description=Reconcile CloudIF agents when onboarding changes
+TriggerLimitIntervalSec=0
+[Path]
+PathChanged=/var/lib/cloudif/onboarding/onboarding.db
+Unit=cloudif-agent-controller.service
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,25 @@
+services:
+  web:
+    image: nginxinc/nginx-unprivileged:1.27-alpine
+    container_name: cloudif-p${CLOUDIF_PUBLIC_NUMBER}-d${CLOUDIF_DEPLOY_NUMBER}-web
+    restart: unless-stopped
+    read_only: true
+    user: "101:101"
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m
+      - /var/cache/nginx:rw,noexec,nosuid,size=16m
+      - /var/run:rw,noexec,nosuid,size=4m
+    volumes:
+      - ./site:/usr/share/nginx/html:ro
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O- http://127.0.0.1:80/__cloudif_health >/dev/null"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+    networks: [cloudif-publications]
+networks:
+  cloudif-publications:
+    external: true

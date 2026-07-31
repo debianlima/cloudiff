@@ -1,0 +1,12 @@
+[Unit]
+Description=Push CloudIF aggregated access telemetry to portal
+After=network-online.target cloudif-access-collector.service
+[Service]
+Type=oneshot
+User=cloudif-telemetry
+Group=cloudif-telemetry
+EnvironmentFile=/etc/cloudif/access-push.env
+ExecStart=/usr/bin/python3 /srv/cloudif/app-pointers/access-telemetry-current/cloudif-access-push.py
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadOnlyPaths=/var/lib/cloudif/access-telemetry /srv/cloudif/app-releases/access-telemetry /srv/cloudif/app-pointers

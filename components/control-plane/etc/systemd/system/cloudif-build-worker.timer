@@ -1,0 +1,10 @@
+[Unit]
+Description=CloudIF build queue scheduler
+[Timer]
+OnBootSec=20s
+OnUnitActiveSec=15s
+AccuracySec=3s
+Persistent=true
+Unit=cloudif-build-worker.service
+[Install]
+WantedBy=timers.target

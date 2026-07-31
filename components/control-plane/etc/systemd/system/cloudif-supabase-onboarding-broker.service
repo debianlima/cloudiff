@@ -1,0 +1,21 @@
+[Unit]
+Description=CloudIF controlled Supabase onboarding broker
+After=docker.service cloudif-control-plane-sync.service
+[Service]
+Type=simple
+User=root
+Group=root
+EnvironmentFile=/etc/cloudif/supabase-onboarding-broker.env
+ExecStart=/usr/bin/python3 /srv/cloudif/app-pointers/supabase-onboarding-broker-current/cloudif-supabase-onboarding-broker.py
+Restart=always
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadOnlyPaths=/var/lib/cloudif/control-plane /srv/cloudif/app-releases/supabase-onboarding-broker /srv/cloudif/app-pointers /srv/cloudif/bin /srv/cloudif/lib /etc/cloudif
+ReadWritePaths=/srv/cloudif/tenants /var/lib/cloudif /run /tmp
+IPAddressDeny=any
+IPAddressAllow=127.0.0.0/8
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+source /etc/cloudif/komodo-mongo.env
+
+if [ "$#" -eq 0 ]; then
+  docker exec -it "$KOMODO_MONGO_CONTAINER" \
+    mongosh "$KOMODO_MONGO_DB" \
+    -u "$KOMODO_MONGO_USER" \
+    -p "$KOMODO_MONGO_PASS" \
+    --authenticationDatabase "$KOMODO_MONGO_AUTH_DB"
+else
+  JS="$*"
+  docker exec -i "$KOMODO_MONGO_CONTAINER" \
+    mongosh "$KOMODO_MONGO_DB" \
+    --quiet \
+    -u "$KOMODO_MONGO_USER" \
+    -p "$KOMODO_MONGO_PASS" \
+    --authenticationDatabase "$KOMODO_MONGO_AUTH_DB" \
+    --eval "$JS"
+fi

@@ -1,0 +1,342 @@
+# CloudIF router v170 - subdomain tenants + legacy /supabase/<tenant>
+
+map $http_upgrade $connection_upgrade {
+    default upgrade;
+    '' close;
+}
+
+map $host $cloudif_host_tenant {
+    default "";
+    ~^([A-Za-z0-9_.-]+)\.cloudiff\.duckdns\.org$ $1;
+}
+
+map $http_referer $cloudif_referer_tenant {
+    default "";
+    ~*/supabase/([^/]+)/ $1;
+    ~^https?://([A-Za-z0-9_.-]+)\.cloudiff\.duckdns\.org/ $1;
+}
+
+map "$cloudif_host_tenant:$cookie_cloudif_tenant:$cloudif_referer_tenant" $cloudif_effective_tenant {
+    default "";
+    ~^([^:]+):.*:.*$ $1;
+    ~^:([^:]+):.*$ $1;
+    ~^::([^:]+)$ $1;
+}
+
+map $cloudif_host_tenant $cloudif_is_subdomain_tenant {
+    default 1;
+    "" 0;
+}
+
+map $cloudif_effective_tenant $cloudif_kong_port {
+    default "";
+    akadmin 8102;
+    iff1742962 8101;
+}
+
+map $cloudif_effective_tenant $cloudif_basic_auth_header {
+    default "";
+    akadmin "Basic Y2xvdWRpZjpEeFBWZHhHUEhsR3ZIR3hjRFZUa0FH";
+    iff1742962 "Basic Y2xvdWRpZjptbHRiaWk4bHpURE9FUW8waUZFbjVO";
+}
+
+server {
+    listen 10.62.92.7:8099;
+    server_name cloudiff.duckdns.org *.cloudiff.duckdns.org;
+
+    absolute_redirect off;
+    port_in_redirect off;
+    server_name_in_redirect off;
+    proxy_headers_hash_max_size 4096;
+    proxy_headers_hash_bucket_size 256;
+
+    proxy_intercept_errors on;
+    error_page 401 = @cloudif_reauth;
+
+    location @cloudif_reauth {
+        add_header Cache-Control no-store always;
+        add_header X-CloudIF-Reason basic-auth-intercept always;
+        return 302 https://cloudiff.duckdns.org/cloudif/supabase/session/start;
+    }
+
+    location = /health {
+        add_header Content-Type text/plain;
+        return 200 "cloudif-router-ok\n";
+    }
+
+    location ^~ /cloudif/supabase/session/ {
+        proxy_intercept_errors off;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_pass http://10.62.92.7:18091;
+    }
+
+    location = /supabase/akadmin { return 301 https://cloudiff.duckdns.org/supabase/akadmin/; }
+
+    location ^~ /supabase/akadmin/ {
+        proxy_hide_header WWW-Authenticate;
+        add_header Set-Cookie "cloudif_tenant=akadmin; Path=/; Secure; HttpOnly; SameSite=Lax" always;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Prefix /supabase/akadmin;
+        proxy_set_header Accept-Encoding "";
+        proxy_set_header Authorization "Basic Y2xvdWRpZjpEeFBWZHhHUEhsR3ZIR3hjRFZUa0FH";
+        rewrite ^/supabase/akadmin/?(.*)$ /$1 break;
+        proxy_cookie_path / /supabase/akadmin/;
+        proxy_redirect ~^/(.*)$ /supabase/akadmin/$1;
+        proxy_redirect / /supabase/akadmin/;
+        proxy_pass http://10.62.92.7:8102;
+    }
+
+    location = /supabase/iff1742962 { return 301 https://cloudiff.duckdns.org/supabase/iff1742962/; }
+
+    location ^~ /supabase/iff1742962/ {
+        proxy_hide_header WWW-Authenticate;
+        add_header Set-Cookie "cloudif_tenant=iff1742962; Path=/; Secure; HttpOnly; SameSite=Lax" always;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Prefix /supabase/iff1742962;
+        proxy_set_header Accept-Encoding "";
+        proxy_set_header Authorization "Basic Y2xvdWRpZjptbHRiaWk4bHpURE9FUW8waUZFbjVO";
+        rewrite ^/supabase/iff1742962/?(.*)$ /$1 break;
+        proxy_cookie_path / /supabase/iff1742962/;
+        proxy_redirect ~^/(.*)$ /supabase/iff1742962/$1;
+        proxy_redirect / /supabase/iff1742962/;
+        proxy_pass http://10.62.92.7:8101;
+    }
+
+    location ^~ /project/ {
+        if ($cloudif_is_subdomain_tenant = 0) { return 302 https://cloudiff.duckdns.org/cloudif/supabase/session/start; }
+        if ($cloudif_kong_port = "") { return 302 https://cloudiff.duckdns.org/cloudif/supabase/session/start; }
+        proxy_intercept_errors off;
+        proxy_hide_header WWW-Authenticate;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header Authorization $cloudif_basic_auth_header;
+        proxy_pass http://10.62.92.7:$cloudif_kong_port;
+    }
+
+    location ^~ /api/ {
+        proxy_intercept_errors off;
+        proxy_hide_header WWW-Authenticate;
+        if ($cloudif_kong_port = "") { return 302 https://cloudiff.duckdns.org/cloudif/supabase/session/start; }
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header Referer $http_referer;
+        proxy_set_header Cookie $http_cookie;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header Authorization $cloudif_basic_auth_header;
+        proxy_pass http://10.62.92.7:$cloudif_kong_port;
+    }
+
+    location ^~ /_next/ {
+        proxy_intercept_errors off;
+        proxy_hide_header WWW-Authenticate;
+        if ($cloudif_kong_port = "") { return 302 https://cloudiff.duckdns.org/cloudif/supabase/session/start; }
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header Referer $http_referer;
+        proxy_set_header Cookie $http_cookie;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header Authorization $cloudif_basic_auth_header;
+        proxy_pass http://10.62.92.7:$cloudif_kong_port;
+    }
+
+    location ^~ /assets/ {
+        proxy_intercept_errors off;
+        proxy_hide_header WWW-Authenticate;
+        if ($cloudif_kong_port = "") { return 302 https://cloudiff.duckdns.org/cloudif/supabase/session/start; }
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header Referer $http_referer;
+        proxy_set_header Cookie $http_cookie;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header Authorization $cloudif_basic_auth_header;
+        proxy_pass http://10.62.92.7:$cloudif_kong_port;
+    }
+
+    location ^~ /img/ {
+        proxy_intercept_errors off;
+        proxy_hide_header WWW-Authenticate;
+        if ($cloudif_kong_port = "") { return 302 https://cloudiff.duckdns.org/cloudif/supabase/session/start; }
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header Referer $http_referer;
+        proxy_set_header Cookie $http_cookie;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header Authorization $cloudif_basic_auth_header;
+        proxy_pass http://10.62.92.7:$cloudif_kong_port;
+    }
+
+    location ^~ /monaco-editor/ {
+        proxy_intercept_errors off;
+        proxy_hide_header WWW-Authenticate;
+        if ($cloudif_kong_port = "") { return 302 https://cloudiff.duckdns.org/cloudif/supabase/session/start; }
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header Referer $http_referer;
+        proxy_set_header Cookie $http_cookie;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header Authorization $cloudif_basic_auth_header;
+        proxy_pass http://10.62.92.7:$cloudif_kong_port;
+    }
+
+    location ^~ /favicon/ {
+        proxy_intercept_errors off;
+        proxy_hide_header WWW-Authenticate;
+        if ($cloudif_kong_port = "") { return 302 https://cloudiff.duckdns.org/cloudif/supabase/session/start; }
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header Referer $http_referer;
+        proxy_set_header Cookie $http_cookie;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header Authorization $cloudif_basic_auth_header;
+        proxy_pass http://10.62.92.7:$cloudif_kong_port;
+    }
+
+    location ^~ /auth/v1/ {
+        proxy_intercept_errors off;
+        proxy_hide_header WWW-Authenticate;
+        if ($cloudif_kong_port = "") { return 302 https://cloudiff.duckdns.org/cloudif/supabase/session/start; }
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header Referer $http_referer;
+        proxy_set_header Cookie $http_cookie;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header Authorization $cloudif_basic_auth_header;
+        proxy_pass http://10.62.92.7:$cloudif_kong_port;
+    }
+
+    location ^~ /rest/v1/ {
+        proxy_intercept_errors off;
+        proxy_hide_header WWW-Authenticate;
+        if ($cloudif_kong_port = "") { return 302 https://cloudiff.duckdns.org/cloudif/supabase/session/start; }
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header Referer $http_referer;
+        proxy_set_header Cookie $http_cookie;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header Authorization $cloudif_basic_auth_header;
+        proxy_pass http://10.62.92.7:$cloudif_kong_port;
+    }
+
+    location ^~ /storage/v1/ {
+        proxy_intercept_errors off;
+        proxy_hide_header WWW-Authenticate;
+        if ($cloudif_kong_port = "") { return 302 https://cloudiff.duckdns.org/cloudif/supabase/session/start; }
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header Referer $http_referer;
+        proxy_set_header Cookie $http_cookie;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header Authorization $cloudif_basic_auth_header;
+        proxy_pass http://10.62.92.7:$cloudif_kong_port;
+    }
+
+    location ^~ /realtime/v1/ {
+        proxy_intercept_errors off;
+        proxy_hide_header WWW-Authenticate;
+        if ($cloudif_kong_port = "") { return 302 https://cloudiff.duckdns.org/cloudif/supabase/session/start; }
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header Referer $http_referer;
+        proxy_set_header Cookie $http_cookie;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header Authorization $cloudif_basic_auth_header;
+        proxy_pass http://10.62.92.7:$cloudif_kong_port;
+    }
+
+    location ^~ /functions/v1/ {
+        proxy_intercept_errors off;
+        proxy_hide_header WWW-Authenticate;
+        if ($cloudif_kong_port = "") { return 302 https://cloudiff.duckdns.org/cloudif/supabase/session/start; }
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header Referer $http_referer;
+        proxy_set_header Cookie $http_cookie;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header Authorization $cloudif_basic_auth_header;
+        proxy_pass http://10.62.92.7:$cloudif_kong_port;
+    }
+
+    location / {
+        if ($cloudif_is_subdomain_tenant = 0) { return 404; }
+        if ($cloudif_kong_port = "") { return 404; }
+        proxy_hide_header WWW-Authenticate;
+        add_header Set-Cookie "cloudif_tenant=$cloudif_effective_tenant; Path=/; Secure; HttpOnly; SameSite=Lax" always;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header Authorization $cloudif_basic_auth_header;
+        proxy_pass http://10.62.92.7:$cloudif_kong_port;
+    }
+
+}

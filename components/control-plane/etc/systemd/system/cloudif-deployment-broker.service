@@ -1,0 +1,29 @@
+[Unit]
+Description=CloudIF Deployment Broker dry-run only
+After=network-online.target
+Wants=network-online.target
+[Service]
+Type=simple
+User=root
+Group=root
+EnvironmentFile=/etc/cloudif/deployment-broker.env
+ExecStart=/usr/bin/python3 /srv/cloudif/app-pointers/deployment-broker-current/cloudif-deployment-broker.py
+Restart=always
+RestartSec=2
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/cloudif/deployment-broker /var/lib/cloudif/portal
+ReadOnlyPaths=/srv/cloudif/lib /etc/cloudif
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictRealtime=true
+IPAddressDeny=any
+IPAddressAllow=localhost
+IPAddressAllow=10.62.91.2/32
+[Install]
+WantedBy=multi-user.target

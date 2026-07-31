@@ -1,0 +1,9 @@
+[Unit]
+Description=Daily CloudIF Control Plane Integrity Check
+[Timer]
+OnCalendar=*-*-* 04:40:00 UTC
+RandomizedDelaySec=20m
+Persistent=true
+Unit=cloudif-control-plane-integrity.service
+[Install]
+WantedBy=timers.target

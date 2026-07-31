@@ -1,0 +1,17 @@
+[Unit]
+Description=CloudIF transaction reconciler (observe and normalize expiry only)
+After=cloudif-approval-api.service cloudif-deployment-broker.service
+[Service]
+Type=oneshot
+User=root
+Group=root
+EnvironmentFile=/etc/cloudif/transaction-reconciler.env
+ExecStart=/usr/bin/python3 /srv/cloudif/app-pointers/transaction-reconciler-current/cloudif-transaction-reconciler.py
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadOnlyPaths=/srv/cloudif/app-releases/transaction-reconciler /srv/cloudif/app-pointers /var/lib/cloudif/approvals /var/lib/cloudif/portal/deployment-idempotency.db /etc/cloudif
+ReadWritePaths=/var/lib/cloudif/health
+IPAddressDeny=any
+IPAddressAllow=127.0.0.0/8

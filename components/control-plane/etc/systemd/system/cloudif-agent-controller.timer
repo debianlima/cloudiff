@@ -1,0 +1,10 @@
+[Unit]
+Description=Periodic CloudIF agent reconciliation
+[Timer]
+OnBootSec=50s
+OnUnitActiveSec=90s
+AccuracySec=5s
+Persistent=true
+Unit=cloudif-agent-controller.service
+[Install]
+WantedBy=timers.target

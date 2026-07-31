@@ -1,0 +1,20 @@
+services:
+  web:
+    image: nginx:1.27-alpine
+    container_name: cloudif-p1006-d4-web
+    restart: unless-stopped
+    volumes:
+      - /srv/cloudif/publications/p1006/d4/site:/usr/share/nginx/html:ro
+      - /srv/cloudif/publications/p1006/d4/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/health >/dev/null 2>&1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+    networks:
+      cloudif-publications:
+        aliases:
+          - cloudif-p1006-d4-web
+networks:
+  cloudif-publications:
+    external: true

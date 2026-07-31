@@ -1,0 +1,16 @@
+[Unit]
+Description=CloudIF internal notification API
+After=cloudif-notification-evaluator.service
+[Service]
+Type=simple
+User=cloudif-control
+Group=cloudif-control
+EnvironmentFile=/etc/cloudif/notifications.env
+ExecStart=/usr/bin/python3 /srv/cloudif/app-pointers/notifications-current/cloudif-notification-api.py
+Restart=on-failure
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/cloudif/notifications
+ReadOnlyPaths=/srv/cloudif/app-releases/notifications /srv/cloudif/app-pointers
+[Install]
+WantedBy=multi-user.target

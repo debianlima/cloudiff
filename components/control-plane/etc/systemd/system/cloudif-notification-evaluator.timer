@@ -1,0 +1,8 @@
+[Unit]
+Description=Periodic CloudIF alert evaluation
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=2min
+Persistent=true
+[Install]
+WantedBy=timers.target

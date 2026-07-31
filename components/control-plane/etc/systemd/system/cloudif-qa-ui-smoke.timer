@@ -1,0 +1,10 @@
+[Unit]
+Description=Daily CloudIF QA interface tests
+
+[Timer]
+OnCalendar=*-*-* 05:10:00
+Persistent=true
+RandomizedDelaySec=10m
+
+[Install]
+WantedBy=timers.target

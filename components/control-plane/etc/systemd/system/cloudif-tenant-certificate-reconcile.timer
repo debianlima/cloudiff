@@ -1,0 +1,11 @@
+[Unit]
+Description=Periodic CloudIF tenant TLS certificate reconciliation
+
+[Timer]
+OnBootSec=10min
+OnUnitActiveSec=6h
+RandomizedDelaySec=15min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

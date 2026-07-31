@@ -1,0 +1,8 @@
+[Unit]
+Description=Periodic CloudIF project registry synchronization
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+Persistent=true
+[Install]
+WantedBy=timers.target

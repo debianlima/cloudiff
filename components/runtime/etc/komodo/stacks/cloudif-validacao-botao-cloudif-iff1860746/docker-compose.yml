@@ -1,0 +1,21 @@
+services:
+  web:
+    image: nginx:1.27-alpine
+    container_name: cloudif-p${CLOUDIF_PUBLIC_NUMBER}-d${CLOUDIF_DEPLOY_NUMBER}-web
+    restart: unless-stopped
+    volumes:
+      - ./site:/usr/share/nginx/html:ro
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/health >/dev/null 2>&1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+    networks:
+      cloudif-publications:
+        aliases:
+          - cloudif-p${CLOUDIF_PUBLIC_NUMBER}-d${CLOUDIF_DEPLOY_NUMBER}-web
+          - cloudif-p${CLOUDIF_PUBLIC_NUMBER}-active-web
+networks:
+  cloudif-publications:
+    external: true

@@ -1,0 +1,14 @@
+[Unit]
+Description=CloudIF Supabase session-aware OIDC broker
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/cloudif-supabase-session.env
+ExecStart=/usr/bin/python3 /usr/local/sbin/cloudif-supabase-session-broker.py
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

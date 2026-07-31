@@ -1,0 +1,11 @@
+[Unit]
+Description=Renew CloudIF admin subdomain certificate
+After=docker.service network-online.target
+Requires=docker.service
+Wants=network-online.target
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/docker exec cloudif-nginx-proxy-manager certbot renew --cert-name cloudif-admin --config /etc/letsencrypt.ini --work-dir /tmp/letsencrypt-lib --logs-dir /data/logs --quiet
+ExecStartPost=/usr/bin/docker exec cloudif-nginx-proxy-manager nginx -t
+ExecStartPost=/usr/bin/docker exec cloudif-nginx-proxy-manager nginx -s reload
+Nice=10

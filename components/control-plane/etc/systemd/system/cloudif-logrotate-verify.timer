@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily CloudIF verification after logrotate
+
+[Timer]
+OnCalendar=*-*-* 01:15:00 UTC
+Persistent=true
+RandomizedDelaySec=300
+Unit=cloudif-logrotate-verify.service
+
+[Install]
+WantedBy=timers.target

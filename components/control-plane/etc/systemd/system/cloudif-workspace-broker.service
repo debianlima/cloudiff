@@ -1,0 +1,36 @@
+[Unit]
+Description=CloudIF restricted ephemeral workspace broker
+After=docker.service network.target
+Requires=docker.service
+[Service]
+Type=simple
+User=root
+Group=root
+EnvironmentFile=/etc/cloudif/workspace-broker.env
+ExecStart=/usr/bin/python3 /srv/cloudif/app-pointers/workspace-broker-current/cloudif-workspace-broker.py
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+RestrictAddressFamilies=AF_INET AF_UNIX
+RestrictNamespaces=true
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+UMask=0077
+ReadOnlyPaths=/srv/cloudif/app-releases/workspace-broker /srv/cloudif/app-pointers /var/run/docker.sock
+ReadWritePaths=/var/lib/cloudif/workspaces
+
+[Install]
+WantedBy=multi-user.target

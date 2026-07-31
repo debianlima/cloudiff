@@ -1,0 +1,6 @@
+[Unit]
+Description=Collect CloudIF per-project container metrics
+After=cloudif-control-plane-api.service network-online.target
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /srv/cloudif/app-pointers/monitor-current/cloudif-monitor-collector.py

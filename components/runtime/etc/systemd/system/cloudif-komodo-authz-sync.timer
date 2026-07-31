@@ -1,0 +1,10 @@
+[Unit]
+Description=CloudIF periodic Komodo authorization sync
+[Timer]
+OnBootSec=45s
+OnUnitActiveSec=2min
+AccuracySec=15s
+Persistent=true
+Unit=cloudif-komodo-authz-sync.service
+[Install]
+WantedBy=timers.target

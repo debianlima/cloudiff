@@ -1,0 +1,433 @@
+#!/usr/bin/env python3
+import datetime as dt, hashlib, hmac, json, os, re, sys, urllib.parse, urllib.request, sqlite3
+from pathlib import Path
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+sys.path.insert(0,'/srv/cloudif/lib')
+import cloudif_release_manager as rm
+HOST=os.environ.get('CLOUDIF_DEPLOYMENT_BROKER_HOST','127.0.0.1')
+PORT=int(os.environ.get('CLOUDIF_DEPLOYMENT_BROKER_PORT','18207'))
+TOKEN=os.environ.get('CLOUDIF_DEPLOYMENT_BROKER_TOKEN','')
+IDEMPOTENCY_DB=Path(os.environ.get('CLOUDIF_DEPLOYMENT_IDEMPOTENCY_DB','/var/lib/cloudif/portal/deployment-broker-idempotency.db'))
+EXECUTION_ID=re.compile(r'^exec_[a-f0-9]{24,64}$')
+SLUG=re.compile(r'^[a-z0-9][a-z0-9._-]{0,62}$')
+COMMIT=re.compile(r'^[0-9a-f]{40}$')
+VERSION=re.compile(r'^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-([0-9A-Za-z.-]+))?$')
+
+def send(h,code,obj):
+ b=json.dumps(obj,ensure_ascii=False,separators=(',',':')).encode();h.send_response(code);h.send_header('Content-Type','application/json');h.send_header('Cache-Control','no-store');h.send_header('Content-Length',str(len(b)));h.end_headers();h.wfile.write(b)
+def auth(h):
+ got=h.headers.get('Authorization','')
+ return bool(TOKEN) and hmac.compare_digest(got,'Bearer '+TOKEN)
+def body(h):
+ try:n=int(h.headers.get('Content-Length','0'))
+ except Exception:raise ValueError('invalid_length')
+ if n<2 or n>16384:raise ValueError('invalid_length')
+ raw=h.rfile.read(n);data=json.loads(raw)
+ if not isinstance(data,dict):raise ValueError('invalid_json')
+ return data
+def idem_connect():
+ IDEMPOTENCY_DB.parent.mkdir(parents=True,exist_ok=True)
+ c=sqlite3.connect(IDEMPOTENCY_DB,timeout=30,isolation_level=None)
+ c.row_factory=sqlite3.Row
+ c.execute('pragma busy_timeout=30000')
+ c.execute('pragma journal_mode=wal')
+ c.execute("create table if not exists executions(execution_id text primary key,operation text not null,payload_digest text not null,state text not null,http_code integer,response_json text,effect_started integer not null default 0,created_at text not null,updated_at text not null)")
+ return c
+def idem_digest(operation,payload):
+ canonical={'operation':operation,'payload':payload}
+ return hashlib.sha256(json.dumps(canonical,sort_keys=True,separators=(',',':')).encode()).hexdigest()
+def idem_begin(execution_id,operation,payload):
+ if not execution_id:return {'mode':'legacy'}
+ if not EXECUTION_ID.fullmatch(execution_id):raise ValueError('invalid_execution_id')
+ digest=idem_digest(operation,payload);c=idem_connect();now=dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat();c.execute('begin immediate')
+ row=c.execute('select * from executions where execution_id=?',(execution_id,)).fetchone()
+ if row:
+  if row['payload_digest']!=digest or row['operation']!=operation:
+   c.rollback();c.close();return {'mode':'conflict'}
+  if row['state']=='finished':
+   out={'mode':'replay','http_code':int(row['http_code']),'response':json.loads(row['response_json']),'effect_started':bool(row['effect_started'])};c.commit();c.close();return out
+  c.commit();c.close();return {'mode':'in_progress'}
+ c.execute('insert into executions(execution_id,operation,payload_digest,state,created_at,updated_at) values(?,?,?,?,?,?)',(execution_id,operation,digest,'in_progress',now,now));c.commit();c.close();return {'mode':'new','execution_id':execution_id}
+def idem_mark_effect(execution_id):
+ if not execution_id:return
+ c=idem_connect();c.execute('update executions set effect_started=1,updated_at=? where execution_id=? and state=?',(dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat(),execution_id,'in_progress'));c.close()
+def idem_finish(execution_id,code,response):
+ if not execution_id:return response
+ out=dict(response);out['execution_id']=execution_id;out['idempotent_replay']=False
+ c=idem_connect();c.execute('update executions set state=?,http_code=?,response_json=?,updated_at=? where execution_id=? and state=?',('finished',int(code),json.dumps(out,ensure_ascii=False,separators=(',',':')),dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat(),execution_id,'in_progress'));c.close();return out
+def idem_response(state):
+ if state['mode']=='conflict':return 409,{'ok':False,'error':'execution_id_conflict'}
+ if state['mode']=='in_progress':return 409,{'ok':False,'error':'execution_in_progress'}
+ if state['mode']=='replay':
+  out=dict(state['response']);out['idempotent_replay']=True;out['effect_started']=state['effect_started'];return state['http_code'],out
+ return None
+
+def validate_common(d,allow_trace=True):
+ allowed={'project_slug','commit_sha','version'}|({'trace_id'} if allow_trace else set())
+ if set(d)!=allowed:raise ValueError('invalid_request')
+ slug=str(d.get('project_slug') or '').strip().lower();commit=str(d.get('commit_sha') or '').strip().lower();version=str(d.get('version') or '').strip();trace=str(d.get('trace_id') or '').strip()
+ if not SLUG.fullmatch(slug) or not COMMIT.fullmatch(commit) or not VERSION.fullmatch(version) or not trace:raise ValueError('invalid_request')
+ setting=rm.project_setting(slug)
+ if not setting:raise LookupError('project_not_reconciled')
+ return slug,commit,version,trace,setting
+TEST_PROJECT='sistema-de-biblioteca-teste'
+PRODUCTION_TARGETS=os.environ.get('CLOUDIF_PRODUCTION_TARGETS','/etc/cloudif/production-targets.json')
+HOMOLOGATION_URL=os.environ.get('CLOUDIF_PRODUCTION_HOMOLOGATION_URL','http://10.62.91.2:18217').rstrip('/')
+HOMOLOGATION_TOKEN=os.environ.get('CLOUDIF_PRODUCTION_HOMOLOGATION_TOKEN','')
+def _production_config(slug):
+ try:
+  data=json.load(open(PRODUCTION_TARGETS))
+  cfg=data.get(slug) if isinstance(data,dict) else None
+  return cfg if isinstance(cfg,dict) else {}
+ except Exception:return {}
+def _latest_build_artifact(slug):
+ try:
+  c=sqlite3.connect('/var/lib/cloudif/build-broker/builds.sqlite3');c.row_factory=sqlite3.Row
+  r=c.execute("select id,status,result_json,updated_at from builds where project_slug=? and status='succeeded' order by created_at desc limit 1",(slug,)).fetchone()
+  if not r:return {}
+  x=json.loads(r['result_json'] or '{}');x['build_id']=r['id'];x['build_status']=r['status'];x['build_updated_at']=r['updated_at'];return x
+ except Exception:return {}
+
+def _production_readiness(slug):
+ if not SLUG.fullmatch(slug):raise ValueError('invalid_project')
+ setting=rm.project_setting(slug)
+ if not setting:raise LookupError('project_not_reconciled')
+ cfg=_production_config(slug)
+ artifact=_latest_build_artifact(slug)
+ checks={'target_enabled':cfg.get('enabled') is True,'separate_from_test':cfg.get('separate_from_test') is True,'komodo_stack_configured':bool(cfg.get('komodo_stack')),'public_url_configured':bool(cfg.get('public_url')),'smoke_url_configured':bool(cfg.get('smoke_url')),'rollback_strategy_configured':bool(cfg.get('rollback_strategy')),'automatic_database_restore':cfg.get('database_restore')=='automatic','immutable_image_required':cfg.get('immutable_image') is True,'artifact_image_created':artifact.get('image_created') is True,'artifact_digest_present':str(artifact.get('artifact_image_id') or '').startswith('sha256:'),'sbom_ready':artifact.get('sbom_ready') is True and bool(artifact.get('sbom_sha256')),'scanner_ready':artifact.get('scanner_ready') is True and bool(artifact.get('scanner_sha256')),'scanner_high_zero':int((artifact.get('scanner_counts') or {}).get('HIGH',0))==0,'scanner_critical_zero':int((artifact.get('scanner_counts') or {}).get('CRITICAL',0))==0,'runtime_rootless':str((artifact.get('runtime_proof') or {}).get('user') or '').split(':')[0] not in {'','0','root'},'runtime_read_only':(artifact.get('runtime_proof') or {}).get('read_only') is True,'runtime_no_capabilities':(artifact.get('runtime_proof') or {}).get('cap_drop')==['ALL'],'runtime_no_published_ports':(artifact.get('runtime_proof') or {}).get('published_ports')==[],'change_window_configured':bool(cfg.get('change_window')),'change_window_open':cfg.get('change_window_open') is True,'snapshot_policy_configured':cfg.get('snapshot_policy')=='required-before-activation','snapshot_verified':cfg.get('snapshot_signature_verified') is True and bool(cfg.get('snapshot_sha256')) and bool(cfg.get('snapshot_signature_sha256')),'change_dossier_signed':cfg.get('change_dossier_signed') is True and bool(cfg.get('change_dossier_path')),'rollback_plan_verified':cfg.get('rollback_plan_verified') is True,'dual_approval_required':cfg.get('dual_approval_required') is True,'production_effects_explicitly_enabled':cfg.get('production_effects_enabled') is True}
+ blockers=[k for k,v in checks.items() if not v]
+ return {'ok':True,'project_slug':slug,'production_ready':not blockers,'execution_allowed':not blockers,'checks':checks,'blockers':blockers,'artifact':{k:artifact.get(k) for k in ('build_id','artifact_image_id','sbom_sha256','scanner_sha256','scanner_counts','production_ready')},'two_approvers_required':True,'approval_policy':{'activation':'two_distinct_admin_or_professor','requester_cannot_approve':True,'approval_replay':'blocked'},'target_configured':bool(cfg),'side_effect_free':True,'secrets_exposed':False}
+def _production_plan(d):
+ if set(d)!={'project_slug','commit_sha','version','trace_id'}:raise ValueError('invalid_request')
+ slug=str(d.get('project_slug') or '').strip();commit=str(d.get('commit_sha') or '').strip().lower();version=str(d.get('version') or '').strip();trace=str(d.get('trace_id') or '').strip()
+ if not SLUG.fullmatch(slug) or not COMMIT.fullmatch(commit) or not VERSION.fullmatch(version) or not trace:raise ValueError('invalid_request')
+ ready=_production_readiness(slug);prepared=rm.forja_prepare(slug,version,commit,'production plan',True);body=prepared.get('data') if isinstance(prepared.get('data'),dict) else {}
+ if not prepared.get('ok') or not body.get('ok'):raise RuntimeError('forgejo_validation_failed')
+ canonical={'action':'deployment.production.deploy','project_slug':slug,'commit_sha':commit,'version':version,'target':'production','readiness_checks':ready['checks'],'snapshot_sha256':_production_config(slug).get('snapshot_sha256'),'snapshot_signature_sha256':_production_config(slug).get('snapshot_signature_sha256'),'change_dossier_signed':_production_config(slug).get('change_dossier_signed') is True}
+ digest=hashlib.sha256(json.dumps(canonical,sort_keys=True,separators=(',',':')).encode()).hexdigest()
+ return {'ok':True,'project_slug':slug,'commit_sha':commit,'version':version,'plan_digest':digest,'snapshot':{'sha256':_production_config(slug).get('snapshot_sha256'),'signature_sha256':_production_config(slug).get('snapshot_signature_sha256'),'signing_key_fingerprint':_production_config(slug).get('snapshot_signing_key_fingerprint'),'signature_verified':_production_config(slug).get('snapshot_signature_verified') is True},'change_dossier_signed':_production_config(slug).get('change_dossier_signed') is True,'production_ready':ready['production_ready'],'execution_allowed':ready['execution_allowed'],'blockers':ready['blockers'],'approval_policy':ready['approval_policy'],'two_approvers_required':True,'approval_required':True,'side_effect_free':True,'backup_created':False,'deployment_created':False,'trace_id':trace}
+
+def _production_activation_plan(d):
+ if set(d)!={'project_slug','trace_id'}:raise ValueError('invalid_request')
+ slug=str(d.get('project_slug') or '').strip();trace=str(d.get('trace_id') or '').strip()
+ if not SLUG.fullmatch(slug) or not trace:raise ValueError('invalid_request')
+ ready=_production_readiness(slug);cfg=_production_config(slug);w=cfg.get('change_window') or {}
+ canonical={'action':'deployment.production.activate','project_slug':slug,'target_url':cfg.get('real_target_url'),'target_mode':cfg.get('real_target_mode'),'snapshot_sha256':cfg.get('snapshot_sha256'),'snapshot_signature_sha256':cfg.get('snapshot_signature_sha256'),'window_digest_sha256':w.get('digest_sha256'),'window_id':w.get('id'),'window_start_at':w.get('start_at'),'window_end_at':w.get('end_at'),'canary_a_sha256':cfg.get('real_canary_a_body_sha256'),'canary_b_sha256':cfg.get('real_canary_b_body_sha256'),'canary_rollback_verified':cfg.get('real_canary_rollback_verified') is True,'restore_test_verified':cfg.get('restore_test_verified') is True,'rollback_plan_verified':cfg.get('rollback_plan_verified') is True,'dual_approval_required':True,'auto_reseal':w.get('auto_reseal') is True,'max_duration_seconds':w.get('max_duration_seconds'),'readiness_checks':ready['checks'],'effect_tool_available':False}
+ digest=hashlib.sha256(json.dumps(canonical,sort_keys=True,separators=(',',':')).encode()).hexdigest()
+ blockers=list(ready['blockers'])
+ if cfg.get('real_target_mode')!='sealed':blockers.append('real_target_not_sealed')
+ if cfg.get('real_canary_rollback_verified') is not True:blockers.append('real_canary_rollback_unverified')
+ if cfg.get('restore_test_verified') is not True:blockers.append('restore_test_unverified')
+ return {'ok':True,'project_slug':slug,'activation_digest':digest,'operation':canonical,'approval_action':'deployment.production.activate','two_approvers_required':True,'requester_cannot_approve':True,'approval_required':True,'effect_tool_available':False,'side_effect_free':True,'activation_allowed':False,'execution_allowed':False,'production_enabled':False,'blockers':sorted(set(blockers)),'trace_id':trace,'secrets_exposed':False}
+
+def _homologation_executor(path,payload=None,timeout=180):
+ data=None if payload is None else json.dumps(payload,separators=(',',':')).encode();req=urllib.request.Request(HOMOLOGATION_URL+path,data=data,method='GET' if data is None else 'POST',headers={'Authorization':'Bearer '+HOMOLOGATION_TOKEN,'Content-Type':'application/json','Accept':'application/json','Host':'cloudif-production-homologation.internal'})
+ try:
+  with urllib.request.urlopen(req,timeout=timeout) as x:return x.status,json.load(x)
+ except urllib.error.HTTPError as e:
+  try:b=json.load(e)
+  except Exception:b={}
+  return e.code,b
+def _homologation_artifact(slug,build_id):
+ c=sqlite3.connect('/var/lib/cloudif/build-broker/builds.sqlite3');c.row_factory=sqlite3.Row;r=c.execute("select id,project_slug,status,result_json from builds where id=? and project_slug=?",(build_id,slug)).fetchone();c.close()
+ if not r or r['status']!='succeeded':raise LookupError('build_not_ready')
+ x=json.loads(r['result_json'] or '{}');att=x.get('attestation') or {};counts=x.get('scanner_counts') or {}
+ if not (x.get('attestation_verified') is True and att.get('algorithm')=='HMAC-SHA256' and len(str(att.get('signature') or ''))==64 and str(x.get('artifact_image_id') or '').startswith('sha256:') and x.get('sbom_ready') is True and x.get('scanner_ready') is True and x.get('scanner_blocked') is False and counts.get('HIGH',0)==0 and counts.get('CRITICAL',0)==0 and x.get('production_ready') is True):raise RuntimeError('artifact_not_attested')
+ return x
+def _homologation_plan(d):
+ if set(d)!={'project_slug','build_id','trace_id'}:raise ValueError('invalid_request')
+ slug=str(d['project_slug']);build_id=str(d['build_id']);trace=str(d['trace_id']);cfg=_production_config(slug)
+ if not (cfg.get('homologation_enabled') is True and cfg.get('homologation_only') is True and cfg.get('enabled') is False and cfg.get('production_effects_enabled') is False):raise PermissionError('homologation_target_not_allowed')
+ art=_homologation_artifact(slug,build_id)
+ canonical={'action':'deployment.production.homologation.deploy','project_slug':slug,'build_id':build_id,'artifact_image_id':art['artifact_image_id'],'immutable_source_digest':art.get('immutable_source_digest'),'attestation_signature':(art.get('attestation') or {}).get('signature'),'target':'production-homologation','atomic_switch':True}
+ digest=hashlib.sha256(json.dumps(canonical,sort_keys=True,separators=(',',':')).encode()).hexdigest()
+ return {'ok':True,'side_effect_free':True,'homologation_digest':digest,'operation':canonical,'approval_required':True,'production_enabled':False,'homologation_only':True,'trace_id':trace,'secrets_exposed':False}
+def _executor_execution_id(execution_id):
+ return 'exe_'+hashlib.sha256(execution_id.encode()).hexdigest()[:24]
+def _executor_rollback_id(execution_id):
+ return 'rbk_'+hashlib.sha256(execution_id.encode()).hexdigest()[:24]
+def _homologation_deploy(d,execution_id):
+ if set(d)!={'project_slug','build_id','homologation_digest','trace_id'}:raise ValueError('invalid_request')
+ pl=_homologation_plan({'project_slug':d['project_slug'],'build_id':d['build_id'],'trace_id':d['trace_id']})
+ if not hmac.compare_digest(pl['homologation_digest'],d['homologation_digest']):raise ValueError('homologation_digest_mismatch')
+ op=pl['operation'];idem_mark_effect(execution_id);code,x=_homologation_executor('/v1/deploy',{'project_slug':op['project_slug'],'artifact_image_id':op['artifact_image_id'],'execution_id':_executor_execution_id(execution_id)},180)
+ if code!=200 or not x.get('ok'):return code,{'ok':False,'error':x.get('error') or 'homologation_deploy_failed','effect_started':True}
+ x.update({'homologation_only':True,'production_enabled':False,'build_id':d['build_id'],'attestation_verified':True,'effect_started':True,'secrets_exposed':False});return 200,x
+def _homologation_rollback(d,execution_id):
+ if set(d)!={'project_slug','trace_id'}:raise ValueError('invalid_request')
+ cfg=_production_config(d['project_slug'])
+ if not (cfg.get('homologation_only') is True and cfg.get('enabled') is False):raise PermissionError('homologation_target_not_allowed')
+ idem_mark_effect(execution_id);code,x=_homologation_executor('/v1/rollback',{'project_slug':d['project_slug'],'execution_id':_executor_rollback_id(execution_id)},180)
+ if code!=200 or not x.get('ok'):return code,{'ok':False,'error':x.get('error') or 'homologation_rollback_failed','effect_started':True}
+ x.update({'homologation_only':True,'production_enabled':False,'effect_started':True,'secrets_exposed':False});return 200,x
+
+def _migration_analysis(d,plan_only=False):
+ slug,commit,version,trace,setting=validate_common(d)
+ if plan_only and slug!=TEST_PROJECT:raise PermissionError('project_not_allowed')
+ tenant=str(setting.get('tenant') or '').strip()
+ prepared=rm.forja_prepare(slug,version,commit,'migration inspection',True)
+ body=prepared.get('data') if isinstance(prepared.get('data'),dict) else {}
+ if not prepared.get('ok') or not body.get('ok'):raise RuntimeError('forgejo_validation_failed')
+ bundle=body.get('migrations') or {};items=bundle.get('items') or []
+ if not isinstance(items,list):raise RuntimeError('invalid_migration_bundle')
+ checked=rm.supabase_inspect(slug,tenant,version,items)
+ sb=checked.get('data') if isinstance(checked.get('data'),dict) else {}
+ if not checked.get('ok') or not sb.get('ok'):raise RuntimeError('supabase_inspect_failed')
+ safe=[]
+ for item in items:
+  name=str(item.get('name') or '')
+  sha=str(item.get('sha256') or '')
+  raw=str(item.get('content_b64') or '')
+  size=(len(raw)*3)//4 if raw else 0
+  safe.append({'name':name,'sha256':sha,'size_bytes':size})
+ canonical={'action':'supabase.migrations.plan' if plan_only else 'supabase.migrations.inspect','project_slug':slug,'commit_sha':commit,'version':version,'tenant':tenant,'migrations':[{'name':x['name'],'sha256':x['sha256']} for x in safe],'target':'isolated-test' if plan_only else 'project','side_effect_free':True}
+ digest=hashlib.sha256(json.dumps(canonical,sort_keys=True,separators=(',',':')).encode()).hexdigest()
+ return {'ok':True,'project_slug':slug,'commit_sha':commit,'version':version,'tenant':tenant,'migration_count':len(safe),'total_bytes':int(bundle.get('total_bytes') or 0),'migrations':safe,'tenant_available':bool(sb.get('available')),'side_effect_free':True,'sql_exposed':False,'content_b64_exposed':False,'backup_created':False,'migrations_applied':0,'deployment_created':False,'plan_digest':digest if plan_only else '', 'target':'isolated-test' if plan_only else 'project','apply_allowed':len(safe)==0,'blocked_reason':'' if len(safe)==0 else 'automatic_restore_unavailable','automatic_restore_available':False,'trace_id':trace}
+
+def _client_env(path,url_key,token_key,default):
+ cfg=rm.read_env(Path(path));return (cfg.get(url_key) or default).rstrip('/'),cfg.get(token_key) or ''
+def _komodo_operational(body):
+ busy=body.get('busy') or {}
+ return body.get('deploy_status') in {'ready','completed'} and not bool(busy.get('repo')) and not bool(busy.get('stack'))
+
+def _komodo_status(project):
+ base,token=_client_env('/etc/cloudif/komodo-agent-client.env','KOMODO_AGENT_URL','KOMODO_AGENT_TOKEN','http://10.62.91.2:18098')
+ return rm.http_json('GET',base+'/komodo/status?'+urllib.parse.urlencode({'project':project}),token,None,60)
+def _komodo_smoke(project):
+ base,token=_client_env('/etc/cloudif/komodo-agent-client.env','KOMODO_AGENT_URL','KOMODO_AGENT_TOKEN','http://10.62.91.2:18098')
+ return rm.http_json('POST',base+'/komodo/stack/http-smoke',token,{'project':project},30)
+def _last_published(project):
+ con=rm.connect();con.row_factory=sqlite3.Row
+ row=con.execute("SELECT * FROM release_jobs WHERE project=? AND dry_run=0 AND status='published' ORDER BY id DESC LIMIT 1",(project,)).fetchone();con.close()
+ return dict(row) if row else None
+def _prestate(project):
+ previous=_last_published(project)
+ if not previous or not COMMIT.fullmatch(str(previous.get('commit_sha') or '')):raise RuntimeError('previous_release_missing')
+ status=_komodo_status(project);body=status.get('data') if isinstance(status.get('data'),dict) else {}
+ if not status.get('ok') or not body.get('ok') or not _komodo_operational(body):raise RuntimeError('komodo_not_ready')
+ latest=str((body.get('repo') or {}).get('latest_hash') or '')
+ telemetry_mismatch=bool(latest and not str(previous['commit_sha']).startswith(latest))
+ smoke=_komodo_smoke(project);sb=smoke.get('data') if isinstance(smoke.get('data'),dict) else {}
+ if not smoke.get('ok') or not sb.get('ok') or sb.get('status')!=200:raise RuntimeError('predeploy_smoke_failed')
+ return {'commit_sha':previous['commit_sha'],'version':previous['version'],'job_id':previous['id'],'tenant':previous.get('tenant') or '', 'http_sha256':sb.get('sha256'),'http_size':sb.get('size'),'komodo_repo_latest_hash':latest,'komodo_repo_telemetry_mismatch':telemetry_mismatch}
+def _rollback_test(project,tenant,commit,trace):
+ deploy=rm.komodo_deploy_commit(project,tenant,commit,'deployment-broker-rollback:'+trace)
+ body=deploy.get('data') if isinstance(deploy.get('data'),dict) else {}
+ smoke=_komodo_smoke(project);sb=smoke.get('data') if isinstance(smoke.get('data'),dict) else {}
+ status=_komodo_status(project);st=status.get('data') if isinstance(status.get('data'),dict) else {}
+ ok=bool(deploy.get('ok') and body.get('ok') and smoke.get('ok') and sb.get('ok') and sb.get('status')==200 and status.get('ok') and _komodo_operational(st))
+ return {'ok':ok,'deploy_confirmed':bool(deploy.get('ok') and body.get('ok')),'smoke_ok':bool(smoke.get('ok') and sb.get('ok')),'status_ready':bool(status.get('ok') and _komodo_operational(st)),'http_sha256':sb.get('sha256'),'http_size':sb.get('size')}
+
+def _published_job(project,job_id):
+ con=rm.connect();con.row_factory=sqlite3.Row
+ row=con.execute("select * from release_jobs where id=? and project=? and dry_run=0 and status='published'",(int(job_id),project)).fetchone();con.close()
+ return dict(row) if row else None
+
+def _rollback_plan(d):
+ if set(d)!={'project_slug','target_job_id','trace_id'}:raise ValueError('invalid_request')
+ slug=str(d.get('project_slug') or '').strip().lower();trace=str(d.get('trace_id') or '').strip();target_job_id=int(d.get('target_job_id') or 0)
+ if slug!=TEST_PROJECT or not trace or target_job_id<1:raise ValueError('invalid_request')
+ pre=_prestate(slug);target=_published_job(slug,target_job_id)
+ if not target:raise LookupError('rollback_target_not_published')
+ canonical={'action':'deployment.rollback-test','project_slug':slug,'target_job_id':target_job_id,'target_commit':target['commit_sha'],'target_version':target['version'],'expected_current_job_id':pre['job_id'],'expected_current_commit':pre['commit_sha'],'target':'isolated-test','real_deploy':True}
+ digest=hashlib.sha256(json.dumps(canonical,sort_keys=True,separators=(',',':')).encode()).hexdigest()
+ return {'ok':True,'side_effect_free':True,'rollback_digest':digest,'operation':canonical,'prestate':pre,'target_release':{'job_id':target_job_id,'commit_sha':target['commit_sha'],'version':target['version'],'release_id':target.get('release_id') or ''},'approval_required':True,'trace_id':trace}
+
+def _record_deploy_state(project,tenant,commit,actor,response):
+ con=rm.connect();now=rm.now_utc()
+ sql="insert into deploy_state(project,tenant,mode,commit_sha,commit_short,commit_message,actor,updated_at,response_json) values(?,?,?,?,?,?,?,?,?) on conflict(project) do update set tenant=excluded.tenant,mode=excluded.mode,commit_sha=excluded.commit_sha,commit_short=excluded.commit_short,commit_message=excluded.commit_message,actor=excluded.actor,updated_at=excluded.updated_at,response_json=excluded.response_json"
+ con.execute(sql,(project,tenant,'manual_rollback',commit,commit[:7],'manual rollback',actor,now,rm.safe_detail(response)));con.commit();con.close()
+
+def _rollback_real(d,execution_id=''):
+ if set(d)!={'project_slug','target_job_id','expected_current_job_id','expected_current_commit','trace_id'}:raise ValueError('invalid_request')
+ slug=str(d.get('project_slug') or '').strip().lower();target_job_id=int(d.get('target_job_id') or 0);current_job_id=int(d.get('expected_current_job_id') or 0);current_commit=str(d.get('expected_current_commit') or '').strip().lower();trace=str(d.get('trace_id') or '').strip()
+ if slug!=TEST_PROJECT or target_job_id<1 or current_job_id<1 or not COMMIT.fullmatch(current_commit) or not trace:raise ValueError('invalid_request')
+ pre=_prestate(slug)
+ if pre['job_id']!=current_job_id or not hmac.compare_digest(pre['commit_sha'],current_commit):raise RuntimeError('current_release_changed')
+ target=_published_job(slug,target_job_id)
+ if not target:raise LookupError('rollback_target_not_published')
+ setting=rm.project_setting(slug) or {};tenant=setting.get('tenant') or pre.get('tenant') or ''
+ version=f"v0.0.0-rollback-j{target_job_id}-{int(dt.datetime.now(dt.timezone.utc).timestamp())}"
+ scheduled=rm.schedule(slug,tenant,version,target['commit_sha'],dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat(),f'deployment-broker-manual-rollback:{trace}',dry_run=False,notes=f'Manual approved rollback to historical job {target_job_id}.')
+ job_id=scheduled['job_id'];rm.update_job(job_id,status='running',started_at=rm.now_utc(),message='Manual rollback started.');idem_mark_effect(execution_id)
+ backup_path=''
+ if tenant:
+  backup=rm.supabase_backup(slug,tenant,version);bb=backup.get('data') if isinstance(backup.get('data'),dict) else {}
+  if not backup.get('ok') or not bb.get('ok') or not bb.get('backup_path'):
+   rm.update_job(job_id,status='failed',finished_at=rm.now_utc(),message='Manual rollback backup failed.');return 502,{'ok':False,'status':'failed','job_id':job_id,'failure':'backup_failed'}
+  backup_path=str(bb.get('backup_path') or '');rm.update_job(job_id,backup_path=backup_path)
+ rb=_rollback_test(slug,tenant,target['commit_sha'],trace)
+ if not rb.get('ok'):
+  recovery=_rollback_test(slug,tenant,pre['commit_sha'],trace+'-recovery')
+  rm.update_job(job_id,status='rolled_back',finished_at=rm.now_utc(),message='Manual rollback target failed; previous release restored.',detail_json=rm.safe_detail({'target_job_id':target_job_id,'rollback':rb,'recovery':recovery,'prestate':pre}))
+  return 502,{'ok':False,'status':'rolled_back' if recovery.get('ok') else 'rollback_failed','job_id':job_id,'target_job_id':target_job_id,'recovery':recovery,'failure':'target_deploy_failed'}
+ response={'target_job_id':target_job_id,'target_commit':target['commit_sha'],'target_version':target['version'],'prestate':pre,'rollback':rb}
+ rm.update_job(job_id,status='published',finished_at=rm.now_utc(),message=f'Manual rollback to job {target_job_id} completed.',detail_json=rm.safe_detail(response),migration_applied=0)
+ _record_deploy_state(slug,tenant,target['commit_sha'],f'deployment-broker-manual-rollback:{trace}',response)
+ return 200,{'ok':True,'status':'published','operation':'manual_rollback','job_id':job_id,'project_slug':slug,'target_job_id':target_job_id,'commit_sha':target['commit_sha'],'version':version,'backup_path':backup_path,'migrations_applied':0,'komodo_called':True,'postcheck':{'status_ready':rb.get('status_ready') is True,'http_smoke':rb.get('smoke_ok') is True,'http_sha256':rb.get('http_sha256'),'http_size':rb.get('http_size')},'prestate':pre,'rollback_prepared':True}
+
+def _promote_real(d,execution_id=""):
+ if set(d)!={'project_slug','commit_sha','version','trace_id','expected_previous_commit'}:raise ValueError('invalid_request')
+ expected_previous=str(d.get('expected_previous_commit') or '').strip().lower()
+ if not COMMIT.fullmatch(expected_previous):raise ValueError('invalid_request')
+ base={k:d[k] for k in ('project_slug','commit_sha','version','trace_id')}
+ slug,commit,version,trace,setting=validate_common(base)
+ if slug!=TEST_PROJECT:raise PermissionError('project_not_allowed')
+ pre=_prestate(slug)
+ if not hmac.compare_digest(pre['commit_sha'],expected_previous):raise RuntimeError('previous_commit_changed')
+ idem_mark_effect(execution_id)
+ scheduled=rm.schedule(slug,setting.get('tenant') or '',version,commit,dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat(),f'deployment-broker:{trace}',dry_run=False,notes='CloudIF approved real deployment for isolated test project.')
+ result=rm.process_job(scheduled['job_id']);item=rm.get_job(scheduled['job_id']) or {}
+ if not result.get('ok') or result.get('status')!='published' or item.get('status')!='published':
+  rb=_rollback_test(slug,pre['tenant'],pre['commit_sha'],trace)
+  rm.update_job(scheduled['job_id'],status='rolled_back',finished_at=rm.now_utc(),message='Deploy failed; automatic rollback executed.',detail_json=rm.safe_detail({'process_result':result,'rollback':rb,'prestate':pre}))
+  return 502,{'ok':False,'status':'rolled_back' if rb.get('ok') else 'rollback_failed','job_id':scheduled['job_id'],'rollback':rb,'prestate':pre,'failure':'process_job_failed'}
+ status=_komodo_status(slug);st=status.get('data') if isinstance(status.get('data'),dict) else {}
+ smoke=_komodo_smoke(slug);sb=smoke.get('data') if isinstance(smoke.get('data'),dict) else {}
+ post_ok=bool(status.get('ok') and st.get('ok') and _komodo_operational(st) and smoke.get('ok') and sb.get('ok') and sb.get('status')==200)
+ if not post_ok:
+  rb=_rollback_test(slug,pre['tenant'],pre['commit_sha'],trace)
+  rm.update_job(scheduled['job_id'],status='rolled_back',finished_at=rm.now_utc(),message='Post-deploy verification failed; automatic rollback executed.',detail_json=rm.safe_detail({'rollback':rb,'prestate':pre,'status':st,'smoke':sb}))
+  return 502,{'ok':False,'status':'rolled_back' if rb.get('ok') else 'rollback_failed','job_id':scheduled['job_id'],'rollback':rb,'prestate':pre,'failure':'postcheck_failed'}
+ return 200,{'ok':True,'status':'published','job_id':scheduled['job_id'],'project_slug':slug,'commit_sha':commit,'version':version,'release_id':item.get('release_id') or '','release_url':item.get('release_url') or '','backup_path':item.get('backup_path') or '','migrations_applied':int(item.get('migration_applied') or 0),'komodo_called':True,'postcheck':{'status_ready':True,'http_smoke':True,'http_sha256':sb.get('sha256'),'http_size':sb.get('size')},'prestate':pre,'rollback_prepared':True}
+
+
+class H(BaseHTTPRequestHandler):
+ server_version='CloudIFDeploymentBroker/1.0'
+ def log_message(self,*a):pass
+ def do_GET(self):
+  if self.path=='/health':return send(self,200,{'ok':True,'service':'cloudif-deployment-broker','mode':'approved-test-promotion'})
+  if not auth(self):return send(self,401,{'ok':False,'error':'unauthorized'})
+  p=urllib.parse.urlparse(self.path);q=urllib.parse.parse_qs(p.query)
+  if p.path!='/v1/status' or set(q)!={'job_id'}:return send(self,404,{'ok':False,'error':'not_found'})
+  try:job_id=int(q['job_id'][0]);item=rm.get_job(job_id)
+  except Exception:return send(self,400,{'ok':False,'error':'invalid_request'})
+  if not item:return send(self,404,{'ok':False,'error':'not_found'})
+  safe={k:item.get(k) for k in ('id','created_at','scheduled_at','started_at','finished_at','project','tenant','version','commit_sha','actor','status','dry_run','migration_count','migration_applied','release_id','release_url','backup_path','message')}
+  return send(self,200,{'ok':True,'job':safe,'read_only':True})
+ def do_POST(self):
+  if not auth(self):return send(self,401,{'ok':False,'error':'unauthorized'})
+  try:d=body(self)
+  except Exception:return send(self,400,{'ok':False,'error':'invalid_request'})
+  if self.path=='/v1/production-readiness':
+   try:
+    if set(d)!={'project_slug','trace_id'}:raise ValueError('invalid_request')
+    result=_production_readiness(str(d.get('project_slug') or '').strip());result['trace_id']=str(d.get('trace_id') or '')
+   except LookupError as e:return send(self,404,{'ok':False,'error':str(e)})
+   except Exception:return send(self,400,{'ok':False,'error':'invalid_request'})
+   return send(self,200,result)
+  if self.path=='/v1/production-activation-plan':
+   try:result=_production_activation_plan(d)
+   except LookupError as e:return send(self,404,{'ok':False,'error':str(e)})
+   except Exception:return send(self,400,{'ok':False,'error':'invalid_request'})
+   return send(self,200,result)
+  if self.path=='/v1/production-plan':
+   try:result=_production_plan(d)
+   except LookupError as e:return send(self,404,{'ok':False,'error':str(e)})
+   except RuntimeError as e:return send(self,409,{'ok':False,'error':str(e)})
+   except Exception:return send(self,400,{'ok':False,'error':'invalid_request'})
+   return send(self,200,result)
+  if self.path=='/v1/production-homologation-plan':
+   try:result=_homologation_plan(d)
+   except PermissionError as e:return send(self,403,{'ok':False,'error':str(e)})
+   except LookupError as e:return send(self,404,{'ok':False,'error':str(e)})
+   except RuntimeError as e:return send(self,409,{'ok':False,'error':str(e)})
+   except Exception:return send(self,400,{'ok':False,'error':'invalid_request'})
+   return send(self,200,result)
+  if self.path in {'/v1/production-homologation-deploy','/v1/production-homologation-rollback'}:
+   execution_id=str(d.pop('execution_id','') or '').strip();payload=dict(d);op='deployment.production.homologation.deploy' if self.path.endswith('-deploy') else 'deployment.production.homologation.rollback'
+   try:istate=idem_begin(execution_id,op,payload)
+   except ValueError as e:return send(self,400,idem_finish(execution_id,400,{'ok':False,'error':str(e),'effect_started':False}))
+   if (cached:=idem_response(istate)):return send(self,cached[0],cached[1])
+   try:code,result=(_homologation_deploy(d,execution_id) if self.path.endswith('-deploy') else _homologation_rollback(d,execution_id))
+   except PermissionError as e:return send(self,403,idem_finish(execution_id,403,{'ok':False,'error':str(e),'effect_started':False}))
+   except LookupError as e:return send(self,404,idem_finish(execution_id,404,{'ok':False,'error':str(e),'effect_started':False}))
+   except ValueError as e:return send(self,400,idem_finish(execution_id,400,{'ok':False,'error':str(e),'effect_started':False}))
+   except Exception as e:return send(self,502,idem_finish(execution_id,502,{'ok':False,'error':'homologation_effect_failed','error_type':type(e).__name__,'effect_started':True}))
+   return send(self,code,idem_finish(execution_id,code,result))
+  if self.path in {'/v1/migrations-inspect','/v1/migrations-plan'}:
+   try:result=_migration_analysis(d,self.path.endswith('-plan'))
+   except PermissionError as e:return send(self,403,{'ok':False,'error':str(e)})
+   except LookupError:return send(self,404,{'ok':False,'error':'project_not_reconciled'})
+   except RuntimeError as e:return send(self,409,{'ok':False,'error':str(e)})
+   except Exception:return send(self,400,{'ok':False,'error':'invalid_request'})
+   return send(self,200,result)
+  if self.path=='/v1/plan':
+   try:slug,commit,version,trace,setting=validate_common(d)
+   except LookupError:return send(self,404,{'ok':False,'error':'project_not_reconciled'})
+   except Exception:return send(self,400,{'ok':False,'error':'invalid_request'})
+   canonical={'action':'deployment.validate','project_slug':slug,'commit_sha':commit,'version':version,'dry_run':True}
+   digest=hashlib.sha256(json.dumps(canonical,sort_keys=True,separators=(',',':')).encode()).hexdigest()
+   return send(self,200,{'ok':True,'side_effect_free':True,'deployment_digest':digest,'operation':canonical,'tenant':setting.get('tenant') or '','target':'validation-only','trace_id':trace})
+  if self.path=='/v1/plan-promote-test':
+   try:slug,commit,version,trace,setting=validate_common(d)
+   except LookupError:return send(self,404,{'ok':False,'error':'project_not_reconciled'})
+   except Exception:return send(self,400,{'ok':False,'error':'invalid_request'})
+   if slug!=TEST_PROJECT:return send(self,403,{'ok':False,'error':'project_not_allowed'})
+   try:pre=_prestate(slug)
+   except RuntimeError as e:return send(self,409,{'ok':False,'error':str(e)})
+   canonical={'action':'deployment.promote-test','project_slug':slug,'commit_sha':commit,'version':version,'target':'isolated-test','real_deploy':True,'expected_previous_commit':pre['commit_sha']}
+   digest=hashlib.sha256(json.dumps(canonical,sort_keys=True,separators=(',',':')).encode()).hexdigest()
+   return send(self,200,{'ok':True,'side_effect_free':True,'promotion_digest':digest,'operation':canonical,'prestate':{'commit_sha':pre['commit_sha'],'version':pre['version'],'job_id':pre['job_id'],'http_sha256':pre['http_sha256'],'komodo_repo_latest_hash':pre.get('komodo_repo_latest_hash'),'komodo_repo_telemetry_mismatch':pre.get('komodo_repo_telemetry_mismatch',False)},'rollback_required':True,'trace_id':trace})
+  if self.path=='/v1/plan-rollback-test':
+   try:result=_rollback_plan(d)
+   except LookupError as e:return send(self,404,{'ok':False,'error':str(e)})
+   except RuntimeError as e:return send(self,409,{'ok':False,'error':str(e)})
+   except Exception:return send(self,400,{'ok':False,'error':'invalid_request'})
+   return send(self,200,result)
+  if self.path=='/v1/rollback-test':
+   execution_id=str(d.pop('execution_id','') or '').strip();payload=dict(d)
+   try:istate=idem_begin(execution_id,'deployment.rollback-test',payload)
+   except ValueError as e:return send(self,400,idem_finish(execution_id,400,{'ok':False,'error':str(e),'effect_started':False}))
+   if (cached:=idem_response(istate)):return send(self,cached[0],cached[1])
+   try:code,result=_rollback_real(d,execution_id)
+   except LookupError as e:return send(self,404,idem_finish(execution_id,404,{'ok':False,'error':str(e),'effect_started':False}))
+   except RuntimeError as e:return send(self,409,idem_finish(execution_id,409,{'ok':False,'error':str(e),'effect_started':False}))
+   except ValueError as e:return send(self,400,idem_finish(execution_id,400,{'ok':False,'error':str(e),'effect_started':False}))
+   except Exception as e:return send(self,502,idem_finish(execution_id,502,{'ok':False,'error':'rollback_failed','error_type':type(e).__name__,'effect_started':True}))
+   result=dict(result);result['effect_started']=True
+   return send(self,code,idem_finish(execution_id,code,result))
+  if self.path=='/v1/validate':
+   execution_id=str(d.pop('execution_id','') or '').strip()
+   try:slug,commit,version,trace,setting=validate_common(d)
+   except LookupError:return send(self,404,{'ok':False,'error':'project_not_reconciled'})
+   except Exception:return send(self,400,{'ok':False,'error':'invalid_request'})
+   payload={'project_slug':slug,'commit_sha':commit,'version':version,'trace_id':trace}
+   try:istate=idem_begin(execution_id,'deployment.validate',payload)
+   except ValueError as e:return send(self,400,idem_finish(execution_id,400,{'ok':False,'error':str(e),'effect_started':False}))
+   if (cached:=idem_response(istate)):return send(self,cached[0],cached[1])
+   try:
+    idem_mark_effect(execution_id)
+    scheduled=rm.schedule(slug,setting.get('tenant') or '',version,commit,dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat(),f'deployment-broker:{trace}',dry_run=True,notes='CloudIF MCP approved deployment validation; dry-run only.')
+    result=rm.process_job(scheduled['job_id'])
+    item=rm.get_job(scheduled['job_id']) or {}
+   except Exception as e:
+    out={'ok':False,'error':'validation_failed','error_type':type(e).__name__,'effect_started':True};return send(self,502,idem_finish(execution_id,502,out))
+   if not result.get('ok') or result.get('status')!='validated' or item.get('status')!='validated' or int(item.get('dry_run') or 0)!=1:
+    out={'ok':False,'error':'validation_not_confirmed','job_id':scheduled.get('job_id'),'effect_started':True};return send(self,502,idem_finish(execution_id,502,out))
+   forbidden=any([item.get('release_id'),item.get('release_url'),item.get('backup_path'),int(item.get('migration_applied') or 0)])
+   if forbidden:
+    out={'ok':False,'error':'dry_run_boundary_violated','job_id':scheduled['job_id'],'effect_started':True};return send(self,502,idem_finish(execution_id,502,out))
+   out={'ok':True,'status':'validated','job_id':scheduled['job_id'],'project_slug':slug,'commit_sha':commit,'version':version,'dry_run':True,'release_created':False,'backup_created':False,'migrations_applied':0,'komodo_called':False,'trace_id':trace,'effect_started':True}
+   return send(self,200,idem_finish(execution_id,200,out))
+  if self.path=='/v1/promote-test':
+   execution_id=str(d.pop('execution_id','') or '').strip()
+   payload=dict(d)
+   try:istate=idem_begin(execution_id,'deployment.promote-test',payload)
+   except ValueError as e:return send(self,400,idem_finish(execution_id,400,{'ok':False,'error':str(e),'effect_started':False}))
+   if (cached:=idem_response(istate)):return send(self,cached[0],cached[1])
+   try:
+    code,result=_promote_real(d,execution_id)
+   except PermissionError:return send(self,403,idem_finish(execution_id,403,{'ok':False,'error':'project_not_allowed','effect_started':False}))
+   except LookupError:return send(self,404,idem_finish(execution_id,404,{'ok':False,'error':'project_not_reconciled','effect_started':False}))
+   except ValueError as e:return send(self,400,idem_finish(execution_id,400,{'ok':False,'error':str(e),'effect_started':False}))
+   except RuntimeError as e:
+    if str(e)=='previous_commit_changed':return send(self,409,idem_finish(execution_id,409,{'ok':False,'error':'previous_commit_changed','effect_started':False}))
+    return send(self,502,idem_finish(execution_id,502,{'ok':False,'error':'promotion_failed','error_type':type(e).__name__,'effect_started':True}))
+   except Exception as e:return send(self,502,idem_finish(execution_id,502,{'ok':False,'error':'promotion_failed','error_type':type(e).__name__,'effect_started':True}))
+   result=dict(result);result['effect_started']=True
+   return send(self,code,idem_finish(execution_id,code,result))
+  return send(self,404,{'ok':False,'error':'not_found'})
+if __name__=='__main__':
+ if not TOKEN:raise SystemExit('missing token')
+ ThreadingHTTPServer((HOST,PORT),H).serve_forever()

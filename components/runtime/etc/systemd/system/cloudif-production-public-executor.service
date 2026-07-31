@@ -1,0 +1,20 @@
+[Unit]
+Description=CloudIF public production blue-green executor
+After=docker.service network-online.target
+Requires=docker.service
+[Service]
+Type=simple
+EnvironmentFile=/etc/cloudif/production-public.env
+ExecStart=/usr/bin/python3 /srv/cloudif/app-pointers/production-public-executor-current/cloudif-production-public-executor.py
+Restart=on-failure
+NoNewPrivileges=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/cloudif/production-public
+IPAddressDeny=any
+IPAddressAllow=localhost
+IPAddressAllow=10.62.91.2/32
+IPAddressAllow=10.62.91.3/32
+IPAddressAllow=172.23.0.0/16
+[Install]
+WantedBy=multi-user.target

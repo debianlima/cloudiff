@@ -1,0 +1,26 @@
+[Unit]
+Description=CloudIF Machine Administration Controller
+After=network-online.target docker.service
+Wants=network-online.target
+[Service]
+Type=simple
+EnvironmentFile=/etc/cloudif/machine-controller-db.env
+EnvironmentFile=/etc/cloudif/machine-admin-security.env
+ExecStart=/usr/bin/python3 /usr/local/sbin/cloudif-machine-controller.py
+Restart=on-failure
+RestartSec=5
+User=root
+Group=root
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictRealtime=true
+ReadWritePaths=/var/lib/cloudif-machine-admin /tmp
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,19 @@
+[Unit]
+Description=CloudIF internal academic audit API
+After=network.target
+[Service]
+Type=simple
+User=cloudif-control
+Group=cloudif-control
+EnvironmentFile=/etc/cloudif/academic-audit.env
+ExecStart=/usr/bin/python3 /srv/cloudif/app-pointers/audit-current/cloudif-academic-audit-api.py
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/cloudif/audit
+ReadOnlyPaths=/srv/cloudif/app-releases/audit /srv/cloudif/app-pointers
+[Install]
+WantedBy=multi-user.target

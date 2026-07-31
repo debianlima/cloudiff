@@ -1,0 +1,7 @@
+[Unit]
+Description=Reconcile CloudIF capabilities when onboarding changes
+[Path]
+PathChanged=/var/lib/cloudif/onboarding/onboarding.db
+Unit=cloudif-project-capabilities.service
+[Install]
+WantedBy=multi-user.target

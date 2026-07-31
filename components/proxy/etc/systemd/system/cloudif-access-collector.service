@@ -1,0 +1,12 @@
+[Unit]
+Description=CloudIF incremental proxy access collector
+After=cloudif-nginx-proxy-manager.service
+[Service]
+Type=oneshot
+User=cloudif-telemetry
+Group=cloudif-telemetry
+EnvironmentFile=/etc/cloudif/access-telemetry.env
+ExecStart=/usr/bin/python3 /srv/cloudif/app-pointers/access-telemetry-current/cloudif-access-collector.py
+NoNewPrivileges=true
+ReadOnlyPaths=/srv/cloudif/proxy/npm/data/logs /srv/cloudif/app-releases/access-telemetry /srv/cloudif/app-pointers
+ReadWritePaths=/var/lib/cloudif/access-telemetry

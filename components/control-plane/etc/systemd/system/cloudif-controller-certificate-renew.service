@@ -1,0 +1,18 @@
+[Unit]
+Description=CloudIF Controller mTLS Server Certificate Renewal
+After=docker.service cloudif-machine-controller.service
+Requires=docker.service
+[Service]
+EnvironmentFile=/etc/cloudif/machine-controller-db.env
+Type=oneshot
+ExecStart=/usr/local/sbin/cloudif-controller-certificate-renew.sh
+User=root
+Group=root
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadOnlyPaths=/etc/cloudif /srv/cloudif/lib
+ReadWritePaths=/var/lib/cloudif-agent-pki /srv/cloudif/router/mtls /srv/cloudif/router/logs /var/run/docker.sock /run /tmp
+TimeoutStartSec=240

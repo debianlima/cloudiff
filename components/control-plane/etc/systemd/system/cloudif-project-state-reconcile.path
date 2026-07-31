@@ -1,0 +1,9 @@
+[Unit]
+Description=Trigger unified CloudIF project state reconciliation
+StartLimitIntervalSec=0
+[Path]
+PathChanged=/var/lib/cloudif/onboarding/onboarding.db
+Unit=cloudif-project-state-reconcile.service
+TriggerLimitIntervalSec=0
+[Install]
+WantedBy=multi-user.target

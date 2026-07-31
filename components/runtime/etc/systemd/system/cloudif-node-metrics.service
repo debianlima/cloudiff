@@ -1,0 +1,15 @@
+[Unit]
+Description=CloudIF Node Metrics Agent
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+Environment=CLOUDIF_METRICS_HOST=0.0.0.0
+Environment=CLOUDIF_METRICS_PORT=18096
+ExecStart=/usr/bin/python3 /usr/local/sbin/cloudif-node-metrics.py
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

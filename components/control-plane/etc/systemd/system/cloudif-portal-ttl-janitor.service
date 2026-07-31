@@ -1,0 +1,7 @@
+[Unit]
+Description=CloudIF Portal TTL Janitor
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/cloudif/portal.env
+ExecStart=/usr/bin/python3 /usr/local/sbin/cloudif-portal-ttl-janitor.py

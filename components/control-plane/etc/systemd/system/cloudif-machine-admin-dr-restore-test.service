@@ -1,0 +1,16 @@
+[Unit]
+Description=CloudIF Machine Administration DR Restore Validation
+After=cloudif-machine-admin-dr-backup.service
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/cloudif-machine-admin-dr-restore-test.sh
+User=root
+Group=root
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadOnlyPaths=/etc /usr/local/sbin /srv/cloudif /var/lib/cloudif-agent-pki
+ReadWritePaths=/srv/cloudif/managed-backups/machine-admin-dr /var/tmp /tmp
+TimeoutStartSec=300

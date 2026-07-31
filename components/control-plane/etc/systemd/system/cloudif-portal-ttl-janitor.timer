@@ -1,0 +1,10 @@
+[Unit]
+Description=Run CloudIF Portal TTL Janitor every 5 minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+Unit=cloudif-portal-ttl-janitor.service
+
+[Install]
+WantedBy=timers.target

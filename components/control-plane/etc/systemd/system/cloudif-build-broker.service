@@ -1,0 +1,27 @@
+[Unit]
+Description=CloudIF durable build queue broker
+After=network.target cloudif-workspace-broker.service
+[Service]
+Type=simple
+User=cloudif-control
+Group=cloudif-control
+EnvironmentFile=/etc/cloudif/build-broker.env
+ExecStart=/usr/bin/python3 /srv/cloudif/app-pointers/build-broker-current/cloudif-build-broker.py
+Restart=on-failure
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/cloudif/build-broker
+ReadOnlyPaths=/etc/cloudif/build-broker.env /srv/cloudif/app-releases/build-broker /srv/cloudif/app-pointers
+PrivateDevices=true
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+CapabilityBoundingSet=
+RestrictAddressFamilies=AF_INET AF_UNIX
+IPAddressAllow=127.0.0.0/8
+IPAddressDeny=any
+UMask=0077
+[Install]
+WantedBy=multi-user.target

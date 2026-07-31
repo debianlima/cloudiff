@@ -1,0 +1,7 @@
+services:
+  cloudif-demo:
+    image: nginx:alpine
+    restart: unless-stopped
+    labels:
+      - "cloudif.project=sistema-de-biblioteca"
+      - "cloudif.generated=v127"

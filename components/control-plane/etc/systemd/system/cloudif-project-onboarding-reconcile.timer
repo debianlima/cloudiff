@@ -1,0 +1,9 @@
+[Unit]
+Description=CloudIF automatic project onboarding reconciliation
+[Timer]
+OnBootSec=45s
+OnUnitActiveSec=60s
+AccuracySec=5s
+Persistent=true
+[Install]
+WantedBy=timers.target

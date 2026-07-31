@@ -1,0 +1,17 @@
+[Unit]
+Description=CloudIF internal academic evaluation API
+After=cloudif-academic-audit.service
+Wants=cloudif-academic-audit.service
+[Service]
+Type=simple
+User=cloudif-control
+Group=cloudif-control
+EnvironmentFile=/etc/cloudif/evaluations.env
+ExecStart=/usr/bin/python3 /srv/cloudif/app-pointers/evaluations-current/cloudif-evaluation-api.py
+Restart=on-failure
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/cloudif/evaluations
+ReadOnlyPaths=/srv/cloudif/app-releases/evaluations /srv/cloudif/app-pointers
+[Install]
+WantedBy=multi-user.target

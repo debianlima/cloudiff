@@ -1,0 +1,18 @@
+[Unit]
+Description=CloudIF Supabase tenant launch/status/cancel API
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/cloudif/supabase-launch.env
+ExecStart=/usr/bin/python3 /usr/local/sbin/cloudif-supabase-launch-api.py
+Restart=always
+RestartSec=5
+User=root
+WorkingDirectory=/srv/cloudif
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

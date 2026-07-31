@@ -1,0 +1,16 @@
+[Unit]
+Description=CloudIF Control Plane Integrity Check
+After=local-fs.target
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/cloudif-control-plane-integrity.py check
+User=root
+Group=root
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadOnlyPaths=/etc /usr/local/sbin /srv/cloudif /var/lib/cloudif-agent-pki
+ReadWritePaths=/var/lib/cloudif-machine-admin /tmp
+TimeoutStartSec=120

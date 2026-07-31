@@ -1,0 +1,6 @@
+[Unit]
+Description=CloudIF safe release retention and storage guard
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/cloudif/storage-guard.env
+ExecStart=/usr/bin/python3 /usr/local/sbin/cloudif-storage-guard.py

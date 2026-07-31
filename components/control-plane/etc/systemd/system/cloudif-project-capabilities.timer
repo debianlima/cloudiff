@@ -1,0 +1,10 @@
+[Unit]
+Description=Periodic CloudIF project capability reconciliation
+[Timer]
+OnBootSec=45s
+OnUnitActiveSec=60s
+AccuracySec=5s
+Persistent=true
+Unit=cloudif-project-capabilities.service
+[Install]
+WantedBy=timers.target

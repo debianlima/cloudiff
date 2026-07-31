@@ -1,0 +1,45 @@
+[Unit]
+Description=CloudIF internal read-only MCP gateway
+After=network.target cloudif-control-plane-api.service
+Requires=cloudif-control-plane-api.service
+[Service]
+Type=simple
+User=cloudif-control
+Group=cloudif-control
+EnvironmentFile=/etc/cloudif/mcp-gateway.env
+ExecStart=/usr/bin/python3 /srv/cloudif/app-pointers/mcp-gateway-current/cloudif-mcp-gateway.py
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadOnlyPaths=/srv/cloudif/app-releases/mcp-gateway /srv/cloudif/app-pointers
+
+PrivateDevices=true
+ProtectClock=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+ProtectHostname=true
+ProtectProc=invisible
+ProcSubset=pid
+RestrictNamespaces=true
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+RestrictRealtime=true
+SystemCallArchitectures=native
+RestrictAddressFamilies=AF_INET AF_UNIX
+CapabilityBoundingSet=
+AmbientCapabilities=
+RemoveIPC=true
+UMask=0077
+IPAddressAllow=127.0.0.0/8
+IPAddressAllow=::1/128
+IPAddressAllow=10.62.91.2/32
+IPAddressDeny=any
+
+[Install]
+WantedBy=multi-user.target

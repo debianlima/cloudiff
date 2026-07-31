@@ -1,0 +1,9 @@
+[Unit]
+Description=Daily CloudIF Controller mTLS Server Certificate Renewal Check
+[Timer]
+OnCalendar=*-*-* 03:50:00 UTC
+RandomizedDelaySec=20m
+Persistent=true
+Unit=cloudif-controller-certificate-renew.service
+[Install]
+WantedBy=timers.target

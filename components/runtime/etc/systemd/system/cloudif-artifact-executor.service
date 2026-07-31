@@ -1,0 +1,19 @@
+[Unit]
+Description=CloudIF artifact build, SBOM and scan executor
+After=docker.service network-online.target
+Requires=docker.service
+[Service]
+Type=simple
+User=root
+Group=root
+EnvironmentFile=/etc/cloudif/artifact-executor.env
+ExecStart=/usr/bin/python3 /srv/cloudif/app-pointers/artifact-executor-current/cloudif-artifact-executor.py
+Restart=on-failure
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/cloudif/artifact-executor /srv/cloudif/artifacts /var/run/docker.sock
+ReadOnlyPaths=/etc/cloudif/artifact-executor.env /etc/komodo/stacks /srv/cloudif/scanners /srv/cloudif/app-releases/artifact-executor /srv/cloudif/app-pointers
+[Install]
+WantedBy=multi-user.target

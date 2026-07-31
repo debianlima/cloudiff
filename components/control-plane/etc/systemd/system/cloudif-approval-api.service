@@ -1,0 +1,16 @@
+[Unit]
+Description=CloudIF internal approval API
+After=network.target
+[Service]
+Type=simple
+User=cloudif-control
+Group=cloudif-control
+EnvironmentFile=/etc/cloudif/approvals.env
+ExecStart=/usr/bin/python3 /srv/cloudif/app-pointers/approvals-current/cloudif-approval-api.py
+Restart=on-failure
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/cloudif/approvals
+ReadOnlyPaths=/srv/cloudif/app-releases/approvals /srv/cloudif/app-pointers
+[Install]
+WantedBy=multi-user.target

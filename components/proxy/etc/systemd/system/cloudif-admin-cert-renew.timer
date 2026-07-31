@@ -1,0 +1,9 @@
+[Unit]
+Description=Daily renewal check for CloudIF admin certificate
+[Timer]
+OnCalendar=*-*-* 03:35:00
+RandomizedDelaySec=30m
+Persistent=true
+Unit=cloudif-admin-cert-renew.service
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,18 @@
+[Unit]
+Description=CloudIF Machine Agent mTLS Certificate Renewal
+After=network-online.target cloudif-machine-harvester.service
+Wants=network-online.target
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/cloudif/machine-agent.env
+ExecStart=/usr/bin/python3 /usr/local/sbin/cloudif-machine-certificate-renew.py
+User=root
+Group=root
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadOnlyPaths=/etc/cloudif
+ReadWritePaths=/var/lib/cloudif-machine-agent /etc/cloudif/machine-agent /tmp
+TimeoutStartSec=180

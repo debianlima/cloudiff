@@ -1,0 +1,19 @@
+[Unit]
+Description=CloudIF Deploy Center / Komodo Panel
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+Environment=CLOUDIF_PORTAL_DB=/var/lib/cloudif/portal/cloudif-portal.db
+Environment=CLOUDIF_DEPLOY_PANEL_HOST=10.62.92.7
+Environment=CLOUDIF_DEPLOY_PANEL_PORT=18099
+Environment=CLOUDIF_KOMODO_AGENT_URL=http://10.62.91.2:18098
+Environment=CLOUDIF_DEFAULT_PROJECT=sistema-de-biblioteca-teste
+Environment=CLOUDIF_DEFAULT_TENANT=iff1742962
+ExecStart=/usr/bin/python3 /usr/local/sbin/cloudif-deploy-panel.py
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

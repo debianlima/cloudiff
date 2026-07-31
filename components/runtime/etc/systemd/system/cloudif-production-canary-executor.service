@@ -1,0 +1,19 @@
+[Unit]
+Description=CloudIF real production canary executor
+After=docker.service network-online.target
+Requires=docker.service
+[Service]
+Type=simple
+EnvironmentFile=/etc/cloudif/production-canary.env
+ExecStart=/usr/bin/python3 /srv/cloudif/app-pointers/production-canary-executor-current/cloudif-production-canary-executor.py
+Restart=on-failure
+NoNewPrivileges=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/cloudif/production-canary
+IPAddressDeny=any
+IPAddressAllow=localhost
+IPAddressAllow=10.62.91.2/32
+IPAddressAllow=172.31.125.0/24
+[Install]
+WantedBy=multi-user.target

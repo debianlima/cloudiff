@@ -1,0 +1,11 @@
+[Unit]
+Description=Run CloudIF UI and security review every 6 hours
+
+[Timer]
+OnBootSec=10min
+OnUnitActiveSec=6h
+RandomizedDelaySec=5min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

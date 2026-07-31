@@ -1,0 +1,20 @@
+[Unit]
+Description=CloudIF one-shot build queue worker
+After=cloudif-build-broker.service cloudif-workspace-broker.service
+[Service]
+Type=oneshot
+User=cloudif-control
+Group=cloudif-control
+EnvironmentFile=/etc/cloudif/build-broker.env
+ExecStart=/usr/bin/python3 /srv/cloudif/app-pointers/build-broker-current/cloudif-build-broker.py drain
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/cloudif/build-broker
+ReadOnlyPaths=/etc/cloudif/build-broker.env /srv/cloudif/app-releases/build-broker /srv/cloudif/app-pointers
+PrivateDevices=true
+RestrictSUIDSGID=true
+LockPersonality=true
+CapabilityBoundingSet=
+UMask=0077

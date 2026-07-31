@@ -1,0 +1,17 @@
+[Unit]
+Description=CloudIF Tenant Guard first-login provisioner
+After=network-online.target cloudif-authz-gate.service
+Wants=network-online.target
+Requires=cloudif-authz-gate.service
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/cloudif-tenant-guard.env
+ExecStart=/usr/bin/python3 /usr/local/sbin/cloudif-tenant-guard.py
+Restart=always
+RestartSec=3
+LimitNOFILE=262144
+TasksMax=infinity
+
+[Install]
+WantedBy=multi-user.target

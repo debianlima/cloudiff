@@ -1,0 +1,17 @@
+[Unit]
+Description=CloudIF Node 24 lockfile build and security homologation
+After=docker.service cloudif-artifact-executor.service
+Requires=docker.service
+[Service]
+Type=oneshot
+User=root
+Group=root
+EnvironmentFile=/etc/cloudif/artifact-executor.env
+ExecStart=/usr/bin/python3 /srv/cloudif/app-pointers/node24-pipeline-current/cloudif-node24-pipeline.py
+TimeoutStartSec=1200
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/cloudif/node24-pipeline /srv/cloudif/artifacts /var/run/docker.sock /var/lib/cloudif/artifact-executor
+ReadOnlyPaths=/srv/cloudif/test-fixtures /srv/cloudif/scanners /srv/cloudif/app-releases/node24-pipeline /srv/cloudif/app-pointers /etc/cloudif/artifact-executor.env

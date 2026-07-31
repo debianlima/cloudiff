@@ -1,0 +1,47 @@
+#!/bin/bash
+set -euo pipefail
+BASE=${CLOUDIF_RELEASE_BASE:-/srv/cloudif/releases}
+cmd=${1:-status}
+case "$cmd" in
+ status)
+   python3 - "$BASE" <<'PY'
+import json,sys,pathlib
+b=pathlib.Path(sys.argv[1]); rows=[]
+for p in sorted(b.glob('*/result.json')):
+ try: rows.append(json.loads(p.read_text()))
+ except Exception: pass
+print(json.dumps({'active':str((b/'pointers/active').resolve()) if (b/'pointers/active').exists() else None,'previous':str((b/'pointers/previous').resolve()) if (b/'pointers/previous').exists() else None,'releases':rows[-20:]},ensure_ascii=False))
+PY
+   ;;
+ retention)
+   mode=${2:---dry-run}
+   python3 - "$BASE" "$mode" <<'PY'
+import json,sys,pathlib,time,shutil
+b=pathlib.Path(sys.argv[1]); mode=sys.argv[2]
+protected=set()
+for n in ('active','previous','candidate'):
+ p=b/'pointers'/n
+ try: protected.add(p.resolve())
+ except Exception: pass
+rows=[]
+for d in b.iterdir() if b.exists() else []:
+ if not d.is_dir() or d.name=='pointers': continue
+ r=d/'result.json'; status='unknown'; at=d.stat().st_mtime
+ try:
+  j=json.loads(r.read_text());status=j.get('status','unknown')
+ except Exception: pass
+ rows.append((at,d,status))
+rows.sort(reverse=True)
+keep=set(d for _,d,_ in rows[:3])|protected
+candidates=[]
+for at,d,status in rows[3:]:
+ if d in keep: continue
+ if time.time()-at < 7*86400: continue
+ candidates.append(str(d))
+if mode=='--apply':
+ for x in candidates: shutil.rmtree(x)
+print(json.dumps({'mode':mode,'protected':[str(x) for x in protected],'candidates':candidates,'deleted':candidates if mode=='--apply' else []},ensure_ascii=False))
+PY
+   ;;
+ *) echo 'uso: cloudif-release-maintenance status|retention [--dry-run|--apply]' >&2; exit 2;;
+esac

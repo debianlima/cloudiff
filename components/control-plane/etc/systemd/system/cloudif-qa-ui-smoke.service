@@ -1,0 +1,11 @@
+[Unit]
+Description=CloudIF QA interface smoke and accessibility tests
+After=cloudif-portal-qa.service
+Requires=cloudif-portal-qa.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /usr/local/libexec/cloudif/qa_ui_smoke.py
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true

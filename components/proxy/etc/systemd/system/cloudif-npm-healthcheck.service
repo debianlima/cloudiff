@@ -1,0 +1,11 @@
+[Unit]
+Description=CloudIF NPM and public domains healthcheck
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/cloudif-npm-healthcheck.sh
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true

@@ -1,0 +1,8 @@
+[Unit]
+Description=Periodic CloudIF coordinated smoke test
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=5min
+Persistent=true
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,10 @@
+[Unit]
+Description=CloudIF integrated health check
+After=docker.service network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/cloudif-healthcheck.sh
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true

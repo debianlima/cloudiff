@@ -1,0 +1,10 @@
+[Unit]
+Description=Refresh CloudIF Portal cache every minute
+
+[Timer]
+OnBootSec=30s
+OnUnitActiveSec=60s
+Unit=cloudif-portal-refresh-cache.service
+
+[Install]
+WantedBy=timers.target

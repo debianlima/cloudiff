@@ -1,0 +1,49 @@
+#!/bin/bash
+set -euo pipefail
+BASE=${CLOUDIF_RELEASE_BASE:-/srv/cloudif/releases}
+LOCK=${CLOUDIF_RELEASE_LOCK:-/var/lock/cloudif-release.lock}
+usage(){ echo "uso: $0 prepare|homologate|rollback|status <release-id> [target source]" >&2; exit 2; }
+cmd=${1:-}; rid=${2:-}; [ -n "$cmd" ] || usage
+root="$BASE/$rid"
+mkdir -p "$BASE/pointers"
+case "$cmd" in
+ prepare)
+   [ $# -eq 4 ] || usage; target=$3; source=$4
+   [ -e "$source" ] || { echo source_missing >&2; exit 3; }
+   exec 9>"$LOCK"; flock -n 9 || exit 75
+   [ ! -e "$root" ] || { echo release_exists >&2; exit 4; }
+   mkdir -p "$root/pre-state" "$root/candidate"; chmod 700 "$root"
+   if [ -e "$target" ]; then cp -a "$target" "$root/pre-state/target"; echo 1 > "$root/pre-state/existed"; else echo 0 > "$root/pre-state/existed"; fi
+   cp -a "$source" "$root/candidate/payload"
+   printf '%s\n' "$target" > "$root/target"
+   sha256sum "$root/candidate/payload" > "$root/candidate.sha256"
+   cat > "$root/rollback.sh" <<EOF
+#!/bin/bash
+set -euo pipefail
+exec 9>"$LOCK"; flock -n 9 || exit 75
+target=\$(cat '$root/target')
+if [ \$(cat '$root/pre-state/existed') = 1 ]; then cp -a '$root/pre-state/target' "\$target.rollback-new"; mv -Tf "\$target.rollback-new" "\$target"; else rm -f "\$target"; fi
+printf '{"release_id":"$rid","status":"rolled_back","at":"%s"}\n' "\$(date -Is)" > '$root/result.json'
+EOF
+   chmod 700 "$root/rollback.sh"
+   printf '{"release_id":"%s","status":"prepared","target":"%s","at":"%s"}\n' "$rid" "$target" "$(date -Is)" > "$root/result.json"
+   ln -sfn "$root" "$BASE/pointers/candidate"
+   ;;
+ homologate)
+   [ $# -eq 2 ] || usage
+   exec 9>"$LOCK"; flock -n 9 || exit 75
+   [ -f "$root/candidate/payload" ] || exit 5
+   sha256sum -c "$root/candidate.sha256"
+   target=$(cat "$root/target"); mkdir -p "$(dirname "$target")"
+   cp -a "$root/candidate/payload" "$target.release-new"; mv -Tf "$target.release-new" "$target"
+   prev=$(readlink -f "$BASE/pointers/active" 2>/dev/null || true)
+   [ -z "$prev" ] || ln -sfn "$prev" "$BASE/pointers/previous"
+   ln -sfn "$root" "$BASE/pointers/active"; rm -f "$BASE/pointers/candidate"
+   printf '{"release_id":"%s","status":"homologated","target":"%s","at":"%s"}\n' "$rid" "$target" "$(date -Is)" > "$root/result.json"
+   ;;
+ rollback)
+   [ $# -eq 2 ] || usage; exec "$root/rollback.sh" ;;
+ status)
+   cat "$root/result.json" ;;
+ *) usage ;;
+esac

@@ -1,0 +1,5 @@
+[Unit]
+Description=Synchronize CloudIF project registry
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /usr/local/sbin/cloudif-control-plane-sync.py

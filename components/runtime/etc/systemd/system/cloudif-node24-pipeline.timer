@@ -1,0 +1,9 @@
+[Unit]
+Description=CloudIF scheduled Node 24 security homologation
+[Timer]
+OnBootSec=15min
+OnUnitActiveSec=24h
+Persistent=true
+Unit=cloudif-node24-pipeline.service
+[Install]
+WantedBy=timers.target

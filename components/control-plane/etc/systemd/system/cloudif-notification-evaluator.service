@@ -1,0 +1,11 @@
+[Unit]
+Description=Evaluate CloudIF project alerts
+After=cloudif-monitor-api.service
+[Service]
+Type=oneshot
+User=cloudif-control
+Group=cloudif-control
+EnvironmentFile=/etc/cloudif/notifications.env
+ExecStart=/usr/bin/python3 /srv/cloudif/app-pointers/notifications-current/cloudif-notification-evaluator.py
+ReadWritePaths=/var/lib/cloudif/notifications
+NoNewPrivileges=true

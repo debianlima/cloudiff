@@ -1,0 +1,9 @@
+[Unit]
+Description=Monthly CloudIF Machine Administration DR Restore Validation
+[Timer]
+OnCalendar=*-*-01 05:10:00 UTC
+RandomizedDelaySec=45m
+Persistent=true
+Unit=cloudif-machine-admin-dr-restore-validation.service
+[Install]
+WantedBy=timers.target

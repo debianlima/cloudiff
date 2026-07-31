@@ -1,0 +1,18 @@
+[Unit]
+Description=CloudIF desired versus observed agent controller
+After=cloudif-agent-registry.service cloudif-project-onboarding.service
+Requires=cloudif-agent-registry.service
+StartLimitIntervalSec=0
+[Service]
+Type=oneshot
+User=root
+Group=root
+ExecStart=/usr/bin/python3 /srv/cloudif/app-pointers/agent-controller-current/cloudif-agent-controller.py
+TimeoutStartSec=180
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadOnlyPaths=/var/lib/cloudif/onboarding /var/lib/cloudif/agents /srv/cloudif/app-pointers /etc/cloudif
+ReadWritePaths=/var/lib/cloudif/health /var/lib/cloudif/portal
+UMask=0077

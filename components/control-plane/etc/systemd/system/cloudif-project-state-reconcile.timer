@@ -1,0 +1,10 @@
+[Unit]
+Description=Periodic unified CloudIF project state reconciliation
+[Timer]
+OnBootSec=50s
+OnUnitActiveSec=60s
+AccuracySec=5s
+Persistent=true
+Unit=cloudif-project-state-reconcile.service
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,16 @@
+[Unit]
+Description=CloudIF internal access telemetry API
+After=network.target cloudif-access-collector.service
+[Service]
+Type=simple
+User=cloudif-telemetry
+Group=cloudif-telemetry
+EnvironmentFile=/etc/cloudif/access-telemetry.env
+ExecStart=/usr/bin/python3 /srv/cloudif/app-pointers/access-telemetry-current/cloudif-access-api.py
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadOnlyPaths=/var/lib/cloudif/access-telemetry /srv/cloudif/app-releases/access-telemetry /srv/cloudif/app-pointers
+[Install]
+WantedBy=multi-user.target

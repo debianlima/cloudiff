@@ -1,0 +1,13 @@
+[Unit]
+Description=CloudIF verification of logrotate execution and log permissions
+After=logrotate.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/cloudif-logrotate-verify.sh
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/log/cloudif-logrotate-verify.log
+UMask=0077

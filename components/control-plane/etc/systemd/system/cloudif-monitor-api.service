@@ -1,0 +1,18 @@
+[Unit]
+Description=CloudIF internal monitoring API
+After=cloudif-monitor-collector.service
+[Service]
+Type=simple
+User=cloudif-control
+Group=cloudif-control
+EnvironmentFile=/etc/cloudif/monitor.env
+ExecStart=/usr/bin/python3 /srv/cloudif/app-pointers/monitor-current/cloudif-monitor-api.py
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadOnlyPaths=/srv/cloudif/app-releases/monitor /srv/cloudif/app-pointers /var/lib/cloudif/monitoring /var/lib/cloudif/approvals /var/lib/cloudif/portal/deployment-idempotency.db
+[Install]
+WantedBy=multi-user.target
