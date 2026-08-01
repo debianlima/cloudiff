@@ -274,6 +274,10 @@ def validate_structure() -> None:
         "portal/design/app.js",
         "portal/legacy/README.md",
         "docs/portal-v2/prototipo.html",
+        "portal/core/legacy_shell.py",
+        "components/control-plane/srv/cloudif/lib/cloudif_portal_v2_coexist.py",
+        "components/control-plane/etc/systemd/system/cloudif-admin-portal.service.d/v2.conf",
+        "components/control-plane/srv/cloudif/lib/sitecustomize.py",
     ]
     for item in required:
         if not (ROOT / item).exists():

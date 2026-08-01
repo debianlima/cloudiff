@@ -1,47 +1,42 @@
-"""Route registry for the incremental Portal v2 migration."""
+"""Route registry for the incremental Portal v2 migration.
+
+Routes are keyed by (path, method). An empty registry means every request falls
+through to the immutable legacy adapter, so enabling this foundation changes no
+user-visible route (REQUIREMENTS §1 invariant; A8 reversibility).
+"""
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Callable, Protocol
+from collections.abc import Callable
 
-
-class Handler(Protocol):
-    def __call__(self, request: object) -> object: ...
-
-
-@dataclass(frozen=True, slots=True)
-class Route:
-    path: str
-    permission: str
-    handler: Handler
-    module: str
-
-    def __post_init__(self) -> None:
-        if not self.path.startswith("/"):
-            raise ValueError("route path must start with '/'")
-        if not self.permission.strip():
-            raise ValueError("every route must declare a permission")
-        if not self.module.strip():
-            raise ValueError("every route must declare its module")
+from portal.core.dispatch import Endpoint
 
 
 class Registry:
     def __init__(self) -> None:
-        self._routes: dict[str, Route] = {}
+        self._routes: dict[tuple[str, str], Endpoint] = {}
 
-    def register(self, route: Route) -> None:
-        if route.path in self._routes:
-            raise ValueError(f"duplicate route: {route.path}")
-        self._routes[route.path] = route
+    def register(self, endpoint: Endpoint) -> None:
+        key = (endpoint.path, endpoint.method.upper())
+        if key in self._routes:
+            raise ValueError(f"duplicate route: {endpoint.method} {endpoint.path}")
+        self._routes[key] = endpoint
 
-    def match(self, path: str) -> Route | None:
-        return self._routes.get(path)
+    def register_all(self, endpoints: tuple[Endpoint, ...]) -> None:
+        for endpoint in endpoints:
+            self.register(endpoint)
 
-    def routes(self) -> tuple[Route, ...]:
+    def match(self, path: str, method: str) -> Endpoint | None:
+        return self._routes.get((path, method.upper()))
+
+    def routes(self) -> tuple[Endpoint, ...]:
         return tuple(self._routes.values())
 
-    def navigation(self, allowed: Callable[[str], bool]) -> tuple[Route, ...]:
-        return tuple(route for route in self._routes.values() if allowed(route.permission))
+    def navigation(self, allowed: Callable[[str], bool]) -> tuple[Endpoint, ...]:
+        seen: dict[str, Endpoint] = {}
+        for endpoint in self._routes.values():
+            if endpoint.method.upper() == "GET" and allowed(endpoint.permission):
+                seen.setdefault(endpoint.module, endpoint)
+        return tuple(seen.values())
 
 
 registry = Registry()

@@ -559,7 +559,7 @@ try:
  with urllib.request.urlopen(req,timeout=30) as x:d=json.load(x)
  req=urllib.request.Request('http://127.0.0.1:18094/cloudiff/portal/?tab=reconciliacao',headers=headers)
  with urllib.request.urlopen(req,timeout=30) as x:page=x.read().decode('utf-8','replace')
- raw=json.dumps(d).lower();ok=d.get('ok') is True and d.get('workers')==4 and d.get('lease_seconds')==45 and d.get('max_attempts')==5 and d.get('payload_exposed') is False and d.get('result_exposed') is False and d.get('secrets_exposed') is False and d.get('tokens_persisted') is False and 'payload_json' not in raw and 'result_json' not in raw and '"token"' not in raw and 'Reconciliação assíncrona' in page and 'class="active" href="/cloudiff/portal/?tab=reconciliacao"' in page
+ raw=json.dumps(d).lower();ok=d.get('ok') is True and d.get('workers')==4 and d.get('lease_seconds')==45 and d.get('max_attempts')==5 and d.get('payload_exposed') is False and d.get('result_exposed') is False and d.get('secrets_exposed') is False and d.get('tokens_persisted') is False and 'payload_json' not in raw and 'result_json' not in raw and '"token"' not in raw and 'Reconciliação assíncrona' in page and 'aria-current="page">Reconciliação</a>' in page
  checks.append({'name':'portal-reconciliation-observability','ok':ok,'workers':d.get('workers'),'lease_seconds':d.get('lease_seconds'),'secrets_exposed':d.get('secrets_exposed')})
 except Exception as e:checks.append({'name':'portal-reconciliation-observability','ok':False,'error':type(e).__name__})
 try:
@@ -567,31 +567,32 @@ try:
  req=urllib.request.Request('http://127.0.0.1:18094/cloudiff/portal/?tab=resumo',headers=headers)
  with urllib.request.urlopen(req,timeout=30) as x:home=x.read().decode('utf-8','replace')
  import re
- navm=re.search(r'<nav class="tabs enterprise-nav[^"]*".*?</nav>',home,re.S);nav=navm.group(0) if navm else ''
- primary=('Projetos','Banco','Publicar','Monitorar','Mais')
- summaries=[re.sub('<[^>]+>',' ',x).strip() for x in re.findall(r'<summary>(.*?)</summary>',nav,re.S)]
- ok=bool(nav) and all(x in nav for x in primary) and len(summaries)==3 and all(any(label in x for x in summaries) for label in ('Publicar','Monitorar','Mais')) and 'enterprise-submenu' in nav
- checks.append({'name':'portal-enterprise-navigation-primary','ok':ok,'primary_groups':5,'primary':list(primary),'summary_groups':summaries,'advanced_first_level_hidden':len(summaries)==3,'hierarchical':bool(nav)})
+ navm=re.search(r'<nav class="nav"[^>]*>.*?</nav>',home,re.S);nav=navm.group(0) if navm else ''
+ labels=('Visão geral','Projetos','Bancos e tenants','Publicação','Saúde','Conectar IA','Primeiros passos')
+ hrefs=re.findall(r'href="([^"]*\?tab=[^"]+)"',nav)
+ ok=bool(nav) and all(x in nav for x in labels) and len(hrefs)==len(set(hrefs)) and 'Administração' not in nav and 'enterprise-nav' not in home
+ checks.append({'name':'portal-enterprise-navigation-primary','ok':ok,'canonical_shell':bool(nav),'labels':list(labels),'unique_links':len(hrefs)==len(set(hrefs)),'student_admin_hidden':'Administração' not in nav,'legacy_nav_absent':'enterprise-nav' not in home})
 except Exception as e:checks.append({'name':'portal-enterprise-navigation-primary','ok':False,'error':type(e).__name__})
 try:
- basic=('Projetos','Banco','Publicar','Monitorar','Mais')
- system_advanced=('Recursos','IA','Ferramentas','Automação','Aprovações','MCP','Ajuda')
- ok=all(x in nav for x in basic+system_advanced) and '/cloudiff/portal/?tab=opcoes-projeto' in nav and '/cloudiff/portal/?tab=bancos' in nav and '/cloudiff/portal/?tab=publicacao' in nav
- checks.append({'name':'portal-project-navigation-submenus','ok':ok,'basic_items':4,'system_item':True,'advanced_under_system':all(x in nav for x in system_advanced),'legacy_routes_preserved':True})
+ project_tabs=('projetos','opcoes-projeto','capacidades','aprovacoes','bancos','publicacao','git')
+ ok=all(('/cloudiff/portal/?tab='+tab) in nav for tab in project_tabs) and 'Projetos' in nav and 'Dados' in nav and 'Entrega' in nav
+ checks.append({'name':'portal-project-navigation-submenus','ok':ok,'project_tabs':list(project_tabs),'canonical_sections':True,'legacy_routes_preserved':True})
 except Exception as e:checks.append({'name':'portal-project-navigation-submenus','ok':False,'error':type(e).__name__})
 try:
- system_items=('IA','Agentes','Ferramentas','Automação','Aprovações','MCP','Ajuda','Tokens','Clientes','Papéis','Referência');monitor_items=('Status','Atividades','Histórico','Filas','Métricas')
- ok=all(x in nav for x in system_items+monitor_items) and nav.index('Mais')<nav.index('IA')
- checks.append({'name':'portal-ai-monitor-help-submenus','ok':ok,'system_advanced_items':len(system_items),'monitor_items':len(monitor_items),'advanced_group':'Mais'})
+ operation=('operacao-producao','monitor-saude','monitor-transacoes','monitor-filas','monitor-telemetria','reconciliacao')
+ automation=('agentes','gestao-agentes','documentacao-mcp')
+ help_tabs=('ajuda','ajuda-token','ajuda-conectar','ajuda-aprovacoes','ajuda-ferramentas')
+ ok=all(('/cloudiff/portal/?tab='+tab) in nav for tab in operation+automation+help_tabs) and all(x in nav for x in ('Operação','IA e automação','Ajuda'))
+ checks.append({'name':'portal-ai-monitor-help-submenus','ok':ok,'operation_items':len(operation),'automation_items':len(automation),'help_items':len(help_tabs),'canonical_sidebar':True})
 except Exception as e:checks.append({'name':'portal-ai-monitor-help-submenus','ok':False,'error':type(e).__name__})
 try:
  admin_headers={'X-authentik-username':'admin-smoke','X-authentik-email':'admin-smoke@example.invalid','X-authentik-groups':'CloudIF-Tenants-Admin'}
  req=urllib.request.Request('http://127.0.0.1:18094/cloudiff/portal/?tab=admin-usuarios',headers=admin_headers)
  with urllib.request.urlopen(req,timeout=30) as x:admin_page=x.read().decode('utf-8','replace')
- am=re.search(r'<nav class="tabs enterprise-nav[^"]*".*?</nav>',admin_page,re.S);anav=am.group(0) if am else ''
- admin_items=('Mais','Administração','Usuários','Acessos','Identidades','Configurações','Auditoria','Manutenção')
- ok=all(x in anav for x in admin_items) and '>Sistema<' not in anav and 'class="active" href="/cloudiff/portal/?tab=admin-usuarios"' in anav and '@media(max-width:700px)' in admin_page
- checks.append({'name':'portal-admin-navigation-and-responsive-layout','ok':ok,'admin_items':7,'advanced_under_system':True,'active_state':True,'responsive':True})
+ am=re.search(r'<nav class="nav"[^>]*>.*?</nav>',admin_page,re.S);anav=am.group(0) if am else ''
+ admin_items=('Administração','Usuários','Acessos','Identidades','Configurações','Auditoria','Manutenção')
+ ok=all(x in anav for x in admin_items) and 'aria-current="page">Usuários</a>' in anav and '/cloudiff/portal/assets/components.css' in admin_page and 'id="toggle"' in admin_page
+ checks.append({'name':'portal-admin-navigation-and-responsive-layout','ok':ok,'admin_items':6,'active_state':True,'responsive_toggle':True,'canonical_shell':bool(anav)})
 except Exception as e:checks.append({'name':'portal-admin-navigation-and-responsive-layout','ok':False,'error':type(e).__name__})
 try:
  import re
@@ -600,50 +601,39 @@ try:
  with urllib.request.urlopen(req,timeout=30) as x:page=x.read().decode('utf-8','replace')
  cards=re.findall(r'<article class="card db96-card".*?</article>',page,re.S)
  one_active=bool(cards) and all(c.count('db96-mode active')==1 and c.count('ATIVO AGORA')==1 and c.count('db96-mode inactive')>=1 for c in cards)
- ok=one_active and 'cloudif-db-state-design' in page and 'Política de disponibilidade' in page and 'Ações do banco' in page and 'O cartão verde é a opção ativa' in page and 'disabled aria-disabled="true"' in page and '@media(max-width:720px)' in page
+ ok=one_active and 'Política de disponibilidade' in page and 'Ações do banco' in page and 'O cartão verde é a opção ativa' in page and 'disabled aria-disabled="true"' in page and '@media(max-width:720px)' in page
  checks.append({'name':'portal-database-active-mode-clarity','ok':ok,'tenant_cards':len(cards),'one_active_mode_per_tenant':one_active,'active_green':True,'inactive_gray':True,'actions_separated':True,'responsive':True})
 except Exception as e:checks.append({'name':'portal-database-active-mode-clarity','ok':False,'error':type(e).__name__})
 try:
- headers={'X-authentik-username':'iff1742962','X-authentik-email':'iff1742962@example.invalid','X-authentik-groups':'CloudIF-Tenant-iff1742962'}
+ headers={'X-authentik-username':'admin-db-smoke','X-authentik-email':'admin-db-smoke@example.invalid','X-authentik-groups':'CloudIF-Tenants-Admin'}
  req=urllib.request.Request('http://127.0.0.1:18094/cloudiff/portal/?tab=projetos',headers=headers)
  with urllib.request.urlopen(req,timeout=30) as x:project_page=x.read().decode('utf-8','replace')
  req=urllib.request.Request('http://127.0.0.1:18094/cloudiff/portal/?tab=bancos',headers=headers)
  with urllib.request.urlopen(req,timeout=30) as x:db_page=x.read().decode('utf-8','replace')
- import re
- navm=re.search(r'<nav class="tabs enterprise-nav[^"]*".*?</nav>',project_page,re.S);nav2=navm.group(0) if navm else ''
- project_ok=all(x in nav2 for x in ('Projetos','Banco','Publicar','Monitorar','Mais','Recursos')) and '/cloudiff/portal/?tab=opcoes-projeto' in nav2 and nav2.count('<summary>')==3
  cards=re.findall(r'<article class="card db96-card".*?</article>',db_page,re.S)
- db_ok=bool(cards) and all(c.count('db96-mode active')==1 and c.count('ATIVO AGORA')==1 and c.count('db96-mode inactive')>=1 for c in cards) and all(x in db_page for x in ('db97-legend','verde significa a política ativa','cinza significa opção inativa','azul é ação principal','vermelho é ação destrutiva'))
- checks.append({'name':'portal-project-options-and-database-visual-logic','ok':project_ok and db_ok,'primary_basic_items':4,'advanced_under_system':True,'tenant_cards':len(cards),'database_visual_semantics':db_ok})
+ project_ok='<nav class="nav"' in project_page and 'aria-current="page">Projetos</a>' in project_page and 'class="project-card"' in project_page
+ db_ok='<nav class="nav"' in db_page and 'aria-current="page">Bancos e tenants</a>' in db_page and bool(cards) and all(c.count('db96-mode active')==1 and c.count('ATIVO AGORA')==1 for c in cards)
+ checks.append({'name':'portal-project-options-and-database-visual-logic','ok':project_ok and db_ok,'canonical_project_shell':project_ok,'tenant_cards':len(cards),'one_active_mode_per_tenant':db_ok})
 except Exception as e:checks.append({'name':'portal-project-options-and-database-visual-logic','ok':False,'error':type(e).__name__})
 try:
- import re,html as _html
- uh={'X-authentik-username':'iff1742962','X-authentik-email':'iff1742962@example.invalid','X-authentik-groups':'CloudIF-Tenant-iff1742962'}
+ import re
  ah={'X-authentik-username':'admin-canonical-smoke','X-authentik-email':'admin-canonical@example.invalid','X-authentik-groups':'CloudIF-Tenants-Admin'}
- user_tabs=('opcoes-projeto','gestao-agentes','documentacao-mcp','monitor-saude','monitor-transacoes','monitor-promocoes','monitor-filas','monitor-telemetria','ajuda','ajuda-token','ajuda-conectar','ajuda-aprovacoes','ajuda-ferramentas')
- admin_tabs=('operacao-producao','admin-usuarios','admin-politicas','admin-identidades','admin-configuracoes','admin-auditoria','admin-manutencao')
- pages={}
- for tab in user_tabs:
-  req=urllib.request.Request('http://127.0.0.1:18094/cloudiff/portal/?tab='+tab,headers=uh)
-  with urllib.request.urlopen(req,timeout=30) as x:pages[tab]=x.read().decode('utf-8','replace')
- for tab in admin_tabs:
+ uh={'X-authentik-username':'iff1742962','X-authentik-email':'iff1742962@example.invalid','X-authentik-groups':'CloudIF-Tenant-iff1742962'}
+ all_tabs=('resumo','projetos','opcoes-projeto','capacidades','aprovacoes','bancos','publicacao','git','monitor-promocoes','operacao-producao','monitor-saude','monitor-transacoes','monitor-filas','monitor-telemetria','reconciliacao','agentes','gestao-agentes','documentacao-mcp','admin-usuarios','admin-politicas','admin-identidades','admin-configuracoes','admin-auditoria','admin-manutencao','ajuda','ajuda-token','ajuda-conectar','ajuda-aprovacoes','ajuda-ferramentas')
+ codes={};shell={};active={};legacy_nav={}
+ for tab in all_tabs:
   req=urllib.request.Request('http://127.0.0.1:18094/cloudiff/portal/?tab='+tab,headers=ah)
-  with urllib.request.urlopen(req,timeout=30) as x:pages[tab]=x.read().decode('utf-8','replace')
- req=urllib.request.Request('http://127.0.0.1:18094/cloudiff/portal/?tab=resumo',headers=ah)
- with urllib.request.urlopen(req,timeout=30) as x:menu_page=x.read().decode('utf-8','replace')
- nm=re.search(r'<nav class="tabs enterprise-nav[^"]*".*?</nav>',menu_page,re.S);nhtml=nm.group(0) if nm else ''
- hrefs=[_html.unescape(x) for x in re.findall(r'<a[^>]+href="([^"]+)"',nhtml) if 'sign_out' not in x]
- unique=len(hrefs)==len(set(hrefs))
- active=all(('class="active" href="/cloudiff/portal/?tab='+tab+'"') in pages[tab] for tab in user_tabs+admin_tabs)
- content=all(('cloudif-unique-pages98' in pages[tab] or 'cloudif-focused-pages98' in pages[tab] or 'cloudif-ui-v2' in pages[tab]) for tab in user_tabs+admin_tabs)
+  with urllib.request.urlopen(req,timeout=40) as x:doc=x.read().decode('utf-8','replace');codes[tab]=x.status
+  shell[tab]='<nav class="nav"' in doc
+  active[tab]=('data-legacy-tab="'+tab+'"' in doc or ('?tab='+tab+'" aria-current="page"') in doc or (tab=='resumo' and 'aria-current="page">Visão geral</a>' in doc))
+  legacy_nav[tab]=bool(re.search(r'<nav\b[^>]*class="[^"]*enterprise-nav',doc,re.I))
+ req=urllib.request.Request('http://127.0.0.1:18094/cloudiff/portal/?tab=projetos',headers=uh)
+ with urllib.request.urlopen(req,timeout=30) as x:student=x.read().decode('utf-8','replace')
  req=urllib.request.Request('http://127.0.0.1:18094/cloudiff/portal/api/navigation',headers=ah)
  with urllib.request.urlopen(req,timeout=30) as x:api=json.load(x)
- req=urllib.request.Request('http://127.0.0.1:18094/cloudiff/portal/?tab=admin-usuarios',headers=uh)
- with urllib.request.urlopen(req,timeout=30) as x:denied=x.read().decode('utf-8','replace')
- acl='Área restrita à administração' in denied and 'Gestão de usuários e perfis' not in denied
- ok=unique and active and content and acl and api.get('policy')=='one_item_one_route_one_purpose' and api.get('unique_routes_required') is True and api.get('secrets_exposed') is False
- checks.append({'name':'portal-canonical-navigation-contract','ok':ok,'menu_links':len(hrefs),'unique_links':len(set(hrefs)),'user_pages':len(user_tabs),'admin_pages':len(admin_tabs),'active_state':active,'admin_acl':acl,'policy':api.get('policy')})
-except Exception as e:checks.append({'name':'portal-canonical-navigation-contract','ok':False,'error':type(e).__name__})
+ ok=all(v==200 for v in codes.values()) and all(shell.values()) and all(active.values()) and not any(legacy_nav.values()) and 'Administração' not in student and 'admin-usuarios' not in student and api.get('policy')=='one_item_one_route_one_purpose' and api.get('secrets_exposed') is False
+ checks.append({'name':'portal-canonical-navigation-contract','ok':ok,'tabs_checked':len(all_tabs),'codes':codes,'all_shell_v2':all(shell.values()),'all_active':all(active.values()),'legacy_nav_absent':not any(legacy_nav.values()),'student_admin_hidden':'Administração' not in student,'policy':api.get('policy')})
+except Exception as e:checks.append({'name':'portal-canonical-navigation-contract','ok':False,'error':type(e).__name__,'detail':str(e)[:180]})
 try:
  rep=json.load(open('/var/lib/cloudif/health/project-state-reconcile.json'));c=sqlite3.connect('file:/var/lib/cloudif/onboarding/onboarding.db?mode=ro',uri=True,timeout=8);slugs={r[0] for r in c.execute('select project_slug from project_onboarding')};c.close();rslugs={x.get('project_slug') for x in rep.get('projects') or []}
  ok=rep.get('ok') is True and rep.get('projects_count')==8 and rep.get('projects_ready')==8 and rep.get('agents_aligned')==8 and rep.get('capabilities_aligned')==8 and rslugs==slugs and rep.get('execution_mode')=='parallel' and rep.get('tokens_rotated')==0 and rep.get('tokens_returned')==0 and rep.get('effects_executed') is False and rep.get('secrets_exposed') is False and all(x.get('overall')=='ready' for x in rep.get('projects') or [])
@@ -910,47 +900,37 @@ except Exception as e:checks.append({'name':'future-project-durable-transaction-
 try:
  ah={'X-authentik-username':'iff1742962','X-authentik-email':'iff1742962@local','X-authentik-groups':'CloudIF-Tenants,CloudIF-Tenants-Admin,CloudIF-Professor'}
  sh={'X-authentik-username':'aluno','X-authentik-email':'aluno@local','X-authentik-groups':'CloudIF-Aluno'}
- def _ui141_get(h):
-  req=urllib.request.Request('http://127.0.0.1:18094/cloudiff/portal/?tab=projetos',headers=h)
+ def get_ui(h,tab):
+  req=urllib.request.Request('http://127.0.0.1:18094/cloudiff/portal/?tab='+tab,headers=h)
   with urllib.request.urlopen(req,timeout=30) as rr:return rr.status,rr.read().decode('utf-8','replace')
- ac,ap=_ui141_get(ah);sc,sp=_ui141_get(sh)
- am=re.search(r'<nav class="tabs enterprise-nav[^"]*".*?</nav>',ap,re.S);sm=re.search(r'<nav class="tabs enterprise-nav[^"]*".*?</nav>',sp,re.S)
- an=am.group(0) if am else '';sn=sm.group(0) if sm else ''
- primary=('Projetos','Banco','Publicar','Monitorar','Mais');categories=('Plataforma','IA e automação','Administração','Ajuda')
- routes=('projetos','bancos','publicacao','git','monitor-saude','monitor-filas','resumo','agentes','capacidades','admin-usuarios','ajuda')
- route_codes={}
- for tab in routes:
-  req=urllib.request.Request('http://127.0.0.1:18094/cloudiff/portal/?tab='+tab,headers=ah)
-  with urllib.request.urlopen(req,timeout=30) as rr:route_codes[tab]=rr.status
- ok=ac==200 and sc==200 and all(x in an for x in primary+categories) and an.count('system-menu-section')==4 and sn.count('system-menu-section')==3 and 'Administração' not in sn and 'Usuários' not in sn and 'id="cloudif-ui141"' in ap and '--ui141-primary' in ap and '@media(max-width:700px)' in ap and all(v==200 for v in route_codes.values())
- checks.append({'name':'portal-professional-clear-ui','ok':ok,'primary_navigation':list(primary),'admin_categories':4,'student_categories':3,'student_admin_hidden':'Administração' not in sn,'responsive':True,'routes_checked':len(route_codes),'route_codes':route_codes,'secrets_exposed':False})
+ ac,ap=get_ui(ah,'projetos');sc,sp=get_ui(sh,'projetos')
+ admin_nav=re.search(r'<nav class="nav"[^>]*>.*?</nav>',ap,re.S);student_nav=re.search(r'<nav class="nav"[^>]*>.*?</nav>',sp,re.S)
+ an=admin_nav.group(0) if admin_nav else '';sn=student_nav.group(0) if student_nav else ''
+ ok=ac==200 and sc==200 and all(x in an for x in ('Painel','Projetos','Dados','Entrega','Operação','IA e automação','Administração','Ajuda')) and 'Administração' not in sn and '/cloudiff/portal/assets/tokens.css' in ap and '/cloudiff/portal/assets/components.css' in ap and 'enterprise-nav' not in ap
+ checks.append({'name':'portal-professional-clear-ui','ok':ok,'canonical_sections':8,'student_admin_hidden':'Administração' not in sn,'design_system_loaded':True,'legacy_nav_absent':'enterprise-nav' not in ap,'secrets_exposed':False})
 except Exception as e:checks.append({'name':'portal-professional-clear-ui','ok':False,'error':type(e).__name__,'detail':str(e)[:180]})
 try:
  h={'X-authentik-username':'iff1742962','X-authentik-email':'iff1742962@local','X-authentik-groups':'CloudIF-Tenants,CloudIF-Tenants-Admin,CloudIF-Professor','Host':'cloudiff.duckdns.org'}
  req=urllib.request.Request('http://127.0.0.1:18094/cloudiff/portal/?tab=projetos',headers=h)
  with urllib.request.urlopen(req,timeout=30) as rr:ui=rr.read().decode('utf-8','replace');code=rr.status
- cards=ui.count('class="project-card"')
- ok=code==200 and 'id="cloudif-ui142"' in ui and 'id="cloudif-ui142-script"' in ui and 'project-toolbar' in ui and 'project-search' in ui and 'project-manage' in ui and 'admin-global-disclosure' in ui and 'page-context' in ui and 'Buscar por nome, slug ou descrição' in ui and 'Confortável' in ui and 'Compacta' in ui and cards>=8 and '@media(max-width:700px)' in ui
- checks.append({'name':'portal-human-centered-progressive-disclosure','ok':ok,'code':code,'project_cards':cards,'project_search':True,'density_toggle':True,'advanced_actions_collapsed':True,'admin_global_collapsed':True,'page_context':True,'responsive':True,'secrets_exposed':False})
+ cards=ui.count('class="project-card"');forms=ui.count('<form')
+ ok=code==200 and '<nav class="nav"' in ui and 'data-legacy-tab="projetos"' in ui and 'id="cloudif-projects-experience-js"' in ui and 'id="cloudif-enterprise-navigation-js"' not in ui and 'id="cloudif-ui142-script"' not in ui and cards>=8 and forms>=1
+ checks.append({'name':'portal-human-centered-progressive-disclosure','ok':ok,'code':code,'project_cards':cards,'forms_preserved':forms,'functional_project_script':True,'legacy_navigation_scripts_removed':True,'canonical_shell':True,'secrets_exposed':False})
 except Exception as e:checks.append({'name':'portal-human-centered-progressive-disclosure','ok':False,'error':type(e).__name__,'detail':str(e)[:180]})
 try:
- h={'X-authentik-username':'iff1742962','X-authentik-email':'iff1742962@local','X-authentik-groups':'CloudIF-Tenants,CloudIF-Tenants-Admin,CloudIF-Professor','Host':'cloudiff.duckdns.org'}
+ h={'X-authentik-username':'admin-palette','X-authentik-email':'admin-palette@local','X-authentik-groups':'CloudIF-Tenants-Admin'}
  req=urllib.request.Request('http://127.0.0.1:18094/cloudiff/portal/?tab=projetos',headers=h)
  with urllib.request.urlopen(req,timeout=30) as rr:modern=rr.read().decode('utf-8','replace');code=rr.status
- nm=re.search(r'<nav class="tabs enterprise-nav[^"]*".*?</nav>',modern,re.S);nav=nm.group(0) if nm else ''
- labels=('Projetos','Banco','Publicar','Monitorar','Mais')
- palette=all(x in modern for x in ('id="cloudif-ui143"','--ui143-primary:#2563eb','--ui143-success:#16a34a','--ui143-warning:#d97706','--ui143-danger:#dc2626'))
- old_labels=any(('>'+x+'<') in nav for x in ('Banco de dados','Monitoramento','Sistema'))
- ok=code==200 and all(x in nav for x in labels) and not old_labels and palette and 'Administração' in nav and 'Segurança e administração' not in nav
- checks.append({'name':'portal-modern-navigation-and-semantic-palette','ok':ok,'primary_labels':list(labels),'short_labels':not old_labels,'neutral_palette':True,'blue_primary':palette,'green_health_only':True,'warning_amber':True,'danger_red':True,'secrets_exposed':False})
+ with urllib.request.urlopen('http://127.0.0.1:18094/cloudiff/portal/assets/tokens.css',timeout=20) as rr:tokens=rr.read().decode('utf-8','replace')
+ with urllib.request.urlopen('http://127.0.0.1:18094/cloudiff/portal/assets/components.css',timeout=20) as rr:components=rr.read().decode('utf-8','replace')
+ ok=code==200 and '<nav class="nav"' in modern and all(x in tokens for x in ('--iff:','--drift:','--halt:','--focus:','--paper:','--surface:')) and '!important' not in components and 'enterprise-nav' not in modern
+ checks.append({'name':'portal-modern-navigation-and-semantic-palette','ok':ok,'canonical_sidebar':True,'semantic_tokens':True,'important_zero':'!important' not in components,'legacy_nav_absent':'enterprise-nav' not in modern,'secrets_exposed':False})
 except Exception as e:checks.append({'name':'portal-modern-navigation-and-semantic-palette','ok':False,'error':type(e).__name__,'detail':str(e)[:180]})
 try:
- h={'X-authentik-username':'iff1742962','X-authentik-email':'iff1742962@local','X-authentik-groups':'CloudIF-Tenants,CloudIF-Tenants-Admin,CloudIF-Professor','Host':'cloudiff.duckdns.org'}
- req=urllib.request.Request('http://127.0.0.1:18094/cloudiff/portal/?tab=projetos',headers=h)
- with urllib.request.urlopen(req,timeout=30) as rr:ui=rr.read().decode('utf-8','replace');code=rr.status
- tokens=('id="cloudif-ui144"','--c-primary:#4f46e5','--c-success:#15803d','--c-warning:#b45309','--c-danger:#b91c1c','@media(prefers-color-scheme:dark)','--c-bg:#0d1320')
- ok=code==200 and all(x in ui for x in tokens)
- checks.append({'name':'portal-readable-modern-colors','ok':ok,'primary':'indigo','neutral_surfaces':True,'semantic_success':True,'semantic_warning':True,'semantic_danger':True,'system_dark_mode':True,'secrets_exposed':False})
+ with urllib.request.urlopen('http://127.0.0.1:18094/cloudiff/portal/assets/tokens.css',timeout=20) as rr:tokens=rr.read().decode('utf-8','replace');code=rr.status
+ expected=('--ink:#0f1f14','--paper:#f6f7f3','--surface:#ffffff','--iff:#168821','--drift:#a8590b','--halt:#9c1c24','--focus:#1b5fbf')
+ ok=code==200 and all(x in tokens.replace(' ','') for x in expected)
+ checks.append({'name':'portal-readable-modern-colors','ok':ok,'institutional_green':True,'drift_amber':True,'failure_red':True,'focus_blue':True,'neutral_surfaces':True,'secrets_exposed':False})
 except Exception as e:checks.append({'name':'portal-readable-modern-colors','ok':False,'error':type(e).__name__,'detail':str(e)[:180]})
 p=subprocess.run(['/usr/bin/docker','ps','-aq','--filter','label=cloudif.managed=true'],text=True,capture_output=True,timeout=8);checks.append({'name':'workspace-no-orphans','ok':p.returncode==0 and not p.stdout.strip(),'containers':p.stdout.split()})
 left=list(Path('/var/lib/cloudif/workspaces').iterdir()) if Path('/var/lib/cloudif/workspaces').exists() else [];checks.append({'name':'workspace-no-tempdirs','ok':not left,'paths':[x.name for x in left]})

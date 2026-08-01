@@ -1,0 +1,775 @@
+{
+ "generated_at": "2026-08-01T15:20:25Z",
+ "source": {
+  "file": "portal/legacy/cloudif-admin-portal.py",
+  "sha256": "6780749abe5476994a9444f5c01ba9dd90524a884b46a132be8b5a884f7073bd",
+  "lines": 5734
+ },
+ "personas": {
+  "aluno": [
+   "CloudIF-Tenants"
+  ],
+  "professor": [
+   "CloudIF-Tenants",
+   "CloudIF-Professor"
+  ],
+  "admin": [
+   "CloudIF-Tenants-Admin"
+  ]
+ },
+ "admin_semantics": {
+  "canonical": "is_admin(): igualdade exata com setting CLOUDIF_ADMIN_GROUP (default CloudIF-Tenants-Admin) ou 'domain admins'.",
+  "legacy_v54_v56": "substring 'admin' na string crua de grupos OU username em [admin, akadmin]; v54 e v56 são idênticas entre si; usadas apenas nas rotas git-komodo."
+ },
+ "routes_inventory_31": [
+  {
+   "path": "/cloudiff/portal",
+   "aliases": [],
+   "method": "GET",
+   "module": "overview",
+   "csrf": false,
+   "origin_check": false,
+   "guard": "authenticated",
+   "decisions": {
+    "aluno": "allow",
+    "professor": "allow",
+    "admin": "allow"
+   },
+   "scope": "user_visible_projects",
+   "notes": "Conteúdo escopado; abas via ?tab=."
+  },
+  {
+   "path": "/cloudiff/portal/control",
+   "aliases": [],
+   "method": "GET",
+   "module": "health",
+   "csrf": false,
+   "origin_check": false,
+   "guard": "username-header + delegado",
+   "decisions": {
+    "aluno": "allow",
+    "professor": "allow",
+    "admin": "allow"
+   },
+   "scope": "",
+   "notes": "401 sem X-authentik-username; autorização final delegada ao control-dashboard (127.0.0.1:18200)."
+  },
+  {
+   "path": "/cloudiff/portal/control/",
+   "aliases": [],
+   "method": "GET",
+   "module": "health",
+   "csrf": false,
+   "origin_check": false,
+   "guard": "username-header + delegado",
+   "decisions": {
+    "aluno": "allow",
+    "professor": "allow",
+    "admin": "allow"
+   },
+   "scope": "",
+   "notes": "401 sem X-authentik-username; autorização final delegada ao control-dashboard (127.0.0.1:18200). (variante com barra final; mesmo proxy)"
+  },
+  {
+   "path": "/cloudiff/portal/repair-dashboard",
+   "aliases": [],
+   "method": "GET",
+   "module": "health",
+   "csrf": false,
+   "origin_check": false,
+   "guard": "authenticated",
+   "decisions": {
+    "aluno": "allow",
+    "professor": "allow",
+    "admin": "allow"
+   },
+   "scope": "_rd_projects(user)",
+   "notes": "Botões de reparo condicionados a can_repair no cliente; enforcement real no POST."
+  },
+  {
+   "path": "/action/project_action",
+   "aliases": [],
+   "method": "POST",
+   "module": "projects",
+   "csrf": true,
+   "origin_check": true,
+   "guard": "csrf+origin+(slug visível OU global_admin)",
+   "decisions": {
+    "aluno": "conditional",
+    "professor": "allow",
+    "admin": "allow"
+   },
+   "scope": "user_visible_projects",
+   "notes": "global_admin = admin canônico | CloudIF-Tenants-Admin | CloudIF-Professor. Aluno: apenas projetos visíveis (owner/ACL/tenant). create isento da checagem de slug."
+  },
+  {
+   "path": "/action/publication",
+   "aliases": [],
+   "method": "POST",
+   "module": "projects",
+   "csrf": false,
+   "origin_check": false,
+   "guard": "delegado a cloudif_portal_publications",
+   "decisions": {
+    "aluno": "conditional",
+    "professor": "conditional",
+    "admin": "conditional"
+   },
+   "scope": "_project_allowed (admin|owner|ACL)",
+   "notes": "SEM CSRF e SEM origem na v1 (ACHADO F3). publish/activate: projeto visível para qualquer grupo. Produção real (TARGET_SLUG) e rollback_production: admin canônico apenas (aluno/professor deny)."
+  },
+  {
+   "path": "/action/repair-project",
+   "aliases": [],
+   "method": "POST",
+   "module": "health",
+   "csrf": true,
+   "origin_check": false,
+   "guard": "csrf+can_repair",
+   "decisions": {
+    "aluno": "deny",
+    "professor": "allow",
+    "admin": "allow"
+   },
+   "scope": "_rd_projects",
+   "notes": "can_repair = admin | Tenants-Admin | Professor."
+  },
+  {
+   "path": "/action/rotate-project-credential",
+   "aliases": [],
+   "method": "POST",
+   "module": "admin",
+   "csrf": true,
+   "origin_check": true,
+   "guard": "csrf+origin+can_rotate",
+   "decisions": {
+    "aluno": "conditional",
+    "professor": "conditional",
+    "admin": "allow"
+   },
+   "scope": "user_visible_projects",
+   "notes": "can_rotate = visível E (admin|owner|Tenants-Admin|Professor). Aluno: apenas owner. Professor: qualquer visível."
+  },
+  {
+   "path": "/action/open-project-terminal",
+   "aliases": [],
+   "method": "GET",
+   "module": "delivery",
+   "csrf": false,
+   "origin_check": false,
+   "guard": "projeto visível com stack",
+   "decisions": {
+    "aluno": "conditional",
+    "professor": "conditional",
+    "admin": "allow"
+   },
+   "scope": "_rd_projects",
+   "notes": "ACHADO F4: método real é GET, sem CSRF, apesar do prefixo /action/ e do §2.2 do REQUIREMENTS."
+  },
+  {
+   "path": "/action/production-window-schedule",
+   "aliases": [],
+   "method": "POST",
+   "module": "environments",
+   "csrf": true,
+   "origin_check": true,
+   "guard": "csrf+origin+admin",
+   "decisions": {
+    "aluno": "deny",
+    "professor": "deny",
+    "admin": "allow"
+   },
+   "scope": "",
+   "notes": "Admin canônico (user.admin)."
+  },
+  {
+   "path": "/action/production-window-cancel",
+   "aliases": [],
+   "method": "POST",
+   "module": "environments",
+   "csrf": true,
+   "origin_check": true,
+   "guard": "csrf+origin+admin",
+   "decisions": {
+    "aluno": "deny",
+    "professor": "deny",
+    "admin": "allow"
+   },
+   "scope": "",
+   "notes": ""
+  },
+  {
+   "path": "/action/production-alert-ack",
+   "aliases": [],
+   "method": "POST",
+   "module": "environments",
+   "csrf": true,
+   "origin_check": true,
+   "guard": "csrf+origin+admin",
+   "decisions": {
+    "aluno": "deny",
+    "professor": "deny",
+    "admin": "allow"
+   },
+   "scope": "",
+   "notes": ""
+  },
+  {
+   "path": "/action/production-incident-assign",
+   "aliases": [],
+   "method": "POST",
+   "module": "environments",
+   "csrf": true,
+   "origin_check": true,
+   "guard": "csrf+origin+admin",
+   "decisions": {
+    "aluno": "deny",
+    "professor": "deny",
+    "admin": "allow"
+   },
+   "scope": "",
+   "notes": ""
+  },
+  {
+   "path": "/action/production-incident-escalate",
+   "aliases": [],
+   "method": "POST",
+   "module": "environments",
+   "csrf": true,
+   "origin_check": true,
+   "guard": "csrf+origin+admin",
+   "decisions": {
+    "aluno": "deny",
+    "professor": "deny",
+    "admin": "allow"
+   },
+   "scope": "",
+   "notes": ""
+  },
+  {
+   "path": "/action/production-incident-mitigate",
+   "aliases": [],
+   "method": "POST",
+   "module": "environments",
+   "csrf": true,
+   "origin_check": true,
+   "guard": "csrf+origin+admin",
+   "decisions": {
+    "aluno": "deny",
+    "professor": "deny",
+    "admin": "allow"
+   },
+   "scope": "",
+   "notes": ""
+  },
+  {
+   "path": "/action/production-incident-close",
+   "aliases": [],
+   "method": "POST",
+   "module": "environments",
+   "csrf": true,
+   "origin_check": true,
+   "guard": "csrf+origin+admin",
+   "decisions": {
+    "aluno": "deny",
+    "professor": "deny",
+    "admin": "allow"
+   },
+   "scope": "",
+   "notes": ""
+  },
+  {
+   "path": "/api/navigation",
+   "aliases": [],
+   "method": "GET",
+   "module": "core",
+   "csrf": false,
+   "origin_check": false,
+   "guard": "authenticated",
+   "decisions": {
+    "aluno": "allow",
+    "professor": "allow",
+    "admin": "allow"
+   },
+   "scope": "",
+   "notes": "Item 'Administração' presente só p/ admin|Tenants-Admin; demais chaves idênticas."
+  },
+  {
+   "path": "/api/approvals",
+   "aliases": [],
+   "method": "GET",
+   "module": "projects",
+   "csrf": false,
+   "origin_check": false,
+   "guard": "authenticated",
+   "decisions": {
+    "aluno": "allow",
+    "professor": "allow",
+    "admin": "allow"
+   },
+   "scope": "user_visible_projects",
+   "notes": "can_decide=true p/ admin|Tenants-Admin|Professor; aluno recebe can_decide=false."
+  },
+  {
+   "path": "/api/publication",
+   "aliases": [],
+   "method": "GET",
+   "module": "projects",
+   "csrf": false,
+   "origin_check": false,
+   "guard": "authenticated",
+   "decisions": {
+    "aluno": "allow",
+    "professor": "allow",
+    "admin": "allow"
+   },
+   "scope": "user_visible_projects",
+   "notes": ""
+  },
+  {
+   "path": "/api/promotions",
+   "aliases": [],
+   "method": "GET",
+   "module": "delivery",
+   "csrf": false,
+   "origin_check": false,
+   "guard": "projeto sentinela visível",
+   "decisions": {
+    "aluno": "conditional",
+    "professor": "conditional",
+    "admin": "allow"
+   },
+   "scope": "'sistema-de-biblioteca-teste' em visíveis",
+   "notes": "403 project_not_allowed se o projeto sentinela não for visível; admin sempre vê (is_admin vê todos)."
+  },
+  {
+   "path": "/api/project-capabilities",
+   "aliases": [],
+   "method": "GET",
+   "module": "projects",
+   "csrf": false,
+   "origin_check": false,
+   "guard": "authenticated",
+   "decisions": {
+    "aluno": "allow",
+    "professor": "allow",
+    "admin": "allow"
+   },
+   "scope": "",
+   "notes": "Não escopado por usuário na v1."
+  },
+  {
+   "path": "/api/project-identities",
+   "aliases": [],
+   "method": "GET",
+   "module": "projects",
+   "csrf": false,
+   "origin_check": false,
+   "guard": "authenticated",
+   "decisions": {
+    "aluno": "allow",
+    "professor": "allow",
+    "admin": "allow"
+   },
+   "scope": "user_visible_projects",
+   "notes": ""
+  },
+  {
+   "path": "/api/agia-lifecycle",
+   "aliases": [],
+   "method": "GET",
+   "module": "projects",
+   "csrf": false,
+   "origin_check": false,
+   "guard": "authenticated",
+   "decisions": {
+    "aluno": "allow",
+    "professor": "allow",
+    "admin": "allow"
+   },
+   "scope": "",
+   "notes": "Não escopado; lê /var/lib/cloudif/health/project-state-reconcile.json."
+  },
+  {
+   "path": "/api/transactions",
+   "aliases": [],
+   "method": "GET",
+   "module": "health",
+   "csrf": false,
+   "origin_check": false,
+   "guard": "authenticated",
+   "decisions": {
+    "aluno": "allow",
+    "professor": "allow",
+    "admin": "allow"
+   },
+   "scope": "user_visible_projects",
+   "notes": ""
+  },
+  {
+   "path": "/api/reconciliation",
+   "aliases": [],
+   "method": "GET",
+   "module": "health",
+   "csrf": false,
+   "origin_check": false,
+   "guard": "authenticated",
+   "decisions": {
+    "aluno": "allow",
+    "professor": "allow",
+    "admin": "allow"
+   },
+   "scope": "",
+   "notes": "Não escopado."
+  },
+  {
+   "path": "/api/repair-dashboard",
+   "aliases": [],
+   "method": "GET",
+   "module": "health",
+   "csrf": false,
+   "origin_check": false,
+   "guard": "authenticated",
+   "decisions": {
+    "aluno": "allow",
+    "professor": "allow",
+    "admin": "allow"
+   },
+   "scope": "_rd_projects",
+   "notes": "can_repair no payload = admin|TA|Professor."
+  },
+  {
+   "path": "/control/api/dashboard",
+   "aliases": [],
+   "method": "GET",
+   "module": "health",
+   "csrf": false,
+   "origin_check": false,
+   "guard": "username-header + delegado",
+   "decisions": {
+    "aluno": "allow",
+    "professor": "allow",
+    "admin": "allow"
+   },
+   "scope": "",
+   "notes": "Servido como /cloudiff/portal/control/api/dashboard; proxy p/ 18200 com headers de identidade encaminhados."
+  },
+  {
+   "path": "/api/production-operations",
+   "aliases": [],
+   "method": "GET",
+   "module": "environments",
+   "csrf": false,
+   "origin_check": false,
+   "guard": "projeto sentinela visível",
+   "decisions": {
+    "aluno": "conditional",
+    "professor": "conditional",
+    "admin": "allow"
+   },
+   "scope": "'atalhos-cloudif-iff1860746' em visíveis",
+   "notes": "403 forbidden caso contrário."
+  },
+  {
+   "path": "/api/agent-guide",
+   "aliases": [],
+   "method": "GET",
+   "module": "admin",
+   "csrf": false,
+   "origin_check": false,
+   "guard": "authenticated",
+   "decisions": {
+    "aluno": "allow",
+    "professor": "allow",
+    "admin": "allow"
+   },
+   "scope": "_oi_visible",
+   "notes": ""
+  },
+  {
+   "path": "/cloudiff/internal/access-ingest",
+   "aliases": [],
+   "method": "POST",
+   "module": "core",
+   "csrf": false,
+   "origin_check": false,
+   "guard": "ip-allowlist+bearer-token",
+   "decisions": {
+    "aluno": "deny",
+    "professor": "deny",
+    "admin": "deny"
+   },
+   "scope": "",
+   "notes": "Grupos irrelevantes: exige client em CLOUDIF_ACCESS_INGEST_ALLOWED (127.0.0.1,10.62.91.3) + Bearer CLOUDIF_ACCESS_INGEST_TOKEN. 403 IP / 401 token."
+  },
+  {
+   "path": "/cloudiff/internal/access-latest",
+   "aliases": [],
+   "method": "GET",
+   "module": "core",
+   "csrf": false,
+   "origin_check": false,
+   "guard": "ip-allowlist+bearer-token",
+   "decisions": {
+    "aluno": "deny",
+    "professor": "deny",
+    "admin": "deny"
+   },
+   "scope": "",
+   "notes": "Idem access-ingest."
+  }
+ ],
+ "routes_outside_requirements_inventory": [
+  {
+   "path": "/action/create_project",
+   "aliases": [],
+   "method": "POST",
+   "module": "projects",
+   "csrf": true,
+   "origin_check": true,
+   "guard": "csrf+origin+tenant_visible/setting",
+   "decisions": {
+    "aluno": "allow",
+    "professor": "allow",
+    "admin": "allow"
+   },
+   "scope": "",
+   "notes": "FORA do inventário §2. Com tenant: exige tenant_visible; sem tenant: exige setting CLOUDIF_ALLOW_GIT_ONLY_PROJECT. Todos os grupos podem criar."
+  },
+  {
+   "path": "/action/approval",
+   "aliases": [],
+   "method": "POST",
+   "module": "projects",
+   "csrf": true,
+   "origin_check": true,
+   "guard": "csrf+origin+can_decide",
+   "decisions": {
+    "aluno": "deny",
+    "professor": "allow",
+    "admin": "allow"
+   },
+   "scope": "",
+   "notes": "FORA do inventário §2. can_decide = admin|Tenants-Admin|Professor."
+  },
+  {
+   "path": "/action/project-backup",
+   "aliases": [],
+   "method": "POST",
+   "module": "projects",
+   "csrf": true,
+   "origin_check": true,
+   "guard": "csrf+origin+_pb_manage",
+   "decisions": {
+    "aluno": "conditional",
+    "professor": "allow",
+    "admin": "allow"
+   },
+   "scope": "",
+   "notes": "FORA do inventário §2."
+  },
+  {
+   "path": "/api/project-backups",
+   "aliases": [],
+   "method": "GET",
+   "module": "projects",
+   "csrf": false,
+   "origin_check": false,
+   "guard": "authenticated (escopo por projeto)",
+   "decisions": {
+    "aluno": "allow",
+    "professor": "allow",
+    "admin": "allow"
+   },
+   "scope": "_cpx_allowed_projects; 403 p/ slug não visível",
+   "notes": "FORA do inventário §2."
+  },
+  {
+   "path": "/download/project-backup",
+   "aliases": [],
+   "method": "GET",
+   "module": "projects",
+   "csrf": false,
+   "origin_check": false,
+   "guard": "projeto visível",
+   "decisions": {
+    "aluno": "conditional",
+    "professor": "conditional",
+    "admin": "allow"
+   },
+   "scope": "",
+   "notes": "FORA do inventário §2. Path traversal protegido."
+  },
+  {
+   "path": "/api/container-telemetry",
+   "aliases": [],
+   "method": "GET",
+   "module": "projects",
+   "csrf": false,
+   "origin_check": false,
+   "guard": "authenticated",
+   "decisions": {
+    "aluno": "allow",
+    "professor": "allow",
+    "admin": "allow"
+   },
+   "scope": "_cpx_allowed_projects",
+   "notes": "FORA do inventário §2. can_shell=admin|TA|Professor no payload."
+  },
+  {
+   "path": "/action/open-container-shell",
+   "aliases": [],
+   "method": "GET",
+   "module": "delivery",
+   "csrf": false,
+   "origin_check": false,
+   "guard": "can_shell+container permitido",
+   "decisions": {
+    "aluno": "deny",
+    "professor": "conditional",
+    "admin": "conditional"
+   },
+   "scope": "",
+   "notes": "FORA do inventário §2. GET com redirect ao Komodo; can_shell=admin|TA|Professor."
+  },
+  {
+   "path": "/cloudif/portal/git-komodo",
+   "aliases": [],
+   "method": "GET",
+   "module": "projects",
+   "csrf": false,
+   "origin_check": false,
+   "guard": "authenticated; autorização no módulo gk",
+   "decisions": {
+    "aluno": "allow",
+    "professor": "allow",
+    "admin": "allow"
+   },
+   "scope": "",
+   "notes": "FORA do inventário §2. Identidade via helpers v54/v56 (admin-legacy substring)."
+  },
+  {
+   "path": "/cloudif/portal/git-komodo/action",
+   "aliases": [],
+   "method": "POST",
+   "module": "projects",
+   "csrf": false,
+   "origin_check": false,
+   "guard": "delegado a gk.handle_git_komodo_action",
+   "decisions": {
+    "aluno": "conditional",
+    "professor": "conditional",
+    "admin": "conditional"
+   },
+   "scope": "",
+   "notes": "FORA do inventário §2. Sem CSRF na borda; usa cloudif_v56_* (admin-legacy)."
+  },
+  {
+   "path": "*/health",
+   "aliases": [],
+   "method": "GET",
+   "module": "core",
+   "csrf": false,
+   "origin_check": false,
+   "guard": "público",
+   "decisions": {
+    "aluno": "allow",
+    "professor": "allow",
+    "admin": "allow"
+   },
+   "scope": "",
+   "notes": "FORA do inventário §2. Responde 'ok' sem autenticação."
+  },
+  {
+   "path": "*/action/refresh_cache",
+   "aliases": [],
+   "method": "GET",
+   "module": "core",
+   "csrf": false,
+   "origin_check": false,
+   "guard": "authenticated",
+   "decisions": {
+    "aluno": "allow",
+    "professor": "allow",
+    "admin": "allow"
+   },
+   "scope": "",
+   "notes": "FORA do inventário §2. ACHADO F5: qualquer autenticado dispara systemctl start cloudif-portal-refresh-cache.service via GET, sem CSRF."
+  },
+  {
+   "path": "*/ad-search",
+   "aliases": [],
+   "method": "GET",
+   "module": "admin",
+   "csrf": false,
+   "origin_check": false,
+   "guard": "admin canônico",
+   "decisions": {
+    "aluno": "deny",
+    "professor": "deny",
+    "admin": "allow"
+   },
+   "scope": "",
+   "notes": "FORA do inventário §2."
+  },
+  {
+   "path": "/cloudiff/portal/control/{manifest.webmanifest,sw.js,icon.svg}",
+   "aliases": [],
+   "method": "GET",
+   "module": "health",
+   "csrf": false,
+   "origin_check": false,
+   "guard": "público (estático)",
+   "decisions": {
+    "aluno": "allow",
+    "professor": "allow",
+    "admin": "allow"
+   },
+   "scope": "",
+   "notes": "FORA do inventário §2. Sem exigência de identidade."
+  }
+ ],
+ "findings": [
+  {
+   "id": "F1",
+   "severity": "info",
+   "text": "R-PERM-2: cloudif_v54_is_admin ≡ cloudif_v56_is_admin (código idêntico). Nenhuma divergência entre si."
+  },
+  {
+   "id": "F2",
+   "severity": "medium",
+   "text": "v54/v56 divergem do is_admin() canônico: substring 'admin' em qualquer grupo e usernames admin/akadmin concedem admin. Mais permissivo. Escopo de uso: apenas git-komodo. Decisão registrada: a v2 preserva as duas semânticas por rota (admin-legacy só em git-komodo); unificação é mudança de política, decisão separada."
+  },
+  {
+   "id": "F3",
+   "severity": "high",
+   "text": "/action/publication (POST) não valida CSRF nem origem na v1. A3 exige CSRF em todo /action/: a v2 DEVE adicionar CSRF aqui. Divergência sancionada em relação a A2, registrada nesta linha."
+  },
+  {
+   "id": "F4",
+   "severity": "medium",
+   "text": "/action/open-project-terminal é GET sem CSRF, contrariando a classificação do §2.2 do REQUIREMENTS (ação POST+CSRF). A v2 preserva GET (A1) e registra follow-up de política."
+  },
+  {
+   "id": "F5",
+   "severity": "medium",
+   "text": "/action/refresh_cache é GET sem CSRF e dispara systemctl para qualquer autenticado. Preservar na conversão (A1/A2) e tratar como follow-up de política."
+  },
+  {
+   "id": "F6",
+   "severity": "medium",
+   "text": "Inventário §2 do REQUIREMENTS está incompleto: 13 rotas adicionais servidas pela v1 (ver routes_outside_requirements_inventory). A1 'nenhuma rota muda' exige que o legado continue atendendo essas rotas via fallback até serem formalmente adotadas por um módulo."
+  },
+  {
+   "id": "F7",
+   "severity": "low",
+   "text": "Mensagem de erro de publicação diz 'administrador tenant ou professor', mas o código exige apenas user.admin (professor NÃO publica produção real). Mensagem enganosa; corrigir texto na v2 sem mudar a decisão."
+  },
+  {
+   "id": "F8",
+   "severity": "info",
+   "text": "/api/promotions e /api/production-operations condicionam acesso à visibilidade de projetos sentinela hardcoded ('sistema-de-biblioteca-teste', 'atalhos-cloudif-iff1860746')."
+  }
+ ],
+ "combinations_total": 93
+}

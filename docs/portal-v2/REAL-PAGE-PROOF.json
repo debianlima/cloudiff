@@ -1,0 +1,65 @@
+{
+  "ok": true,
+  "pages": {
+    "admin-usuarios": {
+      "body_byte_identical": true,
+      "forms": 0,
+      "csrf_fields": 0,
+      "action_links": 0,
+      "element_ids": 1,
+      "functional_scripts": 2,
+      "canonical_nav": true,
+      "legacy_nav_removed": true
+    },
+    "ajuda": {
+      "body_byte_identical": true,
+      "forms": 0,
+      "csrf_fields": 0,
+      "action_links": 0,
+      "element_ids": 1,
+      "functional_scripts": 2,
+      "canonical_nav": true,
+      "legacy_nav_removed": true
+    },
+    "bancos": {
+      "body_byte_identical": true,
+      "forms": 10,
+      "csrf_fields": 10,
+      "action_links": 10,
+      "element_ids": 5,
+      "functional_scripts": 2,
+      "canonical_nav": true,
+      "legacy_nav_removed": true
+    },
+    "monitor-saude": {
+      "body_byte_identical": true,
+      "forms": 0,
+      "csrf_fields": 0,
+      "action_links": 0,
+      "element_ids": 1,
+      "functional_scripts": 2,
+      "canonical_nav": true,
+      "legacy_nav_removed": true
+    },
+    "projetos": {
+      "body_byte_identical": true,
+      "forms": 34,
+      "csrf_fields": 34,
+      "action_links": 34,
+      "element_ids": 23,
+      "functional_scripts": 4,
+      "canonical_nav": true,
+      "legacy_nav_removed": true
+    },
+    "publicacao": {
+      "body_byte_identical": true,
+      "forms": 16,
+      "csrf_fields": 16,
+      "action_links": 16,
+      "element_ids": 0,
+      "functional_scripts": 2,
+      "canonical_nav": true,
+      "legacy_nav_removed": true
+    }
+  }
+}
