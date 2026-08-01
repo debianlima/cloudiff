@@ -44,3 +44,5 @@ node_modules/
 !components/runtime/srv/cloudif/scanners/*.env.example
 
 !components/proxy/srv/cloudif/proxy/npm/data/nginx/custom/http.conf
+
+!components/proxy/srv/cloudif/proxy/npm/data/nginx/custom/server_proxy.conf
