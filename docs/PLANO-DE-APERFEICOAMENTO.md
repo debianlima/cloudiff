@@ -1,9 +1,13 @@
 # Plano de aperfeiçoamento — CloudIFF Portal
 
-Documento de trabalho · versão 1 · 31/07/2026
+Documento de trabalho · versão 2 · 01/08/2026
+
+> **Revisão 2** — corrige três números da versão 1 (camadas de CSS, contagem de
+> `!important` e a caracterização do `staging/lib/`) e acrescenta os itens 16 a 18.
+> Os valores agora foram contados no código, não estimados.
 
 Este plano parte de uma leitura do repositório `debianlima/cloudiff` no commit
-`247ba90`. Ele não propõe reescrever a plataforma: o control-plane, o runtime e
+`ff9f166`. Ele não propõe reescrever a plataforma: o control-plane, o runtime e
 o proxy funcionam e têm cobertura auditada. O alvo é **o Portal e a camada de
 interface**, que é onde o custo de manutenção cresce mais rápido do que a
 funcionalidade.
@@ -18,27 +22,35 @@ Cada item abaixo é observável no código atual. Nenhum é hipótese.
 |---|-----------|------|--------------|
 | 1 | Arquivo de 345 KB (~9 mil linhas) | `portal-current/cloudif-admin-portal.py` | Não é revisável em PR, não é testável em unidade, todo commit conflita |
 | 2 | Arquivo de 123 KB | `mcp-gateway-current/cloudif-mcp-gateway.py` | Mesmo problema, num serviço que é superfície de integração |
-| 3 | 19 camadas de CSS empilhadas por versão (`v70` … `v88`) | `cloudif_ui_components.py` | Ninguém sabe qual regra vence sem abrir o inspetor |
-| 4 | `.cm-menu-tabs{display:none !important}` na camada v71 | idem, linha ~470 | A função `menu_tabs()` continua sendo chamada e renderizando HTML que o CSS esconde. Código morto que ainda custa CPU e confunde |
+| 3 | 10 camadas de CSS empilhadas por versão, numeradas de `v70` a `v88` (faltam v73, v74 e v80–v86) | `cloudif_ui_components.py` | Ninguém sabe qual regra vence sem abrir o inspetor. As lacunas na numeração indicam camadas removidas sem renumeração |
+| 4 | `.cm-menu-tabs{display:none !important}` na camada v71 | idem | A função `menu_tabs()` continua sendo chamada e renderizando HTML que o CSS esconde. Código morto que ainda custa CPU e confunde |
 | 5 | Bloco `.acl-result-*` duplicado **byte a byte** nas camadas v87 e v88 | idem, final do arquivo | ~1,2 KB de CSS idêntico enviado duas vezes em cada resposta |
 | 6 | `profile_mount()` definido **duas vezes** no mesmo arquivo | idem | A segunda definição sombreia a primeira em silêncio. A primeira é código morto |
 | 7 | JS que varre `.card, .cm-card, .panel, .box, section, div` e esconde elementos por correspondência de texto (`'Usuário:'`, `'Grupos Authentik:'`) | `hideLooseUserBox()` | Um módulo escondendo a saída de outro por heurística de string. Quebra se um rótulo mudar |
 | 8 | JS que esconde rodapés procurando `'uso didático'` e `'Instituto Federal Fluminense'` no texto | `footer()` | Mesmo padrão |
 | 9 | Dois sistemas de botão (`.cm-btn` e `.btn`), dois de pílula, dois de cartão, dois de modal (`:target` e `.wizard`) | idem | Cada tela escolhe um. A interface parece dois produtos |
-| 10 | ~40 usos de `!important` | idem | Sinal de que a cascata já não é usada, é vencida na força |
+| 10 | 57 usos de `!important` — 45 no bloco base e 12 nas camadas | idem | Sinal de que a cascata já não é usada, é vencida na força. Só `.cm-profile-top summary` concentra 13 |
 | 11 | CI executa apenas `validate.sh` (sintaxe + segredos). Nenhum teste roda | `.github/workflows/validate.yml` | O portão prova "isto faz parse", não "isto funciona" |
 | 12 | `_tenant_level()` retorna no máximo `10`, mas `tenant.manage` exige `30` e `tenant.delete` exige `50` | `cloudif_rbac.py` | Essas ações são **inalcançáveis** fora do admin global. Metade do `ROLE_LEVEL` é código morto nesse caminho |
-| 13 | `'domain admins'` no valor padrão de `CLOUDIF_ADMIN_GROUPS` | idem, linha 7 | Se a variável não for definida, todo Domain Admin do AD ganha admin global por omissão |
+| 13 | `'domain admins'` no valor padrão de `CLOUDIF_ADMIN_GROUPS` | idem | Se a variável não for definida, todo Domain Admin do AD ganha admin global por omissão |
 | 14 | `with sqlite3.connect(...)` sem `close()` | idem, `authorize()` e `explain()` | O context manager do `sqlite3` faz commit/rollback, não fecha. Acumula descritores num processo de longa duração que chama isso a cada request |
 | 15 | Menu nomeado por tecnologia: "Git + Komodo", "Bancos / Tenants" | `menu_tabs()` | O usuário precisa saber como o sistema é construído para achar o que quer |
+| 16 | `staging/lib/` e `lib/`: 20 dos 25 arquivos têm blob SHA idêntico; 5 divergem | `srv/cloudif/staging/lib/` vs `srv/cloudif/lib/` | Nenhum manifesto declara qual árvore é a fonte. Os 5 divergentes são menores em staging: −31%, −37%, −23%, −2%, −1% |
+| 17 | Camada v77 inteiramente anulada pela v78 | `cloudif_ui_components.py` | A v78 abre com `.footer{display:none !important}`, que mata todo o bloco `.footer` definido logo acima na v77 |
+| 18 | `footer.cm-footer{display:none !important}` idêntico em v77 e v78 | idem | Segunda duplicação exata do arquivo, além do `.acl-result-*` das camadas v87/v88 |
 
 ### O padrão por trás
 
-Os itens 3 a 10 são o mesmo fenômeno: **correções aplicadas por acréscimo, nunca
-por edição**. Cada versão empilhou uma camada nova para anular a anterior, em vez
-de mudar a origem. É um modo de trabalho que funciona sob pressão e cobra juros
-depois. O plano abaixo existe para pagar essa dívida uma vez e criar as condições
-para que ela não volte.
+Os itens 3 a 10, mais o 17 e o 18, são o mesmo fenômeno: **correções aplicadas
+por acréscimo, nunca por edição**. Cada versão empilhou uma camada nova para
+anular a anterior, em vez de mudar a origem. É um modo de trabalho que funciona
+sob pressão e cobra juros depois. O plano abaixo existe para pagar essa dívida
+uma vez e criar as condições para que ela não volte.
+
+O item 16 é o mesmo padrão subindo de escala: antes eram camadas dentro de um
+arquivo, agora é uma árvore de diretório inteira ao lado da original. E é a
+deriva que a própria plataforma foi construída para detectar — só que entre dois
+diretórios do repositório, onde o reconciliador não olha.
 
 ---
 
@@ -66,11 +78,13 @@ Cinco decisões que valem para todas as fases:
 
 - Ativar os testes existentes de `srv/cloudif/tests/` no workflow. Hoje eles
   estão no repositório e não rodam.
-- Adicionar ao `validate-repository.py` três verificações novas, no mesmo estilo
-  das que já existem:
+- Adicionar ao `validate-repository.py` verificações novas, no mesmo estilo das
+  que já existem:
   - **símbolo redefinido** no mesmo módulo (pega o item 6 automaticamente);
-  - **bloco CSS duplicado** dentro do mesmo arquivo (pega o item 5);
-  - **contagem de `!important`** com teto declarado, falhando se subir.
+  - **bloco CSS duplicado** dentro do mesmo arquivo (pega os itens 5 e 18);
+  - **contagem de `!important`** com teto declarado em 57, falhando se subir;
+  - **deriva entre `lib/` e `staging/lib/`**: comparar os dois conjuntos e exigir
+    que toda divergência esteja declarada num manifesto (pega o item 16).
 - Congelar o `cloudif_ui_components.py` atual como `legacy` e marcar no README
   que ele não recebe mais camadas novas.
 
@@ -81,7 +95,7 @@ produção.
 
 ### Fase 1 — Design system único
 
-Substituir as 19 camadas por **três arquivos**:
+Substituir as 10 camadas por **três arquivos**:
 
 ```
 portal/design/
@@ -94,14 +108,22 @@ Regras que o `validate.sh` passa a impor:
 
 - nenhum literal de cor (`#hex`, `rgb(`) fora de `tokens.css`;
 - nenhum `!important` em `components.css`;
-- nenhum seletor com mais de duas classes encadeadas.
+- nenhum seletor com mais de duas classes encadeadas;
+- **contraste WCAG AA (4,5:1) em todo par texto/fundo declarado.**
 
-O protótipo `docs/portal-v2/portal-v2-prototipo.html` que acompanha este plano já
-implementa esse sistema por inteiro e serve como referência executável. Ele mantém
-o verde institucional `#168821` — que é o verde do padrão gov.br e faz sentido para
-um Instituto Federal — mas o **reserva para dois usos apenas**: a marca e o estado
-convergido. Hoje o mesmo verde pinta cabeçalho, botão, cabeçalho de tabela,
-pílula, link e medidor; quando tudo é destaque, nada é.
+O último item não é formalidade: a primeira auditoria do próprio protótipo
+reprovou. O cinza-esverdeado `--ink-3`, usado em rótulos, legendas, medidores e
+carimbos de tempo, ficava em 4,07:1 sobre `--paper` e 4,38:1 sobre `--surface`.
+Foi corrigido para `#5E6E63`, que dá 5,02:1 e 5,40:1. Sendo um site de instituição
+federal, o eMAG e a Lei Brasileira de Inclusão tornam isso requisito, não
+preferência — e é exatamente o tipo de erro que passa despercebido a olho nu.
+
+O protótipo `docs/portal-v2/portal-v2-prototipo.html` que acompanha este plano
+já implementa esse sistema por inteiro e serve como referência executável. Ele
+mantém o verde institucional `#168821` — que é o verde do padrão gov.br e faz
+sentido para um Instituto Federal — mas o **reserva para dois usos apenas**: a
+marca e o estado convergido. Hoje o mesmo verde pinta cabeçalho, botão, cabeçalho
+de tabela, pílula, link e medidor; quando tudo é destaque, nada é.
 
 Estados ganham cores próprias e semânticas: âmbar `#A8590B` para deriva, vermelho
 `#9C1C24` para falha. O azul `#1B5FBF` é usado **só** no anel de foco, para nunca
@@ -281,6 +303,9 @@ frente.
 ## Anexos
 
 - `docs/portal-v2/portal-v2-prototipo.html` — implementação de referência do design
-  system e da nova navegação. Abre em qualquer navegador, sem build.
+  system e da nova navegação. Abre em qualquer navegador, sem build. Auditado em
+  01/08: 13 pares de contraste em AA, sem IDs duplicados, sem referências ARIA
+  quebradas, sem saltos de nível de título e sem `!important` fora do bloco
+  `prefers-reduced-motion`.
 - `docs/GUIA-DE-MIGRACAO.md` — como sair da versão atual, como os módulos funcionam
   e como a nova estrutura se organiza.
