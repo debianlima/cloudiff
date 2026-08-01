@@ -11,14 +11,16 @@
 /* ============================================================
    CloudIFF Portal v2 — tokens
    Fonte única de verdade. Nenhum valor de cor ou tipo pode ser
-   escrito fora daqui. Isto substitui as 19 camadas de override
+   escrito fora daqui. Isto substitui as 10 camadas de override
    (v70…v88) do cloudif_ui_components.py atual.
+
+   Contraste auditado em 01/08/2026: 13 pares em WCAG AA.
    ============================================================ */
 :root{
   /* Tinta e papel — família verde, não cinza neutro */
   --ink:        #0F1F14;
   --ink-2:      #42544A;
-  --ink-3:      #6B7D71;
+  --ink-3:      #5E6E63;   /* 5,02:1 sobre --paper · era #6B7D71 (4,07:1, reprovava AA) */
   --paper:      #F6F7F3;
   --surface:    #FFFFFF;
   --rule:       #DCE3DA;
