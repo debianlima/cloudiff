@@ -1,0 +1,36 @@
+/* CloudIFF Portal v2 — única fonte de valores visuais. */
+:root{
+  --ink:#0f1f14;
+  --ink-2:#42544a;
+  --ink-3:#6b7d71;
+  --paper:#f6f7f3;
+  --surface:#ffffff;
+  --rule:#dce3da;
+  --rule-soft:#edf1eb;
+  --iff:#168821;
+  --iff-dark:#0b6418;
+  --iff-wash:#eaf4ec;
+  --on-iff:#ffffff;
+  --drift:#a8590b;
+  --drift-wash:#fbf1e4;
+  --halt:#9c1c24;
+  --halt-wash:#faebec;
+  --focus:#1b5fbf;
+  --overlay:rgba(15,31,20,.4);
+  --display:"Bricolage Grotesque",ui-sans-serif,system-ui,sans-serif;
+  --body:"Public Sans",ui-sans-serif,system-ui,sans-serif;
+  --data:"JetBrains Mono",ui-monospace,"SFMono-Regular",monospace;
+  --s1:4px;
+  --s2:8px;
+  --s3:12px;
+  --s4:16px;
+  --s5:24px;
+  --s6:32px;
+  --s7:48px;
+  --s8:64px;
+  --r-sm:6px;
+  --r-md:10px;
+  --r-lg:14px;
+  --nav-w:264px;
+  --bar-h:60px;
+}

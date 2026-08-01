@@ -1,0 +1,10 @@
+{
+  "legacy_file": "components/control-plane/srv/cloudif/lib/cloudif_ui_components.py",
+  "legacy_important_max": 57,
+  "legacy_duplicate_symbols": {
+    "profile_mount": 2
+  },
+  "portal_v2_components_important_max": 0,
+  "portal_v2_duplicate_symbols_max": 0,
+  "portal_v2_duplicate_css_blocks_max": 0
+}

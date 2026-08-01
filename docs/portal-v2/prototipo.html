@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CloudIFF · Portal v2</title>
+<link rel="stylesheet" href="../../portal/design/tokens.css">
+<link rel="stylesheet" href="../../portal/design/base.css">
+<link rel="stylesheet" href="../../portal/design/components.css">
+<script src="../../portal/design/app.js" defer></script>
+</head>
+<body>
+<div class="app">
+<nav class="nav" id="nav" aria-label="Navegação principal">
+<div class="nav-brand"><div class="nav-mark">CI</div><div><div class="nav-brand-name">CloudIFF</div><div class="nav-brand-sub">Campus Bom Jesus</div></div></div>
+<div class="nav-scroll">
+<div class="nav-group"><a class="nav-link" aria-current="page" href="#">Início</a></div>
+<div class="nav-group"><div class="nav-group-label">Projetos</div><a class="nav-link" href="#">Todos os projetos <span class="nav-count">34</span></a><a class="nav-link" href="#">Publicações</a><a class="nav-link" href="#">Aprovações <span class="nav-count is-drift">3</span></a></div>
+<div class="nav-group"><div class="nav-group-label">Ambientes</div><a class="nav-link" href="#">Pré-visualização</a><a class="nav-link" href="#">Homologação</a><a class="nav-link" href="#">Produção</a></div>
+<div class="nav-group"><div class="nav-group-label">Dados</div><a class="nav-link" href="#">Bancos de dados</a><a class="nav-link" href="#">Tenants</a></div>
+<div class="nav-group"><div class="nav-group-label">Entrega</div><a class="nav-link" href="#">Repositórios</a><a class="nav-link" href="#">Compilações</a><a class="nav-link" href="#">Implantações</a></div>
+<div class="nav-group"><div class="nav-group-label">Saúde</div><a class="nav-link" href="#">Servidores</a><a class="nav-link" href="#">Reconciliação</a><a class="nav-link" href="#">Auditoria</a></div>
+<div class="nav-group"><div class="nav-group-label">Administração</div><a class="nav-link" href="#">Pessoas e acessos</a><a class="nav-link" href="#">Políticas</a><a class="nav-link" href="#">Configuração</a></div>
+</div><div class="nav-foot">Portal v2 · migração incremental</div></nav>
+<div class="main"><header class="bar"><button class="bar-toggle" id="toggle" aria-label="Abrir navegação" aria-expanded="false" aria-controls="nav">☰</button><span class="scope"><span class="scope-dot"></span>produção · 3 nós</span><div class="search">Buscar projeto, tenant ou serviço</div><button class="avatar">AD</button></header>
+<main class="page"><div class="page-head"><div class="eyebrow">Início</div><h1 class="page-title">Estado declarado e observado, lado a lado</h1><p class="page-sub">A nova interface usa linguagem de operação, componentes únicos e cores semânticas.</p></div>
+<section class="attention"><div><h2 class="attention-title">Dois serviços fora do estado declarado</h2><p class="attention-text">A plataforma continua disponível. A reconciliação pode ser executada sem ocultar a causa.</p></div><a class="btn btn-alert" href="#">Reconciliar agora</a></section>
+<section class="ledger"><div class="ledger-head"><h2 class="ledger-title">Estado dos serviços</h2><span class="ledger-meta">verificado agora</span></div><div class="ledger-cols"><span>Serviço</span><span>Declarado</span><span>Convergência</span><span>Observado</span><span></span></div>
+<div class="row"><div class="row-name"><div class="row-service">portal-current</div><div class="row-node">control-plane</div></div><div class="state is-live">v2</div><div class="link"><span class="link-tag">igual</span></div><div class="state is-live">v2</div><div class="row-act"><a class="btn btn-quiet" href="#">Abrir</a></div></div>
+<div class="row"><div class="row-name"><div class="row-service">publisher-agent</div><div class="row-node">proxy</div></div><div class="state is-live">v4.2</div><div class="link is-drift"><span class="link-tag">deriva</span></div><div class="state is-off">v4.1</div><div class="row-act"><a class="btn btn-quiet" href="#">Detalhes</a></div></div></section>
+<div class="nodes"><article class="node"><span class="chip">control-plane</span><h2>Saudável</h2><p>Portal, MCP e reconciliação convergidos.</p></article><article class="node"><span class="chip is-drift">proxy</span><h2>Atenção</h2><p>Uma versão observada difere da declarada.</p></article><article class="node"><span class="chip">runtime</span><h2>Saudável</h2><p>Agentes e executores disponíveis.</p></article></div>
+</main></div></div>
+</body></html>

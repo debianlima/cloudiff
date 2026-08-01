@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ast
+import collections
 import json
 import re
 import subprocess
@@ -156,6 +157,91 @@ def validate_unit_references() -> None:
     STATS["unit_references"] = checked
 
 
+
+def validate_portal_quality() -> None:
+    """Prevent the v2 from inheriting the append-only legacy pattern."""
+    baseline_path = ROOT / "config/portal-quality-baseline.json"
+    baseline = json.loads(baseline_path.read_text(encoding="utf-8"))
+    legacy = ROOT / baseline["legacy_file"]
+    legacy_text = legacy.read_text(encoding="utf-8")
+    legacy_important = legacy_text.count("!important")
+    if legacy_important > baseline["legacy_important_max"]:
+        fail(
+            f"legacy !important count increased: {legacy_important} > "
+            f"{baseline['legacy_important_max']}"
+        )
+
+    def duplicate_symbols(path: Path) -> dict[str, int]:
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        names = collections.Counter(
+            node.name
+            for node in tree.body
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
+        )
+        return {name: count for name, count in names.items() if count > 1}
+
+    allowed_legacy = baseline["legacy_duplicate_symbols"]
+    actual_legacy = duplicate_symbols(legacy)
+    if actual_legacy != allowed_legacy:
+        fail(f"legacy duplicate-symbol baseline changed: {actual_legacy}")
+
+    portal_duplicates: dict[str, dict[str, int]] = {}
+    for path in (ROOT / "portal").rglob("*.py"):
+        if "legacy" in path.parts:
+            continue
+        duplicates = duplicate_symbols(path)
+        if duplicates:
+            portal_duplicates[str(path.relative_to(ROOT))] = duplicates
+    if portal_duplicates:
+        fail(f"Portal v2 redefined symbols: {portal_duplicates}")
+
+    tokens = ROOT / "portal/design/tokens.css"
+    components = ROOT / "portal/design/components.css"
+    base = ROOT / "portal/design/base.css"
+    component_text = components.read_text(encoding="utf-8")
+    important_count = component_text.count("!important")
+    if important_count > baseline["portal_v2_components_important_max"]:
+        fail(f"Portal v2 components.css contains {important_count} !important rules")
+
+    color_literal = re.compile(r"#[0-9a-fA-F]{3,8}\b|rgba?\(")
+    for path in (base, components):
+        if color_literal.search(path.read_text(encoding="utf-8")):
+            fail(f"color literal outside tokens.css: {path.relative_to(ROOT)}")
+
+    # Detect byte-equivalent CSS rule bodies repeated in the v2 component sheet.
+    blocks = collections.Counter()
+    for selector, body in re.findall(r"([^{}]+)\{([^{}]+)\}", component_text):
+        normalized_selector = re.sub(r"\s+", " ", selector).strip()
+        normalized_body = re.sub(r"\s+", "", body)
+        if normalized_selector and normalized_body:
+            blocks[(normalized_selector, normalized_body)] += 1
+    repeated = {selector: count for (selector, _body), count in blocks.items() if count > 1}
+    if repeated:
+        fail(f"Portal v2 duplicate CSS blocks: {repeated}")
+
+    # No module may depend on a sibling module.
+    module_names = {p.name for p in (ROOT / "portal/modules").iterdir() if p.is_dir()}
+    for path in (ROOT / "portal/modules").rglob("*.py"):
+        own = path.relative_to(ROOT / "portal/modules").parts[0]
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        for node in ast.walk(tree):
+            target = None
+            if isinstance(node, ast.ImportFrom) and node.module:
+                target = node.module
+            elif isinstance(node, ast.Import):
+                for alias in node.names:
+                    if alias.name.startswith("portal.modules."):
+                        target = alias.name
+            if target and target.startswith("portal.modules."):
+                sibling = target.split(".")[2]
+                if sibling in module_names and sibling != own:
+                    fail(f"sibling module import: {path.relative_to(ROOT)} -> {target}")
+
+    STATS["legacy_important"] = legacy_important
+    STATS["portal_v2_important"] = important_count
+    STATS["portal_v2_duplicate_symbols"] = len(portal_duplicates)
+    STATS["portal_v2_duplicate_css_blocks"] = len(repeated)
+
 def validate_structure() -> None:
     required = [
         "components/control-plane/current-apps/portal-current/cloudif-admin-portal.py",
@@ -180,6 +266,14 @@ def validate_structure() -> None:
         "config/control-plane/portal.env.example",
         "config/runtime/forja-agent.env.example",
         "config/proxy/access-telemetry.env.example",
+        "portal/app.py",
+        "portal/registry.py",
+        "portal/design/tokens.css",
+        "portal/design/base.css",
+        "portal/design/components.css",
+        "portal/design/app.js",
+        "portal/legacy/README.md",
+        "docs/portal-v2/prototipo.html",
     ]
     for item in required:
         if not (ROOT / item).exists():
@@ -195,6 +289,7 @@ def main() -> int:
     validate_json()
     validate_yaml()
     validate_unit_references()
+    validate_portal_quality()
     result = {"ok": not ERRORS, "stats": STATS, "errors": ERRORS}
     print(json.dumps(result, ensure_ascii=False, indent=2))
     return 0 if not ERRORS else 1

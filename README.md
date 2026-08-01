@@ -71,3 +71,14 @@ Consulte:
 - `docs/REPOSITORY_AUDIT.md` para a auditoria de cobertura;
 - `docs/COVERAGE_AUDIT.json` para a comparação com os hosts ativos;
 - `docs/INVENTORY.json` para o inventário de arquivos.
+
+## Portal v2
+
+A migração incremental do Portal está em `portal/`. Consulte:
+
+- `docs/portal-v2/PLANO-DE-APERFEICOAMENTO.md`;
+- `docs/portal-v2/GUIA-DE-MIGRACAO.md`;
+- `docs/portal-v2/prototipo.html`.
+
+As Fases 0 e 1 estão implementadas em coexistência. O Portal legado permanece o
+fallback de produção até a migração individual das rotas.
