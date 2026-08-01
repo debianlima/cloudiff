@@ -1,0 +1,1252 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CloudIFF · Portal v2 (protótipo de interface)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&family=Public+Sans:wght@400;500;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+/* ============================================================
+   CloudIFF Portal v2 — tokens
+   Fonte única de verdade. Nenhum valor de cor ou tipo pode ser
+   escrito fora daqui. Isto substitui as 19 camadas de override
+   (v70…v88) do cloudif_ui_components.py atual.
+   ============================================================ */
+:root{
+  /* Tinta e papel — família verde, não cinza neutro */
+  --ink:        #0F1F14;
+  --ink-2:      #42544A;
+  --ink-3:      #6B7D71;
+  --paper:      #F6F7F3;
+  --surface:    #FFFFFF;
+  --rule:       #DCE3DA;
+  --rule-soft:  #EDF1EB;
+
+  /* Identidade institucional — verde gov.br, herdado do portal atual.
+     Reservado para: marca + estado convergido. Nada mais. */
+  --iff:        #168821;
+  --iff-dark:   #0B6418;
+  --iff-wash:   #EAF4EC;
+  --on-iff:     #FFFFFF;   /* texto sobre o verde institucional */
+
+  /* Estados — semânticos, nunca decorativos */
+  --drift:      #A8590B;
+  --drift-wash: #FBF1E4;
+  --halt:       #9C1C24;
+  --halt-wash:  #FAEBEC;
+
+  /* Foco: azul, deliberadamente fora da paleta de estado,
+     para nunca competir com a semântica de convergência */
+  --focus:      #1B5FBF;
+
+  /* Tipografia */
+  --display: 'Bricolage Grotesque', ui-sans-serif, system-ui, sans-serif;
+  --body:    'Public Sans', ui-sans-serif, system-ui, sans-serif;
+  --data:    'JetBrains Mono', ui-monospace, 'SF Mono', monospace;
+
+  /* Espaço — escala de 4 */
+  --s1: 4px;  --s2: 8px;  --s3: 12px; --s4: 16px;
+  --s5: 24px; --s6: 32px; --s7: 48px; --s8: 64px;
+
+  --r-sm: 6px; --r-md: 10px; --r-lg: 14px;
+  --nav-w: 264px;
+  --bar-h: 60px;
+}
+
+*,*::before,*::after{ box-sizing:border-box; }
+
+html,body{ margin:0; padding:0; }
+
+body{
+  background:var(--paper);
+  color:var(--ink);
+  font-family:var(--body);
+  font-size:14.5px;
+  line-height:1.55;
+  -webkit-font-smoothing:antialiased;
+}
+
+a{ color:inherit; }
+
+:focus-visible{
+  outline:2px solid var(--focus);
+  outline-offset:2px;
+  border-radius:var(--r-sm);
+}
+
+.sr-only{
+  position:absolute; width:1px; height:1px;
+  padding:0; margin:-1px; overflow:hidden;
+  clip:rect(0 0 0 0); white-space:nowrap; border:0;
+}
+
+/* ============================================================
+   Esqueleto
+   ============================================================ */
+.app{
+  display:grid;
+  grid-template-columns:var(--nav-w) 1fr;
+  min-height:100vh;
+}
+
+/* ---------- Navegação lateral ---------- */
+.nav{
+  background:var(--surface);
+  border-right:1px solid var(--rule);
+  display:flex;
+  flex-direction:column;
+  position:sticky;
+  top:0;
+  height:100vh;
+  overflow-y:auto;
+}
+
+.nav-brand{
+  padding:var(--s4) var(--s4) var(--s3);
+  border-bottom:1px solid var(--rule-soft);
+  display:flex;
+  align-items:center;
+  gap:var(--s3);
+}
+
+.nav-mark{
+  width:34px; height:34px;
+  border-radius:9px;
+  background:var(--iff);
+  color:var(--on-iff);
+  display:grid;
+  place-items:center;
+  font-family:var(--display);
+  font-weight:800;
+  font-size:15px;
+  letter-spacing:-.03em;
+  flex:0 0 auto;
+}
+
+.nav-brand-text{ min-width:0; }
+
+.nav-brand-name{
+  font-family:var(--display);
+  font-weight:800;
+  font-size:16px;
+  letter-spacing:-.02em;
+  line-height:1.1;
+}
+
+.nav-brand-sub{
+  font-size:11.5px;
+  color:var(--ink-3);
+  letter-spacing:.01em;
+}
+
+.nav-scroll{ padding:var(--s3) var(--s2) var(--s5); flex:1; }
+
+.nav-group{ margin-bottom:var(--s4); }
+
+.nav-group-label{
+  font-family:var(--data);
+  font-size:10.5px;
+  font-weight:700;
+  letter-spacing:.11em;
+  text-transform:uppercase;
+  color:var(--ink-3);
+  padding:0 var(--s3) var(--s2);
+}
+
+.nav-link{
+  display:flex;
+  align-items:center;
+  gap:var(--s3);
+  padding:7px var(--s3);
+  border-radius:var(--r-sm);
+  text-decoration:none;
+  color:var(--ink-2);
+  font-size:14px;
+  font-weight:500;
+  position:relative;
+}
+
+.nav-link:hover{ background:var(--rule-soft); color:var(--ink); }
+
+.nav-link[aria-current="page"]{
+  background:var(--iff-wash);
+  color:var(--iff-dark);
+  font-weight:700;
+}
+
+.nav-link[aria-current="page"]::before{
+  content:"";
+  position:absolute;
+  left:calc(var(--s2) * -1);
+  top:6px; bottom:6px;
+  width:3px;
+  border-radius:0 3px 3px 0;
+  background:var(--iff);
+}
+
+.nav-ico{ width:16px; height:16px; flex:0 0 auto; stroke-width:1.8; }
+
+.nav-count{
+  margin-left:auto;
+  font-family:var(--data);
+  font-size:11px;
+  font-weight:700;
+  color:var(--ink-3);
+}
+
+.nav-count.is-drift{ color:var(--drift); }
+
+.nav-foot{
+  border-top:1px solid var(--rule-soft);
+  padding:var(--s3);
+  font-size:11.5px;
+  color:var(--ink-3);
+  line-height:1.45;
+}
+
+/* ---------- Barra superior ---------- */
+.main{ min-width:0; display:flex; flex-direction:column; }
+
+.bar{
+  height:var(--bar-h);
+  border-bottom:1px solid var(--rule);
+  background:color-mix(in srgb, var(--surface) 82%, transparent);
+  backdrop-filter:blur(8px);
+  display:flex;
+  align-items:center;
+  gap:var(--s3);
+  padding:0 var(--s5);
+  position:sticky;
+  top:0;
+  z-index:20;
+}
+
+.bar-toggle{
+  display:none;
+  background:none;
+  border:1px solid var(--rule);
+  border-radius:var(--r-sm);
+  width:34px; height:34px;
+  cursor:pointer;
+  color:var(--ink-2);
+  place-items:center;
+}
+
+.scope{
+  display:flex;
+  align-items:center;
+  gap:var(--s2);
+  border:1px solid var(--rule);
+  background:var(--surface);
+  border-radius:999px;
+  padding:5px var(--s3) 5px 10px;
+  font-family:var(--data);
+  font-size:12px;
+  font-weight:500;
+  color:var(--ink-2);
+  cursor:pointer;
+}
+
+.scope-dot{
+  width:7px; height:7px; border-radius:50%;
+  background:var(--iff);
+  flex:0 0 auto;
+}
+
+.search{
+  margin-left:auto;
+  display:flex;
+  align-items:center;
+  gap:var(--s2);
+  border:1px solid var(--rule);
+  background:var(--surface);
+  border-radius:var(--r-sm);
+  padding:6px var(--s3);
+  min-width:210px;
+  color:var(--ink-3);
+  font-size:13px;
+  cursor:text;
+}
+
+.search kbd{
+  margin-left:auto;
+  font-family:var(--data);
+  font-size:10.5px;
+  border:1px solid var(--rule);
+  border-bottom-width:2px;
+  border-radius:4px;
+  padding:1px 5px;
+  color:var(--ink-3);
+  background:var(--paper);
+}
+
+.avatar{
+  width:34px; height:34px;
+  border-radius:50%;
+  border:1px solid var(--rule);
+  background:var(--iff-wash);
+  color:var(--iff-dark);
+  display:grid; place-items:center;
+  font-family:var(--data);
+  font-size:12px;
+  font-weight:700;
+  cursor:pointer;
+  flex:0 0 auto;
+}
+
+/* ---------- Conteúdo ---------- */
+.page{ padding:var(--s6) var(--s5) var(--s8); max-width:1180px; width:100%; }
+
+.page-head{ margin-bottom:var(--s6); }
+
+.eyebrow{
+  font-family:var(--data);
+  font-size:11px;
+  font-weight:700;
+  letter-spacing:.1em;
+  text-transform:uppercase;
+  color:var(--ink-3);
+  margin-bottom:var(--s2);
+}
+
+.page-title{
+  font-family:var(--display);
+  font-weight:800;
+  font-size:clamp(26px, 3.4vw, 36px);
+  letter-spacing:-.03em;
+  line-height:1.08;
+  margin:0 0 var(--s3);
+}
+
+.page-sub{
+  color:var(--ink-2);
+  max-width:62ch;
+  margin:0;
+  font-size:15px;
+}
+
+/* ============================================================
+   ASSINATURA: régua de reconciliação
+   O conceito central da plataforma é a distância entre o estado
+   declarado e o estado observado. A interface mostra os dois lados
+   sempre juntos, em vez de reduzir tudo a um selo verde.
+   ============================================================ */
+.ledger{
+  background:var(--surface);
+  border:1px solid var(--rule);
+  border-radius:var(--r-lg);
+  overflow:hidden;
+  margin-bottom:var(--s6);
+}
+
+.ledger-head{
+  display:flex;
+  align-items:baseline;
+  justify-content:space-between;
+  gap:var(--s4);
+  flex-wrap:wrap;
+  padding:var(--s4) var(--s5);
+  border-bottom:1px solid var(--rule-soft);
+}
+
+.ledger-title{
+  font-family:var(--display);
+  font-weight:600;
+  font-size:17px;
+  letter-spacing:-.015em;
+  margin:0;
+}
+
+.ledger-meta{
+  font-family:var(--data);
+  font-size:11.5px;
+  color:var(--ink-3);
+}
+
+.ledger-cols{
+  display:grid;
+  grid-template-columns:minmax(160px,1.5fr) 92px minmax(120px,1fr) 92px 108px;
+  gap:var(--s3);
+  padding:var(--s2) var(--s5);
+  border-bottom:1px solid var(--rule-soft);
+  background:var(--paper);
+  font-family:var(--data);
+  font-size:10.5px;
+  font-weight:700;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  color:var(--ink-3);
+}
+
+.ledger-cols span:nth-child(2),
+.ledger-cols span:nth-child(4){ text-align:center; }
+.ledger-cols span:nth-child(3){ text-align:center; }
+.ledger-cols span:nth-child(5){ text-align:right; }
+
+.row{
+  display:grid;
+  grid-template-columns:minmax(160px,1.5fr) 92px minmax(120px,1fr) 92px 108px;
+  gap:var(--s3);
+  align-items:center;
+  padding:var(--s3) var(--s5);
+  border-bottom:1px solid var(--rule-soft);
+  animation:rise .4s cubic-bezier(.2,.7,.3,1) backwards;
+}
+
+.row:last-child{ border-bottom:0; }
+
+.row:hover{ background:var(--paper); }
+
+@keyframes rise{
+  from{ opacity:0; transform:translateY(5px); }
+  to{ opacity:1; transform:none; }
+}
+
+.row-name{ min-width:0; }
+
+.row-service{
+  font-family:var(--data);
+  font-size:13px;
+  font-weight:500;
+  color:var(--ink);
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+
+.row-node{
+  font-size:11.5px;
+  color:var(--ink-3);
+}
+
+.state{
+  font-family:var(--data);
+  font-size:12px;
+  font-weight:700;
+  text-align:center;
+  padding:3px 0;
+  border-radius:var(--r-sm);
+  background:var(--rule-soft);
+  color:var(--ink-2);
+}
+
+.state.is-live{ background:var(--iff-wash); color:var(--iff-dark); }
+.state.is-off{  background:var(--drift-wash); color:var(--drift); }
+.state.is-halt{ background:var(--halt-wash); color:var(--halt); }
+
+/* O conector: solidez = convergência, tracejado = deriva */
+.link{
+  position:relative;
+  height:20px;
+  display:grid;
+  place-items:center;
+}
+
+.link::before{
+  content:"";
+  position:absolute;
+  left:0; right:0; top:50%;
+  height:0;
+  border-top:2px solid var(--iff);
+}
+
+.link.is-drift::before{ border-top-style:dashed; border-top-color:var(--drift); }
+.link.is-halt::before{  border-top-style:dashed; border-top-color:var(--halt); }
+
+.link-tag{
+  position:relative;
+  background:var(--surface);
+  padding:0 var(--s2);
+  font-family:var(--data);
+  font-size:10.5px;
+  font-weight:700;
+  letter-spacing:.05em;
+  color:var(--iff-dark);
+  white-space:nowrap;
+}
+
+.row:hover .link-tag{ background:var(--paper); }
+
+.link.is-drift .link-tag{ color:var(--drift); }
+.link.is-halt  .link-tag{ color:var(--halt); }
+
+.row-act{ text-align:right; }
+
+/* ---------- Botões: UM sistema só ---------- */
+.btn{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:6px;
+  min-height:32px;
+  padding:0 var(--s3);
+  border-radius:var(--r-sm);
+  border:1px solid transparent;
+  font-family:var(--body);
+  font-size:13px;
+  font-weight:600;
+  text-decoration:none;
+  cursor:pointer;
+  background:var(--iff);
+  color:var(--on-iff);
+}
+
+.btn:hover{ background:var(--iff-dark); }
+
+.btn-quiet{
+  background:var(--surface);
+  color:var(--ink-2);
+  border-color:var(--rule);
+}
+
+.btn-quiet:hover{ background:var(--paper); color:var(--ink); }
+
+.btn-alert{
+  background:var(--surface);
+  color:var(--drift);
+  border-color:color-mix(in srgb, var(--drift) 30%, var(--rule));
+}
+
+.btn-alert:hover{ background:var(--drift-wash); }
+
+.btn[disabled],.btn[aria-disabled="true"]{
+  background:var(--rule-soft);
+  color:var(--ink-3);
+  border-color:var(--rule);
+  cursor:not-allowed;
+}
+
+.btn-sm{ min-height:27px; font-size:12px; padding:0 10px; }
+
+/* ---------- Cartões de nó ---------- */
+.nodes{
+  display:grid;
+  grid-template-columns:repeat(auto-fit, minmax(230px, 1fr));
+  gap:var(--s4);
+  margin-bottom:var(--s6);
+}
+
+.node{
+  background:var(--surface);
+  border:1px solid var(--rule);
+  border-radius:var(--r-lg);
+  padding:var(--s4);
+}
+
+.node-top{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:var(--s2);
+  margin-bottom:var(--s3);
+}
+
+.node-name{
+  font-family:var(--data);
+  font-size:13px;
+  font-weight:700;
+  letter-spacing:-.01em;
+}
+
+.node-role{
+  font-size:11.5px;
+  color:var(--ink-3);
+  margin-bottom:var(--s4);
+  min-height:2.6em;
+}
+
+.meter{ margin-bottom:var(--s3); }
+
+.meter-top{
+  display:flex;
+  justify-content:space-between;
+  font-family:var(--data);
+  font-size:11px;
+  font-weight:500;
+  color:var(--ink-3);
+  margin-bottom:5px;
+}
+
+.meter-top b{ color:var(--ink-2); font-weight:700; }
+
+.meter-track{
+  height:5px;
+  border-radius:99px;
+  background:var(--rule-soft);
+  overflow:hidden;
+}
+
+.meter-fill{
+  height:100%;
+  border-radius:99px;
+  background:var(--iff);
+  transform-origin:left;
+  animation:fill .7s cubic-bezier(.2,.7,.3,1) backwards;
+}
+
+.meter-fill.is-warn{ background:var(--drift); }
+
+@keyframes fill{ from{ transform:scaleX(0); } to{ transform:scaleX(1); } }
+
+.chip{
+  display:inline-flex;
+  align-items:center;
+  gap:5px;
+  border-radius:999px;
+  padding:2px 9px;
+  font-family:var(--data);
+  font-size:10.5px;
+  font-weight:700;
+  letter-spacing:.03em;
+  background:var(--iff-wash);
+  color:var(--iff-dark);
+}
+
+.chip.is-drift{ background:var(--drift-wash); color:var(--drift); }
+.chip.is-halt{  background:var(--halt-wash);  color:var(--halt); }
+.chip.is-mute{  background:var(--rule-soft);  color:var(--ink-3); }
+
+/* ---------- Faixa de atenção ---------- */
+.attention{
+  display:flex;
+  gap:var(--s4);
+  align-items:flex-start;
+  background:var(--drift-wash);
+  border:1px solid color-mix(in srgb, var(--drift) 22%, var(--rule));
+  border-radius:var(--r-lg);
+  padding:var(--s4) var(--s5);
+  margin-bottom:var(--s6);
+}
+
+.attention-ico{
+  color:var(--drift);
+  flex:0 0 auto;
+  margin-top:1px;
+}
+
+.attention-body{ min-width:0; flex:1; }
+
+.attention-title{
+  font-family:var(--display);
+  font-weight:600;
+  font-size:15px;
+  letter-spacing:-.01em;
+  margin:0 0 3px;
+  color:var(--ink);
+}
+
+.attention-text{
+  margin:0;
+  font-size:13.5px;
+  color:var(--ink-2);
+  max-width:64ch;
+}
+
+.attention-act{ flex:0 0 auto; }
+
+/* ---------- Grade inferior ---------- */
+.split{
+  display:grid;
+  grid-template-columns:1.35fr 1fr;
+  gap:var(--s4);
+}
+
+.panel{
+  background:var(--surface);
+  border:1px solid var(--rule);
+  border-radius:var(--r-lg);
+  overflow:hidden;
+}
+
+.panel-head{
+  padding:var(--s4) var(--s5) var(--s3);
+  border-bottom:1px solid var(--rule-soft);
+  display:flex;
+  align-items:baseline;
+  justify-content:space-between;
+  gap:var(--s3);
+}
+
+.panel-title{
+  font-family:var(--display);
+  font-weight:600;
+  font-size:16px;
+  letter-spacing:-.015em;
+  margin:0;
+}
+
+.panel-link{
+  font-size:12.5px;
+  font-weight:600;
+  color:var(--iff-dark);
+  text-decoration:none;
+}
+
+.panel-link:hover{ text-decoration:underline; }
+
+.panel-body{ padding:var(--s3) var(--s5) var(--s4); }
+
+.feed{ list-style:none; margin:0; padding:0; }
+
+.feed li{
+  display:grid;
+  grid-template-columns:52px 1fr;
+  gap:var(--s3);
+  padding:10px 0;
+  border-bottom:1px solid var(--rule-soft);
+}
+
+.feed li:last-child{ border-bottom:0; }
+
+.feed-time{
+  font-family:var(--data);
+  font-size:11.5px;
+  color:var(--ink-3);
+  padding-top:1px;
+}
+
+.feed-text{ font-size:13.5px; color:var(--ink-2); min-width:0; }
+
+.feed-text b{ color:var(--ink); font-weight:600; }
+
+.feed-text code{
+  font-family:var(--data);
+  font-size:12px;
+  background:var(--rule-soft);
+  border-radius:4px;
+  padding:1px 5px;
+  color:var(--ink);
+}
+
+.queue{ list-style:none; margin:0; padding:0; }
+
+.queue li{
+  display:flex;
+  align-items:center;
+  gap:var(--s3);
+  padding:10px 0;
+  border-bottom:1px solid var(--rule-soft);
+}
+
+.queue li:last-child{ border-bottom:0; }
+
+.queue-name{ font-size:13.5px; min-width:0; flex:1; }
+
+.queue-name span{
+  display:block;
+  font-size:11.5px;
+  color:var(--ink-3);
+  font-family:var(--data);
+}
+
+.empty{
+  text-align:center;
+  padding:var(--s5) 0;
+  color:var(--ink-3);
+  font-size:13.5px;
+}
+
+.empty b{ display:block; color:var(--ink-2); font-weight:600; margin-bottom:3px; }
+
+/* ---------- Rodapé institucional ---------- */
+.foot{
+  margin-top:var(--s7);
+  padding-top:var(--s4);
+  border-top:1px solid var(--rule);
+  font-size:12px;
+  color:var(--ink-3);
+  line-height:1.6;
+}
+
+.foot b{ color:var(--ink-2); }
+
+/* ============================================================
+   Responsivo
+   ============================================================ */
+@media (max-width: 1040px){
+  .split{ grid-template-columns:1fr; }
+}
+
+@media (max-width: 860px){
+  .app{ grid-template-columns:1fr; }
+
+  .nav{
+    position:fixed;
+    inset:0 auto 0 0;
+    width:var(--nav-w);
+    z-index:40;
+    transform:translateX(-100%);
+    transition:transform .22s ease;
+    box-shadow:0 0 0 100vmax rgba(15,31,20,0);
+  }
+
+  .nav.is-open{ transform:none; box-shadow:0 0 0 100vmax rgba(15,31,20,.4); }
+
+  .bar-toggle{ display:grid; }
+
+  .page{ padding:var(--s5) var(--s4) var(--s7); }
+
+  .search{ display:none; }
+
+  .ledger-cols{ display:none; }
+
+  .row{
+    grid-template-columns:1fr auto;
+    row-gap:var(--s2);
+  }
+
+  .row-name{ grid-column:1 / -1; }
+  .link{ grid-column:1 / -1; }
+  .row-act{ grid-column:1 / -1; text-align:left; }
+
+  .attention{ flex-direction:column; }
+}
+
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{
+    animation-duration:.01ms !important;
+    animation-iteration-count:1 !important;
+    transition-duration:.01ms !important;
+  }
+}
+</style>
+</head>
+<body>
+
+<div class="app">
+
+  <!-- ==================== NAVEGAÇÃO ====================
+       7 grupos por intenção, não por tecnologia.
+       "Git + Komodo" virou "Entrega". "Bancos / Tenants"
+       foi separado em dois conceitos distintos.
+  ==================================================== -->
+  <nav class="nav" id="nav" aria-label="Navegação principal">
+    <div class="nav-brand">
+      <div class="nav-mark" aria-hidden="true">CI</div>
+      <div class="nav-brand-text">
+        <div class="nav-brand-name">CloudIFF</div>
+        <div class="nav-brand-sub">Campus Bom Jesus</div>
+      </div>
+    </div>
+
+    <div class="nav-scroll">
+
+      <div class="nav-group">
+        <a class="nav-link" href="#" aria-current="page">
+          <svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12l9-8 9 8"/><path d="M5 10v10h14V10"/></svg>
+          Início
+        </a>
+      </div>
+
+      <div class="nav-group">
+        <div class="nav-group-label">Projetos</div>
+        <a class="nav-link" href="#">
+          <svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18"/></svg>
+          Todos os projetos
+          <span class="nav-count">34</span>
+        </a>
+        <a class="nav-link" href="#">
+          <svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="M8 7l4-4 4 4"/><path d="M4 17v3h16v-3"/></svg>
+          Publicações
+        </a>
+        <a class="nav-link" href="#">
+          <svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="9"/></svg>
+          Aprovações
+          <span class="nav-count is-drift">3</span>
+        </a>
+      </div>
+
+      <div class="nav-group">
+        <div class="nav-group-label">Ambientes</div>
+        <a class="nav-link" href="#">
+          <svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6z"/><circle cx="12" cy="12" r="2.5"/></svg>
+          Pré-visualização
+        </a>
+        <a class="nav-link" href="#">
+          <svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V8l8-5 8 5v12"/><path d="M9 20v-6h6v6"/></svg>
+          Homologação
+        </a>
+        <a class="nav-link" href="#">
+          <svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M2.5 12h19"/><path d="M12 3a14 14 0 000 18 14 14 0 000-18z"/></svg>
+          Produção
+        </a>
+      </div>
+
+      <div class="nav-group">
+        <div class="nav-group-label">Dados</div>
+        <a class="nav-link" href="#">
+          <svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg>
+          Bancos de dados
+        </a>
+        <a class="nav-link" href="#">
+          <svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 21V7l6-4 6 4v14"/><path d="M15 21V11l6 4v6"/><path d="M7 11h2M7 15h2"/></svg>
+          Tenants
+          <span class="nav-count">12</span>
+        </a>
+      </div>
+
+      <div class="nav-group">
+        <div class="nav-group-label">Entrega</div>
+        <a class="nav-link" href="#">
+          <svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="12" r="2.5"/><path d="M6 8.5v7"/><path d="M8.5 6h5a2 2 0 012 2v2"/></svg>
+          Repositórios
+        </a>
+        <a class="nav-link" href="#">
+          <svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+          Compilações
+        </a>
+        <a class="nav-link" href="#">
+          <svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 19l4-4"/><path d="M14 5l5 5-8 8-5-5z"/><path d="M15 4l5 5"/></svg>
+          Implantações
+        </a>
+      </div>
+
+      <div class="nav-group">
+        <div class="nav-group-label">Saúde</div>
+        <a class="nav-link" href="#">
+          <svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="7" rx="1.5"/><rect x="3" y="13" width="18" height="7" rx="1.5"/><path d="M7 7.5h.01M7 16.5h.01"/></svg>
+          Servidores
+        </a>
+        <a class="nav-link" href="#">
+          <svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11a8 8 0 10-2.3 5.7"/><path d="M20 5v6h-6"/></svg>
+          Reconciliação
+          <span class="nav-count is-drift">2</span>
+        </a>
+        <a class="nav-link" href="#">
+          <svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h4"/></svg>
+          Auditoria
+        </a>
+      </div>
+
+      <div class="nav-group">
+        <div class="nav-group-label">Administração</div>
+        <a class="nav-link" href="#">
+          <svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.2"/><path d="M2.5 20c.6-3.6 3.2-5.6 6.5-5.6s5.9 2 6.5 5.6"/><circle cx="18" cy="9" r="2.4"/><path d="M17 14.2c2.3.3 4 2 4.4 4.6"/></svg>
+          Pessoas e acessos
+        </a>
+        <a class="nav-link" href="#">
+          <svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 3.5v5c0 4.6-3.2 8.6-8 9.5-4.8-.9-8-4.9-8-9.5v-5z"/><path d="M9.5 12l1.8 1.8L15 10"/></svg>
+          Políticas
+        </a>
+        <a class="nav-link" href="#">
+          <svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.6 1.6 0 00-1.8-.3 1.6 1.6 0 00-1 1.5V21a2 2 0 11-4 0v-.1A1.6 1.6 0 009 19.4a1.6 1.6 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.6 1.6 0 00.3-1.8 1.6 1.6 0 00-1.5-1H3a2 2 0 110-4h.1A1.6 1.6 0 004.6 9a1.6 1.6 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.6 1.6 0 001.8.3H9a1.6 1.6 0 001-1.5V3a2 2 0 114 0v.1a1.6 1.6 0 001 1.5 1.6 1.6 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.6 1.6 0 00-.3 1.8V9a1.6 1.6 0 001.5 1H21a2 2 0 110 4h-.1a1.6 1.6 0 00-1.5 1z"/></svg>
+          Configuração
+        </a>
+      </div>
+
+    </div>
+
+    <div class="nav-foot">
+      Portal v2.0.0 · <a href="#" style="color:var(--iff-dark);font-weight:600;text-decoration:none;">Ajuda</a><br>
+      Última reconciliação há 4 min
+    </div>
+  </nav>
+
+  <!-- ==================== ÁREA PRINCIPAL ==================== -->
+  <div class="main">
+
+    <header class="bar">
+      <button class="bar-toggle" id="toggle" aria-label="Abrir navegação" aria-expanded="false" aria-controls="nav">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+      </button>
+
+      <button class="scope">
+        <span class="scope-dot" aria-hidden="true"></span>
+        producao · 3 nós
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+      </button>
+
+      <div class="search" role="search">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+        Buscar projeto, tenant ou serviço
+        <kbd>/</kbd>
+      </div>
+
+      <button class="avatar" title="Anderson De Souza">AD</button>
+    </header>
+
+    <main class="page">
+
+      <div class="page-head">
+        <div class="eyebrow">Início</div>
+        <h1 class="page-title">Dois serviços fora do estado declarado</h1>
+        <p class="page-sub">
+          A plataforma mantém 34 projetos em 12 tenants. O reconciliador comparou o
+          estado desejado com o estado real dos três nós há 4 minutos.
+        </p>
+      </div>
+
+      <!-- Faixa de atenção: diz o que houve e o que fazer, sem se desculpar -->
+      <div class="attention">
+        <svg class="attention-ico" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 9v5"/><path d="M12 17.5h.01"/><path d="M10.3 3.9L2.5 18a2 2 0 001.7 3h15.6a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z"/></svg>
+        <div class="attention-body">
+          <h2 class="attention-title">O proxy está servindo uma versão anterior</h2>
+          <p class="attention-text">
+            O nó de proxy responde com <code style="font-family:var(--data);font-size:12px;">npm-publisher v4.1.0</code>,
+            mas a versão declarada é a 4.2.0. As publicações continuam funcionando; os certificados
+            emitidos após 29/07 não são renovados automaticamente até a convergência.
+          </p>
+        </div>
+        <div class="attention-act">
+          <a class="btn btn-alert" href="#">Reconciliar agora</a>
+        </div>
+      </div>
+
+      <!-- ============ ASSINATURA: régua de reconciliação ============ -->
+      <section class="ledger" aria-labelledby="ledger-h">
+        <div class="ledger-head">
+          <h2 class="ledger-title" id="ledger-h">Estado dos serviços</h2>
+          <span class="ledger-meta">verificado 31/07 · 19:42 BRT</span>
+        </div>
+
+        <div class="ledger-cols" aria-hidden="true">
+          <span>Serviço</span>
+          <span>Declarado</span>
+          <span>Convergência</span>
+          <span>Observado</span>
+          <span></span>
+        </div>
+
+        <div class="row" style="animation-delay:.02s">
+          <div class="row-name">
+            <div class="row-service">portal-current</div>
+            <div class="row-node">control-plane</div>
+          </div>
+          <div class="state is-live">v98.2</div>
+          <div class="link">
+            <span class="link-tag">igual</span>
+          </div>
+          <div class="state is-live">v98.2</div>
+          <div class="row-act">
+            <a class="btn btn-quiet btn-sm" href="#">Abrir</a>
+          </div>
+        </div>
+
+        <div class="row" style="animation-delay:.06s">
+          <div class="row-name">
+            <div class="row-service">mcp-gateway-current</div>
+            <div class="row-node">control-plane</div>
+          </div>
+          <div class="state is-live">v12.4</div>
+          <div class="link">
+            <span class="link-tag">igual</span>
+          </div>
+          <div class="state is-live">v12.4</div>
+          <div class="row-act">
+            <a class="btn btn-quiet btn-sm" href="#">Abrir</a>
+          </div>
+        </div>
+
+        <div class="row" style="animation-delay:.1s">
+          <div class="row-name">
+            <div class="row-service">npm-publisher-agent</div>
+            <div class="row-node">proxy</div>
+          </div>
+          <div class="state is-live">v4.2.0</div>
+          <div class="link is-drift">
+            <span class="link-tag">atrás 1 versão</span>
+          </div>
+          <div class="state is-off">v4.1.0</div>
+          <div class="row-act">
+            <a class="btn btn-alert btn-sm" href="#">Reconciliar</a>
+          </div>
+        </div>
+
+        <div class="row" style="animation-delay:.14s">
+          <div class="row-name">
+            <div class="row-service">komodo-agent-current</div>
+            <div class="row-node">runtime</div>
+          </div>
+          <div class="state is-live">v7.9</div>
+          <div class="link">
+            <span class="link-tag">igual</span>
+          </div>
+          <div class="state is-live">v7.9</div>
+          <div class="row-act">
+            <a class="btn btn-quiet btn-sm" href="#">Abrir</a>
+          </div>
+        </div>
+
+        <div class="row" style="animation-delay:.18s">
+          <div class="row-name">
+            <div class="row-service">forja-agent-current</div>
+            <div class="row-node">runtime</div>
+          </div>
+          <div class="state is-live">v3.1</div>
+          <div class="link is-drift">
+            <span class="link-tag">timer parado</span>
+          </div>
+          <div class="state is-off">inativo</div>
+          <div class="row-act">
+            <a class="btn btn-alert btn-sm" href="#">Religar</a>
+          </div>
+        </div>
+
+        <div class="row" style="animation-delay:.22s">
+          <div class="row-name">
+            <div class="row-service">transaction-reconciler</div>
+            <div class="row-node">control-plane</div>
+          </div>
+          <div class="state is-live">v2.0</div>
+          <div class="link">
+            <span class="link-tag">igual</span>
+          </div>
+          <div class="state is-live">v2.0</div>
+          <div class="row-act">
+            <a class="btn btn-quiet btn-sm" href="#">Abrir</a>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ Nós ============ -->
+      <section class="nodes" aria-label="Nós da plataforma">
+
+        <article class="node">
+          <div class="node-top">
+            <div class="node-name">control-plane</div>
+            <span class="chip">23 serviços</span>
+          </div>
+          <p class="node-role">Portal, autorização, tenants, MCP, reconciliação e auditoria.</p>
+          <div class="meter">
+            <div class="meter-top"><span>Memória</span><b>61%</b></div>
+            <div class="meter-track"><div class="meter-fill" style="width:61%;animation-delay:.1s"></div></div>
+          </div>
+          <div class="meter">
+            <div class="meter-top"><span>Disco</span><b>44%</b></div>
+            <div class="meter-track"><div class="meter-fill" style="width:44%;animation-delay:.16s"></div></div>
+          </div>
+        </article>
+
+        <article class="node">
+          <div class="node-top">
+            <div class="node-name">runtime</div>
+            <span class="chip is-drift">1 em deriva</span>
+          </div>
+          <p class="node-role">Komodo, agentes, stacks, compilações e execução dos projetos.</p>
+          <div class="meter">
+            <div class="meter-top"><span>Memória</span><b>78%</b></div>
+            <div class="meter-track"><div class="meter-fill is-warn" style="width:78%;animation-delay:.12s"></div></div>
+          </div>
+          <div class="meter">
+            <div class="meter-top"><span>Disco</span><b>52%</b></div>
+            <div class="meter-track"><div class="meter-fill" style="width:52%;animation-delay:.18s"></div></div>
+          </div>
+        </article>
+
+        <article class="node">
+          <div class="node-top">
+            <div class="node-name">proxy</div>
+            <span class="chip is-drift">1 em deriva</span>
+          </div>
+          <p class="node-role">Entrada HTTPS, certificados e roteamento para os serviços internos.</p>
+          <div class="meter">
+            <div class="meter-top"><span>Memória</span><b>33%</b></div>
+            <div class="meter-track"><div class="meter-fill" style="width:33%;animation-delay:.14s"></div></div>
+          </div>
+          <div class="meter">
+            <div class="meter-top"><span>Disco</span><b>27%</b></div>
+            <div class="meter-track"><div class="meter-fill" style="width:27%;animation-delay:.2s"></div></div>
+          </div>
+        </article>
+
+      </section>
+
+      <!-- ============ Atividade + fila ============ -->
+      <div class="split">
+
+        <section class="panel" aria-labelledby="act-h">
+          <div class="panel-head">
+            <h2 class="panel-title" id="act-h">Atividade recente</h2>
+            <a class="panel-link" href="#">Ver auditoria</a>
+          </div>
+          <div class="panel-body">
+            <ul class="feed">
+              <li>
+                <span class="feed-time">19:38</span>
+                <span class="feed-text"><b>marina.costa</b> publicou <code>portal-biblioteca</code> em produção</span>
+              </li>
+              <li>
+                <span class="feed-time">19:12</span>
+                <span class="feed-text">Reconciliador detectou deriva em <code>npm-publisher-agent</code></span>
+              </li>
+              <li>
+                <span class="feed-time">18:55</span>
+                <span class="feed-text"><b>anderson.souza</b> criou o tenant <code>tn-agroecologia</code></span>
+              </li>
+              <li>
+                <span class="feed-time">18:40</span>
+                <span class="feed-text">Compilação <code>node24-pipeline #1841</code> concluída em 2m 14s</span>
+              </li>
+              <li>
+                <span class="feed-time">18:03</span>
+                <span class="feed-text"><b>j.almeida</b> recebeu acesso de leitura a <code>sistema-estagios</code></span>
+              </li>
+            </ul>
+          </div>
+        </section>
+
+        <section class="panel" aria-labelledby="apr-h">
+          <div class="panel-head">
+            <h2 class="panel-title" id="apr-h">Esperando você</h2>
+            <a class="panel-link" href="#">Ver todas</a>
+          </div>
+          <div class="panel-body">
+            <ul class="queue">
+              <li>
+                <span class="queue-name">Promover para produção<span>sistema-estagios · pedido por marina.costa</span></span>
+                <a class="btn btn-sm" href="#">Revisar</a>
+              </li>
+              <li>
+                <span class="queue-name">Ampliar cota de banco<span>tn-agroecologia · +2 GB</span></span>
+                <a class="btn btn-sm" href="#">Revisar</a>
+              </li>
+              <li>
+                <span class="queue-name">Acesso de escrita<span>portal-biblioteca · j.almeida</span></span>
+                <a class="btn btn-sm" href="#">Revisar</a>
+              </li>
+            </ul>
+          </div>
+        </section>
+
+      </div>
+
+      <footer class="foot">
+        <b>Instituto Federal Fluminense · Campus Bom Jesus do Itabapoana</b><br>
+        Av. Dário Viêira Borges, 235 — Lia Márcia, Bom Jesus do Itabapoana/RJ, 28360-000 · (22) 3833-9850
+      </footer>
+
+    </main>
+  </div>
+</div>
+
+<script>
+(function(){
+  var nav = document.getElementById('nav');
+  var toggle = document.getElementById('toggle');
+
+  toggle.addEventListener('click', function(){
+    var open = nav.classList.toggle('is-open');
+    toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+  });
+
+  document.addEventListener('click', function(e){
+    if (window.innerWidth > 860) return;
+    if (nav.contains(e.target) || toggle.contains(e.target)) return;
+    nav.classList.remove('is-open');
+    toggle.setAttribute('aria-expanded','false');
+  });
+
+  document.addEventListener('keydown', function(e){
+    if (e.key === 'Escape' && nav.classList.contains('is-open')){
+      nav.classList.remove('is-open');
+      toggle.setAttribute('aria-expanded','false');
+      toggle.focus();
+    }
+  });
+})();
+</script>
+
+</body>
+</html>
