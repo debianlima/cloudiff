@@ -67,3 +67,13 @@ Essas exclusões não removem código-fonte necessário para editar monitorament
 ## Promoção para produção
 
 O GitHub contém a fonte editável e validável. A atualização dos hosts deve continuar passando pelo processo de release imutável, smoke tests e rollback descrito em `docs/MAINTENANCE.md`. O repositório não faz cópia automática direta para produção.
+
+## Portal de staging
+
+A auditoria online identificou que o serviço `cloudif-admin-portal-staging` utiliza uma biblioteca própria em `/srv/cloudif/staging/lib`. Os módulos ativos dessa biblioteca também são versionados em:
+
+```text
+components/control-plane/srv/cloudif/staging/lib/
+```
+
+Cópias de backup e arquivos quebrados continuam excluídos.

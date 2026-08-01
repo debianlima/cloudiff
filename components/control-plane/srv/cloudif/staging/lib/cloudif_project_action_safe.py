@@ -1,0 +1,419 @@
+#!/usr/bin/env python3
+import json
+import os
+import re
+import sqlite3
+import subprocess
+import time
+from pathlib import Path
+
+DB = "/var/lib/cloudif/portal/cloudif-portal.db"
+JOBDIR = Path("/srv/cloudif/jobs")
+LOG = Path("/var/log/cloudif/project-provision.log")
+
+def _log(msg):
+    LOG.parent.mkdir(parents=True, exist_ok=True)
+    with LOG.open("a", encoding="utf-8") as f:
+        f.write(time.strftime("%Y-%m-%dT%H:%M:%S%z") + " " + str(msg) + "\n")
+
+def h(x):
+    import html
+    return html.escape("" if x is None else str(x))
+
+def slugify(value, keep_dash=True):
+    value = str(value or "").strip().lower()
+    value = (
+        value.replace("á","a").replace("à","a").replace("ã","a").replace("â","a")
+             .replace("é","e").replace("ê","e")
+             .replace("í","i")
+             .replace("ó","o").replace("õ","o").replace("ô","o")
+             .replace("ú","u")
+             .replace("ç","c")
+    )
+    if keep_dash:
+        value = re.sub(r"[^a-z0-9]+", "-", value).strip("-")
+    else:
+        value = re.sub(r"[^a-z0-9]+", "", value)
+    return value or "projeto"
+
+def now_stamp():
+    return time.strftime("%Y%m%d%H%M%S")
+
+def user_from_headers(headers):
+    groups_raw = headers.get("X-authentik-groups") or headers.get("X-Authentik-Groups") or ""
+    groups = [g.strip() for g in groups_raw.replace("|", ",").split(",") if g.strip()]
+    username = (
+        headers.get("X-authentik-username")
+        or headers.get("X-Authentik-Username")
+        or headers.get("X-Forwarded-User")
+        or ""
+    ).strip()
+    email = (
+        headers.get("X-authentik-email")
+        or headers.get("X-Authentik-Email")
+        or ""
+    ).strip()
+    return {
+        "username": username or (email.split("@")[0] if email else "unknown"),
+        "email": email,
+        "groups": groups,
+    }
+
+def val(form, key, default=""):
+    v = form.get(key, default)
+    if isinstance(v, list):
+        return v[0] if v else default
+    return v or default
+
+def db():
+    con = sqlite3.connect(DB, timeout=20)
+    con.row_factory = sqlite3.Row
+    con.execute("PRAGMA busy_timeout=20000")
+    return con
+
+def tables(con):
+    return [r["name"] for r in con.execute("SELECT name FROM sqlite_master WHERE type='table'")]
+
+def cols(con, table):
+    return [r[1] for r in con.execute(f"PRAGMA table_info({table})")]
+
+def pick(cols_, names):
+    low = {c.lower(): c for c in cols_}
+    for n in names:
+        if n.lower() in low:
+            return low[n.lower()]
+    return ""
+
+def generate_tenant(form, user):
+    mode = val(form, "db_mode", "skip")
+    posted = val(form, "tenant", "").strip()
+    username = slugify(user.get("username") or "usuario", keep_dash=False)
+
+    if mode == "skip":
+        return ""
+
+    if mode == "link":
+        return posted
+
+    if mode == "create":
+        if posted:
+            # O JS do wizard já deve ter gerado usuario-nome. Mantém se vier seguro.
+            safe = slugify(posted, keep_dash=True)
+            return safe
+
+        suffix = (
+            val(form, "tenant_suffix", "")
+            or val(form, "tenant_name", "")
+            or val(form, "tenant_new", "")
+            or val(form, "name", "")
+            or now_stamp()
+        )
+        suffix = slugify(suffix, keep_dash=False)
+        if not suffix:
+            suffix = now_stamp()
+        return f"{username}-{suffix}"
+
+    return posted
+
+def ensure_tenant_record(con, tenant, user):
+    if not tenant:
+        return
+
+    if "tenants" not in tables(con):
+        return
+
+    c = cols(con, "tenants")
+    tenant_col = pick(c, ["tenant", "name", "slug"])
+    if not tenant_col:
+        return
+
+    exists = con.execute(f"SELECT COUNT(*) FROM tenants WHERE {tenant_col}=?", (tenant,)).fetchone()[0]
+    if exists:
+        return
+
+    values = {tenant_col: tenant}
+
+    for col in c:
+        low = col.lower()
+        if low in ["owner", "created_by", "username", "user"]:
+            values[col] = user.get("username", "")
+        elif low in ["email", "owner_email"]:
+            values[col] = user.get("email", "")
+        elif low in ["status"]:
+            values[col] = "pending"
+        elif low in ["created_at", "updated_at"]:
+            values[col] = time.strftime("%Y-%m-%dT%H:%M:%S%z")
+
+    names = list(values)
+    sql = f"INSERT INTO tenants ({','.join(names)}) VALUES ({','.join(['?']*len(names))})"
+    con.execute(sql, [values[n] for n in names])
+
+def ensure_project_acl_owner(con, slug, user):
+    if "project_acl" not in tables(con):
+        return
+
+    c = cols(con, "project_acl")
+    slug_col = pick(c, ["slug", "project_slug", "project"])
+    type_col = pick(c, ["subject_type", "principal_type", "type"])
+    subject_col = pick(c, ["subject", "principal", "user", "username"])
+    role_col = pick(c, ["role", "permission", "access"])
+
+    if not slug_col or not subject_col:
+        return
+
+    username = user.get("username", "")
+    if not username:
+        return
+
+    params = [slug, username]
+    where = f"{slug_col}=? AND {subject_col}=?"
+    if type_col:
+        where += f" AND {type_col}='user'"
+
+    exists = con.execute(f"SELECT COUNT(*) FROM project_acl WHERE {where}", params).fetchone()[0]
+    if exists:
+        return
+
+    values = {
+        slug_col: slug,
+        subject_col: username,
+    }
+    if type_col:
+        values[type_col] = "user"
+    if role_col:
+        values[role_col] = "access"
+
+    names = list(values)
+    con.execute(
+        f"INSERT INTO project_acl ({','.join(names)}) VALUES ({','.join(['?']*len(names))})",
+        [values[n] for n in names]
+    )
+
+def upsert_project(form, user):
+    action = val(form, "action", "create_project")
+    name = val(form, "name", "").strip()
+    description = val(form, "description", "").strip()
+    posted_slug = val(form, "slug", "").strip()
+    tenant = generate_tenant(form, user)
+
+    slug = posted_slug or slugify(name or ("projeto-" + now_stamp()), keep_dash=True)
+    if not slug:
+        raise RuntimeError("Nome/slug do projeto não informado.")
+
+    con = db()
+    try:
+        if "projects" not in tables(con):
+            raise RuntimeError("Tabela projects não encontrada no SQLite.")
+
+        c = cols(con, "projects")
+
+        slug_col = pick(c, ["slug", "project_slug"])
+        name_col = pick(c, ["name", "title"])
+        desc_col = pick(c, ["description", "descr", "summary"])
+        tenant_col = pick(c, ["tenant", "tenant_slug", "db_tenant"])
+        owner_col = pick(c, ["owner", "created_by", "username", "user"])
+        email_col = pick(c, ["email", "owner_email"])
+        updated_col = pick(c, ["updated_at", "modified_at"])
+        created_col = pick(c, ["created_at"])
+
+        if not slug_col:
+            raise RuntimeError("Tabela projects não possui coluna slug/project_slug.")
+
+        exists = con.execute(f"SELECT COUNT(*) FROM projects WHERE {slug_col}=?", (slug,)).fetchone()[0]
+        owner_project_count = 0
+        if owner_col:
+            owner_project_count = con.execute(
+                f"SELECT COUNT(*) FROM projects WHERE {owner_col}=?",
+                (user.get("username", ""),),
+            ).fetchone()[0]
+        template_kind = "onboarding" if (not exists and owner_project_count == 0) else ("links" if not exists else "none")
+
+        values = {slug_col: slug}
+
+        if name_col:
+            values[name_col] = name or slug
+        if desc_col:
+            values[desc_col] = description
+        if tenant_col:
+            values[tenant_col] = tenant
+        if owner_col:
+            values[owner_col] = user.get("username", "")
+        if email_col:
+            values[email_col] = user.get("email", "")
+        if updated_col:
+            values[updated_col] = time.strftime("%Y-%m-%dT%H:%M:%S%z")
+        if created_col and not exists:
+            values[created_col] = time.strftime("%Y-%m-%dT%H:%M:%S%z")
+
+        if exists:
+            set_cols = [k for k in values if k != slug_col]
+            if set_cols:
+                sql = f"UPDATE projects SET {','.join([k+'=?' for k in set_cols])} WHERE {slug_col}=?"
+                con.execute(sql, [values[k] for k in set_cols] + [slug])
+        else:
+            names = list(values)
+            sql = f"INSERT INTO projects ({','.join(names)}) VALUES ({','.join(['?']*len(names))})"
+            con.execute(sql, [values[n] for n in names])
+
+        ensure_tenant_record(con, tenant, user)
+        ensure_project_acl_owner(con, slug, user)
+
+        con.commit()
+    finally:
+        con.close()
+
+    job = {
+        "action": action,
+        "slug": slug,
+        "name": name or slug,
+        "description": description,
+        "tenant": tenant,
+        "db_mode": val(form, "db_mode", "skip"),
+        "create_repo": val(form, "create_repo", "1"),
+        "setup_komodo": val(form, "setup_komodo", "1"),
+        "template_kind": template_kind,
+        "user": user,
+        "created_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+    }
+
+    queue_provision_job(job)
+
+    reconcile = None
+    try:
+        import sys as _reconcile_sys
+        if "/srv/cloudif/lib" not in _reconcile_sys.path:
+            _reconcile_sys.path.insert(0, "/srv/cloudif/lib")
+        from cloudif_reconcile_client import enqueue as _enqueue_reconcile
+        reconcile = _enqueue_reconcile(
+            "project.created" if action == "create_project" else "project.updated",
+            actor=user.get("username") or "portal",
+            username=user.get("username") or "",
+            project=slug,
+            tenant=tenant,
+            payload={
+                "source": "project_action",
+                "create_repo": job.get("create_repo"),
+                "setup_komodo": job.get("setup_komodo"),
+                "db_mode": job.get("db_mode"),
+            },
+            dedupe_seconds=0,
+        )
+    except Exception as exc:
+        _log("RECONCILE_ENQUEUE_ERROR " + type(exc).__name__)
+
+    reconcile_suffix = ""
+    if isinstance(reconcile, dict) and reconcile.get("request_id"):
+        reconcile_suffix = " Reconciliação: " + reconcile["request_id"][:8] + " (" + reconcile.get("status", "queued") + ")."
+    return {
+        "slug": slug,
+        "tenant": tenant,
+        "reconcile": reconcile,
+        "message": "Projeto salvo. Provisionamento enviado para segundo plano." + reconcile_suffix,
+    }
+
+def queue_provision_job(job):
+    JOBDIR.mkdir(parents=True, exist_ok=True)
+    job_file = JOBDIR / f"project-provision-{int(time.time())}-{job['slug']}.json"
+    job_file.write_text(json.dumps(job, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    worker = Path("/srv/cloudif/lib/cloudif_project_provision_worker.py")
+    if not worker.exists():
+        worker.write_text(WORKER_CODE, encoding="utf-8")
+        worker.chmod(0o755)
+
+    _log(f"QUEUE {job_file}")
+    subprocess.Popen(
+        ["python3", str(worker), str(job_file)],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        start_new_session=True,
+    )
+
+WORKER_CODE = r'''#!/usr/bin/env python3
+import json
+import os
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+LOG = Path("/var/log/cloudif/project-provision.log")
+
+def log(msg):
+    LOG.parent.mkdir(parents=True, exist_ok=True)
+    with LOG.open("a", encoding="utf-8") as f:
+        f.write(time.strftime("%Y-%m-%dT%H:%M:%S%z") + " " + str(msg) + "\n")
+
+def run(cmd, timeout=180):
+    log("RUN " + " ".join(cmd))
+    try:
+        p = subprocess.run(cmd, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=timeout)
+        log(f"RC={p.returncode}")
+        if p.stdout:
+            log("STDOUT " + p.stdout[-4000:])
+        if p.stderr:
+            log("STDERR " + p.stderr[-4000:])
+        return p.returncode
+    except subprocess.TimeoutExpired:
+        log("TIMEOUT " + " ".join(cmd))
+        return 124
+    except Exception as e:
+        log("ERROR " + repr(e))
+        return 999
+
+def main():
+    job_file = Path(sys.argv[1])
+    job = json.loads(job_file.read_text(encoding="utf-8"))
+    log(f"START job={job_file} slug={job.get('slug')} tenant={job.get('tenant')}")
+
+    candidates = [
+        "/usr/local/sbin/cloudif-project-provision.sh",
+        "/usr/local/sbin/cloudif-provision-project.sh",
+        "/root/cloudif-project-provision.sh",
+        "/root/cloudif-provision-project.sh",
+    ]
+
+    found = [c for c in candidates if Path(c).exists() and os.access(c, os.X_OK)]
+
+    if not found:
+        log("NO_EXTERNAL_PROVISION_SCRIPT_FOUND metadata_saved_only")
+        log("DONE")
+        return
+
+    # Executa apenas o primeiro script real encontrado, com timeout, passando o JSON do job.
+    rc = run([found[0], str(job_file)], timeout=240)
+    if rc == 0 and job.get("template_kind") in ["onboarding", "links"]:
+        trc = run(["/usr/local/sbin/cloudif-project-template-apply.py", str(job_file)], timeout=420)
+        log(f"TEMPLATE_RC={trc}")
+        if trc == 0:
+            prc = run(["/usr/local/sbin/cloudif-project-initial-publish.py", str(job_file)], timeout=900)
+            log(f"INITIAL_PUBLISH_RC={prc}")
+    log("DONE")
+
+if __name__ == "__main__":
+    main()
+'''
+
+def handle_project_action(form, headers):
+
+    # CloudIF v135b4 delete_git_komodo via project_action
+    try:
+        import sys as _cloudif_v135b4_sys
+        if "/srv/cloudif/lib" not in _cloudif_v135b4_sys.path:
+            _cloudif_v135b4_sys.path.insert(0, "/srv/cloudif/lib")
+
+        from cloudif_delete_git_komodo_action import handle_delete_git_komodo
+        _cloudif_v135b4_res = handle_delete_git_komodo(form, actor="portal", headers=headers)
+        if _cloudif_v135b4_res is not None:
+            return _cloudif_v135b4_res
+    except Exception as _cloudif_v135b4_exc:
+        return (
+            '<div class="card">'
+            '<h2>Erro controlado na ação Excluir Git/Komodo</h2>'
+            '<p>' + type(_cloudif_v135b4_exc).__name__ + ': ' + str(_cloudif_v135b4_exc) + '</p>'
+            '<p><a class="btn" href="/cloudiff/portal/?tab=git">Voltar</a></p>'
+            '</div>'
+        )
+
+    user = user_from_headers(headers)
+    return upsert_project(form, user)
