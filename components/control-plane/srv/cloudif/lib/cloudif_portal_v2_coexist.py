@@ -142,7 +142,8 @@ def _install() -> None:
                 tab = (query.get("tab") or [""])[0]
                 native_home = path in PORTAL_PATHS and tab in ("", "resumo", "inicio", "início", "overview")
                 match_path = "/cloudiff/portal" if path == "/" else path
-                if native_home or (path, "GET") in NATIVE_READY:
+                native_nonportal = (path, "GET") in NATIVE_READY and path not in PORTAL_PATHS
+                if native_home or native_nonportal:
                     if registry.match(match_path, "GET") is None:
                         wire()
                     if registry.match(match_path, "GET") is not None:
