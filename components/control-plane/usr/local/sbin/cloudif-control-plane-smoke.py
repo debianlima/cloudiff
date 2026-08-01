@@ -471,7 +471,7 @@ try:
  headers={'X-authentik-username':'iff1742962','X-authentik-email':'iff1742962@example.invalid','X-authentik-groups':'CloudIF-Tenant-iff1742962'}
  req=urllib.request.Request('http://127.0.0.1:18094/cloudiff/portal/?tab=aprovacoes',headers=headers)
  with urllib.request.urlopen(req,timeout=30) as x:page=x.read().decode('utf-8','replace')
- ok='Aprovações humanas' in page and 'Pendentes' in page and 'Aprovadas' in page and 'Histórico' in page and 'class="active" href="/cloudiff/portal/?tab=aprovacoes"' in page
+ ok='Aprovações humanas' in page and 'Pendentes' in page and 'Aprovadas' in page and 'Histórico' in page and bool(re.search(r'<a\b[^>]*href="/cloudiff/portal/\?tab=aprovacoes"[^>]*aria-current="page"',page) or re.search(r'<a\b[^>]*aria-current="page"[^>]*href="/cloudiff/portal/\?tab=aprovacoes"',page))
  checks.append({'name':'approvals-dedicated-tab','ok':ok,'route':'/cloudiff/portal/?tab=aprovacoes','menu_active':ok})
 except Exception as e:checks.append({'name':'approvals-dedicated-tab','ok':False,'error':type(e).__name__})
 try:
@@ -520,7 +520,7 @@ try:
  with urllib.request.urlopen(req,timeout=30) as x:api=json.load(x)
  req=urllib.request.Request('http://127.0.0.1:18094/cloudiff/portal/?tab=capacidades',headers=headers)
  with urllib.request.urlopen(req,timeout=30) as x:page=x.read().decode('utf-8','replace')
- pol=json.load(open('/etc/cloudif/project-capabilities-policy.json'));future=api.get('future_project_template') or {};ok=api.get('ok') is True and api.get('catalog_tools')==33 and len(api.get('projects') or [])==8 and future.get('tool_count')==33 and api.get('apply_to_new') is True and pol.get('apply_to_new') is True and pol.get('reconcile_after_onboarding') is True and pol.get('production_effect_scopes_enabled') is False and api.get('secrets_exposed') is False and 'Capacidades dos projetos' in page and 'class="active" href="/cloudiff/portal/?tab=capacidades"' in page and 'Ver todas as ferramentas' in page
+ pol=json.load(open('/etc/cloudif/project-capabilities-policy.json'));future=api.get('future_project_template') or {};ok=api.get('ok') is True and api.get('catalog_tools')==33 and len(api.get('projects') or [])==8 and future.get('tool_count')==33 and api.get('apply_to_new') is True and pol.get('apply_to_new') is True and pol.get('reconcile_after_onboarding') is True and pol.get('production_effect_scopes_enabled') is False and api.get('secrets_exposed') is False and 'Capacidades dos projetos' in page and bool(re.search(r'<a\b[^>]*href="/cloudiff/portal/\?tab=capacidades"[^>]*aria-current="page"',page) or re.search(r'<a\b[^>]*aria-current="page"[^>]*href="/cloudiff/portal/\?tab=capacidades"',page)) and 'Ver todas as ferramentas' in page
  checks.append({'name':'project-capabilities-portal-and-future-template','ok':ok,'projects':len(api.get('projects') or []),'future_tools':future.get('tool_count'),'apply_to_new':pol.get('apply_to_new'),'secrets_exposed':api.get('secrets_exposed')})
 except Exception as e:checks.append({'name':'project-capabilities-portal-and-future-template','ok':False,'error':type(e).__name__})
 try:
@@ -552,7 +552,7 @@ try:
 except Exception as e:checks.append({'name':'portal-reconciliation-observability','ok':False,'error':type(e).__name__})
 try:
  headers={'X-authentik-username':'iff1742962','X-authentik-email':'iff1742962@example.invalid','X-authentik-groups':'CloudIF-Tenant-iff1742962'}
- req=urllib.request.Request('http://127.0.0.1:18094/cloudiff/portal/?tab=resumo',headers=headers)
+ req=urllib.request.Request('http://127.0.0.1:18094/cloudiff/portal/?tab=projetos',headers=headers)
  with urllib.request.urlopen(req,timeout=30) as x:home=x.read().decode('utf-8','replace')
  import re
  navm=re.search(r'<nav class="tabs enterprise-nav".*?</nav>',home,re.S);nav=navm.group(0) if navm else ''
