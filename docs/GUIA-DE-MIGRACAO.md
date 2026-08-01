@@ -19,7 +19,7 @@ cloudif-admin-portal.py  345 KB       app.py                  ~4 KB
   └ tudo                              registry.py             ~3 KB
                                       core/       (4 arquivos)
 cloudif_ui_components.py  27 KB       design/     (3 CSS + 1 JS)
-  └ 19 camadas v70…v88                ui/         (3 arquivos)
+  └ 10 camadas v70…v88                ui/         (3 arquivos)
 cloudif_ui_pages.py       96 KB       modules/    (7 módulos × 4 arquivos)
   └ render_tab(tab, user)
 ```
@@ -106,7 +106,24 @@ git checkout -b portal-v2
 mkdir -p portal/{core,design,ui,modules}
 ```
 
-Copie o portal atual para `portal/legacy/` sem alterar nada:
+**Antes de copiar, decida qual árvore é a fonte.** O repositório tem duas:
+`srv/cloudif/lib/` e `srv/cloudif/staging/lib/`. Dos 25 arquivos, 20 têm blob
+SHA idêntico e 5 divergem:
+
+| Arquivo | `lib/` | `staging/lib/` |
+|---|---:|---:|
+| `cloudif_portal_publications.py` | 11.960 | 8.227 |
+| `cloudif_project_provision_worker.py` | 3.367 | 2.109 |
+| `cloudif_reconcile_client.py` | 8.777 | 6.725 |
+| `cloudif_project_action_safe.py` | 14.350 | 14.026 |
+| `cloudif_ui_publications.py` | 4.258 | 4.235 |
+
+Nenhum manifesto diz qual vence. Enquanto isso não estiver resolvido, o
+`portal/legacy/` nasce ambíguo e a comparação lado a lado do passo 3.3 não tem
+referência confiável. Resolva primeiro; é trabalho de uma tarde e evita
+descobrir a divergência no meio da migração.
+
+Feita a escolha, copie sem alterar nada:
 
 ```bash
 mkdir -p portal/legacy
@@ -366,6 +383,17 @@ Não use `--iff` para "coisa boa genérica". O verde tem um significado técnico
 nesta interface: **o observado é igual ao declarado**. Se você pintar de verde
 um botão qualquer, quebra a leitura de estado da tela inteira.
 
+### Todo par texto/fundo precisa de 4,5:1
+
+Sendo um site de instituição federal, o eMAG e a Lei Brasileira de Inclusão
+exigem contraste AA. O CI verifica, e vale saber que a primeira versão deste
+próprio protótipo reprovou: `--ink-3` estava em `#6B7D71`, que dá 4,07:1 sobre
+`--paper`. Foi corrigido para `#5E6E63` (5,02:1).
+
+Se você criar um token de cor novo, calcule o contraste contra `--paper` **e**
+contra `--surface` — a diferença entre os dois é pequena, mas foi ela que
+separou o reprovado do aprovado nesse caso.
+
 ### A régua de reconciliação
 
 É o elemento de assinatura da v2. Sempre que existir um par
@@ -449,9 +477,11 @@ Além do que a v1 já verificava, o portão passa a reprovar:
 
 - valor de cor literal fora de `tokens.css`;
 - `!important` em `components.css`;
+- par texto/fundo abaixo de 4,5:1;
 - import entre módulos irmãos;
 - símbolo redefinido no mesmo arquivo;
 - bloco CSS duplicado;
+- divergência não declarada entre `lib/` e `staging/lib/`;
 - rota registrada sem `permission` declarada.
 
 E, diferente da v1, os testes de `srv/cloudif/tests/` rodam de verdade.
