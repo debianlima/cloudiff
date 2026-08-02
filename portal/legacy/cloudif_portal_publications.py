@@ -179,10 +179,11 @@ def enqueue_publish(slug,user):
 
 def latest_job(slug):
     con=sqlite3.connect(DB);con.row_factory=sqlite3.Row;_ensure_schema(con)
-    row=con.execute("""select j.* from publication_jobs j
+    row=con.execute("""select j.*,a.job_id as acknowledged_job_id from publication_jobs j
         left join publication_job_acknowledgements a on a.job_id=j.id
-        where j.project_slug=? and a.job_id is null order by j.id desc limit 1""",(slug,)).fetchone();con.close()
-    return dict(row) if row else None
+        where j.project_slug=? order by j.id desc limit 1""",(slug,)).fetchone();con.close()
+    if not row or row['acknowledged_job_id'] is not None:return None
+    result=dict(row);result.pop('acknowledged_job_id',None);return result
 
 def acknowledge_job(slug,job_id,user):
     con=sqlite3.connect(DB);con.row_factory=sqlite3.Row;_ensure_schema(con)

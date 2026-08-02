@@ -43,4 +43,17 @@ class PublicationManagementUITest(unittest.TestCase):
         self.assertIn('Funcional',out);self.assertIn('Gerenciar site',out)
         self.assertNotIn('Sem build',out);self.assertNotIn('Detecção Plano Build',out)
 
+
+    def test_old_unacknowledged_jobs_do_not_resurface(self):
+        user={'username':'alice','groups':[],'admin':False}
+        current=publications.latest_job('demo')
+        publications.acknowledge_job('demo',current['id'],user)
+        con=sqlite3.connect(self.db)
+        con.execute("insert into publication_jobs(project_slug,actor,status,step,message,created_at) values('demo','alice','failed','failed','Erro antigo','before')")
+        old_id=con.execute('select last_insert_rowid()').fetchone()[0]
+        con.execute("update publication_jobs set id=? where id=?",(current['id']-1,old_id))
+        con.commit();con.close()
+        self.assertIsNone(publications.latest_job('demo'))
+
+
 if __name__=='__main__':unittest.main()
