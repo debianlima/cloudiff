@@ -3202,7 +3202,7 @@ function cloudifCancelWizard() {{
 <div id="cloudif-project-list" class="card" data-current-user="{h(user['username'])}">
   <div class="section-title">
     <div>
-      <h2>Projetos por usuário</h2>
+      <h2>Gestão de projetos</h2>
       <p class="small">Abra um grupo para visualizar os projetos vinculados a cada usuário.</p>
     </div>
     <button class="btn" onclick="cloudifShowWizard('wiz_new_project')">Novo projeto</button>
@@ -4824,12 +4824,12 @@ if 'Portal' in globals() and not globals().get('_cpx_get_wrapped'):
             try:
                 result=_rd_agent('/komodo/project/runtime-inspect',{'project':slug,'public_numbers':project.get('public_numbers') or []},timeout=45)
                 repository=result.setdefault('repository',{})
-                repository['url']=project.get('repo_url') or ''
-                repository['provider']='Forgejo'
                 try:
-                    con=db();row=con.execute("SELECT stable_hostname,version_hostname FROM project_publications WHERE project_slug=? AND is_active=1 ORDER BY id DESC LIMIT 1",(slug,)).fetchone();con.close()
+                    con=db();project_row=con.execute("SELECT repo_url FROM projects WHERE slug=?",(slug,)).fetchone();row=con.execute("SELECT stable_hostname,version_hostname FROM project_publications WHERE project_slug=? AND is_active=1 ORDER BY id DESC LIMIT 1",(slug,)).fetchone();con.close()
                 except Exception:
-                    row=None
+                    project_row=None;row=None
+                repository['url']=str((project_row['repo_url'] if project_row else '') or '')
+                repository['provider']='Forgejo'
                 host=((row['stable_hostname'] or row['version_hostname']) if row else '')
                 result['external_server']={'label':'Proxy HTTPS CloudIFF','url':('https://'+host) if host else ''}
             except Exception as exc:
