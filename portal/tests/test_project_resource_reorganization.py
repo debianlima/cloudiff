@@ -80,7 +80,7 @@ class ActiveProjectRendererContractTest(unittest.TestCase):
         self.source=source.read_text()
 
     def test_active_renderer_contains_owner_metadata_and_neutral_tenant_copy(self):
-        source=(Path(__file__).resolve().parents[2]/"components/control-plane/current-apps/portal-current/cloudif-admin-portal.py").read_text()
+        source=self.source
         list_pos=source.find('<div id="cloudif-project-list"')
         start=source.rfind('def render_projects(user):',0,list_pos)
         end=source.find('def render_bancos(user):',list_pos)
