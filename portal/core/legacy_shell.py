@@ -266,7 +266,9 @@ def group_resources_by_user(body: str, tab: str, identity: Identity) -> str:
 
     def mark_database(match: re.Match[str]) -> str:
         opening = match.group(0)
-        ident = re.search(r'\bid=["\']([^"\']+)', opening, re.I)
+        ident = re.search(r'\bdata-tenant=["\']([^"\']+)', opening, re.I)
+        if ident is None:
+            ident = re.search(r'\bid=["\']([^"\']+)', opening, re.I)
         tenant = unescape(ident.group(1)) if ident else ""
         owner = tenant_owners.get(tenant, "")
         if "data-resource-owner=" in opening:

@@ -28,13 +28,13 @@ class GroupedResourcesTest(unittest.TestCase):
     def test_databases_without_owner_are_not_misattributed(self, ownership):
         ownership.return_value = ({}, {"alice-db": "alice"})
         body = (
-            '<article class="card db96-card" id="alice-db"><article class="nested">inner</article></article>'
-            '<article class="card db96-card" id="orphan-db"></article>'
+            '<article class="card db96-card" data-tenant="alice-db"><article class="nested">inner</article></article>'
+            '<article class="card db96-card" data-tenant="orphan-db"></article>'
         )
         output = group_resources_by_user(body, "bancos", self.identity)
         self.assertIn('data-current-user="alice"', output)
-        self.assertIn('id="alice-db" data-resource-owner="alice"', output)
-        self.assertIn('id="orphan-db" data-resource-owner=""', output)
+        self.assertIn('data-tenant="alice-db" data-resource-owner="alice"', output)
+        self.assertIn('data-tenant="orphan-db" data-resource-owner=""', output)
         self.assertEqual(output.count('db96-card'), 2)
         self.assertIn('<article class="nested">inner</article>', output)
 
