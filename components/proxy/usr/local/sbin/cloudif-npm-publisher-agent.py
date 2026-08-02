@@ -92,6 +92,40 @@ server {{
   for dep_s,v in sorted(p.get('versions',{}).items(),key=lambda x:int(x[0])):
    dep=int(dep_s); host=f'{num}-d{dep}.cloudiff.duckdns.org'; cert=v['cert']
    blocks.append(f'''server {{\n    listen 80;\n    listen [::]:80;\n    server_name {host};\n    location ^~ /.well-known/acme-challenge/ {{ root /data/letsencrypt-acme-challenge; default_type text/plain; }}\n    location / {{ return 301 https://$host$request_uri; }}\n}}\nserver {{\n    listen 443 ssl;\n    listen [::]:443 ssl;\n    http2 on;\n    server_name {host};\n    ssl_certificate /etc/letsencrypt/live/{cert}/fullchain.pem;\n    ssl_certificate_key /etc/letsencrypt/live/{cert}/privkey.pem;\n    include conf.d/include/ssl-ciphers.conf;\n    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;\n    add_header X-Content-Type-Options nosniff always;\n    add_header X-Frame-Options SAMEORIGIN always;\n    location / {{\n        proxy_http_version 1.1;\n        proxy_set_header Host $host;\n        proxy_set_header X-Real-IP $remote_addr;\n        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n        proxy_set_header X-Forwarded-Proto https;\n        proxy_set_header X-Forwarded-Host $host;\n        proxy_set_header Upgrade $http_upgrade;\n        proxy_set_header Connection "upgrade";\n        proxy_pass http://10.62.91.2:18150;\n    }}\n}}''')
+ for alias,a in sorted(state.get('aliases',{}).items()):
+  num=int(a['public_number']); dep=int(a['active_deploy'])
+  stable_host=f'{alias}.cloudiff.duckdns.org'; stable_target=f'{num}.cloudiff.duckdns.org'
+  pairs=[(stable_host,a['cert'],stable_target)]
+  versions=a.get('versions',{})
+  if not versions and a.get('version_cert'):
+   versions={str(dep):{'cert':a['version_cert']}}
+  for dep_s,version_data in sorted(versions.items(),key=lambda item:int(item[0])):
+   version_dep=int(dep_s);pairs.append((f'{version_dep}.{alias}.cloudiff.duckdns.org',version_data['cert'],f'{num}-d{version_dep}.cloudiff.duckdns.org'))
+  for host,hostcert,target in pairs:
+   blocks.append('server {\n'
+    '    listen 80;\n'
+    '    listen [::]:80;\n'
+    f'    server_name {host};\n'
+    '    location ^~ /.well-known/acme-challenge/ { root /data/letsencrypt-acme-challenge; default_type text/plain; }\n'
+    '    location / { return 301 https://$host$request_uri; }\n'
+    '}\n'
+    'server {\n'
+    '    listen 443 ssl;\n'
+    '    listen [::]:443 ssl;\n'
+    '    http2 on;\n'
+    f'    server_name {host};\n'
+    f'    ssl_certificate /etc/letsencrypt/live/{hostcert}/fullchain.pem;\n'
+    f'    ssl_certificate_key /etc/letsencrypt/live/{hostcert}/privkey.pem;\n'
+    '    include conf.d/include/ssl-ciphers.conf;\n'
+    '    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;\n'
+    '    location / {\n'
+    '        proxy_http_version 1.1;\n'
+    f'        proxy_set_header Host {target};\n'
+    '        proxy_set_header X-Forwarded-Host $host;\n'
+    '        proxy_set_header X-Forwarded-Proto https;\n'
+    '        proxy_pass http://10.62.91.2:18150;\n'
+    '    }\n'
+    '}')
  block=BEGIN+'\n'+'\n\n'.join(blocks)+'\n'+END
  old=CONF.read_text(); backup=CONF.with_name(CONF.name+'.bkp-publisher-'+time.strftime('%Y%m%d-%H%M%S')); shutil.copy2(CONF,backup)
  if BEGIN in old and END in old:
@@ -105,6 +139,22 @@ server {{
   shutil.copy2(backup,CONF)
   subprocess.run(['docker','exec','cloudif-nginx-proxy-manager','nginx','-s','reload'])
   raise
+
+def ensure_alias(state,num,dep,alias):
+ if not re.fullmatch(r'[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?',alias): raise ValueError('invalid_alias')
+ aliases=state.setdefault('aliases',{})
+ current=aliases.get(alias)
+ if current and int(current.get('public_number'))!=int(num): raise ValueError('alias_in_use')
+ stable=f'{alias}.cloudiff.duckdns.org'; version=f'{dep}.{alias}.cloudiff.duckdns.org'
+ cert=ensure_cert(f'cloudif-alias-{alias}',[stable])
+ version_cert=ensure_cert(f'cloudif-alias-{alias}-d{dep}',[version])
+ item=aliases.setdefault(alias,{'public_number':int(num),'active_deploy':int(dep),'cert':cert,'versions':{}})
+ item['public_number']=int(num);item['active_deploy']=int(dep);item['cert']=cert;item.setdefault('versions',{})[str(dep)]={'cert':version_cert};item['updated_at']=time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime())
+ return {'ok':True,'alias':alias,'stable_url':'https://'+stable+'/','version_url':'https://'+version+'/'}
+
+def alias_publish(payload):
+ num=int(payload.get('public_number')); dep=int(payload.get('deploy_number')); alias=str(payload.get('alias') or '').strip().lower()
+ state=load_state(); result=ensure_alias(state,num,dep,alias); render(state); save_state(state); return result
 
 def publish(payload):
  num=int(payload.get('public_number')); dep=int(payload.get('deploy_number'))
@@ -124,6 +174,8 @@ def publish(payload):
   stable_cert=p.get('stable_cert') or ensure_cert(f'cloudif-p{num}',[stable])
   version_cert=p.get('versions',{}).get(str(dep),{}).get('cert') or ensure_cert(f'cloudif-p{num}-d{dep}',[version])
  p['stable_cert']=stable_cert; p['active_deploy']=dep; p.setdefault('versions',{})[str(dep)]={'cert':version_cert,'created_at':time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime())}
+ alias=str(payload.get('alias') or '').strip().lower()
+ if alias: ensure_alias(state,num,dep,alias)
  render(state); save_state(state)
  return {'ok':True,'public_number':num,'deploy_number':dep,'stable_url':'https://'+stable+'/','version_url':'https://'+version+'/'}
 
@@ -149,6 +201,7 @@ class H(BaseHTTPRequestHandler):
   try:
    n=int(self.headers.get('Content-Length','0')); payload=json.loads(self.rfile.read(n) or b'{}')
    if self.path=='/publish': return self._json(200,publish(payload))
+   if self.path=='/alias': return self._json(200,alias_publish(payload))
    if self.path=='/tenant': return self._json(200,ensure_tenant(payload))
    return self._json(404,{'ok':False,'error':'not_found'})
   except Exception as e: return self._json(422,{'ok':False,'error':type(e).__name__,'detail':str(e)[:500]})

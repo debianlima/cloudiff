@@ -4201,8 +4201,11 @@ if "Portal" in globals() and not hasattr(Portal, "_cloudif_pub_previous_do_POST"
             slug=val("slug").strip(); op=val("op").strip()
             try:
                 if op=="publish_version":
-                    result=publications.publish(slug,user)
-                    msg=f"Publicação d{result['deploy_number']} concluída e ativada."
+                    result=publications.enqueue_publish(slug,user)
+                    msg=f"Publicação enfileirada. Job {result['job_id']}."
+                elif op=="set_alias":
+                    result=publications.set_alias(slug,val("alias"),user)
+                    msg=f"Alias {result['hostname']} configurado."
                 elif op=="activate_version":
                     result=publications.activate(slug,int(val("deploy_number","0")),user)
                     msg=f"Publicação d{result['deploy_number']} ativada manualmente."

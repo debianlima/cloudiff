@@ -1,0 +1,15 @@
+[Unit]
+Description=CloudIF asynchronous publication worker
+After=network-online.target cloudif-admin-portal.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+Environment=PYTHONPATH=/srv/cloudif/lib
+ExecStart=/usr/bin/python3 /usr/local/sbin/cloudif-publication-worker.py
+Restart=always
+RestartSec=3
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

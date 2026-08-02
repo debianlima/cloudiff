@@ -52,6 +52,12 @@
     source.insertBefore(container,source.firstChild);
   }
   groupDatabaseCards();
+  document.querySelectorAll('form[action$="/action/publication"]').forEach(function(form){
+    form.addEventListener('submit',function(){
+      var button=form.querySelector('button[type="submit"],button:not([type])');
+      if(button){button.disabled=true;button.textContent='Enviando…';}
+    });
+  });
   document.addEventListener("keydown",function(event){
     if(event.key==="Escape"){
       nav.classList.remove("is-open");

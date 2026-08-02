@@ -3017,8 +3017,35 @@ def cloudif_publication_deploy(handler):
         raw=git_file(name)
         if raw.strip(): compose_content=raw;compose_name=name;break
     compose_text=compose_content.decode("utf-8","ignore")
+    generated_compose=False
     if not compose_text or "cloudif-publications" not in compose_text:
-        return send(handler, 422, {"ok": False, "error": "versioned_compose_missing_or_invalid", "commit": commit})
+        compose_text="""services:
+  web:
+    image: nginxinc/nginx-unprivileged:1.27-alpine
+    container_name: cloudif-p${CLOUDIF_PUBLIC_NUMBER}-d${CLOUDIF_DEPLOY_NUMBER}-web
+    restart: unless-stopped
+    read_only: true
+    user: "101:101"
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m
+      - /var/cache/nginx:rw,noexec,nosuid,size=16m
+      - /var/run:rw,noexec,nosuid,size=4m
+    volumes:
+      - ./site:/usr/share/nginx/html:ro
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O- http://127.0.0.1:80/__cloudif_health >/dev/null"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+    networks: [cloudif-publications]
+networks:
+  cloudif-publications:
+    external: true
+"""
+        compose_name="cloudif-generated-compose.yml";generated_compose=True
     tree=subprocess.run(["git","-C",str(base_dir),"ls-tree","-r","--name-only",commit,"site"],text=True,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL)
     site_files=[x.strip() for x in tree.stdout.splitlines() if x.strip().startswith("site/")]
     nginx_content=git_file("nginx.conf")
@@ -3138,7 +3165,7 @@ def cloudif_publication_deploy(handler):
         "ok": ok, "project": project, "public_number": public_number, "deploy_number": deploy_number,
         "commit": commit, "stack_id": stack_id, "stack_name": name, "container": container,
         "created": created, "deploy": dep, "operation_id": opid, "operation_final": final, "healthy": healthy,
-        "terminal": terminal, "content_digest": content_digest, "source": "git_commit",
+        "terminal": terminal, "content_digest": content_digest, "source": "git_commit", "generated_compose": generated_compose,
         "republished": republished_from is not None, "republished_from": republished_from
     })
 

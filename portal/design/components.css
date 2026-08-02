@@ -167,3 +167,14 @@
 
 .publication-single{display:block}
 .publication-single>.publication-project{margin:0}
+.publication-job{display:grid;gap:8px;margin-bottom:var(--s4);padding:var(--s3);border:1px solid var(--rule);border-radius:var(--r-md);background:var(--paper)}
+.publication-job>div{display:flex;justify-content:space-between;gap:var(--s3)}
+.publication-job span{color:var(--ink-2)}
+.publication-job progress{width:100%;accent-color:var(--iff)}
+.publication-job.is-failed{border-color:var(--halt)}
+.publication-alias{display:grid;gap:var(--s3);margin-bottom:var(--s4);padding:var(--s3);border:1px solid var(--rule);border-radius:var(--r-md)}
+.publication-alias form{display:flex;align-items:end;gap:var(--s2);flex-wrap:wrap}
+.publication-alias label{display:grid;gap:5px;flex:1;min-width:240px}
+.publication-alias label>div{display:flex;align-items:center;gap:6px}
+.publication-alias input{min-width:0;flex:1}
+@media(max-width:620px){.publication-job>div{display:grid}.publication-alias form{display:grid}.publication-alias label{min-width:0}.publication-alias label>div{align-items:flex-start;flex-direction:column}}

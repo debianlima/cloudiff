@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import html
+import json
 import sqlite3
 
 DB='/var/lib/cloudif/portal/cloudif-portal.db'
@@ -17,9 +18,34 @@ def _rows(slug):
 
 def publication_panel(slug):
     rows=_rows(slug)
+    try:
+        from cloudif_portal_publications import latest_job
+        job=latest_job(slug)
+    except Exception:
+        job=None
+    job_html=''
+    if job:
+        states={'queued':'Na fila','running':'Publicando','succeeded':'Concluída','failed':'Falhou'}
+        status=states.get(job.get('status'),job.get('status') or '')
+        progress_values={'queued':1,'preparing':2,'deploying':3,'https':4,'promoting':5,'validating':5,'completed':6}
+        progress_value=progress_values.get(job.get('step'),0)
+        job_html=(f'<div class="publication-job is-{h(job.get("status"))}" data-publication-job="{int(job.get("id") or 0)}">'
+                  f'<div><strong>{h(status)}</strong><span>{h(job.get("message") or "")}</span></div>'
+                  f'<progress max="6" value="{progress_value}"></progress></div>')
+        if job.get('status') in ('queued','running'):
+            job_html += '<script>setTimeout(function(){location.reload()},2500)</script>'
+    alias=''
+    try:
+        con=sqlite3.connect(DB);row=con.execute('select alias from project_publication_aliases where project_slug=?',(slug,)).fetchone();con.close();alias=row[0] if row else ''
+    except Exception:alias=''
+    alias_html=('<div class="publication-alias"><strong>Endereço amigável</strong>'
+                '<form method="post" action="/cloudiff/portal/action/publication">'
+                f'<input type="hidden" name="slug" value="{h(slug)}">'
+                f'<label><span>Alias</span><div><input name="alias" value="{h(alias)}" placeholder="ex.: lima" pattern="[a-z0-9][a-z0-9-]{0,62}"><span>.cloudiff.duckdns.org</span></div></label>'
+                '<button class="btn light" name="op" value="set_alias">Salvar endereço</button></form></div>')
     if not rows:
         return (
-            '<div class="cm-resource">'
+            '<div class="cm-resource">'+job_html+alias_html+
             '<div class="cm-resource-title"><strong>Publicação</strong><span class="pill">Ainda não publicada</span></div>'
             '<div class="cm-actions">'
             '<form method="post" action="/cloudiff/portal/action/publication">'
@@ -47,7 +73,7 @@ def publication_panel(slug):
             f'<td><a href="https://{h(r.get("version_hostname") or "")}/" target="_blank">Abrir</a></td><td>{action}</td></tr>'
         )
     return (
-        '<div class="cm-resource">'
+        '<div class="cm-resource">'+job_html+alias_html+
         f'<div class="cm-resource-title"><strong>Publicações</strong><span class="pill ok">d{int(active.get("deploy_number") or 0)} ativa</span></div>'
         '<div class="cm-actions">'
         f'<a class="btn light" href="https://{num}.cloudiff.duckdns.org/" target="_blank">Abrir site</a>'
