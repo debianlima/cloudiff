@@ -5642,6 +5642,36 @@ if 'page' in globals() and not globals().get('_ui144_wrapped'):
     _ui144_wrapped=True
 # CloudIF readable modern colors END
 
+
+# CloudIF project 3x2 fallback layout BEGIN
+_UI145_CSS=r'''<style id="cloudif-ui145">
+body.ui142-tab-projetos #cloudif-project-list>.project-card{padding:18px!important;overflow:visible!important}
+body.ui142-tab-projetos #cloudif-project-list>.project-card>.project-line{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:14px!important;align-items:start!important}
+body.ui142-tab-projetos #cloudif-project-list>.project-card>.project-line>div{min-width:0!important;margin:0!important;padding:16px!important;border:1px solid var(--c-border,#dce3ed)!important;border-radius:12px!important;background:var(--c-surface,#fff)!important}
+body.ui142-tab-projetos #cloudif-project-list>.project-card>.project-line>div:nth-child(-n+3){min-height:168px}
+body.ui142-tab-projetos #cloudif-project-list>.project-card>.project-line>div:nth-child(4){display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:14px!important;padding:0!important;border:0!important;background:transparent!important}
+body.ui142-tab-projetos #cloudif-project-list .publication-manager-resource{display:contents!important}
+body.ui142-tab-projetos #cloudif-project-list .publication-information,
+body.ui142-tab-projetos #cloudif-project-list .publication-alias,
+body.ui142-tab-projetos #cloudif-project-list .publication-active-card,
+body.ui142-tab-projetos #cloudif-project-list .publication-versions,
+body.ui142-tab-projetos #cloudif-project-list .publication-manager-resource>.cm-actions{min-width:0!important;margin:0!important;padding:16px!important;border:1px solid var(--c-border,#dce3ed)!important;border-radius:12px!important;background:var(--c-surface,#fff)!important}
+body.ui142-tab-projetos #cloudif-project-list .publication-information{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+body.ui142-tab-projetos #cloudif-project-list .publication-alias{display:grid!important;align-content:start!important;gap:12px!important}
+body.ui142-tab-projetos #cloudif-project-list .publication-active-card,
+body.ui142-tab-projetos #cloudif-project-list .publication-manager-resource>.cm-actions{display:flex!important;align-items:center!important;justify-content:space-between!important;gap:10px!important;flex-wrap:wrap!important}
+body.ui142-tab-projetos #cloudif-project-list .publication-versions{grid-column:1/-1!important}
+body.ui142-tab-projetos #cloudif-project-list>.project-card>.project-line>div:nth-child(4)>.btn{width:auto!important;justify-self:start!important}
+@media(max-width:900px){body.ui142-tab-projetos #cloudif-project-list>.project-card>.project-line,body.ui142-tab-projetos #cloudif-project-list>.project-card>.project-line>div:nth-child(4){grid-template-columns:1fr!important}body.ui142-tab-projetos #cloudif-project-list .publication-versions{grid-column:auto!important}}
+</style>'''
+if 'page' in globals() and not globals().get('_ui145_wrapped'):
+    _ui145_prev_page=page
+    def page(user,tab,body):
+        doc=_ui145_prev_page(user,tab,body)
+        return doc.replace('</head>',_UI145_CSS+'</head>',1)
+    _ui145_wrapped=True
+# CloudIF project 3x2 fallback layout END
+
 # CloudIF unique AGIA, monitoring and help routes BEGIN
 import cloudif_unique_pages98 as _u98
 if 'Portal' in globals() and not globals().get('_u98_wrapped'):
