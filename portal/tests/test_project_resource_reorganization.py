@@ -110,7 +110,7 @@ class ActiveProjectRendererContractTest(unittest.TestCase):
         self.assertIn('data-project-owner=',self.source)
 
     def test_project_heading_is_management(self):
-        self.assertIn('<h2>Gestão de projetos</h2>',self.source)
+        self.assertIn('<h2>Projetos por usuário</h2>',self.source)
 
 
 

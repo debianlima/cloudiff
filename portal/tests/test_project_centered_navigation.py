@@ -42,5 +42,10 @@ class ProjectCenteredNavigationTest(unittest.TestCase):
         self.assertIn('data-legacy-tab="publicacao"',doc)
 
 
+    def test_project_page_title_is_management(self):
+        self.assertEqual(shell._TAB_TITLES["projetos"], "Gestão de projetos")
+        self.assertIn("?v=", shell._document(self.identity, "projetos", "Gestão de projetos", "<p>ok</p>"))
+
+
 if __name__ == "__main__":
     unittest.main()

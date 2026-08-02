@@ -3226,7 +3226,7 @@ function cloudifCancelWizard() {{
 <div id="cloudif-project-list" class="card" data-current-user="{h(user['username'])}">
   <div class="section-title">
     <div>
-      <h2>Gestão de projetos</h2>
+      <h2>Projetos por usuário</h2>
       <p class="small">Abra um grupo para visualizar os projetos vinculados a cada usuário.</p>
     </div>
     <button class="btn" onclick="cloudifShowWizard('wiz_new_project')">Novo projeto</button>

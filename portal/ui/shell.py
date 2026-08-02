@@ -59,6 +59,8 @@ _PROJECT_DESCRIPTIONS = {
 
 _TAB_TITLES = {tab: label for entries in _TAB_GROUPS.values() for tab, label in entries}
 _TAB_TITLES.update({tab: label for entries in _PROJECT_NAV.values() for tab, label in entries})
+_TAB_TITLES["projetos"] = "Gestão de projetos"
+_ASSET_VERSION = "20260802-191"
 
 _MODULE_TO_TAB = {
     "overview": "resumo",
@@ -137,11 +139,12 @@ def _document(identity: Identity, active_tab: str, title: str, body: str, *, ext
     return (
         '<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">'
         '<meta name="viewport" content="width=device-width,initial-scale=1">'
+        f'<meta name="cloudif-release" content="{_ASSET_VERSION}">'
         f"<title>{escape(title)} · CloudIFF</title>{extra_head}"
-        '<link rel="stylesheet" href="/cloudiff/portal/assets/tokens.css">'
-        '<link rel="stylesheet" href="/cloudiff/portal/assets/base.css">'
-        '<link rel="stylesheet" href="/cloudiff/portal/assets/components.css">'
-        '<script src="/cloudiff/portal/assets/app.js" defer></script>'
+        '<link rel="stylesheet" href="/cloudiff/portal/assets/tokens.css?v={_ASSET_VERSION}">'
+        '<link rel="stylesheet" href="/cloudiff/portal/assets/base.css?v={_ASSET_VERSION}">'
+        '<link rel="stylesheet" href="/cloudiff/portal/assets/components.css?v={_ASSET_VERSION}">'
+        '<script src="/cloudiff/portal/assets/app.js?v={_ASSET_VERSION}" defer></script>'
         f'</head><body class="{body_class}"><a class="skip-link" href="#conteudo-principal">Ir para o conteúdo</a><div class="app">'
         '<nav class="nav" id="nav" aria-label="Navegação principal">'
         '<div class="nav-brand"><span class="nav-mark">CI</span>'
