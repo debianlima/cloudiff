@@ -3069,7 +3069,7 @@ def render_projects(user):
     allow_git_only = setting_bool("CLOUDIF_ALLOW_GIT_ONLY_PROJECT", True)
     tenant_opts = ""
     if allow_git_only:
-        tenant_opts += '<option value="">Sem banco: somente Git/Komodo</option>'
+        tenant_opts += '<option value="">Nenhum tenant vinculado</option>'
     tenant_opts += "".join(f'<option value="{h(t.get("tenant"))}">{h(t.get("tenant"))}</option>' for t in tenants)
 
     cards = []
@@ -3085,7 +3085,7 @@ def render_projects(user):
         studio_btn = f'<a class="btn light" href="{h(studio)}" target="_blank">Abrir Studio</a>' if p["tenant"] else ""
 
         cards.append(f"""
-<div class="project-card">
+<div class="project-card" data-project-owner="{h(p.get('owner') or user['username'])}">
   <div class="project-line">
     <div>
       <h3>{h(p['name'])}</h3>

@@ -70,4 +70,18 @@ class ProjectResourceReorganizationTest(unittest.TestCase):
         self.assertIn('Alterar, instalar ou remover framework exige proposta transacional',self.source)
 
 
+
+class ActiveProjectRendererContractTest(unittest.TestCase):
+    def test_active_renderer_contains_owner_metadata_and_neutral_tenant_copy(self):
+        source=(Path(__file__).resolve().parents[2]/"components/control-plane/current-apps/portal-current/cloudif-admin-portal.py").read_text()
+        list_pos=source.find('<div id="cloudif-project-list"')
+        start=source.rfind('def render_projects(user):',0,list_pos)
+        end=source.find('def render_bancos(user):',list_pos)
+        block=source[start:end]
+        self.assertIn('data-project-owner=',block)
+        self.assertIn('data-current-user=',block)
+        self.assertIn('Nenhum tenant vinculado',block)
+        self.assertNotIn('Sem banco: somente Git/Komodo',block)
+
+
 if __name__=='__main__':unittest.main()
