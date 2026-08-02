@@ -142,8 +142,6 @@ def parse_legacy(markup: str, tab: str) -> LegacyPage:
 
 
 _PORTAL_DB = os.environ.get("CLOUDIF_PORTAL_DB", "/var/lib/cloudif/portal/cloudif-portal.db")
-_PUBLICATION_CARD = re.compile(r'<article\b[^>]*class=["\'][^"\']*\bpublication-project\b[^"\']*["\'][^>]*>.*?</article>', re.I | re.S)
-_DATABASE_CARD = re.compile(r'<article\b[^>]*class=["\'][^"\']*\bdb96-card\b[^"\']*["\'][^>]*>.*?</article>', re.I | re.S)
 
 
 def _readonly_connection() -> sqlite3.Connection:
@@ -201,13 +199,42 @@ def _group_label(owner: str, current_user: str) -> str:
     return owner or "Sem usuário vinculado"
 
 
-def _group_cards(body: str, pattern: re.Pattern[str], owner_for_card, current_user: str, kind: str) -> str:
-    matches = list(pattern.finditer(body))
-    if not matches:
+def _card_spans(body: str, class_token: str) -> list[tuple[int, int, str]]:
+    """Extract complete article elements, including nested article children."""
+    opening = re.compile(
+        rf'<article\b[^>]*class=["\'][^"\']*\b{re.escape(class_token)}\b[^"\']*["\'][^>]*>',
+        re.I,
+    )
+    tags = re.compile(r'</?article\b[^>]*>', re.I)
+    spans: list[tuple[int, int, str]] = []
+    cursor = 0
+    while True:
+        start_match = opening.search(body, cursor)
+        if not start_match:
+            break
+        depth = 0
+        end = None
+        for tag in tags.finditer(body, start_match.start()):
+            if tag.group(0).lower().startswith('</article'):
+                depth -= 1
+                if depth == 0:
+                    end = tag.end()
+                    break
+            else:
+                depth += 1
+        if end is None:
+            raise ValueError(f"unbalanced article for {class_token}")
+        spans.append((start_match.start(), end, body[start_match.start():end]))
+        cursor = end
+    return spans
+
+
+def _group_cards(body: str, class_token: str, owner_for_card, current_user: str, kind: str) -> str:
+    spans = _card_spans(body, class_token)
+    if not spans:
         return body
     grouped: "OrderedDict[str, list[str]]" = OrderedDict()
-    for match in matches:
-        card = match.group(0)
+    for _start, _end, card in spans:
         owner = (owner_for_card(card) or "").strip()
         grouped.setdefault(owner, []).append(card)
     blocks: list[str] = []
@@ -222,7 +249,7 @@ def _group_cards(body: str, pattern: re.Pattern[str], owner_for_card, current_us
             f'<summary><span>{label}</span><span class="owner-resource-count">{count} {noun}</span></summary>'
             f'<div class="owner-resource-items">{"".join(cards)}</div></details>'
         )
-    return body[: matches[0].start()] + '<div class="owner-resource-groups">' + "".join(blocks) + '</div>' + body[matches[-1].end() :]
+    return body[: spans[0][0]] + '<div class="owner-resource-groups">' + "".join(blocks) + '</div>' + body[spans[-1][1] :]
 
 
 def group_resources_by_user(body: str, tab: str, identity: Identity) -> str:
@@ -235,13 +262,13 @@ def group_resources_by_user(body: str, tab: str, identity: Identity) -> str:
         def publication_owner(card: str) -> str:
             slug = next((item for item in slugs if item in card), "")
             return project_owners.get(slug, "")
-        return _group_cards(body, _PUBLICATION_CARD, publication_owner, identity.username, "publicação")
+        return _group_cards(body, "publication-project", publication_owner, identity.username, "publicação")
 
     def database_owner(card: str) -> str:
         match = re.search(r'<article\b[^>]*\bid=["\']([^"\']+)', card, re.I)
         tenant = unescape(match.group(1)) if match else ""
         return tenant_owners.get(tenant, "")
-    return _group_cards(body, _DATABASE_CARD, database_owner, identity.username, "banco")
+    return _group_cards(body, "db96-card", database_owner, identity.username, "banco")
 
 def transform(markup: str, identity: Identity, tab: str) -> str:
     page = parse_legacy(markup, tab)
