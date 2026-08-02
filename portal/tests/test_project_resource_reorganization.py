@@ -50,7 +50,7 @@ class ProjectResourceReorganizationTest(unittest.TestCase):
         self.assertIn("#project-identities{display:none}",self.source)
 
     def test_services_are_rebuilt_as_project_specific_cards(self):
-        for label in ('Banco','Repositório','Komodo Publicação','Abrir site'):
+        for label in ('Banco vinculado','Repositório Forge','Komodo Publicação SSH','Acessar SSH','Abrir site'):
             self.assertIn(label,self.source)
         self.assertIn('project-service-card',self.source)
         self.assertIn('Instalação, troca ou remoção exigem proposta no Forgejo',self.source)
@@ -59,13 +59,13 @@ class ProjectResourceReorganizationTest(unittest.TestCase):
 
     def test_projects_are_grouped_by_owner(self):
         self.assertIn('project-owner-group',self.source)
-        self.assertIn("owner===current?'Meus projetos':'Projetos de '+owner",self.source)
+        self.assertIn("label='Meus projetos' if owner==user['username'] else f'Projetos de {owner}'",self.source)
         self.assertIn('data-project-owner',self.source)
 
     def test_runtime_inspection_uses_real_backend(self):
         self.assertIn('/api/project-runtime-inspection?slug=',self.source)
         self.assertIn('/komodo/project/runtime-inspect',self.source)
-        for label in ('Repositório de código','Último commit','Servidor web externo','Servidor web interno','Containers inspecionados'):
+        for label in ('Repositório Forge','Abrir repositório','Último commit','Servidor web externo','Servidor web interno','Containers inspecionados'):
             self.assertIn(label,self.source)
         self.assertIn('Instalação, troca ou remoção exigem proposta no Forgejo',self.source)
 
@@ -93,7 +93,7 @@ class ActiveProjectRendererContractTest(unittest.TestCase):
 
 
     def test_repository_and_servers_are_explicit(self):
-        for label in ('Repositório de código','Forgejo · encontrado','Abrir repositório','Último commit','Servidor web externo','Servidor web interno','Tecnologia web'):
+        for label in ('Repositório Forge','Abrir repositório','Último commit','Servidor web externo','Servidor web interno','Tecnologia web'):
             self.assertIn(label,self.source)
         self.assertIn('data-runtime-template',self.source)
         self.assertIn('Gerar plano',self.source)
@@ -116,6 +116,27 @@ class ActiveProjectRendererContractTest(unittest.TestCase):
         self.assertIn('return project[key]',self.source)
         self.assertIn('return project.get(key)',self.source)
         self.assertIn('data-project-owner="{h(_project_effective_owner(p))}"',self.source)
+
+
+
+    def test_project_services_reuse_publication_pattern(self):
+        self.assertIn('publication-information project-service-grid',self.source)
+        self.assertIn("service('Banco vinculado'",self.source)
+        self.assertIn("service('Repositório Forge'",self.source)
+        self.assertIn("service('Komodo Publicação SSH'",self.source)
+        self.assertIn("'Acessar SSH'",self.source)
+        self.assertNotIn('Ver catálogo homologado',self.source)
+
+    def test_owner_groups_are_server_rendered(self):
+        self.assertIn('grouped_projects_html',self.source)
+        self.assertIn('<details class="project-owner-group"',self.source)
+        self.assertNotIn('const groups=new Map()',self.source)
+
+    def test_runtime_plan_uses_structured_wizard(self):
+        for marker in ('technology-wizard','technology-wizard-steps','openTechnologyWizard','renderTechnologyPlan'):
+            self.assertIn(marker,self.source)
+        self.assertIn('progress max="4"',self.source)
+        self.assertIn('Nenhuma alteração foi aplicada. Próxima etapa: proposta no Forgejo.',self.source)
 
 
 if __name__=='__main__':unittest.main()
