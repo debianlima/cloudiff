@@ -2933,6 +2933,95 @@ def _cloudif_project_audit_data(payload):
       'container_stats':container.get('stats') or {}, 'server_id':server_id,
       'terminal_target_type':target.get('type'),'terminal_ok':terminal_ok,'terminal_command':cmd,'issues':issues,'healthy':not issues,'target':target}
 
+def cloudif_project_runtime_inspect(handler):
+    if not _cloudif_pub_auth(handler):
+        return send(handler,403,{'ok':False,'error':'forbidden'})
+    payload=_cloudif_pub_json(handler)
+    if not set(payload).issubset({'project','public_numbers'}):
+        return send(handler,400,{'ok':False,'error':'invalid_request'})
+    project=safe_slug(payload.get('project') or '')
+    if not project:
+        return send(handler,400,{'ok':False,'error':'invalid_project'})
+    numbers=[]
+    for value in payload.get('public_numbers') or []:
+        try:
+            number=int(value)
+            if 1 <= number <= 999999999:numbers.append(number)
+        except Exception:pass
+    repo=Path('/etc/komodo/stacks')/('cloudif-'+project)
+    repository_present=bool((repo/'.git').is_dir())
+    files=[];commit='';images=[]
+    if repository_present:
+        try:
+            commit=subprocess.check_output(['git','-C',str(repo),'rev-parse','HEAD'],text=True,stderr=subprocess.DEVNULL,timeout=12).strip()
+            files=subprocess.check_output(['git','-C',str(repo),'ls-tree','-r','--name-only',commit],text=True,stderr=subprocess.DEVNULL,timeout=12).splitlines()
+        except Exception:files=[];commit=''
+        for compose_name in ('docker-compose.yml','compose.yaml','compose.yml'):
+            try:
+                raw=subprocess.check_output(['git','-C',str(repo),'show',commit+':'+compose_name],text=True,stderr=subprocess.DEVNULL,timeout=12)
+            except Exception:continue
+            images.extend(re.findall(r'^\s*image:\s*["\']?([^"\'\s#]+)',raw,re.M))
+    file_set=set(files)
+    def has(name):return name in file_set or any(x.endswith('/'+name) for x in file_set)
+    framework='Não identificado';framework_evidence=[]
+    package={}
+    if repository_present and has('package.json'):
+        target=next((x for x in files if x=='package.json' or x.endswith('/package.json')),'package.json')
+        try:package=json.loads(subprocess.check_output(['git','-C',str(repo),'show',commit+':'+target],text=True,stderr=subprocess.DEVNULL,timeout=12))
+        except Exception:package={}
+        deps={**(package.get('dependencies') or {}),**(package.get('devDependencies') or {})}
+        mapping=(('next','Next.js'),('nuxt','Nuxt'),('@angular/core','Angular'),('@sveltejs/kit','SvelteKit'),('astro','Astro'),('vite','Vite'),('express','Express'))
+        match=next(((key,label) for key,label in mapping if key in deps),None)
+        framework=match[1] if match else 'Node.js'
+        framework_evidence=['package.json']+([match[0]] if match else [])
+    elif repository_present and (has('composer.json') or has('index.php')):
+        framework='PHP';framework_evidence=['composer.json' if has('composer.json') else 'index.php']
+    elif repository_present and (has('requirements.txt') or has('pyproject.toml')):
+        framework='Python';framework_evidence=['requirements.txt' if has('requirements.txt') else 'pyproject.toml']
+    elif repository_present and (has('index.html') or any(x.startswith(('site/','dist/','build/','public/')) and x.endswith('.html') for x in files)):
+        framework='Site estático';framework_evidence=['arquivo HTML publicado']
+    if framework=='Não identificado' and any('nginx' in x.lower() for x in images):
+        framework='Site estático';framework_evidence=['imagem Nginx no compose']
+    candidates=[]
+    try:
+        ids=subprocess.check_output(['docker','ps','-aq'],text=True,timeout=15).split()
+        if ids:
+            rows=json.loads(subprocess.check_output(['docker','inspect',*ids],text=True,timeout=30))
+            expected={project,'cloudif-'+project}
+            for info in rows:
+                cfg=info.get('Config') or {};labels=cfg.get('Labels') or {};name=str(info.get('Name') or '').lstrip('/')
+                compose_project=str(labels.get('com.docker.compose.project') or '')
+                direct=str(labels.get('cloudif.project') or '')
+                publication=any(re.match(r'^cloudif-p%d-d\d+-web$'%n,name) for n in numbers)
+                if direct==project or compose_project in expected or project in name or publication:
+                    candidates.append({'name':name,'image':cfg.get('Image') or '', 'running':bool((info.get('State') or {}).get('Running'))})
+    except Exception:pass
+    probes=(('node',['node','--version']),('npm',['npm','--version']),('php',['php','--version']),('python',['python3','--version']),('nginx',['nginx','-v']),('apache',['apache2','-v']),('httpd',['httpd','-v']))
+    runtimes={}
+    for container in candidates:
+        if not container['running']:continue
+        found={}
+        for key,cmd in probes:
+            try:
+                run=subprocess.run(['docker','exec',container['name'],*cmd],text=True,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,timeout=6)
+                text=' '.join((run.stdout or '').split())[:180]
+                if run.returncode==0 and text:found[key]=text
+            except Exception:pass
+        if found:runtimes[container['name']]=found
+    flat={}
+    for values in runtimes.values():
+        for key,value in values.items():flat.setdefault(key,value)
+    server='Nginx' if 'nginx' in flat or any('nginx' in x.lower() for x in images+[c['image'] for c in candidates]) else ('Apache' if 'apache' in flat or 'httpd' in flat else None)
+    return send(handler,200,{
+        'ok':True,'read_only':True,'project':project,
+        'repository':{'present':repository_present,'commit':commit,'file_count':len(files),'manifest_files':[x for x in files if x.rsplit('/',1)[-1] in ('package.json','composer.json','requirements.txt','pyproject.toml','index.php','index.html','docker-compose.yml','compose.yaml','compose.yml')][:30]},
+        'detection':{'framework':framework,'evidence':framework_evidence,'server':server,'runtimes':flat},
+        'containers':candidates,'container_probes':runtimes,'compose_images':sorted(set(images)),
+        'mutation_supported':False,'mutation_reason':'framework_change_requires_transactional_repository_proposal_build_validation_and_rollback',
+        'secrets_exposed':False,
+    })
+
+
 def cloudif_project_audit(handler):
     if not _cloudif_pub_auth(handler): return send(handler,403,{'ok':False,'error':'forbidden'})
     return send(handler,200,_cloudif_project_audit_data(_cloudif_pub_json(handler)))
@@ -3407,6 +3496,8 @@ class H(BaseHTTPRequestHandler):
             return cloudif_stack_http_smoke(self)
 
         _cloudif_pub_path = self.path.split("?", 1)[0]
+        if _cloudif_pub_path == "/komodo/project/runtime-inspect":
+            return cloudif_project_runtime_inspect(self)
         if _cloudif_pub_path == "/komodo/project/audit":
             return cloudif_project_audit(self)
         if _cloudif_pub_path == "/komodo/project/repair":

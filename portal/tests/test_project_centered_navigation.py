@@ -13,7 +13,7 @@ class ProjectCenteredNavigationTest(unittest.TestCase):
         )
 
     def test_global_navigation_contains_entities_only(self):
-        self.assertEqual(shell._TAB_GROUPS["Projetos"], (("projetos", "Todos os projetos"),))
+        self.assertEqual(shell._TAB_GROUPS["Projetos"], (("projetos", "Projetos"),))
         self.assertEqual(shell._TAB_GROUPS["Dados"], (("bancos", "Bancos e tenants"),))
         self.assertEqual(shell._TAB_GROUPS["Ferramentas"], (("monitor-saude", "Saúde da plataforma"),))
         global_tabs={tab for entries in shell._TAB_GROUPS.values() for tab,_ in entries}

@@ -21,7 +21,7 @@ _FOOTER = (
 _TAB_GROUPS: "OrderedDict[str, tuple[tuple[str, str], ...]]" = OrderedDict(
     (
         ("Painel", (("resumo", "Visão geral"),)),
-        ("Projetos", (("projetos", "Todos os projetos"),)),
+        ("Projetos", (("projetos", "Projetos"),)),
         ("Dados", (("bancos", "Bancos e tenants"),)),
         ("Ferramentas", (("monitor-saude", "Saúde da plataforma"),)),
         ("Administração", (("admin-usuarios", "Usuários"), ("admin-politicas", "Acessos"), ("admin-identidades", "Identidades"), ("admin-configuracoes", "Configurações"), ("admin-auditoria", "Auditoria"), ("admin-manutencao", "Manutenção"))),

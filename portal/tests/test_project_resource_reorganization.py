@@ -37,7 +37,7 @@ class ProjectResourceReorganizationTest(unittest.TestCase):
         self.assertNotIn("if tab=='projetos': body=_admin_resources139_panel(user)+body",self.source)
 
     def test_framework_install_is_not_faked(self):
-        self.assertIn('Ver framework detectado',self.source)
+        self.assertIn('Inspecionar ambiente',self.source)
         self.assertNotIn('install_framework',self.source)
 
 
@@ -53,7 +53,21 @@ class ProjectResourceReorganizationTest(unittest.TestCase):
         for label in ('Banco','Repositório','Komodo Publicação','Abrir site'):
             self.assertIn(label,self.source)
         self.assertIn('project-service-card',self.source)
-        self.assertIn('A instalação automática ainda não está habilitada',self.source)
+        self.assertIn('Alterar, instalar ou remover framework exige proposta transacional',self.source)
+
+
+
+    def test_projects_are_grouped_by_owner(self):
+        self.assertIn('project-owner-group',self.source)
+        self.assertIn("owner===current?'Meus projetos':'Projetos de '+owner",self.source)
+        self.assertIn('data-project-owner',self.source)
+
+    def test_runtime_inspection_uses_real_backend(self):
+        self.assertIn('/api/project-runtime-inspection?slug=',self.source)
+        self.assertIn('/komodo/project/runtime-inspect',self.source)
+        for label in ('Repositório','Commit','Servidor web','Containers inspecionados'):
+            self.assertIn(label,self.source)
+        self.assertIn('Alterar, instalar ou remover framework exige proposta transacional',self.source)
 
 
 if __name__=='__main__':unittest.main()
