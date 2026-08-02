@@ -822,6 +822,21 @@ def render_resumo(user):
 </div>"""
     return body
 
+def _project_effective_owner(project):
+    owner=str(project.get("owner") or project.get("created_by") or "").strip()
+    if owner:
+        return owner
+    try:
+        con=db()
+        row=con.execute("SELECT created_by FROM project_publications WHERE project_slug=? AND is_active=1 ORDER BY id DESC LIMIT 1",(project.get("slug"),)).fetchone()
+        con.close()
+        if row:
+            return str(row["created_by"] or "").strip()
+    except Exception:
+        pass
+    return ""
+
+
 def render_projects(user):
     rows = user_visible_projects(user["username"], user["groups"])
     tenants = visible_tenants(user["username"], user["groups"])
@@ -893,7 +908,7 @@ def render_projects(user):
 <div class="card">
   <div class="section-title">
     <div>
-      <h2>Projetos</h2>
+      <h2>Gestão de projetos</h2>
       <p class="small">Apenas projetos que você pode acessar aparecem aqui.</p>
     </div>
     <button class="btn" onclick="togglePanel('new_project')">Novo projeto</button>
@@ -901,7 +916,7 @@ def render_projects(user):
 
   <div id="new_project" class="wizard-panel">
     <div class="help">
-      Projeto pode começar sem banco, usando só Git/Komodo. O banco pode ser vinculado depois.
+      Informe os dados do projeto e vincule um tenant quando necessário.
     </div>
     <form method="post" action="{url('/action/create_project')}">
       <label>Nome do projeto</label>
@@ -1671,7 +1686,7 @@ def render_projects(user):
     allow_git_only = setting_bool("CLOUDIF_ALLOW_GIT_ONLY_PROJECT", True)
     tenant_opts = ""
     if allow_git_only:
-        tenant_opts += '<option value="">Sem banco: somente Git/Komodo</option>'
+        tenant_opts += '<option value="">Nenhum tenant vinculado</option>'
     tenant_opts += "".join(f'<option value="{h(t.get("tenant"))}">{h(t.get("tenant"))}</option>' for t in tenants)
 
     cards = []
@@ -1686,7 +1701,7 @@ def render_projects(user):
         studio_btn = f'<a class="btn light" href="{h(studio)}" target="_blank">Abrir Studio</a>' if p["tenant"] else ""
 
         cards.append(f"""
-<div class="project-card">
+<div class="project-card" data-project-owner="{h(_project_effective_owner(p))}">
   <div class="project-line">
     <div>
       <h3>{h(p['name'])}</h3>
@@ -1742,7 +1757,7 @@ def render_projects(user):
 <div class="card">
   <div class="section-title">
     <div>
-      <h2>Projetos</h2>
+      <h2>Gestão de projetos</h2>
       <p class="small">Apenas projetos que você pode acessar aparecem aqui.</p>
     </div>
     <button class="btn" onclick="togglePanel('new_project')">Novo projeto</button>
@@ -1750,7 +1765,7 @@ def render_projects(user):
 
   <div id="new_project" class="wizard-panel">
     <div class="help">
-      Projeto pode começar sem banco, usando só Git/Komodo. O banco pode ser vinculado depois.
+      Informe os dados do projeto e vincule um tenant quando necessário.
     </div>
     <form method="post" action="{url('/action/create_project')}">
       <label>Nome do projeto</label>
@@ -2160,7 +2175,7 @@ def render_projects(user):
     allow_git_only = setting_bool("CLOUDIF_ALLOW_GIT_ONLY_PROJECT", True)
     tenant_opts = ""
     if allow_git_only:
-        tenant_opts += '<option value="">Sem banco: somente Git/Komodo</option>'
+        tenant_opts += '<option value="">Nenhum tenant vinculado</option>'
     tenant_opts += "".join(f'<option value="{h(t.get("tenant"))}">{h(t.get("tenant"))}</option>' for t in tenants)
 
     cards = []
@@ -2173,7 +2188,7 @@ def render_projects(user):
         studio_btn = f'<a class="btn light" href="{h(studio)}" target="_blank">Abrir Studio</a>' if p["tenant"] else ""
 
         cards.append(f"""
-<div class="project-card">
+<div class="project-card" data-project-owner="{h(_project_effective_owner(p))}">
   <div class="project-line">
     <div>
       <h3>{h(p['name'])}</h3>
@@ -2229,14 +2244,14 @@ def render_projects(user):
 <div class="card">
   <div class="section-title">
     <div>
-      <h2>Projetos</h2>
+      <h2>Gestão de projetos</h2>
       <p class="small">Apenas projetos que você pode acessar aparecem aqui.</p>
     </div>
     <button class="btn" onclick="togglePanel('new_project')">Novo projeto</button>
   </div>
 
   <div id="new_project" class="wizard-panel">
-    <div class="help">Projeto pode começar sem banco, usando só Git/Komodo.</div>
+    <div class="help">Informe os dados do projeto e vincule um tenant quando necessário.</div>
     <form method="post" action="{url('/action/create_project')}">
       <label>Nome do projeto</label>
       <input name="name" required placeholder="Ex: Sistema de Biblioteca">
@@ -4546,6 +4561,7 @@ html[data-theme="dark"]{color-scheme:dark;--cif-surface:#111b16;--cif-bg:#07110b
 .project-runtime-evidence{display:flex;gap:6px;flex-wrap:wrap}
 .project-runtime-evidence code{padding:5px 7px;border-radius:7px;background:#edf3ef;font-size:.74rem}
 .project-runtime-actions{display:flex;gap:8px;flex-wrap:wrap}
+.project-runtime-selector{display:flex;align-items:end;gap:10px;flex-wrap:wrap}.project-runtime-selector label{display:grid;gap:6px;min-width:220px}.project-runtime-selector select{min-height:40px}
 .project-runtime-note{margin:0;color:var(--cif-muted);font-size:.82rem}
 @media(max-width:760px){.project-card.cpx-ready .project-service-grid{grid-template-columns:1fr}.project-card.cpx-ready>.project-options-hint{align-items:flex-start;flex-direction:column}.project-card.cpx-ready>.project-options-hint span{margin-left:0}.project-card.cpx-ready>.project-options-hint:after{margin-top:4px}}
 </style>
@@ -4569,7 +4585,7 @@ _CPX_SCRIPT=r"""
  const projectCards=list?[...list.querySelectorAll(':scope > .project-card')]:[];
  projectCards.forEach((card,idx)=>{const line=card.querySelector('.project-line');if(!line)return;const cols=[...line.children];if(cols.length<4)return;const slugText=(cols[0].querySelector('.small')||{}).textContent||'';const slug=slugText.replace(/^Slug:\s*/i,'').trim();const name=((cols[0].querySelector('h3')||{}).textContent||slug).trim();const description=[...cols[0].querySelectorAll('p')].find(x=>!x.classList.contains('small'));const bankLink=cols[1].querySelector('a');const bankName=((cols[1].querySelector('.pill')||{}).textContent||'Sem banco').trim();const links=[...cols[2].querySelectorAll('a')];const gitLink=links.find(a=>/Git/i.test(a.textContent));const komodoLink=links.find(a=>/Komodo/i.test(a.textContent));
  const services=document.createElement('section');services.className='project-services-panel';services.innerHTML='<div class="section-title"><div><h3>Serviços</h3><p class="small">Acessos vinculados exclusivamente a este projeto.</p></div></div><div class="project-service-grid"></div><div class="project-site-action"></div><div class="project-runtime-inspection" data-role="runtime-inspection"><div class="project-runtime-head"><div><span>Framework e runtime</span><strong>Inspeção ainda não executada</strong></div><button type="button" class="btn light" data-runtime-refresh>Inspecionar ambiente</button></div><p class="project-runtime-note">A inspeção consulta o repositório sincronizado e os containers vinculados ao projeto.</p></div>';const serviceGrid=services.querySelector('.project-service-grid');function service(title,value,link,label){const el=document.createElement('article');el.className='project-service-card';el.innerHTML='<span>'+title+'</span><strong>'+value+'</strong><div class="service-links"></div>';if(link){const a=link.cloneNode(true);a.textContent=label;el.querySelector('.service-links').appendChild(a)}return el}serviceGrid.append(service('Banco',bankName,bankLink,'Abrir Studio'),service('Repositório',gitLink?'Forge':'Não vinculado',gitLink,'Abrir repositório'),service('Publicação','Komodo',komodoLink,'Komodo Publicação'));
- const containers=document.createElement('section');containers.dataset.role='containers';containers.innerHTML='<h3>Containers</h3><div class="empty-state">Carregando containers do projeto...</div>';const pubs=document.createElement('section');pubs.className='project-publication-actions';pubs.innerHTML='<div class="section-title"><div><h3>Publicação e acesso</h3><p class="small">Sincronização, integração, edição e permissões do projeto.</p></div></div>';pubs.append(cols[3]);const backups=document.createElement('section');backups.dataset.role='backups';backups.dataset.projectIndex=idx;backups.innerHTML='<h3>Backups</h3><div class="empty-state">Carregando backups...</div>';const agent=document.createElement('section');agent.className='project-agent-panel';agent.innerHTML='<div class="section-title"><div><h3>Agente IA e MCP</h3><p class="small">Gere a credencial, conecte agentes e consulte as funções autorizadas deste projeto.</p></div></div><div class="project-agent-actions"><a class="btn light" href="/cloudiff/portal/?tab=agentes">Conectar agente</a><a class="btn light" href="/cloudiff/portal/?tab=documentacao-mcp">Ver funções MCP</a></div>';const identity=identityBySlug.get(slug);if(identity)agent.append(identity);else agent.insertAdjacentHTML('beforeend','<div class="empty-state">Identidade MCP ainda não disponível para este projeto.</div>');tabs(card,{'Serviços':services,'Containers':containers,'Publicação':pubs,'Backups':backups,'Agente IA e MCP':agent});line.replaceWith(services,containers,pubs,backups,agent);card.dataset.projectIndex=idx;card.dataset.projectSlug=slug;card.classList.add('cpx-ready');const hint=document.createElement('div');hint.className='project-options-hint';hint.setAttribute('role','button');hint.setAttribute('tabindex','0');hint.setAttribute('aria-expanded','false');hint.innerHTML='<strong>'+name+'</strong><span>'+slug+(description&&description.textContent.trim()?' · '+description.textContent.trim():'')+'</span>';function toggle(){const open=!card.classList.contains('is-open');projectCards.forEach(x=>{x.classList.remove('is-open');const h=x.querySelector(':scope > .project-options-hint');if(h)h.setAttribute('aria-expanded','false')});if(open){card.classList.add('is-open');hint.setAttribute('aria-expanded','true');card.scrollIntoView({block:'nearest',behavior:'smooth'})}}hint.addEventListener('click',toggle);hint.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();toggle()}});card.insertBefore(hint,card.firstChild);const runtimePanel=services.querySelector('[data-role="runtime-inspection"]');async function loadRuntime(){if(!runtimePanel||runtimePanel.dataset.loading==='1')return;runtimePanel.dataset.loading='1';const button=runtimePanel.querySelector('[data-runtime-refresh]');if(button){button.disabled=true;button.textContent='Inspecionando…'}try{const response=await fetch('/cloudiff/portal/api/project-runtime-inspection?slug='+encodeURIComponent(slug),{credentials:'same-origin'});const data=await response.json();if(!response.ok||!data.ok)throw new Error(data.error||'inspection_failed');const d=data.detection||{},repo=data.repository||{},r=d.runtimes||{},e=d.evidence||[];const values=Object.entries(r).map(([k,v])=>'<div><span>'+k.toUpperCase()+'</span><strong>'+v+'</strong></div>').join('');runtimePanel.innerHTML='<div class="project-runtime-head"><div><span>Framework e runtime</span><strong>'+(d.framework||'Não identificado')+'</strong></div><button type="button" class="btn light" data-runtime-refresh>Atualizar inspeção</button></div><div class="project-runtime-grid"><div><span>Repositório</span><strong>'+(repo.present?'Encontrado':'Não encontrado')+'</strong></div><div><span>Commit</span><strong>'+(repo.commit?repo.commit.slice(0,12):'—')+'</strong></div><div><span>Servidor web</span><strong>'+(d.server||'Não detectado')+'</strong></div><div><span>Containers inspecionados</span><strong>'+((data.containers||[]).length)+'</strong></div>'+values+'</div><div class="project-runtime-evidence">'+e.map(x=>'<code>'+x+'</code>').join('')+'</div><p class="project-runtime-note">Alterar, instalar ou remover framework exige proposta transacional no repositório, build validado e rollback. Essa operação ainda não está habilitada.</p><div class="project-runtime-actions"><a class="btn light" href="/cloudiff/portal/?tab=capacidades">Ver catálogo homologado</a></div>';runtimePanel.querySelector('[data-runtime-refresh]').onclick=loadRuntime}catch(error){runtimePanel.innerHTML='<div class="project-runtime-head"><div><span>Framework e runtime</span><strong>Falha na inspeção</strong></div><button type="button" class="btn light" data-runtime-refresh>Tentar novamente</button></div><p class="project-runtime-note">Não foi possível consultar o ambiente real deste projeto.</p>';runtimePanel.querySelector('[data-runtime-refresh]').onclick=loadRuntime}finally{runtimePanel.dataset.loading='0'}}const runtimeButton=runtimePanel&&runtimePanel.querySelector('[data-runtime-refresh]');if(runtimeButton)runtimeButton.onclick=loadRuntime;hint.addEventListener('click',()=>{if(card.classList.contains('is-open')&&runtimePanel&&!runtimePanel.dataset.loaded){runtimePanel.dataset.loaded='1';loadRuntime()}})});const identitySection=document.querySelector('#project-identities');if(identitySection)identitySection.remove();if(list&&projectCards.length){const current=list.dataset.currentUser||'';const groups=new Map();projectCards.forEach(card=>{const owner=card.dataset.projectOwner||current||'sem proprietário';if(!groups.has(owner)){const d=document.createElement('details');d.className='project-owner-group';d.open=owner===current;const summary=document.createElement('summary');summary.innerHTML='<span>'+(owner===current?'Meus projetos':'Projetos de '+owner)+'</span><small>0 projetos</small>';const body=document.createElement('div');body.className='project-owner-group-body';d.append(summary,body);groups.set(owner,{details:d,body,count:0,summary});}const group=groups.get(owner);group.body.appendChild(card);group.count++;group.summary.querySelector('small').textContent=group.count+' projeto'+(group.count===1?'':'s')});const wrap=document.createElement('div');wrap.className='project-owner-groups';groups.forEach(group=>wrap.appendChild(group.details));list.appendChild(wrap)}
+ const containers=document.createElement('section');containers.dataset.role='containers';containers.innerHTML='<h3>Containers</h3><div class="empty-state">Carregando containers do projeto...</div>';const pubs=document.createElement('section');pubs.className='project-publication-actions';pubs.innerHTML='<div class="section-title"><div><h3>Publicação e acesso</h3><p class="small">Sincronização, integração, edição e permissões do projeto.</p></div></div>';pubs.append(cols[3]);const backups=document.createElement('section');backups.dataset.role='backups';backups.dataset.projectIndex=idx;backups.innerHTML='<h3>Backups</h3><div class="empty-state">Carregando backups...</div>';const agent=document.createElement('section');agent.className='project-agent-panel';agent.innerHTML='<div class="section-title"><div><h3>Agente IA e MCP</h3><p class="small">Gere a credencial, conecte agentes e consulte as funções autorizadas deste projeto.</p></div></div><div class="project-agent-actions"><a class="btn light" href="/cloudiff/portal/?tab=agentes">Conectar agente</a><a class="btn light" href="/cloudiff/portal/?tab=documentacao-mcp">Ver funções MCP</a></div>';const identity=identityBySlug.get(slug);if(identity)agent.append(identity);else agent.insertAdjacentHTML('beforeend','<div class="empty-state">Identidade MCP ainda não disponível para este projeto.</div>');tabs(card,{'Serviços':services,'Containers':containers,'Publicação':pubs,'Backups':backups,'Agente IA e MCP':agent});line.replaceWith(services,containers,pubs,backups,agent);card.dataset.projectIndex=idx;card.dataset.projectSlug=slug;card.classList.add('cpx-ready');const hint=document.createElement('div');hint.className='project-options-hint';hint.setAttribute('role','button');hint.setAttribute('tabindex','0');hint.setAttribute('aria-expanded','false');hint.innerHTML='<strong>'+name+'</strong><span>'+slug+(description&&description.textContent.trim()?' · '+description.textContent.trim():'')+'</span>';function toggle(){const open=!card.classList.contains('is-open');projectCards.forEach(x=>{x.classList.remove('is-open');const h=x.querySelector(':scope > .project-options-hint');if(h)h.setAttribute('aria-expanded','false')});if(open){card.classList.add('is-open');hint.setAttribute('aria-expanded','true');card.scrollIntoView({block:'nearest',behavior:'smooth'})}}hint.addEventListener('click',toggle);hint.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();toggle()}});card.insertBefore(hint,card.firstChild);const runtimePanel=services.querySelector('[data-role="runtime-inspection"]');async function loadRuntime(){if(!runtimePanel||runtimePanel.dataset.loading==='1')return;runtimePanel.dataset.loading='1';const button=runtimePanel.querySelector('[data-runtime-refresh]');if(button){button.disabled=true;button.textContent='Inspecionando…'}try{const response=await fetch('/cloudiff/portal/api/project-runtime-inspection?slug='+encodeURIComponent(slug),{credentials:'same-origin'});const data=await response.json();if(!response.ok||!data.ok)throw new Error(data.error||'inspection_failed');const d=data.detection||{},repo=data.repository||{},r=d.runtimes||{},e=d.evidence||[];const values=Object.entries(r).map(([k,v])=>'<div><span>'+k.toUpperCase()+'</span><strong>'+v+'</strong></div>').join('');const external=data.external_server||{};const repoLink=repo.url?'<a class="btn light" href="'+repo.url+'" target="_blank" rel="noopener">Abrir repositório</a>':'';runtimePanel.innerHTML='<div class="project-runtime-head"><div><span>Tecnologia web</span><strong>'+(d.framework||'Não identificado')+'</strong></div><button type="button" class="btn light" data-runtime-refresh>Atualizar inspeção</button></div><div class="project-runtime-grid"><div><span>Repositório de código</span><strong>'+(repo.present?'Forgejo · encontrado':'Não encontrado')+'</strong>'+repoLink+'</div><div><span>Último commit</span><strong>'+(repo.commit?repo.commit.slice(0,12):'—')+'</strong></div><div><span>Servidor web externo</span><strong>'+(external.label||'Não publicado')+'</strong>'+(external.url?'<a class="btn light" href="'+external.url+'" target="_blank" rel="noopener">Abrir site</a>':'')+'</div><div><span>Servidor web interno</span><strong>'+(d.server||'Não detectado')+'</strong></div><div><span>Containers inspecionados</span><strong>'+((data.containers||[]).length)+'</strong></div>'+values+'</div><div class="project-runtime-evidence">'+e.map(x=>'<code>'+x+'</code>').join('')+'</div><div class="project-runtime-selector"><label><span>Tecnologia homologada</span><select data-runtime-template><option value="">Selecionar</option><option value="node20">Node.js 20</option><option value="node22">Node.js 22</option><option value="node24">Node.js 24</option><option value="php83-apache">PHP 8.3 + Apache</option><option value="static-nginx">Site estático + Nginx</option><option value="remove-runtime">Remover runtime atual</option></select></label><button type="button" class="btn light" data-runtime-plan>Gerar plano</button></div><p class="project-runtime-note">O plano é somente leitura e não altera o container. Instalação, troca ou remoção exigem proposta no Forgejo, build validado e rollback.</p><div class="project-runtime-actions"><a class="btn light" href="/cloudiff/portal/?tab=capacidades">Ver catálogo homologado</a></div>';runtimePanel.querySelector('[data-runtime-refresh]').onclick=loadRuntime;const planButton=runtimePanel.querySelector('[data-runtime-plan]');if(planButton)planButton.onclick=async()=>{const template=(runtimePanel.querySelector('[data-runtime-template]')||{}).value||'';if(!template)return;planButton.disabled=true;planButton.textContent='Gerando…';try{const response=await fetch('/cloudiff/portal/api/project-runtime-plan?slug='+encodeURIComponent(slug)+'&template='+encodeURIComponent(template),{credentials:'same-origin'});const data=await response.json();if(!response.ok||!data.ok)throw new Error(data.error||'plan_failed');const p=data.plan||{};const files=(p.files||[]).map(x=>'<li><code>'+x+'</code></li>').join('');const checks=(p.validation||[]).map(x=>'<li>'+x+'</li>').join('');cloudifOpenSheet('Plano de tecnologia','<p><strong>'+p.operation+' '+p.technology+' '+p.version+'</strong></p><h3>Arquivos previstos</h3><ul>'+files+'</ul><h3>Validações</h3><ul>'+checks+'</ul><p><strong>Rollback:</strong> '+p.rollback+'</p><p>Nenhuma alteração foi aplicada. Próxima etapa: proposta no Forgejo.</p>')}catch(error){cloudifOpenSheet('Plano indisponível','<p>Não foi possível gerar o plano homologado.</p>')}finally{planButton.disabled=false;planButton.textContent='Gerar plano'}}}catch(error){runtimePanel.innerHTML='<div class="project-runtime-head"><div><span>Framework e runtime</span><strong>Falha na inspeção</strong></div><button type="button" class="btn light" data-runtime-refresh>Tentar novamente</button></div><p class="project-runtime-note">Não foi possível consultar o ambiente real deste projeto.</p>';runtimePanel.querySelector('[data-runtime-refresh]').onclick=loadRuntime}finally{runtimePanel.dataset.loading='0'}}const runtimeButton=runtimePanel&&runtimePanel.querySelector('[data-runtime-refresh]');if(runtimeButton)runtimeButton.onclick=loadRuntime;hint.addEventListener('click',()=>{if(card.classList.contains('is-open')&&runtimePanel&&!runtimePanel.dataset.loaded){runtimePanel.dataset.loaded='1';loadRuntime()}})});const identitySection=document.querySelector('#project-identities');if(identitySection)identitySection.remove();if(list&&projectCards.length){const current=list.dataset.currentUser||'';const groups=new Map();projectCards.forEach(card=>{const owner=card.dataset.projectOwner||'Sem usuário vinculado';if(!groups.has(owner)){const d=document.createElement('details');d.className='project-owner-group';d.open=owner===current;const summary=document.createElement('summary');summary.innerHTML='<span>'+(owner===current?'Meus projetos':'Projetos de '+owner)+'</span><small>0 projetos</small>';const body=document.createElement('div');body.className='project-owner-group-body';d.append(summary,body);groups.set(owner,{details:d,body,count:0,summary});}const group=groups.get(owner);group.body.appendChild(card);group.count++;group.summary.querySelector('small').textContent=group.count+' projeto'+(group.count===1?'':'s')});const wrap=document.createElement('div');wrap.className='project-owner-groups';groups.forEach(group=>wrap.appendChild(group.details));list.appendChild(wrap)}
 
  const bankMarker=document.createComment('cloudif-bank-tabs-v1');document.body.appendChild(bankMarker);
  if(new URLSearchParams(location.search).get('tab')==='bancos'){
@@ -4796,9 +4812,33 @@ if 'Portal' in globals() and not globals().get('_cpx_get_wrapped'):
             if not project:return _cpx_send_json(self,{'ok':False,'error':'project_not_authorized'},403)
             try:
                 result=_rd_agent('/komodo/project/runtime-inspect',{'project':slug,'public_numbers':project.get('public_numbers') or []},timeout=45)
+                repository=result.setdefault('repository',{})
+                repository['url']=project.get('repo_url') or ''
+                repository['provider']='Forgejo'
+                try:
+                    con=db();row=con.execute("SELECT stable_hostname,version_hostname FROM project_publications WHERE project_slug=? AND is_active=1 ORDER BY id DESC LIMIT 1",(slug,)).fetchone();con.close()
+                except Exception:
+                    row=None
+                host=((row['stable_hostname'] or row['version_hostname']) if row else '')
+                result['external_server']={'label':'Proxy HTTPS CloudIFF','url':('https://'+host) if host else ''}
             except Exception as exc:
                 return _cpx_send_json(self,{'ok':False,'error':'runtime_inspection_failed','detail':type(exc).__name__},502)
             return _cpx_send_json(self,result,200 if result.get('ok') else 502)
+        if path in ('/cloudiff/portal/api/project-runtime-plan','/api/project-runtime-plan'):
+            user=self.user();q=_cpx_parse.parse_qs(_cpx_parse.urlparse(self.path).query);slug=(q.get('slug') or [''])[0];template=(q.get('template') or [''])[0]
+            project=next((p for p in _cpx_allowed_projects(user) if p.get('slug')==slug),None)
+            if not project:return _cpx_send_json(self,{'ok':False,'error':'project_not_authorized'},403)
+            catalog={
+              'node20':{'technology':'Node.js','version':'20','operation':'instalar ou atualizar','files':['Dockerfile','package.json'],'validation':['node --version','npm --version','build do projeto'],'rollback':'reverter o commit da proposta Forgejo'},
+              'node22':{'technology':'Node.js','version':'22','operation':'instalar ou atualizar','files':['Dockerfile','package.json'],'validation':['node --version','npm --version','build do projeto'],'rollback':'reverter o commit da proposta Forgejo'},
+              'node24':{'technology':'Node.js','version':'24','operation':'instalar ou atualizar','files':['Dockerfile','package.json'],'validation':['node --version','npm --version','build do projeto','SBOM e scanner homologado'],'rollback':'reverter o commit da proposta Forgejo'},
+              'php83-apache':{'technology':'PHP + Apache','version':'8.3','operation':'instalar ou substituir','files':['Dockerfile','apache-vhost.conf','composer.json'],'validation':['php --version','apache2 -v','healthcheck HTTP'],'rollback':'reverter o commit da proposta Forgejo'},
+              'static-nginx':{'technology':'Site estático + Nginx','version':'estável homologada','operation':'instalar ou substituir','files':['Dockerfile','nginx.conf'],'validation':['nginx -v','nginx -t','healthcheck HTTP'],'rollback':'reverter o commit da proposta Forgejo'},
+              'remove-runtime':{'technology':'Runtime de aplicação','version':'—','operation':'remover','files':['Dockerfile','compose.yaml','manifesto do projeto'],'validation':['build limpo','healthcheck HTTP','ausência do binário removido'],'rollback':'reverter o commit da proposta Forgejo'},
+            }
+            selected=catalog.get(template)
+            if not selected:return _cpx_send_json(self,{'ok':False,'error':'template_not_allowed'},400)
+            return _cpx_send_json(self,{'ok':True,'side_effect_free':True,'project_slug':slug,'template':template,'plan':selected,'next_step':'criar proposta Forgejo para revisão e aprovação','applied':False,'secrets_exposed':False})
         if path in ('/cloudif/portal/action/open-container-shell','/action/open-container-shell'):
             user=self.user();q=_cpx_parse.parse_qs(_cpx_parse.urlparse(self.path).query);name=(q.get('container') or [''])[0]
             groups=set(user.get('groups') or [])

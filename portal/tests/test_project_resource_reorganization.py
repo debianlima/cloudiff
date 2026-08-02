@@ -53,7 +53,7 @@ class ProjectResourceReorganizationTest(unittest.TestCase):
         for label in ('Banco','Repositório','Komodo Publicação','Abrir site'):
             self.assertIn(label,self.source)
         self.assertIn('project-service-card',self.source)
-        self.assertIn('Alterar, instalar ou remover framework exige proposta transacional',self.source)
+        self.assertIn('Instalação, troca ou remoção exigem proposta no Forgejo',self.source)
 
 
 
@@ -65,13 +65,16 @@ class ProjectResourceReorganizationTest(unittest.TestCase):
     def test_runtime_inspection_uses_real_backend(self):
         self.assertIn('/api/project-runtime-inspection?slug=',self.source)
         self.assertIn('/komodo/project/runtime-inspect',self.source)
-        for label in ('Repositório','Commit','Servidor web','Containers inspecionados'):
+        for label in ('Repositório de código','Último commit','Servidor web externo','Servidor web interno','Containers inspecionados'):
             self.assertIn(label,self.source)
-        self.assertIn('Alterar, instalar ou remover framework exige proposta transacional',self.source)
+        self.assertIn('Instalação, troca ou remoção exigem proposta no Forgejo',self.source)
 
 
 
 class ActiveProjectRendererContractTest(unittest.TestCase):
+    def setUp(self):
+        self.source=(Path(__file__).resolve().parents[2]/"components/control-plane/current-apps/portal-current/cloudif-admin-portal.py").read_text()
+
     def test_active_renderer_contains_owner_metadata_and_neutral_tenant_copy(self):
         source=(Path(__file__).resolve().parents[2]/"components/control-plane/current-apps/portal-current/cloudif-admin-portal.py").read_text()
         list_pos=source.find('<div id="cloudif-project-list"')
@@ -82,6 +85,26 @@ class ActiveProjectRendererContractTest(unittest.TestCase):
         self.assertIn('data-current-user=',block)
         self.assertIn('Nenhum tenant vinculado',block)
         self.assertNotIn('Sem banco: somente Git/Komodo',block)
+
+
+
+    def test_repository_and_servers_are_explicit(self):
+        for label in ('Repositório de código','Forgejo · encontrado','Abrir repositório','Último commit','Servidor web externo','Servidor web interno','Tecnologia web'):
+            self.assertIn(label,self.source)
+        self.assertIn('data-runtime-template',self.source)
+        self.assertIn('Gerar plano',self.source)
+        self.assertIn('/api/project-runtime-plan?slug=',self.source)
+        self.assertIn("'side_effect_free':True",self.source)
+        self.assertIn('Nenhuma alteração foi aplicada. Próxima etapa: proposta no Forgejo.',self.source)
+
+    def test_owner_rule_matches_publication_grouping(self):
+        self.assertIn('def _project_effective_owner',self.source)
+        self.assertIn('project.get("owner") or project.get("created_by")',self.source)
+        self.assertIn('FROM project_publications WHERE project_slug=? AND is_active=1',self.source)
+        self.assertIn('data-project-owner=',self.source)
+
+    def test_project_heading_is_management(self):
+        self.assertIn('<h2>Gestão de projetos</h2>',self.source)
 
 
 if __name__=='__main__':unittest.main()
