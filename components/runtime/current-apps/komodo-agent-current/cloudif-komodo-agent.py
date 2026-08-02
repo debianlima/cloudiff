@@ -3129,7 +3129,25 @@ networks:
     if "cloudif-publications" not in content:
         return send(handler, 422, {"ok": False, "error": "publication_network_missing"})
     base_stack, base_stack_id, _ = _cloudif_v131_get_stack(project=project)
+    if not base_stack:
+        stacks_result = _cloudif_v131_core_call("read", "ListStacks", {})
+        expected_names = {project, f"cloudif-{project}"}
+        expected_repo = f"cloudif/{project}"
+        base_stack = next((item for item in _cloudif_v131_list_items(stacks_result.get("data"))
+                           if isinstance(item, dict) and (
+                               item.get("name") in expected_names
+                               or ((item.get("info") or {}).get("repo") == expected_repo)
+                               or ((item.get("config") or {}).get("repo") == expected_repo)
+                           )), {})
+        base_stack_id = _cloudif_v131_oid(base_stack)
     server_id = ((base_stack.get("info") or {}).get("server_id") or (base_stack.get("config") or {}).get("server_id") or "")
+    if not server_id:
+        servers_result = _cloudif_v131_core_call("read", "ListServers", {})
+        servers = [item for item in _cloudif_v131_list_items(servers_result.get("data")) if isinstance(item, dict)]
+        preferred = next((item for item in servers if item.get("name") == "Local"), None)
+        if preferred is None:
+            preferred = next((item for item in servers if (item.get("info") or {}).get("state") == "Ok"), None)
+        server_id = _cloudif_v131_oid(preferred or {})
     if not server_id:
         return send(handler, 422, {"ok": False, "error": "server_id_missing"})
     name = f"cloudif-p{public_number}-d{deploy_number}"
