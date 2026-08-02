@@ -164,3 +164,6 @@
 .network-row b{text-align:right;font-family:var(--data);font-size:11px;color:var(--ink);white-space:nowrap}
 @media(max-width:760px){.sites-grid,.server-grid{grid-template-columns:1fr}}
 @media(max-width:430px){.network-row{grid-template-columns:1fr 70px}.network-track{grid-column:1/-1;grid-row:2}.network-row b{grid-column:2;grid-row:1}.network-key{grid-column:1;grid-row:1}}
+
+.publication-single{display:block}
+.publication-single>.publication-project{margin:0}

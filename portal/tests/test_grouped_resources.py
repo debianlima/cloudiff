@@ -60,3 +60,24 @@ class IndividualPublicationTest(unittest.TestCase):
         self.assertIn('value="beta"', output)
         self.assertIn('<p>before</p>', output)
         self.assertIn('<p>after</p>', output)
+
+
+class IndividualPublicationPresentationTest(unittest.TestCase):
+    def test_individual_manager_returns_only_selected_card(self):
+        from portal.core.legacy_shell import individual_publication_body
+        body = (
+            '<section class="publication-shell">'
+            '<div class="page-hero"><span>Meus Projetos</span><h1>Publicação</h1></div>'
+            '<div class="publication-summary card"><strong>Fila</strong><span>Em execução</span></div>'
+            '<article class="publication-project card"><input name="slug" value="alpha"><h2>Alpha</h2></article>'
+            '<article class="publication-project card"><input name="slug" value="beta"><h2>Beta</h2></article>'
+            '</section>'
+        )
+        output = individual_publication_body(body, "beta")
+        self.assertIn('value="beta"', output)
+        self.assertNotIn('value="alpha"', output)
+        self.assertNotIn('Meus Projetos', output)
+        self.assertNotIn('publication-summary', output)
+        self.assertNotIn('owner-resource-group', output)
+        self.assertNotIn('Em execução', output)
+        self.assertIn('class="publication-single"', output)

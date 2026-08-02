@@ -274,13 +274,30 @@ def filter_publication_project(body: str, selected_project: str) -> str:
     return body[:spans[0][0]] + selected[0][2] + body[spans[-1][1]:]
 
 
+def individual_publication_body(body: str, selected_project: str) -> str:
+    """Return only the selected publication card for the individual manager."""
+    if not selected_project:
+        return body
+    for _start, _end, card in _card_spans(body, "publication-project"):
+        if re.search(
+            r'<input\b[^>]*name=["\']slug["\'][^>]*value=["\']'
+            + re.escape(selected_project)
+            + r'["\']',
+            card,
+            re.I,
+        ):
+            return f'<section class="publication-single">{card}</section>'
+    return body
+
+
 def group_resources_by_user(body: str, tab: str, identity: Identity, selected_project: str = "") -> str:
     """Group only general publication/database screens; the overview is untouched."""
     if tab not in {"publicacao", "bancos"}:
         return body
     project_owners, tenant_owners = _resource_ownership()
     if tab == "publicacao":
-        body = filter_publication_project(body, selected_project)
+        if selected_project:
+            return individual_publication_body(body, selected_project)
         slugs = sorted(project_owners, key=len, reverse=True)
         def publication_owner(card: str) -> str:
             slug = next((item for item in slugs if item in card), "")
