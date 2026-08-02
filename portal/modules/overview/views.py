@@ -85,9 +85,9 @@ def overview_body(data: dict) -> str:
         f'<h2>Olá, {username}.</h2><p>Aqui você encontra o que está publicando, os bancos ligados aos seus projetos e os caminhos mais usados para continuar seu trabalho.</p></div>'
         f'<div class="welcome-actions"><a class="btn" href="{BASE}/?tab=projetos">Continuar um projeto</a><a class="btn btn-quiet" href="{BASE}/?tab=ajuda">Primeiros passos</a></div></section>'
         '<section class="resource-section" aria-labelledby="my-sites-title"><div class="resource-section-head"><div><p class="ov-eyebrow">Publicações</p><h2 id="my-sites-title">Meus sites</h2><p>Sites que estão disponíveis na internet a partir dos seus projetos.</p></div>'
-        f'<a href="{BASE}/?tab=publicacao">Ver publicações</a></div><div class="resource-grid">{sites}</div></section>'
+        f'<a href="{BASE}/?tab=publicacao">Ver todas as publicações</a></div><div class="resource-grid">{sites}</div></section>'
         '<section class="resource-section" aria-labelledby="my-databases-title"><div class="resource-section-head"><div><p class="ov-eyebrow">Dados</p><h2 id="my-databases-title">Meus bancos</h2><p>Ambientes de dados que você pode usar nos seus projetos.</p></div>'
-        f'<a href="{BASE}/?tab=bancos">Gerenciar bancos</a></div><div class="resource-grid">{databases}</div>{others}</section>'
+        f'<a href="{BASE}/?tab=bancos">Gerenciar todos os bancos</a></div><div class="resource-grid">{databases}</div>{others}</section>'
         '<section class="resource-section platform-health" aria-labelledby="platform-title"><div class="resource-section-head"><div><p class="ov-eyebrow">Plataforma</p><h2 id="platform-title">Saúde da plataforma</h2>'
         f'<p>{metrics["online_count"]} de {metrics["node_count"]} servidores com coleta recente.</p></div><a href="{BASE}/?tab=monitor-saude">Abrir monitoramento</a></div><div class="resource-grid server-grid">{servers}</div></section>'
     )

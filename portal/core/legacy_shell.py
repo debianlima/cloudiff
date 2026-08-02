@@ -9,6 +9,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from html import unescape
 import re
+import os
+import sqlite3
+from collections import OrderedDict
+from html import escape
 
 from portal.core.auth import Identity
 from portal.ui.shell import render_legacy
@@ -136,13 +140,116 @@ def parse_legacy(markup: str, tab: str) -> LegacyPage:
     )
 
 
+
+_PORTAL_DB = os.environ.get("CLOUDIF_PORTAL_DB", "/var/lib/cloudif/portal/cloudif-portal.db")
+_PUBLICATION_CARD = re.compile(r'<article\b[^>]*class=["\'][^"\']*\bpublication-project\b[^"\']*["\'][^>]*>.*?</article>', re.I | re.S)
+_DATABASE_CARD = re.compile(r'<article\b[^>]*class=["\'][^"\']*\bdb96-card\b[^"\']*["\'][^>]*>.*?</article>', re.I | re.S)
+
+
+def _readonly_connection() -> sqlite3.Connection:
+    con = sqlite3.connect(f"file:{_PORTAL_DB}?mode=ro", uri=True)
+    con.row_factory = sqlite3.Row
+    return con
+
+
+def _resource_ownership() -> tuple[dict[str, str], dict[str, str]]:
+    """Return deterministic project and tenant owners without inventing links."""
+    projects: dict[str, str] = {}
+    tenant_candidates: dict[str, list[str]] = {}
+    try:
+        con = _readonly_connection()
+        for row in con.execute("SELECT slug, owner, created_by, tenant FROM projects"):
+            owner = (row["owner"] or row["created_by"] or "").strip()
+            if owner:
+                projects[row["slug"]] = owner
+                tenant = (row["tenant"] or "").strip()
+                if tenant:
+                    tenant_candidates.setdefault(tenant, []).append(owner)
+        for row in con.execute(
+            """SELECT pt.tenant, p.owner, p.created_by
+               FROM project_tenants pt LEFT JOIN projects p ON p.slug=pt.project"""
+        ):
+            owner = (row["owner"] or row["created_by"] or "").strip()
+            tenant = (row["tenant"] or "").strip()
+            if owner and tenant:
+                tenant_candidates.setdefault(tenant, []).append(owner)
+        for row in con.execute(
+            "SELECT tenant, subject FROM tenant_acl WHERE subject_type='user'"
+        ):
+            tenant = (row["tenant"] or "").strip()
+            subject = (row["subject"] or "").strip()
+            if tenant and subject:
+                tenant_candidates.setdefault(tenant, []).append(subject)
+        con.close()
+    except Exception:
+        return projects, {}
+    tenants: dict[str, str] = {}
+    for tenant, candidates in tenant_candidates.items():
+        unique = list(OrderedDict.fromkeys(item for item in candidates if item))
+        if len(unique) == 1:
+            tenants[tenant] = unique[0]
+        elif unique:
+            # Prefer a project owner over extra ACL users; the first candidate is
+            # always sourced from projects/project_tenants when available.
+            tenants[tenant] = unique[0]
+    return projects, tenants
+
+
+def _group_label(owner: str, current_user: str) -> str:
+    if owner == current_user:
+        return f"{owner} · você"
+    return owner or "Sem usuário vinculado"
+
+
+def _group_cards(body: str, pattern: re.Pattern[str], owner_for_card, current_user: str, kind: str) -> str:
+    matches = list(pattern.finditer(body))
+    if not matches:
+        return body
+    grouped: "OrderedDict[str, list[str]]" = OrderedDict()
+    for match in matches:
+        card = match.group(0)
+        owner = (owner_for_card(card) or "").strip()
+        grouped.setdefault(owner, []).append(card)
+    blocks: list[str] = []
+    ordered = sorted(grouped.items(), key=lambda item: (item[0] != current_user, (item[0] or "~").lower()))
+    for owner, cards in ordered:
+        opened = " open" if owner == current_user else ""
+        label = escape(_group_label(owner, current_user))
+        count = len(cards)
+        noun = kind if count == 1 else ("publicações" if kind == "publicação" else "bancos")
+        blocks.append(
+            f'<details class="owner-resource-group"{opened}>'
+            f'<summary><span>{label}</span><span class="owner-resource-count">{count} {noun}</span></summary>'
+            f'<div class="owner-resource-items">{"".join(cards)}</div></details>'
+        )
+    return body[: matches[0].start()] + '<div class="owner-resource-groups">' + "".join(blocks) + '</div>' + body[matches[-1].end() :]
+
+
+def group_resources_by_user(body: str, tab: str, identity: Identity) -> str:
+    """Group only general publication/database screens; the overview is untouched."""
+    if tab not in {"publicacao", "bancos"}:
+        return body
+    project_owners, tenant_owners = _resource_ownership()
+    if tab == "publicacao":
+        slugs = sorted(project_owners, key=len, reverse=True)
+        def publication_owner(card: str) -> str:
+            slug = next((item for item in slugs if item in card), "")
+            return project_owners.get(slug, "")
+        return _group_cards(body, _PUBLICATION_CARD, publication_owner, identity.username, "publicação")
+
+    def database_owner(card: str) -> str:
+        match = re.search(r'<article\b[^>]*\bid=["\']([^"\']+)', card, re.I)
+        tenant = unescape(match.group(1)) if match else ""
+        return tenant_owners.get(tenant, "")
+    return _group_cards(body, _DATABASE_CARD, database_owner, identity.username, "banco")
+
 def transform(markup: str, identity: Identity, tab: str) -> str:
     page = parse_legacy(markup, tab)
     return render_legacy(
         identity=identity,
         active_tab=page.tab,
         title=page.title,
-        body=page.body,
+        body=group_resources_by_user(page.body, page.tab, identity),
         legacy_head=page.scoped_styles,
         legacy_scripts=page.scripts,
     )
