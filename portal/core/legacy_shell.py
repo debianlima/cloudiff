@@ -274,6 +274,25 @@ def filter_publication_project(body: str, selected_project: str) -> str:
     return body[:spans[0][0]] + selected[0][2] + body[spans[-1][1]:]
 
 
+def _balanced_element_by_class(markup: str, tag_name: str, class_token: str) -> str:
+    opening = re.compile(
+        rf'<{tag_name}\b[^>]*class=["\'][^"\']*\b{re.escape(class_token)}\b[^"\']*["\'][^>]*>', re.I
+    )
+    start = opening.search(markup)
+    if not start:
+        return ""
+    tags = re.compile(rf'</?{tag_name}\b[^>]*>', re.I)
+    depth = 0
+    for tag in tags.finditer(markup, start.start()):
+        if tag.group(0).lower().startswith(f'</{tag_name}'):
+            depth -= 1
+            if depth == 0:
+                return markup[start.start():tag.end()]
+        else:
+            depth += 1
+    return ""
+
+
 def individual_publication_body(body: str, selected_project: str) -> str:
     """Return only the selected publication card for the individual manager."""
     if not selected_project:
@@ -286,6 +305,15 @@ def individual_publication_body(body: str, selected_project: str) -> str:
             card,
             re.I,
         ):
+            resource = _balanced_element_by_class(card, "div", "cm-resource")
+            heading = re.search(r'<h2[^>]*>(.*?)</h2>', card, re.S | re.I)
+            title = heading.group(1) if heading else escape(selected_project)
+            if resource:
+                return (
+                    '<section class="publication-single"><article class="publication-project card publication-manager">'
+                    f'<div class="publication-manager-head"><div><p>Gerenciar site</p><h2>{title}</h2></div></div>{resource}'
+                    '</article></section>'
+                )
             return f'<section class="publication-single">{card}</section>'
     return body
 

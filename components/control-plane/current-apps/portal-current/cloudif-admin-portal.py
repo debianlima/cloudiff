@@ -4205,7 +4205,10 @@ if "Portal" in globals() and not hasattr(Portal, "_cloudif_pub_previous_do_POST"
                     msg=f"Publicação enfileirada. Job {result['job_id']}."
                 elif op=="set_alias":
                     result=publications.set_alias(slug,val("alias"),user)
-                    msg=f"Alias {result['hostname']} configurado."
+                    msg=f"Endereço {result['hostname']} salvo."
+                elif op=="acknowledge_job":
+                    result=publications.acknowledge_job(slug,int(val("job_id","0")),user)
+                    msg="Confirmação fechada."
                 elif op=="activate_version":
                     result=publications.activate(slug,int(val("deploy_number","0")),user)
                     msg=f"Publicação d{result['deploy_number']} ativada manualmente."

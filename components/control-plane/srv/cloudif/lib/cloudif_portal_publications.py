@@ -59,6 +59,8 @@ CREATE TABLE IF NOT EXISTS publication_jobs(
 CREATE INDEX IF NOT EXISTS idx_publication_jobs_project ON publication_jobs(project_slug,id DESC);
 CREATE TABLE IF NOT EXISTS project_publication_aliases(
  alias TEXT PRIMARY KEY,project_slug TEXT NOT NULL UNIQUE,created_by TEXT NOT NULL,created_at TEXT NOT NULL,updated_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS publication_job_acknowledgements(
+ job_id INTEGER PRIMARY KEY,actor TEXT NOT NULL,acknowledged_at TEXT NOT NULL);
 ''')
 
 def _number(con,slug):
@@ -177,8 +179,20 @@ def enqueue_publish(slug,user):
 
 def latest_job(slug):
     con=sqlite3.connect(DB);con.row_factory=sqlite3.Row;_ensure_schema(con)
-    row=con.execute('select * from publication_jobs where project_slug=? order by id desc limit 1',(slug,)).fetchone();con.close()
+    row=con.execute("""select j.* from publication_jobs j
+        left join publication_job_acknowledgements a on a.job_id=j.id
+        where j.project_slug=? and a.job_id is null order by j.id desc limit 1""",(slug,)).fetchone();con.close()
     return dict(row) if row else None
+
+def acknowledge_job(slug,job_id,user):
+    con=sqlite3.connect(DB);con.row_factory=sqlite3.Row;_ensure_schema(con)
+    project=_project_allowed(con,slug,user)
+    if not project:con.close();raise PermissionError('Projeto não encontrado ou sem permissão.')
+    job=con.execute('select id,status from publication_jobs where id=? and project_slug=?',(int(job_id),slug)).fetchone()
+    if not job:con.close();raise ValueError('Publicação não encontrada.')
+    if job['status'] not in ('succeeded','failed'):con.close();raise ValueError('A publicação ainda está em andamento.')
+    con.execute('insert or replace into publication_job_acknowledgements(job_id,actor,acknowledged_at) values(?,?,?)',(int(job_id),user.get('username') or 'portal',_now()))
+    con.commit();con.close();return {'ok':True,'job_id':int(job_id)}
 
 def claim_next_job():
     con=sqlite3.connect(DB,timeout=30);con.row_factory=sqlite3.Row;_ensure_schema(con)

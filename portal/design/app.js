@@ -52,6 +52,24 @@
     source.insertBefore(container,source.firstChild);
   }
   groupDatabaseCards();
+  document.querySelectorAll('[data-alias-edit]').forEach(function(button){
+    button.addEventListener('click',function(){
+      var box=button.closest('.publication-alias');
+      var form=box&&box.querySelector('.publication-alias-form');
+      var view=box&&box.querySelector('.publication-alias-view');
+      if(form){form.hidden=false;}
+      if(view){view.hidden=true;}
+    });
+  });
+  document.querySelectorAll('[data-alias-cancel]').forEach(function(button){
+    button.addEventListener('click',function(){
+      var box=button.closest('.publication-alias');
+      var form=box&&box.querySelector('.publication-alias-form');
+      var view=box&&box.querySelector('.publication-alias-view');
+      if(form){form.hidden=true;}
+      if(view){view.hidden=false;}
+    });
+  });
   document.querySelectorAll('form[action$="/action/publication"]').forEach(function(form){
     form.addEventListener('submit',function(event){
       var button=event.submitter||form.querySelector('button[type="submit"],button:not([type])');

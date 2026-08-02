@@ -133,12 +133,19 @@ def academic_resources(identity) -> dict:
                    ORDER BY id DESC LIMIT 1""",
                 (project["slug"],),
             ).fetchone()
+            alias_row = con.execute(
+                "SELECT alias FROM project_publication_aliases WHERE project_slug=?",
+                (project["slug"],),
+            ).fetchone()
+            alias = alias_row["alias"] if alias_row else None
             sites.append({
                 "project_slug": project["slug"],
                 "name": project["name"] or project["slug"],
                 "owner": project["owner"],
                 "project_status": project["status"],
-                "stable_hostname": publication["stable_hostname"] if publication else None,
+                "stable_hostname": ((alias + ".cloudiff.duckdns.org") if alias else publication["stable_hostname"]) if publication else None,
+                "numeric_hostname": publication["stable_hostname"] if publication else None,
+                "alias": alias,
                 "version_hostname": publication["version_hostname"] if publication else None,
                 "status": publication["status"] if publication else None,
                 "published_at": publication["published_at"] if publication else None,
