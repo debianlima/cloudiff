@@ -5,6 +5,7 @@ import unittest
 
 from portal.core.auth import Identity
 from portal.core.legacy_shell import parse_legacy, scope_css, transform
+from portal.ui import shell
 
 
 LEGACY = """<!doctype html><html><head><title>Projetos</title>
@@ -44,13 +45,10 @@ class LegacyShellTest(unittest.TestCase):
         self.assertNotIn(">Administração<", doc)
         self.assertIn('aria-current="page">Todos os projetos</a>', doc)
 
-    def test_admin_receives_all_canonical_tabs(self):
+    def test_admin_receives_global_entities_only(self):
         doc = transform(LEGACY, self.admin, "admin-usuarios")
         expected = {
-            "resumo", "projetos", "opcoes-projeto", "capacidades", "aprovacoes",
-            "bancos", "publicacao", "git", "monitor-promocoes", "operacao-producao",
-            "monitor-saude", "monitor-transacoes", "monitor-filas", "monitor-telemetria",
-            "reconciliacao", "agentes", "gestao-agentes", "documentacao-mcp",
+            "resumo", "projetos", "bancos", "monitor-saude",
             "admin-usuarios", "admin-politicas", "admin-identidades", "admin-configuracoes",
             "admin-auditoria", "admin-manutencao", "ajuda", "ajuda-token", "ajuda-conectar",
             "ajuda-aprovacoes", "ajuda-ferramentas",
@@ -58,6 +56,14 @@ class LegacyShellTest(unittest.TestCase):
         actual = set(re.findall(r"\?tab=([a-z0-9-]+)", doc))
         self.assertEqual(expected, actual)
         self.assertIn('aria-current="page">Usuários</a>', doc)
+
+    def test_context_route_receives_all_project_tools(self):
+        doc = transform(LEGACY, self.admin, "aprovacoes")
+        expected = {tab for entries in shell._PROJECT_NAV.values() for tab, _label in entries}
+        actual = set(re.findall(r"\?tab=([a-z0-9-]+)", doc))
+        self.assertTrue(expected.issubset(actual))
+        self.assertIn('aria-label="Navegação do projeto"', doc)
+
 
     def test_old_shell_is_not_embedded(self):
         doc = transform(LEGACY, self.admin, "projetos")

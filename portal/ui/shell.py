@@ -21,26 +21,7 @@ _FOOTER = (
 _TAB_GROUPS: "OrderedDict[str, tuple[tuple[str, str], ...]]" = OrderedDict(
     (
         ("Painel", (("resumo", "Visão geral"),)),
-        (
-            "Projetos",
-            (
-                ("projetos", "Todos os projetos"),
-                ("opcoes-projeto", "Recursos"),
-                ("capacidades", "Ferramentas do projeto"),
-                ("aprovacoes", "Aprovações"),
-                ("publicacao", "Publicação"),
-                ("git", "Código e infraestrutura"),
-                ("monitor-promocoes", "Histórico"),
-                ("operacao-producao", "Produção"),
-                ("monitor-transacoes", "Atividades"),
-                ("monitor-filas", "Filas"),
-                ("monitor-telemetria", "Métricas"),
-                ("reconciliacao", "Reconciliação"),
-                ("agentes", "Conectar IA"),
-                ("gestao-agentes", "Agentes"),
-                ("documentacao-mcp", "MCP"),
-            ),
-        ),
+        ("Projetos", (("projetos", "Todos os projetos"),)),
         ("Dados", (("bancos", "Bancos e tenants"),)),
         ("Ferramentas", (("monitor-saude", "Saúde da plataforma"),)),
         ("Administração", (("admin-usuarios", "Usuários"), ("admin-politicas", "Acessos"), ("admin-identidades", "Identidades"), ("admin-configuracoes", "Configurações"), ("admin-auditoria", "Auditoria"), ("admin-manutencao", "Manutenção"))),
@@ -48,7 +29,36 @@ _TAB_GROUPS: "OrderedDict[str, tuple[tuple[str, str], ...]]" = OrderedDict(
     )
 )
 
+_PROJECT_NAV: "OrderedDict[str, tuple[tuple[str, str], ...]]" = OrderedDict(
+    (
+        ("Construir", (("opcoes-projeto", "Recursos"), ("git", "Código"), ("capacidades", "Ferramentas"))),
+        ("Entregar", (("aprovacoes", "Aprovações"), ("publicacao", "Publicação"), ("monitor-promocoes", "Histórico"))),
+        ("Operar", (("operacao-producao", "Produção"), ("monitor-transacoes", "Atividades"), ("monitor-filas", "Filas"), ("monitor-telemetria", "Métricas"), ("reconciliacao", "Reconciliação"))),
+        ("Automatizar", (("agentes", "Conectar IA"), ("gestao-agentes", "Agentes"), ("documentacao-mcp", "MCP"))),
+    )
+)
+
+_PROJECT_TABS = {tab for entries in _PROJECT_NAV.values() for tab, _label in entries}
+_PROJECT_DESCRIPTIONS = {
+    "opcoes-projeto": "Serviços, conectores, containers e recursos associados aos projetos.",
+    "git": "Repositórios Forge, integrações e infraestrutura vinculada aos projetos.",
+    "capacidades": "Frameworks, capacidades detectadas e ferramentas disponíveis por projeto.",
+    "aprovacoes": "Decisões humanas e autorizações pendentes para ações dos projetos.",
+    "publicacao": "Versões publicadas, endereço ativo e ativação do site.",
+    "monitor-promocoes": "Histórico de promoções, ativações e reversões dos projetos.",
+    "operacao-producao": "Operações controladas de produção vinculadas aos projetos autorizados.",
+    "monitor-transacoes": "Atividades e transações recentes executadas pelos projetos.",
+    "monitor-filas": "Processamento assíncrono, filas e tentativas relacionadas aos projetos.",
+    "monitor-telemetria": "Métricas e sinais operacionais consolidados por projeto.",
+    "reconciliacao": "Estado desejado, tarefas e reconciliação assíncrona dos projetos.",
+    "agentes": "Configuração para conectar ferramentas de IA aos projetos.",
+    "gestao-agentes": "Agentes, identidades e estado de automação por projeto.",
+    "documentacao-mcp": "Recursos, ferramentas e documentação MCP do ambiente de projetos.",
+}
+
+
 _TAB_TITLES = {tab: label for entries in _TAB_GROUPS.values() for tab, label in entries}
+_TAB_TITLES.update({tab: label for entries in _PROJECT_NAV.values() for tab, label in entries})
 
 _MODULE_TO_TAB = {
     "overview": "resumo",
@@ -99,11 +109,31 @@ def _navigation(identity: Identity, active_tab: str, allowed_modules: set[str] |
     return "".join(output)
 
 
+def _project_navigation(active_tab: str) -> str:
+    groups=[]
+    for section,entries in _PROJECT_NAV.items():
+        links=[]
+        for tab,label in entries:
+            current=' aria-current="page"' if tab==active_tab else ''
+            links.append(f'<a href="/cloudiff/portal/?tab={escape(tab)}"{current}>{escape(label)}</a>')
+        groups.append(
+            f'<div class="project-context-group"><span>{escape(section)}</span><div>{"".join(links)}</div></div>'
+        )
+    return '<nav class="project-context-nav" aria-label="Navegação do projeto">'+''.join(groups)+'</nav>'
+
+
 def _document(identity: Identity, active_tab: str, title: str, body: str, *, extra_head: str = "", tail: str = "", allowed_modules: set[str] | None = None) -> str:
     initials = escape((identity.username[:2] or "u").upper())
     friendly_group, canonical_group = _primary_group(identity)
     group = escape(friendly_group)
     group_id = escape(canonical_group)
+    contextual = active_tab in _PROJECT_TABS
+    body_class = f'tab-{escape(active_tab)}' + (' project-context-route' if contextual else '')
+    description = (
+        f'<p class="page-description">{escape(_PROJECT_DESCRIPTIONS.get(active_tab, ""))}</p>'
+        if contextual else ''
+    )
+    project_nav = _project_navigation(active_tab) if contextual and active_tab != "publicacao" else ''
     return (
         '<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">'
         '<meta name="viewport" content="width=device-width,initial-scale=1">'
@@ -112,7 +142,7 @@ def _document(identity: Identity, active_tab: str, title: str, body: str, *, ext
         '<link rel="stylesheet" href="/cloudiff/portal/assets/base.css">'
         '<link rel="stylesheet" href="/cloudiff/portal/assets/components.css">'
         '<script src="/cloudiff/portal/assets/app.js" defer></script>'
-        '</head><body><a class="skip-link" href="#conteudo-principal">Ir para o conteúdo</a><div class="app">'
+        f'</head><body class="{body_class}"><a class="skip-link" href="#conteudo-principal">Ir para o conteúdo</a><div class="app">'
         '<nav class="nav" id="nav" aria-label="Navegação principal">'
         '<div class="nav-brand"><span class="nav-mark">CI</span>'
         '<span><span class="nav-brand-name">CloudIFF</span>'
@@ -131,7 +161,8 @@ def _document(identity: Identity, active_tab: str, title: str, body: str, *, ext
         '<a href="/outpost.goauthentik.io/sign_out">Sair da plataforma</a></div></details>'
         '</header>'
         f'<main class="page" id="conteudo-principal"><div class="page-head"><p class="eyebrow">{group}</p>'
-        f'<h1 class="page-title">{escape(title)}</h1></div>{body}</main>'
+        f'<h1 class="page-title">{escape(title)}</h1>{description}</div>'
+        f'{project_nav}{body}</main>'
         f'<footer class="page-footer">{escape(_FOOTER)}</footer></div></div>{tail}</body></html>'
     )
 
@@ -145,5 +176,6 @@ def render(identity: Identity, nav_modules: list[str], active: str, title: str, 
 def render_legacy(identity: Identity, active_tab: str, title: str, body: str, legacy_head: str, legacy_scripts: str) -> str:
     """Render a legacy page body without its old header/navigation."""
     page_title = _TAB_TITLES.get(active_tab, title)
-    wrapped = f'<section class="legacy-content" data-legacy-tab="{escape(active_tab)}">{body}</section>'
+    contextual = " project-context-content" if active_tab in _PROJECT_TABS and active_tab != "publicacao" else ""
+    wrapped = f'<section class="legacy-content{contextual}" data-legacy-tab="{escape(active_tab)}">{body}</section>'
     return _document(identity, active_tab, page_title, wrapped, extra_head=legacy_head, tail=legacy_scripts)

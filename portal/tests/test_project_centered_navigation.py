@@ -12,45 +12,34 @@ class ProjectCenteredNavigationTest(unittest.TestCase):
             groups=frozenset({"CloudIF-Tenants"}),
         )
 
-    def test_project_capabilities_live_under_projects(self):
-        project_tabs = dict(shell._TAB_GROUPS["Projetos"])
-        expected = {
-            "projetos",
-            "opcoes-projeto",
-            "capacidades",
-            "aprovacoes",
-            "publicacao",
-            "git",
-            "monitor-promocoes",
-            "operacao-producao",
-            "monitor-transacoes",
-            "monitor-filas",
-            "monitor-telemetria",
-            "reconciliacao",
-            "agentes",
-            "gestao-agentes",
-            "documentacao-mcp",
-        }
-        self.assertEqual(set(project_tabs), expected)
-        self.assertEqual(project_tabs["projetos"], "Todos os projetos")
-        self.assertEqual(project_tabs["capacidades"], "Ferramentas do projeto")
-
-    def test_only_database_and_platform_health_remain_separate(self):
+    def test_global_navigation_contains_entities_only(self):
+        self.assertEqual(shell._TAB_GROUPS["Projetos"], (("projetos", "Todos os projetos"),))
         self.assertEqual(shell._TAB_GROUPS["Dados"], (("bancos", "Bancos e tenants"),))
-        self.assertEqual(
-            shell._TAB_GROUPS["Ferramentas"],
-            (("monitor-saude", "Saúde da plataforma"),),
-        )
-        self.assertNotIn("Entrega", shell._TAB_GROUPS)
-        self.assertNotIn("Operação", shell._TAB_GROUPS)
-        self.assertNotIn("IA e automação", shell._TAB_GROUPS)
+        self.assertEqual(shell._TAB_GROUPS["Ferramentas"], (("monitor-saude", "Saúde da plataforma"),))
+        global_tabs={tab for entries in shell._TAB_GROUPS.values() for tab,_ in entries}
+        self.assertNotIn("aprovacoes",global_tabs)
+        self.assertNotIn("documentacao-mcp",global_tabs)
+        self.assertNotIn("monitor-telemetria",global_tabs)
 
-    def test_navigation_keeps_routes_and_opens_active_project_group(self):
-        markup = shell._navigation(self.identity, "aprovacoes")
-        self.assertIn('<summary class="nav-group-label">Projetos</summary>', markup)
-        self.assertIn('href="/cloudiff/portal/?tab=aprovacoes" aria-current="page"', markup)
-        project_group = markup.split('<summary class="nav-group-label">Projetos</summary>', 1)[0]
-        self.assertTrue(project_group.endswith('<details class="nav-group" open>'))
+    def test_project_navigation_is_grouped_by_user_goal(self):
+        self.assertEqual(tuple(shell._PROJECT_NAV), ("Construir","Entregar","Operar","Automatizar"))
+        project_tabs={tab for entries in shell._PROJECT_NAV.values() for tab,_ in entries}
+        self.assertIn("git",project_tabs)
+        self.assertIn("publicacao",project_tabs)
+        self.assertIn("aprovacoes",project_tabs)
+        self.assertIn("documentacao-mcp",project_tabs)
+
+    def test_context_navigation_marks_active_route(self):
+        markup=shell._project_navigation("aprovacoes")
+        self.assertIn('aria-label="Navegação do projeto"',markup)
+        self.assertIn('href="/cloudiff/portal/?tab=aprovacoes" aria-current="page"',markup)
+        self.assertIn("Construir",markup)
+        self.assertIn("Automatizar",markup)
+
+    def test_frozen_publication_does_not_receive_context_navigation(self):
+        doc=shell.render_legacy(self.identity,"publicacao","Publicação","<p>conteúdo</p>","","")
+        self.assertNotIn('aria-label="Navegação do projeto"',doc)
+        self.assertIn('data-legacy-tab="publicacao"',doc)
 
 
 if __name__ == "__main__":

@@ -205,3 +205,21 @@
 @media(max-width:900px){.publication-information{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:520px){.publication-information{grid-template-columns:1fr}}
 .publication-database-link{font-weight:700;text-decoration-thickness:1px;text-underline-offset:3px}
+.page-description{max-width:760px;margin:8px 0 0;color:var(--ink-3);font-size:14px;line-height:1.55}
+.project-context-nav{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:0 0 24px;padding:14px;border:1px solid var(--rule);border-radius:var(--r-lg);background:var(--paper)}
+.project-context-group{display:grid;align-content:start;gap:8px;min-width:0}
+.project-context-group>span{font-size:10px;font-weight:750;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3)}
+.project-context-group>div{display:flex;flex-wrap:wrap;gap:5px}
+.project-context-group a{display:inline-flex;align-items:center;min-height:32px;padding:6px 9px;border-radius:8px;color:var(--ink-2);font-size:12px;text-decoration:none}
+.project-context-group a:hover{background:var(--surface);color:var(--ink)}
+.project-context-group a[aria-current="page"]{background:var(--accent-soft);color:var(--accent);font-weight:750}
+.project-context-route .page-context{display:none}
+.project-context-content{display:grid;gap:18px}
+.project-context-content>.s98-hero,.project-context-content>.card,.project-context-content>.ci-page,.project-context-content>.publication-shell{margin:0}
+.project-context-content>.s98-hero{padding:20px;border:1px solid var(--rule);border-radius:var(--r-lg);background:var(--paper)}
+.project-context-content>.s98-hero>h1:first-child,.project-context-content>.s98-hero>h2:first-child{display:none}
+.project-context-content .s98-grid,.project-context-content .grid{gap:12px}
+.project-context-content .s98-item,.project-context-content .s98-kpi,.project-context-content .box{border-color:var(--rule);border-radius:var(--r-md);background:var(--paper);box-shadow:none}
+.project-context-content .card{border-color:var(--rule);border-radius:var(--r-lg);box-shadow:none}
+@media(max-width:1040px){.project-context-nav{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:620px){.project-context-nav{grid-template-columns:1fr;padding:12px}.project-context-group>div{overflow:auto;flex-wrap:nowrap;padding-bottom:2px}.project-context-group a{white-space:nowrap}}
