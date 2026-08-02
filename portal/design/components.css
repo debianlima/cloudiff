@@ -204,3 +204,4 @@
 .publication-projects-clean{display:grid;gap:var(--s4)}
 @media(max-width:900px){.publication-information{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:520px){.publication-information{grid-template-columns:1fr}}
+.publication-database-link{font-weight:700;text-decoration-thickness:1px;text-underline-offset:3px}

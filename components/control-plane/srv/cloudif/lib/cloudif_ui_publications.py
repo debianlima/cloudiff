@@ -55,7 +55,7 @@ def _project_information(context):
     repo_value=(f'<a href="{h(repo)}" target="_blank" rel="noopener">Abrir repositório</a>' if repo else '<span>Nenhum repositório vinculado</span>')
     if database and database!='Nenhum banco vinculado':
         studio=f'https://{database}.cloudiff.duckdns.org/project/default'
-        database_value=f'<a href="{h(studio)}" target="_blank" rel="noopener">{h(database)}</a>'
+        database_value=f'<a class="publication-database-link" href="{h(studio)}" target="_blank" rel="noopener" title="Abrir Studio do banco">{h(database)}</a>'
     else:
         database_value=f'<strong>{h(database or "Nenhum banco vinculado")}</strong>'
     return (
