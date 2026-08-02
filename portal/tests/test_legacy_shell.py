@@ -42,7 +42,7 @@ class LegacyShellTest(unittest.TestCase):
         self.assertIn('<nav class="nav"', doc)
         self.assertNotIn("admin-usuarios", doc)
         self.assertNotIn(">Administração<", doc)
-        self.assertIn('aria-current="page">Projetos</a>', doc)
+        self.assertIn('aria-current="page">Todos os projetos</a>', doc)
 
     def test_admin_receives_all_canonical_tabs(self):
         doc = transform(LEGACY, self.admin, "admin-usuarios")

@@ -21,11 +21,28 @@ _FOOTER = (
 _TAB_GROUPS: "OrderedDict[str, tuple[tuple[str, str], ...]]" = OrderedDict(
     (
         ("Painel", (("resumo", "Visão geral"),)),
-        ("Projetos", (("projetos", "Projetos"), ("opcoes-projeto", "Recursos"), ("capacidades", "Ferramentas"), ("aprovacoes", "Aprovações"))),
+        (
+            "Projetos",
+            (
+                ("projetos", "Todos os projetos"),
+                ("opcoes-projeto", "Recursos"),
+                ("capacidades", "Ferramentas do projeto"),
+                ("aprovacoes", "Aprovações"),
+                ("publicacao", "Publicação"),
+                ("git", "Código e infraestrutura"),
+                ("monitor-promocoes", "Histórico"),
+                ("operacao-producao", "Produção"),
+                ("monitor-transacoes", "Atividades"),
+                ("monitor-filas", "Filas"),
+                ("monitor-telemetria", "Métricas"),
+                ("reconciliacao", "Reconciliação"),
+                ("agentes", "Conectar IA"),
+                ("gestao-agentes", "Agentes"),
+                ("documentacao-mcp", "MCP"),
+            ),
+        ),
         ("Dados", (("bancos", "Bancos e tenants"),)),
-        ("Entrega", (("publicacao", "Publicação"), ("git", "Código e infraestrutura"), ("monitor-promocoes", "Histórico"))),
-        ("Operação", (("operacao-producao", "Produção"), ("monitor-saude", "Saúde"), ("monitor-transacoes", "Atividades"), ("monitor-filas", "Filas"), ("monitor-telemetria", "Métricas"), ("reconciliacao", "Reconciliação"))),
-        ("IA e automação", (("agentes", "Conectar IA"), ("gestao-agentes", "Agentes"), ("documentacao-mcp", "MCP"))),
+        ("Ferramentas", (("monitor-saude", "Saúde da plataforma"),)),
         ("Administração", (("admin-usuarios", "Usuários"), ("admin-politicas", "Acessos"), ("admin-identidades", "Identidades"), ("admin-configuracoes", "Configurações"), ("admin-auditoria", "Auditoria"), ("admin-manutencao", "Manutenção"))),
         ("Ajuda", (("ajuda", "Primeiros passos"), ("ajuda-token", "Tokens"), ("ajuda-conectar", "Clientes"), ("ajuda-aprovacoes", "Papéis"), ("ajuda-ferramentas", "Referência"))),
     )
