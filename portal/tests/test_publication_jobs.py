@@ -49,5 +49,22 @@ class PublicationJobsTest(unittest.TestCase):
         self.assertEqual(latest["step"], "preparing")
 
 
+    def test_alias_failure_does_not_reserve_name(self):
+        user = {"username": "alice", "groups": [], "admin": False}
+        con = sqlite3.connect(self.db)
+        publications._ensure_schema(con)
+        con.execute("insert into project_publications(project_slug,public_number,deploy_number,stable_hostname,version_hostname,status,is_active,created_by,created_at) values(?,?,?,?,?,?,?,?,?)",('demo',1001,1,'1001.cloudiff.duckdns.org','1001-d1.cloudiff.duckdns.org','published',1,'alice','2026-01-01T00:00:00Z'))
+        con.commit();con.close()
+        with (
+            patch.object(publications, '_clients', return_value=('http://runtime','token','publisher')),
+            patch.object(publications, '_post', return_value=(422, {'ok': False, 'error': 'cert_failed'})),
+        ):
+            with self.assertRaises(RuntimeError):
+                publications.set_alias('demo','lima',user)
+        con = sqlite3.connect(self.db)
+        row = con.execute('select alias from project_publication_aliases where project_slug=?',('demo',)).fetchone()
+        con.close()
+        self.assertIsNone(row)
+
 if __name__ == "__main__":
     unittest.main()

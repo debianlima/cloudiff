@@ -223,13 +223,17 @@ def set_alias(slug,alias,user):
     other=con.execute('select project_slug from project_publication_aliases where alias=? and project_slug<>?',(alias,slug)).fetchone()
     if other:con.close();raise ValueError('Este alias já está em uso.')
     now=_now();actor=user.get('username') or 'portal'
-    con.execute('insert into project_publication_aliases(alias,project_slug,created_by,created_at,updated_at) values(?,?,?,?,?) on conflict(project_slug) do update set alias=excluded.alias,updated_at=excluded.updated_at',(alias,slug,actor,now,now))
-    pub=con.execute('select public_number,deploy_number from project_publications where project_slug=? and is_active=1 order by id desc limit 1',(slug,)).fetchone();con.commit();con.close()
-    result={'ok':True,'alias':alias,'hostname':alias+'.cloudiff.duckdns.org'}
+    previous=con.execute('select alias,created_by,created_at,updated_at from project_publication_aliases where project_slug=?',(slug,)).fetchone()
+    pub=con.execute('select public_number,deploy_number from project_publications where project_slug=? and is_active=1 order by id desc limit 1',(slug,)).fetchone()
     if pub:
         _,_,nt=_clients();status,data=_post('http://10.62.91.3/alias',{'public_number':int(pub['public_number']),'deploy_number':int(pub['deploy_number']),'alias':alias},nt,host='cloudif-publisher.internal',timeout=300)
-        if status//100!=2 or not data.get('ok'):raise RuntimeError('Falha ao ativar alias HTTPS: '+json.dumps(data,ensure_ascii=False)[:500])
-        result.update(data)
+        if status//100!=2 or not data.get('ok'):
+            con.close()
+            raise RuntimeError('Falha ao ativar alias HTTPS: '+json.dumps(data,ensure_ascii=False)[:500])
+    con.execute('insert into project_publication_aliases(alias,project_slug,created_by,created_at,updated_at) values(?,?,?,?,?) on conflict(project_slug) do update set alias=excluded.alias,updated_at=excluded.updated_at',(alias,slug,actor,(previous['created_at'] if previous else now),now))
+    con.commit();con.close()
+    result={'ok':True,'alias':alias,'hostname':alias+'.cloudiff.duckdns.org'}
+    if pub:result.update(data)
     return result
 
 def activate(slug,deploy_number,user):
