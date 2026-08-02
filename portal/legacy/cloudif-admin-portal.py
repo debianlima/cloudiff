@@ -823,15 +823,26 @@ def render_resumo(user):
     return body
 
 def _project_effective_owner(project):
-    owner=str(project.get("owner") or project.get("created_by") or "").strip()
+    def value(key):
+        try:
+            return project[key]
+        except Exception:
+            try:
+                return project.get(key)
+            except Exception:
+                return None
+    owner=str(value("owner") or value("created_by") or "").strip()
     if owner:
         return owner
     try:
         con=db()
-        row=con.execute("SELECT created_by FROM project_publications WHERE project_slug=? AND is_active=1 ORDER BY id DESC LIMIT 1",(project.get("slug"),)).fetchone()
+        row=con.execute("SELECT created_by FROM project_publications WHERE project_slug=? AND is_active=1 ORDER BY id DESC LIMIT 1",(value("slug"),)).fetchone()
         con.close()
         if row:
-            return str(row["created_by"] or "").strip()
+            try:
+                return str(row["created_by"] or "").strip()
+            except Exception:
+                return str(row[0] or "").strip()
     except Exception:
         pass
     return ""
@@ -854,7 +865,7 @@ def render_projects(user):
         edit_id = "edit_" + re.sub(r"[^a-zA-Z0-9_]+", "_", p["slug"])
 
         cards.append(f"""
-<div class="project-card" data-project-owner="{h(p.get('owner') or user['username'])}">
+<div class="project-card" data-project-owner="{h(_project_effective_owner(p))}">
   <div class="project-line">
     <div>
       <h3>{h(p['name'])}</h3>
@@ -3100,7 +3111,7 @@ def render_projects(user):
         studio_btn = f'<a class="btn light" href="{h(studio)}" target="_blank">Abrir Studio</a>' if p["tenant"] else ""
 
         cards.append(f"""
-<div class="project-card" data-project-owner="{h(p.get('owner') or user['username'])}">
+<div class="project-card" data-project-owner="{h(_project_effective_owner(p))}">
   <div class="project-line">
     <div>
       <h3>{h(p['name'])}</h3>

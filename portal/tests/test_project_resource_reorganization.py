@@ -103,12 +103,19 @@ class ActiveProjectRendererContractTest(unittest.TestCase):
 
     def test_owner_rule_matches_publication_grouping(self):
         self.assertIn('def _project_effective_owner',self.source)
-        self.assertIn('project.get("owner") or project.get("created_by")',self.source)
+        self.assertIn('value("owner") or value("created_by")',self.source)
         self.assertIn('FROM project_publications WHERE project_slug=? AND is_active=1',self.source)
         self.assertIn('data-project-owner=',self.source)
 
     def test_project_heading_is_management(self):
         self.assertIn('<h2>Gestão de projetos</h2>',self.source)
+
+
+
+    def test_effective_owner_accepts_sqlite_row(self):
+        self.assertIn('return project[key]',self.source)
+        self.assertIn('return project.get(key)',self.source)
+        self.assertIn('data-project-owner="{h(_project_effective_owner(p))}"',self.source)
 
 
 if __name__=='__main__':unittest.main()
