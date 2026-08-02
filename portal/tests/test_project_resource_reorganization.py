@@ -43,9 +43,11 @@ class ProjectResourceReorganizationTest(unittest.TestCase):
 
 
     def test_project_cards_are_compact_and_single_open(self):
-        self.assertIn("card.classList.add('cpx-ready')",self.source)
-        self.assertIn("projectCards.forEach(x=>{x.classList.remove('is-open')",self.source)
-        self.assertIn("hint.setAttribute('aria-expanded','false')",self.source)
+        self.assertIn('<details class="project-entry"',self.source)
+        self.assertIn('project-entry-summary',self.source)
+        self.assertIn("document.querySelectorAll('.project-entry[open]')",self.source)
+        self.assertIn("if(x!==entry)x.open=false",self.source)
+        self.assertIn("entry.open&&runtimePanel",self.source)
         self.assertIn("identityBySlug.get(slug)",self.source)
         self.assertIn("#project-identities{display:none}",self.source)
 
