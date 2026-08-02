@@ -3046,11 +3046,36 @@ networks:
     external: true
 """
         compose_name="cloudif-generated-compose.yml";generated_compose=True
-    tree=subprocess.run(["git","-C",str(base_dir),"ls-tree","-r","--name-only",commit,"site"],text=True,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL)
-    site_files=[x.strip() for x in tree.stdout.splitlines() if x.strip().startswith("site/")]
+    def git_tree(prefix=""):
+        cmd=["git","-C",str(base_dir),"ls-tree","-r","--name-only",commit]
+        if prefix: cmd.append(prefix)
+        tree=subprocess.run(cmd,text=True,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL)
+        return [x.strip() for x in tree.stdout.splitlines() if x.strip()]
+    publication_files=[]
+    publication_source=""
+    for prefix in ("site","dist","build","public"):
+        files=[x for x in git_tree(prefix) if x.startswith(prefix+"/")]
+        if files:
+            publication_source=prefix
+            publication_files=[(x,x[len(prefix)+1:]) for x in files]
+            break
+    if not publication_files and git_file("index.html").strip():
+        publication_source="root"
+        ignored={"README.md","docker-compose.yml","compose.yml","compose.yaml","Dockerfile","nginx.conf"}
+        publication_files=[(x,x) for x in git_tree() if x not in ignored and not x.startswith(".")]
+    generated_placeholder=not publication_files
     nginx_content=git_file("nginx.conf")
-    if not site_files or not nginx_content.strip():
-        return send(handler, 422, {"ok": False, "error": "versioned_publication_sources_missing", "commit": commit})
+    generated_nginx=not bool(nginx_content.strip())
+    if generated_nginx:
+        nginx_content=b"""server {
+  listen 80;
+  server_name _;
+  root /usr/share/nginx/html;
+  index index.html;
+  location = /__cloudif_health { access_log off; return 200 'ok'; add_header Content-Type text/plain; }
+  location / { try_files $uri $uri/ /index.html; }
+}
+"""
     compose={"ok":True,"content":compose_text,"filename":compose_name,"source":"git_commit","commit":commit}
     snap_dir = Path(f"/srv/cloudif/publications/p{public_number}/d{deploy_number}")
     marker = snap_dir / ".cloudif-commit"
@@ -3063,8 +3088,15 @@ networks:
         if snap_dir.exists(): shutil.rmtree(snap_dir)
         snap_dir.mkdir(parents=True, mode=0o755)
         (snap_dir / "site").mkdir(mode=0o755)
-        for rel in site_files:
-            raw=git_file(rel);dst=snap_dir / rel;dst.parent.mkdir(parents=True,exist_ok=True);dst.write_bytes(raw)
+        for source_rel,dest_rel in publication_files:
+            raw=git_file(source_rel);dst=snap_dir / "site" / dest_rel;dst.parent.mkdir(parents=True,exist_ok=True);dst.write_bytes(raw)
+        if generated_placeholder:
+            import html as _html
+            title=_html.escape(project.replace("-"," ").title())
+            safe_project=_html.escape(project)
+            safe_commit=_html.escape(commit[:12])
+            placeholder=f"""<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{title}</title><style>body{{margin:0;font-family:system-ui,sans-serif;background:#f7f7f5;color:#171717}}main{{max-width:720px;margin:0 auto;padding:12vh 24px}}small{{letter-spacing:.08em;text-transform:uppercase;color:#666}}h1{{font-size:clamp(2rem,7vw,4rem);line-height:1;margin:.4em 0}}p{{font-size:1.05rem;line-height:1.6;color:#555}}code{{font-size:.85rem}}</style></head><body><main><small>CloudIFF · pré-publicação</small><h1>{title}</h1><p>Este projeto já possui um endereço público, mas ainda não contém arquivos web. A próxima publicação substituirá esta página pelo site do projeto.</p><p><code>{safe_project} · {safe_commit}</code></p></main></body></html>"""
+            (snap_dir / "site" / "index.html").write_text(placeholder,encoding="utf-8")
         (snap_dir / "nginx.conf").write_bytes(nginx_content)
         marker.write_text(commit + "\n");marker.chmod(0o640)
         for fp in (snap_dir / "site").rglob("*"):
@@ -3166,6 +3198,7 @@ networks:
         "commit": commit, "stack_id": stack_id, "stack_name": name, "container": container,
         "created": created, "deploy": dep, "operation_id": opid, "operation_final": final, "healthy": healthy,
         "terminal": terminal, "content_digest": content_digest, "source": "git_commit", "generated_compose": generated_compose,
+        "publication_source": publication_source or "generated_placeholder", "generated_placeholder": generated_placeholder, "generated_nginx": generated_nginx,
         "republished": republished_from is not None, "republished_from": republished_from
     })
 
