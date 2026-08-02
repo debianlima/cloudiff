@@ -568,22 +568,29 @@ try:
  with urllib.request.urlopen(req,timeout=30) as x:home=x.read().decode('utf-8','replace')
  import re
  navm=re.search(r'<nav class="nav"[^>]*>.*?</nav>',home,re.S);nav=navm.group(0) if navm else ''
- labels=('Visão geral','Projetos','Bancos e tenants','Publicação','Saúde','Conectar IA','Primeiros passos')
+ labels=('Visão geral','Todos os projetos','Bancos e tenants','Saúde da plataforma','Primeiros passos')
  hrefs=re.findall(r'href="([^"]*\?tab=[^"]+)"',nav)
- ok=bool(nav) and all(x in nav for x in labels) and len(hrefs)==len(set(hrefs)) and 'Administração' not in nav and not bool(re.search(r'<nav\b[^>]*class="[^"]*enterprise-nav',home,re.I))
- checks.append({'name':'portal-enterprise-navigation-primary','ok':ok,'canonical_shell':bool(nav),'labels':list(labels),'unique_links':len(hrefs)==len(set(hrefs)),'student_admin_hidden':'Administração' not in nav,'legacy_nav_absent':not bool(re.search(r'<nav\b[^>]*class="[^"]*enterprise-nav',home,re.I))})
+ project_actions=('Aprovações','Publicação','MCP','Métricas')
+ ok=bool(nav) and all(x in nav for x in labels) and all(x not in nav for x in project_actions) and len(hrefs)==len(set(hrefs)) and 'Administração' not in nav and not bool(re.search(r'<nav\b[^>]*class="[^"]*enterprise-nav',home,re.I))
+ checks.append({'name':'portal-enterprise-navigation-primary','ok':ok,'canonical_shell':bool(nav),'labels':list(labels),'project_actions_contextual':all(x not in nav for x in project_actions),'unique_links':len(hrefs)==len(set(hrefs)),'student_admin_hidden':'Administração' not in nav,'legacy_nav_absent':not bool(re.search(r'<nav\b[^>]*class="[^"]*enterprise-nav',home,re.I))})
 except Exception as e:checks.append({'name':'portal-enterprise-navigation-primary','ok':False,'error':type(e).__name__})
 try:
- project_tabs=('projetos','opcoes-projeto','capacidades','aprovacoes','bancos','publicacao','git')
- ok=all(('/cloudiff/portal/?tab='+tab) in nav for tab in project_tabs) and 'Projetos' in nav and 'Dados' in nav and 'Entrega' in nav
- checks.append({'name':'portal-project-navigation-submenus','ok':ok,'project_tabs':list(project_tabs),'canonical_sections':True,'legacy_routes_preserved':True})
+ project_tabs=('opcoes-projeto','git','capacidades','aprovacoes','publicacao','monitor-promocoes','operacao-producao','monitor-transacoes','monitor-filas','monitor-telemetria','reconciliacao','agentes','gestao-agentes','documentacao-mcp')
+ req=urllib.request.Request('http://127.0.0.1:18094/cloudiff/portal/?tab=aprovacoes',headers=headers)
+ with urllib.request.urlopen(req,timeout=30) as x:context_page=x.read().decode('utf-8','replace')
+ context_nav=re.search(r'<nav class="project-context-nav".*?</nav>',context_page,re.S)
+ context=context_nav.group(0) if context_nav else ''
+ ok=bool(context) and all(('/cloudiff/portal/?tab='+tab) in context for tab in project_tabs) and all(x in context for x in ('Construir','Entregar','Operar','Automatizar')) and 'aria-current="page"' in context
+ checks.append({'name':'portal-project-navigation-submenus','ok':ok,'project_tabs':list(project_tabs),'canonical_sections':bool(context),'active_context':bool(context and 'aria-current="page"' in context),'legacy_routes_preserved':True})
 except Exception as e:checks.append({'name':'portal-project-navigation-submenus','ok':False,'error':type(e).__name__})
 try:
- operation=('operacao-producao','monitor-saude','monitor-transacoes','monitor-filas','monitor-telemetria','reconciliacao')
+ operation=('operacao-producao','monitor-transacoes','monitor-filas','monitor-telemetria','reconciliacao')
  automation=('agentes','gestao-agentes','documentacao-mcp')
  help_tabs=('ajuda','ajuda-token','ajuda-conectar','ajuda-aprovacoes','ajuda-ferramentas')
- ok=all(('/cloudiff/portal/?tab='+tab) in nav for tab in operation+automation+help_tabs) and all(x in nav for x in ('Operação','IA e automação','Ajuda'))
- checks.append({'name':'portal-ai-monitor-help-submenus','ok':ok,'operation_items':len(operation),'automation_items':len(automation),'help_items':len(help_tabs),'canonical_sidebar':True})
+ contextual=all(('/cloudiff/portal/?tab='+tab) in context for tab in operation+automation)
+ help_global=all(('/cloudiff/portal/?tab='+tab) in nav for tab in help_tabs) and 'Ajuda' in nav
+ ok=contextual and help_global and 'Saúde da plataforma' in nav and 'IA e automação' not in nav and 'Operação' not in nav
+ checks.append({'name':'portal-ai-monitor-help-submenus','ok':ok,'operation_items':len(operation),'automation_items':len(automation),'help_items':len(help_tabs),'contextual_project_tools':contextual,'help_global':help_global,'canonical_sidebar':True})
 except Exception as e:checks.append({'name':'portal-ai-monitor-help-submenus','ok':False,'error':type(e).__name__})
 try:
  admin_headers={'X-authentik-username':'admin-smoke','X-authentik-email':'admin-smoke@example.invalid','X-authentik-groups':'CloudIF-Tenants-Admin'}
@@ -611,9 +618,11 @@ try:
  req=urllib.request.Request('http://127.0.0.1:18094/cloudiff/portal/?tab=bancos',headers=headers)
  with urllib.request.urlopen(req,timeout=30) as x:db_page=x.read().decode('utf-8','replace')
  cards=re.findall(r'<article class="card db96-card".*?</article>',db_page,re.S)
- project_ok='<nav class="nav"' in project_page and 'aria-current="page">Projetos</a>' in project_page and 'class="project-card"' in project_page
+ app_source=Path('/srv/cloudif/app-pointers/portal-current/cloudif-admin-portal.py').read_text()
+ resource_contract=all(x in app_source for x in ("{'Serviços':services,'Containers':containers,'Publicação':pubs,'Backups':backups,'Agente IA e MCP':agent}",'items.slice(0,5)','Ver todos os backups','Publicação ativa','Publicações inativas'))
+ project_ok='<nav class="nav"' in project_page and 'aria-current="page">Todos os projetos</a>' in project_page and 'class="project-card"' in project_page and 'id="admin-recursos-globais"' not in project_page and resource_contract
  db_ok='<nav class="nav"' in db_page and 'aria-current="page">Bancos e tenants</a>' in db_page and bool(cards) and all(c.count('db96-mode active')==1 and c.count('ATIVO AGORA')==1 for c in cards)
- checks.append({'name':'portal-project-options-and-database-visual-logic','ok':project_ok and db_ok,'canonical_project_shell':project_ok,'tenant_cards':len(cards),'one_active_mode_per_tenant':db_ok})
+ checks.append({'name':'portal-project-options-and-database-visual-logic','ok':project_ok and db_ok,'canonical_project_shell':project_ok,'resource_contract':resource_contract,'tenant_cards':len(cards),'one_active_mode_per_tenant':db_ok})
 except Exception as e:checks.append({'name':'portal-project-options-and-database-visual-logic','ok':False,'error':type(e).__name__})
 try:
  import re
@@ -888,14 +897,14 @@ try:
  users={x['username']:x for x in komodo.get('users',[])}
  admin=users.get('iff1742962') or {};student=users.get('aluno') or {}
  hdr={'X-authentik-username':'iff1742962','X-authentik-email':'iff1742962@local','X-authentik-groups':'CloudIF-Tenants,CloudIF-Tenants-Admin,CloudIF-Professor','Host':'cloudiff.duckdns.org'}
- req=urllib.request.Request('http://127.0.0.1:18094/cloudiff/portal/?tab=projetos',headers=hdr)
+ req=urllib.request.Request('http://127.0.0.1:18094/cloudiff/portal/?tab=admin-manutencao',headers=hdr)
  with urllib.request.urlopen(req,timeout=30) as rr:admin_html=rr.read().decode('utf-8','ignore');admin_code=rr.status
  sh={'X-authentik-username':'aluno','X-authentik-email':'aluno@local','X-authentik-groups':'CloudIF-Aluno','Host':'cloudiff.duckdns.org'}
  req=urllib.request.Request('http://127.0.0.1:18094/cloudiff/portal/?tab=projetos',headers=sh)
  with urllib.request.urlopen(req,timeout=30) as rr:student_html=rr.read().decode('utf-8','ignore');student_code=rr.status
  tenant_links=all(('https://'+t+'.cloudiff.duckdns.org/project/default') in admin_html for t in platform.get('tenants',[]))
  activation=platform.get('latest_activation_actions') or []
- ok=komodo.get('ok') is True and komodo.get('timer_active') is True and admin.get('super_admin') is True and admin.get('admin') is True and admin.get('create_server_permissions') is True and admin.get('create_build_permissions') is True and student.get('super_admin') is False and student.get('admin') is False and len(komodo.get('servers') or [])>=2 and komodo.get('container_count',0)>=40 and platform.get('ok') is True and platform.get('authz_groups_configured') is True and platform.get('tenant_guard_groups_configured') is True and platform.get('active_publication',{}).get('deploy_number')==11 and len(activation)>=2 and all(x.get('rc')==0 for x in activation[:2]) and admin_code==200 and tenant_links and 'Abrir todos os contêineres' in admin_html and student_code==200 and 'id="admin-recursos-globais"' not in student_html and 'Abrir todos os contêineres' not in student_html
+ ok=komodo.get('ok') is True and komodo.get('timer_active') is True and admin.get('super_admin') is True and admin.get('admin') is True and admin.get('create_server_permissions') is True and admin.get('create_build_permissions') is True and student.get('super_admin') is False and student.get('admin') is False and len(komodo.get('servers') or [])>=2 and komodo.get('container_count',0)>=40 and platform.get('ok') is True and platform.get('authz_groups_configured') is True and platform.get('tenant_guard_groups_configured') is True and platform.get('active_publication',{}).get('deploy_number')==11 and len(activation)>=2 and all(x.get('rc')==0 for x in activation[:2]) and admin_code==200 and tenant_links and all(x in admin_html for x in ('Servidores','Containers','Tenants','Repositórios')) and student_code==200 and 'id="admin-recursos-globais"' not in student_html and 'admin-tool-shortcuts' not in student_html
  checks.append({'name':'unified-admin-permissions-komodo-supabase-publication','ok':ok,'komodo_super_admin':admin.get('super_admin'),'komodo_admin':admin.get('admin'),'komodo_create_server':admin.get('create_server_permissions'),'komodo_create_build':admin.get('create_build_permissions'),'komodo_servers':len(komodo.get('servers') or []),'komodo_containers':komodo.get('container_count'),'komodo_sync_timer':komodo.get('timer_active'),'student_komodo_admin':student.get('admin'),'supabase_tenants':platform.get('tenants'),'supabase_admin_links':tenant_links,'authz_admin_groups':platform.get('authz_groups_configured'),'tenant_guard_admin_groups':platform.get('tenant_guard_groups_configured'),'publication_active_deploy':platform.get('active_publication',{}).get('deploy_number'),'activation_actions_ok':len(activation)>=2 and all(x.get('rc')==0 for x in activation[:2]),'admin_panel_code':admin_code,'student_panel_code':student_code,'student_global_panel_absent':'id="admin-recursos-globais"' not in student_html,'secrets_exposed':False})
 except Exception as e:checks.append({'name':'unified-admin-permissions-komodo-supabase-publication','ok':False,'error':type(e).__name__,'detail':str(e)[:180]})
 try:
@@ -918,8 +927,10 @@ try:
  ac,ap=get_ui(ah,'projetos');sc,sp=get_ui(sh,'projetos')
  admin_nav=re.search(r'<nav class="nav"[^>]*>.*?</nav>',ap,re.S);student_nav=re.search(r'<nav class="nav"[^>]*>.*?</nav>',sp,re.S)
  an=admin_nav.group(0) if admin_nav else '';sn=student_nav.group(0) if student_nav else ''
- ok=ac==200 and sc==200 and all(x in an for x in ('Painel','Projetos','Dados','Entrega','Operação','IA e automação','Administração','Ajuda')) and 'Administração' not in sn and '/cloudiff/portal/assets/tokens.css' in ap and '/cloudiff/portal/assets/components.css' in ap and not bool(re.search(r'<nav\b[^>]*class="[^"]*enterprise-nav',ap,re.I))
- checks.append({'name':'portal-professional-clear-ui','ok':ok,'canonical_sections':8,'student_admin_hidden':'Administração' not in sn,'design_system_loaded':True,'legacy_nav_absent':not bool(re.search(r'<nav\b[^>]*class="[^"]*enterprise-nav',ap,re.I)),'secrets_exposed':False})
+ admin_sections=('Painel','Projetos','Dados','Ferramentas','Administração','Ajuda')
+ student_sections=('Painel','Projetos','Dados','Ferramentas','Ajuda')
+ ok=ac==200 and sc==200 and all(x in an for x in admin_sections) and all(x in sn for x in student_sections) and all(x not in an for x in ('Entrega','Operação','IA e automação')) and 'Administração' not in sn and '/cloudiff/portal/assets/tokens.css' in ap and '/cloudiff/portal/assets/components.css' in ap and not bool(re.search(r'<nav\b[^>]*class="[^"]*enterprise-nav',ap,re.I))
+ checks.append({'name':'portal-professional-clear-ui','ok':ok,'canonical_sections':len(admin_sections),'student_admin_hidden':'Administração' not in sn,'project_groups_contextual':all(x not in an for x in ('Entrega','Operação','IA e automação')),'design_system_loaded':True,'legacy_nav_absent':not bool(re.search(r'<nav\b[^>]*class="[^"]*enterprise-nav',ap,re.I)),'secrets_exposed':False})
 except Exception as e:checks.append({'name':'portal-professional-clear-ui','ok':False,'error':type(e).__name__,'detail':str(e)[:180]})
 try:
  h={'X-authentik-username':'iff1742962','X-authentik-email':'iff1742962@local','X-authentik-groups':'CloudIF-Tenants,CloudIF-Tenants-Admin,CloudIF-Professor','Host':'cloudiff.duckdns.org'}
