@@ -193,9 +193,9 @@ def _resource_ownership() -> tuple[dict[str, str], dict[str, str]]:
     return projects, tenants
 
 
-def _group_label(owner: str, current_user: str) -> str:
+def _group_label(owner: str, current_user: str, own_label: str = "") -> str:
     if owner == current_user:
-        return f"{owner} · você"
+        return own_label or f"{owner} · você"
     return owner or "Sem usuário vinculado"
 
 
@@ -229,7 +229,7 @@ def _card_spans(body: str, class_token: str) -> list[tuple[int, int, str]]:
     return spans
 
 
-def _group_cards(body: str, class_token: str, owner_for_card, current_user: str, kind: str) -> str:
+def _group_cards(body: str, class_token: str, owner_for_card, current_user: str, kind: str, own_label: str = "") -> str:
     spans = _card_spans(body, class_token)
     if not spans:
         return body
@@ -241,9 +241,14 @@ def _group_cards(body: str, class_token: str, owner_for_card, current_user: str,
     ordered = sorted(grouped.items(), key=lambda item: (item[0] != current_user, (item[0] or "~").lower()))
     for owner, cards in ordered:
         opened = " open" if owner == current_user else ""
-        label = escape(_group_label(owner, current_user))
+        label = escape(_group_label(owner, current_user, own_label))
         count = len(cards)
-        noun = kind if count == 1 else ("publicações" if kind == "publicação" else "bancos")
+        if kind == "site":
+            noun = "site" if count == 1 else "sites"
+        elif kind == "publicação":
+            noun = "publicação" if count == 1 else "publicações"
+        else:
+            noun = "banco" if count == 1 else "bancos"
         blocks.append(
             f'<details class="owner-resource-group"{opened}>'
             f'<summary><span>{label}</span><span class="owner-resource-count">{count} {noun}</span></summary>'
@@ -252,17 +257,35 @@ def _group_cards(body: str, class_token: str, owner_for_card, current_user: str,
     return body[: spans[0][0]] + '<div class="owner-resource-groups">' + "".join(blocks) + '</div>' + body[spans[-1][1] :]
 
 
-def group_resources_by_user(body: str, tab: str, identity: Identity) -> str:
+def filter_publication_project(body: str, selected_project: str) -> str:
+    if not selected_project:
+        return body
+    spans = _card_spans(body, "publication-project")
+    selected = []
+    for start, end, card in spans:
+        if re.search(
+            r'<input\b[^>]*name=["\']slug["\'][^>]*value=["\']' + re.escape(selected_project) + r'["\']',
+            card,
+            re.I,
+        ):
+            selected.append((start, end, card))
+    if not selected:
+        return body
+    return body[:spans[0][0]] + selected[0][2] + body[spans[-1][1]:]
+
+
+def group_resources_by_user(body: str, tab: str, identity: Identity, selected_project: str = "") -> str:
     """Group only general publication/database screens; the overview is untouched."""
     if tab not in {"publicacao", "bancos"}:
         return body
     project_owners, tenant_owners = _resource_ownership()
     if tab == "publicacao":
+        body = filter_publication_project(body, selected_project)
         slugs = sorted(project_owners, key=len, reverse=True)
         def publication_owner(card: str) -> str:
             slug = next((item for item in slugs if item in card), "")
             return project_owners.get(slug, "")
-        return _group_cards(body, "publication-project", publication_owner, identity.username, "publicação")
+        return _group_cards(body, "publication-project", publication_owner, identity.username, "site", "Meus sites")
 
     def mark_database(match: re.Match[str]) -> str:
         opening = match.group(0)
@@ -285,13 +308,13 @@ def group_resources_by_user(body: str, tab: str, identity: Identity) -> str:
         f'data-current-user="{escape(identity.username)}">{marked}</div>'
     )
 
-def transform(markup: str, identity: Identity, tab: str) -> str:
+def transform(markup: str, identity: Identity, tab: str, selected_project: str = "") -> str:
     page = parse_legacy(markup, tab)
     return render_legacy(
         identity=identity,
         active_tab=page.tab,
         title=page.title,
-        body=group_resources_by_user(page.body, page.tab, identity),
+        body=group_resources_by_user(page.body, page.tab, identity, selected_project),
         legacy_head=page.scoped_styles,
         legacy_scripts=page.scripts,
     )

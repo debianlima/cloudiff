@@ -19,7 +19,7 @@ class GroupedResourcesTest(unittest.TestCase):
             '</div>'
         )
         output = group_resources_by_user(body, "publicacao", self.identity)
-        self.assertIn('alice · você', output)
+        self.assertIn('Meus sites', output)
         self.assertIn('class="owner-resource-group" open', output)
         self.assertIn('bob', output)
         self.assertEqual(output.count('publication-project card'), 2)
@@ -45,3 +45,18 @@ class GroupedResourcesTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+class IndividualPublicationTest(unittest.TestCase):
+    def test_selected_project_keeps_only_matching_card(self):
+        from portal.core.legacy_shell import filter_publication_project
+        body = (
+            '<p>before</p>'
+            '<article class="publication-project card"><input name="slug" value="alpha"></article>'
+            '<article class="publication-project card"><input name="slug" value="beta"></article>'
+            '<p>after</p>'
+        )
+        output = filter_publication_project(body, "beta")
+        self.assertNotIn('value="alpha"', output)
+        self.assertIn('value="beta"', output)
+        self.assertIn('<p>before</p>', output)
+        self.assertIn('<p>after</p>', output)

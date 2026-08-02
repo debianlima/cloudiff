@@ -12,6 +12,35 @@ def run(cmd, timeout=5):
     except Exception as e:
         return {"rc": 999, "stdout": "", "stderr": str(e)}
 
+def network_summary():
+    """Return cumulative counters for physical/upstream interfaces only."""
+    base = "/sys/class/net"
+    ignored_prefixes = ("lo", "docker", "br-", "veth", "virbr", "tun", "tap")
+    interfaces = []
+    rx_total = tx_total = 0
+    try:
+        for name in sorted(os.listdir(base)):
+            if name == "lo" or name.startswith(ignored_prefixes[1:]):
+                continue
+            path = os.path.join(base, name)
+            try:
+                with open(os.path.join(path, "operstate"), encoding="utf-8") as stream:
+                    state = stream.read().strip()
+                if state not in {"up", "unknown"}:
+                    continue
+                with open(os.path.join(path, "statistics", "rx_bytes"), encoding="utf-8") as stream:
+                    rx = int(stream.read().strip())
+                with open(os.path.join(path, "statistics", "tx_bytes"), encoding="utf-8") as stream:
+                    tx = int(stream.read().strip())
+            except (OSError, ValueError):
+                continue
+            interfaces.append({"name": name, "rx_bytes": rx, "tx_bytes": tx})
+            rx_total += rx
+            tx_total += tx
+    except OSError:
+        pass
+    return {"rx_bytes": rx_total, "tx_bytes": tx_total, "interfaces": interfaces}
+
 def docker_summary():
     if run(["bash", "-lc", "command -v docker"]).get("rc") != 0:
         return {"available": False, "containers": []}
@@ -31,6 +60,7 @@ def metrics():
     uptime = run(["bash", "-lc", "cat /proc/uptime"])
     ips = run(["bash", "-lc", "ip -br addr | sed -n '1,40p'"])
     docker = docker_summary()
+    network = network_summary()
 
     mem_data = {}
     if mem["stdout"]:
@@ -67,6 +97,7 @@ def metrics():
         "loadavg": load["stdout"],
         "uptime": uptime["stdout"],
         "ips": ips["stdout"],
+        "network": network,
         "docker": docker,
     }
 

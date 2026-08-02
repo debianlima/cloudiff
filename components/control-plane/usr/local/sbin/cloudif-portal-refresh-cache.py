@@ -102,6 +102,31 @@ def fetch_json(url, timeout=5):
     except Exception as e:
         return {"ok": False, "error": str(e)}
 
+def network_rate(previous_payload, previous_updated_at, current_payload, current_updated_at):
+    """Calculate bytes/second between two successful node samples."""
+    try:
+        previous = (previous_payload or {}).get("network") or {}
+        current = (current_payload or {}).get("network") or {}
+        before = datetime.datetime.fromisoformat(str(previous_updated_at).replace("Z", "+00:00"))
+        after = datetime.datetime.fromisoformat(str(current_updated_at).replace("Z", "+00:00"))
+        if before.tzinfo is None:
+            before = before.replace(tzinfo=datetime.timezone.utc)
+        if after.tzinfo is None:
+            after = after.replace(tzinfo=datetime.timezone.utc)
+        elapsed = (after - before).total_seconds()
+        rx_delta = int(current.get("rx_bytes") or 0) - int(previous.get("rx_bytes") or 0)
+        tx_delta = int(current.get("tx_bytes") or 0) - int(previous.get("tx_bytes") or 0)
+        if elapsed <= 0 or rx_delta < 0 or tx_delta < 0:
+            return None
+        return {
+            "sample_seconds": round(elapsed, 3),
+            "rx_bps": round(rx_delta / elapsed, 2),
+            "tx_bps": round(tx_delta / elapsed, 2),
+            "total_bps": round((rx_delta + tx_delta) / elapsed, 2),
+        }
+    except (AttributeError, TypeError, ValueError):
+        return None
+
 def refresh_nodes():
     con = db()
     for item in NODES.split(","):
@@ -110,8 +135,20 @@ def refresh_nodes():
         name, url = item.split("=", 1)
         name = name.strip()
         url = url.strip().rstrip("/") + "/metrics"
+        previous_row = con.execute(
+            "SELECT payload, updated_at FROM node_metrics_cache WHERE node=?", (name,)
+        ).fetchone()
         result = fetch_json(url, 5)
         payload = result.get("data") if result.get("ok") else result
+        sampled_at = now_iso()
+        if result.get("ok") and isinstance(payload, dict) and previous_row:
+            try:
+                previous_payload = json.loads(previous_row["payload"] or "{}")
+            except Exception:
+                previous_payload = {}
+            rate = network_rate(previous_payload, previous_row["updated_at"], payload, sampled_at)
+            if rate:
+                payload.setdefault("network", {}).update(rate)
         con.execute("""
           INSERT INTO node_metrics_cache(node,url,ok,payload,updated_at)
           VALUES(?,?,?,?,?)
@@ -120,7 +157,7 @@ def refresh_nodes():
             ok=excluded.ok,
             payload=excluded.payload,
             updated_at=excluded.updated_at
-        """, (name, url, 1 if result.get("ok") else 0, json.dumps(payload, ensure_ascii=False), now_iso()))
+        """, (name, url, 1 if result.get("ok") else 0, json.dumps(payload, ensure_ascii=False), sampled_at))
     con.commit()
     con.close()
 

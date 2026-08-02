@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import html
+from urllib.parse import quote
 
 BASE = "/cloudiff/portal"
 
@@ -24,19 +25,30 @@ def _server_card(node: dict, fmt) -> str:
         f'<p class="resource-note">{detail}</p>'
         f'<div class="metric-line"><span>Memória</span><b>{fmt(node["mem_used"])} de {fmt(node["mem_total"])}</b></div>{_bar(node["mem_pct"])}'
         f'<div class="metric-line"><span>Armazenamento</span><b>{fmt(node["disk_used"])} de {fmt(node["disk_total"])}</b></div>{_bar(node["disk_pct"])}'
-        '</article>'
+        '<div class="network-metrics">'
+        f'<div><span>Recebimento</span><b>{node.get("network_rx_label", "-")}</b></div>'
+        f'<div><span>Envio</span><b>{node.get("network_tx_label", "-")}</b></div>'
+        '</div></article>'
     )
 
 
 def _site_card(site: dict) -> str:
     name = html.escape(site.get("name") or site["project_slug"])
+    slug = str(site["project_slug"])
     host = html.escape(site.get("stable_hostname") or "")
-    href = "https://" + host if host else f"{BASE}/?tab=publicacao"
+    manage = f"{BASE}/?tab=publicacao&project={quote(slug, safe='')}"
+    if site.get("published") and host:
+        badge = '<span class="chip">Publicado</span>'
+        address = f'<p class="resource-address">{host}</p>'
+        open_action = f'<a class="btn" href="https://{host}" target="_blank" rel="noopener">Abrir site</a>'
+    else:
+        badge = '<span class="chip is-drift">Ainda não publicado</span>'
+        address = '<p class="resource-address">Este projeto ainda não possui endereço público.</p>'
+        open_action = ''
     return (
         '<article class="resource-card">'
-        f'<div class="resource-card-head"><div><p class="resource-kicker">Site publicado</p><h3>{name}</h3></div><span class="chip">No ar</span></div>'
-        f'<p class="resource-address">{host or "Endereço não informado"}</p>'
-        f'<div class="resource-actions"><a class="btn" href="{href}" target="_blank" rel="noopener">Abrir site</a><a class="btn btn-quiet" href="{BASE}/?tab=publicacao">Gerenciar</a></div>'
+        f'<div class="resource-card-head"><div><p class="resource-kicker">Site do projeto</p><h3>{name}</h3></div>{badge}</div>'
+        f'{address}<div class="resource-actions">{open_action}<a class="btn btn-quiet" href="{manage}">Gerenciar</a></div>'
         '</article>'
     )
 
@@ -69,6 +81,9 @@ def overview_body(data: dict) -> str:
         "Nenhum banco vinculado", "Crie ou vincule um banco de dados a um dos seus projetos.",
         "Ir para bancos", f"{BASE}/?tab=bancos"
     )
+    for node in metrics["nodes"]:
+        node["network_rx_label"] = metrics["fmt_rate"](node.get("network_rx_bps"))
+        node["network_tx_label"] = metrics["fmt_rate"](node.get("network_tx_bps"))
     servers = "".join(_server_card(node, metrics["fmt"]) for node in metrics["nodes"]) or _empty(
         "Métricas indisponíveis", "A coleta da plataforma ainda não enviou dados.", "Ver saúde", f"{BASE}/?tab=monitor-saude"
     )
@@ -84,7 +99,7 @@ def overview_body(data: dict) -> str:
         '<section class="welcome-panel"><div><p class="ov-eyebrow">Seu espaço acadêmico</p>'
         f'<h2>Olá, {username}.</h2><p>Aqui você encontra o que está publicando, os bancos ligados aos seus projetos e os caminhos mais usados para continuar seu trabalho.</p></div>'
         f'<div class="welcome-actions"><a class="btn" href="{BASE}/?tab=projetos">Continuar um projeto</a><a class="btn btn-quiet" href="{BASE}/?tab=ajuda">Primeiros passos</a></div></section>'
-        '<section class="resource-section" aria-labelledby="my-sites-title"><div class="resource-section-head"><div><p class="ov-eyebrow">Publicações</p><h2 id="my-sites-title">Meus sites</h2><p>Sites que estão disponíveis na internet a partir dos seus projetos.</p></div>'
+        '<section class="resource-section" aria-labelledby="my-sites-title"><div class="resource-section-head"><div><p class="ov-eyebrow">Publicações</p><h2 id="my-sites-title">Meus sites</h2><p>Todos os seus projetos web, publicados ou em preparação.</p></div>'
         f'<a href="{BASE}/?tab=publicacao">Ver todas as publicações</a></div><div class="resource-grid">{sites}</div></section>'
         '<section class="resource-section" aria-labelledby="my-databases-title"><div class="resource-section-head"><div><p class="ov-eyebrow">Dados</p><h2 id="my-databases-title">Meus bancos</h2><p>Ambientes de dados que você pode usar nos seus projetos.</p></div>'
         f'<a href="{BASE}/?tab=bancos">Gerenciar todos os bancos</a></div><div class="resource-grid">{databases}</div>{others}</section>'

@@ -160,7 +160,8 @@ def _install() -> None:
                     if status == 200 and content_type.lower().startswith("text/html"):
                         try:
                             markup = body.decode("utf-8")
-                            adapted = transform(markup, identity(self.headers), tab or "resumo").encode("utf-8")
+                            selected_project = (query.get("project") or [""])[0]
+                            adapted = transform(markup, identity(self.headers), tab or "resumo", selected_project).encode("utf-8")
                             return send(self, 200, "text/html; charset=utf-8", adapted, captured_headers)
                         except Exception:
                             # Auto-recovery: return byte-identical legacy output.

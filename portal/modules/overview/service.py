@@ -23,6 +23,16 @@ def _fmt_bytes(n) -> str:
     return "-"
 
 
+def _fmt_rate(value) -> str:
+    try:
+        value = float(value or 0)
+    except (TypeError, ValueError):
+        return "Aguardando segunda coleta"
+    if value <= 0:
+        return "0 B/s"
+    return _fmt_bytes(value) + "/s"
+
+
 def _role_text(identity) -> str:
     groups = {g.lower() for g in identity.groups}
     if "cloudif-tenants-admin" in groups:
@@ -62,6 +72,7 @@ def server_metrics() -> dict:
             payload = {}
         mem = payload.get("memory", {}) or {}
         disk = payload.get("disk_root", {}) or {}
+        network = payload.get("network", {}) or {}
         total_memory, used_memory = mem.get("total") or 0, mem.get("used") or 0
         total_storage, used_storage = disk.get("size") or 0, disk.get("used") or 0
         age = _age_seconds(row["updated_at"])
@@ -78,6 +89,9 @@ def server_metrics() -> dict:
             "mem_pct": round(100 * used_memory / total_memory) if total_memory else 0,
             "disk_used": used_storage, "disk_total": total_storage,
             "disk_pct": round(100 * used_storage / total_storage) if total_storage else 0,
+            "network_rx_bps": network.get("rx_bps"),
+            "network_tx_bps": network.get("tx_bps"),
+            "network_total_bps": network.get("total_bps"),
         })
     return {
         "nodes": nodes,
@@ -86,6 +100,7 @@ def server_metrics() -> dict:
         "agg_mem": f"{_fmt_bytes(used_mem)} / {_fmt_bytes(total_mem)}",
         "agg_disk": f"{_fmt_bytes(used_disk)} / {_fmt_bytes(total_disk)}",
         "fmt": _fmt_bytes,
+        "fmt_rate": _fmt_rate,
     }
 
 
@@ -110,15 +125,25 @@ def academic_resources(identity) -> dict:
         con.row_factory = sqlite3.Row
         projects = _visible_projects(con, identity.username)
         slugs = [row["slug"] for row in projects]
-        if slugs:
-            marks = ",".join("?" for _ in slugs)
-            sites = [dict(row) for row in con.execute(
-                f"""SELECT pp.project_slug, pp.stable_hostname, pp.version_hostname,
-                           pp.status, pp.published_at, p.name, p.owner
-                    FROM project_publications pp JOIN projects p ON p.slug=pp.project_slug
-                    WHERE pp.is_active=1 AND pp.project_slug IN ({marks})
-                    ORDER BY lower(coalesce(p.name,p.slug))""", slugs
-            )]
+        for project in projects:
+            publication = con.execute(
+                """SELECT stable_hostname, version_hostname, status, published_at
+                   FROM project_publications
+                   WHERE project_slug=? AND is_active=1
+                   ORDER BY id DESC LIMIT 1""",
+                (project["slug"],),
+            ).fetchone()
+            sites.append({
+                "project_slug": project["slug"],
+                "name": project["name"] or project["slug"],
+                "owner": project["owner"],
+                "project_status": project["status"],
+                "stable_hostname": publication["stable_hostname"] if publication else None,
+                "version_hostname": publication["version_hostname"] if publication else None,
+                "status": publication["status"] if publication else None,
+                "published_at": publication["published_at"] if publication else None,
+                "published": bool(publication and publication["stable_hostname"]),
+            })
         for project in projects:
             tenant = (project["tenant"] or "").strip()
             if tenant:
