@@ -141,8 +141,9 @@ server {{
   raise
 
 def ensure_alias(state,num,dep,alias):
- if not re.fullmatch(r'[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?',alias): raise ValueError('invalid_alias')
+ if not re.fullmatch(r'[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?',alias) or alias.isdigit(): raise ValueError('invalid_alias')
  aliases=state.setdefault('aliases',{})
+ if alias in state.get('tenants',{}): raise ValueError('alias_in_use')
  current=aliases.get(alias)
  if current and int(current.get('public_number'))!=int(num): raise ValueError('alias_in_use')
  stable=f'{alias}.cloudiff.duckdns.org'; version=f'{dep}.{alias}.cloudiff.duckdns.org'
