@@ -8,6 +8,8 @@
     toggle.setAttribute("aria-expanded",open?"true":"false");
   });
   document.addEventListener("click",function(event){
+    var profile=document.querySelector(".profile-menu[open]");
+    if(profile&&!profile.contains(event.target)){profile.removeAttribute("open");}
     if(window.innerWidth>860||nav.contains(event.target)||toggle.contains(event.target)){return;}
     nav.classList.remove("is-open");
     toggle.setAttribute("aria-expanded","false");

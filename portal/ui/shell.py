@@ -69,17 +69,15 @@ def _navigation(identity: Identity, active_tab: str, allowed_modules: set[str] |
             entries = tuple((tab, label) for tab, label in entries if tab in allowed_tabs)
             if not entries:
                 continue
+        active_group = any(tab == active_tab for tab, _label in entries)
         links = []
         for tab, label in entries:
             current = ' aria-current="page"' if tab == active_tab else ""
-            links.append(
-                f'<a class="nav-link" href="/cloudiff/portal/?tab={escape(tab)}"{current}>'
-                f"{escape(label)}</a>"
-            )
+            links.append(f'<a class="nav-link" href="/cloudiff/portal/?tab={escape(tab)}"{current}>{escape(label)}</a>')
         output.append(
-            f'<div class="nav-group"><p class="nav-group-label">{escape(section)}</p>'
-            + "".join(links)
-            + "</div>"
+            f'<details class="nav-group"{" open" if active_group else ""}>'
+            f'<summary class="nav-group-label">{escape(section)}</summary>'
+            f'<div class="nav-group-links">{"".join(links)}</div></details>'
         )
     return "".join(output)
 
@@ -108,8 +106,12 @@ def _document(identity: Identity, active_tab: str, title: str, body: str, *, ext
         '<button class="bar-toggle" id="toggle" aria-label="Abrir navegação" aria-expanded="false" aria-controls="nav">☰</button>'
         '<span class="scope"><span class="scope-dot"></span>Ambiente acadêmico</span>'
         '<a class="search" href="/cloudiff/portal/?tab=projetos">Buscar em projetos</a>'
-        f'<span class="avatar" data-primary-group="{group_id}" title="{escape(identity.username)} · {group} · {group_id}">{icon("user-tie") or initials}</span>'
-        '<a class="btn btn-quiet session-exit" href="/outpost.goauthentik.io/sign_out">Sair</a>'
+        '<details class="profile-menu"><summary aria-label="Abrir perfil">'
+        f'<span class="avatar" data-primary-group="{group_id}">{icon("user-tie") or initials}</span>'
+        '</summary><div class="profile-card">'
+        f'<p class="profile-role">{group}</p><strong>{escape(identity.username)}</strong>'
+        f'<span>{escape(identity.email or "E-mail não informado")}</span>'
+        '<a href="/outpost.goauthentik.io/sign_out">Sair da plataforma</a></div></details>'
         '</header>'
         f'<main class="page" id="conteudo-principal"><div class="page-head"><p class="eyebrow">{group}</p>'
         f'<h1 class="page-title">{escape(title)}</h1></div>{body}</main>'
