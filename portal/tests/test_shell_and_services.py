@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import unittest
+from pathlib import Path
 
 from portal.core.auth import Identity
 from portal.modules.delivery import service as delivery_service
@@ -56,6 +57,14 @@ class ServiceTest(unittest.TestCase):
         self.assertEqual(agg["ram_total"], 10)
         self.assertEqual(agg["online"], 1)
         self.assertEqual(agg["count"], 2)
+
+
+    def test_shell_has_keyboard_skip_link(self):
+        root = Path(__file__).resolve().parents[1]
+        shell = (root / "ui" / "shell.py").read_text()
+        css = (root / "design" / "base.css").read_text()
+        self.assertIn('class="skip-link" href="#conteudo-principal"', shell)
+        self.assertIn('.skip-link:focus', css)
 
 
 if __name__ == "__main__":

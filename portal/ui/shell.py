@@ -95,7 +95,7 @@ def _document(identity: Identity, active_tab: str, title: str, body: str, *, ext
         '<link rel="stylesheet" href="/cloudiff/portal/assets/base.css">'
         '<link rel="stylesheet" href="/cloudiff/portal/assets/components.css">'
         '<script src="/cloudiff/portal/assets/app.js" defer></script>'
-        '</head><body><a class="sr-only" href="#conteudo-principal">Ir para o conteúdo</a><div class="app">'
+        '</head><body><a class="skip-link" href="#conteudo-principal">Ir para o conteúdo</a><div class="app">'
         '<nav class="nav" id="nav" aria-label="Navegação principal">'
         '<div class="nav-brand"><span class="nav-mark">CI</span>'
         '<span><span class="nav-brand-name">CloudIFF</span>'
