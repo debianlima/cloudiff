@@ -16,8 +16,56 @@ def _rows(slug):
     except Exception:
         return []
 
-def publication_panel(slug):
+def _project_context(slug, framework_hint=''):
+    context={'framework':framework_hint or '', 'database':'', 'repo_url':'', 'security':'Aguardando publicação'}
+    try:
+        con=sqlite3.connect(DB);con.row_factory=sqlite3.Row
+        project=con.execute('select * from projects where slug=?',(slug,)).fetchone()
+        if project:
+            keys=set(project.keys())
+            context['repo_url']=str(project['repo_url'] or '') if 'repo_url' in keys else ''
+            context['database']=str((project['tenant_default'] if 'tenant_default' in keys else '') or (project['tenant'] if 'tenant' in keys else '') or '')
+        if not context['database']:
+            try:
+                tenant=con.execute('select tenant from project_tenants where project=? order by is_primary desc,id limit 1',(slug,)).fetchone()
+                context['database']=str(tenant['tenant'] or '') if tenant else ''
+            except Exception:
+                pass
+        active=con.execute("select detail_json from project_publications where project_slug=? and status='published' and is_active=1 order by id desc limit 1",(slug,)).fetchone()
+        if active:
+            try:detail=json.loads(active['detail_json'] or '{}')
+            except Exception:detail={}
+            komodo=detail.get('komodo') or {}
+            source=komodo.get('publication_source') or ''
+            if not context['framework']:
+                if source in {'site','dist','build','public','root'}:context['framework']='Site estático'
+                elif komodo.get('generated_placeholder'):context['framework']='Não identificado'
+            context['security']='HTTPS ativo' + (' · Health validado' if komodo.get('healthy') else '')
+        con.close()
+    except Exception:
+        pass
+    context['framework']=context['framework'] or 'Não identificado'
+    context['database']=context['database'] or 'Nenhum banco vinculado'
+    return context
+
+
+def _project_information(context):
+    repo=context.get('repo_url') or ''
+    repo_value=(f'<a href="{h(repo)}" target="_blank" rel="noopener">Abrir repositório</a>' if repo else '<span>Nenhum repositório vinculado</span>')
+    return (
+        '<div class="publication-information">'
+        f'<div><span>Framework</span><strong>{h(context.get("framework"))}</strong></div>'
+        f'<div><span>Banco vinculado</span><strong>{h(context.get("database"))}</strong></div>'
+        f'<div><span>Segurança</span><strong>{h(context.get("security"))}</strong></div>'
+        f'<div><span>Repositório Forge</span>{repo_value}</div>'
+        '</div>'
+    )
+
+
+def publication_panel(slug, framework_hint=''):
     rows=_rows(slug)
+    context=_project_context(slug,framework_hint)
+    information=_project_information(context)
     try:
         from cloudif_portal_publications import latest_job
         job=latest_job(slug)
@@ -76,7 +124,7 @@ def publication_panel(slug):
 
     if not rows:
         return (
-            '<div class="cm-resource publication-manager-resource">'+job_html+alias_html+
+            '<div class="cm-resource publication-manager-resource">'+information+job_html+alias_html+
             '<div class="publication-active-card"><div><span>Estado</span><strong>Ainda não publicado</strong></div></div>'
             '<div class="cm-actions"><form method="post" action="/cloudiff/portal/action/publication">'
             f'<input type="hidden" name="slug" value="{h(slug)}">'
@@ -104,7 +152,7 @@ def publication_panel(slug):
             f'<td><a href="https://{h(r.get("version_hostname") or "")}/" target="_blank" rel="noopener">Abrir</a></td><td>{action}</td></tr>'
         )
     return (
-        '<div class="cm-resource publication-manager-resource">'+job_html+alias_html+
+        '<div class="cm-resource publication-manager-resource">'+information+job_html+alias_html+
         '<div class="publication-active-card"><div><span>Site publicado</span>'
         f'<a href="https://{h(active_host)}/" target="_blank" rel="noopener">{h(active_host)}</a></div><span class="pill ok">d{active_dep} ativa</span></div>'
         '<div class="cm-actions">'

@@ -14,9 +14,9 @@ class PublicationManagementUITest(unittest.TestCase):
         self.tmp=tempfile.TemporaryDirectory();self.db=Path(self.tmp.name)/'portal.db'
         con=sqlite3.connect(self.db)
         con.executescript('''
-        create table projects(slug text primary key,owner text,created_by text,status text);
+        create table projects(slug text primary key,owner text,created_by text,status text,repo_url text,tenant_default text,tenant text);
         create table project_acl(slug text,subject_type text,subject text);
-        insert into projects values('demo','alice','alice','published');
+        insert into projects values('demo','alice','alice','published','https://forge.example/cloudif/demo','demo-db','');
         ''')
         publications._ensure_schema(con)
         con.execute("insert into project_publications(project_slug,public_number,deploy_number,version,commit_sha,stable_hostname,version_hostname,status,is_active,created_by,created_at,published_at) values('demo',1001,1,'d1','abc','1001.cloudiff.duckdns.org','1001-d1.cloudiff.duckdns.org','published',1,'alice','now','now')")
@@ -54,6 +54,25 @@ class PublicationManagementUITest(unittest.TestCase):
         con.execute("update publication_jobs set id=? where id=?",(current['id']-1,old_id))
         con.commit();con.close()
         self.assertIsNone(publications.latest_job('demo'))
+
+
+
+    def test_information_uses_real_project_links(self):
+        markup=ui.publication_panel('demo','Django')
+        self.assertIn('Framework',markup);self.assertIn('Django',markup)
+        self.assertIn('Banco vinculado',markup);self.assertIn('demo-db',markup)
+        self.assertIn('Segurança',markup);self.assertIn('HTTPS ativo',markup)
+        self.assertIn('Repositório Forge',markup);self.assertIn('https://forge.example/cloudif/demo',markup)
+
+    def test_general_cleaner_matches_individual_structure(self):
+        from portal.core.legacy_shell import clean_general_publication_body
+        body='<section><div class="page-hero">Meus Projetos Publicação</div><article class="publication-project card"><div class="publication-head"><h2>Demo</h2><code>demo</code></div><div class="publication-grid">Preview Produção</div><div class="publication-flow">Detecção Plano Build Rollback</div><div class="cm-resource"><div class="publication-information">Framework Banco vinculado Segurança Repositório Forge</div></div></article></section>'
+        out=clean_general_publication_body(body)
+        self.assertIn('publication-manager',out)
+        self.assertIn('Framework Banco vinculado Segurança Repositório Forge',out)
+        self.assertNotIn('Meus Projetos Publicação',out)
+        self.assertNotIn('Preview Produção',out)
+        self.assertNotIn('Detecção Plano Build Rollback',out)
 
 
 if __name__=='__main__':unittest.main()

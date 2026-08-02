@@ -293,6 +293,25 @@ def _balanced_element_by_class(markup: str, tag_name: str, class_token: str) -> 
     return ""
 
 
+def clean_general_publication_body(body: str) -> str:
+    cards=[]
+    for _start,_end,card in _card_spans(body,"publication-project"):
+        resource=_balanced_element_by_class(card,"div","cm-resource")
+        heading=re.search(r'<h2[^>]*>(.*?)</h2>',card,re.S|re.I)
+        code=re.search(r'<code[^>]*>(.*?)</code>',card,re.S|re.I)
+        title=heading.group(1) if heading else "Projeto"
+        slug=code.group(1) if code else ""
+        if resource:
+            cards.append(
+                '<article class="publication-project card publication-manager">'
+                f'<div class="publication-manager-head"><div><p>Projeto</p><h2>{title}</h2><code>{slug}</code></div></div>{resource}'
+                '</article>'
+            )
+        else:
+            cards.append(card)
+    return ''.join(cards) if cards else body
+
+
 def individual_publication_body(body: str, selected_project: str) -> str:
     """Return only the selected publication card for the individual manager."""
     if not selected_project:
@@ -326,6 +345,7 @@ def group_resources_by_user(body: str, tab: str, identity: Identity, selected_pr
     if tab == "publicacao":
         if selected_project:
             return individual_publication_body(body, selected_project)
+        body=clean_general_publication_body(body)
         slugs = sorted(project_owners, key=len, reverse=True)
         def publication_owner(card: str) -> str:
             slug = next((item for item in slugs if item in card), "")
