@@ -264,11 +264,24 @@ def group_resources_by_user(body: str, tab: str, identity: Identity) -> str:
             return project_owners.get(slug, "")
         return _group_cards(body, "publication-project", publication_owner, identity.username, "publicação")
 
-    def database_owner(card: str) -> str:
-        match = re.search(r'<article\b[^>]*\bid=["\']([^"\']+)', card, re.I)
-        tenant = unescape(match.group(1)) if match else ""
-        return tenant_owners.get(tenant, "")
-    return _group_cards(body, "db96-card", database_owner, identity.username, "banco")
+    def mark_database(match: re.Match[str]) -> str:
+        opening = match.group(0)
+        ident = re.search(r'\bid=["\']([^"\']+)', opening, re.I)
+        tenant = unescape(ident.group(1)) if ident else ""
+        owner = tenant_owners.get(tenant, "")
+        if "data-resource-owner=" in opening:
+            return opening
+        return opening[:-1] + f' data-resource-owner="{escape(owner)}">'
+
+    opening = re.compile(
+        r'<article\b[^>]*class=["\'][^"\']*\bdb96-card\b[^"\']*["\'][^>]*>',
+        re.I,
+    )
+    marked = opening.sub(mark_database, body)
+    return (
+        f'<div class="js-owner-resource-source" data-resource-kind="banco" '
+        f'data-current-user="{escape(identity.username)}">{marked}</div>'
+    )
 
 def transform(markup: str, identity: Identity, tab: str) -> str:
     page = parse_legacy(markup, tab)

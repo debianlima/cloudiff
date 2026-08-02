@@ -32,8 +32,9 @@ class GroupedResourcesTest(unittest.TestCase):
             '<article class="card db96-card" id="orphan-db"></article>'
         )
         output = group_resources_by_user(body, "bancos", self.identity)
-        self.assertIn('alice · você', output)
-        self.assertIn('Sem usuário vinculado', output)
+        self.assertIn('data-current-user="alice"', output)
+        self.assertIn('id="alice-db" data-resource-owner="alice"', output)
+        self.assertIn('id="orphan-db" data-resource-owner=""', output)
         self.assertEqual(output.count('db96-card'), 2)
         self.assertIn('<article class="nested">inner</article>', output)
 
