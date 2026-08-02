@@ -5,14 +5,20 @@ from pathlib import Path
 class ProjectResourceReorganizationTest(unittest.TestCase):
     def setUp(self):
         self.root=Path(__file__).resolve().parents[2]
-        self.source=(self.root/'components/control-plane/current-apps/portal-current/cloudif-admin-portal.py').read_text()
+        source=self.root/'components/control-plane/current-apps/portal-current/cloudif-admin-portal.py'
+        if not source.exists():
+            source=self.root/'portal/legacy/cloudif-admin-portal.py'
+        self.source=source.read_text()
 
     def test_project_tabs_are_focused_and_mcp_is_embedded(self):
         self.assertIn("{'Serviços':services,'Containers':containers,'Publicação':pubs,'Backups':backups,'Agente IA e MCP':agent}",self.source)
         project_block=self.source[self.source.index("document.querySelectorAll('.project-card')"):self.source.index("const bankMarker")]
         self.assertNotIn("{'Visão geral':overview",project_block,msg='A aba Visão geral não pode voltar aos projetos')
         self.assertIn("#project-identities article.project-card",project_block)
-        identity=(self.root/'components/control-plane/current-apps/portal-current/cloudif_project_identity_panel.py').read_text()
+        identity_path=self.root/'components/control-plane/current-apps/portal-current/cloudif_project_identity_panel.py'
+        if not identity_path.exists():
+            identity_path=self.root/'portal/legacy/cloudif_project_identity_panel.py'
+        identity=identity_path.read_text()
         self.assertIn("Rotacionar e exibir uma vez",identity)
 
     def test_backups_are_limited_and_expandable(self):
