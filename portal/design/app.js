@@ -53,9 +53,22 @@
   }
   groupDatabaseCards();
   document.querySelectorAll('form[action$="/action/publication"]').forEach(function(form){
-    form.addEventListener('submit',function(){
-      var button=form.querySelector('button[type="submit"],button:not([type])');
-      if(button){button.disabled=true;button.textContent='Enviando…';}
+    form.addEventListener('submit',function(event){
+      var button=event.submitter||form.querySelector('button[type="submit"],button:not([type])');
+      if(!button){return;}
+      if(button.name&&button.value){
+        var operation=form.querySelector('input[data-submit-operation]');
+        if(!operation){
+          operation=document.createElement('input');
+          operation.type='hidden';
+          operation.setAttribute('data-submit-operation','true');
+          form.appendChild(operation);
+        }
+        operation.name=button.name;
+        operation.value=button.value;
+      }
+      button.disabled=true;
+      button.textContent='Enviando…';
     });
   });
   document.addEventListener("keydown",function(event){

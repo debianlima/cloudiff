@@ -1,4 +1,5 @@
 import unittest
+from pathlib import Path
 from portal.modules.overview.views import _network_graph, _site_card
 
 
@@ -35,6 +36,14 @@ class OverviewSiteCardTest(unittest.TestCase):
         self.assertIn("Envio", markup)
         self.assertIn('width:100%', markup)
         self.assertIn('width:50%', markup)
+
+
+    def test_publication_submit_preserves_operation_before_disabling_button(self):
+        source = (Path(__file__).resolve().parents[1] / "design" / "app.js").read_text()
+        self.assertIn("event.submitter", source)
+        self.assertIn("operation.name=button.name", source)
+        self.assertIn("operation.value=button.value", source)
+        self.assertLess(source.index("operation.value=button.value"), source.index("button.disabled=true"))
 
 
 if __name__ == "__main__":
