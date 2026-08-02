@@ -144,8 +144,23 @@
 .owner-resource-items>.publication-project,.owner-resource-items>.db96-card{margin:0}
 @media(max-width:680px){.owner-resource-group>summary{align-items:flex-start;padding:var(--s3) var(--s4)}.owner-resource-count{white-space:nowrap}.owner-resource-items{padding:var(--s3)}}
 
-.network-metrics{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--s2);margin-top:var(--s4);padding-top:var(--s3);border-top:1px solid var(--rule-soft)}
-.network-metrics div{display:grid;gap:2px}
-.network-metrics span{font-size:11px;color:var(--ink-3)}
-.network-metrics b{font-family:var(--data);font-size:12px;color:var(--ink)}
-@media(max-width:480px){.network-metrics{grid-template-columns:1fr}}
+
+.sites-grid,.server-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+.server-card{display:flex;flex-direction:column}
+.network-panel{margin-top:var(--s4);padding-top:var(--s4);border-top:1px solid var(--rule-soft)}
+.network-panel-head{display:flex;align-items:flex-start;justify-content:space-between;gap:var(--s3);margin-bottom:var(--s3)}
+.network-panel-head>div{display:grid;gap:2px}
+.network-title{font-family:var(--display);font-size:13px;font-weight:700;color:var(--ink)}
+.network-panel small{font-size:11px;color:var(--ink-3)}
+.network-live{font-family:var(--data);font-size:10px;color:var(--iff-dark);background:var(--iff-wash);border-radius:999px;padding:2px 7px}
+.network-chart{display:grid;gap:var(--s2)}
+.network-row{display:grid;grid-template-columns:86px minmax(80px,1fr) 74px;align-items:center;gap:var(--s2)}
+.network-key{font-size:11px;color:var(--ink-2)}
+.network-key::before{content:"";display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:6px;background:var(--iff)}
+.network-key.is-tx::before{background:var(--focus)}
+.network-track{height:8px;background:var(--rule-soft);border-radius:999px;overflow:hidden}
+.network-fill{display:block;height:100%;min-width:0;border-radius:inherit;background:var(--iff)}
+.network-fill.is-tx{background:var(--focus)}
+.network-row b{text-align:right;font-family:var(--data);font-size:11px;color:var(--ink);white-space:nowrap}
+@media(max-width:760px){.sites-grid,.server-grid{grid-template-columns:1fr}}
+@media(max-width:430px){.network-row{grid-template-columns:1fr 70px}.network-track{grid-column:1/-1;grid-row:2}.network-row b{grid-column:2;grid-row:1}.network-key{grid-column:1;grid-row:1}}

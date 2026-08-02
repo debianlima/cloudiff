@@ -12,6 +12,28 @@ def _bar(pct: int) -> str:
     return f'<div class="ov-bar"><span class="ov-bar-fill" style="width:{pct}%"></span></div>'
 
 
+def _network_graph(node: dict) -> str:
+    rx = max(0.0, float(node.get("network_rx_bps") or 0))
+    tx = max(0.0, float(node.get("network_tx_bps") or 0))
+    peak = max(rx, tx, 1.0)
+    rx_pct = max(3, round(100 * rx / peak)) if rx else 0
+    tx_pct = max(3, round(100 * tx / peak)) if tx else 0
+    return (
+        '<div class="network-panel" aria-label="Tráfego de rede do servidor">'
+        '<div class="network-panel-head"><div><span class="network-title">Tráfego de rede</span>'
+        '<small>Taxa atual recebida e enviada pelo servidor</small></div>'
+        '<span class="network-live">Agora</span></div>'
+        '<div class="network-chart">'
+        '<div class="network-row"><span class="network-key is-rx">Recebimento</span>'
+        f'<div class="network-track" role="img" aria-label="Recebimento {node.get("network_rx_label", "-")}"><span class="network-fill is-rx" style="width:{rx_pct}%"></span></div>'
+        f'<b>{node.get("network_rx_label", "-")}</b></div>'
+        '<div class="network-row"><span class="network-key is-tx">Envio</span>'
+        f'<div class="network-track" role="img" aria-label="Envio {node.get("network_tx_label", "-")}"><span class="network-fill is-tx" style="width:{tx_pct}%"></span></div>'
+        f'<b>{node.get("network_tx_label", "-")}</b></div>'
+        '</div></div>'
+    )
+
+
 def _server_card(node: dict, fmt) -> str:
     if node["online"]:
         state, detail = '<span class="chip">Disponível</span>', "Coleta recente"
@@ -25,10 +47,7 @@ def _server_card(node: dict, fmt) -> str:
         f'<p class="resource-note">{detail}</p>'
         f'<div class="metric-line"><span>Memória</span><b>{fmt(node["mem_used"])} de {fmt(node["mem_total"])}</b></div>{_bar(node["mem_pct"])}'
         f'<div class="metric-line"><span>Armazenamento</span><b>{fmt(node["disk_used"])} de {fmt(node["disk_total"])}</b></div>{_bar(node["disk_pct"])}'
-        '<div class="network-metrics">'
-        f'<div><span>Recebimento</span><b>{node.get("network_rx_label", "-")}</b></div>'
-        f'<div><span>Envio</span><b>{node.get("network_tx_label", "-")}</b></div>'
-        '</div></article>'
+        f'{_network_graph(node)}</article>'
     )
 
 
@@ -100,7 +119,7 @@ def overview_body(data: dict) -> str:
         f'<h2>Olá, {username}.</h2><p>Aqui você encontra o que está publicando, os bancos ligados aos seus projetos e os caminhos mais usados para continuar seu trabalho.</p></div>'
         f'<div class="welcome-actions"><a class="btn" href="{BASE}/?tab=projetos">Continuar um projeto</a><a class="btn btn-quiet" href="{BASE}/?tab=ajuda">Primeiros passos</a></div></section>'
         '<section class="resource-section" aria-labelledby="my-sites-title"><div class="resource-section-head"><div><p class="ov-eyebrow">Publicações</p><h2 id="my-sites-title">Meus sites</h2><p>Todos os seus projetos web, publicados ou em preparação.</p></div>'
-        f'<a href="{BASE}/?tab=publicacao">Ver todas as publicações</a></div><div class="resource-grid">{sites}</div></section>'
+        f'<a href="{BASE}/?tab=publicacao">Ver todas as publicações</a></div><div class="resource-grid sites-grid">{sites}</div></section>'
         '<section class="resource-section" aria-labelledby="my-databases-title"><div class="resource-section-head"><div><p class="ov-eyebrow">Dados</p><h2 id="my-databases-title">Meus bancos</h2><p>Ambientes de dados que você pode usar nos seus projetos.</p></div>'
         f'<a href="{BASE}/?tab=bancos">Gerenciar todos os bancos</a></div><div class="resource-grid">{databases}</div>{others}</section>'
         '<section class="resource-section platform-health" aria-labelledby="platform-title"><div class="resource-section-head"><div><p class="ov-eyebrow">Plataforma</p><h2 id="platform-title">Saúde da plataforma</h2>'
