@@ -73,7 +73,11 @@ class ProjectResourceReorganizationTest(unittest.TestCase):
 
 class ActiveProjectRendererContractTest(unittest.TestCase):
     def setUp(self):
-        self.source=(Path(__file__).resolve().parents[2]/"components/control-plane/current-apps/portal-current/cloudif-admin-portal.py").read_text()
+        root=Path(__file__).resolve().parents[2]
+        source=root/"components/control-plane/current-apps/portal-current/cloudif-admin-portal.py"
+        if not source.exists():
+            source=root/"portal/legacy/cloudif-admin-portal.py"
+        self.source=source.read_text()
 
     def test_active_renderer_contains_owner_metadata_and_neutral_tenant_copy(self):
         source=(Path(__file__).resolve().parents[2]/"components/control-plane/current-apps/portal-current/cloudif-admin-portal.py").read_text()
