@@ -168,9 +168,14 @@ def _document(identity: Identity, active_tab: str, title: str, body: str, *, ext
 
 
 def render(identity: Identity, nav_modules: list[str], active: str, title: str, body: str) -> str:
-    """Render native v2 modules in the same canonical shell."""
+    """Render native v2 modules in the same canonical shell.
+
+    ``nav_modules`` remains part of the route contract, but the global entity
+    navigation is stable across pages. Authorization is enforced before the
+    shell renders; the current route must not reshape the user's menu.
+    """
     active_tab = _MODULE_TO_TAB.get(active, active)
-    return _document(identity, active_tab, title, body, allowed_modules=set(nav_modules))
+    return _document(identity, active_tab, title, body)
 
 
 def render_legacy(identity: Identity, active_tab: str, title: str, body: str, legacy_head: str, legacy_scripts: str) -> str:

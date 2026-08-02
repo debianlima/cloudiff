@@ -23,13 +23,14 @@ class ShellTest(unittest.TestCase):
         self.assertIn("CloudIF-Tenants-Admin", html)  # primary group in profile
         self.assertIn('aria-current="page"', html)
 
-    def test_nav_only_shows_provided_modules(self):
-        html = shell.render(self.admin, ["overview"], "overview", "Início", "")
-        self.assertIn("Início", html)
-        self.assertNotIn("Administração", html)  # admin module not passed
+    def test_navigation_is_stable_across_native_modules(self):
+        doc = shell.render(self.admin, ["overview"], "overview", "Resumo", "<p>ok</p>")
+        self.assertIn('href="/cloudiff/portal/?tab=resumo"', doc)
+        self.assertIn('href="/cloudiff/portal/?tab=projetos"', doc)
+        self.assertIn('href="/cloudiff/portal/?tab=bancos"', doc)
+        self.assertIn('href="/cloudiff/portal/?tab=monitor-saude"', doc)
 
 
-class ServiceTest(unittest.TestCase):
     def test_health_summary_and_score(self):
         items = [{"healthy": True}, {"healthy": True}, {"state": "unlinked"}, {"state": "unknown"}]
         summary = health_service.summarize_repairs(items)
