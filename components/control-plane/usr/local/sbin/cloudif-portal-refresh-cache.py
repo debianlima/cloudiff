@@ -138,7 +138,7 @@ def refresh_nodes():
         previous_row = con.execute(
             "SELECT payload, updated_at FROM node_metrics_cache WHERE node=?", (name,)
         ).fetchone()
-        result = fetch_json(url, 5)
+        result = fetch_json(url, 15)
         payload = result.get("data") if result.get("ok") else result
         sampled_at = now_iso()
         if result.get("ok") and isinstance(payload, dict) and previous_row:
