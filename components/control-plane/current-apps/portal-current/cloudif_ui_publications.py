@@ -51,11 +51,17 @@ def _project_context(slug, framework_hint=''):
 
 def _project_information(context):
     repo=context.get('repo_url') or ''
+    database=context.get('database') or ''
     repo_value=(f'<a href="{h(repo)}" target="_blank" rel="noopener">Abrir repositório</a>' if repo else '<span>Nenhum repositório vinculado</span>')
+    if database and database!='Nenhum banco vinculado':
+        studio=f'https://{database}.cloudiff.duckdns.org/project/default'
+        database_value=f'<a href="{h(studio)}" target="_blank" rel="noopener">{h(database)}</a>'
+    else:
+        database_value=f'<strong>{h(database or "Nenhum banco vinculado")}</strong>'
     return (
         '<div class="publication-information">'
         f'<div><span>Framework</span><strong>{h(context.get("framework"))}</strong></div>'
-        f'<div><span>Banco vinculado</span><strong>{h(context.get("database"))}</strong></div>'
+        f'<div><span>Banco vinculado</span>{database_value}</div>'
         f'<div><span>Segurança</span><strong>{h(context.get("security"))}</strong></div>'
         f'<div><span>Repositório Forge</span>{repo_value}</div>'
         '</div>'

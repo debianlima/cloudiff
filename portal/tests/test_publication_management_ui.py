@@ -61,6 +61,8 @@ class PublicationManagementUITest(unittest.TestCase):
         markup=ui.publication_panel('demo','Django')
         self.assertIn('Framework',markup);self.assertIn('Django',markup)
         self.assertIn('Banco vinculado',markup);self.assertIn('demo-db',markup)
+        self.assertIn('https://demo-db.cloudiff.duckdns.org/project/default',markup)
+        self.assertIn('target="_blank"',markup)
         self.assertIn('Segurança',markup);self.assertIn('HTTPS ativo',markup)
         self.assertIn('Repositório Forge',markup);self.assertIn('https://forge.example/cloudif/demo',markup)
 
@@ -73,6 +75,14 @@ class PublicationManagementUITest(unittest.TestCase):
         self.assertNotIn('Meus Projetos Publicação',out)
         self.assertNotIn('Preview Produção',out)
         self.assertNotIn('Detecção Plano Build Rollback',out)
+
+
+
+    def test_unlinked_database_remains_plain_text(self):
+        context={'framework':'Django','database':'Nenhum banco vinculado','security':'Aguardando publicação','repo_url':''}
+        markup=ui._project_information(context)
+        self.assertIn('Nenhum banco vinculado',markup)
+        self.assertNotIn('.cloudiff.duckdns.org/project/default',markup)
 
 
 if __name__=='__main__':unittest.main()
