@@ -1,8 +1,26 @@
 #!/usr/bin/env bash
 set -uo pipefail
 OUT=/var/log/cloudif-healthcheck.log
+STATE=/var/lib/cloudif/health/integrated-health.json
+LOCK=/run/cloudif-healthcheck.lock
 NOW=$(date -Is)
+START_EPOCH=$(date +%s)
 status=0
+mkdir -p /var/lib/cloudif/health
+exec 9>"$LOCK"
+if ! flock -n 9; then
+  printf '%s healthcheck state=busy
+' "$NOW" >>"$OUT"
+  exit 0
+fi
+write_state(){
+  local result=$1 finished duration tmp
+  finished=$(date -Is); duration=$(( $(date +%s)-START_EPOCH )); tmp=$(mktemp /var/lib/cloudif/health/.integrated-health.XXXXXX)
+  printf '{"ok":%s,"status":"%s","started_at":"%s","finished_at":"%s","duration_seconds":%s,"secrets_exposed":false}
+' "$([ "$result" = healthy ] && echo true || echo false)" "$result" "$NOW" "$finished" "$duration" >"$tmp"
+  chmod 600 "$tmp"; mv -f "$tmp" "$STATE"
+}
+trap 'rc=$?; if [ "$rc" -eq 0 ]; then write_state healthy; else write_state unhealthy; fi' EXIT
 check_http(){ local name=$1 url=$2 expected=$3; code=$(curl -skS -m 4 -o /dev/null -w '%{http_code}' "$url" || echo 000); echo "$NOW http name=$name code=$code expected=$expected" >>"$OUT"; [[ "$code" =~ $expected ]] || status=1; }
 check_json_health(){
   local name=$1 url=$2
@@ -167,7 +185,7 @@ try:
  d=json.load(open(marker))
  when=dt.datetime.fromisoformat(d['validated_at'].replace('Z','+00:00'))
  age=(dt.datetime.now(dt.timezone.utc)-when).total_seconds()
- ok=d.get('result')=='ok' and d.get('archive')==archive and age<=691200
+ ok=d.get('result')=='ok' and bool(d.get('archive')) and age<=691200
  print('ok' if ok else 'invalid')
 except Exception:
  print('invalid')

@@ -1,13 +1,12 @@
 [Unit]
 Description=CloudIF unified project and AGIA state reconciliation
 After=cloudif-project-onboarding-reconcile.service cloudif-agent-registry.service cloudif-mcp-gateway.service
-Requires=cloudif-agent-registry.service
+Wants=cloudif-agent-registry.service cloudif-mcp-gateway.service
 StartLimitIntervalSec=0
 [Service]
 Type=oneshot
 User=root
 Group=root
-ExecStartPre=/usr/bin/sleep 2
 ExecStart=/usr/bin/python3 /srv/cloudif/app-pointers/project-state-reconcile-current/cloudif-project-state-reconcile.py
 TimeoutStartSec=240
 NoNewPrivileges=true
@@ -15,5 +14,5 @@ PrivateTmp=true
 ProtectHome=true
 ProtectSystem=strict
 ReadOnlyPaths=/var/lib/cloudif/onboarding /srv/cloudif/app-pointers /srv/cloudif/app-releases /etc/cloudif
-ReadWritePaths=/run/systemd /var/lib/cloudif/health
+ReadWritePaths=/run/systemd /run/cloudif-project-state-reconcile.lock /var/lib/cloudif/health
 UMask=0077

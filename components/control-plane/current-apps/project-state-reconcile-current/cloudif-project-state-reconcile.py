@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-import argparse,datetime as dt,hashlib,json,os,sqlite3,subprocess,tempfile,time
+import argparse,datetime as dt,fcntl,hashlib,json,os,sqlite3,subprocess,tempfile,time,traceback
 ON='/var/lib/cloudif/onboarding/onboarding.db'
 OUT='/var/lib/cloudif/health/project-state-reconcile.json'
 AGENT='/var/lib/cloudif/health/agent-controller.json'
 CAP='/var/lib/cloudif/health/project-capabilities-v2.json'
+LOCK='/run/cloudif-project-state-reconcile.lock'
 SOURCES=(
  '/srv/cloudif/app-pointers/agent-controller-current/cloudif-agent-controller.py',
  '/srv/cloudif/app-pointers/project-capabilities-current/cloudif-project-capabilities.py',
@@ -67,12 +68,25 @@ def jload_text(raw):
   x=json.loads(raw or '{}');return x if isinstance(x,dict) else {}
  except Exception:return {}
 def main(force=False):
- rows=onboarding_rows();fp,sources=fingerprint(rows);previous=jload(OUT)
- if not force and previous.get('ok') is True and previous.get('fingerprint')==fp and previous.get('projects_count')==len(rows):
-  print(json.dumps({'ok':True,'changed':False,'projects':len(rows),'fingerprint':fp,'execution_mode':'noop','tokens_rotated':0},separators=(',',':')));return 0
- components=parallel_reconcile();report=build_report(rows,fp,sources,components,True);atomic(OUT,report)
- print(json.dumps({'ok':report['ok'],'changed':True,'projects':report['projects_count'],'ready':report['projects_ready'],'components':components,'tokens_rotated':0},separators=(',',':')))
- return 0 if report['ok'] and all(x['ok'] for x in components) else 1
+ os.makedirs(os.path.dirname(LOCK),exist_ok=True)
+ with open(LOCK,'w') as lock:
+  try:fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
+  except BlockingIOError:
+   print(json.dumps({'ok':True,'changed':False,'execution_mode':'busy','tokens_rotated':0},separators=(',',':')));return 0
+  started=time.monotonic();started_at=now();previous=jload(OUT)
+  try:
+   rows=onboarding_rows();fp,sources=fingerprint(rows)
+   if not force and previous.get('ok') is True and previous.get('fingerprint')==fp and previous.get('projects_count')==len(rows):
+    summary={'ok':True,'changed':False,'projects':len(rows),'fingerprint':fp,'execution_mode':'noop','duration_ms':round((time.monotonic()-started)*1000),'tokens_rotated':0}
+    print(json.dumps(summary,separators=(',',':')));return 0
+   components=parallel_reconcile();report=build_report(rows,fp,sources,components,True)
+   report['started_at']=started_at;report['duration_ms']=round((time.monotonic()-started)*1000);report['error']=None
+   atomic(OUT,report)
+   print(json.dumps({'ok':report['ok'],'changed':True,'projects':report['projects_count'],'ready':report['projects_ready'],'components':components,'duration_ms':report['duration_ms'],'tokens_rotated':0},separators=(',',':')))
+   return 0 if report['ok'] and all(x['ok'] for x in components) else 1
+  except Exception as exc:
+   failure={'ok':False,'generated_at':now(),'started_at':started_at,'last_success_at':previous.get('last_success_at'),'execution_mode':'failed','duration_ms':round((time.monotonic()-started)*1000),'error':type(exc).__name__,'message':str(exc)[:240],'tokens_rotated':0,'secrets_exposed':False}
+   atomic(OUT,failure);print(json.dumps(failure,separators=(',',':')));return 1
 def selftest():
  rows=onboarding_rows();fp,sources=fingerprint(rows);assert len(fp)==64 and rows and all('project_slug' in x for x in rows)
  a=jload(AGENT);c=jload(CAP);assert a.get('tokens_rotated')==0 and c.get('effects_executed') is False
