@@ -174,4 +174,11 @@ class DefinitiveProjectManagementRendererTest(unittest.TestCase):
         self.assertIn('class="project-owner-final"',block)
         self.assertIn("'Meus projetos' if owner==user['username']",block)
 
+
+    def test_public_directory_and_acl_paths_are_supported(self):
+        self.assertIn('/cloudiff/portal/api/ad-search',self.source)
+        self.assertIn('/cloudiff/portal/action/project_acl',self.source)
+        self.assertIn('project_acl_module.render_acl_modal',self.source)
+
+
 if __name__=='__main__':unittest.main()

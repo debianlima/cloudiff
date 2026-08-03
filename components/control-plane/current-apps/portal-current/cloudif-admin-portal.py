@@ -4124,7 +4124,7 @@ if "Portal" in globals():
         # Aceita os dois formatos:
         # - caminho externo antes do rewrite
         # - caminho interno depois do proxy reverso remover /cloudif/portal
-        if clean_path in ["/cloudif/portal/api/ad-search", "/api/ad-search"]:
+        if clean_path in ["/cloudiff/portal/api/ad-search", "/cloudif/portal/api/ad-search", "/api/ad-search"]:
             try:
                 import cloudif_ad_directory_module as directory
             except Exception as e:
