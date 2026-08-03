@@ -5960,6 +5960,19 @@ if 'page' in globals() and not globals().get('_pm197_page_wrapped'):
         return _pm197_prev_page(user,tab,body).replace('</head>',_PM197_CSS+'</head>',1)
     _pm197_page_wrapped=True
 # CloudIF definitive project management renderer END
+# CloudIF definitive project route override BEGIN
+if 'Portal' in globals() and not globals().get('_pm197_route_wrapped'):
+    _pm197_prev_get=Portal.do_GET
+    def _pm197_get(self):
+        parsed=urllib.parse.urlparse(self.path)
+        tab=(urllib.parse.parse_qs(parsed.query).get('tab') or [''])[0]
+        if tab=='projetos' and parsed.path.rstrip('/') in ('','/cloudiff/portal','/cloudif/portal'):
+            user=self.user()
+            return self.send_html(page(user,'projetos',_pm197_render(user)))
+        return _pm197_prev_get(self)
+    Portal.do_GET=_pm197_get
+    _pm197_route_wrapped=True
+# CloudIF definitive project route override END
 
 if __name__ == "__main__":
     init_db()
