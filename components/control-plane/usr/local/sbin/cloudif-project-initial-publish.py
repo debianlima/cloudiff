@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import json,sqlite3,subprocess,sys,time,urllib.request,urllib.error
+import json,os,sqlite3,subprocess,sys,time,tempfile,urllib.request,urllib.error
 from pathlib import Path
 DB='/var/lib/cloudif/portal/cloudif-portal.db'
 def envfile(path):
@@ -36,47 +36,55 @@ def update_db(slug,tenant,owner,num,commit=''):
  if updates:
   c.execute('update projects set '+','.join(k+'=?' for k in updates)+' where slug=?',list(updates.values())+[slug])
  c.commit(); c.close()
+def atomic_job(path,data):
+ fd,tmp=tempfile.mkstemp(prefix='.project-job-',dir=str(path.parent))
+ try:
+  with os.fdopen(fd,'w') as f:
+   json.dump(data,f,ensure_ascii=False,indent=2);f.write('\n');f.flush();os.fsync(f.fileno())
+  os.chmod(tmp,0o600);os.replace(tmp,path)
+ finally:
+  try:os.unlink(tmp)
+  except FileNotFoundError:pass
+
+def progress(path,job,message,attempt=0,detail=''):
+ job.update(status='running',current_step='initial-publication',message=message,progress_attempt=attempt,progress_detail=detail[:500],updated_at=time.strftime('%Y-%m-%dT%H:%M:%S%z'))
+ atomic_job(path,job)
+
 def main():
- job=json.loads(Path(sys.argv[1]).read_text()); slug=job['slug']; tenant=job['tenant']; owner=(job.get('user') or {}).get('username',''); kind=job.get('template_kind','none'); num=public_number(slug)
+ job_path=Path(sys.argv[1]); job=json.loads(job_path.read_text()); slug=job['slug']; tenant=job['tenant']; owner=(job.get('user') or {}).get('username',''); kind=job.get('template_kind','none'); num=public_number(slug)
  kc=envfile('/etc/cloudif/komodo-agent-client.env'); kbase=(kc.get('KOMODO_AGENT_URL') or 'http://10.62.91.2:18098').rstrip('/'); kt=kc.get('KOMODO_AGENT_TOKEN',''); kh={'X-CloudIF-Token':kt,'Authorization':'Bearer '+kt} if kt else {}
  payload={'project_slug':slug,'project':slug,'slug':slug,'tenant':tenant,'actor':'project-initial-publish','deploy':True,'wait_timeout':600}
  final={}
  def deployment_ready():
   nonlocal final
-  try:
-   _,final=request(kbase+'/komodo/project/status','POST',payload,kh,30)
-  except Exception:
-   return False
-  stack=final.get('stack') or {}
-  busy=final.get('busy') or {}
-  deployed=stack.get('deployed_hash') or ''
-  latest=stack.get('latest_hash') or ''
+  _,final=request(kbase+'/komodo/project/status','POST',payload,kh,20)
+  stack=final.get('stack') or {}; busy=final.get('busy') or {}
+  deployed=str(stack.get('deployed_hash') or ''); latest=str(stack.get('latest_hash') or '')
   remote_errors=stack.get('remote_errors') or []
-  hash_confirmed=bool(deployed) and deployed == latest
-  service_confirmed=(
-   not deployed and bool(latest) and
-   bool(stack.get('latest_services') or stack.get('services'))
-  )
-  return (
-   final.get('ok') is True and
-   final.get('deploy_status') == 'completed' and
-   not busy.get('repo') and not busy.get('stack') and
-   not (stack.get('missing_files') or []) and
-   not remote_errors and
-   (hash_confirmed or service_confirmed)
-  )
- if not deployment_ready():
-  request(kbase+'/komodo/stack/pull','POST',payload,kh,90)
-  request(kbase+'/komodo/stack/deploy','POST',payload,kh,90)
-  for i in range(120):
-   if deployment_ready(): break
-   if i and i%20==0:
-    try: request(kbase+'/komodo/stack/pull','POST',payload,kh,90)
-    except Exception: pass
-    try: request(kbase+'/komodo/stack/deploy','POST',payload,kh,90)
-    except Exception: pass
+  completed=final.get('ok') is True and final.get('deploy_status')=='completed'
+  idle=not busy.get('repo') and not busy.get('stack')
+  identified=bool(stack.get('id') or stack.get('name'))
+  hashes_consistent=(not deployed) or (not latest) or deployed==latest
+  detail=f"status={final.get('deploy_status')} busy_repo={bool(busy.get('repo'))} busy_stack={bool(busy.get('stack'))} deployed={deployed or '-'} latest={latest or '-'} errors={len(remote_errors)}"
+  return completed and idle and identified and not (stack.get('missing_files') or []) and not remote_errors and hashes_consistent,detail
+ progress(job_path,job,'Verificando a stack no Komodo.',0)
+ try:ready,detail=deployment_ready()
+ except Exception as exc:ready=False;detail=type(exc).__name__+': '+str(exc)
+ if not ready:
+  progress(job_path,job,'Atualizando o repositório da stack.',1,detail)
+  request(kbase+'/komodo/stack/pull','POST',payload,kh,60)
+  progress(job_path,job,'Iniciando o deploy da stack.',2,detail)
+  request(kbase+'/komodo/stack/deploy','POST',payload,kh,60)
+  deadline=time.monotonic()+300;attempt=2
+  while time.monotonic()<deadline:
+   attempt+=1
+   try:ready,detail=deployment_ready()
+   except Exception as exc:ready=False;detail=type(exc).__name__+': '+str(exc)
+   progress(job_path,job,'Aguardando a confirmação do Komodo.',attempt,detail)
+   if ready:break
    time.sleep(5)
-  else: raise RuntimeError('komodo_deploy_not_ready')
+  else:raise RuntimeError('komodo_deploy_not_ready: '+detail)
+ progress(job_path,job,'Publicando o endereço inicial.',attempt if 'attempt' in locals() else 1,detail)
  commit=((final.get('stack') or {}).get('deployed_hash') or (final.get('repo') or {}).get('latest_hash') or '')
  if kind=='onboarding': seed_db(tenant)
  nc=envfile('/etc/cloudif/npm-publisher-client.env'); nt=nc.get('NPM_PUBLISHER_TOKEN','');
