@@ -141,4 +141,33 @@ class ActiveProjectRendererContractTest(unittest.TestCase):
         self.assertIn('Nenhuma alteração foi aplicada. Próxima etapa: proposta no Forgejo.',self.source)
 
 
+
+class DefinitiveProjectManagementRendererTest(unittest.TestCase):
+    def setUp(self):
+        root=Path(__file__).resolve().parents[2]
+        source=root/'components/control-plane/current-apps/portal-current/cloudif-admin-portal.py'
+        if not source.exists():
+            source=root/'portal/legacy/cloudif-admin-portal.py'
+        self.source=source.read_text()
+
+    def test_final_renderer_replaces_legacy_project_line(self):
+        start=self.source.rfind('# CloudIF definitive project management renderer BEGIN')
+        self.assertGreaterEqual(start,0)
+        block=self.source[start:]
+        self.assertIn('render_projects=_pm197_render',block)
+        self.assertNotIn('class="project-line"',block)
+        self.assertIn('class="project-final__grid"',block)
+        self.assertIn('grid-template-columns:repeat(2,minmax(0,1fr))',block)
+
+    def test_final_renderer_keeps_project_actions(self):
+        block=self.source[self.source.rfind('# CloudIF definitive project management renderer BEGIN'):]
+        for label in ('Abrir Studio','Abrir repositório','Acessar SSH','Checar','Sincronizar','Integrar','Editar','Permissões'):
+            self.assertIn(label,block)
+
+    def test_final_renderer_is_collapsible_and_grouped(self):
+        block=self.source[self.source.rfind('# CloudIF definitive project management renderer BEGIN'):]
+        self.assertIn('class="project-final"',block)
+        self.assertIn('class="project-owner-final"',block)
+        self.assertIn("'Meus projetos' if owner==user['username']",block)
+
 if __name__=='__main__':unittest.main()

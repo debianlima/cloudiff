@@ -5912,3 +5912,57 @@ if __name__ == "__main__":
     refresh_tenant_policies()
     print(f"CloudIF Portal v17 clean listening on {HOST}:{PORT}", flush=True)
     ThreadingHTTPServer((HOST, PORT), Portal).serve_forever()
+
+# CloudIF definitive project management renderer BEGIN
+_PM197_CSS=r'''<style id="cloudif-project-management-final">
+.project-management-final{display:grid;gap:18px}.project-management-final__head{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}.project-management-final__head h2{margin:0}.project-management-final__head p{margin:4px 0 0;color:var(--c-muted,var(--ui141-muted))}
+.project-owner-final{margin:0!important;padding:0!important;border:0!important;background:transparent!important}.project-owner-final>summary{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 2px;color:var(--c-text-strong,#0f172a)!important}.project-owner-final__body{display:grid;gap:12px}
+.project-final{margin:0!important;padding:0!important;border:1px solid var(--c-border,#dce3ed)!important;border-radius:14px!important;background:var(--c-surface,#fff)!important;overflow:hidden}.project-final>summary{list-style:none;display:flex;align-items:center;justify-content:space-between;gap:18px;padding:16px 18px;color:var(--c-text-strong,#0f172a)!important}.project-final>summary::-webkit-details-marker{display:none}.project-final>summary span{display:grid;gap:3px;min-width:0}.project-final>summary small{color:var(--c-muted,#64748b);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.project-final>summary em{font-style:normal;font-size:.78rem;font-weight:800;color:var(--c-primary,#4f46e5);white-space:nowrap}.project-final[open]>summary{border-bottom:1px solid var(--c-border,#dce3ed);background:var(--c-surface-2,#f1f5f9)}.project-final[open]>summary em{font-size:0}.project-final[open]>summary em:after{content:'Fechar projeto';font-size:.78rem}
+.project-final__grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;padding:16px}.project-final__section{display:grid;align-content:start;gap:9px;min-width:0;padding:16px;border:1px solid var(--c-border,#dce3ed);border-radius:12px;background:var(--c-surface,#fff)}.project-final__section h3{margin:0;font-size:.92rem}.project-final__section p{margin:0}.project-final__meta{color:var(--c-muted,#64748b);font-size:.78rem;overflow-wrap:anywhere}.project-final__actions{display:flex;gap:8px;flex-wrap:wrap}.project-final__actions form{display:flex;gap:8px;flex-wrap:wrap;margin:0}.project-final__actions .btn{margin:0!important;width:auto!important}.project-final__status{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.project-final__status strong{font-size:.86rem}.project-management-final .cloudif-wizard{display:none}
+@media(max-width:820px){.project-final__grid{grid-template-columns:1fr}.project-management-final__head{align-items:flex-start}.project-final>summary{align-items:flex-start}.project-final__actions,.project-final__actions form{display:grid;grid-template-columns:1fr;width:100%}.project-final__actions .btn{width:100%!important;text-align:center}}
+</style>'''
+
+def _pm197_owner(project):
+    try:return _project_effective_owner(project)
+    except Exception:
+        try:return str(project['owner'] or project['created_by'] or '').strip()
+        except Exception:return ''
+
+def _pm197_render(user):
+    rows=user_visible_projects(user['username'],user['groups']);tenants=visible_tenants(user['username'],user['groups'])
+    tenant_opts='<option value="">Nenhum tenant vinculado</option>' if setting_bool('CLOUDIF_ALLOW_GIT_ONLY_PROJECT',True) else ''
+    tenant_opts+=''.join(f'<option value="{h(t.get("tenant"))}">{h(t.get("tenant"))}</option>' for t in tenants)
+    groups={};wizards=[]
+    for p in rows:
+        owner=_pm197_owner(p) or 'Sem usuário vinculado';slug=p['slug'];safe=re.sub(r'[^a-zA-Z0-9_]+','_',slug)
+        forge_target=p['repo_url'] or setting_value('CLOUDIF_FORGEJO_URL','https://cloudiff.duckdns.org/git');forge=direct_oidc_url('forgejo',forge_target)
+        komodo=direct_oidc_url('komodo',setting_value('CLOUDIF_KOMODO_URL','https://komodoiff.duckdns.org/'));studio=supabase_studio_url(p['tenant']) if p['tenant'] else ''
+        edit_id='pm197_edit_'+safe;acl_id='pm197_acl_'+safe
+        bank_action=f'<a class="btn light" href="{h(studio)}" target="_blank" rel="noopener">Abrir Studio</a>' if studio else '<span class="project-final__meta">Sem Studio vinculado</span>'
+        repo_action=f'<a class="btn light" href="{h(forge)}" target="_blank" rel="noopener">Abrir repositório</a>' if forge_target else '<span class="project-final__meta">Nenhum repositório vinculado</span>'
+        markup=f'''<details class="project-final" data-project-slug="{h(slug)}" data-project-owner="{h(owner)}"><summary><span><strong>{h(p['name'])}</strong><small>{h(slug)} · {h(p['description'] or 'Sem descrição')}</small></span><em>Abrir projeto</em></summary><div class="project-final__grid">
+<section class="project-final__section"><h3>Projeto</h3><p><strong>{h(p['name'])}</strong></p><p class="project-final__meta">Slug: {h(slug)}</p><p>{h(p['description'] or 'Sem descrição.')}</p></section>
+<section class="project-final__section"><h3>Banco vinculado</h3><p><strong>{h(p['tenant'] or 'Nenhum tenant vinculado')}</strong></p><div class="project-final__actions">{bank_action}</div></section>
+<section class="project-final__section"><h3>Repositório Forge</h3><p><strong>Forgejo</strong></p><p class="project-final__meta">{h(forge_target)}</p><div class="project-final__actions">{repo_action}</div></section>
+<section class="project-final__section"><h3>Komodo Publicação SSH</h3><p><strong>Container de publicação</strong></p><p class="project-final__meta">Status: {h(p['komodo_status'] or 'não configurado')}</p><div class="project-final__actions"><a class="btn light" href="{h(komodo)}" target="_blank" rel="noopener">Acessar SSH</a></div></section>
+<section class="project-final__section"><h3>Estado técnico</h3><div class="project-final__status"><span class="pill {'ok' if p['tenant'] else 'muted'}">{'Banco vinculado' if p['tenant'] else 'Sem banco'}</span><span class="pill {'ok' if p['repo_url'] else 'muted'}">{'Repositório vinculado' if p['repo_url'] else 'Sem repositório'}</span></div><p class="project-final__meta">Use “Checar” para atualizar o estado real do projeto.</p></section>
+<section class="project-final__section"><h3>Ações do projeto</h3><div class="project-final__actions"><form method="post" action="{url('/action/project_action')}"><input type="hidden" name="slug" value="{h(slug)}"><button class="btn gray" name="op" value="check">Checar</button><button class="btn blue" name="op" value="sync">Sincronizar</button><button class="btn amber" name="op" value="integrate">Integrar</button></form><button class="btn light" type="button" onclick="cloudifShowWizard('{edit_id}')">Editar</button><button class="btn light" type="button" onclick="cloudifShowWizard('{acl_id}')">Permissões</button></div></section>
+</div></details>'''
+        groups.setdefault(owner,[]).append(markup)
+        wizards.append(f'''<div id="{edit_id}" class="wizard-panel cloudif-wizard"><div class="card"><h2>Editar projeto: {h(p['name'])}</h2><form method="post" action="{url('/action/project_action')}"><input type="hidden" name="slug" value="{h(slug)}"><input type="hidden" name="op" value="edit_save"><div class="grid2"><div><label>Nome</label><input name="name" value="{h(p['name'])}"></div><div><label>URL do Git/Forgejo</label><input name="repo_url" value="{h(p['repo_url'])}"></div></div><label>Descrição</label><textarea name="description">{h(p['description'])}</textarea><label>Status Komodo</label><input name="komodo_status" value="{h(p['komodo_status'])}"><button class="btn" type="submit">Salvar</button><button class="btn gray" type="button" onclick="cloudifCancelWizard()">Cancelar</button></form></div></div>''')
+        wizards.append(f'''<div id="{acl_id}" class="wizard-panel cloudif-wizard"><div class="card"><h2>Permissões do projeto: {h(p['name'])}</h2>{project_acl_html(slug,user)}<button class="btn gray" type="button" onclick="cloudifCancelWizard()">Voltar</button></div></div>''')
+    owner_html=[]
+    for owner in sorted(groups,key=lambda x:(0 if x==user['username'] else 1,x.lower())):
+        label='Meus projetos' if owner==user['username'] else f'Projetos de {owner}';items=groups[owner]
+        owner_html.append(f'<details class="project-owner-final"'+(' open' if owner==user['username'] else '')+f'><summary><span>{h(label)}</span><small>{len(items)} projeto'+('' if len(items)==1 else 's')+f'</small></summary><div class="project-owner-final__body">{"".join(items)}</div></details>')
+    return f'''<script>function cloudifShowWizard(id){{const list=document.getElementById('cloudif-project-list');if(list)list.hidden=true;document.querySelectorAll('.cloudif-wizard').forEach(x=>x.style.display='none');const target=document.getElementById(id);if(target){{target.style.display='block';target.scrollIntoView({{block:'start'}})}}}}function cloudifCancelWizard(){{document.querySelectorAll('.cloudif-wizard').forEach(x=>x.style.display='none');const list=document.getElementById('cloudif-project-list');if(list)list.hidden=false}}document.addEventListener('toggle',e=>{{const d=e.target;if(d.matches&&d.matches('.project-final[open]'))document.querySelectorAll('.project-final[open]').forEach(x=>{{if(x!==d)x.open=false}})}},true);</script>
+<section id="cloudif-project-list" class="card project-management-final"><header class="project-management-final__head"><div><h2>Projetos por usuário</h2><p>Abra um projeto para consultar recursos e executar ações.</p></div><button class="btn" type="button" onclick="cloudifShowWizard('pm197_new')">Novo projeto</button></header>{''.join(owner_html) if owner_html else '<div class="box">Nenhum projeto visível.</div>'}</section>
+<div id="pm197_new" class="wizard-panel cloudif-wizard"><div class="card"><h2>Novo projeto</h2><form method="post" action="{url('/action/create_project')}"><label>Nome do projeto</label><input name="name" required><label>Descrição</label><textarea name="description"></textarea><label>Banco/Tenant Supabase</label><select name="tenant">{tenant_opts}</select><button class="btn" type="submit">Criar projeto</button><button class="btn gray" type="button" onclick="cloudifCancelWizard()">Cancelar</button></form></div></div>{''.join(wizards)}'''
+
+render_projects=_pm197_render
+if 'page' in globals() and not globals().get('_pm197_page_wrapped'):
+    _pm197_prev_page=page
+    def page(user,tab,body):
+        return _pm197_prev_page(user,tab,body).replace('</head>',_PM197_CSS+'</head>',1)
+    _pm197_page_wrapped=True
+# CloudIF definitive project management renderer END
