@@ -3731,13 +3731,21 @@ if "Portal" in globals():
     def _cloudif_v81_do_POST(self):
         parsed = _cloudif_acl_urlparse.urlparse(self.path)
 
-        if parsed.path.rstrip("/") in ["/cloudif/portal/action/project_acl", "/action/project_acl"]:
+        if parsed.path.rstrip("/") in ["/cloudiff/portal/action/project_acl", "/cloudif/portal/action/project_acl", "/action/project_acl"]:
             import cloudif_project_acl_module as project_acl
 
+            if '_cloudif_security_valid_origin' in globals() and not _cloudif_security_valid_origin(self):
+                return _cloudif_security_reject(self,'Origem da requisição não autorizada.',403)
             length = int(self.headers.get("Content-Length", "0") or "0")
+            if length < 0 or length > 200000:
+                return _cloudif_security_reject(self,'Corpo da requisição inválido.',413)
             raw = self.rfile.read(length).decode("utf-8", "ignore")
             form = _cloudif_acl_urlparse.parse_qs(raw)
             user = _cloudif_acl_user_from_headers(self)
+            portal_user=self.user()
+            token=(form.get('csrf_token') or [''])[0]
+            if '_prod_csrf_token' in globals() and not _prod_csrf_equal(token,_prod_csrf_token(portal_user)):
+                return _cloudif_security_reject(self,'Token CSRF inválido ou ausente.',403)
 
             def val(k, default=""):
                 v = form.get(k, [default])
@@ -5927,6 +5935,8 @@ def _pm197_render(user):
     tenant_opts='<option value="">Nenhum tenant vinculado</option>' if setting_bool('CLOUDIF_ALLOW_GIT_ONLY_PROJECT',True) else ''
     tenant_opts+=''.join(f'<option value="{h(t.get("tenant"))}">{h(t.get("tenant"))}</option>' for t in tenants)
     groups={};wizards=[]
+    csrf_token=_prod_csrf_token(user) if '_prod_csrf_token' in globals() else ''
+    import cloudif_project_acl_module as project_acl_module
     try:
         runtime_projects={item.get('slug'):item for item in _rd_projects(user)}
     except Exception:
@@ -5937,7 +5947,7 @@ def _pm197_render(user):
         runtime_project=runtime_projects.get(slug) or {}
         terminal_target=url('/action/open-project-terminal')+'?slug='+urllib.parse.quote(slug,safe='') if runtime_project.get('stack_id') else ''
         studio=supabase_studio_url(p['tenant']) if p['tenant'] else ''
-        edit_id='pm197_edit_'+safe;acl_id='pm197_acl_'+safe
+        acl_id='wiz_acl_'+safe
         bank_action=f'<a class="btn light" href="{h(studio)}" target="_blank" rel="noopener">Abrir Studio</a>' if studio else '<span class="project-final__meta">Sem Studio vinculado</span>'
         repo_action=f'<a class="btn light" href="{h(forge_target)}" target="_blank" rel="noopener">Abrir repositório</a>' if forge_target else '<span class="project-final__meta">Nenhum repositório vinculado</span>'
         terminal_action=f'<a class="btn light" href="{h(terminal_target)}" target="_blank" rel="noopener">Acessar SSH</a>' if terminal_target else '<span class="project-final__meta">SSH indisponível: projeto sem stack vinculado</span>'
@@ -5947,16 +5957,19 @@ def _pm197_render(user):
 <section class="project-final__section"><h3>Repositório Forge</h3><p><strong>Forgejo</strong></p><p class="project-final__meta">{h(forge_target)}</p><div class="project-final__actions">{repo_action}</div></section>
 <section class="project-final__section"><h3>Komodo Publicação SSH</h3><p><strong>{'Stack '+h(runtime_project.get('stack_id')) if runtime_project.get('stack_id') else 'Container não vinculado'}</strong></p><p class="project-final__meta">Serviço: {h(runtime_project.get('service') or 'web')} · Status: {h(p['komodo_status'] or 'não configurado')}</p><div class="project-final__actions">{terminal_action}</div></section>
 <section class="project-final__section"><h3>Estado técnico</h3><div class="project-final__status"><span class="pill {'ok' if p['tenant'] else 'muted'}">{'Banco vinculado' if p['tenant'] else 'Sem banco'}</span><span class="pill {'ok' if p['repo_url'] else 'muted'}">{'Repositório vinculado' if p['repo_url'] else 'Sem repositório'}</span></div><p class="project-final__meta">Use “Checar” para atualizar o estado real do projeto.</p></section>
-<section class="project-final__section"><h3>Ações do projeto</h3><div class="project-final__actions"><form method="post" action="{url('/action/project_action')}"><input type="hidden" name="slug" value="{h(slug)}"><button class="btn gray" name="op" value="check">Checar</button><button class="btn blue" name="op" value="sync">Sincronizar</button><button class="btn amber" name="op" value="integrate">Integrar</button></form><button class="btn light" type="button" onclick="cloudifShowWizard('{edit_id}')">Editar</button><button class="btn light" type="button" onclick="cloudifShowWizard('{acl_id}')">Permissões</button></div></section>
+<section class="project-final__section"><h3>Ações do projeto</h3><p class="project-final__meta"><strong>Checar projeto</strong> verifica repositório, banco e vínculo do container sem alterar a configuração. <strong>Permissões</strong> controla quem pode acessar este projeto.</p><div class="project-final__actions"><form method="post" action="{url('/action/project_action')}"><input type="hidden" name="csrf_token" value="{h(csrf_token)}"><input type="hidden" name="slug" value="{h(slug)}"><button class="btn gray" name="op" value="check">Checar projeto</button></form><button class="btn light" type="button" onclick="cloudifShowWizard('{acl_id}')">Gerenciar permissões</button></div></section>
 </div></details>'''
         groups.setdefault(owner,[]).append(markup)
-        wizards.append(f'''<div id="{edit_id}" class="wizard-panel cloudif-wizard"><div class="card"><h2>Editar projeto: {h(p['name'])}</h2><form method="post" action="{url('/action/project_action')}"><input type="hidden" name="slug" value="{h(slug)}"><input type="hidden" name="op" value="edit_save"><div class="grid2"><div><label>Nome</label><input name="name" value="{h(p['name'])}"></div><div><label>URL do Git/Forgejo</label><input name="repo_url" value="{h(p['repo_url'])}"></div></div><label>Descrição</label><textarea name="description">{h(p['description'])}</textarea><label>Status Komodo</label><input name="komodo_status" value="{h(p['komodo_status'])}"><button class="btn" type="submit">Salvar</button><button class="btn gray" type="button" onclick="cloudifCancelWizard()">Cancelar</button></form></div></div>''')
-        wizards.append(f'''<div id="{acl_id}" class="wizard-panel cloudif-wizard"><div class="card"><h2>Permissões do projeto: {h(p['name'])}</h2>{project_acl_html(slug,user)}<button class="btn gray" type="button" onclick="cloudifCancelWizard()">Voltar</button></div></div>''')
+        acl_modal=project_acl_module.render_acl_modal(slug,user)
+        acl_modal=acl_modal.replace('class="wizard"','class="wizard cloudif-wizard"',1)
+        acl_modal=acl_modal.replace('<input type="hidden" name="op" value="add">','<input type="hidden" name="op" value="add"><input type="hidden" name="csrf_token" value="'+h(csrf_token)+'">',1)
+        acl_modal=acl_modal.replace('<input type="hidden" name="op" value="remove">','<input type="hidden" name="op" value="remove"><input type="hidden" name="csrf_token" value="'+h(csrf_token)+'">')
+        wizards.append(acl_modal)
     owner_html=[]
     for owner in sorted(groups,key=lambda x:(0 if x==user['username'] else 1,x.lower())):
         label='Meus projetos' if owner==user['username'] else f'Projetos de {owner}';items=groups[owner]
         owner_html.append(f'<details class="project-owner-final"'+(' open' if owner==user['username'] else '')+f'><summary><span>{h(label)}</span><small>{len(items)} projeto'+('' if len(items)==1 else 's')+f'</small></summary><div class="project-owner-final__body">{"".join(items)}</div></details>')
-    return f'''{_PM197_CSS}<script>function cloudifShowWizard(id){{const list=document.getElementById('cloudif-project-list');if(list)list.hidden=true;document.querySelectorAll('.cloudif-wizard').forEach(x=>x.style.display='none');const target=document.getElementById(id);if(target){{target.style.display='block';target.scrollIntoView({{block:'start'}})}}}}function cloudifCancelWizard(){{document.querySelectorAll('.cloudif-wizard').forEach(x=>x.style.display='none');const list=document.getElementById('cloudif-project-list');if(list)list.hidden=false}}document.addEventListener('toggle',e=>{{const d=e.target;if(d.matches&&d.matches('.project-final[open]'))document.querySelectorAll('.project-final[open]').forEach(x=>{{if(x!==d)x.open=false}})}},true);</script>
+    return f'''{_PM197_CSS}<script>function cloudifShowWizard(id){{const list=document.getElementById('cloudif-project-list');if(list)list.hidden=true;document.querySelectorAll('.cloudif-wizard').forEach(x=>x.style.display='none');const target=document.getElementById(id);if(target){{target.style.display='block';target.scrollIntoView({{block:'start'}})}}}}function cloudifCancelWizard(){{document.querySelectorAll('.cloudif-wizard').forEach(x=>x.style.display='none');const list=document.getElementById('cloudif-project-list');if(list)list.hidden=false}}function cloudifHideWizard(id){{const target=document.getElementById(id);if(target)target.style.display='none';const list=document.getElementById('cloudif-project-list');if(list)list.hidden=false}}document.addEventListener('toggle',e=>{{const d=e.target;if(d.matches&&d.matches('.project-final[open]'))document.querySelectorAll('.project-final[open]').forEach(x=>{{if(x!==d)x.open=false}})}},true);</script>
 <section id="cloudif-project-list" class="card project-management-final"><header class="project-management-final__head"><div><h2>Projetos por usuário</h2><p>Abra um projeto para consultar recursos e executar ações.</p></div><button class="btn" type="button" onclick="cloudifShowWizard('pm197_new')">Novo projeto</button></header>{''.join(owner_html) if owner_html else '<div class="box">Nenhum projeto visível.</div>'}</section>
 <div id="pm197_new" class="wizard-panel cloudif-wizard"><div class="card"><h2>Novo projeto</h2><form method="post" action="{url('/action/create_project')}"><label>Nome do projeto</label><input name="name" required><label>Descrição</label><textarea name="description"></textarea><label>Banco/Tenant Supabase</label><select name="tenant">{tenant_opts}</select><button class="btn" type="submit">Criar projeto</button><button class="btn gray" type="button" onclick="cloudifCancelWizard()">Cancelar</button></form></div></div>{''.join(wizards)}'''
 

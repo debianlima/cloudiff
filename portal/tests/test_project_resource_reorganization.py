@@ -161,8 +161,12 @@ class DefinitiveProjectManagementRendererTest(unittest.TestCase):
 
     def test_final_renderer_keeps_project_actions(self):
         block=self.source[self.source.rfind('# CloudIF definitive project management renderer BEGIN'):]
-        for label in ('Abrir Studio','Abrir repositório','Acessar SSH','Checar','Sincronizar','Integrar','Editar','Permissões'):
+        for label in ('Abrir Studio','Abrir repositório','Acessar SSH','Checar projeto','Gerenciar permissões'):
             self.assertIn(label,block)
+        for removed in ('Sincronizar','Integrar','Editar projeto:'):
+            self.assertNotIn(removed,block)
+        self.assertIn('project_acl_module.render_acl_modal',block)
+        self.assertIn('csrf_token',block)
 
     def test_final_renderer_is_collapsible_and_grouped(self):
         block=self.source[self.source.rfind('# CloudIF definitive project management renderer BEGIN'):]
