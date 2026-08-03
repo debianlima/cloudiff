@@ -105,8 +105,9 @@ def _env(path):
     return data
 
 
-def _post_json(url, token, payload, timeout=90):
+def _post_json(url, token, payload, timeout=90, host=''):
     headers={'Accept':'application/json','Content-Type':'application/json'}
+    if host: headers['Host']=host
     if token: headers.update({'X-CloudIF-Token':token,'Authorization':'Bearer '+token})
     req=urllib.request.Request(url,data=json.dumps(payload).encode(),headers=headers,method='POST')
     try:
@@ -124,7 +125,7 @@ def _destroy_runtime(slug, tenant):
 def _unpublish(public_number):
     if not public_number: return {'ok':True,'skipped':True}
     cfg=_env('/etc/cloudif/npm-publisher-client.env')
-    return _post_json('http://cloudif-publisher.internal/unpublish',cfg.get('NPM_PUBLISHER_TOKEN',''),{'public_number':int(public_number)})
+    return _post_json('http://10.62.91.3/unpublish',cfg.get('NPM_PUBLISHER_TOKEN',''),{'public_number':int(public_number)},host='cloudif-publisher.internal')
 
 def execute(slug, confirmation, actor):
     expected = f'EXCLUIR {slug}'
