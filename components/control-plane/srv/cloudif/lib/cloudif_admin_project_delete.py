@@ -17,6 +17,10 @@ ONBOARDING_DB = Path('/var/lib/cloudif/onboarding/onboarding.db')
 AUDIT_ROOT = Path('/srv/cloudif/admin-project-deletions')
 JOBS = Path('/srv/cloudif/jobs')
 PROVISIONING = Path('/srv/cloudif/provisioning/projects')
+AGENTS_DB = Path('/var/lib/cloudif/agents/agents.db')
+NOTIFICATIONS_DB = Path('/var/lib/cloudif/notifications/notifications.db')
+MONITOR_DB = Path('/var/lib/cloudif/monitoring/monitor.db')
+ONBOARDING_SECRETS = Path('/var/lib/cloudif/onboarding/secrets')
 
 
 def h(value):
@@ -133,6 +137,80 @@ def _unpublish(public_number):
     cfg=_env('/etc/cloudif/npm-publisher-client.env')
     return _post_json('http://10.62.91.3/unpublish',cfg.get('NPM_PUBLISHER_TOKEN',''),{'public_number':int(public_number)},host='cloudif-publisher.internal')
 
+def _backup_if_exists(source, destination):
+    source=Path(source)
+    if source.exists():
+        shutil.copy2(source,destination)
+        os.chmod(destination,0o600)
+
+
+def _delete_agent_identity(slug):
+    if not AGENTS_DB.exists(): return {'clients':0,'usage':0,'client_ids':[]}
+    con=sqlite3.connect(AGENTS_DB)
+    try:
+        con.execute('BEGIN IMMEDIATE')
+        rows=con.execute("SELECT client_id,project_slugs_json FROM clients WHERE client_id LIKE 'project-%'").fetchall()
+        matches=[]
+        for client_id,raw in rows:
+            try: projects=json.loads(raw or '[]')
+            except Exception: projects=[]
+            if slug in projects: matches.append(client_id)
+        usage=0
+        for client_id in matches:
+            usage += con.execute('DELETE FROM usage WHERE client_id=?',(client_id,)).rowcount
+        clients=0
+        for client_id in matches:
+            clients += con.execute("DELETE FROM clients WHERE client_id=? AND client_id LIKE 'project-%'",(client_id,)).rowcount
+        con.commit()
+        return {'clients':clients,'usage':usage,'client_ids':matches}
+    except Exception:
+        con.rollback();raise
+    finally: con.close()
+
+
+def _delete_onboarding_state(slug):
+    out={'project_onboarding':0,'onboarding_events':0,'credential_rotations':0,'secret_file':False}
+    if ONBOARDING_DB.exists():
+        con=sqlite3.connect(ONBOARDING_DB)
+        try:
+            con.execute('BEGIN IMMEDIATE')
+            for table in ('credential_rotations','onboarding_events','project_onboarding'):
+                cols={r[1] for r in con.execute(f'PRAGMA table_info({table})')}
+                if 'project_slug' in cols:
+                    out[table]=con.execute(f'DELETE FROM {table} WHERE project_slug=?',(slug,)).rowcount
+            con.commit()
+        except Exception:
+            con.rollback();raise
+        finally: con.close()
+    secret=ONBOARDING_SECRETS/f'{slug}.json'
+    if secret.exists():
+        secret.unlink();out['secret_file']=True
+    return out
+
+
+def _delete_observability(slug):
+    out={'notifications':0,'monitor_latest':0,'monitor_samples':0}
+    if NOTIFICATIONS_DB.exists():
+        con=sqlite3.connect(NOTIFICATIONS_DB)
+        try:
+            con.execute('BEGIN IMMEDIATE')
+            out['notifications']=con.execute('DELETE FROM notifications WHERE project_slug=?',(slug,)).rowcount
+            con.commit()
+        except Exception:
+            con.rollback();raise
+        finally: con.close()
+    if MONITOR_DB.exists():
+        con=sqlite3.connect(MONITOR_DB)
+        try:
+            con.execute('BEGIN IMMEDIATE')
+            out['monitor_latest']=con.execute('DELETE FROM latest WHERE slug=?',(slug,)).rowcount
+            out['monitor_samples']=con.execute('DELETE FROM samples WHERE slug=?',(slug,)).rowcount
+            con.commit()
+        except Exception:
+            con.rollback();raise
+        finally: con.close()
+    return out
+
 def execute(slug, confirmation, actor):
     expected = f'EXCLUIR {slug}'
     if confirmation != expected:
@@ -145,9 +223,13 @@ def execute(slug, confirmation, actor):
     stamp = time.strftime('%Y%m%d-%H%M%S')
     audit = AUDIT_ROOT / f'{stamp}-{slug}'
     audit.mkdir(parents=True, exist_ok=False)
-    shutil.copy2(DB, audit / 'cloudif-portal.db')
-    if ONBOARDING_DB.exists():
-        shutil.copy2(ONBOARDING_DB, audit / 'onboarding.db')
+    _backup_if_exists(DB, audit / 'cloudif-portal.db')
+    _backup_if_exists(ONBOARDING_DB, audit / 'onboarding.db')
+    _backup_if_exists(AGENTS_DB, audit / 'agents.db')
+    _backup_if_exists(NOTIFICATIONS_DB, audit / 'notifications.db')
+    _backup_if_exists(MONITOR_DB, audit / 'monitor.db')
+    secret_path=ONBOARDING_SECRETS/f'{slug}.json'
+    if secret_path.exists(): _backup_if_exists(secret_path,audit/'onboarding-secret.json')
     (audit / 'preview.json').write_text(json.dumps(plan, ensure_ascii=False, indent=2) + '\n')
 
     publication = _unpublish(public_number)
@@ -175,16 +257,10 @@ def execute(slug, confirmation, actor):
     finally:
         con.close()
 
-    onboarding_removed = 0
-    if ONBOARDING_DB.exists():
-        con = sqlite3.connect(ONBOARDING_DB)
-        try:
-            cols = {row[1] for row in con.execute('PRAGMA table_info(project_onboarding)')}
-            if 'project_slug' in cols:
-                onboarding_removed = con.execute('DELETE FROM project_onboarding WHERE project_slug=?', (slug,)).rowcount
-                con.commit()
-        finally:
-            con.close()
+    agent_identity = _delete_agent_identity(slug)
+    onboarding_state = _delete_onboarding_state(slug)
+    onboarding_removed = onboarding_state.get('project_onboarding',0)
+    observability = _delete_observability(slug)
 
     removed_paths = []
     for candidate in glob.glob(str(JOBS / f'*{slug}*')):
@@ -209,6 +285,9 @@ def execute(slug, confirmation, actor):
         'remote': remote,
         'removed_rows': removed,
         'onboarding_removed': onboarding_removed,
+        'agent_identity': agent_identity,
+        'onboarding_state': onboarding_state,
+        'observability': observability,
         'removed_paths': removed_paths,
         'audit_dir': str(audit),
         'finished_at': time.strftime('%Y-%m-%dT%H:%M:%S%z'),
@@ -236,7 +315,9 @@ def _result_stages(result):
         _stage('Stack e repositório Komodo', runtime.get('ok') is True, f"HTTP {runtime.get('status') or '-'}"),
         _stage('Repositório Forgejo', forge.get('deleted') is True, f"HTTP {forge.get('status') or '-'}"),
         _stage('Registros do Portal', bool(removed) or result.get('ok') is True, f"{sum(removed.values()) if removed else 0} registros"),
-        _stage('Onboarding e identidade', result.get('onboarding_removed',0) >= 0 and result.get('ok') is True, f"{result.get('onboarding_removed',0)} registro(s)"),
+        _stage('Identidade do agente', (result.get('agent_identity') or {}).get('clients',0) >= 0 and result.get('ok') is True, f"{(result.get('agent_identity') or {}).get('clients',0)} cliente(s)"),
+        _stage('Onboarding e credencial', result.get('onboarding_removed',0) >= 0 and result.get('ok') is True, f"{result.get('onboarding_removed',0)} registro(s)"),
+        _stage('Observabilidade', result.get('ok') is True, f"{sum((result.get('observability') or {}).values())} registro(s)"),
         _stage('Reconciliação', result.get('ok') is True, 'Solicitada após a exclusão'),
     ]
     return '<ol class="admin-delete-steps">'+''.join(items)+'</ol>'
