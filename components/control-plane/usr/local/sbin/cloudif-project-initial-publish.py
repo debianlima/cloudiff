@@ -76,12 +76,18 @@ def main():
   request(kbase+'/komodo/stack/pull','POST',payload,kh,60)
   progress(job_path,job,'Iniciando o deploy da stack.',2,detail)
   request(kbase+'/komodo/stack/deploy','POST',payload,kh,60)
-  deadline=time.monotonic()+300;attempt=2
+  deadline=time.monotonic()+420;attempt=2;deploy_retries=0;next_retry=time.monotonic()+60
   while time.monotonic()<deadline:
    attempt+=1
    try:ready,detail=deployment_ready()
    except Exception as exc:ready=False;detail=type(exc).__name__+': '+str(exc)
-   progress(job_path,job,'Aguardando a confirmação do Komodo.',attempt,detail)
+   if not ready and time.monotonic() >= next_retry and deploy_retries < 2:
+    deploy_retries+=1
+    progress(job_path,job,'Repetindo o deploy após falha transitória do registry.',attempt,detail)
+    request(kbase+'/komodo/stack/deploy','POST',payload,kh,60)
+    next_retry=time.monotonic()+(60*(deploy_retries+1))
+   else:
+    progress(job_path,job,'Aguardando a confirmação do Komodo.',attempt,detail)
    if ready:break
    time.sleep(5)
   else:raise RuntimeError('komodo_deploy_not_ready: '+detail)

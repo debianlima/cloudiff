@@ -1374,14 +1374,36 @@ SELECT cloudif.cloudif_register_project_event(
     report["files"]["supabase_sql"] = str(sql_path)
 
     if rc == 0:
-        comp["status"] = "done"
-        comp["ok"] = True
         comp["actions"].extend([
             {"name": "cloudif_ensure_project_schema", "ok": True, "message": "Procedure criada/atualizada e executada."},
             {"name": "cloudif_sync_project_acl", "ok": True, "message": "Procedure de sincronização ACL criada/atualizada."},
             {"name": "cloudif_register_project_event", "ok": True, "message": "Procedure de eventos criada/atualizada."},
             {"name": "trg_cloudif_project_acl_changed", "ok": True, "message": "Trigger criada/atualizada."},
         ])
+        ensure_script = env("CLOUDIF_SUPABASE_ENSURE_SCRIPT", "/srv/cloudif/bin/cloudif-auto-ensure-supabase-tenant.sh")
+        erc, eout, eerr = run([ensure_script, tenant], timeout=2700)
+        comp["actions"].append({
+            "name": "supabase_tenant_runtime",
+            "ok": erc == 0,
+            "message": "Tenant Supabase criado e reconciliado." if erc == 0 else "Falha ao criar o tenant Supabase.",
+            "detail": (eout + "\n" + eerr)[-1500:],
+        })
+        hrc, hout, herr = run(["bash", "-lc", f"source /srv/cloudif/lib/cloudif-supabase.sh; cloudif_supabase_tenant_basic_health {tenant!r}"], timeout=120)
+        comp["actions"].append({
+            "name": "supabase_tenant_health",
+            "ok": hrc == 0,
+            "message": "Containers do tenant estão saudáveis." if hrc == 0 else "Tenant criado, mas ainda não está saudável.",
+            "detail": (hout + "\n" + herr)[-1000:],
+        })
+        crc, cout, cerr = run(["/srv/cloudif/bin/cloudif-ensure-tenant-certificate.sh", tenant], timeout=420)
+        comp["actions"].append({
+            "name": "supabase_tenant_certificate",
+            "ok": crc == 0,
+            "message": "Certificado do tenant reconciliado." if crc == 0 else "Falha ao reconciliar o certificado do tenant.",
+            "detail": (cout + "\n" + cerr)[-1000:],
+        })
+        comp["ok"] = bool(erc == 0 and hrc == 0 and crc == 0)
+        comp["status"] = "done" if comp["ok"] else "tenant_runtime_error"
     else:
         comp["status"] = "error"
         comp["actions"].append({

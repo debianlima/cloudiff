@@ -39,12 +39,12 @@ patterns = [
 for pat in patterns:
     txt = re.sub(pat, '\n', txt, flags=re.S)
 
-authz_locations = f'''
+authz_locations = '''
     # CloudIF v244 authz locations BEGIN
 
     location = /cloudiff/authz {{
         internal;
-        proxy_pass http://{authz_upstream}/authz;
+        proxy_pass http://__AUTHZ_UPSTREAM__/authz;
         proxy_pass_request_body off;
         proxy_set_header Content-Length "";
 
@@ -100,7 +100,7 @@ authz_locations = f'''
 
     # CloudIF v244 authz locations END
 
-'''
+'''.replace('__AUTHZ_UPSTREAM__', authz_upstream)
 
 auth_snippet = '''        # CloudIF v244 tenant-auth BEGIN
         auth_request /cloudiff/authz;
