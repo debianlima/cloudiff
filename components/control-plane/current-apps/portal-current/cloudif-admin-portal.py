@@ -5907,12 +5907,6 @@ if 'page' in globals() and not globals().get('_admin_resources139_wrapped'):
     _admin_resources139_wrapped=True
 # CloudIF unified administrative resource visibility END
 
-if __name__ == "__main__":
-    init_db()
-    refresh_tenant_policies()
-    print(f"CloudIF Portal v17 clean listening on {HOST}:{PORT}", flush=True)
-    ThreadingHTTPServer((HOST, PORT), Portal).serve_forever()
-
 # CloudIF definitive project management renderer BEGIN
 _PM197_CSS=r'''<style id="cloudif-project-management-final">
 .project-management-final{display:grid;gap:18px}.project-management-final__head{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}.project-management-final__head h2{margin:0}.project-management-final__head p{margin:4px 0 0;color:var(--c-muted,var(--ui141-muted))}
@@ -5966,3 +5960,9 @@ if 'page' in globals() and not globals().get('_pm197_page_wrapped'):
         return _pm197_prev_page(user,tab,body).replace('</head>',_PM197_CSS+'</head>',1)
     _pm197_page_wrapped=True
 # CloudIF definitive project management renderer END
+
+if __name__ == "__main__":
+    init_db()
+    refresh_tenant_policies()
+    print(f"CloudIF Portal v17 clean listening on {HOST}:{PORT}", flush=True)
+    ThreadingHTTPServer((HOST, PORT), Portal).serve_forever()
