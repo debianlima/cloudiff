@@ -5530,7 +5530,7 @@ if 'Portal' in globals() and not globals().get('_aig_wrapped'):
 
 # CloudIF unique focused sections BEGIN
 import cloudif_portal_sections98 as _focus98
-_FOCUS98_TABS={'opcoes-projeto','gestao-agentes','documentacao-mcp','monitor-saude','monitor-transacoes','monitor-promocoes','monitor-filas','monitor-telemetria','ajuda','ajuda-token','ajuda-clientes','ajuda-aprovacoes','ajuda-ferramentas','admin-usuarios','admin-politicas','admin-identidades','admin-configuracoes','admin-auditoria','admin-manutencao'}
+_FOCUS98_TABS={'opcoes-projeto','gestao-agentes','documentacao-mcp','monitor-saude','monitor-transacoes','monitor-promocoes','monitor-filas','monitor-telemetria','ajuda','ajuda-token','ajuda-clientes','ajuda-aprovacoes','ajuda-ferramentas','admin-usuarios','admin-politicas','admin-identidades','admin-configuracoes','admin-auditoria','admin-manutencao','admin-excluir-projeto'}
 def _focus98_render(tab,user):
     if tab=='opcoes-projeto':return _focus98.options_project()
     if tab=='gestao-agentes':return _focus98.agent_management()
@@ -6069,3 +6069,36 @@ if __name__ == "__main__":
     refresh_tenant_policies()
     print(f"CloudIF Portal v17 clean listening on {HOST}:{PORT}", flush=True)
     ThreadingHTTPServer((HOST, PORT), Portal).serve_forever()
+
+
+# CloudIF administrative full project deletion BEGIN
+import cloudif_admin_project_delete as _admin_project_delete
+if 'Portal' in globals() and not globals().get('_admin_project_delete_wrapped'):
+    _admin_project_delete_prev_get=Portal.do_GET
+    _admin_project_delete_prev_post=Portal.do_POST
+    def _admin_project_delete_global(user):
+        groups={str(x).strip().lower() for x in (user.get('groups') or [])}
+        return bool(user.get('admin') or groups.intersection({'cloudif-tenants-admin','domain admins'}))
+    def _admin_project_delete_get(self):
+        parsed=urllib.parse.urlparse(self.path);path=parsed.path.rstrip('/');q=urllib.parse.parse_qs(parsed.query);tab=(q.get('tab') or [''])[0]
+        if path in ('','/cloudiff/portal','/cloudif/portal') and tab=='admin-excluir-projeto':
+            user=self.user()
+            if not _admin_project_delete_global(user):return self.send_html(page(user,tab,'<section class="card"><h1>Acesso negado</h1><p>Área restrita à administração global.</p></section>'),403)
+            slug=(q.get('slug') or [''])[0].strip()
+            return self.send_html(page(user,tab,_admin_project_delete.render(_prod_csrf_token(user),selected=slug)))
+        return _admin_project_delete_prev_get(self)
+    def _admin_project_delete_post(self):
+        parsed=urllib.parse.urlparse(self.path);path=parsed.path.rstrip('/')
+        if path in ('/cloudiff/portal/action/admin-delete-project','/cloudif/portal/action/admin-delete-project'):
+            user=self.user()
+            if not _admin_project_delete_global(user):return _cloudif_security_reject(self,'Acesso restrito à administração global.',403)
+            n=int(self.headers.get('Content-Length','0') or 0);form=urllib.parse.parse_qs(self.rfile.read(n).decode('utf-8','ignore'))
+            val=lambda k:(form.get(k) or [''])[0].strip()
+            if not _prod_csrf_equal(val('csrf_token'),_prod_csrf_token(user)):return _cloudif_security_reject(self,'Token CSRF inválido ou ausente.',403)
+            slug=val('slug');result=_admin_project_delete.execute(slug,val('confirm_text'),user.get('username') or 'admin')
+            return self.send_html(page(user,'admin-excluir-projeto',_admin_project_delete.render(_prod_csrf_token(user),selected='',result=result)),200 if result.get('ok') else 409)
+        return _admin_project_delete_prev_post(self)
+    Portal.do_GET=_admin_project_delete_get
+    Portal.do_POST=_admin_project_delete_post
+    _admin_project_delete_wrapped=True
+# CloudIF administrative full project deletion END

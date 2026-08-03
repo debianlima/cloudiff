@@ -50,7 +50,7 @@ class LegacyShellTest(unittest.TestCase):
         expected = {
             "resumo", "projetos", "bancos", "monitor-saude",
             "admin-usuarios", "admin-politicas", "admin-identidades", "admin-configuracoes",
-            "admin-auditoria", "admin-manutencao", "ajuda", "ajuda-token", "ajuda-conectar",
+            "admin-auditoria", "admin-manutencao", "admin-excluir-projeto", "ajuda", "ajuda-token", "ajuda-conectar",
             "ajuda-aprovacoes", "ajuda-ferramentas",
         }
         actual = set(re.findall(r"\?tab=([a-z0-9-]+)", doc))
