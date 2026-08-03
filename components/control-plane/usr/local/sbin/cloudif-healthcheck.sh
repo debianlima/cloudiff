@@ -178,14 +178,20 @@ else
   status=1
 fi
 if [ -f "$dr_restore_marker" ]; then
-  dr_restore_check=$(python3 - "$dr_restore_marker" "$dr_archive" <<'PYDR'
-import json,sys,datetime as dt
-marker,archive=sys.argv[1:]
+  dr_restore_check=$(python3 - "$dr_restore_marker" <<'PYDR'
+import hashlib,json,os,sys,datetime as dt
 try:
- d=json.load(open(marker))
+ d=json.load(open(sys.argv[1]))
  when=dt.datetime.fromisoformat(d['validated_at'].replace('Z','+00:00'))
  age=(dt.datetime.now(dt.timezone.utc)-when).total_seconds()
- ok=d.get('result')=='ok' and bool(d.get('archive')) and age<=691200
+ archive=d.get('archive') or ''; expected=d.get('archive_sha256') or ''
+ actual=''
+ if archive and os.path.isfile(archive):
+  h=hashlib.sha256()
+  with open(archive,'rb') as f:
+   for chunk in iter(lambda:f.read(1024*1024),b''): h.update(chunk)
+  actual=h.hexdigest()
+ ok=d.get('result')=='ok' and age<=691200 and bool(expected) and actual==expected
  print('ok' if ok else 'invalid')
 except Exception:
  print('invalid')
@@ -327,5 +333,20 @@ PYQ
 fi
 echo "$NOW control_plane_integrity ok=$integrity_ok age_seconds=$integrity_age changed=$integrity_changed missing=$integrity_missing permission_violations=$integrity_permissions" >>"$OUT"
 [ "$integrity_ok" -eq 1 ] && [ "$integrity_age" -lt 172800 ] && [ "$integrity_changed" -eq 0 ] && [ "$integrity_missing" -eq 0 ] && [ "$integrity_permissions" -eq 0 ] || status=1
+
+reconcile_contract=$(python3 - <<'PYQ'
+import datetime as dt,json
+try:
+ d=json.load(open('/var/lib/cloudif/health/project-state-reconcile.json'))
+ when=dt.datetime.fromisoformat(d['generated_at'].replace('Z','+00:00'))
+ age=int((dt.datetime.now(dt.timezone.utc)-when).total_seconds())
+ ok=d.get('ok') is True and d.get('projects_count')==d.get('projects_ready') and age<=300
+ print(f"ok={1 if ok else 0} age={age} projects={d.get('projects_count',-1)} ready={d.get('projects_ready',-1)}")
+except Exception:
+ print('ok=0 age=999999999 projects=-1 ready=-1')
+PYQ
+)
+echo "$NOW project_state_reconcile $reconcile_contract" >>"$OUT"
+echo "$reconcile_contract" | grep -q '^ok=1 ' || status=1
 
 exit "$status"
