@@ -109,8 +109,11 @@ def _post_json(url, token, payload, timeout=90):
     headers={'Accept':'application/json','Content-Type':'application/json'}
     if token: headers.update({'X-CloudIF-Token':token,'Authorization':'Bearer '+token})
     req=urllib.request.Request(url,data=json.dumps(payload).encode(),headers=headers,method='POST')
-    with urllib.request.urlopen(req,timeout=timeout) as response:
-        return {'ok':200 <= response.status < 300,'status':response.status,'data':json.loads(response.read() or b'{}')}
+    try:
+        with urllib.request.urlopen(req,timeout=timeout) as response:
+            return {'ok':200 <= response.status < 300,'status':response.status,'data':json.loads(response.read() or b'{}')}
+    except Exception as exc:
+        return {'ok':False,'status':0,'error':type(exc).__name__,'detail':str(exc)[:300]}
 
 
 def _destroy_runtime(slug, tenant):
@@ -121,7 +124,7 @@ def _destroy_runtime(slug, tenant):
 def _unpublish(public_number):
     if not public_number: return {'ok':True,'skipped':True}
     cfg=_env('/etc/cloudif/npm-publisher-client.env')
-    return _post_json('http://10.62.91.3:18160/unpublish',cfg.get('NPM_PUBLISHER_TOKEN',''),{'public_number':int(public_number)})
+    return _post_json('http://cloudif-publisher.internal/unpublish',cfg.get('NPM_PUBLISHER_TOKEN',''),{'public_number':int(public_number)})
 
 def execute(slug, confirmation, actor):
     expected = f'EXCLUIR {slug}'
