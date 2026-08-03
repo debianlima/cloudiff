@@ -262,6 +262,11 @@ def upsert_project(form, user):
     finally:
         con.close()
 
+    runtime_template = val(form, "runtime_template", "static-nginx").strip().lower()
+    allowed_runtimes = {"static-nginx", "node20", "node22", "node24", "php83-apache"}
+    if runtime_template not in allowed_runtimes:
+        raise ValueError("Tecnologia web não homologada.")
+
     job = {
         "action": action,
         "slug": slug,
@@ -272,6 +277,7 @@ def upsert_project(form, user):
         "create_repo": val(form, "create_repo", "1"),
         "setup_komodo": val(form, "setup_komodo", "1"),
         "template_kind": template_kind,
+        "runtime_template": runtime_template,
         "role_profile": "project-admin",
         "environment": "project",
         "status": "queued",
@@ -301,6 +307,7 @@ def upsert_project(form, user):
                 "create_repo": job.get("create_repo"),
                 "setup_komodo": job.get("setup_komodo"),
                 "db_mode": job.get("db_mode"),
+                "runtime_template": job.get("runtime_template"),
             },
             dedupe_seconds=0,
         )

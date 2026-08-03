@@ -744,6 +744,7 @@ def _v101_forja_project_ensure(job, report):
         "name": job.get("name") or slug,
         "description": job.get("description") or "",
         "tenant": tenant,
+        "runtime_template": job.get("runtime_template") or "static-nginx",
 
         "forgejo_org": env("FORGEJO_ORG", "cloudif"),
         "org": env("FORGEJO_ORG", "cloudif"),
@@ -766,6 +767,7 @@ def _v101_forja_project_ensure(job, report):
             "name": job.get("name") or slug,
             "description": job.get("description") or "",
             "tenant": tenant,
+            "runtime_template": job.get("runtime_template") or "static-nginx",
             "repo": repo_name,
             "repo_path": repo_path,
             "repo_url": repo_url,
@@ -1136,6 +1138,7 @@ def komodo(job, report):
         "name": job.get("name") or slug,
         "description": job.get("description") or "",
         "tenant": tenant or "unknown",
+        "runtime_template": job.get("runtime_template") or "static-nginx",
         "containers": containers,
 
         "repo": repo_path,
