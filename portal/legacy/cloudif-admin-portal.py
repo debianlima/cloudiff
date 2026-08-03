@@ -5927,18 +5927,25 @@ def _pm197_render(user):
     tenant_opts='<option value="">Nenhum tenant vinculado</option>' if setting_bool('CLOUDIF_ALLOW_GIT_ONLY_PROJECT',True) else ''
     tenant_opts+=''.join(f'<option value="{h(t.get("tenant"))}">{h(t.get("tenant"))}</option>' for t in tenants)
     groups={};wizards=[]
+    try:
+        runtime_projects={item.get('slug'):item for item in _rd_projects(user)}
+    except Exception:
+        runtime_projects={}
     for p in rows:
         owner=_pm197_owner(p) or 'Sem usuário vinculado';slug=p['slug'];safe=re.sub(r'[^a-zA-Z0-9_]+','_',slug)
-        forge_target=p['repo_url'] or setting_value('CLOUDIF_FORGEJO_URL','https://cloudiff.duckdns.org/git');forge=direct_oidc_url('forgejo',forge_target)
-        komodo=direct_oidc_url('komodo',setting_value('CLOUDIF_KOMODO_URL','https://komodoiff.duckdns.org/'));studio=supabase_studio_url(p['tenant']) if p['tenant'] else ''
+        forge_target=str(p['repo_url'] or '').strip()
+        runtime_project=runtime_projects.get(slug) or {}
+        terminal_target=url('/action/open-project-terminal')+'?slug='+urllib.parse.quote(slug,safe='') if runtime_project.get('stack_id') else ''
+        studio=supabase_studio_url(p['tenant']) if p['tenant'] else ''
         edit_id='pm197_edit_'+safe;acl_id='pm197_acl_'+safe
         bank_action=f'<a class="btn light" href="{h(studio)}" target="_blank" rel="noopener">Abrir Studio</a>' if studio else '<span class="project-final__meta">Sem Studio vinculado</span>'
-        repo_action=f'<a class="btn light" href="{h(forge)}" target="_blank" rel="noopener">Abrir repositório</a>' if forge_target else '<span class="project-final__meta">Nenhum repositório vinculado</span>'
+        repo_action=f'<a class="btn light" href="{h(forge_target)}" target="_blank" rel="noopener">Abrir repositório</a>' if forge_target else '<span class="project-final__meta">Nenhum repositório vinculado</span>'
+        terminal_action=f'<a class="btn light" href="{h(terminal_target)}" target="_blank" rel="noopener">Acessar SSH</a>' if terminal_target else '<span class="project-final__meta">SSH indisponível: projeto sem stack vinculado</span>'
         markup=f'''<details class="project-final" data-project-slug="{h(slug)}" data-project-owner="{h(owner)}"><summary><span><strong>{h(p['name'])}</strong><small>{h(slug)} · {h(p['description'] or 'Sem descrição')}</small></span><em>Abrir projeto</em></summary><div class="project-final__grid">
 <section class="project-final__section"><h3>Projeto</h3><p><strong>{h(p['name'])}</strong></p><p class="project-final__meta">Slug: {h(slug)}</p><p>{h(p['description'] or 'Sem descrição.')}</p></section>
 <section class="project-final__section"><h3>Banco vinculado</h3><p><strong>{h(p['tenant'] or 'Nenhum tenant vinculado')}</strong></p><div class="project-final__actions">{bank_action}</div></section>
 <section class="project-final__section"><h3>Repositório Forge</h3><p><strong>Forgejo</strong></p><p class="project-final__meta">{h(forge_target)}</p><div class="project-final__actions">{repo_action}</div></section>
-<section class="project-final__section"><h3>Komodo Publicação SSH</h3><p><strong>Container de publicação</strong></p><p class="project-final__meta">Status: {h(p['komodo_status'] or 'não configurado')}</p><div class="project-final__actions"><a class="btn light" href="{h(komodo)}" target="_blank" rel="noopener">Acessar SSH</a></div></section>
+<section class="project-final__section"><h3>Komodo Publicação SSH</h3><p><strong>{'Stack '+h(runtime_project.get('stack_id')) if runtime_project.get('stack_id') else 'Container não vinculado'}</strong></p><p class="project-final__meta">Serviço: {h(runtime_project.get('service') or 'web')} · Status: {h(p['komodo_status'] or 'não configurado')}</p><div class="project-final__actions">{terminal_action}</div></section>
 <section class="project-final__section"><h3>Estado técnico</h3><div class="project-final__status"><span class="pill {'ok' if p['tenant'] else 'muted'}">{'Banco vinculado' if p['tenant'] else 'Sem banco'}</span><span class="pill {'ok' if p['repo_url'] else 'muted'}">{'Repositório vinculado' if p['repo_url'] else 'Sem repositório'}</span></div><p class="project-final__meta">Use “Checar” para atualizar o estado real do projeto.</p></section>
 <section class="project-final__section"><h3>Ações do projeto</h3><div class="project-final__actions"><form method="post" action="{url('/action/project_action')}"><input type="hidden" name="slug" value="{h(slug)}"><button class="btn gray" name="op" value="check">Checar</button><button class="btn blue" name="op" value="sync">Sincronizar</button><button class="btn amber" name="op" value="integrate">Integrar</button></form><button class="btn light" type="button" onclick="cloudifShowWizard('{edit_id}')">Editar</button><button class="btn light" type="button" onclick="cloudifShowWizard('{acl_id}')">Permissões</button></div></section>
 </div></details>'''
