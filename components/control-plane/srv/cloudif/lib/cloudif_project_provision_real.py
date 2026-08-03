@@ -1192,6 +1192,16 @@ def komodo(job, report):
                 stack_id = stack_id.get("$oid") or ""
             comp["stack_id"] = str(stack_id or "")
             comp["stack_name"] = str(data.get("stack_name") or stack.get("name") or stack_action.get("name") or ("cloudif-" + slug))
+            repo = data.get("repo") if isinstance(data.get("repo"), dict) else {}
+            repo_action = data.get("repo_action") if isinstance(data.get("repo_action"), dict) else {}
+            repo_id = data.get("repo_id") or repo.get("id") or repo.get("_id") or repo_action.get("repo_id") or repo_action.get("id") or ""
+            if isinstance(repo_id, dict):
+                repo_id = repo_id.get("$oid") or ""
+            comp["repo_id"] = str(repo_id or "")
+            comp["repo_name"] = str(data.get("repo_name") or repo.get("name") or repo_name)
+            server = data.get("server") if isinstance(data.get("server"), dict) else {}
+            comp["server_id"] = str(server.get("id") or data.get("server_id") or "")
+            comp["server_name"] = str(server.get("name") or data.get("server_name") or "")
             _cloudif_terminal_after_provision(agent_url, token, slug, data, comp)
             return
 
@@ -1425,14 +1435,38 @@ def persist_portal_state(report):
         komodo = components.get("komodo") or {}
         supabase_comp = components.get("supabase") or {}
         repo_url = str(forge.get("url") or "")
-        repo_name = str(forge.get("repository") or komodo.get("repository") or "")
+        repo_name = str(forge.get("repository") or komodo.get("repo_name") or komodo.get("repository") or "")
+        forgejo_webhook = forge.get("forgejo_webhook") if isinstance(forge.get("forgejo_webhook"), dict) else {}
+        forgejo_webhook_url = str(forgejo_webhook.get("url") or "")
         stack_id = str(komodo.get("stack_id") or "")
         stack_name = str(komodo.get("stack_name") or "")
+        komodo_repo_id = str(komodo.get("repo_id") or "")
+        komodo_repo_name = str(komodo.get("repo_name") or komodo.get("repository") or "")
+        server_name = str(komodo.get("server_name") or "")
         now = time.strftime("%Y-%m-%dT%H:%M:%S%z")
-        con.execute("""INSERT INTO project_integrations(project,tenant,repo_url,stack_name,stack_id,repo_name,status,message,updated_at,forgejo_repo_url,komodo_stack_name,komodo_stack_id,forgejo_status,komodo_status,supabase_status)
-        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(project) DO UPDATE SET tenant=excluded.tenant,repo_url=excluded.repo_url,stack_name=excluded.stack_name,stack_id=excluded.stack_id,repo_name=excluded.repo_name,status=excluded.status,message=excluded.message,updated_at=excluded.updated_at,forgejo_repo_url=excluded.forgejo_repo_url,komodo_stack_name=excluded.komodo_stack_name,komodo_stack_id=excluded.komodo_stack_id,forgejo_status=excluded.forgejo_status,komodo_status=excluded.komodo_status,supabase_status=excluded.supabase_status""",
-        (slug,tenant,repo_url,stack_name,stack_id,repo_name,"ready" if report.get("ok") else "degraded","Provisionamento concluído." if report.get("ok") else "Provisionamento com pendências.",now,repo_url,stack_name,stack_id,str(forge.get("status") or ""),str(komodo.get("status") or ""),str(supabase_comp.get("status") or "")))
-        con.execute("UPDATE projects SET repo_url=COALESCE(NULLIF(?,''),repo_url),komodo_status=?,updated_at=? WHERE slug=?",(repo_url,"running" if komodo.get("ok") else "error",now,slug))
+        con.execute("""INSERT INTO project_integrations(project,tenant,repo_url,stack_name,stack_id,repo_name,status,message,updated_at,forgejo_repo_url,forgejo_webhook_url,komodo_stack_name,komodo_stack_id,komodo_repo_name,komodo_repo_id,server_name,forgejo_status,komodo_status,supabase_status)
+        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(project) DO UPDATE SET
+        tenant=COALESCE(NULLIF(excluded.tenant,''),project_integrations.tenant),
+        repo_url=COALESCE(NULLIF(excluded.repo_url,''),project_integrations.repo_url),
+        stack_name=COALESCE(NULLIF(excluded.stack_name,''),project_integrations.stack_name),
+        stack_id=COALESCE(NULLIF(excluded.stack_id,''),project_integrations.stack_id),
+        repo_name=COALESCE(NULLIF(excluded.repo_name,''),project_integrations.repo_name),
+        status=excluded.status,message=excluded.message,updated_at=excluded.updated_at,
+        forgejo_repo_url=COALESCE(NULLIF(excluded.forgejo_repo_url,''),project_integrations.forgejo_repo_url),
+        forgejo_webhook_url=COALESCE(NULLIF(excluded.forgejo_webhook_url,''),project_integrations.forgejo_webhook_url),
+        komodo_stack_name=COALESCE(NULLIF(excluded.komodo_stack_name,''),project_integrations.komodo_stack_name),
+        komodo_stack_id=COALESCE(NULLIF(excluded.komodo_stack_id,''),project_integrations.komodo_stack_id),
+        komodo_repo_name=COALESCE(NULLIF(excluded.komodo_repo_name,''),project_integrations.komodo_repo_name),
+        komodo_repo_id=COALESCE(NULLIF(excluded.komodo_repo_id,''),project_integrations.komodo_repo_id),
+        server_name=COALESCE(NULLIF(excluded.server_name,''),project_integrations.server_name),
+        forgejo_status=excluded.forgejo_status,komodo_status=excluded.komodo_status,supabase_status=excluded.supabase_status""",
+        (slug,tenant,repo_url,stack_name,stack_id,repo_name,"ready" if report.get("ok") else "degraded","Provisionamento concluído." if report.get("ok") else "Provisionamento com pendências.",now,repo_url,forgejo_webhook_url,stack_name,stack_id,komodo_repo_name,komodo_repo_id,server_name,str(forge.get("status") or ""),str(komodo.get("status") or ""),str(supabase_comp.get("status") or "")))
+        con.execute("""UPDATE projects SET
+          repo_url=COALESCE(NULLIF(?,''),repo_url),
+          repo_name=COALESCE(NULLIF(?,''),repo_name),
+          stack_name=COALESCE(NULLIF(?,''),stack_name),
+          komodo_status=?,updated_at=? WHERE slug=?""",
+          (repo_url,repo_name,stack_name,"running" if komodo.get("ok") else "error",now,slug))
         con.commit();con.close()
     except Exception as exc:
         log("PORTAL_STATE_PERSIST_ERROR " + type(exc).__name__ + ": " + str(exc))
