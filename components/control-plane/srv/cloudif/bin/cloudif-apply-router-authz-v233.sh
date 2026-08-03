@@ -100,7 +100,7 @@ authz_locations = '''
 
     # CloudIF v244 authz locations END
 
-'''.replace('__AUTHZ_UPSTREAM__', authz_upstream)
+'''.replace('__AUTHZ_UPSTREAM__', authz_upstream).replace('{{', '{').replace('}}', '}')
 
 auth_snippet = '''        # CloudIF v244 tenant-auth BEGIN
         auth_request /cloudiff/authz;
