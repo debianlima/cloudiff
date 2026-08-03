@@ -63,10 +63,11 @@ def main():
   remote_errors=stack.get('remote_errors') or []
   completed=final.get('ok') is True and final.get('deploy_status')=='completed'
   idle=not busy.get('repo') and not busy.get('stack')
-  identified=bool(stack.get('id') or stack.get('name'))
+  services=stack.get('deployed_services') or stack.get('latest_services') or stack.get('services') or []
+  runtime_confirmed=(bool(deployed) and deployed==latest) or bool(services)
   hashes_consistent=(not deployed) or (not latest) or deployed==latest
   detail=f"status={final.get('deploy_status')} busy_repo={bool(busy.get('repo'))} busy_stack={bool(busy.get('stack'))} deployed={deployed or '-'} latest={latest or '-'} errors={len(remote_errors)}"
-  return completed and idle and identified and not (stack.get('missing_files') or []) and not remote_errors and hashes_consistent,detail
+  return completed and idle and runtime_confirmed and not (stack.get('missing_files') or []) and not remote_errors and hashes_consistent,detail
  progress(job_path,job,'Verificando a stack no Komodo.',0)
  try:ready,detail=deployment_ready()
  except Exception as exc:ready=False;detail=type(exc).__name__+': '+str(exc)
@@ -90,6 +91,15 @@ def main():
  nc=envfile('/etc/cloudif/npm-publisher-client.env'); nt=nc.get('NPM_PUBLISHER_TOKEN','');
  _,pub=request('http://10.62.91.3/publish','POST',{'public_number':num,'deploy_number':1},{'Host':'cloudif-publisher.internal','X-CloudIF-Token':nt},240)
  if not pub.get('ok'): raise RuntimeError('npm_publish_failed')
+ progress(job_path,job,'Verificando os endereços públicos.',attempt if 'attempt' in locals() else 1)
+ for public_url in (pub.get('stable_url'),pub.get('version_url')):
+  if not public_url: raise RuntimeError('public_url_missing')
+  try:
+   req=urllib.request.Request(public_url,headers={'User-Agent':'CloudIF-Homologation/1.0'})
+   with urllib.request.urlopen(req,timeout=30) as response:
+    if response.status!=200: raise RuntimeError('public_health_status_'+str(response.status))
+  except urllib.error.HTTPError as exc:
+   raise RuntimeError('public_health_status_'+str(exc.code))
  update_db(slug,tenant,owner,num,commit)
  result={'ok':True,'project':slug,'template_kind':kind,'public_number':num,'stable_url':pub['stable_url'],'version_url':pub['version_url'],'deployed_services':((final.get('stack') or {}).get('deployed_services') or [])}
  out=Path(f'/srv/cloudif/provisioning/projects/{slug}/initial-publication.json'); out.parent.mkdir(parents=True,exist_ok=True); out.write_text(json.dumps(result,ensure_ascii=False,indent=2)+'\n')
