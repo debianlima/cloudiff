@@ -14,5 +14,5 @@ PrivateTmp=true
 ProtectHome=true
 ProtectSystem=strict
 ReadOnlyPaths=/var/lib/cloudif/onboarding /srv/cloudif/app-pointers /srv/cloudif/app-releases /etc/cloudif
-ReadWritePaths=/run/systemd /run/cloudif-project-state-reconcile.lock /var/lib/cloudif/health
+ReadWritePaths=/run /var/lib/cloudif/health
 UMask=0077
