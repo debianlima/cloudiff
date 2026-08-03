@@ -180,6 +180,18 @@ def publish(payload):
  render(state); save_state(state)
  return {'ok':True,'public_number':num,'deploy_number':dep,'stable_url':'https://'+stable+'/','version_url':'https://'+version+'/'}
 
+def unpublish(payload):
+ num=int(payload.get('public_number'))
+ state=load_state(); projects=state.setdefault('projects',{})
+ removed=projects.pop(str(num),None)
+ aliases=state.setdefault('aliases',{})
+ removed_aliases=[]
+ for alias,data in list(aliases.items()):
+  if int(data.get('public_number') or 0)==num:
+   aliases.pop(alias,None);removed_aliases.append(alias)
+ render(state);save_state(state)
+ return {'ok':True,'public_number':num,'removed':bool(removed),'removed_aliases':removed_aliases}
+
 def ensure_tenant(payload):
  tenant=str(payload.get('tenant') or '').strip().lower()
  if not re.fullmatch(r'[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?',tenant): raise ValueError('invalid_tenant')
@@ -203,6 +215,7 @@ class H(BaseHTTPRequestHandler):
    n=int(self.headers.get('Content-Length','0')); payload=json.loads(self.rfile.read(n) or b'{}')
    if self.path=='/publish': return self._json(200,publish(payload))
    if self.path=='/alias': return self._json(200,alias_publish(payload))
+   if self.path=='/unpublish': return self._json(200,unpublish(payload))
    if self.path=='/tenant': return self._json(200,ensure_tenant(payload))
    return self._json(404,{'ok':False,'error':'not_found'})
   except Exception as e: return self._json(422,{'ok':False,'error':type(e).__name__,'detail':str(e)[:500]})

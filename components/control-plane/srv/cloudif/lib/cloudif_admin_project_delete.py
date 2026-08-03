@@ -6,6 +6,7 @@ import shutil
 import sqlite3
 import subprocess
 import time
+import urllib.request
 from pathlib import Path
 
 from cloudif_delete_git_komodo_action import forja_rollback
@@ -93,6 +94,35 @@ def _delete_rows(con, slug):
     return removed
 
 
+def _env(path):
+    data={}
+    p=Path(path)
+    if not p.exists(): return data
+    for raw in p.read_text(errors='ignore').splitlines():
+        line=raw.strip()
+        if line and not line.startswith('#') and '=' in line:
+            k,v=line.split('=',1);data[k.strip()]=v.strip().strip('"').strip("'")
+    return data
+
+
+def _post_json(url, token, payload, timeout=90):
+    headers={'Accept':'application/json','Content-Type':'application/json'}
+    if token: headers.update({'X-CloudIF-Token':token,'Authorization':'Bearer '+token})
+    req=urllib.request.Request(url,data=json.dumps(payload).encode(),headers=headers,method='POST')
+    with urllib.request.urlopen(req,timeout=timeout) as response:
+        return {'ok':200 <= response.status < 300,'status':response.status,'data':json.loads(response.read() or b'{}')}
+
+
+def _destroy_runtime(slug, tenant):
+    cfg=_env('/etc/cloudif/komodo-agent-client.env')
+    return _post_json((cfg.get('KOMODO_AGENT_URL') or 'http://10.62.91.2:18098').rstrip('/')+'/komodo/stack/destroy',cfg.get('KOMODO_AGENT_TOKEN',''),{'project':slug,'tenant':tenant,'actor':'admin-project-delete'})
+
+
+def _unpublish(public_number):
+    if not public_number: return {'ok':True,'skipped':True}
+    cfg=_env('/etc/cloudif/npm-publisher-client.env')
+    return _post_json('http://10.62.91.3:18160/unpublish',cfg.get('NPM_PUBLISHER_TOKEN',''),{'public_number':int(public_number)})
+
 def execute(slug, confirmation, actor):
     expected = f'EXCLUIR {slug}'
     if confirmation != expected:
@@ -100,6 +130,8 @@ def execute(slug, confirmation, actor):
     plan = preview(slug)
     if not plan.get('ok'):
         return plan
+    public_rows=_rows(DB,'project_public_ids','project_slug',slug)
+    public_number=int(public_rows[0].get('public_number')) if public_rows else 0
     stamp = time.strftime('%Y%m%d-%H%M%S')
     audit = AUDIT_ROOT / f'{stamp}-{slug}'
     audit.mkdir(parents=True, exist_ok=False)
@@ -108,6 +140,14 @@ def execute(slug, confirmation, actor):
         shutil.copy2(ONBOARDING_DB, audit / 'onboarding.db')
     (audit / 'preview.json').write_text(json.dumps(plan, ensure_ascii=False, indent=2) + '\n')
 
+    publication = _unpublish(public_number)
+    if not publication.get('ok'):
+        result={'ok':False,'error':'publication_delete_failed','publication':publication,'audit_dir':str(audit)}
+        (audit/'result.json').write_text(json.dumps(result,ensure_ascii=False,indent=2)+'\n');return result
+    runtime = _destroy_runtime(slug, plan.get('tenant_preserved') or '')
+    if not runtime.get('ok'):
+        result={'ok':False,'error':'runtime_destroy_failed','runtime':runtime,'publication':publication,'audit_dir':str(audit)}
+        (audit/'result.json').write_text(json.dumps(result,ensure_ascii=False,indent=2)+'\n');return result
     remote = forja_rollback(slug, execute=True)
     if not remote.get('ok'):
         result = {'ok': False, 'error': 'remote_delete_failed', 'remote': remote, 'audit_dir': str(audit)}
@@ -154,6 +194,8 @@ def execute(slug, confirmation, actor):
         'slug': slug,
         'actor': actor,
         'tenant_preserved': plan.get('tenant_preserved') or '',
+        'publication': publication,
+        'runtime_destroy': runtime,
         'remote': remote,
         'removed_rows': removed,
         'onboarding_removed': onboarding_removed,
