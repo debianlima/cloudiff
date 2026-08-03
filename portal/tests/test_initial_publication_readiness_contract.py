@@ -6,13 +6,13 @@ SCRIPT = Path('components/control-plane/usr/local/sbin/cloudif-project-initial-p
 
 
 class InitialPublicationReadinessContractTest(unittest.TestCase):
-    def test_accepts_completed_stack_when_core_omits_deployed_hash(self):
+    def test_requires_completed_idle_stack_with_running_runtime(self):
         source = SCRIPT.read_text(encoding='utf-8')
-        self.assertIn("identified=bool(stack.get('id') or stack.get('name'))", source)
-        self.assertIn("hashes_consistent=(not deployed) or (not latest) or deployed==latest", source)
+        self.assertIn("completed=final.get('ok') is True and final.get('deploy_status')=='completed'", source)
+        self.assertIn("runtime=final.get('runtime') or {}", source)
+        self.assertIn("runtime_confirmed=runtime.get('running') is True", source)
         self.assertIn("not remote_errors", source)
-        self.assertIn("completed and idle and identified", source)
-        self.assertNotIn("bool(deployed) and deployed == latest", source)
+        self.assertIn("public_health_status_", source)
 
 
 if __name__ == '__main__':

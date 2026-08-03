@@ -63,10 +63,10 @@ def main():
   remote_errors=stack.get('remote_errors') or []
   completed=final.get('ok') is True and final.get('deploy_status')=='completed'
   idle=not busy.get('repo') and not busy.get('stack')
-  services=stack.get('deployed_services') or stack.get('latest_services') or stack.get('services') or []
-  runtime_confirmed=(bool(deployed) and deployed==latest) or bool(services)
+  runtime=final.get('runtime') or {}
+  runtime_confirmed=runtime.get('running') is True
   hashes_consistent=(not deployed) or (not latest) or deployed==latest
-  detail=f"status={final.get('deploy_status')} busy_repo={bool(busy.get('repo'))} busy_stack={bool(busy.get('stack'))} deployed={deployed or '-'} latest={latest or '-'} errors={len(remote_errors)}"
+  detail=f"status={final.get('deploy_status')} runtime_running={bool(runtime.get('running'))} container={runtime.get('container_name') or '-'} busy_repo={bool(busy.get('repo'))} busy_stack={bool(busy.get('stack'))} deployed={deployed or '-'} latest={latest or '-'} errors={len(remote_errors)}"
   return completed and idle and runtime_confirmed and not (stack.get('missing_files') or []) and not remote_errors and hashes_consistent,detail
  progress(job_path,job,'Verificando a stack no Komodo.',0)
  try:ready,detail=deployment_ready()

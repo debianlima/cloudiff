@@ -2548,16 +2548,42 @@ def _cloudif_v132_status_from_payload(payload):
         deployed_hash = info.get("deployed_hash")
         deployed_message = info.get("deployed_message")
 
+    runtime_services = []
+    running_container = {}
+    if resolved_stack_id:
+        service_result = _cloudif_v131_core_call("read", "ListStackServices", {"stack": resolved_stack_id}, timeout=30)
+        raw_services = service_result.get("data") if isinstance(service_result, dict) else []
+        runtime_services = raw_services if isinstance(raw_services, list) else []
+        for service_row in runtime_services:
+            container = service_row.get("container") if isinstance(service_row, dict) else None
+            if isinstance(container, dict) and str(container.get("state") or "").lower() == "running":
+                running_container = dict(container)
+                running_container["service"] = service_row.get("service") or ""
+                break
+        if not running_container:
+            all_result = _cloudif_v131_core_call("read", "ListAllDockerContainers", {}, timeout=30)
+            all_items = all_result.get("data") if isinstance(all_result, dict) else []
+            all_items = all_items if isinstance(all_items, list) else []
+            stack_name = str((stack or {}).get("name") or ("cloudif-" + project))
+            for container in all_items:
+                name = str(container.get("name") or "") if isinstance(container, dict) else ""
+                if isinstance(container, dict) and str(container.get("state") or "").lower() == "running" and (stack_name in name or project in name):
+                    running_container = dict(container)
+                    break
+
+    runtime_running = bool(running_container)
     if repo_busy or stack_busy:
         deploy_status = "in_progress"
     elif errors:
         deploy_status = "failed"
-    elif not missing and not errors and (st.get("latest_hash") or deployed_hash):
-        deploy_status = "completed"
-    elif not missing and not errors:
-        deploy_status = "ready"
-    else:
+    elif missing:
         deploy_status = "needs_attention"
+    elif runtime_running:
+        deploy_status = "completed"
+    elif st.get("latest_hash") or deployed_hash:
+        deploy_status = "in_progress"
+    else:
+        deploy_status = "ready"
 
     return {
         "ok": deploy_status in ["completed", "ready", "in_progress"],
@@ -2580,6 +2606,13 @@ def _cloudif_v132_status_from_payload(payload):
         "busy": {
             "repo": repo_busy,
             "stack": stack_busy,
+        },
+        "runtime": {
+            "running": runtime_running,
+            "container_name": running_container.get("name") or "",
+            "container_state": running_container.get("state") or "missing",
+            "service": running_container.get("service") or "",
+            "services_count": len(runtime_services),
         },
         "lookup": {
             "repo_attempts_count": len(repo_attempts or []),
