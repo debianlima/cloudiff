@@ -1,12 +1,34 @@
 import importlib.util
+import os
 import unittest
 from pathlib import Path
 
 ROOT=Path(__file__).resolve().parents[2]
-PORTAL=(ROOT/'components/control-plane/current-apps/portal-current/cloudif-admin-portal.py').read_text()
-ACTION=(ROOT/'components/control-plane/srv/cloudif/lib/cloudif_project_action_safe.py').read_text()
-PROVISION=(ROOT/'components/control-plane/srv/cloudif/lib/cloudif_project_provision_real.py').read_text()
-TEMPLATE=ROOT/'components/control-plane/usr/local/sbin/cloudif-project-template-apply.py'
+def first_existing(*paths):
+    for value in paths:
+        if value and Path(value).exists():
+            return Path(value)
+    raise FileNotFoundError(paths)
+PORTAL_PATH=first_existing(
+    os.environ.get('CLOUDIF_TEST_PORTAL_SOURCE'),
+    ROOT/'components/control-plane/current-apps/portal-current/cloudif-admin-portal.py',
+    '/srv/cloudif/app-pointers/portal-current/cloudif-admin-portal.py',
+)
+ACTION_PATH=first_existing(
+    ROOT/'components/control-plane/srv/cloudif/lib/cloudif_project_action_safe.py',
+    '/srv/cloudif/lib/cloudif_project_action_safe.py',
+)
+PROVISION_PATH=first_existing(
+    ROOT/'components/control-plane/srv/cloudif/lib/cloudif_project_provision_real.py',
+    '/srv/cloudif/lib/cloudif_project_provision_real.py',
+)
+TEMPLATE=first_existing(
+    ROOT/'components/control-plane/usr/local/sbin/cloudif-project-template-apply.py',
+    '/usr/local/sbin/cloudif-project-template-apply.py',
+)
+PORTAL=PORTAL_PATH.read_text()
+ACTION=ACTION_PATH.read_text()
+PROVISION=PROVISION_PATH.read_text()
 
 class ProjectCreationModalRuntimeTest(unittest.TestCase):
     def test_permissions_and_new_project_are_overlay_modals(self):
