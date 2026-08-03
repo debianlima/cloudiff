@@ -51,12 +51,19 @@ def main():
   busy=final.get('busy') or {}
   deployed=stack.get('deployed_hash') or ''
   latest=stack.get('latest_hash') or ''
+  remote_errors=stack.get('remote_errors') or []
+  hash_confirmed=bool(deployed) and deployed == latest
+  service_confirmed=(
+   not deployed and bool(latest) and
+   bool(stack.get('latest_services') or stack.get('services'))
+  )
   return (
    final.get('ok') is True and
    final.get('deploy_status') == 'completed' and
    not busy.get('repo') and not busy.get('stack') and
    not (stack.get('missing_files') or []) and
-   bool(deployed) and deployed == latest
+   not remote_errors and
+   (hash_confirmed or service_confirmed)
   )
  if not deployment_ready():
   request(kbase+'/komodo/stack/pull','POST',payload,kh,90)
