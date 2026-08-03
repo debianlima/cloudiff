@@ -3016,6 +3016,9 @@ def _cloudif_project_audit_data(payload):
     project=safe_slug(payload.get('project') or payload.get('slug') or payload.get('project_slug'))
     stack_id=str(payload.get('stack_id') or '').strip(); service=safe_slug(payload.get('service') or 'web')
     terminal=safe_slug(payload.get('terminal') or ('cloudif-'+project)); shell=str(payload.get('shell') or 'sh').strip() or 'sh'
+    if project and not stack_id:
+        integration=find_integration(project) or {}
+        stack_id=normalize_resource_id(integration.get('stack_id'))
     if not project or not stack_id: return {'ok':False,'error':'invalid_payload','project':project,'stack_id':stack_id}
     requested_stack_id=stack_id
     stack,_=komodo_call('read','GetStack',{'stack':stack_id}); data=stack.get('data') if isinstance(stack.get('data'),dict) else {}
