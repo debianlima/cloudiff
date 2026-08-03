@@ -36,8 +36,8 @@ class ProjectCreationWizardStepsTest(unittest.TestCase):
             self.assertIn(marker,SOURCE)
 
     def test_green_accent_and_persistent_summary(self):
-        self.assertIn('--pm-accent:#168821',SOURCE)
-        self.assertIn('--pm-accent-soft:#eef8f0',SOURCE)
+        self.assertIn('--pm-accent:#157a2b',SOURCE)
+        self.assertIn('--pm-accent-soft:#edf7ef',SOURCE)
         self.assertIn('aria-label="Resumo do provisionamento"',SOURCE)
         self.assertIn('data-pm-summary="name"',SOURCE)
         self.assertIn('data-pm-summary="db"',SOURCE)

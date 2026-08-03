@@ -277,8 +277,15 @@ def upsert_project(form, user):
         "create_repo": val(form, "create_repo", "1"),
         "setup_komodo": val(form, "setup_komodo", "1"),
         "template_kind": template_kind,
+        "runtime_template": runtime_template,
+        "role_profile": "project-admin",
+        "environment": "project",
+        "status": "queued",
+        "current_step": "queued",
+        "last_error": "",
         "user": user,
         "created_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+        "updated_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
     }
 
     queue_provision_job(job)
@@ -314,7 +321,7 @@ def upsert_project(form, user):
         "slug": slug,
         "tenant": tenant,
         "reconcile": reconcile,
-        "message": "Projeto salvo. Provisionamento enviado para segundo plano." + reconcile_suffix,
+        "message": "Projeto registrado. Acompanhe o estado do provisionamento; ele só será concluído após identidade, capacidades, conectores, template e publicação inicial." + reconcile_suffix,
     }
 
 def queue_provision_job(job):
@@ -400,6 +407,31 @@ if __name__ == "__main__":
     main()
 '''
 
+def check_project(form, headers):
+    """Atualiza apenas o estado observado, sem reenfileirar ou mudar configuração."""
+    slug = val(form, "slug", "").strip()
+    if not slug:
+        raise ValueError("Projeto não informado.")
+    con = db()
+    try:
+        row = con.execute("SELECT slug,tenant,repo_url,komodo_status FROM projects WHERE slug=?", (slug,)).fetchone()
+        if not row:
+            raise LookupError("Projeto não encontrado.")
+        report_path = Path("/srv/cloudif/provisioning/projects") / slug / "provision-report.json"
+        report = json.loads(report_path.read_text(encoding="utf-8")) if report_path.is_file() else {}
+        components = report.get("components") or {}
+        forge = components.get("forgejo") or {}
+        komodo = components.get("komodo") or {}
+        repo_url = str(forge.get("url") or row["repo_url"] or "")
+        komodo_status = "running" if komodo.get("ok") else str(row["komodo_status"] or "not_configured")
+        con.execute("UPDATE projects SET repo_url=?,komodo_status=?,updated_at=? WHERE slug=?",
+                    (repo_url,komodo_status,time.strftime("%Y-%m-%dT%H:%M:%S%z"),slug))
+        con.commit()
+        return {"slug":slug,"tenant":row["tenant"] or "","checked":True,
+                "message":"Estado atualizado sem alterar a configuração do projeto."}
+    finally:
+        con.close()
+
 def handle_project_action(form, headers):
 
     # CloudIF v135b4 delete_git_komodo via project_action
@@ -421,5 +453,8 @@ def handle_project_action(form, headers):
             '</div>'
         )
 
+    action = val(form, "action", "").strip() or val(form, "op", "").strip()
+    if action == "check":
+        return check_project(form, headers)
     user = user_from_headers(headers)
     return upsert_project(form, user)

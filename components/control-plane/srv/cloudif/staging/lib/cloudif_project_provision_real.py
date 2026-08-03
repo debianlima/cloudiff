@@ -744,6 +744,7 @@ def _v101_forja_project_ensure(job, report):
         "name": job.get("name") or slug,
         "description": job.get("description") or "",
         "tenant": tenant,
+        "runtime_template": job.get("runtime_template") or "static-nginx",
 
         "forgejo_org": env("FORGEJO_ORG", "cloudif"),
         "org": env("FORGEJO_ORG", "cloudif"),
@@ -766,6 +767,7 @@ def _v101_forja_project_ensure(job, report):
             "name": job.get("name") or slug,
             "description": job.get("description") or "",
             "tenant": tenant,
+            "runtime_template": job.get("runtime_template") or "static-nginx",
             "repo": repo_name,
             "repo_path": repo_path,
             "repo_url": repo_url,
@@ -1136,6 +1138,7 @@ def komodo(job, report):
         "name": job.get("name") or slug,
         "description": job.get("description") or "",
         "tenant": tenant or "unknown",
+        "runtime_template": job.get("runtime_template") or "static-nginx",
         "containers": containers,
 
         "repo": repo_path,
@@ -1182,6 +1185,13 @@ def komodo(job, report):
             })
 
             comp["agent_response_keys"] = sorted(list(data.keys()))[:40]
+            stack = data.get("stack") if isinstance(data.get("stack"), dict) else {}
+            stack_action = data.get("stack_action") if isinstance(data.get("stack_action"), dict) else {}
+            stack_id = data.get("stack_id") or stack.get("id") or stack.get("_id") or stack_action.get("stack_id") or stack_action.get("id") or ""
+            if isinstance(stack_id, dict):
+                stack_id = stack_id.get("$oid") or ""
+            comp["stack_id"] = str(stack_id or "")
+            comp["stack_name"] = str(data.get("stack_name") or stack.get("name") or stack_action.get("name") or ("cloudif-" + slug))
             _cloudif_terminal_after_provision(agent_url, token, slug, data, comp)
             return
 
@@ -1381,6 +1391,30 @@ SELECT cloudif.cloudif_register_project_event(
             "stderr": err[-1000:],
         })
 
+def persist_portal_state(report):
+    """Persiste resultados dos agentes para leitura imediata no Portal."""
+    try:
+        import sqlite3
+        con = sqlite3.connect(env("CLOUDIF_PORTAL_DB", "/var/lib/cloudif/portal/cloudif-portal.db"), timeout=20)
+        slug = str(report.get("slug") or "")
+        tenant = str(report.get("tenant") or "")
+        components = report.get("components") or {}
+        forge = components.get("forgejo") or {}
+        komodo = components.get("komodo") or {}
+        supabase_comp = components.get("supabase") or {}
+        repo_url = str(forge.get("url") or "")
+        repo_name = str(forge.get("repository") or komodo.get("repository") or "")
+        stack_id = str(komodo.get("stack_id") or "")
+        stack_name = str(komodo.get("stack_name") or "")
+        now = time.strftime("%Y-%m-%dT%H:%M:%S%z")
+        con.execute("""INSERT INTO project_integrations(project,tenant,repo_url,stack_name,stack_id,repo_name,status,message,updated_at,forgejo_repo_url,komodo_stack_name,komodo_stack_id,forgejo_status,komodo_status,supabase_status)
+        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(project) DO UPDATE SET tenant=excluded.tenant,repo_url=excluded.repo_url,stack_name=excluded.stack_name,stack_id=excluded.stack_id,repo_name=excluded.repo_name,status=excluded.status,message=excluded.message,updated_at=excluded.updated_at,forgejo_repo_url=excluded.forgejo_repo_url,komodo_stack_name=excluded.komodo_stack_name,komodo_stack_id=excluded.komodo_stack_id,forgejo_status=excluded.forgejo_status,komodo_status=excluded.komodo_status,supabase_status=excluded.supabase_status""",
+        (slug,tenant,repo_url,stack_name,stack_id,repo_name,"ready" if report.get("ok") else "degraded","Provisionamento concluído." if report.get("ok") else "Provisionamento com pendências.",now,repo_url,stack_name,stack_id,str(forge.get("status") or ""),str(komodo.get("status") or ""),str(supabase_comp.get("status") or "")))
+        con.execute("UPDATE projects SET repo_url=COALESCE(NULLIF(?,''),repo_url),komodo_status=?,updated_at=? WHERE slug=?",(repo_url,"running" if komodo.get("ok") else "error",now,slug))
+        con.commit();con.close()
+    except Exception as exc:
+        log("PORTAL_STATE_PERSIST_ERROR " + type(exc).__name__ + ": " + str(exc))
+
 def main():
     load_env_files()
 
@@ -1420,6 +1454,7 @@ def main():
     report["finished_at"] = time.strftime("%Y-%m-%dT%H:%M:%S%z")
     report["ok"] = all(c.get("ok") for c in report["components"].values())
     path = save_report(report)
+    persist_portal_state(report)
 
     log(f"REAL_DONE slug={report['slug']} ok={report['ok']} report={path}")
     return 0 if report["ok"] else 1
