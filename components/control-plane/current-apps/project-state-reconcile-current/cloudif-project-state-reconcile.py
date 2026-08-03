@@ -219,6 +219,11 @@ def main(force=False):
         previous = load_json(OUTPUT)
         portal, orphans, missing = source_state(rows)
         if not force and previous.get('ok') is True and previous.get('fingerprint') == fingerprint_value and not orphans and not missing:
+            previous['generated_at'] = now()
+            previous['changed'] = False
+            previous['execution_mode'] = 'noop'
+            previous['last_checked_at'] = previous['generated_at']
+            atomic_write(OUTPUT, previous)
             print(json.dumps({'ok': True, 'changed': False, 'projects': len(portal), 'fingerprint': fingerprint_value, 'execution_mode': 'noop', 'tokens_rotated': 0}, separators=(',', ':')))
             return 0
         components = parallel_reconcile()
