@@ -12,6 +12,7 @@ import os
 import re
 import secrets
 import time
+import threading
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -512,6 +513,95 @@ def trigger_komodo(project):
         return {"ok": True, "executed": False, "message": "KOMODO_WEBHOOK_URL não configurado. Estado do projeto atualizado.", "payload_preview": payload}
     res = http_json("POST", hook, token=token, payload=payload, timeout=10, auth_style="bearer")
     return {"ok": bool(res.get("ok")), "executed": bool(res.get("ok")), "message": "Komodo acionado." if res.get("ok") else "Falha ao acionar Komodo.", "detail": res}
+
+def _cloudif_forgejo_signature_ok(project, raw, headers):
+    secret = str(project.get("forgejo_webhook_secret") or "").encode("utf-8")
+    if not secret:
+        return False
+    candidates = [
+        headers.get("X-Forgejo-Signature", ""),
+        headers.get("X-Gitea-Signature", ""),
+        headers.get("X-Hub-Signature-256", ""),
+        headers.get("X-Hub-Signature", ""),
+    ]
+    expected_sha256 = hmac.new(secret, raw, hashlib.sha256).hexdigest()
+    expected_sha1 = hmac.new(secret, raw, hashlib.sha1).hexdigest()
+    for candidate in candidates:
+        value = str(candidate or "").strip()
+        if value.startswith("sha256="):
+            value = value.split("=", 1)[1]
+            expected = expected_sha256
+        elif value.startswith("sha1="):
+            value = value.split("=", 1)[1]
+            expected = expected_sha1
+        else:
+            expected = expected_sha256
+        if value and hmac.compare_digest(value, expected):
+            return True
+    return False
+
+
+def _cloudif_komodo_agent_call(path, payload, timeout=60):
+    base = clean_url(CFG.get("KOMODO_AGENT_URL") or CFG.get("KOMODO_WEBHOOK_URL", ""))
+    if "/komodo/" in base:
+        base = base.split("/komodo/", 1)[0]
+    token = str(CFG.get("KOMODO_AGENT_TOKEN") or CFG.get("KOMODO_TOKEN") or "")
+    return http_json("POST", base + path, token=token, payload=payload, timeout=timeout, auth_style="bearer")
+
+
+def _cloudif_forgejo_push_worker(slug, delivery, body):
+    project = load_project(slug) or {}
+    after = str(body.get("after") or "")
+    repo = project.get("forgejo") or {}
+    payload = {
+        "project_slug": slug,
+        "project": slug,
+        "slug": slug,
+        "tenant": project.get("tenant") or "",
+        "name": project.get("name") or slug,
+        "repo_url": repo.get("url") or project.get("repo_url") or project.get("forgejo_expected") or "",
+        "actor": "forgejo-webhook",
+        "source": "forgejo-push",
+        "commit": after,
+    }
+    started = now()
+    ensure = _cloudif_komodo_agent_call("/komodo/project/ensure", payload, timeout=90)
+    pull = _cloudif_komodo_agent_call("/komodo/stack/pull", payload, timeout=90) if ensure.get("ok") else {"ok": False, "skipped": True}
+    deploy = _cloudif_komodo_agent_call("/komodo/stack/deploy", payload, timeout=90) if pull.get("ok") else {"ok": False, "skipped": True}
+    final = {}
+    ready = False
+    deadline = time.monotonic() + 420
+    while deploy.get("ok") and time.monotonic() < deadline:
+        status = _cloudif_komodo_agent_call("/komodo/project/status", payload, timeout=30)
+        final = status.get("data") if isinstance(status.get("data"), dict) else {}
+        runtime = final.get("runtime") or {}
+        stack = final.get("stack") or {}
+        deployed = str(stack.get("deployed_hash") or "")
+        latest = str(stack.get("latest_hash") or "")
+        hash_ok = (not after) or deployed == after[:7] or latest == after[:7]
+        if final.get("deploy_status") == "completed" and runtime.get("running") is True and hash_ok:
+            ready = True
+            break
+        time.sleep(5)
+    result = {
+        "ok": bool(ensure.get("ok") and pull.get("ok") and deploy.get("ok") and ready),
+        "delivery": delivery,
+        "project_slug": slug,
+        "commit": after,
+        "started_at": started,
+        "finished_at": now(),
+        "ensure": ensure,
+        "pull": pull,
+        "deploy": deploy,
+        "final": final,
+    }
+    save_event("automation", slug, result)
+    project["last_forgejo_automation_at"] = now()
+    project["last_forgejo_automation_ok"] = result["ok"]
+    project["last_forgejo_automation_commit"] = after
+    project["last_forgejo_automation_delivery"] = delivery
+    project["last_forgejo_automation_status"] = "completed" if result["ok"] else "failed"
+    save_project(project)
 
 def ensure_project(project):
     slug = project.get("project_slug", "")
@@ -2518,11 +2608,25 @@ class Handler(BaseHTTPRequestHandler):
             project = load_project(slug)
             if not project:
                 return json_response(self, 404, {"ok": False, "error": "project_not_found"})
-            save_event("forgejo", slug, {"headers": dict(self.headers), "body": raw.decode("utf-8", "ignore")[:5000], "time": now()})
+            if not _cloudif_forgejo_signature_ok(project, raw, self.headers):
+                return json_response(self, 403, {"ok": False, "error": "invalid_webhook_signature"})
+            try:
+                webhook_body = json.loads(raw.decode("utf-8", "ignore") or "{}")
+            except Exception:
+                return json_response(self, 400, {"ok": False, "error": "invalid_webhook_json"})
+            event = self.headers.get("X-Forgejo-Event") or self.headers.get("X-Gitea-Event") or "unknown"
+            delivery = self.headers.get("X-Forgejo-Delivery") or self.headers.get("X-Gitea-Delivery") or ""
+            save_event("forgejo", slug, {"headers": {"event": event, "delivery": delivery}, "body": raw.decode("utf-8", "ignore")[:5000], "time": now(), "signature_verified": True})
             project["last_forgejo_event_at"] = now()
-            project["last_forgejo_event"] = self.headers.get("X-Forgejo-Event") or self.headers.get("X-Gitea-Event") or "unknown"
+            project["last_forgejo_event"] = event
+            project["last_forgejo_delivery"] = delivery
+            project["last_forgejo_signature_verified"] = True
             save_project(project)
-            return json_response(self, 200, {"ok": True, "message": "Evento Forgejo recebido."})
+            is_main_push = event == "push" and str(webhook_body.get("ref") or "") == "refs/heads/main"
+            if is_main_push:
+                threading.Thread(target=_cloudif_forgejo_push_worker, args=(slug, delivery, webhook_body), daemon=True).start()
+                return json_response(self, 202, {"ok": True, "queued": True, "message": "Push validado; deploy automático enfileirado."})
+            return json_response(self, 200, {"ok": True, "queued": False, "message": "Evento validado; nenhuma implantação necessária."})
 
         if path.startswith("/webhook/komodo/"):
             slug = path.rsplit("/", 1)[-1]
