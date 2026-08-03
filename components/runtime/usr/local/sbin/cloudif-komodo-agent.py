@@ -510,6 +510,41 @@ def normalize_resource_id(value):
             pass
     return text
 
+def repo_absent(repo_id, repo_name):
+    listed, _ = komodo_call("read", "ListRepos", {})
+    if not listed.get("ok"):
+        return False, listed
+    raw = listed.get("data")
+    items = raw if isinstance(raw, list) else []
+    wanted_id = normalize_resource_id(repo_id)
+    wanted_name = str(repo_name or "").strip()
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        item_id = normalize_resource_id(item.get("_id") or item.get("id"))
+        item_name = str(item.get("name") or "").strip()
+        if (wanted_id and item_id == wanted_id) or (wanted_name and item_name == wanted_name):
+            return False, {"ok": True, "found": {"id": item_id, "name": item_name}}
+    return True, {"ok": True, "found": None}
+
+
+def resolve_repo_resource(integration):
+    repo_id = normalize_resource_id(integration.get("repo_id"))
+    repo_name = str(integration.get("repo_name") or "").strip()
+    if repo_id:
+        return repo_id, repo_name
+    listed, _ = komodo_call("read", "ListRepos", {})
+    items = listed.get("data") if isinstance(listed.get("data"), list) else []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get("name") or "").strip()
+        if repo_name and name == repo_name:
+            return normalize_resource_id(item.get("_id") or item.get("id")), name
+        if not repo_name and name == str(integration.get("stack_name") or "").strip():
+            return normalize_resource_id(item.get("_id") or item.get("id")), name
+    return "", repo_name
+
 def stack_absent(stack_id, stack_name):
     listed, _ = komodo_call("read", "ListStacks", {})
     if not listed.get("ok"):
@@ -597,6 +632,10 @@ def stack_action(action, payload):
     operation_final = {}
     verified_absent = False
     absence_check = {}
+    delete_stack = {}
+    delete_repo = {}
+    repo_verified_absent = True
+    repo_absence_check = {"ok": True, "found": None}
     if action == "destroy" and ok:
         last_data = (last or {}).get("data") if isinstance(last, dict) else {}
         operation_id = normalize_resource_id((last_data or {}).get("_id") if isinstance(last_data, dict) else "")
@@ -606,8 +645,18 @@ def stack_action(action, payload):
             operation_ok = operation_final.get("success") is True and bool(operation_final.get("end_ts"))
         else:
             operation_ok = idempotent_absent
+        if operation_ok and not idempotent_absent:
+            delete_stack, _ = komodo_call("write", "DeleteStack", {"id": stack_id})
+        else:
+            delete_stack = {"ok": bool(idempotent_absent), "idempotent_absent": bool(idempotent_absent)}
         verified_absent, absence_check = stack_absent(stack_id, stack_name)
-        ok = bool(operation_ok and verified_absent)
+        repo_id, repo_name = resolve_repo_resource(integration)
+        if repo_id:
+            delete_repo, _ = komodo_call("write", "DeleteRepo", {"id": repo_id})
+        else:
+            delete_repo = {"ok": True, "skipped": True, "reason": "repo_not_found"}
+        repo_verified_absent, repo_absence_check = repo_absent(repo_id, repo_name)
+        ok = bool(operation_ok and delete_stack.get("ok") and verified_absent and delete_repo.get("ok") and repo_verified_absent)
 
     result = {
         "ok": ok,
@@ -620,8 +669,12 @@ def stack_action(action, payload):
         "attempts": attempts,
         "operation_id": operation_id,
         "operation_final": operation_final,
+        "delete_stack": delete_stack,
         "verified_absent": verified_absent,
         "absence_check": absence_check,
+        "delete_repo": delete_repo,
+        "repo_verified_absent": repo_verified_absent,
+        "repo_absence_check": repo_absence_check,
         "message": ("Stack destruída e ausência confirmada." if action == "destroy" and ok else "Ação executada.") if ok else "Ação não concluída ou ausência da stack não confirmada.",
     }
 

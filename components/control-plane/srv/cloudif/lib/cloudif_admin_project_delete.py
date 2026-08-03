@@ -218,6 +218,29 @@ def execute(slug, confirmation, actor):
     return result
 
 
+def _stage(label, ok, detail=''):
+    state='Concluído' if ok else 'Pendente ou falhou'
+    cls='ok' if ok else 'bad'
+    return f'<li><span class="pill {cls}">{h(state)}</span><strong>{h(label)}</strong><small>{h(detail)}</small></li>'
+
+
+def _result_stages(result):
+    if not result: return ''
+    publication=result.get('publication') or {}
+    runtime=result.get('runtime_destroy') or result.get('runtime') or {}
+    remote=result.get('remote') or {}
+    forge=((remote.get('data') or {}).get('forgejo') or {})
+    removed=result.get('removed_rows') or {}
+    items=[
+        _stage('Publicação e aliases', publication.get('ok') is True, f"HTTP {publication.get('status') or '-'}"),
+        _stage('Stack e repositório Komodo', runtime.get('ok') is True, f"HTTP {runtime.get('status') or '-'}"),
+        _stage('Repositório Forgejo', forge.get('deleted') is True, f"HTTP {forge.get('status') or '-'}"),
+        _stage('Registros do Portal', bool(removed) or result.get('ok') is True, f"{sum(removed.values()) if removed else 0} registros"),
+        _stage('Onboarding e identidade', result.get('onboarding_removed',0) >= 0 and result.get('ok') is True, f"{result.get('onboarding_removed',0)} registro(s)"),
+        _stage('Reconciliação', result.get('ok') is True, 'Solicitada após a exclusão'),
+    ]
+    return '<ol class="admin-delete-steps">'+''.join(items)+'</ol>'
+
 def render(csrf_token, selected='', result=None):
     rows = projects()
     options = ''.join(
@@ -230,7 +253,7 @@ def render(csrf_token, selected='', result=None):
         title = 'Projeto excluído' if result.get('ok') else 'Exclusão não concluída'
         result_html = (
             f'<section class="card"><span class="pill {cls}">{h(title)}</span>'
-            f'<pre style="white-space:pre-wrap;overflow:auto;max-height:420px">{h(json.dumps(result, ensure_ascii=False, indent=2))}</pre></section>'
+            f'{_result_stages(result)}<details><summary>Relatório técnico</summary><pre style="white-space:pre-wrap;overflow:auto;max-height:420px">{h(json.dumps(result, ensure_ascii=False, indent=2))}</pre></details></section>'
         )
     selected_preview = preview(selected) if selected else None
     preview_html = ''
