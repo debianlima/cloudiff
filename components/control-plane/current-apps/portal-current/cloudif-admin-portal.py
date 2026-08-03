@@ -6064,13 +6064,6 @@ if 'Portal' in globals() and not globals().get('_pm197_route_wrapped'):
     _pm197_route_wrapped=True
 # CloudIF definitive project route override END
 
-if __name__ == "__main__":
-    init_db()
-    refresh_tenant_policies()
-    print(f"CloudIF Portal v17 clean listening on {HOST}:{PORT}", flush=True)
-    ThreadingHTTPServer((HOST, PORT), Portal).serve_forever()
-
-
 # CloudIF administrative full project deletion BEGIN
 import cloudif_admin_project_delete as _admin_project_delete
 if 'Portal' in globals() and not globals().get('_admin_project_delete_wrapped'):
@@ -6102,3 +6095,9 @@ if 'Portal' in globals() and not globals().get('_admin_project_delete_wrapped'):
     Portal.do_POST=_admin_project_delete_post
     _admin_project_delete_wrapped=True
 # CloudIF administrative full project deletion END
+
+if __name__ == "__main__":
+    init_db()
+    refresh_tenant_policies()
+    print(f"CloudIF Portal v17 clean listening on {HOST}:{PORT}", flush=True)
+    ThreadingHTTPServer((HOST, PORT), Portal).serve_forever()
