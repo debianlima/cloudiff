@@ -7,6 +7,7 @@ import sqlite3
 import subprocess
 import time
 import urllib.request
+import urllib.error
 from pathlib import Path
 
 from cloudif_delete_git_komodo_action import forja_rollback
@@ -113,6 +114,11 @@ def _post_json(url, token, payload, timeout=90, host=''):
     try:
         with urllib.request.urlopen(req,timeout=timeout) as response:
             return {'ok':200 <= response.status < 300,'status':response.status,'data':json.loads(response.read() or b'{}')}
+    except urllib.error.HTTPError as exc:
+        raw=exc.read().decode('utf-8','replace')
+        try: data=json.loads(raw)
+        except Exception: data={'raw':raw[:2000]}
+        return {'ok':False,'status':exc.code,'error':'HTTPError','detail':str(exc)[:300],'data':data}
     except Exception as exc:
         return {'ok':False,'status':0,'error':type(exc).__name__,'detail':str(exc)[:300]}
 

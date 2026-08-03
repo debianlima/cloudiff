@@ -497,6 +497,19 @@ def find_integration(project):
     rows = db_query("select * from integrations where project=?", (safe_slug(project),))
     return rows[0] if rows else None
 
+def normalize_resource_id(value):
+    if isinstance(value, dict):
+        return str(value.get("$oid") or value.get("oid") or value.get("id") or "").strip()
+    text=str(value or "").strip()
+    if text.startswith("{"):
+        try:
+            parsed=json.loads(text)
+            if isinstance(parsed,dict):
+                return str(parsed.get("$oid") or parsed.get("oid") or parsed.get("id") or "").strip()
+        except Exception:
+            pass
+    return text
+
 def stack_action(action, payload):
     project = safe_slug(payload.get("project") or "")
     tenant = safe_slug(payload.get("tenant") or "")
@@ -508,8 +521,8 @@ def stack_action(action, payload):
         record_deployment(project, tenant, actor, action, "failed", result["message"], request=payload, response=result)
         return result
 
-    stack_id = integration.get("stack_id")
-    stack_name = integration.get("stack_name")
+    stack_id = normalize_resource_id(integration.get("stack_id"))
+    stack_name = str(integration.get("stack_name") or "").strip()
 
     op_map = {
         "deploy": ["DeployStack"],
@@ -553,8 +566,12 @@ def stack_action(action, payload):
             r, _ = komodo_call("execute", op, params)
             attempts.append({"op": op, "params": params, "response": r})
             last = r
-            if r.get("ok"):
+            response_text=json.dumps(r,ensure_ascii=False)
+            already_absent=(action=="destroy" and "Did not find any Stack matching" in response_text)
+            if r.get("ok") or already_absent:
                 ok = True
+                if already_absent:
+                    attempts[-1]["idempotent_absent"] = True
                 break
         if ok:
             break
@@ -568,7 +585,7 @@ def stack_action(action, payload):
         "stack_id": stack_id,
         "stack_name": stack_name,
         "attempts": attempts,
-        "message": "Ação executada." if ok else "Ação não executada. Verifique schema/operação retornada pelo Komodo.",
+        "message": ("Stack destruída ou já ausente." if action == "destroy" and ok else "Ação executada.") if ok else "Ação não executada. Verifique schema/operação retornada pelo Komodo.",
     }
 
     record_deployment(project, tenant, actor, action, "ok" if ok else "failed", result["message"], stack_id, stack_name, integration.get("repo_id"), integration.get("repo_name"), request=payload, response=result)
