@@ -510,6 +510,23 @@ def normalize_resource_id(value):
             pass
     return text
 
+def stack_absent(stack_id, stack_name):
+    listed, _ = komodo_call("read", "ListStacks", {})
+    if not listed.get("ok"):
+        return False, listed
+    raw = listed.get("data")
+    items = raw if isinstance(raw, list) else []
+    wanted_id = normalize_resource_id(stack_id)
+    wanted_name = str(stack_name or "").strip()
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        item_id = normalize_resource_id(item.get("_id") or item.get("id"))
+        item_name = str(item.get("name") or "").strip()
+        if (wanted_id and item_id == wanted_id) or (wanted_name and item_name == wanted_name):
+            return False, {"ok": True, "found": {"id": item_id, "name": item_name}}
+    return True, {"ok": True, "found": None}
+
 def stack_action(action, payload):
     project = safe_slug(payload.get("project") or "")
     tenant = safe_slug(payload.get("tenant") or "")
@@ -576,6 +593,22 @@ def stack_action(action, payload):
         if ok:
             break
 
+    operation_id = ""
+    operation_final = {}
+    verified_absent = False
+    absence_check = {}
+    if action == "destroy" and ok:
+        last_data = (last or {}).get("data") if isinstance(last, dict) else {}
+        operation_id = normalize_resource_id((last_data or {}).get("_id") if isinstance(last_data, dict) else "")
+        idempotent_absent = any(bool(a.get("idempotent_absent")) for a in attempts)
+        if operation_id:
+            operation_final = _cloudif_pub_wait_operation(operation_id, timeout=180)
+            operation_ok = operation_final.get("success") is True and bool(operation_final.get("end_ts"))
+        else:
+            operation_ok = idempotent_absent
+        verified_absent, absence_check = stack_absent(stack_id, stack_name)
+        ok = bool(operation_ok and verified_absent)
+
     result = {
         "ok": ok,
         "project": project,
@@ -585,7 +618,11 @@ def stack_action(action, payload):
         "stack_id": stack_id,
         "stack_name": stack_name,
         "attempts": attempts,
-        "message": ("Stack destruída ou já ausente." if action == "destroy" and ok else "Ação executada.") if ok else "Ação não executada. Verifique schema/operação retornada pelo Komodo.",
+        "operation_id": operation_id,
+        "operation_final": operation_final,
+        "verified_absent": verified_absent,
+        "absence_check": absence_check,
+        "message": ("Stack destruída e ausência confirmada." if action == "destroy" and ok else "Ação executada.") if ok else "Ação não concluída ou ausência da stack não confirmada.",
     }
 
     record_deployment(project, tenant, actor, action, "ok" if ok else "failed", result["message"], stack_id, stack_name, integration.get("repo_id"), integration.get("repo_name"), request=payload, response=result)
