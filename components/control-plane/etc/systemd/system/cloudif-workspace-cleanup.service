@@ -4,7 +4,9 @@ After=docker.service
 Requires=docker.service
 [Service]
 Type=oneshot
+Environment=DOCKER_CONFIG=/run/cloudif-docker-config-empty
 ExecStart=/usr/bin/python3 /usr/local/sbin/cloudif-workspace-cleanup.py
+TimeoutStartSec=90
 NoNewPrivileges=true
 PrivateTmp=true
 PrivateDevices=true
@@ -19,3 +21,4 @@ CapabilityBoundingSet=
 AmbientCapabilities=
 UMask=0077
 ReadOnlyPaths=/var/run/docker.sock
+ReadWritePaths=/run /var/lib/cloudif/workspaces /var/lib/cloudif/health

@@ -9,6 +9,7 @@ import sqlite3
 import subprocess
 import tempfile
 import time
+from pathlib import Path
 
 ONBOARDING_DB = '/var/lib/cloudif/onboarding/onboarding.db'
 PORTAL_DB = '/var/lib/cloudif/portal/cloudif-portal.db'
@@ -16,6 +17,8 @@ OUTPUT = '/var/lib/cloudif/health/project-state-reconcile.json'
 LOCK = '/run/lock/cloudif-project-state-reconcile.lock'
 AGENT_REPORT = '/var/lib/cloudif/health/agent-controller.json'
 CAP_REPORT = '/var/lib/cloudif/health/project-capabilities-v2.json'
+JOB_DIR = '/srv/cloudif/jobs'
+JOB_RETENTION_SECONDS = 7 * 24 * 3600
 SOURCES = (
     '/srv/cloudif/app-pointers/agent-controller-current/cloudif-agent-controller.py',
     '/srv/cloudif/app-pointers/project-capabilities-current/cloudif-project-capabilities.py',
@@ -112,6 +115,55 @@ def fingerprint(rows):
     return hashlib.sha256(raw).hexdigest(), payload['sources']
 
 
+
+def reconcile_jobs(portal_projects):
+    directory = Path(JOB_DIR)
+    directory.mkdir(parents=True, exist_ok=True)
+    now_epoch = time.time()
+    grouped = {}
+    removed = []
+    kept = []
+    for path in directory.glob('project-provision-*.json'):
+        try:
+            job = load_json(path, {})
+            slug = str(job.get('slug') or '')
+            status = str(job.get('status') or 'unknown')
+            updated = path.stat().st_mtime
+            grouped.setdefault(slug, []).append((updated, path, status))
+        except Exception as exc:
+            removed.append({'path': path.name, 'reason': 'invalid_job', 'error': type(exc).__name__})
+            try: path.unlink()
+            except FileNotFoundError: pass
+    for slug, items in grouped.items():
+        items.sort(reverse=True)
+        if not slug or slug not in portal_projects:
+            for _, path, status in items:
+                try: path.unlink()
+                except FileNotFoundError: pass
+                removed.append({'path': path.name, 'project_slug': slug, 'status': status, 'reason': 'orphan_project'})
+            continue
+        active = [item for item in items if item[2] in ('queued', 'running')]
+        completed = [item for item in items if item[2] not in ('queued', 'running')]
+        for index, (updated, path, status) in enumerate(active):
+            if index == 0:
+                kept.append({'path': path.name, 'project_slug': slug, 'status': status, 'reason': 'active_latest'})
+            elif now_epoch - updated > 3600:
+                try: path.unlink()
+                except FileNotFoundError: pass
+                removed.append({'path': path.name, 'project_slug': slug, 'status': status, 'reason': 'stale_duplicate_active'})
+            else:
+                kept.append({'path': path.name, 'project_slug': slug, 'status': status, 'reason': 'recent_duplicate_active'})
+        for index, (updated, path, status) in enumerate(completed):
+            if index == 0:
+                kept.append({'path': path.name, 'project_slug': slug, 'status': status, 'reason': 'latest_history'})
+            elif now_epoch - updated > JOB_RETENTION_SECONDS:
+                try: path.unlink()
+                except FileNotFoundError: pass
+                removed.append({'path': path.name, 'project_slug': slug, 'status': status, 'reason': 'expired_history'})
+            else:
+                kept.append({'path': path.name, 'project_slug': slug, 'status': status, 'reason': 'retained_history'})
+    return {'ok': True, 'removed': removed, 'kept': kept, 'removed_count': len(removed), 'kept_count': len(kept)}
+
 def parallel_reconcile():
     units = ('cloudif-project-capabilities.service', 'cloudif-agent-controller.service')
     processes = []
@@ -138,7 +190,7 @@ def parallel_reconcile():
     return results
 
 
-def build_report(rows, fingerprint_value, sources, components, changed):
+def build_report(rows, fingerprint_value, sources, components, changed, job_reconciliation):
     portal, orphans, missing = source_state(rows)
     active_rows = [row for row in rows if str(row.get('project_slug') or '') in portal]
     agent = load_json(AGENT_REPORT)
@@ -181,6 +233,7 @@ def build_report(rows, fingerprint_value, sources, components, changed):
         'execution_mode': 'parallel',
         'source_of_truth': 'portal',
         'components': components,
+        'job_reconciliation': job_reconciliation,
         'projects_count': len(projects),
         'projects_ready': sum(1 for project in projects if project['overall'] == 'ready'),
         'agents_aligned': sum(1 for project in projects if project['agent'] == 'aligned'),
@@ -219,15 +272,18 @@ def main(force=False):
         previous = load_json(OUTPUT)
         portal, orphans, missing = source_state(rows)
         if not force and previous.get('ok') is True and previous.get('fingerprint') == fingerprint_value and not orphans and not missing:
+            job_reconciliation = reconcile_jobs(portal)
             previous['generated_at'] = now()
-            previous['changed'] = False
-            previous['execution_mode'] = 'noop'
+            previous['changed'] = bool(job_reconciliation.get('removed_count'))
+            previous['execution_mode'] = 'maintenance' if previous['changed'] else 'noop'
             previous['last_checked_at'] = previous['generated_at']
+            previous['job_reconciliation'] = job_reconciliation
             atomic_write(OUTPUT, previous)
-            print(json.dumps({'ok': True, 'changed': False, 'projects': len(portal), 'fingerprint': fingerprint_value, 'execution_mode': 'noop', 'tokens_rotated': 0}, separators=(',', ':')))
+            print(json.dumps({'ok': True, 'changed': previous['changed'], 'projects': len(portal), 'fingerprint': fingerprint_value, 'execution_mode': previous['execution_mode'], 'job_reconciliation': job_reconciliation, 'tokens_rotated': 0}, separators=(',', ':')))
             return 0
+        job_reconciliation = reconcile_jobs(portal)
         components = parallel_reconcile()
-        report = build_report(rows, fingerprint_value, sources, components, True)
+        report = build_report(rows, fingerprint_value, sources, components, True, job_reconciliation)
         atomic_write(OUTPUT, report)
         print(json.dumps({'ok': report['ok'], 'changed': True, 'projects': report['projects_count'], 'ready': report['projects_ready'], 'onboarding_orphans': orphans, 'onboarding_missing': missing, 'components': components, 'tokens_rotated': 0}, separators=(',', ':')))
         return 0 if report['ok'] else 1
