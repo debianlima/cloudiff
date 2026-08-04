@@ -293,7 +293,7 @@ def _install() -> None:
                 if path in PORTAL_PATHS and tab == "publicacao" and not (query.get("project") or [""])[0].strip():
                     from portal.modules.overview import service as overview_service, views as overview_views
                     data = overview_service.overview_data(identity(self.headers))
-                    body = overview_views.sites_body(data)
+                    body = overview_views.overview_body(data)
                     markup = render_legacy(identity(self.headers), "publicacao", "Publicações", body, "", "")
                     return send(self, 200, "text/html; charset=utf-8", markup.encode("utf-8"))
                 if path in PORTAL_PATHS and tab == "backup":
