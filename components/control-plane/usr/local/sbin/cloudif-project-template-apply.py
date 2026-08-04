@@ -38,163 +38,194 @@ def build(kind,slug,owner,tenant,num):
  return [('README.md',f'# {title}\n\nPortal: {portal}\nForgejo: {forge}\nKomodo: {kom}\nSupabase: {sup}\nSite: {site}\n'),('site/index.html',html),('nginx.conf',nginx),('.env',f'CLOUDIF_PUBLIC_NUMBER={num}\nCLOUDIF_DEPLOY_NUMBER=1\n'),('docker-compose.yml',compose)]
 
 def project_readme(slug,owner,tenant,num,runtime,php_version):
- portal='https://cloudiff.duckdns.org/'
- forge=f'https://cloudiff.duckdns.org/git/cloudif/cloudif-{slug}'
- kom='https://komodoiff.duckdns.org/'
- sup=f'https://{tenant}.cloudiff.duckdns.org/project/default'
- site=f'https://{num}.cloudiff.duckdns.org/'
- node_version=runtime.replace('node','') if runtime.startswith('node') else ''
- if runtime.startswith('node'):
-  runtime_title=f'Node.js {node_version} + PHP {php_version}'
-  quick="""1. Coloque HTML, CSS, JavaScript, imagens e outros arquivos públicos dentro de `site/`.
-2. Coloque scripts PHP dentro de `php/`. Eles serão acessíveis por `/php/<arquivo>.php`.
-3. Edite `package.json` e `server.js` quando precisar de rotas, dependências ou APIs Node.
-4. Faça commit e push na branch `main`. O webhook do Forgejo solicita a atualização automática da stack.
-5. Acompanhe o deploy no Portal ou no Komodo e confirme a URL pública."""
-  structure=f"""| Caminho | Para que serve | Pode alterar? |
-|---|---|---|
-| `site/` | Frontend público: HTML, CSS, JavaScript, imagens e arquivos estáticos. A raiz `/` usa essa pasta. | **Sim.** Substitua todo o conteúdo de exemplo pelo seu site. |
-| `php/` | Aplicação PHP executada em um container Apache separado. A rota pública é `/php/`. | **Sim.** Coloque aqui seus arquivos `.php`, classes e includes. Preserve `health.php` ou forneça um healthcheck equivalente. |
-| `server.js` | Entrada Node. Serve `site/`, fornece `/health` e encaminha `/php` ao serviço PHP. | **Sim, com cuidado.** Deve escutar `process.env.PORT` com padrão `80` e manter `/health`. |
-| `package.json` | Dependências e comando de inicialização do Node. | **Sim.** O script `start` precisa iniciar o servidor sem modo interativo. |
-| `Dockerfile` | Constrói o container Node {node_version}. | **Avançado.** Preserve uma aplicação que escute na porta 80. |
-| `Dockerfile.php` | Constrói PHP {php_version} + Apache e copia `php/`. | **Avançado.** Pode instalar extensões, mantendo Apache e healthcheck compatíveis. |
-| `docker-compose.yml` | Liga `web` e `php`, healthchecks, rede e aliases usados pelo publicador. | **Gerenciado/avançado.** Não remova o serviço `web`, a rede, aliases ou healthchecks sem configuração equivalente. |
-| `.env` | Identificadores da publicação usados pelo Compose. | **Não alterar normalmente.** Não coloque senhas ou tokens aqui. |
-| `README.md` | Manual do repositório. | **Sim.** Pode complementar com a documentação do sistema. |"""
-  replace="""Você pode apagar o conteúdo de exemplo de `site/` e `php/` e colocar sua aplicação real. Não apague os arquivos de infraestrutura da raiz sem substituí-los por uma configuração compatível.
-
-Para um projeto Node comum, copie o código para a raiz ou organize subpastas e ajuste `package.json`, `server.js` e `Dockerfile`. Para frameworks que geram uma pasta de build, configure o servidor para entregar essa saída pela porta 80.
-
-O PHP já está habilitado. Um arquivo `php/relatorio.php` ficará disponível em `https://<numero>.cloudiff.duckdns.org/php/relatorio.php`."""
- elif runtime=='php-apache':
-  runtime_title=f'PHP {php_version} + Apache'
-  quick="""1. Coloque a aplicação PHP dentro de `site/`.
-2. Mantenha um `index.php` ou outro arquivo inicial compatível com o Apache.
-3. Faça commit e push na branch `main`.
-4. Acompanhe o deploy no Portal ou no Komodo e confirme a URL pública."""
-  structure=f"""| Caminho | Para que serve | Pode alterar? |
-|---|---|---|
-| `site/` | Raiz pública do Apache. Recebe PHP, HTML, CSS, JavaScript e imagens. | **Sim.** Substitua o exemplo pela aplicação real. Preserve `health.php` ou forneça equivalente. |
-| `Dockerfile` | Constrói PHP {php_version} + Apache e copia `site/`. | **Avançado.** Pode instalar extensões e Composer, preservando porta 80 e saúde. |
-| `docker-compose.yml` | Define serviço web, aliases, rede e healthcheck. | **Gerenciado/avançado.** Preserve o serviço `web` e o contrato de publicação. |
-| `.env` | Identificadores da publicação. | **Não alterar normalmente.** Não armazene segredos. |
-| `README.md` | Manual do projeto. | **Sim.** |"""
-  replace="""Você pode apagar o conteúdo de exemplo de `site/` e colocar seu projeto PHP. O deploy será automático após o push na `main`, desde que o container continue saudável e atendendo na porta 80."""
- else:
-  runtime_title='Site estático + Nginx'
-  quick="""1. Coloque HTML, CSS, JavaScript, imagens e outros arquivos dentro de `site/`.
-2. Mantenha `site/index.html` como página inicial ou ajuste o Nginx.
-3. Faça commit e push na branch `main`.
-4. Acompanhe o deploy e confirme a URL pública."""
-  structure="""| Caminho | Para que serve | Pode alterar? |
-|---|---|---|
-| `site/` | Conteúdo público servido pelo Nginx. | **Sim.** Substitua todo o exemplo. |
-| `nginx.conf` | Rotas, fallback de SPA e endpoint `/health`. | **Com cuidado.** Preserve `listen 80` e `/health`. |
-| `docker-compose.yml` | Serviço web, rede, aliases e healthcheck. | **Gerenciado/avançado.** Preserve o contrato de publicação. |
-| `.env` | Identificadores da publicação. | **Não alterar normalmente.** Não armazene segredos. |
-| `README.md` | Manual do projeto. | **Sim.** |"""
-  replace="""Você pode apagar o conteúdo de exemplo de `site/` e colocar seu site estático completo. O push na `main` aciona a atualização automática."""
+ node_version=runtime.replace('node','') if runtime.startswith('node') else '22'
  return f"""# {slug.replace('-', ' ').title()}
 
-Projeto CloudIFF de **{owner}** · runtime **{runtime_title}**.
+Projeto CloudIFF de **{owner}** com **Apache + PHP {php_version} + Node.js {node_version}**.
 
-## Atalhos
+## Onde colocar o projeto
 
-- [Portal]({portal})
-- [Forgejo]({forge})
-- [Komodo]({kom})
-- [Supabase]({sup})
-- [Site publicado]({site})
+Todo o código da aplicação fica em `site/`:
 
-## Comece por aqui
+- `site/index.php` é interpretado pelo PHP na raiz do domínio;
+- `site/index.html`, CSS, JavaScript e imagens são servidos pelo Apache;
+- `site/api/server.js` implementa APIs Node disponíveis em `/api/`;
+- outras pastas dentro de `site/` pertencem livremente ao projeto.
 
-{quick}
+Você pode apagar o conteúdo de exemplo de `site/` e colocar seu sistema real.
 
-## Onde colocar o código
+## Infraestrutura gerenciada
 
-{structure}
+A pasta oculta `.cloudif/` contém Dockerfile, Compose, Apache, Supervisor, healthcheck e metadados de runtime. A plataforma mantém essa pasta. Alterações avançadas são possíveis, mas podem quebrar build, saúde ou publicação automática.
 
-## Posso substituir o projeto de exemplo?
+## Publicação automática
 
-{replace}
+1. Edite `site/`.
+2. Faça commit e push na branch `main`.
+3. O Forgejo envia o webhook.
+4. O Komodo reconstrói o container isolado do projeto.
+5. A CloudIFF valida o healthcheck e publica por HTTPS.
 
-## Contrato mínimo de publicação
+Site: https://{num}.cloudiff.duckdns.org/
+Forgejo: https://cloudiff.duckdns.org/git/cloudif/cloudif-{slug}
+Supabase: https://{tenant}.cloudiff.duckdns.org/project/default
 
-A publicação automática depende destes requisitos:
+## Contrato da plataforma
 
-- a branch de implantação é `main`;
-- o serviço público do Compose se chama `web`;
-- o serviço `web` atende HTTP na porta `80` dentro do container;
-- `GET /health` responde com sucesso;
-- o serviço participa da rede externa `cloudif-publications`;
-- os aliases `cloudif-p${{CLOUDIF_PUBLIC_NUMBER}}-d${{CLOUDIF_DEPLOY_NUMBER}}-web` e `cloudif-p${{CLOUDIF_PUBLIC_NUMBER}}-active-web` permanecem disponíveis;
-- segredos não são enviados ao Git. Use o Portal, o tenant ou um mecanismo próprio de segredo.
+- Apache atende internamente na porta 80;
+- o proxy público atende HTTP 80 e HTTPS 443, terminando TLS no Nginx;
+- PHP interpreta arquivos dentro de `site/`;
+- Node executa `site/api/server.js` em `127.0.0.1:3000`;
+- Apache encaminha `/api/` para o processo Node;
+- o serviço público se chama `web` e participa da rede `cloudif-publications`;
+- segredos não devem ser enviados ao Git.
 
-Se você trocar Dockerfiles ou Compose, a CloudIFF continuará publicando desde que esse contrato seja preservado.
-
-## O que acontece após um push
-
-```mermaid
-flowchart LR
-  A[Commit na main] --> B[Webhook Forgejo]
-  B --> C[CloudIFF valida o evento]
-  C --> D[Komodo atualiza e reconstrói a stack]
-  D --> E[Healthcheck]
-  E -->|saudável| F[Publicação disponível]
-  E -->|falhou| G[Erro e logs no Portal/Komodo]
-```
-
-## Banco de dados
-
-O tenant deste projeto é `{tenant}`. O código pode usar PostgreSQL, API REST, autenticação e Storage conforme as permissões concedidas no Portal. Não grave chaves administrativas no repositório.
-
-## Antes de alterar arquivos de infraestrutura
-
-1. Faça uma branch ou commit de segurança.
-2. Preserve o contrato mínimo acima.
-3. Valide localmente o build e o healthcheck.
-4. Faça push e acompanhe logs no Komodo.
-5. Em caso de falha, reverta o commit ou restaure a versão anterior pelo Portal.
+A imagem-base compartilhada desta combinação é `cloudif/runtime-apache-php{php_version}-node{node_version}:v1`. O container final continua exclusivo deste projeto.
 """
+
 
 def runtime_overlay(template,php_version='8.3'):
- template=(template or 'static-nginx').strip().lower(); php_version=str(php_version or '8.3').strip()
- if php_version not in ('8.2','8.3','8.4'): raise ValueError('unsupported_php_version')
- if template in ('node20','node22','node24'):
-  version=template.replace('node','')
-  docker=f"FROM node:{version}-alpine\nWORKDIR /app\nCOPY package*.json ./\nRUN npm install --omit=dev\nCOPY . .\nENV PORT=80\nEXPOSE 80\nCMD [\"npm\",\"start\"]\n"
-  package='{"name":"cloudif-app","private":true,"scripts":{"start":"node server.js"},"dependencies":{"express":"^4.21.0"}}\n'
-  server="""const express=require('express');const http=require('http');const app=express();
-app.use(express.static('site'));
-app.get('/health',(_,r)=>r.json({ok:true,node:process.version,php:true}));
-app.use('/php',(req,res)=>{const p=http.request({host:'php',port:80,path:req.url||'/',method:req.method,headers:req.headers},up=>{res.writeHead(up.statusCode||502,up.headers);up.pipe(res)});p.on('error',()=>res.status(502).json({ok:false,error:'php_unavailable'}));req.pipe(p)});
-const port=Number(process.env.PORT||80);app.listen(port,'0.0.0.0');
+ template=(template or 'node22').strip().lower()
+ php_version=str(php_version or '8.3').strip()
+ if php_version not in ('8.2','8.3','8.4'):
+  raise ValueError('unsupported_php_version')
+ if template not in ('node20','node22','node24'):
+  template='node22'
+ node_version=template.replace('node','')
+ base_tag=f'cloudif/runtime-apache-php{php_version}-node{node_version}:v1'
+ base=f"""FROM php:{php_version}-apache
+ARG NODE_MAJOR={node_version}
+RUN apt-get update \\
+ && apt-get install -y --no-install-recommends ca-certificates curl gnupg supervisor libpq-dev libpng-dev libjpeg62-turbo-dev libfreetype6-dev libzip-dev libicu-dev default-mysql-client postgresql-client unzip git \\
+ && curl -fsSL https://deb.nodesource.com/setup_${{NODE_MAJOR}}.x | bash - \\
+ && apt-get install -y --no-install-recommends nodejs \\
+ && docker-php-ext-configure gd --with-freetype --with-jpeg \\
+ && docker-php-ext-install -j\"$(nproc)\" pdo pdo_mysql mysqli pdo_pgsql pgsql gd intl zip opcache \\
+ && a2enmod rewrite headers proxy proxy_http expires \\
+ && rm -rf /var/lib/apt/lists/*
+COPY .cloudif/apache-vhost.conf /etc/apache2/sites-available/000-default.conf
+COPY .cloudif/supervisor.conf /etc/supervisor/conf.d/cloudif.conf
+COPY .cloudif/node-runner.sh /usr/local/bin/cloudif-node-runner
+COPY .cloudif/health.php /opt/cloudif/health.php
+RUN chmod 0755 /usr/local/bin/cloudif-node-runner
+EXPOSE 80
+CMD [\"/usr/bin/supervisord\",\"-n\",\"-c\",\"/etc/supervisor/supervisord.conf\"]
 """
-  php_docker=f"FROM php:{php_version}-apache\nCOPY php/ /var/www/html/\nRUN printf '<Directory /var/www/html>\\nAllowOverride All\\nRequire all granted\\n</Directory>\\n' > /etc/apache2/conf-available/cloudif.conf && a2enconf cloudif\n"
-  compose='services:\n  web:\n    build: .\n    container_name: cloudif-p${CLOUDIF_PUBLIC_NUMBER}-d${CLOUDIF_DEPLOY_NUMBER}-web\n    restart: unless-stopped\n    depends_on:\n      php:\n        condition: service_healthy\n    healthcheck:\n      test: [\"CMD-SHELL\", \"wget -qO- http://127.0.0.1/health >/dev/null 2>&1\"]\n      interval: 15s\n      timeout: 5s\n      retries: 10\n    networks:\n      cloudif-publications:\n        aliases:\n          - cloudif-p${CLOUDIF_PUBLIC_NUMBER}-d${CLOUDIF_DEPLOY_NUMBER}-web\n          - cloudif-p${CLOUDIF_PUBLIC_NUMBER}-active-web\n  php:\n    build:\n      context: .\n      dockerfile: Dockerfile.php\n    restart: unless-stopped\n    healthcheck:\n      test: [\"CMD-SHELL\", \"curl -fsS http://127.0.0.1/health.php >/dev/null\"]\n      interval: 15s\n      timeout: 5s\n      retries: 10\n    networks:\n      - cloudif-publications\nnetworks:\n  cloudif-publications:\n    external: true\n'
-  return [('Dockerfile',docker),('Dockerfile.php',php_docker),('package.json',package),('server.js',server),('php/index.php',f"<?php echo 'CloudIF PHP {php_version}';"),('php/health.php',"<?php header('Content-Type: application/json'); echo '{\"ok\":true}';"),('docker-compose.yml',compose)]
- if template=='php-apache':
-  docker=f"FROM php:{php_version}-apache\nCOPY site/ /var/www/html/\nRUN printf '<Directory /var/www/html>\\nAllowOverride All\\nRequire all granted\\n</Directory>\\n' > /etc/apache2/conf-available/cloudif.conf && a2enconf cloudif\n"
-  compose='services:\n  web:\n    build: .\n    container_name: cloudif-p${CLOUDIF_PUBLIC_NUMBER}-d${CLOUDIF_DEPLOY_NUMBER}-web\n    restart: unless-stopped\n    healthcheck:\n      test: [\"CMD-SHELL\", \"curl -fsS http://127.0.0.1/health.php >/dev/null\"]\n      interval: 15s\n      timeout: 5s\n      retries: 10\n    networks:\n      cloudif-publications:\n        aliases:\n          - cloudif-p${CLOUDIF_PUBLIC_NUMBER}-d${CLOUDIF_DEPLOY_NUMBER}-web\n          - cloudif-p${CLOUDIF_PUBLIC_NUMBER}-active-web\nnetworks:\n  cloudif-publications:\n    external: true\n'
-  return [('Dockerfile',docker),('site/index.php',f"<?php echo 'CloudIF PHP {php_version}';"),('site/health.php',"<?php header('Content-Type: application/json'); echo '{\"ok\":true}';"),('docker-compose.yml',compose)]
- return []
+ docker=f"""FROM {base_tag}
+COPY site/ /var/www/html/
+WORKDIR /var/www/html
+RUN if [ -f api/package-lock.json ]; then cd api && npm ci --omit=dev; elif [ -f api/package.json ]; then cd api && npm install --omit=dev; fi \\
+ && chown -R www-data:www-data /var/www/html
+"""
+ apache="""<VirtualHost *:80>
+  DocumentRoot /var/www/html
+  DirectoryIndex index.php index.html
+  <Directory /var/www/html>
+    AllowOverride All
+    Options FollowSymLinks
+    Require all granted
+  </Directory>
+  Alias /.cloudif-health /opt/cloudif/health.php
+  <Location /.cloudif-health>
+    Require all granted
+  </Location>
+  ProxyPreserveHost On
+  ProxyPass /api/ http://127.0.0.1:3000/
+  ProxyPassReverse /api/ http://127.0.0.1:3000/
+  SetEnvIf X-Forwarded-Proto https HTTPS=on
+  ErrorLog ${APACHE_LOG_DIR}/error.log
+  CustomLog ${APACHE_LOG_DIR}/access.log combined
+</VirtualHost>
+"""
+ supervisor="""[supervisord]
+nodaemon=true
+user=root
+
+[program:apache]
+command=/usr/sbin/apache2ctl -D FOREGROUND
+autostart=true
+autorestart=true
+priority=10
+stdout_logfile=/dev/fd/1
+stdout_logfile_maxbytes=0
+stderr_logfile=/dev/fd/2
+stderr_logfile_maxbytes=0
+
+[program:node]
+command=/usr/local/bin/cloudif-node-runner
+autostart=true
+autorestart=true
+startsecs=2
+priority=20
+stdout_logfile=/dev/fd/1
+stdout_logfile_maxbytes=0
+stderr_logfile=/dev/fd/2
+stderr_logfile_maxbytes=0
+"""
+ runner="""#!/bin/sh
+set -eu
+cd /var/www/html
+if [ -f api/server.js ]; then
+  cd api
+  export HOST=127.0.0.1 PORT=3000 NODE_ENV=${NODE_ENV:-production}
+  exec node server.js
+fi
+exec sh -c 'while :; do sleep 3600; done'
+"""
+ health="<?php header('Content-Type: application/json'); echo json_encode(['ok'=>true,'php'=>PHP_VERSION]);"
+ compose=f"""services:
+  web:
+    image: cloudif/project-${{CLOUDIF_PUBLIC_NUMBER}}:php{php_version}-node{node_version}
+    build:
+      context: ..
+      dockerfile: .cloudif/Dockerfile
+    container_name: cloudif-p${{CLOUDIF_PUBLIC_NUMBER}}-d${{CLOUDIF_DEPLOY_NUMBER}}-web
+    restart: unless-stopped
+    healthcheck:
+      test: [\"CMD-SHELL\", \"curl -fsS http://127.0.0.1/.cloudif-health >/dev/null\"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    networks:
+      cloudif-publications:
+        aliases:
+          - cloudif-p${{CLOUDIF_PUBLIC_NUMBER}}-d${{CLOUDIF_DEPLOY_NUMBER}}-web
+          - cloudif-p${{CLOUDIF_PUBLIC_NUMBER}}-active-web
+networks:
+  cloudif-publications:
+    external: true
+"""
+ runtime=json.dumps({'schema':1,'apache':'2.4','php':php_version,'node':node_version,'base_image':base_tag,'compose_file':'.cloudif/docker-compose.yml'},ensure_ascii=False,indent=2)+'\n'
+ return [
+  ('.cloudif/Dockerfile.base',base),
+  ('.cloudif/Dockerfile',docker),
+  ('.cloudif/apache-vhost.conf',apache),
+  ('.cloudif/supervisor.conf',supervisor),
+  ('.cloudif/node-runner.sh',runner),
+  ('.cloudif/health.php',health),
+  ('.cloudif/docker-compose.yml',compose),
+  ('.cloudif/runtime.json',runtime),
+  ('site/index.php',f"<?php echo '<h1>CloudIFF</h1><p>Apache + PHP {php_version} + Node.js {node_version}</p>';"),
+  ('site/api/server.js',"const http=require('http');const port=Number(process.env.PORT||3000);http.createServer((req,res)=>{res.setHeader('Content-Type','application/json');res.end(JSON.stringify({ok:true,node:process.version,path:req.url}))}).listen(port,'127.0.0.1');\n"),
+  ('site/api/package.json','{"name":"cloudif-api","private":true,"scripts":{"start":"node server.js"}}\n')]
+
 
 def merge_runtime(files,template,php_version="8.3"):
  overlay=runtime_overlay(template,php_version)
- if not overlay:return files
- names={name for name,_ in overlay}
- return [(name,content) for name,content in files if name not in names]+overlay
+ env=next((content for name,content in files if name=='.env'),'CLOUDIF_PUBLIC_NUMBER=1001\nCLOUDIF_DEPLOY_NUMBER=1\n')
+ keep=[(name,content) for name,content in files if name.startswith('site/') and name!='site/index.html']
+ return keep+overlay+[('.cloudif/.env',env)]
 
 def main():
- job=json.loads(Path(sys.argv[1]).read_text()); kind=job.get('template_kind','none'); runtime=job.get('runtime_template','static-nginx'); php_version=job.get('php_version','8.3')
+ job=json.loads(Path(sys.argv[1]).read_text()); kind=job.get('template_kind','none'); runtime=job.get('runtime_template','node22'); php_version=job.get('php_version','8.3')
  if kind not in ('onboarding','links'): print({'skipped':True,'kind':kind}); return
  slug=job['slug']; owner=(job.get('user') or {}).get('username',''); tenant=job['tenant']; num=public_number(slug)
  marker=Path(f'/srv/cloudif/provisioning/projects/{slug}/template-applied.json')
  if marker.exists():
   try:
    old_marker=json.loads(marker.read_text())
-   if old_marker.get('kind')==kind and old_marker.get('runtime_template')==runtime and old_marker.get('php_version','8.3')==php_version and old_marker.get('version')==8:
+   if old_marker.get('kind')==kind and old_marker.get('runtime_template')==runtime and old_marker.get('php_version','8.3')==php_version and old_marker.get('version')==9:
     print(json.dumps({'ok':True,'skipped':True,'reason':'template_already_applied','kind':kind,'project':slug,'public_number':num},ensure_ascii=False)); return
   except Exception: pass
  cfg=read_env('/etc/cloudif/forja-agent-client.env'); base=(cfg.get('FORJA_AGENT_URL') or 'http://10.62.91.2:18095').rstrip('/'); tok=cfg.get('FORJA_AGENT_TOKEN','')
@@ -211,6 +242,6 @@ def main():
   if not last or not last.get('ok'): raise RuntimeError(f'commit_failed:{path}:{last}')
   results.append({'path':path,'commit':last.get('commit_sha','')})
  marker.parent.mkdir(parents=True,exist_ok=True)
- marker.write_text(json.dumps({'kind':kind,'runtime_template':runtime,'php_version':php_version,'version':8,'project':slug,'public_number':num,'applied_at':time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime()),'files':results},ensure_ascii=False,indent=2)+'\n')
+ marker.write_text(json.dumps({'kind':kind,'runtime_template':runtime,'php_version':php_version,'version':9,'project':slug,'public_number':num,'applied_at':time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime()),'files':results},ensure_ascii=False,indent=2)+'\n')
  print(json.dumps({'ok':True,'kind':kind,'project':slug,'public_number':num,'files':results},ensure_ascii=False))
 if __name__=='__main__': main()

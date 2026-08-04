@@ -7,24 +7,17 @@ class ProjectRepositoryManualTests(unittest.TestCase):
  def setUpClass(cls):
   spec=spec_from_file_location('tpl',Path('components/control-plane/usr/local/sbin/cloudif-project-template-apply.py'))
   cls.mod=module_from_spec(spec);spec.loader.exec_module(cls.mod)
- def test_node_php_manual_explains_editable_and_managed_files(self):
+ def test_manual_explains_single_site_and_hidden_platform_folder(self):
   text=self.mod.project_readme('demo','user','tenant-demo',1001,'node22','8.3')
-  for marker in ('`site/`','`php/`','`server.js`','`package.json`','`Dockerfile`','`Dockerfile.php`','`docker-compose.yml`','`.env`','Pode alterar?'):
+  for marker in ('Todo o código da aplicação fica em `site/`','`site/index.php`','`site/api/server.js`','pasta oculta `.cloudif/`','container final continua exclusivo'):
    self.assertIn(marker,text)
- def test_manual_states_deployment_contract(self):
-  text=self.mod.project_readme('demo','user','tenant-demo',1001,'node22','8.3')
-  for marker in ('branch de implantação é `main`','serviço público do Compose se chama `web`','porta `80`','`GET /health`','rede externa `cloudif-publications`','segredos não são enviados ao Git'):
-   self.assertIn(marker,text)
- def test_all_runtime_manuals_are_supported(self):
-  for runtime in ('static-nginx','node20','node22','node24','php-apache'):
+ def test_all_supported_versions_are_documented(self):
+  for runtime in ('node20','node22','node24'):
    text=self.mod.project_readme('demo','user','tenant-demo',1001,runtime,'8.4')
-   self.assertIn('## Comece por aqui',text)
-   self.assertIn('## O que acontece após um push',text)
-   self.assertIn('## Antes de alterar arquivos de infraestrutura',text)
- def test_template_version_forces_readme_upgrade(self):
+   self.assertIn('Apache + PHP 8.4 + Node.js',text)
+ def test_template_version_forces_layout_upgrade_for_new_projects(self):
   source=Path('components/control-plane/usr/local/sbin/cloudif-project-template-apply.py').read_text()
-  self.assertIn("old_marker.get('version')==8",source)
-  self.assertIn("'version':8",source)
-  self.assertIn("[('README.md',project_readme",source)
+  self.assertIn("old_marker.get('version')==9",source)
+  self.assertIn("'version':9",source)
 
 if __name__=='__main__':unittest.main()

@@ -296,6 +296,7 @@ def create_or_update_repo(repo_info, server_id):
     repos = repos_resp.get("data") if repos_resp.get("ok") else []
     existing = find_by_name(repos, repo_info["repo_name"])
 
+    compose_file = ".cloudif/docker-compose.yml" if runtime_layout == "unified-v1" else "docker-compose.yml"
     desired_config = {
         "server_id": server_id,
         "repo": repo_info["repo_path"],
@@ -336,7 +337,7 @@ def create_or_update_repo(repo_info, server_id):
 
     return None, {"created": False, "attempts": attempts}
 
-def create_or_update_stack(project, repo_info, server_id):
+def create_or_update_stack(project, repo_info, server_id, runtime_layout="legacy"):
     stack_name = "cloudif-" + safe_slug(project)
 
     stacks_resp, _ = komodo_call("read", "ListStacks", {})
@@ -350,7 +351,7 @@ def create_or_update_stack(project, repo_info, server_id):
         "git_provider": repo_info["git_provider"],
         "git_https": True,
                 "git_account": _cloudif_v125_git_account(),
-        "file_paths": ["docker-compose.yml"],
+        "file_paths": [compose_file],
         "run_directory": ".",
         "webhook_enabled": True,
     }
@@ -373,8 +374,8 @@ def create_or_update_stack(project, repo_info, server_id):
     attempts = []
     for params in [
         {"name": stack_name, "config": desired_config},
-        {"name": stack_name, "server_id": server_id, "repo": repo_info["repo_path"], "branch": repo_info["branch"], "git_provider": repo_info["git_provider"], "git_https": True, "git_account": _cloudif_v125_git_account(), "file_paths": ["docker-compose.yml"]},
-        {"name": stack_name, "config": {"server_id": server_id, "repo": repo_info["repo_path"], "branch": repo_info["branch"], "git_provider": repo_info["git_provider"], "git_https": True, "git_account": _cloudif_v125_git_account(), "file_paths": ["docker-compose.yml"], "run_directory": ".", "webhook_enabled": True}},
+        {"name": stack_name, "server_id": server_id, "repo": repo_info["repo_path"], "branch": repo_info["branch"], "git_provider": repo_info["git_provider"], "git_https": True, "git_account": _cloudif_v125_git_account(), "file_paths": [compose_file]},
+        {"name": stack_name, "config": {"server_id": server_id, "repo": repo_info["repo_path"], "branch": repo_info["branch"], "git_provider": repo_info["git_provider"], "git_https": True, "git_account": _cloudif_v125_git_account(), "file_paths": [compose_file], "run_directory": ".", "webhook_enabled": True}},
     ]:
         r, _ = komodo_call("write", "CreateStack", params)
         attempts.append({"params": params, "response": r})
@@ -448,7 +449,7 @@ def ensure_project(payload):
         record_deployment(project, tenant, actor, "ensure", "failed", result["message"], server_id, "", "", repo_info["repo_name"], request=payload, response=result)
         return result
 
-    stack, stack_action = create_or_update_stack(project, repo_info, server_id)
+    stack, stack_action = create_or_update_stack(project, repo_info, server_id, str(payload.get("runtime_layout") or "legacy"))
     result["stack_action"] = stack_action
 
     if not stack:
@@ -2871,19 +2872,48 @@ def _cloudif_v132_wait_for_completion(project, repo_id, stack_id, max_wait_secon
 def _cloudif_v132_force_local_rebuild(project, no_cache=False):
     project = safe_slug(project)
     stack_dir = Path("/etc/komodo/stacks") / ("cloudif-" + project)
-    compose = stack_dir / "docker-compose.yml"
+    unified = stack_dir / ".cloudif" / "docker-compose.yml"
+    compose = unified if unified.is_file() else stack_dir / "docker-compose.yml"
     if not compose.is_file():
         return {"ok": False, "error": "local_stack_compose_missing", "stack_dir": str(stack_dir)}
-    build_cmd = ["docker", "compose", "build"]
-    if no_cache:
-        build_cmd.append("--no-cache")
+    base_result = {"ok": True, "skipped": True}
+    if unified.is_file():
+        runtime_file = stack_dir / ".cloudif" / "runtime.json"
+        base_file = stack_dir / ".cloudif" / "Dockerfile.base"
+        try:
+            runtime = json.loads(runtime_file.read_text(encoding="utf-8"))
+        except Exception as exc:
+            return {"ok": False, "error": "runtime_manifest_invalid", "detail": str(exc)[:300]}
+        base_tag = str(runtime.get("base_image") or "").strip()
+        if not base_tag or not base_file.is_file():
+            return {"ok": False, "error": "runtime_base_definition_missing", "base_image": base_tag}
+        inspect = subprocess.run(["docker", "image", "inspect", base_tag], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        if inspect.returncode != 0 or no_cache:
+            cmd = ["docker", "build", "-f", ".cloudif/Dockerfile.base", "-t", base_tag]
+            if no_cache: cmd.append("--no-cache")
+            cmd.append(".")
+            built = subprocess.run(cmd, cwd=stack_dir, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=2400)
+            base_result = {"ok": built.returncode == 0, "image": base_tag, "returncode": built.returncode, "detail": (built.stderr or built.stdout)[-1200:]}
+            if built.returncode != 0:
+                return {"ok": False, "error": "runtime_base_build_failed", "base": base_result}
+        else:
+            base_result = {"ok": True, "skipped": True, "image": base_tag, "reason": "shared_base_exists"}
+    compose_args = ["docker", "compose", "-f", str(compose.relative_to(stack_dir))]
+    env_file = stack_dir / ".cloudif" / ".env"
+    if unified.is_file() and env_file.is_file():
+        compose_args += ["--env-file", str(env_file.relative_to(stack_dir))]
+    build_cmd = compose_args + ["build"]
+    if no_cache: build_cmd.append("--no-cache")
     build = subprocess.run(build_cmd, cwd=stack_dir, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=1800)
     if build.returncode != 0:
-        return {"ok": False, "error": "local_compose_build_failed", "returncode": build.returncode, "detail": (build.stderr or build.stdout)[-1200:]}
-    up = subprocess.run(["docker", "compose", "up", "-d", "--force-recreate"], cwd=stack_dir, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=900)
+        return {"ok": False, "error": "local_compose_build_failed", "returncode": build.returncode, "base": base_result, "detail": (build.stderr or build.stdout)[-1200:]}
+    up = subprocess.run(compose_args + ["up", "-d", "--force-recreate"], cwd=stack_dir, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=900)
     return {
         "ok": up.returncode == 0,
         "operation": "local_compose_rebuild",
+        "layout": "unified-v1" if unified.is_file() else "legacy",
+        "compose_file": str(compose.relative_to(stack_dir)),
+        "base": base_result,
         "stack_dir": str(stack_dir),
         "build_returncode": build.returncode,
         "up_returncode": up.returncode,

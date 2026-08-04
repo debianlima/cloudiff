@@ -265,8 +265,8 @@ def upsert_project(form, user):
     finally:
         con.close()
 
-    runtime_template = val(form, "runtime_template", "static-nginx").strip().lower()
-    allowed_runtimes = {"static-nginx", "node20", "node22", "node24", "php-apache"}
+    runtime_template = val(form, "runtime_template", "node22").strip().lower()
+    allowed_runtimes = {"node20", "node22", "node24"}
     if runtime_template not in allowed_runtimes:
         raise ValueError("Tecnologia web não homologada.")
     php_version = val(form, "php_version", "8.3").strip()
@@ -284,6 +284,7 @@ def upsert_project(form, user):
         "setup_komodo": val(form, "setup_komodo", "1"),
         "template_kind": template_kind,
         "runtime_template": runtime_template,
+        "runtime_layout": "unified-v1",
         "php_version": php_version,
         "role_profile": "project-admin",
         "environment": "project",
@@ -315,6 +316,7 @@ def upsert_project(form, user):
                 "setup_komodo": job.get("setup_komodo"),
                 "db_mode": job.get("db_mode"),
                 "runtime_template": job.get("runtime_template"),
+                "runtime_layout": job.get("runtime_layout"),
             },
             dedupe_seconds=0,
         )

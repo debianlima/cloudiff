@@ -55,18 +55,17 @@ class ProjectCreationModalRuntimeTest(unittest.TestCase):
         self.assertIn('"runtime_template": job.get("runtime_template")',PROVISION)
 
     def test_runtime_templates_generate_real_files(self):
-        spec=importlib.util.spec_from_file_location('cloudif_template_apply',TEMPLATE)
+        spec=importlib.util.spec_from_file_location('tpl',TEMPLATE)
         module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
-        node=dict(module.merge_runtime([('docker-compose.yml','base')],'node22'))
-        php=dict(module.merge_runtime([('docker-compose.yml','base')],'php-apache','8.3'))
-        self.assertIn('FROM node:22-alpine',node['Dockerfile'])
-        self.assertIn('FROM php:8.3-apache',node['Dockerfile.php'])
-        self.assertIn('php:',node['docker-compose.yml'])
-        self.assertIn("app.use('/php'",node['server.js'])
-        self.assertIn('package.json',node)
-        self.assertIn('server.js',node)
-        self.assertIn('FROM php:8.3-apache',php['Dockerfile'])
-        self.assertIn('site/health.php',php)
+        node=dict(module.merge_runtime([('.env','CLOUDIF_PUBLIC_NUMBER=1001\nCLOUDIF_DEPLOY_NUMBER=1\n')],'node22','8.3'))
+        self.assertIn('FROM php:8.3-apache',node['.cloudif/Dockerfile.base'])
+        self.assertIn('ARG NODE_MAJOR=22',node['.cloudif/Dockerfile.base'])
+        self.assertIn('FROM cloudif/runtime-apache-php8.3-node22:v1',node['.cloudif/Dockerfile'])
+        self.assertIn('site/index.php',node)
+        self.assertIn('site/api/server.js',node)
+        self.assertIn('.cloudif/docker-compose.yml',node)
+        self.assertNotIn('Dockerfile.php',node)
+        self.assertNotIn('docker-compose.yml',node)
 
     def test_acl_uses_supported_reconciliation_event(self):
         self.assertIn('"project.updated",',PORTAL)
