@@ -66,7 +66,18 @@ def job_status(job_id):
     path = JOB_ROOT / f'{job_id}.json'
     if not path.exists():
         return {'ok': False, 'error': 'job_not_found'}
-    return json.loads(path.read_text())
+    state=json.loads(path.read_text())
+    if state.get('status')=='failed' and state.get('error')=='project_not_found':
+        slug=str(state.get('slug') or '')
+        previous={}
+        for result_path in sorted(AUDIT_ROOT.glob(f'*-{slug}/result.json'),key=lambda x:x.stat().st_mtime,reverse=True):
+            try:
+                candidate=json.loads(result_path.read_text())
+                if candidate.get('ok') is True: previous=candidate;break
+            except Exception: pass
+        if previous:
+            state.update({'status':'succeeded','progress':100,'current_step':'Concluído','error':'','already_deleted':True,'result':{'ok':True,'already_deleted':True,'slug':slug,'tenant_preserved':previous.get('tenant_preserved') or '','message':'Projeto já excluído; resíduos verificados.'},'steps':[{'label':'Validação','status':'done','detail':'Projeto já excluído; resíduos verificados.'}]})
+    return state
 
 
 def start_job(slug, confirmation, actor):
@@ -178,6 +189,14 @@ def projects():
 def preview(slug):
     project = _rows(DB, 'projects', 'slug', slug)
     if not project:
+        previous={}
+        for result_path in sorted(AUDIT_ROOT.glob(f'*-{slug}/result.json'),key=lambda x:x.stat().st_mtime,reverse=True):
+            try:
+                candidate=json.loads(result_path.read_text())
+                if candidate.get('ok') is True: previous=candidate;break
+            except Exception: pass
+        if previous:
+            return {'ok':True,'already_deleted':True,'slug':slug,'tenant_preserved':previous.get('tenant_preserved') or '','message':'Projeto já excluído; resíduos verificados.','finished_at':previous.get('finished_at') or ''}
         return {'ok': False, 'error': 'project_not_found', 'slug': slug}
     tenant = str(project[0].get('tenant') or '')
     local = {}
@@ -545,10 +564,13 @@ def render(csrf_token, selected='', result=None):
             f'{_result_stages(result)}<details><summary>Relatório técnico</summary><pre style="white-space:pre-wrap;overflow:auto;max-height:420px">{h(json.dumps(result, ensure_ascii=False, indent=2))}</pre></details></section>'
         )
     selected_preview = preview(selected) if selected else None
-    wizard_token = issue_wizard_token(selected) if selected_preview and selected_preview.get('ok') else ''
+    wizard_token = issue_wizard_token(selected) if selected_preview and selected_preview.get('ok') and not selected_preview.get('already_deleted') else ''
     preview_html = ''
     if selected_preview:
-        preview_html = f'<pre style="white-space:pre-wrap;overflow:auto;max-height:360px">{h(json.dumps(selected_preview, ensure_ascii=False, indent=2))}</pre>'
+        if selected_preview.get('already_deleted'):
+            preview_html = f'<section class="card"><span class="pill ok">Projeto já excluído</span><p>{h(selected_preview.get("message"))}</p><p class="small">Tenant preservado: <strong>{h(selected_preview.get("tenant_preserved") or "não informado")}</strong></p></section>'
+        else:
+            preview_html = f'<pre style="white-space:pre-wrap;overflow:auto;max-height:360px">{h(json.dumps(selected_preview, ensure_ascii=False, indent=2))}</pre>'
     return f'''
 <section class="card admin-delete-project">
   <div class="section-title"><div><h1>Excluir projeto</h1><p>Remoção administrativa de Portal, Forgejo, Komodo, onboarding, jobs e artefatos. O tenant/banco é preservado.</p></div><span class="pill bad">Ação irreversível</span></div>
@@ -564,7 +586,7 @@ def render(csrf_token, selected='', result=None):
     <input type="hidden" name="wizard_token" value="{h(wizard_token)}">
     <label>Digite exatamente <code>EXCLUIR {h(selected)}</code><input name="confirm_text" required autocomplete="off"></label>
     <button class="btn danger" type="submit">Excluir projeto definitivamente</button><div id="admin-delete-progress" hidden aria-live="polite"></div>
-  </form>''' if selected_preview and selected_preview.get('ok') else ''}
+  </form>''' if selected_preview and selected_preview.get('ok') and not selected_preview.get('already_deleted') else ''}
 </section>{result_html}
 <script>
 (() => {{
