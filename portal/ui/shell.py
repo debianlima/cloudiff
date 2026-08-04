@@ -9,7 +9,7 @@ from collections import OrderedDict
 from html import escape
 
 from portal.core.auth import Identity
-from portal.core.rbac import is_global
+from portal.core.rbac import is_admin, is_global
 from portal.ui.icons import icon
 
 _FOOTER = (
@@ -119,6 +119,8 @@ def _navigation(identity: Identity, active_tab: str, allowed_modules: set[str] |
         if section == "Administração" and not is_global(identity):
             continue
         entries = configured_entries
+        if section == "Administração" and not is_admin(identity):
+            entries = tuple((tab, label) for tab, label in entries if tab in {"admin-manutencao", "admin-excluir-projeto"})
         if allowed_tabs is not None:
             entries = tuple((tab, label) for tab, label in entries if tab in allowed_tabs)
             if not entries:
