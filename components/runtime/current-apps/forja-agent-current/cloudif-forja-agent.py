@@ -223,8 +223,7 @@ def ensure_forgejo_repo(project):
             data = res.get("data", {})
             return {"ok": True, "created": True, "owner": owner, "repo": repo, "url": data.get("html_url") or f"{root}/{owner}/{repo}", "message": "Repositório criado."}
 
-        if res.get("status") not in {403, 404}:
-            return {"ok": False, "message": "Falha ao criar repositório no namespace solicitado.", "owner":owner, "owner_kind":owner_kind, "detail": res}
+        return {"ok": False, "message": "Falha ao criar repositório no namespace pessoal solicitado.", "owner":owner, "owner_kind":owner_kind, "detail": res}
 
     payload = {
         "name": repo,
@@ -507,14 +506,26 @@ def trigger_komodo(project):
     # Ação manual: se KOMODO_WEBHOOK_URL existir, chama. Caso contrário, só registra estado.
     hook = clean_url(CFG.get("KOMODO_WEBHOOK_URL", ""))
     token = CFG.get("KOMODO_TOKEN", "")
+    slug=str(project.get("project_slug") or project.get("slug") or "").strip().lower()
+    forgejo=project.get("forgejo") if isinstance(project.get("forgejo"),dict) else {}
+    access=project.get("access") if isinstance(project.get("access"),dict) else {}
+    owner=str(project.get("owner_user") or project.get("forgejo_owner") or access.get("owner") or "").strip().lower()
+    repo_url=str(forgejo.get("url") or project.get("repo_url") or project.get("forgejo_expected") or "")
     payload = {
         "source": "cloudif-forja-agent",
         "time": now(),
-        "project_slug": project.get("project_slug"),
+        "project": slug,
+        "project_slug": slug,
+        "slug": slug,
         "tenant": project.get("tenant"),
-        "app_name": project.get("app_name"),
+        "name": project.get("name") or project.get("app_name") or slug,
+        "app_name": project.get("app_name") or project.get("name") or slug,
+        "owner_user": owner,
+        "access": access,
+        "repo_url": repo_url,
+        "repo_url_original": repo_url,
+        "forgejo": forgejo,
         "supabase_url": project.get("supabase_url"),
-        "forgejo": project.get("forgejo"),
         "komodo_webhook_url": project.get("komodo_webhook_url"),
     }
     if not hook:
