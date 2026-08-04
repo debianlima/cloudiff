@@ -3539,7 +3539,27 @@ def _cloudif_reconcile_unified_stack_metadata(project, stack_id):
     compose=Path('/etc/komodo/stacks')/('cloudif-'+project)/'.cloudif'/'docker-compose.yml'
     if not project or not stack_id or not compose.is_file():
         return {'ok':True,'changed':False,'reason':'not_unified'}
-    update,_=komodo_call('write','UpdateStack',{'id':stack_id,'config':{'project_name':'cloudif','file_paths':['.cloudif/docker-compose.yml'],'run_directory':'.'}})
+    public_number='';deploy_number=''
+    try:
+        ids=subprocess.check_output(['docker','ps','-aq'],text=True,timeout=15).split()
+        if ids:
+            rows=json.loads(subprocess.check_output(['docker','inspect',*ids],text=True,timeout=30))
+            expected=str(compose.resolve())
+            for row in rows:
+                labels=((row.get('Config') or {}).get('Labels') or {})
+                files=str(labels.get('com.docker.compose.project.config_files') or '').split(',')
+                if expected not in [str(x).strip() for x in files]: continue
+                name=str(row.get('Name') or '').lstrip('/')
+                match=re.match(r'^cloudif-p(\d+)-d(\d+)-web$',name)
+                if match:
+                    public_number,deploy_number=match.groups();break
+    except Exception: pass
+    environment=''
+    if public_number and deploy_number:
+        environment=f'CLOUDIF_PUBLIC_NUMBER={public_number}\nCLOUDIF_DEPLOY_NUMBER={deploy_number}'
+    config={'project_name':'cloudif','file_paths':['.cloudif/docker-compose.yml'],'run_directory':'.'}
+    if environment: config['environment']=environment
+    update,_=komodo_call('write','UpdateStack',{'id':stack_id,'config':config})
     if not update.get('ok'):
         return {'ok':False,'error':'stack_metadata_update_failed','update':update}
     refresh,_=komodo_call('write','RefreshStackCache',{'stack':stack_id})
@@ -3552,7 +3572,7 @@ def _cloudif_reconcile_unified_stack_metadata(project, stack_id):
         services=listed.get('data') if isinstance(listed.get('data'),list) else []
         if services: break
         time.sleep(2)
-    return {'ok':bool(services),'changed':True,'services':[str(x.get('service') or '') for x in services if isinstance(x,dict)],'error':'' if services else 'stack_services_not_discovered'}
+    return {'ok':bool(services),'changed':True,'public_number':public_number,'deploy_number':deploy_number,'services':[str(x.get('service') or x.get('service_name') or '') for x in services if isinstance(x,dict)],'error':'' if services else 'stack_services_not_discovered'}
 
 def cloudif_project_terminal_ensure(handler):
     if not _cloudif_pub_auth(handler): return send(handler,403,{"ok":False,"error":"forbidden"})

@@ -9,6 +9,9 @@ class TerminalReconcilesUnifiedStackTests(unittest.TestCase):
    self.assertIn(marker,self.source)
  def test_terminal_requires_successful_reconciliation(self):
   self.assertIn('stack_metadata_reconcile_failed',self.source)
+  self.assertIn('CLOUDIF_PUBLIC_NUMBER={public_number}',self.source)
+  self.assertIn('CLOUDIF_DEPLOY_NUMBER={deploy_number}',self.source)
+  self.assertIn(r"^cloudif-p(\d+)-d(\d+)-web$",self.source)
   self.assertIn('_cloudif_reconcile_unified_stack_metadata(payload.get("project")',self.source)
 
 if __name__=='__main__':unittest.main()
