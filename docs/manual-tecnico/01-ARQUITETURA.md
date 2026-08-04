@@ -78,3 +78,7 @@ flowchart TB
 | Agentes runtime | Adaptar APIs centrais a Forgejo, Komodo, Docker e filesystem local. |
 | Proxy | Publicar rotas, certificados e nomes estáveis/versionados. |
 | Tenants Supabase | Banco, Auth, REST, Storage, Realtime, Studio e serviços auxiliares por tenant. |
+
+## Runtime de cada projeto
+
+Cada projeto novo possui um container exclusivo com Apache, PHP e Node.js. As imagens-base são compartilhadas por combinação de versões; os processos e arquivos do projeto não são compartilhados. O proxy público termina TLS em 80/443 e encaminha HTTP interno para a porta 80 do Apache.

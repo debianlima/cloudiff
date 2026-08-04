@@ -31,12 +31,14 @@ Arquitetura modular, interface, configuração e testes do Portal.
 | [`test_node_php_mixed_runtime.py`](test_node_php_mixed_runtime.py) | `.py` | Implementa `NodePhpMixedRuntimeTests`. |
 | [`test_overview_sites.py`](test_overview_sites.py) | `.py` | Implementa `OverviewSiteCardTest`. |
 | [`test_permission_table.py`](test_permission_table.py) | `.py` | A2 acceptance: every migrated v2 guard decides exactly as the v1 table |
+| [`test_platform_guide_canonical.py`](test_platform_guide_canonical.py) | `.py` | Implementa `CanonicalPlatformGuideTests`. |
 | [`test_platform_guide_github.py`](test_platform_guide_github.py) | `.py` | Implementa `PlatformGuideGithubTests`. |
 | [`test_project_centered_navigation.py`](test_project_centered_navigation.py) | `.py` | Implementa `ProjectCenteredNavigationTest`. |
 | [`test_project_creation_modal_runtime.py`](test_project_creation_modal_runtime.py) | `.py` | Implementa `first_existing`, `ProjectCreationModalRuntimeTest`. |
 | [`test_project_creation_wizard_steps.py`](test_project_creation_wizard_steps.py) | `.py` | Implementa `ProjectCreationWizardStepsTest`. |
 | [`test_project_provisioning_contract.py`](test_project_provisioning_contract.py) | `.py` | Implementa `ProjectProvisioningContractTest`. |
 | [`test_project_provisioning_live_wizard.py`](test_project_provisioning_live_wizard.py) | `.py` | Implementa `ProjectProvisioningLiveWizardTests`. |
+| [`test_project_repository_manual.py`](test_project_repository_manual.py) | `.py` | Implementa `ProjectRepositoryManualTests`. |
 | [`test_project_resource_reorganization.py`](test_project_resource_reorganization.py) | `.py` | Implementa `ProjectResourceReorganizationTest`, `ActiveProjectRendererContractTest`, `DefinitiveProjectManagementRendererTest`. |
 | [`test_provisioning_metadata_persistence_contract.py`](test_provisioning_metadata_persistence_contract.py) | `.py` | Implementa `ProvisioningMetadataPersistenceContractTest`. |
 | [`test_provisioning_runtime_completion_contract.py`](test_provisioning_runtime_completion_contract.py) | `.py` | Implementa `ProvisioningRuntimeCompletionContractTest`. |
@@ -49,6 +51,7 @@ Arquitetura modular, interface, configuração e testes do Portal.
 | [`test_shell_and_services.py`](test_shell_and_services.py) | `.py` | Shell rendering and per-module service unit tests (A5). |
 | [`test_tenant_delete_job_receipt.py`](test_tenant_delete_job_receipt.py) | `.py` | Implementa `TenantDeleteJobReceiptTests`. |
 | [`test_terminal_stack_resolution_contract.py`](test_terminal_stack_resolution_contract.py) | `.py` | Implementa `TerminalStackResolutionContractTest`. |
+| [`test_unified_project_runtime.py`](test_unified_project_runtime.py) | `.py` | Implementa `UnifiedProjectRuntimeTests`. |
 
 > Esta seção é gerada por `scripts/generate-directory-readmes.py`. Conteúdo manual fora dos marcadores é preservado.
 

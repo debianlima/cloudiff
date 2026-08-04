@@ -8,6 +8,7 @@ Este repositório funciona também como uma apostila técnica da plataforma:
 
 - [Manual técnico completo](docs/manual-tecnico/README.md)
 - [Arquitetura e diagramas](docs/manual-tecnico/01-ARQUITETURA.md)
+- [Runtime unificado de projetos](docs/manual-tecnico/11-RUNTIME-UNIFICADO.md)
 - [Fluxos de processo](docs/manual-tecnico/02-FLUXOS.md)
 - [Agentes e funções](docs/manual-tecnico/03-AGENTES.md)
 - [Protocolos de reconciliação](docs/manual-tecnico/04-RECONCILIACAO.md)

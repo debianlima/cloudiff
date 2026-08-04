@@ -54,9 +54,22 @@ Todo o código da aplicação fica em `site/`:
 
 Você pode apagar o conteúdo de exemplo de `site/` e colocar seu sistema real.
 
+## Estrutura do repositório
+
+| Caminho | Finalidade | O usuário deve editar? |
+|---|---|---|
+| `site/` | Código da aplicação, páginas PHP, HTML, CSS, JavaScript, imagens e APIs Node. | **Sim.** É a área normal de trabalho. |
+| `site/index.php` | Página inicial PHP, interpretada pelo Apache. | **Sim.** Pode ser substituída pelo sistema real. |
+| `site/api/server.js` | Processo Node opcional, publicado por `/api/`. | **Sim.** Pode ser alterado ou removido quando não houver API Node. |
+| `site/api/package.json` | Dependências da API Node. | **Sim.** Adicione as bibliotecas necessárias. |
+| `.cloudif/` | Dockerfile, Compose, Apache, Supervisor, healthcheck, versões e metadados. | **Não normalmente.** É infraestrutura gerenciada pela plataforma. |
+| `README.md` | Manual do projeto. | **Sim.** Pode receber documentação adicional. |
+
 ## Infraestrutura gerenciada
 
 A pasta oculta `.cloudif/` contém Dockerfile, Compose, Apache, Supervisor, healthcheck e metadados de runtime. A plataforma mantém essa pasta. Alterações avançadas são possíveis, mas podem quebrar build, saúde ou publicação automática.
+
+Arquivos em `.cloudif/` não são exemplos descartáveis. Eles formam o contrato de execução do projeto. O usuário pode personalizá-los somente quando souber preservar porta 80, serviço `web`, healthcheck, rede e aliases de publicação.
 
 ## Publicação automática
 

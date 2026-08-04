@@ -26,8 +26,8 @@ sequenceDiagram
   S-->>J: Tenant saudável
   J->>O: Reconcilia identidades, capacidades e credencial
   O-->>J: Projeto pronto para agente
-  J->>F: Aplica template Node/PHP ou PHP
-  J->>K: Reclona, build e force-recreate
+  J->>F: Aplica site/ e infraestrutura .cloudif/
+  J->>K: Reclona, verifica imagem-base, build e force-recreate
   J->>X: Cria publicação inicial e valida URLs
   X-->>J: HTTP 200 em URL estável e versionada
   J-->>P: status=succeeded, step=complete

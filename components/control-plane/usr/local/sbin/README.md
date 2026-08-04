@@ -51,7 +51,7 @@ Componentes implantados no plano de controle e no host de hospedagem.
 | [`cloudif-project-ensure.py`](cloudif-project-ensure.py) | `.py` | Implementa `load_env_file`, `now`, `db`, `http_json`, `audit`, `save_project` e outros componentes. |
 | [`cloudif-project-initial-publish.py`](cloudif-project-initial-publish.py) | `.py` | Implementa `envfile`, `request`, `public_number`, `seed_db`, `update_db`, `atomic_job` e outros componentes. |
 | [`cloudif-project-provision.sh`](cloudif-project-provision.sh) | `.sh` | Automação Shell operacional da plataforma. |
-| [`cloudif-project-template-apply.py`](cloudif-project-template-apply.py) | `.py` | Implementa `read_env`, `post`, `public_number`, `build`, `runtime_overlay`, `merge_runtime` e outros componentes. |
+| [`cloudif-project-template-apply.py`](cloudif-project-template-apply.py) | `.py` | Implementa `read_env`, `post`, `public_number`, `build`, `project_readme`, `runtime_overlay` e outros componentes. |
 | [`cloudif-project-template-seed.py`](cloudif-project-template-seed.py) | `.py` | Implementa `load_env`, `req`, `svg`, `files_for`, `seed_db`, `main`. |
 | [`cloudif-publication-worker.py`](cloudif-publication-worker.py) | `.py` | Implementa `stop`. |
 | [`cloudif-publish-1009-once.py`](cloudif-publish-1009-once.py) | `.py` | Módulo Python da plataforma. |

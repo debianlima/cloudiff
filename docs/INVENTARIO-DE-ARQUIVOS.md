@@ -1,6 +1,6 @@
 # Inventário de arquivos
 
-Este catálogo descreve **935 arquivos versionados**. Ele é regenerado pelo script de documentação.
+Este catálogo descreve **939 arquivos versionados**. Ele é regenerado pelo script de documentação.
 
 | Caminho | Finalidade |
 |---|---|
@@ -364,7 +364,7 @@ Este catálogo descreve **935 arquivos versionados**. Ele é regenerado pelo scr
 | [`components/control-plane/usr/local/sbin/cloudif-project-ensure.py`](../components/control-plane/usr/local/sbin/cloudif-project-ensure.py) | Implementa `load_env_file`, `now`, `db`, `http_json`, `audit`, `save_project` e outros componentes. |
 | [`components/control-plane/usr/local/sbin/cloudif-project-initial-publish.py`](../components/control-plane/usr/local/sbin/cloudif-project-initial-publish.py) | Implementa `envfile`, `request`, `public_number`, `seed_db`, `update_db`, `atomic_job` e outros componentes. |
 | [`components/control-plane/usr/local/sbin/cloudif-project-provision.sh`](../components/control-plane/usr/local/sbin/cloudif-project-provision.sh) | Automação Shell operacional da plataforma. |
-| [`components/control-plane/usr/local/sbin/cloudif-project-template-apply.py`](../components/control-plane/usr/local/sbin/cloudif-project-template-apply.py) | Implementa `read_env`, `post`, `public_number`, `build`, `runtime_overlay`, `merge_runtime` e outros componentes. |
+| [`components/control-plane/usr/local/sbin/cloudif-project-template-apply.py`](../components/control-plane/usr/local/sbin/cloudif-project-template-apply.py) | Implementa `read_env`, `post`, `public_number`, `build`, `project_readme`, `runtime_overlay` e outros componentes. |
 | [`components/control-plane/usr/local/sbin/cloudif-project-template-seed.py`](../components/control-plane/usr/local/sbin/cloudif-project-template-seed.py) | Implementa `load_env`, `req`, `svg`, `files_for`, `seed_db`, `main`. |
 | [`components/control-plane/usr/local/sbin/cloudif-publication-worker.py`](../components/control-plane/usr/local/sbin/cloudif-publication-worker.py) | Implementa `stop`. |
 | [`components/control-plane/usr/local/sbin/cloudif-publish-1009-once.py`](../components/control-plane/usr/local/sbin/cloudif-publish-1009-once.py) | Módulo Python da plataforma. |
@@ -664,6 +664,7 @@ Este catálogo descreve **935 arquivos versionados**. Ele é regenerado pelo scr
 | [`docs/manual-tecnico/08-MODELO-DE-SOFTWARE.md`](../docs/manual-tecnico/08-MODELO-DE-SOFTWARE.md) | Documento técnico ou operacional. |
 | [`docs/manual-tecnico/09-SERVICOS.md`](../docs/manual-tecnico/09-SERVICOS.md) | Documento técnico ou operacional. |
 | [`docs/manual-tecnico/10-DESENVOLVIMENTO.md`](../docs/manual-tecnico/10-DESENVOLVIMENTO.md) | Documento técnico ou operacional. |
+| [`docs/manual-tecnico/11-RUNTIME-UNIFICADO.md`](../docs/manual-tecnico/11-RUNTIME-UNIFICADO.md) | Documento técnico ou operacional. |
 | [`docs/manual-tecnico/README.md`](../docs/manual-tecnico/README.md) | Documentação deste diretório. |
 | [`docs/portal-v2/EXECUTION-CHECKLIST.md`](../docs/portal-v2/EXECUTION-CHECKLIST.md) | Documento técnico ou operacional. |
 | [`docs/portal-v2/GUIA-DE-MIGRACAO.md`](../docs/portal-v2/GUIA-DE-MIGRACAO.md) | Documento técnico ou operacional. |
@@ -764,12 +765,14 @@ Este catálogo descreve **935 arquivos versionados**. Ele é regenerado pelo scr
 | [`portal/tests/test_node_php_mixed_runtime.py`](../portal/tests/test_node_php_mixed_runtime.py) | Implementa `NodePhpMixedRuntimeTests`. |
 | [`portal/tests/test_overview_sites.py`](../portal/tests/test_overview_sites.py) | Implementa `OverviewSiteCardTest`. |
 | [`portal/tests/test_permission_table.py`](../portal/tests/test_permission_table.py) | A2 acceptance: every migrated v2 guard decides exactly as the v1 table |
+| [`portal/tests/test_platform_guide_canonical.py`](../portal/tests/test_platform_guide_canonical.py) | Implementa `CanonicalPlatformGuideTests`. |
 | [`portal/tests/test_platform_guide_github.py`](../portal/tests/test_platform_guide_github.py) | Implementa `PlatformGuideGithubTests`. |
 | [`portal/tests/test_project_centered_navigation.py`](../portal/tests/test_project_centered_navigation.py) | Implementa `ProjectCenteredNavigationTest`. |
 | [`portal/tests/test_project_creation_modal_runtime.py`](../portal/tests/test_project_creation_modal_runtime.py) | Implementa `first_existing`, `ProjectCreationModalRuntimeTest`. |
 | [`portal/tests/test_project_creation_wizard_steps.py`](../portal/tests/test_project_creation_wizard_steps.py) | Implementa `ProjectCreationWizardStepsTest`. |
 | [`portal/tests/test_project_provisioning_contract.py`](../portal/tests/test_project_provisioning_contract.py) | Implementa `ProjectProvisioningContractTest`. |
 | [`portal/tests/test_project_provisioning_live_wizard.py`](../portal/tests/test_project_provisioning_live_wizard.py) | Implementa `ProjectProvisioningLiveWizardTests`. |
+| [`portal/tests/test_project_repository_manual.py`](../portal/tests/test_project_repository_manual.py) | Implementa `ProjectRepositoryManualTests`. |
 | [`portal/tests/test_project_resource_reorganization.py`](../portal/tests/test_project_resource_reorganization.py) | Implementa `ProjectResourceReorganizationTest`, `ActiveProjectRendererContractTest`, `DefinitiveProjectManagementRendererTest`. |
 | [`portal/tests/test_provisioning_metadata_persistence_contract.py`](../portal/tests/test_provisioning_metadata_persistence_contract.py) | Implementa `ProvisioningMetadataPersistenceContractTest`. |
 | [`portal/tests/test_provisioning_runtime_completion_contract.py`](../portal/tests/test_provisioning_runtime_completion_contract.py) | Implementa `ProvisioningRuntimeCompletionContractTest`. |
@@ -782,6 +785,7 @@ Este catálogo descreve **935 arquivos versionados**. Ele é regenerado pelo scr
 | [`portal/tests/test_shell_and_services.py`](../portal/tests/test_shell_and_services.py) | Shell rendering and per-module service unit tests (A5). |
 | [`portal/tests/test_tenant_delete_job_receipt.py`](../portal/tests/test_tenant_delete_job_receipt.py) | Implementa `TenantDeleteJobReceiptTests`. |
 | [`portal/tests/test_terminal_stack_resolution_contract.py`](../portal/tests/test_terminal_stack_resolution_contract.py) | Implementa `TerminalStackResolutionContractTest`. |
+| [`portal/tests/test_unified_project_runtime.py`](../portal/tests/test_unified_project_runtime.py) | Implementa `UnifiedProjectRuntimeTests`. |
 | [`portal/ui/README.md`](../portal/ui/README.md) | Documentação deste diretório. |
 | [`portal/ui/__init__.py`](../portal/ui/__init__.py) | Portal v2 UI primitives. |
 | [`portal/ui/components.py`](../portal/ui/components.py) | Semantic HTML primitives backed exclusively by portal/design. |

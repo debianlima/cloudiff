@@ -14,6 +14,7 @@ Este manual descreve a CloudIFF como plataforma de ensino, provisionamento, publ
 8. [Modelo de software e responsabilidades](08-MODELO-DE-SOFTWARE.md)
 9. [Catálogo de serviços](09-SERVICOS.md)
 10. [Como evoluir a plataforma](10-DESENVOLVIMENTO.md)
+11. [Runtime unificado de projetos](11-RUNTIME-UNIFICADO.md)
 
 ## Catálogos gerados do código
 
@@ -49,6 +50,7 @@ Documentação técnica, inventários e evidências.
 | [`08-MODELO-DE-SOFTWARE.md`](08-MODELO-DE-SOFTWARE.md) | `.md` | Documento técnico ou operacional. |
 | [`09-SERVICOS.md`](09-SERVICOS.md) | `.md` | Documento técnico ou operacional. |
 | [`10-DESENVOLVIMENTO.md`](10-DESENVOLVIMENTO.md) | `.md` | Documento técnico ou operacional. |
+| [`11-RUNTIME-UNIFICADO.md`](11-RUNTIME-UNIFICADO.md) | `.md` | Documento técnico ou operacional. |
 
 > Esta seção é gerada por `scripts/generate-directory-readmes.py`. Conteúdo manual fora dos marcadores é preservado.
 
