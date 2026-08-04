@@ -3522,7 +3522,12 @@ def cloudif_publication_deploy(handler):
         return send(handler, 400, {"ok": False, "error": "invalid_payload"})
     status = _cloudif_v132_status_from_payload({"project_slug": project})
     if not status.get("ok"):
-        return send(handler, 404, {"ok": False, "error": "base_project_not_found", "status": status})
+        local_base = _cloudif_v132_local_web_health(project, wait_seconds=1)
+        if not local_base.get("ok"):
+            return send(handler, 404, {"ok": False, "error": "base_project_not_found", "status": status, "local_base": local_base})
+        status["ok"] = True
+        status["local_reconciled"] = True
+        status["local_base"] = local_base
     base_dir = Path(f"/etc/komodo/stacks/cloudif-{project}")
     if not (base_dir / ".git").exists():
         return send(handler, 422, {"ok": False, "error": "git_repository_missing", "base_dir": str(base_dir)})
@@ -3659,12 +3664,12 @@ networks:
     if not base_stack:
         stacks_result = _cloudif_v131_core_call("read", "ListStacks", {})
         expected_names = {project, f"cloudif-{project}"}
-        expected_repo = f"cloudif/{project}"
+        expected_repo_suffix = "/cloudif-" + project
         base_stack = next((item for item in _cloudif_v131_list_items(stacks_result.get("data"))
                            if isinstance(item, dict) and (
                                item.get("name") in expected_names
-                               or ((item.get("info") or {}).get("repo") == expected_repo)
-                               or ((item.get("config") or {}).get("repo") == expected_repo)
+                               or str(((item.get("info") or {}).get("repo") or "")).endswith(expected_repo_suffix)
+                               or str(((item.get("config") or {}).get("repo") or "")).endswith(expected_repo_suffix)
                            )), {})
         base_stack_id = _cloudif_v131_oid(base_stack)
     server_id = ((base_stack.get("info") or {}).get("server_id") or (base_stack.get("config") or {}).get("server_id") or "")
