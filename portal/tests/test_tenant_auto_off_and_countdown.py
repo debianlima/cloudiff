@@ -12,7 +12,8 @@ class TenantAutoOffCountdownTests(unittest.TestCase):
   self.assertIn('keepalive_until=excluded.keepalive_until',self.source)
  def test_countdown_is_rendered(self):
   self.assertIn('class=\"db96-countdown\"',self.source)
-  self.assertIn("setInterval(tick,1000)",self.source)
+  self.assertIn('def remaining_text(value):',self.source)
+  self.assertIn("return f'{hours:02d}:{minutes:02d}:{seconds:02d}'",self.source)
  def test_ui_explains_janitor_interval(self):
   self.assertIn('janitor verifica a cada 5 minutos',self.source)
 if __name__=='__main__':unittest.main()
