@@ -13,6 +13,7 @@ import os
 import sys
 import urllib.parse
 import json
+import re
 
 LIB = "/srv/cloudif/lib"
 DESIGN = LIB + "/portal/design"
@@ -135,6 +136,45 @@ def _install() -> None:
         groups = {group.strip().lower() for group in identity(handler.headers).groups}
         return "cloudif-tenants-admin" in groups
 
+    def admin_ad_body() -> str:
+        return r"""
+<section class="card admin-ad-console">
+  <div class="section-title"><div><h2>Pesquisa no Active Directory</h2><p>Localize usuários e grupos reais enquanto digita.</p></div><span class="pill ok">Consulta em tempo real</span></div>
+  <div class="help">Digite pelo menos dois caracteres. A consulta usa o Samba/Winbind configurado na plataforma e não cria dados simulados.</div>
+  <div class="admin-ad-form">
+    <label>Tipo<select id="admin-ad-type"><option value="all">Usuários e grupos</option><option value="user">Usuários</option><option value="group">Grupos</option></select></label>
+    <label>Usuário ou grupo<input id="admin-ad-query" autocomplete="off" placeholder="Nome, matrícula, login ou grupo" aria-autocomplete="list" aria-controls="admin-ad-results"></label>
+  </div>
+  <div id="admin-ad-status" class="small" role="status">Aguardando pesquisa.</div>
+  <div id="admin-ad-results" class="admin-ad-results" role="listbox"></div>
+  <div id="admin-ad-selected" class="admin-ad-selected" hidden></div>
+</section>
+<style>
+.admin-ad-console{display:grid;gap:14px}.admin-ad-form{display:grid;grid-template-columns:minmax(180px,240px) minmax(260px,1fr);gap:12px;align-items:end}.admin-ad-form label{display:grid;gap:6px}.admin-ad-results{display:grid;gap:6px;max-height:360px;overflow:auto}.admin-ad-result{display:flex;align-items:center;justify-content:space-between;gap:14px;width:100%;padding:11px 12px;border:1px solid var(--c-border,#dce3ed);border-radius:10px;background:var(--c-surface,#fff);text-align:left;cursor:pointer}.admin-ad-result:hover,.admin-ad-result[aria-selected="true"]{border-color:var(--c-accent,#176b35);background:var(--c-surface-2,#f3f8f4)}.admin-ad-result small{color:var(--c-muted,#64748b)}.admin-ad-selected{padding:14px;border:1px solid var(--c-border,#dce3ed);border-radius:10px;background:var(--c-surface-2,#f8fafc)}@media(max-width:720px){.admin-ad-form{grid-template-columns:1fr}}
+</style>
+<script>
+(()=>{const input=document.getElementById('admin-ad-query'),type=document.getElementById('admin-ad-type'),results=document.getElementById('admin-ad-results'),status=document.getElementById('admin-ad-status'),selected=document.getElementById('admin-ad-selected');if(!input)return;let timer=0,controller=null,items=[];const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));function choose(item){input.value=item.principal;selected.hidden=false;selected.innerHTML=`<div class="section-title"><div><small>${item.type==='group'?'Grupo':'Usuário'} selecionado</small><h3>${esc(item.principal)}</h3></div><button class="btn light" type="button" id="admin-ad-copy">Copiar</button></div>`;document.getElementById('admin-ad-copy').onclick=()=>navigator.clipboard.writeText(item.principal);results.innerHTML='';status.textContent='Principal selecionado.'}function draw(data){items=data.items||[];status.textContent=items.length?`${items.length} resultado(s). Use as setas e Enter para selecionar.`:'Nenhum resultado encontrado.';results.innerHTML=items.map((x,i)=>`<button type="button" class="admin-ad-result" role="option" data-index="${i}" aria-selected="false"><span><strong>${esc(x.label)}</strong><small>${x.type==='group'?'Grupo do AD':'Usuário do AD'}</small></span><span class="pill">Selecionar</span></button>`).join('');results.querySelectorAll('button').forEach(b=>b.onclick=()=>choose(items[Number(b.dataset.index)]))}async function search(){const q=input.value.trim();selected.hidden=true;if(q.length<2){results.innerHTML='';status.textContent='Digite pelo menos dois caracteres.';return}if(controller)controller.abort();controller=new AbortController();status.textContent='Consultando Active Directory…';try{const r=await fetch(`/cloudiff/portal/api/admin-ad-search?q=${encodeURIComponent(q)}&type=${encodeURIComponent(type.value)}`,{credentials:'same-origin',headers:{Accept:'application/json'},signal:controller.signal});const content=(r.headers.get('content-type')||'').toLowerCase();if(!content.includes('application/json'))throw new Error(`Resposta inválida (HTTP ${r.status})`);const data=await r.json();if(!r.ok||!data.ok)throw new Error(data.error||`HTTP ${r.status}`);draw(data)}catch(e){if(e.name==='AbortError')return;results.innerHTML='';status.textContent=`Falha na consulta: ${e.message}`}}function schedule(){clearTimeout(timer);timer=setTimeout(search,280)}input.addEventListener('input',schedule);type.addEventListener('change',search);input.addEventListener('keydown',e=>{const buttons=[...results.querySelectorAll('button')];if(!buttons.length)return;let index=buttons.findIndex(b=>b.getAttribute('aria-selected')==='true');if(e.key==='ArrowDown'||e.key==='ArrowUp'){e.preventDefault();buttons.forEach(b=>b.setAttribute('aria-selected','false'));index=e.key==='ArrowDown'?Math.min(index+1,buttons.length-1):Math.max(index-1,0);buttons[index].setAttribute('aria-selected','true');buttons[index].scrollIntoView({block:'nearest'})}else if(e.key==='Enter'&&index>=0){e.preventDefault();choose(items[index])}})})();
+</script>
+"""
+
+    def help_body() -> str:
+        return r"""
+<section class="card platform-guide">
+  <div class="section-title"><div><h1>Guia da plataforma</h1><p>Como usar cada área operacional da CloudIFF.</p></div><span class="pill ok">Ambiente real</span></div>
+  <nav class="guide-index" aria-label="Seções do guia"><a href="#guia-publicacoes">Publicações</a><a href="#guia-projetos">Projetos</a><a href="#guia-bancos">Bancos</a><a href="#guia-backup">Backup</a><a href="#guia-conectores">Conectores</a><a href="#guia-ad">Administração</a></nav>
+  <div class="guide-grid">
+    <article id="guia-publicacoes"><span>01</span><h2>Publicações</h2><p>Acompanhe releases, endereços publicados, saúde e rollback. Uma publicação só aparece quando foi registrada pelos agentes.</p><ol><li>Abra o projeto.</li><li>Confira a release e o endereço.</li><li>Use rollback apenas quando houver release anterior homologada.</li></ol><a class="btn light" href="/cloudiff/portal/?tab=publicacao">Abrir Publicações</a></article>
+    <article id="guia-projetos"><span>02</span><h2>Projetos</h2><p>Crie projetos pelo wizard. O fluxo provisiona repositório Forgejo, stack Komodo, ACL e, quando solicitado, tenant Supabase.</p><ol><li>Informe nome e finalidade.</li><li>Escolha banco existente, novo ou sem banco.</li><li>Selecione a tecnologia.</li><li>Acompanhe o provisionamento até concluir.</li></ol><a class="btn light" href="/cloudiff/portal/?tab=projetos">Abrir Projetos</a></article>
+    <article id="guia-bancos"><span>03</span><h2>Bancos e tenants</h2><p>Consulte disponibilidade, serviços e permissões. Banco é independente de projeto e pode ser compartilhado.</p><ol><li>Use Iniciar/Parar somente para operação do tenant.</li><li>Abra o Studio pelo endereço exibido.</li><li>Exclua banco apenas em Administração, após remover vínculos de projetos.</li></ol><a class="btn light" href="/cloudiff/portal/?tab=bancos">Abrir Bancos</a></article>
+    <article id="guia-backup"><span>04</span><h2>Backup</h2><p>Consulte backups de aplicação e dumps lógicos. A exclusão de projeto não apaga o banco nem seus backups.</p><ol><li>Confira data, tamanho e hash.</li><li>Gere backup antes de mudanças sensíveis.</li><li>Na exclusão de tenant, o dump final é obrigatório.</li></ol><a class="btn light" href="/cloudiff/portal/?tab=backup">Abrir Backup</a></article>
+    <article id="guia-conectores"><span>05</span><h2>Conectores</h2><p>Gere credenciais e consulte ferramentas disponíveis para clientes, agentes e integrações MCP autorizadas.</p><ol><li>Escolha o projeto autorizado.</li><li>Gere ou rotacione o token.</li><li>Copie a configuração mostrada pela plataforma.</li><li>Nunca compartilhe o token em repositório ou mensagem.</li></ol><a class="btn light" href="/cloudiff/portal/?tab=agentes">Abrir Conectores</a></article>
+    <article id="guia-ad"><span>06</span><h2>Administração</h2><p>Área restrita. Administração do AD localiza usuários e grupos reais; Serviços globais abre Forgejo, Komodo e tenants; exclusões possuem wizard e auditoria.</p><ol><li>Pesquise o principal no AD e selecione a sugestão.</li><li>Use ações avançadas somente no tenant correto.</li><li>Leia a prévia antes de confirmar uma exclusão.</li><li>Reporte a etapa e a mensagem exibidas quando houver falha.</li></ol><a class="btn light" href="/cloudiff/portal/?tab=admin">Abrir Administração</a></article>
+  </div>
+  <div class="help"><strong>Perfis:</strong> Aluno visualiza apenas recursos autorizados. Professor administra projetos e serviços globais permitidos. Administrador de tenants também opera AD e bancos.</div>
+</section>
+<style>.platform-guide{display:grid;gap:20px}.guide-index{display:flex;flex-wrap:wrap;gap:8px}.guide-index a{padding:8px 11px;border:1px solid var(--c-border,#dce3ed);border-radius:999px;text-decoration:none}.guide-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px}.guide-grid article{display:grid;align-content:start;gap:10px;padding:18px;border:1px solid var(--c-border,#dce3ed);border-radius:14px;background:var(--c-surface,#fff)}.guide-grid article>span{font-size:.75rem;font-weight:800;color:var(--c-accent,#176b35)}.guide-grid h2,.guide-grid p{margin:0}.guide-grid ol{margin:0;padding-left:20px;display:grid;gap:6px}.guide-grid .btn{justify-self:start}</style>
+"""
+
     def backup_body() -> str:
         return r"""
 <section class="card backup-console">
@@ -165,6 +205,20 @@ def _install() -> None:
                     query = urllib.parse.parse_qs(parsed.query)
                     payload = job_status((query.get("job_id") or [""])[0])
                     return send_json(self, 200 if payload.get("ok") else 404, payload)
+                if path in {"/cloudif/portal/api/admin-ad-search", "/cloudiff/portal/api/admin-ad-search"}:
+                    if not tenant_admin_allowed(self):
+                        return send_json(self, 403, {"ok": False, "error": "forbidden", "items": []})
+                    query = urllib.parse.parse_qs(parsed.query)
+                    q = (query.get("q") or [""])[0].strip()
+                    stype = (query.get("type") or ["all"])[0].strip().lower()
+                    if len(q) < 2:
+                        return send_json(self, 200, {"ok": True, "query": q, "type": stype, "count": 0, "items": []})
+                    owner = sys.modules.get(handler_class.__module__)
+                    search = getattr(owner, "_cloudif_ad_search_real", None)
+                    if not callable(search):
+                        return send_json(self, 503, {"ok": False, "error": "ad_search_unavailable", "items": []})
+                    items = search(q, stype)
+                    return send_json(self, 200, {"ok": True, "query": q, "type": stype, "count": len(items), "items": items})
                 if path in {"/cloudif/portal/api/admin-delete-tenant-preview", "/cloudiff/portal/api/admin-delete-tenant-preview"}:
                     if not tenant_admin_allowed(self):
                         return send_json(self, 403, {"ok": False, "error": "forbidden"})
@@ -186,6 +240,9 @@ def _install() -> None:
                 tab = (query.get("tab") or [""])[0]
                 if path in PORTAL_PATHS and tab == "backup":
                     markup = render_legacy(identity(self.headers), "backup", "Backup", backup_body(), "", "")
+                    return send(self, 200, "text/html; charset=utf-8", markup.encode("utf-8"))
+                if path in PORTAL_PATHS and tab == "ajuda":
+                    markup = render_legacy(identity(self.headers), "ajuda", "Guia da plataforma", help_body(), "", "")
                     return send(self, 200, "text/html; charset=utf-8", markup.encode("utf-8"))
                 native_home = path in PORTAL_PATHS and tab in ("", "resumo", "inicio", "início", "overview")
                 match_path = "/cloudiff/portal" if path == "/" else path
@@ -214,7 +271,11 @@ def _install() -> None:
                                 owner = sys.modules.get(handler_class.__module__)
                                 user = self.user()
                                 panel = render_panel(getattr(owner, "_prod_csrf_token")(user), (query.get("tenant") or [""])[0])
-                                adapted_markup = adapted_markup.replace("</main>", panel + "</main>", 1)
+                                adapted_markup = re.sub(
+                                    r'<div class="box">\s*<h3>Pesquisar usuário/grupo no AD</h3>.*?</form>\s*</div>',
+                                    '', adapted_markup, count=1, flags=re.DOTALL,
+                                )
+                                adapted_markup = adapted_markup.replace("</main>", admin_ad_body() + panel + "</main>", 1)
                             adapted = adapted_markup.encode("utf-8")
                             return send(self, 200, "text/html; charset=utf-8", adapted, captured_headers)
                         except Exception:
