@@ -690,7 +690,11 @@ def stack_action(action, payload):
             delete_repo = {"ok": True, "skipped": True, "reason": "repo_not_found"}
         repo_verified_absent, repo_absence_check = repo_absent(repo_id, repo_name)
         container_cleanup = _cloudif_remove_project_application_containers(project)
-        ok = bool(operation_ok and delete_stack.get("ok") and verified_absent and delete_repo.get("ok") and repo_verified_absent and container_cleanup.get("ok"))
+        # A ausência verificada é a condição final de sucesso. As chamadas DeleteStack/DeleteRepo
+        # podem responder "not found" em retomadas idempotentes depois que o recurso já sumiu.
+        stack_final_ok = bool(verified_absent and container_cleanup.get("ok"))
+        repo_final_ok = bool(repo_verified_absent)
+        ok = bool(operation_ok and stack_final_ok and repo_final_ok)
     else:
         container_cleanup = {"ok": action != "destroy", "skipped": True}
 

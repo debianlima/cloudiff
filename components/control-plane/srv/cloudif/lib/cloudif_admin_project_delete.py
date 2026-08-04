@@ -45,6 +45,32 @@ def job_status(job_id):
 
 
 def start_job(slug, confirmation, actor):
+    JOB_ROOT.mkdir(parents=True, exist_ok=True)
+    lock_path = JOB_ROOT / f'.{slug}.lock'
+    lock_fd = None
+    try:
+        lock_fd = os.open(lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+        os.write(lock_fd, f'{os.getpid()} {time.time()}\n'.encode())
+    except FileExistsError:
+        for candidate in sorted(JOB_ROOT.glob('*.json'), key=lambda item: item.stat().st_mtime, reverse=True):
+            try:
+                existing = json.loads(candidate.read_text())
+            except Exception:
+                continue
+            if existing.get('slug') == slug and existing.get('status') in {'queued', 'running'}:
+                existing['deduplicated'] = True
+                return existing
+        try:
+            if time.time() - lock_path.stat().st_mtime > 900:
+                lock_path.unlink()
+                return start_job(slug, confirmation, actor)
+        except FileNotFoundError:
+            return start_job(slug, confirmation, actor)
+        return {'ok': False, 'error': 'project_delete_already_running', 'slug': slug}
+    finally:
+        if lock_fd is not None:
+            os.close(lock_fd)
+
     job_id = uuid.uuid4().hex
     state = {
         'ok': True, 'job_id': job_id, 'slug': slug, 'actor': actor,
@@ -88,6 +114,11 @@ def start_job(slug, confirmation, actor):
                 'finished_at': time.strftime('%Y-%m-%dT%H:%M:%S%z'),
             })
             _job_write(job_id, current)
+        finally:
+            try:
+                lock_path.unlink()
+            except FileNotFoundError:
+                pass
 
     threading.Thread(target=worker, name=f'project-delete-{job_id[:8]}', daemon=False).start()
     return state
@@ -294,7 +325,7 @@ def execute(slug, confirmation, actor, progress=None):
     public_rows=_rows(DB,'project_public_ids','project_slug',slug)
     public_number=int(public_rows[0].get('public_number')) if public_rows else 0
     stamp = time.strftime('%Y%m%d-%H%M%S')
-    audit = AUDIT_ROOT / f'{stamp}-{slug}'
+    audit = AUDIT_ROOT / f'{stamp}-{time.time_ns() % 1000000000:09d}-{slug}'
     audit.mkdir(parents=True, exist_ok=False)
     _backup_if_exists(DB, audit / 'cloudif-portal.db')
     _backup_if_exists(ONBOARDING_DB, audit / 'onboarding.db')
