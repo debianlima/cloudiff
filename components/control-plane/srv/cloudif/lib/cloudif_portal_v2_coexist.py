@@ -425,6 +425,8 @@ def _install() -> None:
         def do_GET(self):
             parsed = urllib.parse.urlparse(self.path)
             path = parsed.path
+            route_query = urllib.parse.parse_qs(parsed.query)
+            query_api = (route_query.get("api") or [""])[0].strip()
             try:
                 if path in {"/cloudif/portal/api/admin-delete-project-status", "/cloudiff/portal/api/admin-delete-project-status"}:
                     owner = sys.modules.get(handler_class.__module__)
@@ -454,19 +456,17 @@ def _install() -> None:
                         return send_json(self, 200, payload)
                     except Exception as exc:
                         return send_json(self, 500, {"ok": False, "error": type(exc).__name__, "detail": str(exc)[:300], "items": []})
-                if path in {"/cloudif/portal/api/admin-delete-tenant-preview", "/cloudiff/portal/api/admin-delete-tenant-preview"}:
+                if path in {"/cloudif/portal/api/admin-delete-tenant-preview", "/cloudiff/portal/api/admin-delete-tenant-preview"} or (path in PORTAL_PATHS and query_api == "admin-delete-tenant-preview"):
                     if not tenant_admin_allowed(self):
                         return send_json(self, 403, {"ok": False, "error": "forbidden"})
                     from cloudif_admin_tenant_delete import preview
-                    query = urllib.parse.parse_qs(parsed.query)
-                    payload = preview((query.get("tenant") or [""])[0])
+                    payload = preview((route_query.get("tenant") or [""])[0])
                     return send_json(self, 200, payload)
-                if path in {"/cloudif/portal/api/admin-delete-tenant-status", "/cloudiff/portal/api/admin-delete-tenant-status"}:
+                if path in {"/cloudif/portal/api/admin-delete-tenant-status", "/cloudiff/portal/api/admin-delete-tenant-status"} or (path in PORTAL_PATHS and query_api == "admin-delete-tenant-status"):
                     if not tenant_admin_allowed(self):
                         return send_json(self, 403, {"ok": False, "error": "forbidden"})
                     from cloudif_admin_tenant_delete import job_status as tenant_job_status
-                    query = urllib.parse.parse_qs(parsed.query)
-                    payload = tenant_job_status((query.get("job_id") or [""])[0])
+                    payload = tenant_job_status((route_query.get("job_id") or [""])[0])
                     return send_json(self, 200 if payload.get("ok") else 404, payload)
                 if path in {"/cloudif/portal/api/backup-overview", "/cloudiff/portal/api/backup-overview"}:
                     owner = sys.modules.get(handler_class.__module__)
