@@ -6357,6 +6357,58 @@ if 'Portal' in globals() and not globals().get('_admin_project_delete_wrapped'):
     _admin_project_delete_wrapped=True
 # CloudIF administrative full project deletion END
 
+
+# CloudIF definitive always-on tenant policy BEGIN
+import io as _tenant_always_io
+if 'Portal' in globals() and not globals().get('_tenant_always_on_final_wrapped'):
+    _tenant_always_on_final_prev_post=Portal.do_POST
+    def _tenant_always_on_final_post(self):
+        parsed=urllib.parse.urlparse(self.path);path=parsed.path.rstrip('/')
+        if path not in ('/cloudiff/portal/action/tenant_action','/cloudif/portal/action/tenant_action','/action/tenant_action'):
+            return _tenant_always_on_final_prev_post(self)
+        length=int(self.headers.get('Content-Length','0') or 0)
+        if length<0 or length>200000:
+            return _cloudif_security_reject(self,'Corpo da requisição inválido.',413)
+        raw=self.rfile.read(length)
+        try:form=urllib.parse.parse_qs(raw.decode('utf-8','ignore'))
+        except Exception:return _cloudif_security_reject(self,'Formulário inválido.',400)
+        val=lambda k,d='':(form.get(k) or [d])[0].strip()
+        op=val('op')
+        if op not in ('always_on','always_on_start'):
+            self.rfile=_tenant_always_io.BytesIO(raw)
+            self.headers.replace_header('Content-Length',str(len(raw)))
+            return _tenant_always_on_final_prev_post(self)
+        user=self.user();tenant=slugify(val('tenant'))
+        if not _cloudif_security_valid_origin(self):
+            return _cloudif_security_reject(self,'Origem da requisição não autorizada.',403)
+        if not _prod_csrf_equal(val('csrf_token'),_prod_csrf_token(user)):
+            return _cloudif_security_reject(self,'Token CSRF inválido ou ausente.',403)
+        if not user.get('admin'):
+            return _cloudif_security_reject(self,'Restrito a administrador.',403)
+        if not tenant or not tenant_visible(tenant,user['username'],user['groups']):
+            return _cloudif_security_reject(self,'Tenant não autorizado.',403)
+        tdir=BASE/'tenants'/tenant
+        if not tdir.is_dir() or not (tdir/'.env').is_file():
+            return _cloudif_security_reject(self,'Tenant não encontrado.',404)
+        rc=0;out='';err=''
+        if not tenant_is_running(tenant):
+            rc,out,err=run(['bash','-lc',f"cd {str(tdir)!r} && docker compose --env-file .env up -d"],180)
+            if rc!=0:
+                log_action(user['username'],'always_on',tenant,rc,out,err)
+                return _cloudif_security_reject(self,'Não foi possível iniciar o banco.',502)
+        con=db()
+        sql=('INSERT INTO tenant_policy(tenant,always_alive,keepalive_until,max_hours,updated_at) '
+             'VALUES(?,1,NULL,24,?) '
+             'ON CONFLICT(tenant) DO UPDATE SET '
+             'always_alive=1,keepalive_until=NULL,max_hours=24,updated_at=excluded.updated_at')
+        con.execute(sql,(tenant,now_iso()))
+        con.commit();con.close()
+        log_action(user['username'],'always_on',tenant,0,out or 'Política sempre ligado ativada.',err)
+        return self.redirect('/?tab=bancos')
+    Portal.do_POST=_tenant_always_on_final_post
+    _tenant_always_on_final_wrapped=True
+# CloudIF definitive always-on tenant policy END
+
 if __name__ == "__main__":
     init_db()
     refresh_tenant_policies()
