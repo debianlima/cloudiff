@@ -4892,7 +4892,7 @@ if 'page' in globals() and not globals().get('_cpx_page_wrapped'):
             repo_path=m.group(1)
             target='https://cloudiff.duckdns.org/git/user/oauth2/Authentik?redirect_to='+_cpx_parse.quote(repo_path if repo_path.startswith('/git/') else '/git'+repo_path,safe='')
             return 'href="'+target+'"'
-        doc=_cpx_re.sub(r'href="(https://cloudiff\.duckdns\.org/git/cloudif/[^"]+)"',lambda m:_forgejo_direct(type('M',(),{'group':lambda self,n:_cpx_parse.urlparse(m.group(1)).path})()),doc)
+        doc=_cpx_re.sub(r'href="(https://cloudiff\.duckdns\.org/git/(?!user/)[^/"]+/[^"]+)"',lambda m:_forgejo_direct(type('M',(),{'group':lambda self,n:_cpx_parse.urlparse(m.group(1)).path})()),doc)
         return doc
     _cpx_page_wrapped=True
 

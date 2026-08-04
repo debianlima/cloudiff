@@ -3094,7 +3094,10 @@ def _v95_repo_url(slug, p=None):
     if explicit:
         return explicit
     repo = _v115_ui_repo_name(slug)
-    return f"https://cloudiff.duckdns.org/git/cloudif/{repo}"
+    owner = str(p.get('owner') or p.get('created_by') or '').strip().lower()
+    if owner:
+        return f"https://cloudiff.duckdns.org/git/{owner}/{repo}"
+    return "https://cloudiff.duckdns.org/git/"
 
 
 

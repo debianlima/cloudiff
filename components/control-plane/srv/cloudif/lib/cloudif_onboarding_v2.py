@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
+import urllib.parse
 
 def build_onboarding_v2(slug, owner, tenant, num):
     portal='https://cloudiff.duckdns.org/'
-    forge=f'https://cloudiff.duckdns.org/git/user/oauth2/Authentik?redirect_to=%2Fgit%2Fcloudif%2Fcloudif-{slug}'
+    repo_path=f'/git/{owner}/cloudif-{slug}'
+    forge='https://cloudiff.duckdns.org/git/user/oauth2/Authentik?redirect_to='+urllib.parse.quote(repo_path,safe='')
     kom='https://komodoiff.duckdns.org/'
     sup=f'https://{tenant}.cloudiff.duckdns.org/project/default'
     site=f'https://{num}.cloudiff.duckdns.org/'
