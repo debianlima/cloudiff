@@ -71,11 +71,13 @@
       var timer=0,controller=null;
       function close(){results.hidden=true;results.innerHTML='';input.setAttribute('aria-expanded','false');}
       var verified=form.querySelector('input[name="identity_verified"]');var submit=form.querySelector('button[type="submit"]');var note=form.querySelector('.tenant-identity-note');
-      function invalidate(){if(verified)verified.value='';if(submit)submit.disabled=true;if(note)note.textContent='Selecione um resultado validado antes de adicionar.';}
-      function choose(item){var principal=item.principal||item.username||item.label||'';var kind=item.type==='group'?'group':'user';input.value=principal;type.value=kind;if(verified)verified.value=kind+':'+principal;if(submit)submit.disabled=false;if(note)note.textContent='Identidade validada pelo provedor: '+principal+'.';close();input.focus();}
-      function render(items){
+      function setNote(message,state){if(!note)return;note.textContent=message;note.classList.remove('is-error','is-success','is-searching');if(state)note.classList.add(state);}
+      function invalidate(){if(verified)verified.value='';if(submit)submit.disabled=true;input.removeAttribute('aria-invalid');setNote('Selecione um resultado validado antes de adicionar.','');}
+      function markNotFound(query){if(verified)verified.value='';if(submit)submit.disabled=true;input.setAttribute('aria-invalid','true');setNote('Usuário ou grupo "'+query+'" não encontrado no provedor de identidade.','is-error');}
+      function choose(item){var principal=item.principal||item.username||item.label||'';var kind=item.type==='group'?'group':'user';input.value=principal;type.value=kind;if(verified)verified.value=kind+':'+principal;if(submit)submit.disabled=false;input.removeAttribute('aria-invalid');setNote('Identidade validada pelo provedor: '+principal+'.','is-success');close();input.focus();}
+      function render(items,query){
         results.innerHTML='';
-        if(!items.length){results.innerHTML='<p class="tenant-acl-empty">Nenhum usuário ou grupo encontrado.</p>';results.hidden=false;input.setAttribute('aria-expanded','true');return;}
+        if(!items.length){results.innerHTML='<p class="tenant-acl-empty tenant-acl-empty-error">Nenhum usuário ou grupo encontrado.</p>';results.hidden=false;input.setAttribute('aria-expanded','true');markNotFound(query);return;}
         items.slice(0,12).forEach(function(item){
           var button=document.createElement('button');button.type='button';button.className='tenant-acl-result';button.setAttribute('role','option');
           var principal=item.principal||item.username||item.label||'';
@@ -89,12 +91,12 @@
         invalidate();window.clearTimeout(timer);var q=input.value.trim();if(q.length<2){close();return;}
         timer=window.setTimeout(async function(){
           if(controller){controller.abort();}controller=new AbortController();
-          results.hidden=false;results.innerHTML='<p class="tenant-acl-empty">Pesquisando no AD…</p>';input.setAttribute('aria-expanded','true');
+          results.hidden=false;results.innerHTML='<p class="tenant-acl-empty">Pesquisando no provedor de identidade…</p>';input.setAttribute('aria-expanded','true');setNote('Pesquisando usuário ou grupo…','is-searching');
           try{
             var url='/cloudiff/portal/api/admin-ad-search?q='+encodeURIComponent(q)+'&type='+encodeURIComponent(type.value||'all');
             var response=await fetch(url,{credentials:'same-origin',headers:{Accept:'application/json'},signal:controller.signal});
-            var data=await response.json();if(!response.ok||!data.ok){throw new Error(data.error||'search_failed');}render(data.items||[]);
-          }catch(error){if(error.name!=='AbortError'){results.innerHTML='<p class="tenant-acl-empty">Não foi possível consultar o AD.</p>';}}
+            var data=await response.json();if(!response.ok||!data.ok){throw new Error(data.error||'search_failed');}render(data.items||[],q);
+          }catch(error){if(error.name!=='AbortError'){results.hidden=false;results.innerHTML='<p class="tenant-acl-empty tenant-acl-empty-error">Não foi possível consultar o provedor de identidade.</p>';input.setAttribute('aria-expanded','true');input.setAttribute('aria-invalid','true');setNote('Não foi possível consultar o provedor de identidade. Tente novamente.','is-error');}}
         },250);
       });
       input.addEventListener('keydown',function(event){
@@ -109,7 +111,7 @@
         if(event.key==='ArrowUp'){event.preventDefault();if(current<=0){input.focus();}else{items[current-1].focus();}}
         if(event.key==='Escape'){close();input.focus();}
       });
-      type.addEventListener('change',invalidate);form.addEventListener('submit',function(event){if(!verified||verified.value!==(type.value+':'+input.value.trim())){event.preventDefault();invalidate();if(note)note.textContent='Selecione novamente a identidade na lista de resultados.';}});document.addEventListener('click',function(event){if(!form.contains(event.target)){close();}});
+      type.addEventListener('change',invalidate);form.addEventListener('submit',function(event){if(!verified||verified.value!==(type.value+':'+input.value.trim())){event.preventDefault();if(!input.value.trim()){invalidate();input.setAttribute('aria-invalid','true');setNote('Digite e selecione um usuário ou grupo retornado pelo provedor de identidade.','is-error');}else{markNotFound(input.value.trim());}input.focus();}});document.addEventListener('click',function(event){if(!form.contains(event.target)){close();}});
     });
   }
   enableTenantPermissionAutocomplete();

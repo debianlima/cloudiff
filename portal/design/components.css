@@ -248,3 +248,5 @@
 @media(max-width:720px){.db96-compact-tools{margin:0 20px 20px}.db96-compact>summary{align-items:flex-start}.db96-service-list{grid-template-columns:1fr}}
 
 .tenant-owner-row{background:#f0fdf4}.tenant-owner-row td{vertical-align:middle}.tenant-owner-badge{margin-left:8px}.tenant-owner-lock{display:inline-flex;padding:5px 9px;border-radius:999px;background:#edf7f0;color:#176b35;font-size:.73rem;font-weight:800}.tenant-acl-table td:nth-child(3){text-align:right}
+
+.tenant-identity-note{margin:7px 0 0;padding:9px 10px;border-radius:9px;background:#f8fafc;color:var(--muted);font-weight:650}.tenant-identity-note.is-searching{background:#f0fdf4;color:#176b35}.tenant-identity-note.is-success{background:#edf7f0;color:#176b35}.tenant-identity-note.is-error{background:#fef2f2;color:#991b1b;border:1px solid #fecaca}.tenant-acl-empty-error{color:#991b1b;background:#fef2f2}.db96-permissions input[aria-invalid="true"]{border-color:#dc2626!important;outline:2px solid rgba(220,38,38,.16)!important}
