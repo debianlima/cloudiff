@@ -173,6 +173,35 @@ def _install() -> None:
             return previous_get(self)
 
         handler_class.do_GET = do_GET
+
+        previous_post = getattr(handler_class, "do_POST", None)
+        if previous_post is not None:
+            def do_POST(self):
+                parsed = urllib.parse.urlparse(self.path)
+                if parsed.path not in {
+                    "/cloudif/portal/action/admin-delete-project",
+                    "/cloudiff/portal/action/admin-delete-project",
+                }:
+                    return previous_post(self)
+                try:
+                    status, captured_headers, body = capture_legacy(self, previous_post)
+                    content_type = header_value(captured_headers, "Content-Type", "text/html; charset=utf-8")
+                    if status in {200, 409} and content_type.lower().startswith("text/html"):
+                        try:
+                            adapted = transform(
+                                body.decode("utf-8"),
+                                identity(self.headers),
+                                "admin-excluir-projeto",
+                            ).encode("utf-8")
+                            return send(self, status, "text/html; charset=utf-8", adapted, captured_headers)
+                        except Exception:
+                            return send(self, status, content_type, body, captured_headers)
+                    return send(self, status, content_type, body, captured_headers)
+                except Exception:
+                    return previous_post(self)
+
+            handler_class.do_POST = do_POST
+
         handler_class._v2_coexist_wrapped = True
 
     import http.server as http_server
