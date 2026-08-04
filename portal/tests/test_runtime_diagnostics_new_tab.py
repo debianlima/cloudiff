@@ -22,7 +22,7 @@ class RuntimeDiagnosticsNewTabTests(unittest.TestCase):
     def test_route_remains_authenticated_and_project_scoped(self):
         route=self.base[self.base.index("project-runtime-info'"):self.base.index("open-project-terminal'",self.base.index("project-runtime-info'"))]
         self.assertIn('_rd_projects(user)',route)
-        self.assertIn('/komodo/project/runtime-info',route)
+        self.assertIn('_rd_runtime_info_with_reconcile',route)
         self.assertIn("kind not in ('php','node')",route)
 
 if __name__=='__main__':unittest.main()

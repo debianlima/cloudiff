@@ -5141,6 +5141,28 @@ document.getElementById('rd-refresh').onclick=load;document.getElementById('rd-r
     body=body.replace("__CSRF__",_rd_json.dumps(csrf))
     return page(user,'projetos',body)
 
+def _rd_runtime_info_with_reconcile(project, kind):
+    payload={'project':project['slug'],'stack_id':project['stack_id'],'service':project['service'],'kind':kind}
+    try:
+        return _rd_agent('/komodo/project/runtime-info',payload,timeout=45)
+    except Exception as first:
+        try:
+            audit=_rd_agent('/komodo/project/audit',{'project':project['slug'],'stack_id':project['stack_id'],'service':project['service'],'terminal':'cloudif-'+project['slug'],'shell':'sh'},timeout=45)
+            resolved=str(audit.get('resolved_stack_id') or '')
+            if resolved and resolved!=project['stack_id']:
+                project=dict(project);project['stack_id']=resolved;payload['stack_id']=resolved
+                try:
+                    with sqlite3.connect(str(DB)) as con:
+                        con.execute('UPDATE project_integrations SET komodo_stack_id=?, stack_id=?, updated_at=CURRENT_TIMESTAMP WHERE project=?',(resolved,resolved,project['slug']))
+                        con.commit()
+                except Exception: pass
+            if audit.get('running') and audit.get('container_name'):
+                time.sleep(1)
+                return _rd_agent('/komodo/project/runtime-info',payload,timeout=45)
+        except Exception:
+            pass
+        raise first
+
 if 'Portal' in globals() and not globals().get('_rd_wrapped'):
     _rd_prev_get=Portal.do_GET;_rd_prev_post=Portal.do_POST
     def _rd_get(self):
@@ -5172,7 +5194,7 @@ if 'Portal' in globals() and not globals().get('_rd_wrapped'):
             p=next((x for x in _rd_projects(user) if x['slug']==slug),None)
             if not p or kind not in ('php','node'):return _cpx_send_json(self,{'ok':False,'error':'not_found'},404)
             try:
-                info=_rd_agent('/komodo/project/runtime-info',{'project':slug,'stack_id':p['stack_id'],'service':p['service'],'kind':kind},timeout=45)
+                info=_rd_runtime_info_with_reconcile(p,kind)
                 return _cpx_send_json(self,info,200 if info.get('ok') else 422)
             except Exception as exc:
                 return _cpx_send_json(self,{'ok':False,'error':'runtime_info_unavailable','detail':str(exc)[:220]},503)
@@ -5181,7 +5203,7 @@ if 'Portal' in globals() and not globals().get('_rd_wrapped'):
             project=next((x for x in _rd_projects(user) if x['slug']==slug),None)
             if not project or kind not in ('php','node'):return self.send_error(404)
             try:
-                info=_rd_agent('/komodo/project/runtime-info',{'project':slug,'stack_id':project['stack_id'],'service':project['service'],'kind':kind},timeout=45)
+                info=_rd_runtime_info_with_reconcile(project,kind)
                 if not info.get('ok'):raise RuntimeError(str(info.get('error') or 'runtime_info_failed'))
                 title='Informações do PHP' if kind=='php' else 'Informações do Node.js'
                 description='Versão, configuração e extensões carregadas.' if kind=='php' else 'Runtime, npm e dependências declaradas da API.'
