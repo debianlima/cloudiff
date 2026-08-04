@@ -296,7 +296,6 @@ def create_or_update_repo(repo_info, server_id):
     repos = repos_resp.get("data") if repos_resp.get("ok") else []
     existing = find_by_name(repos, repo_info["repo_name"])
 
-    compose_file = ".cloudif/docker-compose.yml" if runtime_layout == "unified-v1" else "docker-compose.yml"
     desired_config = {
         "server_id": server_id,
         "repo": repo_info["repo_path"],
@@ -339,6 +338,7 @@ def create_or_update_repo(repo_info, server_id):
 
 def create_or_update_stack(project, repo_info, server_id, runtime_layout="legacy"):
     stack_name = "cloudif-" + safe_slug(project)
+    compose_file = ".cloudif/docker-compose.yml" if runtime_layout == "unified-v1" else "docker-compose.yml"
 
     stacks_resp, _ = komodo_call("read", "ListStacks", {})
     stacks = stacks_resp.get("data") if stacks_resp.get("ok") else []

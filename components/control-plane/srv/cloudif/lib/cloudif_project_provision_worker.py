@@ -38,13 +38,29 @@ def main():
   found=[c for c in candidates if Path(c).exists() and os.access(c,os.X_OK)]
   if not found:raise RuntimeError('external_provision_script_missing')
   p=run([found[0],str(path)],2700)
-  if p.returncode:raise RuntimeError('project_provision_failed: '+(p.stderr or p.stdout or '')[-420:])
+  if p.returncode:
+   detail=(p.stderr or p.stdout or '')[-420:]
+   report_path=Path('/srv/cloudif/provisioning/projects')/slug/'provision-report.json'
+   try:
+    report=json.loads(report_path.read_text())
+    failures=[]
+    for name,component in (report.get('components') or {}).items():
+     if component.get('ok') is False:
+      actions=component.get('actions') or []
+      last=next((a for a in reversed(actions) if a.get('ok') is False),{})
+      failures.append(name+': '+str(last.get('message') or last.get('detail') or component.get('status') or 'falhou'))
+    if failures: detail='; '.join(failures)[:700]
+   except Exception: pass
+   raise RuntimeError('project_provision_failed: '+detail)
   set_state(path,job,'running','onboarding-reconcile')
   p=run(['/bin/systemctl','start','cloudif-project-onboarding-reconcile.service'],300)
   if p.returncode:raise RuntimeError('onboarding_reconcile_failed')
   verify_onboarding(slug)
   p=run(['/bin/systemctl','start','cloudif-project-capabilities.service'],240)
   if p.returncode:raise RuntimeError('capabilities_reconcile_failed')
+  set_state(path,job,'running','backup-configuration')
+  p=run(['/usr/local/sbin/cloudif-project-backup.py','set-auto','--slug',slug,'--enabled','1','--remote-requested','1'],120)
+  if p.returncode:raise RuntimeError('backup_configuration_failed: '+(p.stderr or p.stdout or '')[-420:])
   if job.get('template_kind') in ('onboarding','links'):
    set_state(path,job,'running','template')
    p=run(['/usr/local/sbin/cloudif-project-template-apply.py',str(path)],480)

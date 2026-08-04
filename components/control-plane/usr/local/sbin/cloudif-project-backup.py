@@ -140,20 +140,31 @@ def make_application(slug,p,dest):
         meta={'type':'application','status':'ready','owner':owner_for(p),'project':slug,'container_scope':'all-containers','created_at':now(),'size':path.stat().st_size,'sha256':sha256(path),'filename':path.name,'public_numbers':nums,'containers':len(remote_containers or names),'tenant_containers':len(tenant_containers)}
         write_manifest(path,meta); return path,meta
     finally: shutil.rmtree(tmp,ignore_errors=True)
-def remote_status(slug,files):
-    if not REMOTE_ENV.exists(): return {'requested':True,'status':'pending_configuration','server':'10.68.128.250'}
+def remote_config():
     env={}
-    for line in REMOTE_ENV.read_text().splitlines():
-        if '=' in line and not line.lstrip().startswith('#'):
-            k,v=line.split('=',1); env[k.strip()]=v.strip()
-    host=env.get('REMOTE_HOST','10.68.128.250'); user=env.get('REMOTE_USER',''); target=env.get('REMOTE_PATH','')
-    key=env.get('REMOTE_KEY','')
-    if not (user and target and key): return {'requested':True,'status':'pending_configuration','server':host}
-    if subprocess.run(['nc','-z','-w','3',host,'22'],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL).returncode!=0:
-        return {'requested':True,'status':'server_offline','server':host}
-    cmd=['rsync','-a','--chmod=F600', '-e',f'ssh -i {key} -o BatchMode=yes -o StrictHostKeyChecking=yes']+[str(x) for x in files]+[f'{user}@{host}:{target.rstrip("/")}/{slug}/']
+    if REMOTE_ENV.exists():
+        for line in REMOTE_ENV.read_text().splitlines():
+            if '=' in line and not line.lstrip().startswith('#'):
+                k,v=line.split('=',1); env[k.strip()]=v.strip().strip('"\'')
+    return {'host':env.get('REMOTE_HOST','10.68.128.250'),'port':int(env.get('REMOTE_PORT') or 22),'user':env.get('REMOTE_USER',''),'path':env.get('REMOTE_PATH',''),'key':env.get('REMOTE_KEY',''),'enabled':env.get('REMOTE_ENABLED','1')=='1'}
+
+def remote_probe():
+    cfg=remote_config(); reachable=False
+    if cfg['enabled'] and cfg['host']:
+        try: reachable=subprocess.run(['nc','-z','-w','3',cfg['host'],str(cfg['port'])],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=5).returncode==0
+        except Exception: reachable=False
+    ready=bool(cfg['user'] and cfg['path'] and cfg['key'])
+    status='disabled' if not cfg['enabled'] else 'server_offline' if not reachable else 'pending_configuration' if not ready else 'online'
+    return {'requested':True,'configured':bool(cfg['host']),'reachable':reachable,'ready':ready,'status':status,'server':cfg['host'],'port':cfg['port']}
+
+def remote_status(slug,files):
+    probe=remote_probe(); cfg=remote_config()
+    if probe['status']!='online': return probe
+    cmd=['rsync','-a','--chmod=F600','-e',f"ssh -p {cfg['port']} -i {cfg['key']} -o BatchMode=yes -o StrictHostKeyChecking=yes"]+[str(x) for x in files]+[f"{cfg['user']}@{cfg['host']}:{cfg['path'].rstrip('/')}/{slug}/"]
     r=subprocess.run(cmd,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True)
-    return {'requested':True,'status':'synced' if r.returncode==0 else 'sync_failed','server':host,'detail':r.stderr[-180:] if r.returncode else ''}
+    probe.update({'status':'synced' if r.returncode==0 else 'sync_failed','detail':r.stderr[-180:] if r.returncode else ''})
+    return probe
+
 def backup(slug):
     slug=safe(slug); p=project(slug); dest=ROOT/slug; dest.mkdir(parents=True,exist_ok=True); os.chmod(dest,0o700)
     files=[]; metas=[]
@@ -182,6 +193,7 @@ def listing(slug):
             except Exception: pass
             items.append({'filename':f.name,'size':f.stat().st_size,'modified':dt.datetime.fromtimestamp(f.stat().st_mtime,dt.timezone.utc).astimezone().isoformat(timespec='seconds'),'type':meta.get('type') or ('database' if ('database' in f.name and 'application' not in f.name) else 'application'),'sha256':meta.get('sha256') or sha256(f)})
     cfg=load_state().get('projects',{}).get(slug,{})
+    if cfg.get('remote_requested'): cfg['remote']=remote_probe()
     return {'ok':True,'project':slug,'settings':cfg,'items':items}
 def set_auto(slug,enabled,remote_requested=None):
     slug=safe(slug); project(slug); d=load_state(); cfg=d.setdefault('projects',{}).setdefault(slug,{})

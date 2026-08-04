@@ -289,6 +289,29 @@ def _delete_onboarding_state(slug):
     return out
 
 
+BACKUP_STATE = Path('/var/lib/cloudif/portal/project-backup-settings.json')
+BACKUP_ROOT = Path('/srv/cloudif/managed-backups/projects')
+
+
+def _delete_backup_state(slug):
+    out={'settings_removed':False,'files_removed':False}
+    if BACKUP_STATE.exists():
+        try:
+            data=json.loads(BACKUP_STATE.read_text())
+        except Exception:
+            data={}
+        projects=data.get('projects') or {}
+        if slug in projects:
+            projects.pop(slug,None);data['projects']=projects
+            tmp=BACKUP_STATE.with_name(BACKUP_STATE.name+'.tmp')
+            tmp.write_text(json.dumps(data,ensure_ascii=False,indent=2)+'\n');os.chmod(tmp,0o600);os.replace(tmp,BACKUP_STATE)
+            out['settings_removed']=True
+    root=BACKUP_ROOT/slug
+    if root.exists():
+        shutil.rmtree(root);out['files_removed']=True
+    return out
+
+
 def _delete_observability(slug):
     out={'notifications':0,'monitor_latest':0,'monitor_samples':0}
     if NOTIFICATIONS_DB.exists():
@@ -374,7 +397,8 @@ def execute(slug, confirmation, actor, progress=None):
     onboarding_state = _delete_onboarding_state(slug)
     onboarding_removed = onboarding_state.get('project_onboarding',0)
     observability = _delete_observability(slug)
-    progress('Identidade e onboarding', 'done', 'Estados removidos')
+    backup_state = _delete_backup_state(slug)
+    progress('Identidade e onboarding', 'done', 'Estados e backup do projeto removidos')
 
     removed_paths = []
     for candidate in glob.glob(str(JOBS / f'*{slug}*')):
@@ -404,6 +428,7 @@ def execute(slug, confirmation, actor, progress=None):
         'agent_identity': agent_identity,
         'onboarding_state': onboarding_state,
         'observability': observability,
+        'backup_state': backup_state,
         'removed_paths': removed_paths,
         'audit_dir': str(audit),
         'finished_at': time.strftime('%Y-%m-%dT%H:%M:%S%z'),
