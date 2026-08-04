@@ -3,7 +3,7 @@
 from pathlib import Path
 import re
 
-_POLICY_OLD = "return bool(user.get('admin') or groups.intersection({'cloudif-tenants-admin','cloudif-professor'}))"
+_POLICY_OLD = "return bool(user.get('admin') or groups.intersection({'cloudif-tenants-admin','domain admins'}))"
 _POLICY_NEW = "return bool(groups.intersection({'cloudif-tenants-admin','cloudif-professor'}))"
 _MESSAGE_REPLACEMENTS = (
     ('Área restrita à administração global.', 'Área restrita a CloudIF-Professor ou CloudIF-Tenants-Admin.'),

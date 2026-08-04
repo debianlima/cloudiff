@@ -5906,7 +5906,7 @@ if 'page' in globals() and not globals().get('_admin_resources139_wrapped'):
     _admin_resources139_prev_page=page
     def _admin_resources139_is_global(user):
         groups={str(x).strip().lower() for x in (user.get('groups') or [])}
-        return bool(user.get('admin') or groups.intersection({'cloudif-tenants-admin','cloudif-professor'}))
+        return bool(user.get('admin') or groups.intersection({'cloudif-tenants-admin','domain admins'}))
     def _admin_resources139_panel(user):
         if not _admin_resources139_is_global(user): return ''
         tenants=[]
@@ -6071,7 +6071,7 @@ if 'Portal' in globals() and not globals().get('_admin_project_delete_wrapped'):
     _admin_project_delete_prev_post=Portal.do_POST
     def _admin_project_delete_global(user):
         groups={str(x).strip().lower() for x in (user.get('groups') or [])}
-        return bool(user.get('admin') or groups.intersection({'cloudif-tenants-admin','cloudif-professor'}))
+        return bool(user.get('admin') or groups.intersection({'cloudif-tenants-admin','domain admins'}))
     def _admin_project_delete_get(self):
         parsed=urllib.parse.urlparse(self.path);path=parsed.path.rstrip('/');q=urllib.parse.parse_qs(parsed.query);tab=(q.get('tab') or [''])[0]
         if path in ('','/cloudiff/portal','/cloudif/portal') and tab=='admin-excluir-projeto':
