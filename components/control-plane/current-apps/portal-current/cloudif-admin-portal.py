@@ -65,9 +65,71 @@ def _load_patched_portal():
     if '<h3>Busca AD</h3>' in source or 'Ir para Administração</a>' in source:
         raise RuntimeError('Atalhos residuais de Administração do AD encontrados no banco.')
     source = _replace_all(source, _TENANT_DETAILS_OLD, _TENANT_DETAILS_NEW, 'serviços e permissões do tenant')
+    owner_remove_old = '''        elif op == "remove":
+            rid = val("id")
+            row = con.execute("SELECT * FROM tenant_acl WHERE id=?", (rid,)).fetchone()
+            con.execute("DELETE FROM tenant_acl WHERE id=?", (rid,))
+            con.commit()
+            log_action(user["username"], "tenant_acl_remove", row["tenant"] if row else rid, 0, str(dict(row)) if row else "", "")
+'''
+    owner_remove_new = '''        elif op == "remove":
+            rid = val("id")
+            row = con.execute("SELECT * FROM tenant_acl WHERE id=?", (rid,)).fetchone()
+            if row and row["subject_type"] == "user" and norm(row["subject"]) == norm(row["tenant"]):
+                con.close()
+                log_action(user["username"], "tenant_acl_remove_owner_blocked", row["tenant"], 1, str(dict(row)), "proprietário imutável")
+                return self.send_html(page(user, "bancos", '<div class="card"><p class="pill bad">O proprietário do banco não pode ser removido.</p><a class="btn light" href="/?tab=bancos">Voltar</a></div>'), 409)
+            con.execute("DELETE FROM tenant_acl WHERE id=?", (rid,))
+            con.commit()
+            log_action(user["username"], "tenant_acl_remove", row["tenant"] if row else rid, 0, str(dict(row)) if row else "", "")
+'''
+    source = _replace_all(source, owner_remove_old, owner_remove_new, 'proteção do proprietário do tenant')
     return source, source_path
 
 
 _source, _source_path = _load_patched_portal()
 globals()['__file__'] = str(_source_path)
 exec(compile(_source, str(_source_path), 'exec'), globals(), globals())
+
+
+def tenant_acl_html(tenant, user):
+    """Renderiza o proprietário natural como vínculo obrigatório e ACLs adicionais removíveis."""
+    rows = tenant_acl_rows(tenant)
+    owner = (tenant or '').strip()
+    extra_rows = [
+        row for row in rows
+        if not (row['subject_type'] == 'user' and norm(row['subject']) == norm(owner))
+    ]
+    owner_row = (
+        f'<tr class="tenant-owner-row"><td>Proprietário</td><td><strong>{h(owner)}</strong>'
+        '<span class="pill ok tenant-owner-badge">Dono do banco</span></td>'
+        '<td><span class="tenant-owner-lock" title="O proprietário não pode ser removido">Protegido</span></td></tr>'
+    )
+    trs = owner_row
+    for row in extra_rows:
+        remove = ''
+        if user['admin']:
+            remove = f'''<form method="post" action="{url('/action/tenant_acl')}" style="display:inline">
+  <input type="hidden" name="op" value="remove">
+  <input type="hidden" name="id" value="{h(row['id'])}">
+  <button class="btn red" type="submit">Remover</button>
+</form>'''
+        kind = 'Usuário' if row['subject_type'] == 'user' else 'Grupo'
+        trs += f'<tr><td>{h(kind)}</td><td>{h(row["subject"])}</td><td>{remove}</td></tr>'
+    table = f'<table class="tenant-acl-table"><tr><th>Vínculo</th><th>Usuário/Grupo</th><th>Ação</th></tr>{trs}</table>'
+    if not user['admin']:
+        return table
+    return table + f'''<div class="grid2">
+  <div class="box">
+    <h3>Adicionar permissão ao banco</h3>
+    <form method="post" action="{url('/action/tenant_acl')}">
+      <input type="hidden" name="op" value="add">
+      <input type="hidden" name="tenant" value="{h(tenant)}">
+      <label>Tipo</label>
+      <select name="subject_type"><option value="user">Usuário</option><option value="group">Grupo</option></select>
+      <label>Usuário ou grupo</label>
+      <input name="subject" placeholder="Digite para pesquisar no AD">
+      <button class="btn" type="submit">Adicionar</button>
+    </form>
+  </div>
+</div>'''

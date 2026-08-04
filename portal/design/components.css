@@ -246,3 +246,5 @@
 .tenant-acl-result:last-child{border-bottom:0}.tenant-acl-result:hover,.tenant-acl-result:focus{background:#edf7f0;outline:2px solid #67a875;outline-offset:-2px}
 .tenant-acl-result strong{font-size:.88rem}.tenant-acl-result small,.tenant-acl-empty{font-size:.76rem;color:var(--muted)}.tenant-acl-empty{margin:0;padding:12px}
 @media(max-width:720px){.db96-compact-tools{margin:0 20px 20px}.db96-compact>summary{align-items:flex-start}.db96-service-list{grid-template-columns:1fr}}
+
+.tenant-owner-row{background:#f0fdf4}.tenant-owner-row td{vertical-align:middle}.tenant-owner-badge{margin-left:8px}.tenant-owner-lock{display:inline-flex;padding:5px 9px;border-radius:999px;background:#edf7f0;color:#176b35;font-size:.73rem;font-weight:800}.tenant-acl-table td:nth-child(3){text-align:right}

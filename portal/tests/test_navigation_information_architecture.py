@@ -45,6 +45,9 @@ class NavigationInformationArchitectureTest(unittest.TestCase):
         self.assertIn("_ADMIN_LOOKUP_BOX, ''", source)
         self.assertNotIn('togglePanel(\'{acl_id}\')', source)
         self.assertIn('data-tenant-permissions', source)
+        self.assertIn('tenant-owner-row', source)
+        self.assertIn('tenant_acl_remove_owner_blocked', source)
+        self.assertIn('O proprietário do banco não pode ser removido', source)
 
     def test_tenant_deletion_is_separate_and_protected(self):
         source = Path('components/control-plane/srv/cloudif/lib/cloudif_admin_tenant_delete.py').read_text(encoding='utf-8')
