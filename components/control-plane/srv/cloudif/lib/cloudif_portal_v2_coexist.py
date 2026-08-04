@@ -319,16 +319,6 @@ def _install() -> None:
                             selected_project = (query.get("project") or [""])[0]
                             owner = sys.modules.get(handler_class.__module__)
                             adapted_markup = transform(markup, identity(self.headers), tab or "publicacao", selected_project)
-                            if tab == "publicacao":
-                                publications_header = '<section class="my-publications-heading card"><div class="section-title"><div><h1>Minhas Publicações</h1><p>Gerencie publicação, retirada, versões e permissões dos projetos autorizados.</p></div></div></section>'
-                                empty_marker = '<section class="publication-shell publication-projects-clean"></section>'
-                                if empty_marker in adapted_markup:
-                                    empty_state = '<section class="publication-shell publication-projects-clean"><div class="empty-state"><h3>Nenhum projeto disponível para publicação</h3><p>Quando um projeto for criado e autorizado, os controles homologados de publicar, retirar publicação, versões e permissões aparecerão aqui.</p></div></section>'
-                                    adapted_markup = adapted_markup.replace(empty_marker, publications_header + empty_state, 1)
-                                else:
-                                    opening = '<section class="publication-shell publication-projects-clean">'
-                                    if opening in adapted_markup:
-                                        adapted_markup = adapted_markup.replace(opening, publications_header + opening, 1)
                             if tab == "agentes":
                                 try:
                                     identities = getattr(owner, "_oi_panel")(self.user())
