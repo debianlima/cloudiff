@@ -966,8 +966,10 @@ def render_bancos(user):
         pol = con.execute("SELECT * FROM tenant_policy WHERE tenant=?", (tenant,)).fetchone()
         always_alive = bool(pol and pol["always_alive"])
         keepalive_until = (pol["keepalive_until"] if pol else None) or ""
-        timed_active = (not always_alive) and keepalive_active(keepalive_until)
-        automatic_active = not always_alive and not timed_active
+        policy_hours = int((pol["max_hours"] if pol else 0) or 0)
+        deadline_active = (not always_alive) and keepalive_active(keepalive_until)
+        automatic_active = (not always_alive) and policy_hours == 0
+        timed_active = deadline_active and not automatic_active
         services = compose_services(tenant)
         running = tenant_is_running(tenant)
         hours = "".join(f'<option value="{i}">{i} hora{"s" if i > 1 else ""}</option>' for i in range(1, max_keepalive_hours()+1))
@@ -990,7 +992,7 @@ def render_bancos(user):
 
         timed_controls = f"""<label class="db96-hours"><span>Duração</span><select name="hours">{hours}</select></label>
 <button class="btn {'db96-current' if timed_active else 'gray'}" name="op" value="keepalive" {'disabled aria-disabled="true"' if timed_active else ''}>{'Ativo agora' if timed_active else ('Iniciar temporariamente' if not running else 'Usar esta duração')}</button>"""
-        timed_desc = f"Ligado até {h(keepalive_until)}." if timed_active else "Mantém o banco ligado pelo período escolhido e depois volta ao modo automático."
+        timed_desc = (f'Ligado por mais <strong class="db96-countdown" data-until="{h(keepalive_until)}">calculando...</strong>.' if timed_active else 'Mantém o banco ligado pelo período escolhido; ao vencer, o janitor para os serviços em até 5 minutos.')
         modes = [mode_card('active' if timed_active else 'inactive','Por tempo determinado',timed_desc,'ATIVO AGORA' if timed_active else 'INATIVO',timed_controls)]
 
         if user["admin"]:
@@ -998,7 +1000,8 @@ def render_bancos(user):
             always_controls = f"""<button class="btn {'db96-current' if always_alive else 'gray'}" name="op" value="{always_op}" {'disabled aria-disabled="true"' if always_alive else ''}>{'Ativo agora' if always_alive else 'Ativar sempre ligado'}</button>"""
             modes.append(mode_card('active' if always_alive else 'inactive','Sempre ligado','Mantém o banco disponível continuamente, sem desligamento automático.','ATIVO AGORA' if always_alive else 'INATIVO',always_controls))
             automatic_controls = f"""<button class="btn {'db96-current' if automatic_active else 'gray'}" name="op" value="always_off" {'disabled aria-disabled="true"' if automatic_active else ''}>{'Ativo agora' if automatic_active else 'Ativar desligamento automático'}</button>"""
-            modes.append(mode_card('active' if automatic_active else 'inactive','Desligamento automático','O banco pode ser desligado quando não houver uma duração temporária ou política permanente ativa.','ATIVO AGORA' if automatic_active else 'INATIVO',automatic_controls))
+            auto_desc = (f'Desligamento agendado em <strong class="db96-countdown" data-until="{h(keepalive_until)}">calculando...</strong>. O janitor verifica a cada 5 minutos.' if automatic_active and keepalive_until else 'Ao ativar, agenda o desligamento para 1 hora depois. O janitor verifica o prazo a cada 5 minutos.')
+            modes.append(mode_card('active' if automatic_active else 'inactive','Desligamento automático',auto_desc,'ATIVO AGORA' if automatic_active else 'INATIVO',automatic_controls))
         else:
             modes.append(mode_card('active' if automatic_active else 'inactive','Desligamento automático','Política padrão para economizar recursos quando não existe uma duração ativa.','ATIVO AGORA' if automatic_active else 'GERENCIADO','<span class="db96-readonly">Gerenciado pela plataforma</span>'))
 
@@ -1034,6 +1037,7 @@ def render_bancos(user):
 <style id="cloudif-db-state-design">
 .db96-card{{overflow:hidden;padding:0!important;border-radius:24px!important}}.db96-hero{{display:grid;grid-template-columns:1fr auto;gap:22px;align-items:center;padding:26px 28px;background:#f7f9f8;border-bottom:1px solid var(--cif-border)}}.db96-eyebrow{{font-size:.76rem;font-weight:900;text-transform:uppercase;letter-spacing:.12em;color:#17803d}}.db96-hero h2{{font-size:clamp(1.65rem,4vw,2.25rem);margin:5px 0}}.db96-hero p{{margin:0;color:var(--cif-muted)}}.db96-runtime{{min-width:190px;padding:15px 17px;border-radius:16px;display:grid;grid-template-columns:14px 1fr;column-gap:9px;align-items:center;border:1px solid}}.db96-runtime.running{{background:#e9fbea;border-color:#9bddaa;color:#14532d}}.db96-runtime.stopped{{background:#f3f4f6;border-color:#d1d5db;color:#4b5563}}.db96-runtime-dot{{width:12px;height:12px;border-radius:50%;grid-row:1/3}}.db96-runtime.running .db96-runtime-dot{{background:#22c55e;box-shadow:0 0 0 5px #bbf7d0}}.db96-runtime.stopped .db96-runtime-dot{{background:#9ca3af;box-shadow:0 0 0 5px #e5e7eb}}.db96-runtime small{{opacity:.72}}.db96-form{{padding:4px 28px 24px}}.db96-section{{padding:22px 0;border-bottom:1px solid var(--cif-border)}}.db96-section-title{{display:flex;justify-content:space-between;gap:14px;align-items:center;margin-bottom:14px}}.db96-section-title>div{{display:flex;align-items:center;gap:10px}}.db96-section-title span{{width:29px;height:29px;border-radius:9px;display:grid;place-items:center;background:#176b35;color:#fff;font-weight:900}}.db96-section-title h3,.db96-section-title p{{margin:0}}.db96-section-title p{{color:var(--cif-muted);font-size:.86rem}}.db96-modes{{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px}}.db96-mode{{border-radius:17px;padding:17px;border:2px solid;transition:.18s ease;min-width:0}}.db96-mode.active{{background:#eaf7ed;border-color:#2ca44f;box-shadow:0 12px 26px rgba(34,139,70,.13)}}.db96-mode.inactive{{background:#f5f6f7;border-color:#d8dde0;color:#687078}}.db96-mode-head{{display:grid;grid-template-columns:28px 1fr auto;gap:9px;align-items:start}}.db96-check{{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;font-weight:900}}.db96-mode.active .db96-check{{background:#1f9d45;color:#fff}}.db96-mode.inactive .db96-check{{background:#e1e5e8;color:#889096}}.db96-mode h3{{margin:1px 0 5px;font-size:1rem}}.db96-mode p{{margin:0;font-size:.84rem;line-height:1.45}}.db96-mode-badge{{padding:5px 8px;border-radius:999px;font-size:.68rem;font-weight:900;white-space:nowrap}}.db96-mode.active .db96-mode-badge{{background:#167c37;color:#fff}}.db96-mode.inactive .db96-mode-badge{{background:#e2e5e7;color:#6b7378}}.db96-mode-controls{{display:grid;gap:9px;margin-top:15px}}.db96-hours span{{display:block;font-size:.76rem;font-weight:800;margin-bottom:5px}}.db96-hours select{{width:100%;margin:0}}.db96-current,.db96-current:disabled{{background:#19863c!important;color:#fff!important;border-color:#19863c!important;opacity:1!important;cursor:default!important;box-shadow:none!important}}.db96-readonly{{display:block;padding:11px;border-radius:10px;background:#e2e5e7;color:#626b70;text-align:center;font-weight:800}}.db96-actions{{display:flex;gap:10px;flex-wrap:wrap}}.db96-actions .btn{{min-width:170px;background:#2563eb!important;color:#fff!important;border-color:#2563eb!important}}.db96-actions .btn.gray{{background:#eef1f3!important;color:#38434a!important;border-color:#cfd5d9!important}}.db96-actions .btn.red{{background:#b42318!important;color:#fff!important;border-color:#b42318!important}}.db96-studio{{background:#2563eb!important;color:#fff!important;border-color:#2563eb!important}}.db96-disabled{{opacity:.55;pointer-events:none}}.db96-details{{margin:0 28px 26px;padding:15px 17px;border:1px solid var(--cif-border);border-radius:14px;background:var(--cif-surface)}}.db96-details summary{{cursor:pointer;font-weight:850;color:#31543b}}.db96-details[open] summary{{margin-bottom:14px}}@media(max-width:720px){{.db96-hero{{grid-template-columns:1fr;padding:21px 20px}}.db96-runtime{{min-width:0}}.db96-form{{padding:3px 20px 20px}}.db96-section-title{{align-items:flex-start;flex-direction:column}}.db96-modes{{grid-template-columns:1fr}}.db96-mode-head{{grid-template-columns:28px 1fr}}.db96-mode-badge{{grid-column:2;justify-self:start}}.db96-actions{{display:grid;grid-template-columns:1fr}}.db96-actions .btn{{width:100%;min-width:0}}.db96-details{{margin:0 20px 20px}}}}
 </style>
+<script>(function(){{function pad(n){{return String(n).padStart(2,'0')}}function tick(){{document.querySelectorAll('.db96-countdown[data-until]').forEach(function(el){{var end=Date.parse(el.dataset.until);if(!Number.isFinite(end)){{el.textContent='prazo indisponível';return}}var ms=Math.max(0,end-Date.now()),s=Math.floor(ms/1000),d=Math.floor(s/86400);s%=86400;var h=Math.floor(s/3600);s%=3600;var m=Math.floor(s/60),sec=s%60;el.textContent=(d?d+'d ':'')+pad(h)+':'+pad(m)+':'+pad(sec);}});}}tick();setInterval(tick,1000);}})();</script>
 <div class="help db97-legend"><b>Como interpretar:</b> verde significa a política ativa; cinza significa opção inativa; azul é ação principal; vermelho é ação destrutiva.</div>
 {''.join(blocks) or '<div class="card">Nenhum tenant visível.</div>'}"""
 
@@ -3283,8 +3287,10 @@ def render_bancos(user):
         pol = con.execute("SELECT * FROM tenant_policy WHERE tenant=?", (tenant,)).fetchone()
         always_alive = bool(pol and pol["always_alive"])
         keepalive_until = (pol["keepalive_until"] if pol else None) or ""
-        timed_active = (not always_alive) and keepalive_active(keepalive_until)
-        automatic_active = not always_alive and not timed_active
+        policy_hours = int((pol["max_hours"] if pol else 0) or 0)
+        deadline_active = (not always_alive) and keepalive_active(keepalive_until)
+        automatic_active = (not always_alive) and policy_hours == 0
+        timed_active = deadline_active and not automatic_active
         services = compose_services(tenant)
         running = tenant_is_running(tenant)
         hours = "".join(f'<option value="{i}">{i} hora{"s" if i > 1 else ""}</option>' for i in range(1, max_keepalive_hours()+1))
@@ -3307,7 +3313,7 @@ def render_bancos(user):
 
         timed_controls = f"""<label class="db96-hours"><span>Duração</span><select name="hours">{hours}</select></label>
 <button class="btn {'db96-current' if timed_active else 'gray'}" name="op" value="keepalive" {'disabled aria-disabled="true"' if timed_active else ''}>{'Ativo agora' if timed_active else ('Iniciar temporariamente' if not running else 'Usar esta duração')}</button>"""
-        timed_desc = f"Ligado até {h(keepalive_until)}." if timed_active else "Mantém o banco ligado pelo período escolhido e depois volta ao modo automático."
+        timed_desc = (f'Ligado por mais <strong class="db96-countdown" data-until="{h(keepalive_until)}">calculando...</strong>.' if timed_active else 'Mantém o banco ligado pelo período escolhido; ao vencer, o janitor para os serviços em até 5 minutos.')
         modes = [mode_card('active' if timed_active else 'inactive','Por tempo determinado',timed_desc,'ATIVO AGORA' if timed_active else 'INATIVO',timed_controls)]
 
         if user["admin"]:
@@ -3315,7 +3321,8 @@ def render_bancos(user):
             always_controls = f"""<button class="btn {'db96-current' if always_alive else 'gray'}" name="op" value="{always_op}" {'disabled aria-disabled="true"' if always_alive else ''}>{'Ativo agora' if always_alive else 'Ativar sempre ligado'}</button>"""
             modes.append(mode_card('active' if always_alive else 'inactive','Sempre ligado','Mantém o banco disponível continuamente, sem desligamento automático.','ATIVO AGORA' if always_alive else 'INATIVO',always_controls))
             automatic_controls = f"""<button class="btn {'db96-current' if automatic_active else 'gray'}" name="op" value="always_off" {'disabled aria-disabled="true"' if automatic_active else ''}>{'Ativo agora' if automatic_active else 'Ativar desligamento automático'}</button>"""
-            modes.append(mode_card('active' if automatic_active else 'inactive','Desligamento automático','O banco pode ser desligado quando não houver uma duração temporária ou política permanente ativa.','ATIVO AGORA' if automatic_active else 'INATIVO',automatic_controls))
+            auto_desc = (f'Desligamento agendado em <strong class="db96-countdown" data-until="{h(keepalive_until)}">calculando...</strong>. O janitor verifica a cada 5 minutos.' if automatic_active and keepalive_until else 'Ao ativar, agenda o desligamento para 1 hora depois. O janitor verifica o prazo a cada 5 minutos.')
+            modes.append(mode_card('active' if automatic_active else 'inactive','Desligamento automático',auto_desc,'ATIVO AGORA' if automatic_active else 'INATIVO',automatic_controls))
         else:
             modes.append(mode_card('active' if automatic_active else 'inactive','Desligamento automático','Política padrão para economizar recursos quando não existe uma duração ativa.','ATIVO AGORA' if automatic_active else 'GERENCIADO','<span class="db96-readonly">Gerenciado pela plataforma</span>'))
 
@@ -6374,7 +6381,7 @@ if 'Portal' in globals() and not globals().get('_tenant_always_on_final_wrapped'
         except Exception:return _cloudif_security_reject(self,'Formulário inválido.',400)
         val=lambda k,d='':(form.get(k) or [d])[0].strip()
         op=val('op')
-        if op not in ('always_on','always_on_start'):
+        if op not in ('always_on','always_on_start','always_off','keepalive'):
             self.rfile=_tenant_always_io.BytesIO(raw)
             self.headers.replace_header('Content-Length',str(len(raw)))
             return _tenant_always_on_final_prev_post(self)
@@ -6391,19 +6398,27 @@ if 'Portal' in globals() and not globals().get('_tenant_always_on_final_wrapped'
         if not tdir.is_dir() or not (tdir/'.env').is_file():
             return _cloudif_security_reject(self,'Tenant não encontrado.',404)
         rc=0;out='';err=''
-        if not tenant_is_running(tenant):
+        if op in ('always_on','always_on_start','keepalive') and not tenant_is_running(tenant):
             rc,out,err=run(['bash','-lc',f"cd {str(tdir)!r} && docker compose --env-file .env up -d"],180)
             if rc!=0:
-                log_action(user['username'],'always_on',tenant,rc,out,err)
+                log_action(user['username'],op,tenant,rc,out,err)
                 return _cloudif_security_reject(self,'Não foi possível iniciar o banco.',502)
+        now=datetime.datetime.now(datetime.timezone.utc)
+        if op in ('always_on','always_on_start'):
+            always_alive=1;until=None;max_hours=24;message='Política sempre ligado ativada.'
+        elif op=='always_off':
+            always_alive=0;max_hours=0;until=(now+datetime.timedelta(hours=1)).isoformat(timespec='seconds');message='Desligamento automático agendado para 1 hora.'
+        else:
+            hours=min(max(int(val('hours') or '1'),1),max_keepalive_hours())
+            always_alive=0;max_hours=hours;until=(now+datetime.timedelta(hours=hours)).isoformat(timespec='seconds');message=f'Período temporário de {hours} hora(s) ativado.'
         con=db()
         sql=('INSERT INTO tenant_policy(tenant,always_alive,keepalive_until,max_hours,updated_at) '
-             'VALUES(?,1,NULL,24,?) '
+             'VALUES(?,?,?,?,?) '
              'ON CONFLICT(tenant) DO UPDATE SET '
-             'always_alive=1,keepalive_until=NULL,max_hours=24,updated_at=excluded.updated_at')
-        con.execute(sql,(tenant,now_iso()))
+             'always_alive=excluded.always_alive,keepalive_until=excluded.keepalive_until,max_hours=excluded.max_hours,updated_at=excluded.updated_at')
+        con.execute(sql,(tenant,always_alive,until,max_hours,now_iso()))
         con.commit();con.close()
-        log_action(user['username'],'always_on',tenant,0,out or 'Política sempre ligado ativada.',err)
+        log_action(user['username'],op,tenant,0,out or message,err)
         return self.redirect('/?tab=bancos')
     Portal.do_POST=_tenant_always_on_final_post
     _tenant_always_on_final_wrapped=True
