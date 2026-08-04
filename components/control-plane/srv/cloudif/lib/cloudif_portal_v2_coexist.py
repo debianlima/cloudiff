@@ -285,13 +285,18 @@ def _install() -> None:
 
                 query = urllib.parse.parse_qs(parsed.query)
                 tab = (query.get("tab") or [""])[0]
+                if path in PORTAL_PATHS and tab in {"resumo", "visao-geral", "visão-geral"}:
+                    owner = sys.modules.get(handler_class.__module__)
+                    body = '<section class="overview-canonical"><div class="section-title"><div><h1>Visão geral</h1><p>Projetos, bancos, perfil e infraestrutura autorizados para sua sessão.</p></div></div>' + getattr(owner, "render_resumo")(self.user()) + '</section>'
+                    markup = render_legacy(identity(self.headers), "resumo", "Visão geral", body, "", "")
+                    return send(self, 200, "text/html; charset=utf-8", markup.encode("utf-8"))
                 if path in PORTAL_PATHS and tab == "backup":
                     owner = sys.modules.get(handler_class.__module__); user = self.user(); markup = render_legacy(identity(self.headers), "backup", "Backup", backup_body(getattr(owner, "_prod_csrf_token")(user)), "", "")
                     return send(self, 200, "text/html; charset=utf-8", markup.encode("utf-8"))
                 if path in PORTAL_PATHS and tab == "ajuda":
                     markup = render_legacy(identity(self.headers), "ajuda", "Guia da plataforma", help_body(), "", "")
                     return send(self, 200, "text/html; charset=utf-8", markup.encode("utf-8"))
-                native_home = path in PORTAL_PATHS and tab in ("", "resumo", "inicio", "início", "overview")
+                native_home = path in PORTAL_PATHS and tab in ("", "inicio", "início", "overview")
                 match_path = "/cloudiff/portal" if path == "/" else path
                 native_nonportal = (path, "GET") in NATIVE_READY and path not in PORTAL_PATHS
                 if native_home or native_nonportal:
@@ -315,8 +320,7 @@ def _install() -> None:
                             owner = sys.modules.get(handler_class.__module__)
                             adapted_markup = transform(markup, identity(self.headers), tab or "publicacao", selected_project)
                             if tab == "publicacao":
-                                summary = getattr(owner, "render_resumo")(self.user())
-                                publications_header = '<section class="my-publications-heading card"><div class="section-title"><div><h2>Minhas Publicações</h2><p>Gerencie publicação, retirada, versões e permissões dos projetos autorizados.</p></div></div></section>'
+                                publications_header = '<section class="my-publications-heading card"><div class="section-title"><div><h1>Minhas Publicações</h1><p>Gerencie publicação, retirada, versões e permissões dos projetos autorizados.</p></div></div></section>'
                                 empty_marker = '<section class="publication-shell publication-projects-clean"></section>'
                                 if empty_marker in adapted_markup:
                                     empty_state = '<section class="publication-shell publication-projects-clean"><div class="empty-state"><h3>Nenhum projeto disponível para publicação</h3><p>Quando um projeto for criado e autorizado, os controles homologados de publicar, retirar publicação, versões e permissões aparecerão aqui.</p></div></section>'
@@ -325,13 +329,6 @@ def _install() -> None:
                                     opening = '<section class="publication-shell publication-projects-clean">'
                                     if opening in adapted_markup:
                                         adapted_markup = adapted_markup.replace(opening, publications_header + opening, 1)
-                                summary_markup = '<section class="publication-summary card"><div class="section-title"><div><h2>Painel geral</h2><p>Resumo de projetos, bancos e infraestrutura autorizada.</p></div></div>' + summary + "</section>"
-                                adapted_markup = adapted_markup.replace('</section></main>', summary_markup + '</section></main>', 1)
-                                adapted_markup = adapted_markup.replace(
-                                    '</style>',
-                                    '.legacy-content[data-legacy-tab="publicacao"]{display:grid;gap:16px;background:transparent!important;min-height:0!important}.legacy-content[data-legacy-tab="publicacao"]>.publication-summary{margin:0!important}.legacy-content[data-legacy-tab="publicacao"]>.publication-summary>.card{margin:14px 0 0!important}</style>',
-                                    1,
-                                )
                             if tab == "agentes":
                                 try:
                                     identities = getattr(owner, "_oi_panel")(self.user())

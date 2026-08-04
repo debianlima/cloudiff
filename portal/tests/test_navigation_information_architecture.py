@@ -10,6 +10,7 @@ class NavigationInformationArchitectureTest(unittest.TestCase):
         self.assertEqual(
             shell._TAB_GROUPS["Painel geral"],
             (
+                ("resumo", "Visão geral"),
                 ("publicacao", "Publicações"),
                 ("projetos", "Projetos"),
                 ("bancos", "Bancos e tenants"),
