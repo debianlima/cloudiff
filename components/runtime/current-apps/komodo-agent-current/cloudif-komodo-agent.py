@@ -3534,6 +3534,41 @@ fi
     return send(handler,200 if proc.returncode==0 else 422,{"ok":proc.returncode==0,"project":project,"kind":kind,"container":container,"output":(proc.stdout or "")[:120000],"stderr":(proc.stderr or "")[:4000],"returncode":proc.returncode})
 
 
+def _cloudif_active_publication_stack(project, fallback_stack_id=''):
+    project=safe_slug(project);fallback_stack_id=normalize_resource_id(fallback_stack_id)
+    public_numbers=set();active_container='';compose_project=''
+    try:
+        ids=subprocess.check_output(['docker','ps','-q'],text=True,timeout=15).split()
+        rows=json.loads(subprocess.check_output(['docker','inspect',*ids],text=True,timeout=30)) if ids else []
+        expected=str((Path('/etc/komodo/stacks')/('cloudif-'+project)/'.cloudif'/'docker-compose.yml').resolve())
+        for row in rows:
+            labels=((row.get('Config') or {}).get('Labels') or {})
+            files=[str(x).strip() for x in str(labels.get('com.docker.compose.project.config_files') or '').split(',')]
+            name=str(row.get('Name') or '').lstrip('/')
+            if expected in files:
+                match=re.match(r'^cloudif-p(\d+)-d\d+-web$',name)
+                if match: public_numbers.add(match.group(1))
+        for row in rows:
+            name=str(row.get('Name') or '').lstrip('/')
+            networks=((row.get('NetworkSettings') or {}).get('Networks') or {})
+            aliases=[]
+            for net in networks.values(): aliases.extend(net.get('Aliases') or [])
+            for number in public_numbers:
+                if 'cloudif-p'+number+'-active-web' in aliases:
+                    active_container=name
+                    labels=((row.get('Config') or {}).get('Labels') or {})
+                    compose_project=str(labels.get('com.docker.compose.project') or '')
+                    break
+            if active_container: break
+    except Exception: pass
+    if not compose_project or not re.match(r'^cloudif-p\d+-d\d+$',compose_project):
+        return {'ok':False,'stack_id':fallback_stack_id,'container':active_container,'reason':'active_version_stack_not_found'}
+    listed,_=komodo_call('read','ListStacks',{})
+    stacks=listed.get('data') if isinstance(listed.get('data'),list) else []
+    item=next((x for x in stacks if isinstance(x,dict) and str(x.get('name') or '')==compose_project),None)
+    stack_id=normalize_resource_id((item or {}).get('_id') or (item or {}).get('id'))
+    return {'ok':bool(stack_id),'stack_id':stack_id or fallback_stack_id,'stack_name':compose_project,'container':active_container}
+
 def _cloudif_reconcile_unified_stack_metadata(project, stack_id):
     project=safe_slug(project);stack_id=normalize_resource_id(stack_id)
     compose=Path('/etc/komodo/stacks')/('cloudif-'+project)/'.cloudif'/'docker-compose.yml'
@@ -3592,9 +3627,12 @@ def cloudif_project_terminal_ensure(handler):
         stack_ids=_cloudif_related_stack_ids(payload.get("project"),integration)
         sync=_cloudif_sync_project_authz(payload.get("project"),owner,access.get("acl") or [],normalize_resource_id(integration.get("stack_id")),normalize_resource_id(integration.get("repo_id")),stack_ids)
         if not sync.get("ok"):return send(handler,422,{"ok":False,"error":"actor_permission_sync_failed","actor":actor,"sync":sync})
-    metadata=_cloudif_reconcile_unified_stack_metadata(payload.get("project"),normalize_resource_id((integration or {}).get("stack_id") or payload.get("stack_id")))
+    base_stack_id=normalize_resource_id((integration or {}).get("stack_id") or payload.get("stack_id"))
+    metadata=_cloudif_reconcile_unified_stack_metadata(payload.get("project"),base_stack_id)
     if not metadata.get("ok"): return send(handler,422,{"ok":False,"error":"stack_metadata_reconcile_failed","metadata":metadata})
-    audit=_cloudif_project_audit_data(payload)
+    active=_cloudif_active_publication_stack(payload.get("project"),base_stack_id)
+    audit_payload=dict(payload);audit_payload["stack_id"]=active.get("stack_id") or base_stack_id
+    audit=_cloudif_project_audit_data(audit_payload)
     if not audit.get("ok"): return send(handler,400,audit)
     if not audit.get("running") or not audit.get("server_id") or not audit.get("container_name"):
         return send(handler,422,{"ok":False,"error":"container_not_running","audit":audit})
@@ -3613,7 +3651,7 @@ def cloudif_project_terminal_ensure(handler):
         if not result.get("ok"): return send(handler,502,{"ok":False,"error":"terminal_create_failed","result":result,"audit":audit})
         created=True
     url=f"https://komodoiff.duckdns.org/stacks/{audit['resolved_stack_id']}/service/{audit['service']}/terminal/{terminal}"
-    return send(handler,200,{"ok":True,"created":created,"terminal":terminal,"target":target,"server_id":audit["server_id"],"container_name":audit["container_name"],"url":url,"actor_username":actor,"project_owner":owner,"audit":audit})
+    return send(handler,200,{"ok":True,"created":created,"terminal":terminal,"target":target,"server_id":audit["server_id"],"container_name":audit["container_name"],"url":url,"actor_username":actor,"project_owner":owner,"active_publication":active,"audit":audit})
 
 def cloudif_publication_deploy(handler):
     import shutil
