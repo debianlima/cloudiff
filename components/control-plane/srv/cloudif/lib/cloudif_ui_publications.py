@@ -2,6 +2,9 @@
 import html
 import json
 import sqlite3
+import glob
+import os
+import urllib.request
 
 DB='/var/lib/cloudif/portal/cloudif-portal.db'
 
@@ -16,8 +19,34 @@ def _rows(slug):
     except Exception:
         return []
 
+def _runtime_from_job(slug):
+    paths=sorted(glob.glob('/srv/cloudif/jobs/project-provision-*-'+slug+'.json'),key=lambda x:os.path.getmtime(x),reverse=True)
+    for path in paths:
+        try:
+            job=json.load(open(path)); runtime=str(job.get('runtime_template') or ''); php=str(job.get('php_version') or '')
+            node=runtime.replace('node','') if runtime.startswith('node') else ''
+            if node or php:
+                return {'node':node or '—','php':php or '—','apache':'2.4','label':f"Apache 2.4 + PHP {php or '—'} + Node.js {node or '—'}"}
+        except Exception: pass
+    return {}
+
+def _komodo_web_status(slug,stack_id=''):
+    env={}
+    try:
+        for raw in open('/etc/cloudif/komodo-agent-client.env'):
+            if '=' in raw and not raw.lstrip().startswith('#'):
+                k,v=raw.rstrip().split('=',1);env[k]=v.strip().strip('"').strip("'")
+    except Exception:return {}
+    base=(env.get('KOMODO_AGENT_URL') or 'http://10.62.91.2:18098').rstrip('/');token=env.get('KOMODO_AGENT_TOKEN') or ''
+    if not token:return {}
+    payload=json.dumps({'project':slug,'stack_id':stack_id,'service':'web','terminal':'cloudif-'+slug,'shell':'sh'}).encode()
+    req=urllib.request.Request(base+'/komodo/project/audit',data=payload,method='POST',headers={'Content-Type':'application/json','X-CloudIF-Token':token,'Authorization':'Bearer '+token})
+    try:
+        with urllib.request.urlopen(req,timeout=12) as r:return json.loads(r.read().decode())
+    except Exception:return {}
+
 def _project_context(slug, framework_hint=''):
-    context={'framework':framework_hint or '', 'database':'', 'repo_url':'', 'security':'Aguardando publicação'}
+    context={'framework':framework_hint or '', 'database':'', 'repo_url':'', 'security':'Aguardando publicação','service_status':'Não verificado','runtime':{}}
     try:
         con=sqlite3.connect(DB);con.row_factory=sqlite3.Row
         project=con.execute('select * from projects where slug=?',(slug,)).fetchone()
@@ -25,6 +54,17 @@ def _project_context(slug, framework_hint=''):
             keys=set(project.keys())
             context['repo_url']=str(project['repo_url'] or '') if 'repo_url' in keys else ''
             context['database']=str((project['tenant_default'] if 'tenant_default' in keys else '') or (project['tenant'] if 'tenant' in keys else '') or '')
+        try:
+            integration=con.execute('select * from project_integrations where project=?',(slug,)).fetchone()
+            stack_id=str((integration['komodo_stack_id'] if integration and 'komodo_stack_id' in integration.keys() else '') or (integration['stack_id'] if integration and 'stack_id' in integration.keys() else '') or '')
+        except Exception: stack_id=''
+        runtime=_runtime_from_job(slug); context['runtime']=runtime
+        audit=_komodo_web_status(slug,stack_id)
+        if audit:
+            healthy=bool(audit.get('healthy')); state=str(audit.get('state') or ('running' if healthy else 'atenção'))
+            context['service_status']='Rodando e saudável' if healthy else state
+            if healthy: context['security']='HTTPS ativo · Health validado'
+        if runtime and not context['framework']: context['framework']=runtime.get('label') or ''
         if not context['database']:
             try:
                 tenant=con.execute('select tenant from project_tenants where project=? order by is_primary desc,id limit 1',(slug,)).fetchone()
@@ -38,7 +78,7 @@ def _project_context(slug, framework_hint=''):
             komodo=detail.get('komodo') or {}
             source=komodo.get('publication_source') or ''
             if not context['framework']:
-                if source in {'site','dist','build','public','root'}:context['framework']='Site estático'
+                if source in {'site','dist','build','public','root'} and not context.get('runtime'):context['framework']='Site estático'
                 elif komodo.get('generated_placeholder'):context['framework']='Não identificado'
             context['security']='HTTPS ativo' + (' · Health validado' if komodo.get('healthy') else '')
         con.close()
@@ -61,6 +101,8 @@ def _project_information(context):
     return (
         '<div class="publication-information">'
         f'<div><span>Framework</span><strong>{h(context.get("framework"))}</strong></div>'
+        f'<div><span>Serviço web</span><strong>{h(context.get("service_status"))}</strong></div>'
+        f'<div><span>Versões</span><strong>{h((context.get("runtime") or {}).get("label") or context.get("framework"))}</strong></div>'
         f'<div><span>Banco vinculado</span>{database_value}</div>'
         f'<div><span>Segurança</span><strong>{h(context.get("security"))}</strong></div>'
         f'<div><span>Repositório Forge</span>{repo_value}</div>'
@@ -103,8 +145,6 @@ def publication_panel(slug, framework_hint=''):
         job_html=(f'<div class="publication-job is-{h(job.get("status"))}" data-publication-job="{int(job.get("id") or 0)}">'
                   f'<div class="publication-job-copy"><div><strong>{h(status)}</strong><span>{h(job.get("message") or "")}</span></div>{acknowledge}</div>'
                   f'<progress max="6" value="{progress_value}"></progress></div>')
-        if job.get('status') in ('queued','running'):
-            job_html += '<script>setTimeout(function(){location.reload()},2500)</script>'
 
     if alias:
         alias_host=alias+'.cloudiff.duckdns.org'

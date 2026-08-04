@@ -2921,6 +2921,38 @@ def _cloudif_v132_force_local_rebuild(project, no_cache=False):
     }
 
 
+def _cloudif_v132_local_web_health(project):
+    stack_dir = Path("/etc/komodo/stacks") / ("cloudif-" + safe_slug(project))
+    env_file = stack_dir / ".cloudif" / ".env"
+    env = {}
+    try:
+        for raw in env_file.read_text().splitlines():
+            if "=" in raw and not raw.lstrip().startswith("#"):
+                k,v=raw.split("=",1); env[k.strip()]=v.strip()
+    except Exception:
+        pass
+    public_number=str(env.get("CLOUDIF_PUBLIC_NUMBER") or "").strip()
+    deploy_number=str(env.get("CLOUDIF_DEPLOY_NUMBER") or "1").strip()
+    candidates=[]
+    if public_number:
+        candidates.append(f"cloudif-p{public_number}-d{deploy_number}-web")
+    try:
+        ps=subprocess.run(["docker","ps","-a","--format","{{.Names}}"],text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=15)
+        candidates.extend(x.strip() for x in ps.stdout.splitlines() if x.strip() and x.strip() not in candidates and (not public_number or x.startswith(f"cloudif-p{public_number}-")))
+    except Exception:
+        pass
+    for name in candidates:
+        try:
+            raw=subprocess.check_output(["docker","inspect",name],text=True,timeout=15)
+            info=json.loads(raw)[0]; state=info.get("State") or {}; health=(state.get("Health") or {}).get("Status") or ""
+            running=bool(state.get("Running")); ok=running and health in ("healthy","")
+            if ok:
+                return {"ok":True,"container":name,"running":running,"health":health or "running","image":((info.get("Config") or {}).get("Image") or "")}
+        except Exception:
+            continue
+    return {"ok":False,"container":candidates[0] if candidates else "","running":False,"health":"missing"}
+
+
 def cloudif_v132_project_deploy_full(handler):
     payload = _cloudif_v131_read_json(handler)
 
@@ -3049,6 +3081,11 @@ def cloudif_v132_project_deploy_full(handler):
         reset_action = None
 
     deploy_status = final_status.get("deploy_status")
+    local_health = _cloudif_v132_local_web_health(project) if force_rebuild else {"ok": False}
+    if deploy_status not in ["completed", "ready", "in_progress"] and local_health.get("ok"):
+        deploy_status = "completed"
+        final_status = dict(final_status or {})
+        final_status.update({"deploy_status": "completed", "local_reconciled": True, "local_health": local_health})
 
     ok = deploy_status in ["completed", "ready", "in_progress"]
 
@@ -3078,6 +3115,7 @@ def cloudif_v132_project_deploy_full(handler):
         "no_cache": no_cache,
         "reset_reclone_after": reset_reclone_after,
         "reset_action": reset_action,
+        "local_health": local_health,
         "message": "Deploy completo Komodo v132 executado.",
     })
 
