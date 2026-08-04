@@ -360,6 +360,46 @@ def _delete_observability(slug):
         finally: con.close()
     return out
 
+def _latest_successful_delete(slug):
+    candidates=sorted(AUDIT_ROOT.glob(f'*-{slug}/result.json'),key=lambda x:x.stat().st_mtime,reverse=True)
+    for path in candidates:
+        try:
+            data=json.loads(path.read_text())
+            if data.get('ok') is True: return data
+        except Exception: pass
+    return {}
+
+
+def _recover_tenant(slug):
+    previous=_latest_successful_delete(slug)
+    tenant=str(previous.get('tenant_preserved') or '')
+    if tenant: return tenant
+    for path in sorted(JOBS.glob(f'*{slug}*.json'),key=lambda x:x.stat().st_mtime,reverse=True):
+        try:
+            data=json.loads(path.read_text());tenant=str(data.get('tenant') or '')
+            if tenant:return tenant
+        except Exception:pass
+    return ''
+
+
+def _cleanup_already_deleted(slug, actor, progress):
+    tenant=_recover_tenant(slug)
+    progress('Validação','done','Projeto já removido do Portal; verificando resíduos')
+    progress('Stack e runtime','running','Verificando containers e stack órfãos')
+    runtime=_destroy_runtime(slug,tenant)
+    progress('Stack e runtime','done' if runtime.get('ok') else 'failed','Resíduos removidos' if runtime.get('ok') else 'Ainda há resíduos')
+    remote=forja_rollback(slug,execute=True)
+    agent_identity=_delete_agent_identity(slug); onboarding_state=_delete_onboarding_state(slug); observability=_delete_observability(slug); backup_state=_delete_backup_state(slug)
+    removed_paths=[]
+    for candidate in glob.glob(str(JOBS / f'*{slug}*')):
+        try: os.remove(candidate);removed_paths.append(candidate)
+        except FileNotFoundError: pass
+    provision_dir=PROVISIONING/slug
+    if provision_dir.exists(): shutil.rmtree(provision_dir);removed_paths.append(str(provision_dir))
+    ok=bool(runtime.get('ok') and remote.get('ok'))
+    return {'ok':ok,'already_deleted':True,'slug':slug,'actor':actor,'tenant_preserved':tenant,'runtime_destroy':runtime,'remote':remote,'agent_identity':agent_identity,'onboarding_state':onboarding_state,'observability':observability,'backup_state':backup_state,'removed_paths':removed_paths,'message':'Projeto já excluído; resíduos verificados e removidos.' if ok else 'Projeto já excluído do Portal, mas ainda há resíduos a verificar.','finished_at':time.strftime('%Y-%m-%dT%H:%M:%S%z')}
+
+
 def execute(slug, confirmation, actor, progress=None):
     progress = progress or (lambda *args, **kwargs: None)
     progress('Validação', 'running', 'Conferindo confirmação e projeto')
@@ -367,6 +407,8 @@ def execute(slug, confirmation, actor, progress=None):
     if confirmation != expected:
         return {'ok': False, 'error': 'invalid_confirmation', 'expected': expected}
     plan = preview(slug)
+    if not plan.get('ok') and plan.get('error')=='project_not_found':
+        return _cleanup_already_deleted(slug,actor,progress)
     progress('Validação', 'done' if plan.get('ok') else 'failed', 'Projeto localizado' if plan.get('ok') else 'Projeto não encontrado')
     if not plan.get('ok'):
         return plan
@@ -497,7 +539,7 @@ def render(csrf_token, selected='', result=None):
     result_html = ''
     if result is not None:
         cls = 'ok' if result.get('ok') else 'bad'
-        title = 'Projeto excluído' if result.get('ok') else 'Exclusão não concluída'
+        title = ('Projeto já excluído' if result.get('already_deleted') else 'Projeto excluído') if result.get('ok') else 'Exclusão não concluída'
         result_html = (
             f'<section class="card"><span class="pill {cls}">{h(title)}</span>'
             f'{_result_stages(result)}<details><summary>Relatório técnico</summary><pre style="white-space:pre-wrap;overflow:auto;max-height:420px">{h(json.dumps(result, ensure_ascii=False, indent=2))}</pre></details></section>'

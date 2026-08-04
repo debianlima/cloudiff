@@ -565,18 +565,23 @@ def stack_absent(stack_id, stack_name):
     return True, {"ok": True, "found": None}
 
 def _cloudif_project_containers(project):
-    cmd = ["docker", "ps", "-a", "--filter", f"label=cloudif.project={project}", "--format", "{{.ID}}|{{.Names}}|{{.Labels}}"]
-    proc = subprocess.run(cmd, text=True, capture_output=True, timeout=30, check=False)
-    items = []
-    for line in (proc.stdout or "").splitlines():
-        parts = line.split("|", 2)
-        if len(parts) != 3:
-            continue
-        cid, name, labels = parts
-        lowered = (name + " " + labels).lower()
-        database = any(marker in lowered for marker in ("cloudif.role=database", "cloudif.service=database", "-db-", "_db_", "postgres", "supabase-db"))
-        items.append({"id": cid, "name": name, "labels": labels, "database": database})
-    return {"ok": proc.returncode == 0, "items": items, "stderr": (proc.stderr or "")[:500]}
+    compose_project = "cloudif-" + safe_slug(project)
+    ids=[]
+    for label in (f"cloudif.project={project}", f"com.docker.compose.project={compose_project}"):
+        proc=subprocess.run(["docker","ps","-a","--filter",f"label={label}","--format","{{.ID}}"],text=True,capture_output=True,timeout=30,check=False)
+        ids.extend(x.strip() for x in (proc.stdout or "").splitlines() if x.strip())
+    items=[]; errors=[]
+    for cid in dict.fromkeys(ids):
+        try:
+            raw=subprocess.check_output(["docker","inspect",cid],text=True,timeout=20)
+            info=json.loads(raw)[0]; cfg=info.get("Config") or {}; labels=cfg.get("Labels") or {}; name=str(info.get("Name") or "").lstrip('/')
+            service=str(labels.get("com.docker.compose.service") or labels.get("cloudif.service") or "")
+            lowered=(name+" "+service+" "+json.dumps(labels,ensure_ascii=False)).lower()
+            database=any(marker in lowered for marker in ("cloudif.role=database","cloudif.service=database","-db-","_db_","postgres","supabase-db"))
+            items.append({"id":cid,"name":name,"labels":labels,"service":service,"database":database,"compose_project":labels.get("com.docker.compose.project","")})
+        except Exception as exc:
+            errors.append({"id":cid,"error":str(exc)[:300]})
+    return {"ok": not errors, "items": items, "errors": errors}
 
 
 def _cloudif_remove_project_application_containers(project):
