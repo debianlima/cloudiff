@@ -34,6 +34,19 @@ class AIConnectorsHubTests(unittest.TestCase):
         self.assertIn('Configuração para clientes MCP', html)
 
 
+
+    def test_oauth_details_include_callbacks_and_client_secret(self):
+        row = {
+            'project_slug': 'projeto-teste', 'client_id': 'client-projeto-teste',
+            'role_profile': 'developer', 'environment': 'project',
+            'scopes': ['project:read'], 'instructions': {'mcp_endpoint': 'https://cloudiff.duckdns.org/cloudiff/mcp'},
+        }
+        html = self.module.render([row], 'csrf-test')
+        for marker in ('Client Secret', '/cloudiff/mcp/oauth/authorize', '/cloudiff/mcp/oauth/token',
+                       '/cloudiff/mcp/oauth/revoke', 'https://claude.ai/api/mcp/auth_callback',
+                       'https://chatgpt.com/connector/oauth/&lt;callback_id&gt;', 'Llama/Ollama'):
+            self.assertIn(marker, html)
+
     def test_pending_approval_is_embedded_in_project_card(self):
         row = {
             'project_slug': 'projeto-teste', 'client_id': 'client-projeto-teste',

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-import os,json,hmac,urllib.request,urllib.error,threading,time,uuid,hashlib
+import os,json,hmac,urllib.request,urllib.error,threading,time,uuid,hashlib,secrets,base64,re
 from http.server import BaseHTTPRequestHandler,ThreadingHTTPServer
-from urllib.parse import urlparse
+from urllib.parse import urlparse,parse_qs,urlencode
 HOST=os.environ.get('CLOUDIF_MCP_HOST','127.0.0.1');PORT=int(os.environ.get('CLOUDIF_MCP_PORT','18198'))
 TOKEN=os.environ.get('CLOUDIF_MCP_TOKEN','');CONTROL=os.environ.get('CLOUDIF_CONTROL_URL','http://127.0.0.1:18197').rstrip('/');CONTROL_TOKEN=os.environ.get('CLOUDIF_CONTROL_TOKEN','')
 AUDIT_URL=os.environ.get('CLOUDIF_AUDIT_URL','http://127.0.0.1:18201').rstrip('/')
@@ -21,6 +21,54 @@ BUILD_URL=os.environ.get('CLOUDIF_BUILD_URL','http://127.0.0.1:18213').rstrip('/
 BUILD_TOKEN=os.environ.get('CLOUDIF_BUILD_TOKEN','')
 PREVIEW_URL=os.environ.get('CLOUDIF_PREVIEW_URL','http://127.0.0.1:18214').rstrip('/')
 PREVIEW_TOKEN=os.environ.get('CLOUDIF_PREVIEW_TOKEN','')
+PUBLIC_ORIGIN=os.environ.get('CLOUDIF_MCP_PUBLIC_ORIGIN','https://cloudiff.duckdns.org').rstrip('/')
+MCP_RESOURCE=PUBLIC_ORIGIN+'/cloudiff/mcp'
+OAUTH_ISSUER=PUBLIC_ORIGIN
+OAUTH_CODES={};OAUTH_ACCESS={};OAUTH_REFRESH={};OAUTH_LOCK=threading.Lock()
+OAUTH_ACCESS_TTL=3600;OAUTH_REFRESH_TTL=2592000
+
+def _agent_clients():
+    req=urllib.request.Request(AGENT_URL+'/v1/clients',headers={'Authorization':'Bearer '+AGENT_ADMIN_TOKEN,'Accept':'application/json'})
+    with urllib.request.urlopen(req,timeout=5) as x:return json.load(x).get('clients') or []
+def _oauth_client(client_id):return next((x for x in _agent_clients() if x.get('client_id')==client_id and x.get('status')=='active'),None)
+def _callback_allowed(uri):
+    try:u=urlparse(uri)
+    except Exception:return False
+    if u.scheme=='https' and u.netloc=='claude.ai' and u.path=='/api/mcp/auth_callback':return True
+    if u.scheme=='https' and u.netloc=='chatgpt.com' and u.path.startswith('/connector/oauth/') and len(u.path)>len('/connector/oauth/'):return True
+    if u.scheme=='http' and u.hostname in {'127.0.0.1','localhost','::1'} and u.port:return True
+    return False
+def _validate_client_secret(client_id,secret):
+    row=_oauth_client(client_id)
+    if not row or not secret:return None
+    slugs=json.loads(row.get('project_slugs_json') or '[]') if isinstance(row.get('project_slugs_json'),str) else (row.get('project_slugs') or [])
+    slug=str((slugs or [''])[0])
+    payload=json.dumps({'client_id':client_id,'token':secret,'scope':'project:read','project_slug':slug},separators=(',',':')).encode()
+    req=urllib.request.Request(AGENT_URL+'/v1/validate',data=payload,method='POST',headers={'Content-Type':'application/json','Authorization':'Bearer '+AGENT_ADMIN_TOKEN})
+    try:
+        with urllib.request.urlopen(req,timeout=5) as x:data=json.load(x)
+    except Exception:return None
+    return {'client_id':client_id,'secret':secret,'project_slug':slug} if data.get('ok') else None
+def _pkce_ok(verifier,challenge):
+    if not challenge:return True
+    digest=base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).rstrip(b'=').decode()
+    return hmac.compare_digest(digest,challenge)
+def _oauth_token(client):
+    now=int(time.time());access=secrets.token_urlsafe(36);refresh=secrets.token_urlsafe(36)
+    with OAUTH_LOCK:
+        OAUTH_ACCESS[access]={**client,'expires_at':now+OAUTH_ACCESS_TTL}
+        OAUTH_REFRESH[refresh]={**client,'expires_at':now+OAUTH_REFRESH_TTL}
+    return {'access_token':access,'token_type':'Bearer','expires_in':OAUTH_ACCESS_TTL,'refresh_token':refresh,'scope':'mcp offline_access'}
+def _oauth_cleanup():
+    now=time.time()
+    with OAUTH_LOCK:
+        for store in (OAUTH_CODES,OAUTH_ACCESS,OAUTH_REFRESH):
+            for key in [k for k,v in store.items() if float(v.get('expires_at') or 0)<=now]:store.pop(key,None)
+
+def _oauth_metadata(resource=False):
+    if resource:return {'resource':MCP_RESOURCE,'authorization_servers':[OAUTH_ISSUER],'bearer_methods_supported':['header'],'scopes_supported':['mcp','offline_access']}
+    return {'issuer':OAUTH_ISSUER,'authorization_endpoint':OAUTH_ISSUER+'/cloudiff/mcp/oauth/authorize','token_endpoint':OAUTH_ISSUER+'/cloudiff/mcp/oauth/token','revocation_endpoint':OAUTH_ISSUER+'/cloudiff/mcp/oauth/revoke','response_types_supported':['code'],'grant_types_supported':['authorization_code','refresh_token'],'code_challenge_methods_supported':['S256'],'token_endpoint_auth_methods_supported':['client_secret_post','client_secret_basic'],'scopes_supported':['mcp','offline_access'],'resource':MCP_RESOURCE}
+
 def audit_async(event):
     if not AUDIT_TOKEN:return
     def run():
@@ -391,7 +439,14 @@ class H(BaseHTTPRequestHandler):
             audit_async(event)
         raw=json.dumps(data,ensure_ascii=False,separators=(',',':')).encode();self.send_response(code);self.send_header('Content-Type','application/json');self.send_header('Cache-Control','no-store');self.send_header('X-Content-Type-Options','nosniff');self.send_header('Content-Length',str(len(raw)));self.end_headers();self.wfile.write(raw)
     def auth(self):
-        client=self.headers.get('X-CloudIF-Client','').strip();got=self.headers.get('Authorization','')
+        got=self.headers.get('Authorization','');raw=got[7:] if got.startswith('Bearer ') else ''
+        _oauth_cleanup();oauth=OAUTH_ACCESS.get(raw)
+        if oauth:
+            self._oauth=oauth
+            if not self.headers.get('X-CloudIF-Client'):self.headers['X-CloudIF-Client']=oauth['client_id']
+            self.headers.replace_header('Authorization','Bearer '+oauth['secret'])
+            return True
+        client=self.headers.get('X-CloudIF-Client','').strip()
         if client:return got.startswith('Bearer ') and len(got)>20
         return bool(TOKEN) and hmac.compare_digest(got,'Bearer '+TOKEN)
     def authorize_client(self,scope,slug):
@@ -401,13 +456,41 @@ class H(BaseHTTPRequestHandler):
         payload=json.dumps({'client_id':client,'token':raw,'scope':scope,'project_slug':slug},separators=(',',':')).encode()
         req=urllib.request.Request(AGENT_URL+'/v1/authorize',data=payload,method='POST',headers={'Content-Type':'application/json','Authorization':'Bearer '+AGENT_ADMIN_TOKEN})
         with urllib.request.urlopen(req,timeout=5) as x:return json.load(x)
+    def redirect(self,url):self.send_response(302);self.send_header('Location',url);self.send_header('Cache-Control','no-store');self.end_headers()
     def do_GET(self):
-        if urlparse(self.path).path=='/health':
-            try: h=control('/health');self.sendj(200,{'ok':True,'service':'cloudif-mcp-gateway','control_plane':bool(h.get('ok'))})
+        parsed=urlparse(self.path);path=parsed.path
+        if path in {'/.well-known/oauth-authorization-server','/cloudiff/mcp/.well-known/oauth-authorization-server','/oauth/.well-known/oauth-authorization-server'}:return self.sendj(200,_oauth_metadata())
+        if path in {'/.well-known/oauth-protected-resource','/.well-known/oauth-protected-resource/cloudiff/mcp','/cloudiff/mcp/.well-known/oauth-protected-resource'}:return self.sendj(200,_oauth_metadata(True))
+        if path in {'/authorize','/oauth/authorize','/cloudiff/mcp/oauth/authorize'}:
+            q=parse_qs(parsed.query);client_id=(q.get('client_id') or [''])[0];redirect_uri=(q.get('redirect_uri') or [''])[0];state=(q.get('state') or [''])[0];challenge=(q.get('code_challenge') or [''])[0]
+            if (q.get('response_type') or [''])[0]!='code' or not _oauth_client(client_id) or not _callback_allowed(redirect_uri):return self.sendj(400,{'error':'invalid_request'})
+            code=secrets.token_urlsafe(32);OAUTH_CODES[code]={'client_id':client_id,'redirect_uri':redirect_uri,'code_challenge':challenge,'expires_at':time.time()+300}
+            return self.redirect(redirect_uri+('&' if '?' in redirect_uri else '?')+urlencode({'code':code,**({'state':state} if state else {})}))
+        if path=='/health':
+            try: h=control('/health');self.sendj(200,{'ok':True,'service':'cloudif-mcp-gateway','control_plane':bool(h.get('ok')),'oauth':True})
             except Exception:self.sendj(503,{'ok':False,'error':'control_plane_unavailable'})
         else:self.sendj(404,{'ok':False,'error':'not_found'})
     def do_POST(self):
-        if urlparse(self.path).path!='/mcp':self.sendj(404,{'ok':False,'error':'not_found'});return
+        path=urlparse(self.path).path
+        if path in {'/token','/oauth/token','/cloudiff/mcp/oauth/token'}:
+            n=int(self.headers.get('Content-Length','0'));form=parse_qs(self.rfile.read(min(n,65536)).decode());client_id=(form.get('client_id') or [''])[0];secret=(form.get('client_secret') or [''])[0]
+            basic=self.headers.get('Authorization','')
+            if basic.startswith('Basic '):
+                try:client_id,secret=base64.b64decode(basic[6:]).decode().split(':',1)
+                except Exception:return self.sendj(401,{'error':'invalid_client'})
+            grant=(form.get('grant_type') or [''])[0]
+            if grant=='authorization_code':
+                code=(form.get('code') or [''])[0];row=OAUTH_CODES.pop(code,None)
+                if not row or row['client_id']!=client_id or row['redirect_uri']!=(form.get('redirect_uri') or [''])[0] or not _pkce_ok((form.get('code_verifier') or [''])[0],row.get('code_challenge')):return self.sendj(400,{'error':'invalid_grant'})
+                client=_validate_client_secret(client_id,secret)
+            elif grant=='refresh_token':
+                ref=(form.get('refresh_token') or [''])[0];saved=OAUTH_REFRESH.pop(ref,None);client=_validate_client_secret(client_id,secret) if saved and saved.get('client_id')==client_id else None
+            else:return self.sendj(400,{'error':'unsupported_grant_type'})
+            return self.sendj(200,_oauth_token(client)) if client else self.sendj(401,{'error':'invalid_client'})
+        if path in {'/revoke','/oauth/revoke','/cloudiff/mcp/oauth/revoke'}:
+            n=int(self.headers.get('Content-Length','0'));form=parse_qs(self.rfile.read(min(n,65536)).decode());token=(form.get('token') or [''])[0]
+            OAUTH_ACCESS.pop(token,None);OAUTH_REFRESH.pop(token,None);return self.sendj(200,{'ok':True})
+        if path!='/mcp':self.sendj(404,{'ok':False,'error':'not_found'});return
         if not self.auth():self.sendj(401,{'ok':False,'error':'unauthorized'});return
         try:
             n=int(self.headers.get('Content-Length','0')); raw=self.rfile.read(min(n,1048576)); req=json.loads(raw or b'{}')
