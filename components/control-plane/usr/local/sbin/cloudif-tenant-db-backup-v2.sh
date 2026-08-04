@@ -26,7 +26,8 @@ for tdir in "$TENANTS"/*; do
     printf '%s tenant=%s status=skipped reason=compose_missing\n' "$(date -Is)" "$tenant" >&2
     skipped=$((skipped+1)); continue
   fi
-  if ! docker compose -f "$compose" --env-file "$tdir/.env" config --services 2>/dev/null | grep -qx db; then
+  services=$(docker compose -f "$compose" --env-file "$tdir/.env" config --services 2>/dev/null || true)
+  if ! grep -qx db <<<"$services"; then
     printf '%s tenant=%s status=skipped reason=db_service_missing\n' "$(date -Is)" "$tenant" >&2
     skipped=$((skipped+1)); continue
   fi
