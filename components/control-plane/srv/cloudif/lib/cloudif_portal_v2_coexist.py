@@ -12,6 +12,7 @@ import dataclasses
 import os
 import sys
 import urllib.parse
+import json
 
 LIB = "/srv/cloudif/lib"
 DESIGN = LIB + "/portal/design"
@@ -79,6 +80,9 @@ def _install() -> None:
     def send_response_object(handler, response) -> None:
         send(handler, response.status, response.content_type, response.body, response.headers)
 
+    def send_json(handler, status: int, payload) -> None:
+        send(handler, status, "application/json; charset=utf-8", json.dumps(payload, ensure_ascii=False).encode("utf-8"))
+
     def try_asset(handler, path: str) -> bool:
         name = None
         for prefix in ASSET_PREFIXES:
@@ -135,6 +139,16 @@ def _install() -> None:
             parsed = urllib.parse.urlparse(self.path)
             path = parsed.path
             try:
+                if path in {"/cloudif/portal/api/admin-delete-project-status", "/cloudiff/portal/api/admin-delete-project-status"}:
+                    owner = sys.modules.get(handler_class.__module__)
+                    user = self.user()
+                    allowed = bool(getattr(owner, "_admin_project_delete_global")(user))
+                    if not allowed:
+                        return send_json(self, 403, {"ok": False, "error": "forbidden"})
+                    from cloudif_admin_project_delete import job_status
+                    query = urllib.parse.parse_qs(parsed.query)
+                    payload = job_status((query.get("job_id") or [""])[0])
+                    return send_json(self, 200 if payload.get("ok") else 404, payload)
                 if try_asset(self, path):
                     return
 
@@ -183,6 +197,27 @@ def _install() -> None:
                     "/cloudiff/portal/action/admin-delete-project",
                 }:
                     return previous_post(self)
+                content_length = int(self.headers.get("Content-Length", "0") or 0)
+                raw = self.rfile.read(content_length)
+                form = urllib.parse.parse_qs(raw.decode("utf-8", "ignore"))
+                value = lambda key: (form.get(key) or [""])[0].strip()
+                if value("async") == "1":
+                    try:
+                        owner = sys.modules.get(handler_class.__module__)
+                        user = self.user()
+                        if not getattr(owner, "_admin_project_delete_global")(user):
+                            return send_json(self, 403, {"ok": False, "error": "forbidden"})
+                        token_ok = getattr(owner, "_prod_csrf_equal")(
+                            value("csrf_token"), getattr(owner, "_prod_csrf_token")(user)
+                        )
+                        if not token_ok:
+                            return send_json(self, 403, {"ok": False, "error": "invalid_csrf"})
+                        from cloudif_admin_project_delete import start_job
+                        job = start_job(value("slug"), value("confirm_text"), user.get("username") or "admin")
+                        return send_json(self, 202, job)
+                    except Exception as exc:
+                        return send_json(self, 500, {"ok": False, "error": type(exc).__name__, "detail": str(exc)[:300]})
+                self.rfile = BytesIO(raw)
                 try:
                     status, captured_headers, body = capture_legacy(self, previous_post)
                     content_type = header_value(captured_headers, "Content-Type", "text/html; charset=utf-8")
@@ -198,6 +233,7 @@ def _install() -> None:
                             return send(self, status, content_type, body, captured_headers)
                     return send(self, status, content_type, body, captured_headers)
                 except Exception:
+                    self.rfile = BytesIO(raw)
                     return previous_post(self)
 
             handler_class.do_POST = do_POST

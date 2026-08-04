@@ -5,7 +5,10 @@ import os
 import shutil
 import sqlite3
 import subprocess
+import threading
 import time
+import traceback
+import uuid
 import urllib.request
 import urllib.error
 from pathlib import Path
@@ -21,6 +24,73 @@ AGENTS_DB = Path('/var/lib/cloudif/agents/agents.db')
 NOTIFICATIONS_DB = Path('/var/lib/cloudif/notifications/notifications.db')
 MONITOR_DB = Path('/var/lib/cloudif/monitoring/monitor.db')
 ONBOARDING_SECRETS = Path('/var/lib/cloudif/onboarding/secrets')
+JOB_ROOT = Path('/srv/cloudif/admin-project-deletions/.jobs')
+
+
+def _job_write(job_id, data):
+    JOB_ROOT.mkdir(parents=True, exist_ok=True)
+    target = JOB_ROOT / f'{job_id}.json'
+    temporary = target.with_suffix('.tmp')
+    temporary.write_text(json.dumps(data, ensure_ascii=False, indent=2) + '\n')
+    os.replace(temporary, target)
+
+
+def job_status(job_id):
+    if not job_id or any(ch not in 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-' for ch in job_id):
+        return {'ok': False, 'error': 'invalid_job_id'}
+    path = JOB_ROOT / f'{job_id}.json'
+    if not path.exists():
+        return {'ok': False, 'error': 'job_not_found'}
+    return json.loads(path.read_text())
+
+
+def start_job(slug, confirmation, actor):
+    job_id = uuid.uuid4().hex
+    state = {
+        'ok': True, 'job_id': job_id, 'slug': slug, 'actor': actor,
+        'status': 'queued', 'current_step': 'Validação', 'progress': 0,
+        'steps': [], 'started_at': time.strftime('%Y-%m-%dT%H:%M:%S%z'),
+    }
+    _job_write(job_id, state)
+
+    def update(label, status='running', detail=''):
+        current = job_status(job_id)
+        steps = current.setdefault('steps', [])
+        existing = next((item for item in steps if item.get('label') == label), None)
+        if existing is None:
+            existing = {'label': label}
+            steps.append(existing)
+        existing.update({'status': status, 'detail': detail, 'updated_at': time.strftime('%Y-%m-%dT%H:%M:%S%z')})
+        current['current_step'] = label
+        done = sum(1 for item in steps if item.get('status') in {'done', 'failed'})
+        current['progress'] = min(95, done * 11)
+        current['status'] = 'running'
+        _job_write(job_id, current)
+
+    def worker():
+        try:
+            result = execute(slug, confirmation, actor, progress=update)
+            current = job_status(job_id)
+            current.update({
+                'status': 'succeeded' if result.get('ok') else 'failed',
+                'progress': 100, 'result': result,
+                'finished_at': time.strftime('%Y-%m-%dT%H:%M:%S%z'),
+            })
+            if not result.get('ok'):
+                current['error'] = result.get('error') or 'delete_failed'
+            _job_write(job_id, current)
+        except Exception as exc:
+            current = job_status(job_id)
+            current.update({
+                'status': 'failed', 'progress': 100,
+                'error': type(exc).__name__, 'detail': str(exc)[:500],
+                'traceback': traceback.format_exc(limit=8),
+                'finished_at': time.strftime('%Y-%m-%dT%H:%M:%S%z'),
+            })
+            _job_write(job_id, current)
+
+    threading.Thread(target=worker, name=f'project-delete-{job_id[:8]}', daemon=False).start()
+    return state
 
 
 def h(value):
@@ -39,6 +109,7 @@ def _rows(db, table, key, slug):
 
 
 def projects():
+    progress('Registros do Portal', 'running', 'Removendo vínculos e ACLs')
     con = sqlite3.connect(DB)
     con.row_factory = sqlite3.Row
     try:
@@ -211,11 +282,14 @@ def _delete_observability(slug):
         finally: con.close()
     return out
 
-def execute(slug, confirmation, actor):
+def execute(slug, confirmation, actor, progress=None):
+    progress = progress or (lambda *args, **kwargs: None)
+    progress('Validação', 'running', 'Conferindo confirmação e projeto')
     expected = f'EXCLUIR {slug}'
     if confirmation != expected:
         return {'ok': False, 'error': 'invalid_confirmation', 'expected': expected}
     plan = preview(slug)
+    progress('Validação', 'done' if plan.get('ok') else 'failed', 'Projeto localizado' if plan.get('ok') else 'Projeto não encontrado')
     if not plan.get('ok'):
         return plan
     public_rows=_rows(DB,'project_public_ids','project_slug',slug)
@@ -232,15 +306,21 @@ def execute(slug, confirmation, actor):
     if secret_path.exists(): _backup_if_exists(secret_path,audit/'onboarding-secret.json')
     (audit / 'preview.json').write_text(json.dumps(plan, ensure_ascii=False, indent=2) + '\n')
 
+    progress('Publicação e aliases', 'running', 'Removendo publicação')
     publication = _unpublish(public_number)
+    progress('Publicação e aliases', 'done' if publication.get('ok') else 'failed', f"HTTP {publication.get('status') or '-'}")
     if not publication.get('ok'):
         result={'ok':False,'error':'publication_delete_failed','publication':publication,'audit_dir':str(audit)}
         (audit/'result.json').write_text(json.dumps(result,ensure_ascii=False,indent=2)+'\n');return result
+    progress('Stack e runtime', 'running', 'Removendo stack sem tocar no banco')
     runtime = _destroy_runtime(slug, plan.get('tenant_preserved') or '')
+    progress('Stack e runtime', 'done' if runtime.get('ok') else 'failed', f"HTTP {runtime.get('status') or '-'}")
     if not runtime.get('ok'):
         result={'ok':False,'error':'runtime_destroy_failed','runtime':runtime,'publication':publication,'audit_dir':str(audit)}
         (audit/'result.json').write_text(json.dumps(result,ensure_ascii=False,indent=2)+'\n');return result
+    progress('Forgejo e agentes', 'running', 'Removendo repositório e estados dos agentes')
     remote = forja_rollback(slug, execute=True)
+    progress('Forgejo e agentes', 'done' if remote.get('ok') else 'failed', f"HTTP {remote.get('status') or '-'}")
     if not remote.get('ok'):
         result = {'ok': False, 'error': 'remote_delete_failed', 'remote': remote, 'audit_dir': str(audit)}
         (audit / 'result.json').write_text(json.dumps(result, ensure_ascii=False, indent=2) + '\n')
@@ -257,10 +337,13 @@ def execute(slug, confirmation, actor):
     finally:
         con.close()
 
+    progress('Registros do Portal', 'done', f'{sum(removed.values()) if removed else 0} registro(s)')
+    progress('Identidade e onboarding', 'running', 'Removendo identidade, onboarding e credenciais')
     agent_identity = _delete_agent_identity(slug)
     onboarding_state = _delete_onboarding_state(slug)
     onboarding_removed = onboarding_state.get('project_onboarding',0)
     observability = _delete_observability(slug)
+    progress('Identidade e onboarding', 'done', 'Estados removidos')
 
     removed_paths = []
     for candidate in glob.glob(str(JOBS / f'*{slug}*')):
@@ -274,7 +357,9 @@ def execute(slug, confirmation, actor):
         shutil.rmtree(provision_dir)
         removed_paths.append(str(provision_dir))
 
-    subprocess.run(['systemctl', 'start', 'cloudif-project-state-reconcile.service'], check=False, timeout=15)
+    progress('Reconciliação', 'running', 'Solicitando reconciliação em segundo plano')
+    subprocess.Popen(['systemctl', 'start', '--no-block', 'cloudif-project-state-reconcile.service'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+    progress('Reconciliação', 'done', 'Solicitada sem bloquear a exclusão')
     result = {
         'ok': True,
         'slug': slug,
@@ -349,11 +434,35 @@ def render(csrf_token, selected='', result=None):
     <button class="btn light" type="submit">Gerar prévia</button>
   </form>
   {preview_html}
-  {f'''<form method="post" action="/cloudiff/portal/action/admin-delete-project">
+  {f'''<form id="admin-delete-form" method="post" action="/cloudiff/portal/action/admin-delete-project">
     <input type="hidden" name="csrf_token" value="{h(csrf_token)}">
     <input type="hidden" name="slug" value="{h(selected)}">
     <label>Digite exatamente <code>EXCLUIR {h(selected)}</code><input name="confirm_text" required autocomplete="off"></label>
-    <button class="btn danger" type="submit">Excluir projeto definitivamente</button>
+    <button class="btn danger" type="submit">Excluir projeto definitivamente</button><div id="admin-delete-progress" hidden aria-live="polite"></div>
   </form>''' if selected_preview and selected_preview.get('ok') else ''}
 </section>{result_html}
+<script>
+(() => {{
+ const form=document.getElementById('admin-delete-form'); if(!form)return;
+ const box=document.getElementById('admin-delete-progress'); const button=form.querySelector('button[type=submit]');
+ const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}}[c]));
+ function draw(job){{
+  box.hidden=false;
+  const steps=(job.steps||[]).map(x=>`<li><span class="pill ${{x.status==='done'?'ok':x.status==='failed'?'bad':'muted'}}">${{x.status==='done'?'Concluído':x.status==='failed'?'Falhou':'Executando'}}</span><strong>${{esc(x.label)}}</strong><small>${{esc(x.detail||'')}}</small></li>`).join('');
+  box.innerHTML=`<div class="section-title"><div><h3>Exclusão em andamento</h3><p>${{esc(job.current_step||'Preparando')}}</p></div><strong>${{Number(job.progress||0)}}%</strong></div><progress max="100" value="${{Number(job.progress||0)}}" style="width:100%"></progress><ol class="admin-delete-steps">${{steps}}</ol>${{job.status==='failed'?`<p class="pill bad">Falha: ${{esc(job.error||job.detail||'não identificada')}}</p>`:''}}`;
+ }}
+ async function poll(id){{
+  const response=await fetch(`/cloudiff/portal/api/admin-delete-project-status?job_id=${{encodeURIComponent(id)}}`,{{headers:{{Accept:'application/json'}}}}); const job=await response.json(); draw(job);
+  if(job.status==='queued'||job.status==='running') return setTimeout(()=>poll(id),1000);
+  button.disabled=false; button.textContent=job.status==='succeeded'?'Exclusão concluída':'Tentar novamente';
+ }}
+ form.addEventListener('submit',async event=>{{
+  event.preventDefault(); if(!confirm('Confirma a exclusão definitiva? O banco será preservado.'))return;
+  button.disabled=true; button.textContent='Iniciando…'; box.hidden=false; box.innerHTML='<p>Preparando exclusão…</p>';
+  const data=new FormData(form); data.set('async','1');
+  try{{ const response=await fetch(form.action,{{method:'POST',body:data,headers:{{Accept:'application/json'}}}}); const job=await response.json(); if(!response.ok)throw new Error(job.error||'Falha ao iniciar'); draw(job); poll(job.job_id); }}
+  catch(error){{box.innerHTML=`<p class="pill bad">${{esc(error.message)}}</p>`;button.disabled=false;button.textContent='Tentar novamente';}}
+ }});
+}})();
+</script>
 '''
