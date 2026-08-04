@@ -42,13 +42,13 @@ def runtime_overlay(template,php_version='8.3'):
  if php_version not in ('8.2','8.3','8.4'): raise ValueError('unsupported_php_version')
  if template in ('node20','node22','node24'):
   version=template.replace('node','')
-  docker=f"FROM node:{version}-alpine\nWORKDIR /app\nCOPY package*.json ./\nRUN npm install --omit=dev\nCOPY . .\nEXPOSE 80\nCMD [\"npm\",\"start\"]\n"
+  docker=f"FROM node:{version}-alpine\nWORKDIR /app\nCOPY package*.json ./\nRUN npm install --omit=dev\nCOPY . .\nENV PORT=80\nEXPOSE 80\nCMD [\"npm\",\"start\"]\n"
   package='{"name":"cloudif-app","private":true,"scripts":{"start":"node server.js"},"dependencies":{"express":"^4.21.0"}}\n'
   server="""const express=require('express');const http=require('http');const app=express();
 app.use(express.static('site'));
 app.get('/health',(_,r)=>r.json({ok:true,node:process.version,php:true}));
 app.use('/php',(req,res)=>{const p=http.request({host:'php',port:80,path:req.url||'/',method:req.method,headers:req.headers},up=>{res.writeHead(up.statusCode||502,up.headers);up.pipe(res)});p.on('error',()=>res.status(502).json({ok:false,error:'php_unavailable'}));req.pipe(p)});
-app.listen(80,'0.0.0.0');
+const port=Number(process.env.PORT||80);app.listen(port,'0.0.0.0');
 """
   php_docker=f"FROM php:{php_version}-apache\nCOPY php/ /var/www/html/\nRUN printf '<Directory /var/www/html>\\nAllowOverride All\\nRequire all granted\\n</Directory>\\n' > /etc/apache2/conf-available/cloudif.conf && a2enconf cloudif\n"
   compose='services:\n  web:\n    build: .\n    container_name: cloudif-p${CLOUDIF_PUBLIC_NUMBER}-d${CLOUDIF_DEPLOY_NUMBER}-web\n    restart: unless-stopped\n    depends_on:\n      php:\n        condition: service_healthy\n    healthcheck:\n      test: [\"CMD-SHELL\", \"wget -qO- http://127.0.0.1/health >/dev/null 2>&1\"]\n      interval: 15s\n      timeout: 5s\n      retries: 10\n    networks:\n      cloudif-publications:\n        aliases:\n          - cloudif-p${CLOUDIF_PUBLIC_NUMBER}-d${CLOUDIF_DEPLOY_NUMBER}-web\n          - cloudif-p${CLOUDIF_PUBLIC_NUMBER}-active-web\n  php:\n    build:\n      context: .\n      dockerfile: Dockerfile.php\n    restart: unless-stopped\n    healthcheck:\n      test: [\"CMD-SHELL\", \"curl -fsS http://127.0.0.1/health.php >/dev/null\"]\n      interval: 15s\n      timeout: 5s\n      retries: 10\n    networks:\n      - cloudif-publications\nnetworks:\n  cloudif-publications:\n    external: true\n'
@@ -73,7 +73,7 @@ def main():
  if marker.exists():
   try:
    old_marker=json.loads(marker.read_text())
-   if old_marker.get('kind')==kind and old_marker.get('runtime_template')==runtime and old_marker.get('php_version','8.3')==php_version and old_marker.get('version')==6:
+   if old_marker.get('kind')==kind and old_marker.get('runtime_template')==runtime and old_marker.get('php_version','8.3')==php_version and old_marker.get('version')==7:
     print(json.dumps({'ok':True,'skipped':True,'reason':'template_already_applied','kind':kind,'project':slug,'public_number':num},ensure_ascii=False)); return
   except Exception: pass
  cfg=read_env('/etc/cloudif/forja-agent-client.env'); base=(cfg.get('FORJA_AGENT_URL') or 'http://10.62.91.2:18095').rstrip('/'); tok=cfg.get('FORJA_AGENT_TOKEN','')
@@ -89,6 +89,6 @@ def main():
   if not last or not last.get('ok'): raise RuntimeError(f'commit_failed:{path}:{last}')
   results.append({'path':path,'commit':last.get('commit_sha','')})
  marker.parent.mkdir(parents=True,exist_ok=True)
- marker.write_text(json.dumps({'kind':kind,'runtime_template':runtime,'php_version':php_version,'version':6,'project':slug,'public_number':num,'applied_at':time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime()),'files':results},ensure_ascii=False,indent=2)+'\n')
+ marker.write_text(json.dumps({'kind':kind,'runtime_template':runtime,'php_version':php_version,'version':7,'project':slug,'public_number':num,'applied_at':time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime()),'files':results},ensure_ascii=False,indent=2)+'\n')
  print(json.dumps({'ok':True,'kind':kind,'project':slug,'public_number':num,'files':results},ensure_ascii=False))
 if __name__=='__main__': main()

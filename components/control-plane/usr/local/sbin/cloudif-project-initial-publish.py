@@ -74,10 +74,15 @@ def main():
  if kind in ('onboarding','links'):
   ready=False;detail='Template atualizado; sincronização e novo deploy obrigatórios.'
  if not ready:
-  progress(job_path,job,'Atualizando o repositório da stack.',1,detail)
-  request(kbase+'/komodo/stack/pull','POST',payload,kh,60)
-  progress(job_path,job,'Iniciando o deploy da stack.',2,detail)
-  request(kbase+'/komodo/stack/deploy','POST',payload,kh,60)
+  progress(job_path,job,'Atualizando o repositório e reconstruindo a stack.',1,detail)
+  if kind in ('onboarding','links'):
+   full_payload={**payload,'force_reclone':True,'force_clone':True,'force_rebuild':True,'no_cache':False,'wait_for_completion':True,'max_wait_seconds':600,'poll_interval':5,'reset_reclone_after':False}
+   _,deploy_result=request(kbase+'/komodo/project/deploy-full','POST',full_payload,kh,720)
+   if isinstance(deploy_result,dict) and deploy_result.get('ok') is False: raise RuntimeError('komodo_full_deploy_failed:'+str(deploy_result)[:300])
+  else:
+   request(kbase+'/komodo/stack/pull','POST',payload,kh,60)
+   progress(job_path,job,'Iniciando o deploy da stack.',2,detail)
+   request(kbase+'/komodo/stack/deploy','POST',payload,kh,60)
   deadline=time.monotonic()+1200;attempt=2;deploy_retries=0;next_retry=time.monotonic()+45
   while time.monotonic()<deadline:
    attempt+=1
@@ -85,8 +90,12 @@ def main():
    except Exception as exc:ready=False;detail=type(exc).__name__+': '+str(exc)
    if not ready and time.monotonic() >= next_retry and deploy_retries < 8:
     deploy_retries+=1
-    progress(job_path,job,'Repetindo o deploy após falha transitória do registry.',attempt,detail)
-    request(kbase+'/komodo/stack/deploy','POST',payload,kh,60)
+    progress(job_path,job,'Repetindo a reconstrução após falha transitória.',attempt,detail)
+    if kind in ('onboarding','links'):
+     retry_payload={**payload,'force_reclone':True,'force_clone':True,'force_rebuild':True,'wait_for_completion':True,'max_wait_seconds':300,'poll_interval':5,'reset_reclone_after':False}
+     request(kbase+'/komodo/project/deploy-full','POST',retry_payload,kh,420)
+    else:
+     request(kbase+'/komodo/stack/deploy','POST',payload,kh,60)
     next_retry=time.monotonic()+min(180,45*(deploy_retries+1))
    else:
     progress(job_path,job,'Aguardando a confirmação do Komodo.',attempt,detail)
