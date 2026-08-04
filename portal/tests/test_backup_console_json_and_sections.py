@@ -21,6 +21,9 @@ class BackupConsoleJsonAndSectionsTests(unittest.TestCase):
   self.assertIn('def _tenant_backup_items()',self.source)
   self.assertIn('if len(parts)>2',self.source)
   self.assertIn('"tenants": {"items": _tenant_backup_items()',self.source)
+ def test_project_download_uses_public_cloudiff_prefix(self):
+  self.assertIn('/cloudiff/portal/download/project-backup',self.source)
+  self.assertNotIn('/cloudif/portal/download/project-backup',self.source)
  def test_tenant_download_is_admin_protected(self):
   self.assertIn('/download/tenant-backup',self.source)
   self.assertIn("if not user.get(\"admin\")",self.source)
