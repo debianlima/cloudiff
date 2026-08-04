@@ -16,8 +16,8 @@ _ADMIN_LOOKUP_BOX = '''  <div class="box">
   </div>
 '''
 
-_TENANT_DETAILS_OLD = '''  <details class="db96-details"><summary>Serviços detectados e permissões</summary><div class="container-grid">{''.join(chips) or '<div class="container-chip"><span class="container-name">sem serviços detectados</span><span class="pill muted">-</span></div>'}</div><div class="action-group"><button class="btn light" type="button" onclick="togglePanel('{acl_id}')">Permissões do banco</button><div id="{acl_id}" class="wizard-panel">{tenant_acl_html(tenant, user)}</div></div></details>
-'''
+_TENANT_DETAILS_OLD = '''  <details class="db96-details"><summary>Serviços detectados e permissões</summary><div class="container-grid">{''.join(chips) or '<div class="container-chip"><span class="container-name">sem serviços detectados</span><span class="pill muted">-</span></div>'}</div><div class="action-group"><button class="btn light" type="button" onclick="toggle__Panel('{acl_id}')">Permissões do banco</button><div id="{acl_id}" class="wizard-panel">{tenant_acl_html(tenant, user)}</div></div></details>
+'''.replace('toggle__Panel', 'togglePanel')
 
 _TENANT_DETAILS_NEW = '''  <section class="db96-section db96-services"><div class="db96-section-title"><div><span>3</span><h3>Serviços detectados</h3></div><p>Recursos ativos vinculados ao tenant.</p></div><div class="container-grid">{''.join(chips) or '<div class="container-chip"><span class="container-name">sem serviços detectados</span><span class="pill muted">-</span></div>'}</div></section>
   <section class="db96-section db96-permissions"><div class="db96-section-title"><div><span>4</span><h3>Permissões do banco</h3></div><p>Usuários e grupos autorizados neste tenant.</p></div><div class="action-group db96-permissions-content">{tenant_acl_html(tenant, user)}</div></section>
