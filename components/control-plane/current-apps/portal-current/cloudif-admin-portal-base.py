@@ -5906,7 +5906,7 @@ if 'page' in globals() and not globals().get('_admin_resources139_wrapped'):
     _admin_resources139_prev_page=page
     def _admin_resources139_is_global(user):
         groups={str(x).strip().lower() for x in (user.get('groups') or [])}
-        return bool(user.get('admin') or groups.intersection({'cloudif-tenants-admin','domain admins'}))
+        return bool(user.get('admin') or groups.intersection({'cloudif-tenants-admin','cloudif-professor'}))
     def _admin_resources139_panel(user):
         if not _admin_resources139_is_global(user): return ''
         tenants=[]
