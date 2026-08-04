@@ -5425,7 +5425,8 @@ if 'Portal' in globals() and not globals().get('_ap_portal_wrapped'):
             code,data=_ap_panel.request(_ap_cfg('CLOUDIF_APPROVAL_URL','http://127.0.0.1:18204'),_ap_cfg('CLOUDIF_APPROVAL_TOKEN',''),'POST',endpoint,payload)
             if code!=200 or not data.get('ok'):return _cloudif_security_reject(self,'A decisão não pôde ser registrada.',409)
             log_action(user['username'],'approval_'+operation,aid,0,item['project_slug'],'')
-            return self.redirect('/cloudiff/portal/?tab=aprovacoes')
+            return_to=val('return_to').strip()
+            return self.redirect('/cloudiff/portal/?tab='+('agentes' if return_to=='agentes' else 'aprovacoes'))
         return _ap_prev_post(self)
     Portal.do_GET=_ap_get;Portal.do_POST=_ap_post;_ap_portal_wrapped=True
 # CloudIF human approvals END
@@ -5533,7 +5534,7 @@ if 'Portal' in globals() and not globals().get('_ap_tab_wrapped'):
 # CloudIF AI agents guide BEGIN
 import cloudif_ai_agents_guide as _aig
 def _aig_data(user):return _aig.guide_data(_oi_visible(user))
-def _aig_render(user):return _aig.render(_oi_visible(user),_prod_csrf_token(user))
+def _aig_render(user):return _aig.render(_oi_visible(user),_prod_csrf_token(user),_ap_visible(user),_ap_can_decide(user))
 if 'Portal' in globals() and not globals().get('_aig_wrapped'):
     _aig_prev_get=Portal.do_GET
     def _aig_get(self):

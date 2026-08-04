@@ -33,6 +33,31 @@ class AIConnectorsHubTests(unittest.TestCase):
         self.assertIn('não altera o funcionamento do Portal web', html)
         self.assertIn('Configuração para clientes MCP', html)
 
+
+    def test_pending_approval_is_embedded_in_project_card(self):
+        row = {
+            'project_slug': 'projeto-teste', 'client_id': 'client-projeto-teste',
+            'role_profile': 'developer', 'environment': 'project',
+            'scopes': ['project:read'], 'instructions': {'mcp_endpoint': 'https://cloudiff.example/mcp'},
+        }
+        approval = {
+            'approval_id': 'apr_test', 'project_slug': 'projeto-teste',
+            'status': 'pending', 'action_label': 'Publicar em homologação', 'reason': 'Validar release',
+        }
+        html = self.module.render([row], 'csrf-test', [approval], True)
+        self.assertIn('Aprovações humanas', html)
+        self.assertIn('Publicar em homologação', html)
+        self.assertIn('>Aceitar<', html)
+        self.assertIn('>Rejeitar<', html)
+        self.assertIn('name="return_to" value="agentes"', html)
+
+    def test_global_services_has_dedicated_current_route(self):
+        source = Path('components/control-plane/srv/cloudif/lib/cloudif_portal_v2_coexist.py').read_text()
+        self.assertIn('def global_services_body', source)
+        self.assertIn('tab == "admin-manutencao"', source)
+        self.assertIn('Todos os containers', source)
+        self.assertIn('Repositórios por usuário', source)
+
     def test_shell_does_not_append_legacy_identity_panel(self):
         source = Path('components/control-plane/srv/cloudif/lib/cloudif_portal_v2_coexist.py').read_text()
         self.assertNotIn('identities = getattr(owner, "_oi_panel")', source)

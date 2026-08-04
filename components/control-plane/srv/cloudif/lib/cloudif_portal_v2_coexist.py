@@ -168,7 +168,7 @@ def _install() -> None:
             tenants = []
         options = "".join(f'<option value="{html.escape(tenant)}">{html.escape(tenant)}</option>' for tenant in tenants)
         ad_panel = admin_ad_body().replace('<section class="card admin-ad-console">', '<div class="admin-ad-console">', 1).replace('</section>\n<style>', '</div>\n<style>', 1)
-        delete_panel = delete_panel.replace('<section class="card tenant-delete-tool">', '<div class="tenant-delete-tool">', 1).replace('</section>\n<style>', '</div>\n<style>', 1)
+        delete_panel = delete_panel.replace('<section class="card tenant-delete-tool">', '<div class="tenant-delete-tool">', 1).replace('</section>\n<style>', '</div>\n<style>', 1).replace('#eef2ff', '#edf7f0').replace('#4f46e5', '#176b35').replace('#818cf8', '#67a875').replace('#3730a3', '#0f5132')
         return f'''<section class="card admin-operation-center">
   <div class="section-title"><div><span class="admin-eyebrow">Administração do AD e tenants</span><h2>Operações administrativas</h2><p>Escolha uma operação. Cada guia usa os serviços reais da plataforma.</p></div><span class="pill warn">Acesso restrito</span></div>
   <div class="admin-wizard-tabs" role="tablist" aria-label="Operações administrativas">
@@ -197,8 +197,74 @@ def _install() -> None:
 <style>
 .admin-operation-center{{display:grid;gap:18px;margin:18px 0 24px!important;overflow:hidden;background:#fff!important;border-color:#cfe5d5!important}}.admin-eyebrow{{display:block;margin-bottom:5px;font-size:.72rem;font-weight:850;letter-spacing:.08em;text-transform:uppercase;color:#176b35}}.admin-wizard-tabs{{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}}.admin-wizard-tabs button{{display:grid;grid-template-columns:34px 1fr;gap:2px 10px;align-items:center;min-height:82px;padding:13px;border:1px solid var(--c-border,#dce3ed);border-radius:12px;background:#fff;color:var(--c-text,#172033);text-align:left;box-shadow:none!important}}.admin-wizard-tabs button>span{{grid-row:1/3;width:32px;height:32px;display:grid;place-items:center;border-radius:10px;background:#edf7f0;color:#176b35;font-weight:850}}.admin-wizard-tabs button strong{{font-size:.9rem}}.admin-wizard-tabs button small{{color:var(--c-muted,#64748b);line-height:1.25}}.admin-wizard-tabs button[aria-selected="true"]{{border-color:#67a875;background:#edf7f0;color:#0f5132}}.admin-wizard-tabs button[aria-selected="true"]>span{{background:#176b35;color:#fff}}.admin-wizard-panels{{border:1px solid #cfe5d5;border-radius:14px;background:#fff;overflow:hidden}}.admin-wizard-panel{{display:none;padding:20px;background:#fff;color:#172033}}.admin-wizard-panel.active{{display:grid;gap:16px}}.admin-panel-heading{{display:flex;justify-content:space-between;gap:18px;align-items:flex-start}}.admin-panel-heading span{{font-size:.72rem;font-weight:850;text-transform:uppercase;color:#176b35}}.admin-panel-heading h3,.admin-panel-heading p{{margin:3px 0 0}}.admin-panel-heading p{{max-width:580px;color:var(--c-muted,#64748b)}}.admin-tenant-actions{{display:grid;gap:14px}}.admin-tenant-actions>label{{display:grid;gap:6px;max-width:520px}}.admin-action-cards{{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}}.admin-action-card{{display:grid;gap:5px;min-height:112px;padding:16px!important;border:1px solid var(--c-border,#dce3ed)!important;border-radius:12px!important;background:#fff!important;color:var(--c-text,#172033)!important;text-align:left!important}}.admin-action-card:hover{{border-color:#67a875!important;background:#f2f8f3!important}}.admin-action-card span{{font-weight:850}}.admin-action-card small{{color:var(--c-muted,#64748b);line-height:1.4}}.admin-action-status{{padding:13px 14px;border:1px solid var(--c-border,#dce3ed);border-radius:10px;background:#fff;color:#172033;white-space:pre-wrap}}.admin-action-status.running{{border-color:#67a875;background:#edf7f0;color:#0f5132}}.admin-action-status.ok{{border-color:#86c493;background:#f0fdf4;color:#14532d}}.admin-action-status.bad{{border-color:#fecaca;background:#fef2f2;color:#991b1b}}.admin-wizard-panel .admin-ad-console,.admin-wizard-panel .tenant-delete-tool{{display:grid;gap:16px;min-width:0}}.admin-wizard-panel .admin-ad-console>.section-title,.admin-wizard-panel .tenant-delete-tool>.section-title{{padding-bottom:12px;border-bottom:1px solid var(--c-border,#dce3ed)}}@media(max-width:860px){{.admin-wizard-tabs,.admin-action-cards{{grid-template-columns:1fr}}.admin-wizard-tabs button{{min-height:68px}}.admin-panel-heading{{display:grid}}}}
 </style>
-<script>(()=>{{const tabs=[...document.querySelectorAll('[data-admin-step]')],panels=[...document.querySelectorAll('.admin-wizard-panel')];if(!tabs.length)return;function open(name,focus=false){{tabs.forEach(tab=>{{const active=tab.dataset.adminStep===name;tab.setAttribute('aria-selected',active?'true':'false');tab.tabIndex=active?0:-1;if(active&&focus)tab.focus()}});panels.forEach(panel=>{{const active=panel.id===`admin-step-${{name}}`;panel.hidden=!active;panel.classList.toggle('active',active)}})}}tabs.forEach((tab,index)=>{{tab.onclick=()=>open(tab.dataset.adminStep);tab.onkeydown=e=>{{if(!['ArrowLeft','ArrowRight','Home','End'].includes(e.key))return;e.preventDefault();let target=index;if(e.key==='ArrowRight')target=(index+1)%tabs.length;if(e.key==='ArrowLeft')target=(index-1+tabs.length)%tabs.length;if(e.key==='Home')target=0;if(e.key==='End')target=tabs.length-1;open(tabs[target].dataset.adminStep,true)}}}});const form=document.getElementById('admin-tenant-actions'),status=document.getElementById('admin-tenant-action-status');if(form)form.addEventListener('submit',async e=>{{e.preventDefault();const submitter=e.submitter;if(!submitter)return;const fd=new FormData(form),tenant=String(fd.get('tenant')||'').trim(),op=String(submitter.value||'');if(!tenant){{status.className='admin-action-status bad';status.textContent='Selecione um tenant.';return}}const csrf=String(fd.get('csrf_token')||'');const body=new URLSearchParams({{tenant,op,csrf_token:csrf}});form.querySelectorAll('button').forEach(b=>b.disabled=true);status.className='admin-action-status running';status.textContent='Executando '+submitter.querySelector('span').textContent+' em '+tenant+'…';try{{const r=await fetch(form.action,{{method:'POST',credentials:'same-origin',headers:{{Accept:'application/json','Content-Type':'application/x-www-form-urlencoded;charset=UTF-8','X-CSRF-Token':csrf}},body}});const type=(r.headers.get('content-type')||'').toLowerCase();const text=await r.text();if(!type.includes('application/json'))throw new Error('O servidor retornou uma página legada em vez de JSON.');const data=JSON.parse(text);if(!r.ok||!data.ok)throw new Error(data.error||data.stderr||('HTTP '+r.status));status.className='admin-action-status ok';status.textContent='Concluído: '+data.label+'
-'+(data.stdout||data.message||'Operação executada com sucesso.')}}catch(err){{status.className='admin-action-status bad';status.textContent='Falha: '+err.message}}finally{{form.querySelectorAll('button').forEach(b=>b.disabled=false)}}}});open('tenant') }})();</script>'''
+<script>(()=>{{const tabs=[...document.querySelectorAll('[data-admin-step]')],panels=[...document.querySelectorAll('.admin-wizard-panel')];if(!tabs.length)return;function open(name,focus=false){{tabs.forEach(tab=>{{const active=tab.dataset.adminStep===name;tab.setAttribute('aria-selected',active?'true':'false');tab.tabIndex=active?0:-1;if(active&&focus)tab.focus()}});panels.forEach(panel=>{{const active=panel.id===`admin-step-${{name}}`;panel.hidden=!active;panel.classList.toggle('active',active)}})}}tabs.forEach((tab,index)=>{{tab.onclick=()=>open(tab.dataset.adminStep);tab.onkeydown=e=>{{if(!['ArrowLeft','ArrowRight','Home','End'].includes(e.key))return;e.preventDefault();let target=index;if(e.key==='ArrowRight')target=(index+1)%tabs.length;if(e.key==='ArrowLeft')target=(index-1+tabs.length)%tabs.length;if(e.key==='Home')target=0;if(e.key==='End')target=tabs.length-1;open(tabs[target].dataset.adminStep,true)}}}});const form=document.getElementById('admin-tenant-actions'),status=document.getElementById('admin-tenant-action-status');if(form)form.addEventListener('submit',async e=>{{e.preventDefault();const submitter=e.submitter;if(!submitter)return;const fd=new FormData(form),tenant=String(fd.get('tenant')||'').trim(),op=String(submitter.value||'');if(!tenant){{status.className='admin-action-status bad';status.textContent='Selecione um tenant.';return}}const csrf=String(fd.get('csrf_token')||'');const body=new URLSearchParams({{tenant,op,csrf_token:csrf}});form.querySelectorAll('button').forEach(b=>b.disabled=true);status.className='admin-action-status running';status.textContent='Executando '+submitter.querySelector('span').textContent+' em '+tenant+'…';try{{const r=await fetch(form.action,{{method:'POST',credentials:'same-origin',headers:{{Accept:'application/json','Content-Type':'application/x-www-form-urlencoded;charset=UTF-8','X-CSRF-Token':csrf}},body}});const type=(r.headers.get('content-type')||'').toLowerCase();const text=await r.text();if(!type.includes('application/json'))throw new Error('O servidor retornou uma página legada em vez de JSON.');const data=JSON.parse(text);if(!r.ok||!data.ok)throw new Error(data.error||data.stderr||('HTTP '+r.status));status.className='admin-action-status ok';status.textContent='Concluído: '+data.label+'\\n'+(data.stdout||data.message||'Operação executada com sucesso.')}}catch(err){{status.className='admin-action-status bad';status.textContent='Falha: '+err.message}}finally{{form.querySelectorAll('button').forEach(b=>b.disabled=false)}}}});open('tenant') }})();</script>'''
+
+    def global_services_body(owner, user: dict) -> str:
+        try:
+            projects = [dict(row) for row in owner.user_visible_projects(user.get("username") or "", user.get("groups") or [])]
+        except Exception:
+            projects = []
+        try:
+            runtime = list(owner._rd_projects(user))
+        except Exception:
+            runtime = []
+        try:
+            tenants = sorted({str(row.get("tenant") or "").strip() for row in owner.tenants_registry() if str(row.get("tenant") or "").strip()})
+        except Exception:
+            tenants = []
+        runtime_by_slug = {str(row.get("slug") or ""): row for row in runtime}
+        repo_cards, container_cards, tenant_cards = [], [], []
+        for project in projects:
+            slug = str(project.get("slug") or "")
+            name = str(project.get("name") or slug)
+            repo = str(project.get("repo_url") or "")
+            owner_name = str(project.get("owner") or "")
+            rt = runtime_by_slug.get(slug) or {}
+            if repo:
+                repo_cards.append(
+                    '<article class="global-resource"><div><span class="global-resource-type">Repositório</span>'
+                    f'<h3>{html.escape(name)}</h3><p>{html.escape(owner_name or "Sem proprietário")}</p></div>'
+                    f'<a class="btn light" target="_blank" rel="noopener" href="{html.escape(repo, quote=True)}">Abrir Forgejo</a></article>'
+                )
+            container_cards.append(
+                '<article class="global-resource"><div><span class="global-resource-type">Container do projeto</span>'
+                f'<h3>{html.escape(name)}</h3><p>Stack: <code>{html.escape(str(rt.get("stack_id") or "não vinculada"))}</code> · '
+                f'serviço {html.escape(str(rt.get("service") or "web"))}</p></div>'
+                '<a class="btn light" target="_blank" rel="noopener" href="https://komodoiff.duckdns.org/containers">Abrir no Komodo</a></article>'
+            )
+        for tenant in tenants:
+            try:
+                services = list(owner.compose_services(tenant))
+            except Exception:
+                services = []
+            running = sum(1 for item in services if any(word in str(item.get("status") or "").lower() for word in ("running", "healthy", "up")))
+            service_rows = ''.join(
+                '<li><span>' + html.escape(str(item.get("service") or "serviço")) + '</span>' + owner.status_badge(str(item.get("status") or "")) + '</li>'
+                for item in services
+            ) or '<li>Nenhum serviço detectado.</li>'
+            status_class = 'ok' if running else 'warn'
+            status_text = 'operacional' if running else 'verificar'
+            tenant_cards.append(
+                '<details class="global-tenant"><summary><span>'
+                f'<strong>{html.escape(tenant)}</strong><small>{len(services)} serviços · {running} ativos</small></span>'
+                f'<span class="pill {status_class}">{status_text}</span></summary><div class="global-tenant-body"><ul>{service_rows}</ul>'
+                '<div class="global-resource-actions">'
+                f'<a class="btn" target="_blank" rel="noopener" href="https://{html.escape(tenant)}.cloudiff.duckdns.org/project/default">Abrir Studio</a>'
+                f'<a class="btn light" target="_blank" rel="noopener" href="https://{html.escape(tenant)}.cloudiff.duckdns.org/">Abrir tenant</a>'
+                '</div></div></details>'
+            )
+        return (
+            '<section class="global-admin-hub">'
+            '<div class="global-admin-hero"><div><span class="global-admin-kicker">Administração global</span><h1>Serviços globais</h1>'
+            '<p>Visão consolidada de containers, repositórios e tenants autorizados, sem executar manutenção automática.</p></div><span class="pill ok">Acesso global</span></div>'
+            f'<div class="global-admin-summary"><article><small>Projetos</small><strong>{len(projects)}</strong></article><article><small>Containers de projeto</small><strong>{len(container_cards)}</strong></article><article><small>Repositórios</small><strong>{len(repo_cards)}</strong></article><article><small>Tenants</small><strong>{len(tenants)}</strong></article></div>'
+            '<nav class="global-admin-shortcuts" aria-label="Atalhos globais"><a class="btn" target="_blank" rel="noopener" href="https://komodoiff.duckdns.org/servers">Servidores</a><a class="btn light" target="_blank" rel="noopener" href="https://komodoiff.duckdns.org/containers">Todos os containers</a><a class="btn light" target="_blank" rel="noopener" href="https://cloudiff.duckdns.org/git/explore/repos">Todos os repositórios</a></nav>'
+            f'<section class="global-admin-section"><div class="section-title"><div><h2>Containers e stacks</h2><p>Projetos visíveis e seus vínculos no Komodo.</p></div><span class="pill">{len(container_cards)}</span></div><div class="global-resource-grid">{"".join(container_cards) or "<div class=\"empty-state\">Nenhum container de projeto registrado.</div>"}</div></section>'
+            f'<section class="global-admin-section"><div class="section-title"><div><h2>Repositórios por usuário</h2><p>Repositórios Forgejo vinculados aos projetos autorizados.</p></div><span class="pill">{len(repo_cards)}</span></div><div class="global-resource-grid">{"".join(repo_cards) or "<div class=\"empty-state\">Nenhum repositório vinculado.</div>"}</div></section>'
+            f'<section class="global-admin-section"><div class="section-title"><div><h2>Tenants Supabase</h2><p>Abra um tenant para conferir os serviços que compõem o banco.</p></div><span class="pill">{len(tenant_cards)}</span></div><div class="global-tenant-list">{"".join(tenant_cards) or "<div class=\"empty-state\">Nenhum tenant provisionado.</div>"}</div></section>'
+            '</section>'
+            '<style>.global-admin-hub{display:grid;gap:20px}.global-admin-hero{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:24px;border:1px solid #cfe5d5;border-radius:18px;background:#fff}.global-admin-hero h1{margin:4px 0 7px}.global-admin-hero p{margin:0;color:var(--muted)}.global-admin-kicker,.global-resource-type{font-size:.7rem;font-weight:850;letter-spacing:.08em;text-transform:uppercase;color:#176b35}.global-admin-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.global-admin-summary article{padding:16px;border:1px solid var(--border);border-radius:13px;background:#fff}.global-admin-summary small{display:block;color:var(--muted)}.global-admin-summary strong{font-size:1.8rem}.global-admin-shortcuts{display:flex;gap:8px;flex-wrap:wrap}.global-admin-section{display:grid;gap:13px}.global-resource-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:10px}.global-resource{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:16px;border:1px solid var(--border);border-radius:13px;background:#fff}.global-resource h3,.global-resource p{margin:3px 0}.global-resource p{color:var(--muted)}.global-resource-actions{display:flex;gap:8px;flex-wrap:wrap}.global-tenant-list{display:grid;gap:9px}.global-tenant{border:1px solid var(--border);border-radius:13px;background:#fff;overflow:hidden}.global-tenant>summary{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:15px;cursor:pointer;list-style:none}.global-tenant>summary::-webkit-details-marker{display:none}.global-tenant>summary span:first-child{display:grid;gap:3px}.global-tenant>summary small{color:var(--muted)}.global-tenant-body{display:grid;gap:13px;padding:15px;border-top:1px solid var(--border);background:#f8fafc}.global-tenant-body ul{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:7px;margin:0;padding:0;list-style:none}.global-tenant-body li{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px;border-radius:9px;background:#fff}@media(max-width:760px){.global-admin-summary{grid-template-columns:repeat(2,1fr)}.global-admin-hero,.global-resource{align-items:flex-start;display:grid}}</style>'
+        )
 
     def help_body() -> str:
         return r"""
@@ -453,6 +519,13 @@ def _install() -> None:
                     data = overview_service.overview_data(identity(self.headers))
                     body = overview_views.overview_body(data)
                     markup = render_legacy(identity(self.headers), "publicacao", "Publicações", body, "", "")
+                    return send(self, 200, "text/html; charset=utf-8", markup.encode("utf-8"))
+                if path in PORTAL_PATHS and tab == "admin-manutencao":
+                    if not tenant_admin_allowed(self):
+                        denied = render_legacy(identity(self.headers), tab, "Serviços globais", '<section class="card"><h1>Acesso negado</h1></section>', "", "")
+                        return send(self, 403, "text/html; charset=utf-8", denied.encode("utf-8"))
+                    owner = sys.modules.get(handler_class.__module__)
+                    markup = render_legacy(identity(self.headers), tab, "Serviços globais", global_services_body(owner, self.user()), "", "")
                     return send(self, 200, "text/html; charset=utf-8", markup.encode("utf-8"))
                 if path in PORTAL_PATHS and tab == "backup":
                     owner = sys.modules.get(handler_class.__module__); user = self.user(); markup = render_legacy(identity(self.headers), "backup", "Backup", backup_body(getattr(owner, "_prod_csrf_token")(user)), "", "")
