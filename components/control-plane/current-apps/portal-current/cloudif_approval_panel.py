@@ -10,6 +10,10 @@ def request(base,token,method,path,payload=None,timeout=20):
   try:d=json.load(e)
   except Exception:d={}
   return e.code,d
+ except (urllib.error.URLError,TimeoutError,ConnectionError,OSError) as e:
+  return 503,{'ok':False,'error':'approval_service_unavailable','detail':type(e).__name__}
+ except Exception as e:
+  return 503,{'ok':False,'error':'approval_service_unavailable','detail':type(e).__name__}
 def sanitize(row):
  try:meta=json.loads(row.get('metadata_json') or '{}')
  except Exception:meta={}
