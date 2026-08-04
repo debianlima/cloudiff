@@ -2921,36 +2921,39 @@ def _cloudif_v132_force_local_rebuild(project, no_cache=False):
     }
 
 
-def _cloudif_v132_local_web_health(project):
+def _cloudif_v132_local_web_health(project, wait_seconds=90):
     stack_dir = Path("/etc/komodo/stacks") / ("cloudif-" + safe_slug(project))
-    env_file = stack_dir / ".cloudif" / ".env"
-    env = {}
-    try:
-        for raw in env_file.read_text().splitlines():
-            if "=" in raw and not raw.lstrip().startswith("#"):
-                k,v=raw.split("=",1); env[k.strip()]=v.strip()
-    except Exception:
-        pass
-    public_number=str(env.get("CLOUDIF_PUBLIC_NUMBER") or "").strip()
-    deploy_number=str(env.get("CLOUDIF_DEPLOY_NUMBER") or "1").strip()
-    candidates=[]
-    if public_number:
-        candidates.append(f"cloudif-p{public_number}-d{deploy_number}-web")
-    try:
-        ps=subprocess.run(["docker","ps","-a","--format","{{.Names}}"],text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=15)
-        candidates.extend(x.strip() for x in ps.stdout.splitlines() if x.strip() and x.strip() not in candidates and (not public_number or x.startswith(f"cloudif-p{public_number}-")))
-    except Exception:
-        pass
-    for name in candidates:
+    expected_compose = str((stack_dir / ".cloudif" / "docker-compose.yml").resolve())
+    deadline = time.time() + max(1, int(wait_seconds))
+    last = {"ok": False, "container": "", "running": False, "health": "missing", "expected_compose": expected_compose, "candidates": []}
+    while time.time() < deadline:
+        candidates=[]
         try:
-            raw=subprocess.check_output(["docker","inspect",name],text=True,timeout=15)
-            info=json.loads(raw)[0]; state=info.get("State") or {}; health=(state.get("Health") or {}).get("Status") or ""
-            running=bool(state.get("Running")); ok=running and health in ("healthy","")
-            if ok:
-                return {"ok":True,"container":name,"running":running,"health":health or "running","image":((info.get("Config") or {}).get("Image") or "")}
-        except Exception:
-            continue
-    return {"ok":False,"container":candidates[0] if candidates else "","running":False,"health":"missing"}
+            ps=subprocess.run(["docker","ps","-a","--format","{{.Names}}"],text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=15)
+            candidates=[x.strip() for x in ps.stdout.splitlines() if x.strip()]
+        except Exception as exc:
+            last["error"] = str(exc)[:300]
+        inspected=[]
+        for name in candidates:
+            try:
+                raw=subprocess.check_output(["docker","inspect",name],text=True,timeout=15)
+                info=json.loads(raw)[0]
+                labels=(info.get("Config") or {}).get("Labels") or {}
+                service=str(labels.get("com.docker.compose.service") or "")
+                config_files=str(labels.get("com.docker.compose.project.config_files") or "")
+                if service != "web" or expected_compose not in config_files.split(','):
+                    continue
+                state=info.get("State") or {}; health=(state.get("Health") or {}).get("Status") or ""
+                running=bool(state.get("Running")); item={"container":name,"running":running,"health":health or ("running" if running else str(state.get("Status") or "unknown")),"image":((info.get("Config") or {}).get("Image") or ""),"service":service,"config_files":config_files}
+                inspected.append(item)
+                if running and health in ("healthy",""):
+                    item.update({"ok":True,"expected_compose":expected_compose,"candidates":inspected})
+                    return item
+            except Exception as exc:
+                inspected.append({"container":name,"error":str(exc)[:220]})
+        last={"ok":False,"container":inspected[0].get("container","") if inspected else "","running":bool(inspected and inspected[0].get("running")),"health":inspected[0].get("health","missing") if inspected else "missing","expected_compose":expected_compose,"candidates":inspected}
+        time.sleep(3)
+    return last
 
 
 def cloudif_v132_project_deploy_full(handler):
@@ -3046,14 +3049,22 @@ def cloudif_v132_project_deploy_full(handler):
                 "rebuild": rebuild_action,
             })
 
-    if deploy:
+    local_after_rebuild = {"ok": False}
+    if force_rebuild:
+        local_after_rebuild = _cloudif_v132_local_web_health(project, wait_seconds=int(payload.get("local_health_wait_seconds", 90)))
+        actions.append({"operation":"local_web_health","ok":bool(local_after_rebuild.get("ok")),"detail":local_after_rebuild})
+        if not local_after_rebuild.get("ok"):
+            return _cloudif_v131_send_json(handler, 500, {"ok":False,"error":"local_web_health_failed","project":project,"repo_id":repo_id,"stack_id":stack_id,"actions":actions,"local_health":local_after_rebuild})
+    elif deploy:
         deploy_stack = _cloudif_v131_core_call("execute", "DeployStack", {"stack": stack_id}, timeout=60)
         actions.append(deploy_stack)
         _cloudif_v131_wait(payload.get("wait_after_stack_deploy", 3))
 
     poll_snapshots = []
 
-    if wait_for_completion:
+    if force_rebuild and local_after_rebuild.get("ok"):
+        final_status={"project":project,"repo_id":repo_id,"stack_id":stack_id,"deploy_status":"completed","local_reconciled":True,"local_health":local_after_rebuild}
+    elif wait_for_completion:
         final_status, poll_snapshots = _cloudif_v132_wait_for_completion(
             project,
             repo_id,
@@ -3081,7 +3092,7 @@ def cloudif_v132_project_deploy_full(handler):
         reset_action = None
 
     deploy_status = final_status.get("deploy_status")
-    local_health = _cloudif_v132_local_web_health(project) if force_rebuild else {"ok": False}
+    local_health = local_after_rebuild if force_rebuild else {"ok": False}
     if deploy_status not in ["completed", "ready", "in_progress"] and local_health.get("ok"):
         deploy_status = "completed"
         final_status = dict(final_status or {})
