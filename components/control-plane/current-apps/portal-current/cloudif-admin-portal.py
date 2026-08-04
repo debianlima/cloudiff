@@ -20,8 +20,16 @@ _ADMIN_LOOKUP_BOX = '''  <div class="box">
 _TENANT_DETAILS_OLD = '''  <details class="db96-details"><summary>Serviços detectados e permissões</summary><div class="container-grid">{''.join(chips) or '<div class="container-chip"><span class="container-name">sem serviços detectados</span><span class="pill muted">-</span></div>'}</div><div class="action-group"><button class="btn light" type="button" onclick="toggle__Panel('{acl_id}')">Permissões do banco</button><div id="{acl_id}" class="wizard-panel">{tenant_acl_html(tenant, user)}</div></div></details>
 '''.replace('toggle__Panel', 'togglePanel')
 
-_TENANT_DETAILS_NEW = '''  <section class="db96-section db96-services"><div class="db96-section-title"><div><span>3</span><h3>Serviços detectados</h3></div><p>Recursos ativos vinculados ao tenant.</p></div><div class="container-grid">{''.join(chips) or '<div class="container-chip"><span class="container-name">sem serviços detectados</span><span class="pill muted">-</span></div>'}</div></section>
-  <section class="db96-section db96-permissions"><div class="db96-section-title"><div><span>4</span><h3>Permissões do banco</h3></div><p>Usuários e grupos autorizados neste tenant.</p></div><div class="action-group db96-permissions-content">{tenant_acl_html(tenant, user)}</div></section>
+_TENANT_DETAILS_NEW = '''  <div class="db96-compact-tools">
+    <details class="db96-compact db96-services">
+      <summary><span><b>Serviços detectados</b><small>Containers que compõem este banco</small></span><span class="db96-summary-count">{len(chips)} serviços</span></summary>
+      <div class="db96-service-list">{''.join(chips) or '<div class="container-chip"><span class="container-name">sem serviços detectados</span><span class="pill muted">-</span></div>'}</div>
+    </details>
+    <details class="db96-compact db96-permissions" data-tenant-permissions="{h(tenant)}">
+      <summary><span><b>Permissões do banco</b><small>Adicionar ou retirar usuários e grupos</small></span><span class="db96-summary-action">Gerenciar</span></summary>
+      <div class="db96-permissions-content">{tenant_acl_html(tenant, user)}</div>
+    </details>
+  </div>
 '''
 
 

@@ -39,10 +39,12 @@ class NavigationInformationArchitectureTest(unittest.TestCase):
         source = Path('components/control-plane/current-apps/portal-current/cloudif-admin-portal.py').read_text(encoding='utf-8')
         self.assertIn('db96-services', source)
         self.assertIn('db96-permissions', source)
+        self.assertIn('db96-compact-tools', source)
         self.assertIn('Serviços detectados', source)
         self.assertIn('Permissões do banco', source)
         self.assertIn("_ADMIN_LOOKUP_BOX, ''", source)
         self.assertNotIn('togglePanel(\'{acl_id}\')', source)
+        self.assertIn('data-tenant-permissions', source)
 
     def test_tenant_deletion_is_separate_and_protected(self):
         source = Path('components/control-plane/srv/cloudif/lib/cloudif_admin_tenant_delete.py').read_text(encoding='utf-8')
