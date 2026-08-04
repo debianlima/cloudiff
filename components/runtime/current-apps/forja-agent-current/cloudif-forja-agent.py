@@ -952,9 +952,17 @@ def cloudif_v117_project_rollback(handler):
             "expected_confirm": expected_confirm,
         })
 
-    owner = _cloudif_v117_cfg("FORGEJO_OWNER", "cloudif")
-    repo = _cloudif_v117_repo_name(slug)
+    owner = str(payload.get("owner") or "").strip().lower() or _cloudif_v117_cfg("FORGEJO_OWNER", "cloudif")
+    repo = str(payload.get("repo") or "").strip() or _cloudif_v117_repo_name(slug)
+    owner_kind = str(payload.get("owner_kind") or "user").strip().lower()
     forgejo_url = _cloudif_v117_cfg("FORGEJO_URL", "https://cloudiff.duckdns.org/git").rstrip("/")
+    explicit_repo_url = str(payload.get("repo_url") or "").strip().rstrip("/")
+    if explicit_repo_url:
+        try:
+            parsed=urllib.parse.urlparse(explicit_repo_url);parts=[x for x in parsed.path.split('/') if x]
+            if 'git' in parts: parts=parts[parts.index('git')+1:]
+            if len(parts)>=2: owner=parts[-2];repo=parts[-1].removesuffix('.git')
+        except Exception: pass
     forgejo_token = _cloudif_v117_cfg("FORGEJO_TOKEN", "")
 
     result = {
@@ -964,7 +972,8 @@ def cloudif_v117_project_rollback(handler):
         "project_slug": slug,
         "repo": repo,
         "repo_path": f"{owner}/{repo}",
-        "repo_url": f"{forgejo_url}/{owner}/{repo}",
+        "repo_url": explicit_repo_url or f"{forgejo_url}/{owner}/{repo}",
+        "owner_kind": owner_kind,
         "forgejo": {
             "attempted": False,
             "deleted": False,

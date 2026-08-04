@@ -286,11 +286,42 @@ def can_delete_project(slug, actor="", headers=None):
 
     return False, "usuário não é dono/admin do projeto"
 
+def _project_repo_identity(slug):
+    identity={'owner':'','repo':'','repo_url':'','owner_kind':'user'}
+    try:
+        con=sqlite3.connect(db_path());con.row_factory=sqlite3.Row
+        project=con.execute('select owner,repo_url,repo_name from projects where slug=?',(slug,)).fetchone()
+        integration=None
+        try: integration=con.execute('select repo_url,forgejo_repo_url,repo_name from project_integrations where project=?',(slug,)).fetchone()
+        except sqlite3.DatabaseError: pass
+        con.close()
+        repo_url=''
+        if integration: repo_url=str(integration['forgejo_repo_url'] or integration['repo_url'] or '')
+        if not repo_url and project: repo_url=str(project['repo_url'] or '')
+        repo=str((integration['repo_name'] if integration and 'repo_name' in integration.keys() else '') or (project['repo_name'] if project else '') or ('cloudif-'+slug))
+        owner=str(project['owner'] or '').strip().lower() if project else ''
+        try:
+            parsed=urllib.parse.urlparse(repo_url)
+            parts=[x for x in parsed.path.split('/') if x]
+            if 'git' in parts:
+                parts=parts[parts.index('git')+1:]
+            if len(parts)>=2:
+                owner=parts[-2];repo=parts[-1].removesuffix('.git')
+        except Exception: pass
+        identity.update({'owner':owner,'repo':repo,'repo_url':repo_url,'owner_kind':'user'})
+    except Exception: pass
+    return identity
+
 def forja_rollback(slug, execute=False):
     base, token = forja_config()
+    identity=_project_repo_identity(slug)
     payload = {
         "project_slug": slug,
         "execute": bool(execute),
+        "owner": identity.get("owner") or "",
+        "repo": identity.get("repo") or "",
+        "repo_url": identity.get("repo_url") or "",
+        "owner_kind": identity.get("owner_kind") or "user",
     }
     if execute:
         payload["confirm"] = f"ROLLBACK {slug}"
