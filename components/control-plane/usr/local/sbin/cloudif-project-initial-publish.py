@@ -53,7 +53,7 @@ def progress(path,job,message,attempt=0,detail=''):
 def main():
  job_path=Path(sys.argv[1]); job=json.loads(job_path.read_text()); slug=job['slug']; tenant=job['tenant']; owner=(job.get('user') or {}).get('username',''); kind=job.get('template_kind','none'); num=public_number(slug)
  kc=envfile('/etc/cloudif/komodo-agent-client.env'); kbase=(kc.get('KOMODO_AGENT_URL') or 'http://10.62.91.2:18098').rstrip('/'); kt=kc.get('KOMODO_AGENT_TOKEN',''); kh={'X-CloudIF-Token':kt,'Authorization':'Bearer '+kt} if kt else {}
- payload={'project_slug':slug,'project':slug,'slug':slug,'tenant':tenant,'actor':'project-initial-publish','deploy':True,'wait_timeout':600}
+ payload={'project_slug':slug,'project':slug,'slug':slug,'tenant':tenant,'actor':'project-initial-publish','deploy':True,'wait_timeout':1200}
  final={}
  def deployment_ready():
   nonlocal final
@@ -78,16 +78,16 @@ def main():
   request(kbase+'/komodo/stack/pull','POST',payload,kh,60)
   progress(job_path,job,'Iniciando o deploy da stack.',2,detail)
   request(kbase+'/komodo/stack/deploy','POST',payload,kh,60)
-  deadline=time.monotonic()+420;attempt=2;deploy_retries=0;next_retry=time.monotonic()+60
+  deadline=time.monotonic()+1200;attempt=2;deploy_retries=0;next_retry=time.monotonic()+45
   while time.monotonic()<deadline:
    attempt+=1
    try:ready,detail=deployment_ready()
    except Exception as exc:ready=False;detail=type(exc).__name__+': '+str(exc)
-   if not ready and time.monotonic() >= next_retry and deploy_retries < 2:
+   if not ready and time.monotonic() >= next_retry and deploy_retries < 8:
     deploy_retries+=1
     progress(job_path,job,'Repetindo o deploy após falha transitória do registry.',attempt,detail)
     request(kbase+'/komodo/stack/deploy','POST',payload,kh,60)
-    next_retry=time.monotonic()+(60*(deploy_retries+1))
+    next_retry=time.monotonic()+min(180,45*(deploy_retries+1))
    else:
     progress(job_path,job,'Aguardando a confirmação do Komodo.',attempt,detail)
    if ready:break
@@ -102,7 +102,7 @@ def main():
  progress(job_path,job,'Verificando os endereços públicos.',attempt if 'attempt' in locals() else 1)
  for public_url in (pub.get('stable_url'),pub.get('version_url')):
   if not public_url: raise RuntimeError('public_url_missing')
-  deadline=time.monotonic()+240;last_status='unknown';health_attempt=0
+  deadline=time.monotonic()+600;last_status='unknown';health_attempt=0
   while time.monotonic()<deadline:
    health_attempt+=1
    try:

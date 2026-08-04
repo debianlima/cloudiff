@@ -12,7 +12,9 @@ TENANT="$(echo "$TENANT_RAW" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9._
 [ -n "$TENANT" ] || { echo "Tenant inválido"; exit 1; }
 
 TDIR="$BASE/tenants/$TENANT"
-LOCK="/run/cloudif-create-${TENANT}.lock"
+LOCK_ROOT="/run/cloudif-operation-locks"
+mkdir -p "$LOCK_ROOT"
+LOCK="$LOCK_ROOT/tenant-${TENANT}.lock"
 
 exec 9>"$LOCK"
 flock -x 9

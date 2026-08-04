@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import json,os,subprocess,sys,time,tempfile
+import json,os,subprocess,sys,time,tempfile,fcntl
 from pathlib import Path
 LOG=Path('/var/log/cloudif/project-provision.log')
 def log(msg):
@@ -30,6 +30,8 @@ def verify_onboarding(slug):
  if not r or r['status']!='ready' or r['role_profile']!='project-admin' or r['environment']!='project':raise RuntimeError('onboarding_not_ready_project_admin')
 def main():
  path=Path(sys.argv[1]);job=json.loads(path.read_text());slug=str(job.get('slug') or '')
+ lock_fd=int(os.environ.get('CLOUDIF_PROJECT_LOCK_FD','-1'))
+ if lock_fd>=0: fcntl.flock(lock_fd,fcntl.LOCK_EX)
  set_state(path,job,'running','provision');log(f'START job={path} slug={slug} tenant={job.get("tenant")}')
  try:
   candidates=['/usr/local/sbin/cloudif-project-provision.sh','/usr/local/sbin/cloudif-provision-project.sh']
@@ -49,10 +51,14 @@ def main():
    if p.returncode:raise RuntimeError('template_apply_failed')
    set_state(path,job,'running','initial-publication')
    p=run(['/usr/local/sbin/cloudif-project-initial-publish.py',str(path)],1200)
-   if p.returncode:raise RuntimeError('initial_publication_failed')
+   if p.returncode:raise RuntimeError('initial_publication_failed: '+(p.stderr or p.stdout or '')[-420:])
   set_state(path,job,'succeeded','complete',result={'project_slug':slug,'role_profile':'project-admin','provisioned':True})
   log('SUCCEEDED slug='+slug)
  except Exception as e:
   set_state(path,job,'failed',job.get('current_step') or 'unknown',type(e).__name__+': '+str(e))
   log('FAILED slug='+slug+' '+type(e).__name__+': '+str(e));raise
+ finally:
+  if lock_fd>=0:
+   try:os.close(lock_fd)
+   except OSError:pass
 if __name__=='__main__':main()

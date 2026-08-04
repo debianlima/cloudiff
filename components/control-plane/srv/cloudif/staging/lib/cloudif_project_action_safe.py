@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 import json
 import os
+import fcntl
+import uuid
 import re
 import sqlite3
 import subprocess
@@ -10,6 +12,7 @@ from pathlib import Path
 DB = "/var/lib/cloudif/portal/cloudif-portal.db"
 JOBDIR = Path("/srv/cloudif/jobs")
 LOG = Path("/var/log/cloudif/project-provision.log")
+LOCK_ROOT = Path("/run/cloudif-operation-locks")
 
 def _log(msg):
     LOG.parent.mkdir(parents=True, exist_ok=True)
@@ -292,7 +295,7 @@ def upsert_project(form, user):
         "updated_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
     }
 
-    queue_provision_job(job)
+    queued = queue_provision_job(job)
 
     reconcile = None
     try:
@@ -325,26 +328,67 @@ def upsert_project(form, user):
         "slug": slug,
         "tenant": tenant,
         "reconcile": reconcile,
-        "message": "Projeto registrado. Acompanhe o estado do provisionamento; ele só será concluído após identidade, capacidades, conectores, template e publicação inicial." + reconcile_suffix,
+        "job_file": queued.get("job_file"),
+        "deduplicated": bool(queued.get("deduplicated")),
+        "message": ("Provisionamento já estava em andamento. " if queued.get("deduplicated") else "Projeto registrado. ") + "Acompanhe o estado do provisionamento; ele só será concluído após identidade, capacidades, conectores, template e publicação inicial." + reconcile_suffix,
     }
+
+
+def _latest_active_project_job(slug):
+    candidates = sorted(JOBDIR.glob(f"project-provision-*-{slug}.json"), key=lambda p: p.stat().st_mtime, reverse=True)
+    for path in candidates:
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        if data.get("status") in {"queued", "running"}:
+            return path, data
+    return None, None
+
 
 def queue_provision_job(job):
     JOBDIR.mkdir(parents=True, exist_ok=True)
-    job_file = JOBDIR / f"project-provision-{int(time.time())}-{job['slug']}.json"
-    job_file.write_text(json.dumps(job, ensure_ascii=False, indent=2), encoding="utf-8")
+    LOCK_ROOT.mkdir(parents=True, exist_ok=True)
+    lock_path = LOCK_ROOT / f"project-{job['slug']}.lock"
+    lock_fd = os.open(lock_path, os.O_CREAT | os.O_RDWR, 0o600)
+    try:
+        fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        os.close(lock_fd)
+        existing_path, existing = _latest_active_project_job(job['slug'])
+        if existing_path:
+            _log(f"DEDUP {existing_path}")
+            return {"job_file": str(existing_path), "deduplicated": True, "job": existing}
+        raise RuntimeError("project_provision_already_running")
+
+    job_id = uuid.uuid4().hex
+    job["job_id"] = job_id
+    job["project_lock"] = str(lock_path)
+    job_file = JOBDIR / f"project-provision-{job_id}-{job['slug']}.json"
+    job_file.write_text(json.dumps(job, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
     worker = Path("/srv/cloudif/lib/cloudif_project_provision_worker.py")
     if not worker.exists():
         worker.write_text(WORKER_CODE, encoding="utf-8")
         worker.chmod(0o755)
 
+    env = os.environ.copy()
+    env["CLOUDIF_PROJECT_LOCK_FD"] = str(lock_fd)
     _log(f"QUEUE {job_file}")
-    subprocess.Popen(
-        ["python3", str(worker), str(job_file)],
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        start_new_session=True,
-    )
+    try:
+        subprocess.Popen(
+            ["python3", str(worker), str(job_file)],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,
+            pass_fds=(lock_fd,),
+            env=env,
+        )
+    except Exception:
+        os.close(lock_fd)
+        raise
+    os.close(lock_fd)
+    return {"job_file": str(job_file), "deduplicated": False, "job": job}
 
 WORKER_CODE = r'''#!/usr/bin/env python3
 import json

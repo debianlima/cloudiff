@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import csv
 import gzip
+import fcntl
 import json
 import os
 from pathlib import Path
@@ -24,6 +25,7 @@ ONBOARDING_DB = Path(os.environ.get("CLOUDIF_ONBOARDING_DB", "/var/lib/cloudif/o
 AUDIT_ROOT = BASE / "admin-tenant-deletions"
 JOB_ROOT = AUDIT_ROOT / ".jobs"
 JOB_RECEIPTS = AUDIT_ROOT / ".job-receipts"
+LOCK_ROOT = Path("/run/cloudif-operation-locks")
 ROUTER_RENDER = BASE / "bin" / "cloudif-render-router-sso.sh"
 PROTECTED = frozenset({"akadmin"})
 TENANT_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,62}$")
@@ -405,6 +407,9 @@ def run_job_worker(job_id):
     tenant = current.get("tenant") or ""
     actor = current.get("actor") or "portal"
     lock = JOB_ROOT / f".{tenant}.lock"
+    LOCK_ROOT.mkdir(parents=True, exist_ok=True)
+    tenant_lock_fd = os.open(LOCK_ROOT / f"tenant-{tenant}.lock", os.O_CREAT | os.O_RDWR, 0o600)
+    fcntl.flock(tenant_lock_fd, fcntl.LOCK_EX)
     try:
         current.update({
             "status": "running",
@@ -441,6 +446,10 @@ def run_job_worker(job_id):
         return 1
     finally:
         lock.unlink(missing_ok=True)
+        try:
+            os.close(tenant_lock_fd)
+        except OSError:
+            pass
 
 
 def _launch_worker(job_id):
