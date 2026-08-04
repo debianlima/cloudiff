@@ -109,7 +109,6 @@ def _rows(db, table, key, slug):
 
 
 def projects():
-    progress('Registros do Portal', 'running', 'Removendo vínculos e ACLs')
     con = sqlite3.connect(DB)
     con.row_factory = sqlite3.Row
     try:
@@ -326,6 +325,7 @@ def execute(slug, confirmation, actor, progress=None):
         (audit / 'result.json').write_text(json.dumps(result, ensure_ascii=False, indent=2) + '\n')
         return result
 
+    progress('Registros do Portal', 'running', 'Removendo vínculos e ACLs')
     con = sqlite3.connect(DB)
     try:
         con.execute('BEGIN IMMEDIATE')
