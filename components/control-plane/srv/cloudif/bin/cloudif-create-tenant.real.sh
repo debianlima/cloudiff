@@ -3,7 +3,7 @@ set -Eeuo pipefail
 
 TENANT_RAW="${1:?Informe o tenant}"
 BASE="/srv/cloudif"
-SRC="/home/cti/supabase-ativo"
+SRC="${CLOUDIF_SUPABASE_TEMPLATE_DIR:-/opt/cloudif-src/supabase/docker}"
 REGISTRY="$BASE/registry/tenants.csv"
 
 PUBLIC_HOST="cloudiff.duckdns.org"
@@ -43,9 +43,13 @@ fi
 
 IFS=, read -r TENANT KONG STUDIO DB KONG_SSL POOL_TX POOL_SESS INBUCKET CREATED < <(grep "^${TENANT}," "$REGISTRY" | tail -1)
 
-if [ ! -d "$TDIR" ]; then
-  echo "Criando tenant $TENANT em $TDIR"
+if [ ! -f "$SRC/docker-compose.yml" ]; then
+  echo "Template Supabase não encontrado: $SRC" >&2
+  exit 2
+fi
 
+if [ ! -f "$TDIR/docker-compose.yml" ]; then
+  echo "Criando ou reparando tenant $TENANT em $TDIR"
   mkdir -p "$TDIR"
 
   if command -v rsync >/dev/null 2>&1; then
