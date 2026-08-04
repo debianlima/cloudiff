@@ -100,7 +100,11 @@ def monitor(kind):
 _help_page98_base=help_page
 def help_page(kind):
  aliases={'ajuda':'ajuda-inicio'}
- return _help_page98_base(aliases.get(kind,kind))
+ resolved=aliases.get(kind,kind)
+ body=_help_page98_base(resolved)
+ if resolved=='ajuda-inicio':
+  body+='''<section class="card" style="margin-top:16px"><div class="section-title"><div><h2>GitHub e manual técnico</h2><p class="small">Código-fonte e documentação completa da arquitetura CloudIFF.</p></div><a class="btn" href="https://github.com/debianlima/cloudiff" target="_blank" rel="noopener noreferrer">Abrir GitHub do projeto</a></div><p>O repositório documenta arquitetura, fluxogramas, agentes e funções, protocolos de reconciliação, modelo de dados, mensagens, aprovações, operação, serviços, rotas e a finalidade de cada pasta e arquivo.</p></section>'''
+ return body
 
 _admin_page98_base=admin_page
 def admin_page(kind):
