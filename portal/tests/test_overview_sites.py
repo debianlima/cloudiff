@@ -1,6 +1,6 @@
 import unittest
 from pathlib import Path
-from portal.modules.overview.views import _network_graph, _site_card
+from portal.modules.overview.views import _network_graph, _site_card, sites_body
 
 
 class OverviewSiteCardTest(unittest.TestCase):
@@ -22,6 +22,13 @@ class OverviewSiteCardTest(unittest.TestCase):
         self.assertIn('tab=publicacao&project=draft-site', markup)
         self.assertNotIn('target="_blank"', markup)
 
+
+
+    def test_sites_page_uses_canonical_empty_state(self):
+        markup = sites_body({"resources": {"sites": []}})
+        self.assertIn("Meus sites", markup)
+        self.assertIn("Você ainda não publicou um site", markup)
+        self.assertIn("Ver meus projetos", markup)
 
     def test_network_graph_explains_direction_and_uses_comparative_bars(self):
         markup = _network_graph({

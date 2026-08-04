@@ -88,14 +88,22 @@ def _empty(title: str, text: str, label: str, href: str) -> str:
     return f'<div class="resource-empty"><h3>{html.escape(title)}</h3><p>{html.escape(text)}</p><a class="btn" href="{href}">{html.escape(label)}</a></div>'
 
 
-def overview_body(data: dict) -> str:
-    metrics, resources = data["metrics"], data["resources"]
-    username = html.escape(data["username"] or "usuário")
+def sites_body(data: dict) -> str:
+    resources = data["resources"]
     sites = "".join(_site_card(site) for site in resources["sites"]) or _empty(
         "Você ainda não publicou um site",
         "Publique um projeto quando ele estiver pronto para ser acessado pela comunidade acadêmica.",
         "Ver meus projetos", f"{BASE}/?tab=projetos"
     )
+    return (
+        '<section class="resource-section" aria-labelledby="my-sites-title"><div class="resource-section-head"><div><p class="ov-eyebrow">Publicações</p><h2 id="my-sites-title">Meus sites</h2><p>Todos os seus projetos web, publicados ou em preparação.</p></div>'
+        f'</div><div class="resource-grid sites-grid">{sites}</div></section>'
+    )
+
+
+def overview_body(data: dict) -> str:
+    metrics, resources = data["metrics"], data["resources"]
+    username = html.escape(data["username"] or "usuário")
     databases = "".join(_database_card(item) for item in resources["databases"]) or _empty(
         "Nenhum banco vinculado", "Crie ou vincule um banco de dados a um dos seus projetos.",
         "Ir para bancos", f"{BASE}/?tab=bancos"
@@ -118,9 +126,8 @@ def overview_body(data: dict) -> str:
         '<section class="welcome-panel"><div><p class="ov-eyebrow">Seu espaço acadêmico</p>'
         f'<h2>Olá, {username}.</h2><p>Aqui você encontra o que está publicando, os bancos ligados aos seus projetos e os caminhos mais usados para continuar seu trabalho.</p></div>'
         f'<div class="welcome-actions"><a class="btn btn-quiet" href="{BASE}/?tab=ajuda">Primeiros passos</a></div></section>'
-        '<section class="resource-section" aria-labelledby="my-sites-title"><div class="resource-section-head"><div><p class="ov-eyebrow">Publicações</p><h2 id="my-sites-title">Meus sites</h2><p>Todos os seus projetos web, publicados ou em preparação.</p></div>'
-        f'<a href="{BASE}/?tab=publicacao">Ver todas as publicações</a></div><div class="resource-grid sites-grid">{sites}</div></section>'
-        '<section class="resource-section" aria-labelledby="my-databases-title"><div class="resource-section-head"><div><p class="ov-eyebrow">Dados</p><h2 id="my-databases-title">Meus bancos</h2><p>Ambientes de dados que você pode usar nos seus projetos.</p></div>'
+        + sites_body(data)
+        + '<section class="resource-section" aria-labelledby="my-databases-title"><div class="resource-section-head"><div><p class="ov-eyebrow">Dados</p><h2 id="my-databases-title">Meus bancos</h2><p>Ambientes de dados que você pode usar nos seus projetos.</p></div>'
         f'<a href="{BASE}/?tab=bancos">Gerenciar todos os bancos</a></div><div class="resource-grid">{databases}</div>{others}</section>'
         '<section class="resource-section platform-health" aria-labelledby="platform-title"><div class="resource-section-head"><div><p class="ov-eyebrow">Plataforma</p><h2 id="platform-title">Saúde da plataforma</h2>'
         f'<p>{metrics["online_count"]} de {metrics["node_count"]} servidores com coleta recente.</p></div><a href="{BASE}/?tab=monitor-saude">Abrir monitoramento</a></div><div class="resource-grid server-grid">{servers}</div></section>'
