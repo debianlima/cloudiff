@@ -3544,6 +3544,12 @@ def cloudif_publication_deploy(handler):
     def git_file(path):
         pr=subprocess.run(["git","-C",str(base_dir),"show",commit+":"+path],stdout=subprocess.PIPE,stderr=subprocess.DEVNULL)
         return pr.stdout if pr.returncode==0 else b""
+    runtime_manifest={}
+    try:
+        runtime_manifest=json.loads(git_file(".cloudif/runtime.json").decode("utf-8","ignore") or "{}")
+    except Exception:
+        runtime_manifest={}
+    unified_runtime=bool(runtime_manifest.get("php") and runtime_manifest.get("node"))
     compose_content=b"";compose_name=""
     for name in ("docker-compose.yml","compose.yaml","compose.yml"):
         raw=git_file(name)
@@ -3636,6 +3642,16 @@ networks:
             elif fp.is_file(): fp.chmod(0o644)
         snap_dir.chmod(0o755);(snap_dir / "site").chmod(0o755)
         (snap_dir / "nginx.conf").chmod(0o644)
+    if unified_runtime:
+        php=str(runtime_manifest.get("php") or "").strip()
+        node=str(runtime_manifest.get("node") or "").strip()
+        runtime_dockerfile=f"""FROM cloudif/project-{public_number}:php{php}-node{node}
+RUN find /var/www/html -mindepth 1 -maxdepth 1 ! -name api -exec rm -rf {{}} + \
+ && if [ -d /var/www/html/api ]; then find /var/www/html/api -mindepth 1 -maxdepth 1 ! -name node_modules -exec rm -rf {{}} +; fi
+COPY --chown=www-data:www-data site/ /var/www/html/
+"""
+        (snap_dir / "Dockerfile.runtime").write_text(runtime_dockerfile,encoding="utf-8")
+        (snap_dir / "Dockerfile.runtime").chmod(0o644)
     import hashlib
     digest=hashlib.sha256()
     for fp in sorted((snap_dir / "site").rglob("*")):
@@ -3655,8 +3671,33 @@ networks:
     republished_from=max(prior) if prior else None
     if republished_from is not None:
         (snap_dir / ".cloudif-republished-from").write_text(str(republished_from)+"\n")
+    if unified_runtime:
+        php=str(runtime_manifest.get("php") or "").strip()
+        node=str(runtime_manifest.get("node") or "").strip()
+        compose["content"]=f"""services:
+  web:
+    image: cloudif/publication-p{public_number}-d{deploy_number}:php{php}-node{node}
+    build:
+      context: {snap_dir}
+      dockerfile: Dockerfile.runtime
+    container_name: cloudif-p${{CLOUDIF_PUBLIC_NUMBER}}-d${{CLOUDIF_DEPLOY_NUMBER}}-web
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1/.cloudif-health >/dev/null"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    networks: [cloudif-publications]
+networks:
+  cloudif-publications:
+    external: true
+"""
+        compose["filename"]="cloudif-generated-unified-compose.yml"
+        compose["runtime"]="unified-php-node"
     content = _cloudif_pub_transform_compose(compose.get("content"), public_number, deploy_number)
     content = content.replace("./site:/usr/share/nginx/html:ro", f"{snap_dir}/site:/usr/share/nginx/html:ro")
+    content = content.replace("./site:/var/www/html:ro", f"{snap_dir}/site:/var/www/html:ro")
     content = content.replace("./nginx.conf:/etc/nginx/conf.d/default.conf:ro", f"{snap_dir}/nginx.conf:/etc/nginx/conf.d/default.conf:ro")
     if "cloudif-publications" not in content:
         return send(handler, 422, {"ok": False, "error": "publication_network_missing"})
