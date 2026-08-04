@@ -13,7 +13,7 @@ class PublicationRuntimeLinksAndActionsTests(unittest.TestCase):
         self.assertNotIn('<span>Ambiente</span>',info)
         self.assertIn('Configuração do PHP',info)
         self.assertIn('Runtime do Node.js',info)
-        self.assertIn('Abrir no Komodo',info)
+        self.assertIn('Ver informações do PHP',info)
     def test_runtime_pages_are_authenticated_project_routes(self):
         for marker in ('project-runtime-info','_rd_projects(user)','kind not in (\'php\',\'node\')','open-project-terminal'):
             self.assertIn(marker,self.base)

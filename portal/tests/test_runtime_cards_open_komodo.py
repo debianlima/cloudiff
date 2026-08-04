@@ -7,11 +7,11 @@ class RuntimeCardsOpenKomodoTests(unittest.TestCase):
         cls.pub=Path('components/control-plane/current-apps/portal-current/cloudif_ui_publications.py').read_text()
         cls.base=Path('components/control-plane/current-apps/portal-current/cloudif-admin-portal-base.py').read_text()
     def test_cards_use_internal_buttons(self):
-        for marker in ('publication-runtime-card','Configuração do PHP','Runtime do Node.js','Abrir no Komodo'):
+        for marker in ('publication-runtime-card','Configuração do PHP','Runtime do Node.js','Ver informações do PHP'):
             self.assertIn(marker,self.pub)
         self.assertNotIn('class="publication-info-card publication-runtime-link"',self.pub)
     def test_links_open_dedicated_terminal(self):
-        self.assertIn('open-project-terminal?slug=',self.pub)
+        self.assertIn('project-runtime-info?slug=',self.pub)
         self.assertIn('&amp;kind=php',self.pub)
         self.assertIn('&amp;kind=node',self.pub)
     def test_old_runtime_page_redirects(self):
