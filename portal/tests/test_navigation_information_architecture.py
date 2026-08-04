@@ -35,7 +35,7 @@ class NavigationInformationArchitectureTest(unittest.TestCase):
         self.assertIn('Serviços detectados', source)
         self.assertIn('Permissões do banco', source)
         self.assertIn("_ADMIN_LOOKUP_BOX, ''", source)
-        self.assertNotIn("togglePanel('{acl_id}')", source)
+        self.assertNotIn('togglePanel(\'{acl_id}\')', source)
 
 
 if __name__ == '__main__':

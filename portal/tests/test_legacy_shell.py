@@ -38,38 +38,44 @@ class LegacyShellTest(unittest.TestCase):
         self.assertIn(".legacy-content .card,.legacy-content .box", css)
         self.assertIn(".legacy-content button", css)
 
-    def test_student_never_receives_admin_navigation(self):
+    def test_student_receives_panel_and_tools_without_administration(self):
         doc = transform(LEGACY, self.student, "projetos")
         self.assertIn('<nav class="nav"', doc)
         self.assertNotIn("admin-usuarios", doc)
         self.assertNotIn(">Administração<", doc)
         self.assertIn('aria-current="page">Projetos</a>', doc)
+        self.assertIn(">Painel<", doc)
+        self.assertIn(">Ferramentas<", doc)
+        self.assertIn(">Conectores<", doc)
 
-    def test_admin_receives_global_entities_only(self):
-        doc = transform(LEGACY, self.admin, "admin-usuarios")
+    def test_admin_receives_normalized_navigation(self):
+        doc = transform(LEGACY, self.admin, "admin")
         expected = {
-            "resumo", "projetos", "bancos", "monitor-saude",
-            "admin-usuarios", "admin-politicas", "admin-identidades", "admin-configuracoes",
-            "admin-auditoria", "admin-manutencao", "admin-excluir-projeto", "ajuda", "ajuda-token", "ajuda-conectar",
-            "ajuda-aprovacoes", "ajuda-ferramentas",
+            "resumo", "projetos", "bancos",
+            "opcoes-projeto", "agentes", "gestao-agentes", "documentacao-mcp",
+            "admin", "monitor-saude", "admin-usuarios", "admin-politicas",
+            "admin-identidades", "admin-configuracoes", "admin-auditoria",
+            "admin-manutencao", "admin-excluir-projeto",
+            "ajuda", "ajuda-token", "ajuda-conectar", "ajuda-aprovacoes", "ajuda-ferramentas",
         }
         actual = set(re.findall(r"\?tab=([a-z0-9-]+)", doc))
         self.assertEqual(expected, actual)
-        self.assertIn('aria-current="page">Usuários</a>', doc)
+        self.assertIn('aria-current="page">Administração do AD</a>', doc)
+        self.assertNotIn(">Dados<", doc)
 
-    def test_context_route_receives_all_project_tools(self):
+    def test_context_route_receives_only_project_lifecycle_tools(self):
         doc = transform(LEGACY, self.admin, "aprovacoes")
         expected = {tab for entries in shell._PROJECT_NAV.values() for tab, _label in entries}
         actual = set(re.findall(r"\?tab=([a-z0-9-]+)", doc))
         self.assertTrue(expected.issubset(actual))
         self.assertIn('aria-label="Navegação do projeto"', doc)
-
+        self.assertNotIn('class="project-context-group"><span>Automatizar</span>', doc)
 
     def test_old_shell_is_not_embedded(self):
         doc = transform(LEGACY, self.admin, "projetos")
-        self.assertNotIn("<header class=\"header\">old", doc)
-        self.assertNotIn("<nav class=\"enterprise-nav\">old", doc)
-        self.assertNotIn("<footer class=\"footer\">old", doc)
+        self.assertNotIn('<header class="header">old', doc)
+        self.assertNotIn('<nav class="enterprise-nav">old', doc)
+        self.assertNotIn('<footer class="footer">old', doc)
         self.assertIn("conteúdo", doc)
 
 
