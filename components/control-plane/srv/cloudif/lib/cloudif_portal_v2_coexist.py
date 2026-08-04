@@ -276,7 +276,17 @@ def _install() -> None:
                             adapted_markup = transform(markup, identity(self.headers), tab or "publicacao", selected_project)
                             if tab == "publicacao":
                                 summary = getattr(owner, "render_resumo")(self.user())
-                                adapted_markup = adapted_markup.replace("</main>", '<section class="publication-summary card"><div class="section-title"><div><h2>Painel geral</h2><p>Resumo de projetos, bancos e infraestrutura autorizada.</p></div></div>' + summary + "</section></main>", 1)
+                                summary_markup = '<section class="publication-summary card"><div class="section-title"><div><h2>Painel geral</h2><p>Resumo de projetos, bancos e infraestrutura autorizada.</p></div></div>' + summary + "</section>"
+                                marker = '<section class="publication-shell publication-projects-clean"></section>'
+                                if marker in adapted_markup:
+                                    adapted_markup = adapted_markup.replace(marker, marker + summary_markup, 1)
+                                else:
+                                    adapted_markup = adapted_markup.replace('</section></main>', summary_markup + '</section></main>', 1)
+                                adapted_markup = adapted_markup.replace(
+                                    '</style>',
+                                    '.legacy-content[data-legacy-tab="publicacao"]{display:grid;gap:16px;background:transparent!important;min-height:0!important}.legacy-content[data-legacy-tab="publicacao"]>.publication-summary{margin:0!important}.legacy-content[data-legacy-tab="publicacao"]>.publication-summary>.card{margin:14px 0 0!important}</style>',
+                                    1,
+                                )
                             if tab == "agentes":
                                 try:
                                     identities = getattr(owner, "_oi_panel")(self.user())
