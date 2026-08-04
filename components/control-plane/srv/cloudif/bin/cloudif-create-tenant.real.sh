@@ -172,10 +172,31 @@ echo "Preparando docker-compose e kong.yml do tenant $TENANT"
 "$BASE/bin/cloudif-write-kong-v134.sh" "$TENANT"
 
 echo "Subindo tenant $TENANT"
-docker compose --env-file .env up -d
+docker compose --env-file .env up -d db imgproxy kong studio
 
 "$BASE/bin/cloudif-sync-db-passwords.sh" "$TENANT" || true
-docker compose --env-file .env up -d auth rest storage realtime supavisor meta kong studio || true
+
+EXPECTED_SERVICES=(db imgproxy kong studio auth rest storage realtime supavisor meta functions)
+for attempt in $(seq 1 60); do
+  docker compose --env-file .env up -d "${EXPECTED_SERVICES[@]}"
+  running=0
+  for service in "${EXPECTED_SERVICES[@]}"; do
+    cid="$(docker compose --env-file .env ps -q "$service" 2>/dev/null || true)"
+    [ -n "$cid" ] || continue
+    state="$(docker inspect -f '{{.State.Status}}' "$cid" 2>/dev/null || true)"
+    [ "$state" = "running" ] && running=$((running+1))
+  done
+  echo "Tenant $TENANT: $running/${#EXPECTED_SERVICES[@]} serviços ativos (tentativa $attempt/60)"
+  if [ "$running" -eq "${#EXPECTED_SERVICES[@]}" ]; then
+    break
+  fi
+  if [ "$attempt" -eq 60 ]; then
+    docker compose --env-file .env ps -a >&2 || true
+    echo "Falha: tenant $TENANT não estabilizou todos os serviços." >&2
+    exit 3
+  fi
+  sleep 5
+done
 
 "$BASE/bin/cloudif-render-router.sh"
 

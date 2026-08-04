@@ -35,8 +35,8 @@ def main():
   candidates=['/usr/local/sbin/cloudif-project-provision.sh','/usr/local/sbin/cloudif-provision-project.sh']
   found=[c for c in candidates if Path(c).exists() and os.access(c,os.X_OK)]
   if not found:raise RuntimeError('external_provision_script_missing')
-  p=run([found[0],str(path)],300)
-  if p.returncode:raise RuntimeError('project_provision_failed')
+  p=run([found[0],str(path)],2700)
+  if p.returncode:raise RuntimeError('project_provision_failed: '+(p.stderr or p.stdout or '')[-420:])
   set_state(path,job,'running','onboarding-reconcile')
   p=run(['/bin/systemctl','start','cloudif-project-onboarding-reconcile.service'],300)
   if p.returncode:raise RuntimeError('onboarding_reconcile_failed')
