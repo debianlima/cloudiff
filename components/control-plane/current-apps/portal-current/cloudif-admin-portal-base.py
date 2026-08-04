@@ -1139,7 +1139,6 @@ def render_admin(user):
         <label>Tenant</label>
         <select name="tenant">{tenant_opts}</select>
         <button class="btn" name="op" value="sync_roles">Sync roles</button>
-        <button class="btn blue" name="op" value="render_router">Render router</button>
         <button class="btn amber" name="op" value="ensure">Ensure/restore</button>
       </form>
     </div>
