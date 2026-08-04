@@ -3321,7 +3321,16 @@ def render_bancos(user):
 
         timed_controls = f"""<label class="db96-hours"><span>Duração</span><select name="hours">{hours}</select></label>
 <button class="btn {'db96-current' if timed_active else 'gray'}" name="op" value="keepalive" {'disabled aria-disabled="true"' if timed_active else ''}>{'Ativo agora' if timed_active else ('Iniciar temporariamente' if not running else 'Usar esta duração')}</button>"""
-        timed_desc = (f'Ligado por mais <strong class="db96-countdown" data-until="{h(keepalive_until)}">calculando...</strong>.' if timed_active else 'Mantém o banco ligado pelo período escolhido; ao vencer, o janitor para os serviços em até 5 minutos.')
+        def remaining_text(value):
+            try:
+                parsed=_db96_dt.datetime.fromisoformat(str(value).replace('Z','+00:00'))
+                if parsed.tzinfo is None: parsed=parsed.replace(tzinfo=_db96_dt.timezone.utc)
+                total=max(0,int((parsed-_db96_dt.datetime.now(_db96_dt.timezone.utc)).total_seconds()))
+                hours,rem=divmod(total,3600);minutes,seconds=divmod(rem,60)
+                return f'{hours:02d}:{minutes:02d}:{seconds:02d}'
+            except Exception:return '-'
+        remaining=remaining_text(keepalive_until)
+        timed_desc = (f'Ligado por mais <strong class="db96-countdown">{h(remaining)}</strong>.' if timed_active else 'Mantém o banco ligado pelo período escolhido; ao vencer, o janitor para os serviços em até 5 minutos.')
         modes = [mode_card('active' if timed_active else 'inactive','Por tempo determinado',timed_desc,'ATIVO AGORA' if timed_active else 'INATIVO',timed_controls)]
 
         if user["admin"]:
@@ -3329,7 +3338,7 @@ def render_bancos(user):
             always_controls = f"""<button class="btn {'db96-current' if always_alive else 'gray'}" name="op" value="{always_op}" {'disabled aria-disabled="true"' if always_alive else ''}>{'Ativo agora' if always_alive else 'Ativar sempre ligado'}</button>"""
             modes.append(mode_card('active' if always_alive else 'inactive','Sempre ligado','Mantém o banco disponível continuamente, sem desligamento automático.','ATIVO AGORA' if always_alive else 'INATIVO',always_controls))
             automatic_controls = f"""<button class="btn {'db96-current' if automatic_active else 'gray'}" name="op" value="always_off" {'disabled aria-disabled="true"' if automatic_active else ''}>{'Ativo agora' if automatic_active else 'Ativar desligamento automático'}</button>"""
-            auto_desc = (f'Desligamento agendado em <strong class="db96-countdown" data-until="{h(keepalive_until)}">calculando...</strong>. O janitor verifica a cada 5 minutos.' if automatic_active and keepalive_until else 'Ao ativar, agenda o desligamento para 1 hora depois. O janitor verifica o prazo a cada 5 minutos.')
+            auto_desc = (f'Desligamento agendado em <strong class="db96-countdown">{h(remaining)}</strong>. O janitor verifica a cada 5 minutos.' if automatic_active and keepalive_until else 'Ao ativar, agenda o desligamento para 1 hora depois. O janitor verifica o prazo a cada 5 minutos.')
             modes.append(mode_card('active' if automatic_active else 'inactive','Desligamento automático',auto_desc,'ATIVO AGORA' if automatic_active else 'INATIVO',automatic_controls))
         else:
             modes.append(mode_card('active' if automatic_active else 'inactive','Desligamento automático','Política padrão para economizar recursos quando não existe uma duração ativa.','ATIVO AGORA' if automatic_active else 'GERENCIADO','<span class="db96-readonly">Gerenciado pela plataforma</span>'))
