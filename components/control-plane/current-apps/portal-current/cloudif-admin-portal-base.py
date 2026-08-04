@@ -5178,9 +5178,48 @@ if 'Portal' in globals() and not globals().get('_rd_wrapped'):
                 return _cpx_send_json(self,{'ok':False,'error':'runtime_info_unavailable','detail':str(exc)[:220]},503)
         if path in ('/cloudiff/portal/action/project-runtime-info','/cloudif/portal/action/project-runtime-info','/action/project-runtime-info'):
             q=_rd_parse.parse_qs(parsed.query);slug=(q.get('slug') or [''])[0];kind=((q.get('kind') or [''])[0]).lower()
-            if kind not in ('php','node'):return self.send_error(404)
-            target=f'/cloudiff/portal/?tab=publicacao&project={_rd_parse.quote(slug)}&runtime_info={kind}'
-            self.send_response(302);self.send_header('Location',target);self.send_header('Cache-Control','no-store');self.end_headers();return
+            project=next((x for x in _rd_projects(user) if x['slug']==slug),None)
+            if not project or kind not in ('php','node'):return self.send_error(404)
+            try:
+                info=_rd_agent('/komodo/project/runtime-info',{'project':slug,'stack_id':project['stack_id'],'service':project['service'],'kind':kind},timeout=45)
+                if not info.get('ok'):raise RuntimeError(str(info.get('error') or 'runtime_info_failed'))
+                title='Informações do PHP' if kind=='php' else 'Informações do Node.js'
+                description='Versão, configuração e extensões carregadas.' if kind=='php' else 'Runtime, npm e dependências declaradas da API.'
+                output=h(str(info.get('output') or ''))
+                back=f'/cloudiff/portal/?tab=publicacao&project={_rd_parse.quote(slug)}'
+                body=(
+                    '<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">'
+                    '<meta name="viewport" content="width=device-width,initial-scale=1">'
+                    f'<title>{h(title)} · CloudIFF</title><style>'
+                    '*{box-sizing:border-box}body{margin:0;background:#f4f7f5;color:#132019;font-family:Inter,Arial,sans-serif}'
+                    'main{width:min(980px,calc(100% - 32px));margin:32px auto}'
+                    'header{display:flex;justify-content:space-between;align-items:flex-start;gap:24px;margin-bottom:20px}'
+                    'header span{font-size:12px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#647067}'
+                    'h1{margin:6px 0 8px;font-size:clamp(28px,4vw,42px)}p{margin:0;color:#647067}'
+                    '.close{display:inline-flex;align-items:center;justify-content:center;padding:10px 14px;border:1px solid #cfd8d1;border-radius:10px;background:#fff;color:#132019;text-decoration:none;font-weight:800;white-space:nowrap}'
+                    'section{background:#fff;border:1px solid #dbe3dd;border-radius:16px;overflow:hidden}'
+                    '.meta{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:#dbe3dd}.meta div{padding:14px 16px;background:#fff}'
+                    '.meta span{display:block;margin-bottom:4px;font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#647067}'
+                    'pre{margin:0;padding:22px;max-height:calc(100vh - 240px);overflow:auto;background:#071a10;color:#d9f7df;white-space:pre-wrap;word-break:break-word;font:12px/1.55 ui-monospace,SFMono-Regular,Menlo,monospace}'
+                    '@media(max-width:680px){main{width:min(100% - 20px,980px);margin:16px auto}header{display:grid}.meta{grid-template-columns:1fr}pre{max-height:none}}'
+                    '</style></head><body><main><header><div><span>CloudIFF · diagnóstico autenticado</span>'
+                    f'<h1>{h(title)}</h1><p>{h(description)}</p></div><a class="close" href="{h(back)}">Fechar e voltar</a></header>'
+                    '<section><div class="meta">'
+                    f'<div><span>Projeto</span><strong>{h(slug)}</strong></div><div><span>Container</span><strong>{h(info.get("container") or "—")}</strong></div>'
+                    f'</div><pre>{output}</pre></section></main></body></html>'
+                )
+                return self.send_html(body,200)
+            except Exception as exc:
+                back=f'/cloudiff/portal/?tab=publicacao&project={_rd_parse.quote(slug)}'
+                body=(
+                    '<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
+                    '<title>Diagnóstico indisponível · CloudIFF</title><style>'
+                    'body{font-family:Inter,Arial,sans-serif;background:#f4f7f5;color:#132019;margin:0}main{max-width:680px;margin:10vh auto;padding:24px}'
+                    'section{background:#fff;border:1px solid #dbe3dd;border-radius:16px;padding:24px}a{display:inline-block;margin-top:16px;color:#16883f;font-weight:800}'
+                    '</style></head><body><main><section><h1>Diagnóstico indisponível</h1>'
+                    f'<p>{h(str(exc)[:220])}</p><a href="{h(back)}">Fechar e voltar</a></section></main></body></html>'
+                )
+                return self.send_html(body,503)
         if path in ('/cloudiff/portal/action/open-project-terminal','/cloudif/portal/action/open-project-terminal','/action/open-project-terminal'):
             q=_rd_parse.parse_qs(parsed.query);slug=(q.get('slug') or [''])[0];kind=((q.get('kind') or [''])[0]).lower()
             p=next((x for x in _rd_projects(user) if x['slug']==slug),None)
