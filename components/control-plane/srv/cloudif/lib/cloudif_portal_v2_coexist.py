@@ -213,12 +213,16 @@ def _install() -> None:
                     stype = (query.get("type") or ["all"])[0].strip().lower()
                     if len(q) < 2:
                         return send_json(self, 200, {"ok": True, "query": q, "type": stype, "count": 0, "items": []})
-                    owner = sys.modules.get(handler_class.__module__)
-                    search = getattr(owner, "_cloudif_ad_search_real", None)
-                    if not callable(search):
-                        return send_json(self, 503, {"ok": False, "error": "ad_search_unavailable", "items": []})
-                    items = search(q, stype)
-                    return send_json(self, 200, {"ok": True, "query": q, "type": stype, "count": len(items), "items": items})
+                    try:
+                        import cloudif_ad_directory_module as directory
+                        user = directory.user_from_headers(self.headers)
+                        payload = directory.search(q, stype, user=user, diagnostics=False)
+                        payload["query"] = q
+                        payload["type"] = stype
+                        payload["count"] = len(payload.get("items") or [])
+                        return send_json(self, 200, payload)
+                    except Exception as exc:
+                        return send_json(self, 500, {"ok": False, "error": type(exc).__name__, "detail": str(exc)[:300], "items": []})
                 if path in {"/cloudif/portal/api/admin-delete-tenant-preview", "/cloudiff/portal/api/admin-delete-tenant-preview"}:
                     if not tenant_admin_allowed(self):
                         return send_json(self, 403, {"ok": False, "error": "forbidden"})
