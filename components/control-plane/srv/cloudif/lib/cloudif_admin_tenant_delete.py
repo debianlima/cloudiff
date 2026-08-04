@@ -541,7 +541,7 @@ def render_panel(csrf_token, selected=""):
  const modal=document.getElementById('tenant-delete-modal'),body=document.getElementById('tenant-delete-modal-body'),footer=document.getElementById('tenant-delete-modal-footer'),title=document.getElementById('tenant-delete-title'),subtitle=document.getElementById('tenant-delete-subtitle');
  const portal='/cloudiff/portal/',labels=['Validação','Backup final','Containers e volumes','Registry e permissões','Diretório do tenant','Roteador'];
  const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}}[c]));
- let activeJob='',terminal=false;
+ let activeJob='',terminal=false,lastJob=null;
  const dots=()=>'<span class="tenant-delete-dots" aria-label="Executando"><i></i><i></i><i></i></span>';
  function openModal(){{modal.hidden=false;modal.setAttribute('aria-hidden','false');document.body.classList.add('tenant-delete-modal-open')}}
  function closeModal(){{if(activeJob&&!terminal)return;modal.hidden=true;modal.setAttribute('aria-hidden','true');document.body.classList.remove('tenant-delete-modal-open')}}
@@ -549,8 +549,37 @@ def render_panel(csrf_token, selected=""):
  async function jsonFetch(url,options={{}}){{const r=await fetch(url,{{credentials:'same-origin',...options}}),type=(r.headers.get('content-type')||'').toLowerCase(),text=await r.text();if(!type.includes('application/json')){{const e=new Error(`A operação não chegou ao serviço de exclusão (HTTP ${{r.status}}).`);e.status=r.status;throw e}}let data;try{{data=JSON.parse(text)}}catch(_e){{throw new Error('O serviço retornou uma resposta incompleta.')}}if(!r.ok){{const e=new Error(data.detail||data.error||`HTTP ${{r.status}}`);e.status=r.status;throw e}}return data}}
  function timeline(job={{}}){{const known=new Map((job.steps||[]).map(x=>[x.label,x]));return labels.map((label,index)=>{{const item=known.get(label)||{{status:'pending',detail:'Aguardando etapa anterior.'}},status=item.status||'pending',icon=status==='done'?'✓':status==='failed'?'!':status==='running'?dots():String(index+1),badge=status==='done'?'Concluído':status==='failed'?'Falhou':status==='running'?'Executando':'Aguardando';return `<li class="tenant-delete-step ${{status}}"><span class="tenant-delete-step-icon">${{icon}}</span><div><strong>${{esc(label)}}</strong><small>${{esc(item.detail||'')}}</small></div><span class="pill ${{status==='done'?'ok':status==='failed'?'bad':'muted'}}">${{badge}}</span></li>`}}).join('')}}
  function preparing(message,detail){{title.textContent='Exclusão iniciada';subtitle.textContent=message;body.innerHTML=`<div class="tenant-delete-live">${{dots()}}<div><strong>${{esc(message)}}</strong><small>${{esc(detail)}}</small></div></div><div class="tenant-delete-progress-wrap"><progress max="100" value="2"></progress><small>O servidor está preparando a operação.</small></div><ol class="tenant-delete-timeline">${{timeline({{steps:[{{label:'Validação',status:'running',detail}}]}})}}</ol>`;footer.innerHTML='<button class="btn light" type="button" disabled>Aguarde…</button>'}}
- function drawJob(job){{activeJob=['queued','running'].includes(job.status)?job.job_id||activeJob:'';terminal=!activeJob;const progress=Number(job.progress||0),failed=job.status==='failed',done=job.status==='succeeded';title.textContent=done?'Banco removido':failed?'A exclusão falhou':'Exclusão em andamento';subtitle.textContent=done?'Backup protegido e ambiente atualizado.':failed?'O processo foi interrompido com segurança.':job.current_step||'Preparando próxima etapa.';const live=!failed&&!done?`<div class="tenant-delete-live">${{dots()}}<div><strong>${{esc(job.current_step||'Executando')}}</strong><small>O servidor continua trabalhando. Não feche esta janela.</small></div></div>`:'';const terminalBox=done?'<div class="tenant-delete-terminal ok"><strong>Exclusão concluída.</strong><p>O backup final foi criado antes da remoção dos dados.</p></div>':failed?`<div class="tenant-delete-terminal bad"><strong>Não foi possível concluir.</strong><p>${{esc(job.error||job.detail||job.result?.error||'Falha não identificada.')}}</p></div>`:'';body.innerHTML=`${{live}}<div class="tenant-delete-progress-wrap"><progress max="100" value="${{progress}}"></progress><small>${{progress}}% concluído</small></div><ol class="tenant-delete-timeline">${{timeline(job)}}</ol>${{terminalBox}}`;footer.innerHTML=terminal?'<button class="btn" type="button" data-finish>Fechar</button>':'<button class="btn light" type="button" disabled>Exclusão em andamento…</button>';footer.querySelector('[data-finish]')?.addEventListener('click',()=>{{closeModal();location.reload()}})}}
- async function poll(id,attempt=0){{try{{const job=await jsonFetch(`${{portal}}?api=admin-delete-tenant-status&job_id=${{encodeURIComponent(id)}}`,{{headers:{{Accept:'application/json'}}}});drawJob(job);if(['queued','running'].includes(job.status))setTimeout(()=>poll(id,0),1000)}}catch(e){{if([0,502,503,504].includes(Number(e.status||0))&&attempt<30){{subtitle.textContent='Reconectando ao processo…';setTimeout(()=>poll(id,attempt+1),1200);return}}activeJob='';terminal=true;drawJob({{status:'failed',progress:100,error:e.message,steps:[]}})}}}}
+ function drawJob(job){{lastJob=job;activeJob=['queued','running'].includes(job.status)?job.job_id||activeJob:'';terminal=!activeJob;const progress=Number(job.progress||0),failed=job.status==='failed',done=job.status==='succeeded';title.textContent=done?'Banco removido':failed?'A exclusão falhou':'Exclusão em andamento';subtitle.textContent=done?'Backup protegido e ambiente atualizado.':failed?'O processo foi interrompido com segurança.':job.current_step||'Preparando próxima etapa.';const live=!failed&&!done?`<div class="tenant-delete-live">${{dots()}}<div><strong>${{esc(job.current_step||'Executando')}}</strong><small>O servidor continua trabalhando. Não feche esta janela.</small></div></div>`:'';const terminalBox=done?'<div class="tenant-delete-terminal ok"><strong>Exclusão concluída.</strong><p>O backup final foi criado antes da remoção dos dados.</p></div>':failed?`<div class="tenant-delete-terminal bad"><strong>Não foi possível concluir.</strong><p>${{esc(job.error||job.detail||job.result?.error||'Falha não identificada.')}}</p></div>`:'';body.innerHTML=`${{live}}<div class="tenant-delete-progress-wrap"><progress max="100" value="${{progress}}"></progress><small>${{progress}}% concluído</small></div><ol class="tenant-delete-timeline">${{timeline(job)}}</ol>${{terminalBox}}`;footer.innerHTML=terminal?'<button class="btn" type="button" data-finish>Fechar</button>':'<button class="btn light" type="button" disabled>Exclusão em andamento…</button>';footer.querySelector('[data-finish]')?.addEventListener('click',()=>{{closeModal();location.reload()}})}}
+ function showReconnect(attempt){{
+   title.textContent='Confirmando conclusão';
+   subtitle.textContent='O roteador está sendo atualizado. Recuperando o resultado final…';
+   const banner=`<div class="tenant-delete-live" data-delete-reconnect>${{dots()}}<div><strong>Reconectando ao processo</strong><small>Tentativa ${{attempt+1}} de 75. As etapas já concluídas foram preservadas.</small></div></div>`;
+   const previous=body.querySelector('[data-delete-reconnect]');
+   if(previous)previous.outerHTML=banner;else body.insertAdjacentHTML('afterbegin',banner);
+   footer.innerHTML='<button class="btn light" type="button" disabled>Confirmando resultado…</button>';
+ }}
+ async function poll(id,attempt=0){{
+   const urls=[`${{portal}}?api=admin-delete-tenant-status&job_id=${{encodeURIComponent(id)}}`,`/cloudiff/portal/api/admin-delete-tenant-status?job_id=${{encodeURIComponent(id)}}`];
+   try{{
+     const job=await jsonFetch(urls[attempt%2],{{headers:{{Accept:'application/json','Cache-Control':'no-store'}}}});
+     drawJob(job);
+     if(['queued','running'].includes(job.status))setTimeout(()=>poll(id,0),1000);
+   }}catch(e){{
+     const transient=[0,404,408,425,429,500,502,503,504].includes(Number(e.status||0));
+     if(transient&&attempt<75){{showReconnect(attempt);setTimeout(()=>poll(id,attempt+1),1200);return}}
+     activeJob='';terminal=true;
+     if(lastJob){{
+       drawJob(lastJob);
+       title.textContent='Resultado ainda não confirmado';
+       subtitle.textContent='A operação pode ter terminado no servidor. Atualize a página para recuperar o recibo.';
+       body.insertAdjacentHTML('beforeend',`<div class="tenant-delete-terminal bad"><strong>Não foi possível confirmar o resultado.</strong><p>${{esc(e.message)}}</p></div>`);
+       footer.innerHTML='<button class="btn" type="button" data-finish>Fechar e atualizar</button>';
+       footer.querySelector('[data-finish]').onclick=()=>location.reload();
+       return;
+     }}
+     drawJob({{status:'failed',progress:0,error:e.message,steps:[{{label:'Validação',status:'failed',detail:e.message}}]}});
+   }}
+ }}
  form.addEventListener('submit',async e=>{{
    e.preventDefault();
    const fd=new FormData(form),tenant=String(fd.get('tenant')||'').trim();
