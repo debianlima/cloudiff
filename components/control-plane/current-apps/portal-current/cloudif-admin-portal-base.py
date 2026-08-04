@@ -5057,7 +5057,7 @@ if 'Portal' in globals() and not globals().get('_pb_consolidated_wrapped'):
                     if not chunk:break
                     self.wfile.write(chunk)
             return
-        if path in ('/cloudif/portal/download/project-backup','/download/project-backup'):
+        if path in ('/cloudiff/portal/download/project-backup','/cloudif/portal/download/project-backup','/download/project-backup'):
             q=_pb_parse.parse_qs(parsed.query);slug=(q.get('slug') or [''])[0];fn=(q.get('file') or [''])[0]
             if not _pb_project(user,slug) or fn!=_pb_Path(fn).name or not fn.endswith('.tar.gz'):return self.send_html(page(user,'projetos','<div class="card"><span class="pill bad">Backup não autorizado.</span></div>'),403)
             root=(_pb_Path('/srv/cloudif/managed-backups/projects')/slug).resolve();f=(root/fn).resolve()
