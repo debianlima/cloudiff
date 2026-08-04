@@ -85,6 +85,8 @@ def main():
   set_state(path,job,'running','backup-configuration')
   p=run(['/usr/local/sbin/cloudif-project-backup.py','set-auto','--slug',slug,'--enabled','1','--remote-requested','1'],120)
   if p.returncode:raise RuntimeError('backup_configuration_failed: '+(p.stderr or p.stdout or '')[-420:])
+  p=run(['/bin/systemctl','enable','--now','cloudif-tenant-db-backup-v2.timer'],120)
+  if p.returncode:raise RuntimeError('tenant_backup_timer_enable_failed: '+(p.stderr or p.stdout or '')[-420:])
   if job.get('template_kind') in ('onboarding','links'):
    set_state(path,job,'running','template')
    p=run(['/usr/local/sbin/cloudif-project-template-apply.py',str(path)],480)
