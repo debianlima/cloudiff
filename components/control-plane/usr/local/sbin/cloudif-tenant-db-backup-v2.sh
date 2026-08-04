@@ -4,6 +4,7 @@ BASE=/srv/cloudif/managed-backups/databases-v2
 TENANTS=/srv/cloudif/tenants
 STAMP=$(date +%Y%m%d-%H%M%S)
 DEST="$BASE/$STAMP"
+install -d -m 0700 "$BASE"
 install -d -m 0700 "$DEST"
 backed_up=0
 skipped=0
