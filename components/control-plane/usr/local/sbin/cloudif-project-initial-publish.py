@@ -71,6 +71,8 @@ def main():
  progress(job_path,job,'Verificando a stack no Komodo.',0)
  try:ready,detail=deployment_ready()
  except Exception as exc:ready=False;detail=type(exc).__name__+': '+str(exc)
+ if kind in ('onboarding','links'):
+  ready=False;detail='Template atualizado; sincronização e novo deploy obrigatórios.'
  if not ready:
   progress(job_path,job,'Atualizando o repositório da stack.',1,detail)
   request(kbase+'/komodo/stack/pull','POST',payload,kh,60)
