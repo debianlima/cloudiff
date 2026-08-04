@@ -46,7 +46,7 @@ def _komodo_web_status(slug,stack_id=''):
     except Exception:return {}
 
 def _project_context(slug, framework_hint=''):
-    context={'framework':framework_hint or '', 'database':'', 'repo_url':'', 'security':'Aguardando publicação','service_status':'Não verificado','runtime':{}}
+    context={'slug':slug,'framework':framework_hint or '', 'database':'', 'repo_url':'', 'security':'Aguardando publicação','service_status':'Não verificado','runtime':{}}
     try:
         con=sqlite3.connect(DB);con.row_factory=sqlite3.Row
         project=con.execute('select * from projects where slug=?',(slug,)).fetchone()
@@ -100,8 +100,8 @@ def _project_information(context):
         database_value=f'<strong>{h(database or "Nenhum banco vinculado")}</strong>'
     return (
         '<div class="publication-information">'
-        f'<div class="publication-info-card publication-info-primary"><span>Framework</span><strong>{h(context.get("framework"))}</strong><small>Estrutura da aplicação</small></div>'
-        f'<div class="publication-info-card"><span>Ambiente</span><strong>{h((context.get("runtime") or {}).get("environment") or "Não identificado")}</strong><small>Servidor e interpretadores</small></div>'
+        f'<a class="publication-info-card publication-runtime-link" href="/cloudiff/portal/action/project-runtime-info?slug={h(context.get("slug") or "")}&amp;kind=php"><span>PHP</span><strong>Informações do PHP</strong><small>Versão, configuração e extensões</small></a>'
+        f'<a class="publication-info-card publication-runtime-link" href="/cloudiff/portal/action/project-runtime-info?slug={h(context.get("slug") or "")}&amp;kind=node"><span>Node.js</span><strong>Informações do Node.js</strong><small>Runtime, npm e dependências</small></a>'
         f'<div class="publication-info-card"><span>Versões</span><strong>{h((context.get("runtime") or {}).get("versions") or "Não identificadas")}</strong><small>Runtime provisionado</small></div>'
         f'<div class="publication-info-card"><span>Serviço web</span><strong>{h(context.get("service_status"))}</strong><small>Estado real do container</small></div>'
         f'<div class="publication-info-card"><span>Banco vinculado</span>{database_value}<small>Tenant da aplicação</small></div>'
@@ -202,14 +202,14 @@ def publication_panel(slug, framework_hint=''):
         '<div class="cm-resource publication-manager-resource">'+information+job_html+alias_html+
         '<div class="publication-active-card"><div><span>Site publicado</span>'
         f'<a href="https://{h(active_host)}/" target="_blank" rel="noopener">{h(active_host)}</a></div><span class="pill ok">d{active_dep} ativa</span></div>'
-        '<div class="cm-actions">'
-        f'<a class="btn light" href="https://{h(active_host)}/" target="_blank" rel="noopener">Abrir site</a>'
-        '<form method="post" action="/cloudiff/portal/action/publication">'
-        f'<input type="hidden" name="slug" value="{h(slug)}">'
-        '<button class="btn" name="op" value="publish_version">Publicar nova versão</button></form></div>'
+        '<div class="cm-actions publication-site-actions">'
+        f'<a class="btn light" href="https://{h(active_host)}/" target="_blank" rel="noopener">Abrir site</a></div>'
         '<div class="publication-versions"><div class="cm-resource-title"><strong>Versões publicadas</strong></div>'
         '<div style="overflow:auto"><table><tr><th>Versão</th><th>Commit</th><th>URL</th><th>Ação</th></tr>'
-        + ''.join(trs) + '</table></div></div></div>'
+        + ''.join(trs) + '</table></div>'
+        '<form class="publication-new-version" method="post" action="/cloudiff/portal/action/publication">'
+        f'<input type="hidden" name="slug" value="{h(slug)}">'
+        '<button class="btn" name="op" value="publish_version">Publicar nova versão</button></form></div></div>'
     )
 
 

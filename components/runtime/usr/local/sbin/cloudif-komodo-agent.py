@@ -3420,6 +3420,49 @@ def cloudif_project_repair(handler):
     after=_cloudif_project_audit_data(payload)
     return send(handler,200 if after.get('healthy') else 202,{'ok':True,'actions':actions,'before':before,'after':after})
 
+def cloudif_project_runtime_info(handler):
+    if not authorized(handler):
+        return send(handler,403,{"ok":False,"error":"forbidden"})
+    try:
+        payload=handler.parse_json()
+    except Exception as exc:
+        return send(handler,400,{"ok":False,"error":"invalid_json","detail":str(exc)[:200]})
+    project=safe_slug(payload.get("project") or ""); kind=str(payload.get("kind") or "").strip().lower()
+    stack_id=str(payload.get("stack_id") or ""); service=str(payload.get("service") or "web")
+    if not project or kind not in {"php","node"}:
+        return send(handler,400,{"ok":False,"error":"invalid_request"})
+    audit=_cloudif_project_audit_data(project,stack_id,service,"cloudif-"+project,"sh")
+    container=str(audit.get("container_name") or "")
+    if not audit.get("healthy") or not container:
+        return send(handler,422,{"ok":False,"error":"container_not_running","audit":audit})
+    if kind=="php":
+        script="""php -v
+printf '\n---INI---\n'
+php --ini
+printf '\n---CONFIG---\n'
+php -r '$k=["memory_limit","upload_max_filesize","post_max_size","max_execution_time","date.timezone"]; foreach($k as $x){echo $x,"=",ini_get($x),PHP_EOL;}'
+printf '\n---MODULES---\n'
+php -m
+"""
+    else:
+        script="""node -e 'console.log(process.version); console.log("---VERSIONS---"); console.log(JSON.stringify(process.versions,null,2)); console.log("---PLATFORM---"); console.log(process.platform+" "+process.arch)'
+printf '\n---NPM---\n'
+(npm --version 2>/dev/null || true)
+printf '\n---PACKAGE---\n'
+if [ -f /var/www/html/api/package.json ]; then
+  node -e 'const p=require("/var/www/html/api/package.json"); console.log(JSON.stringify({name:p.name||"",version:p.version||"",scripts:p.scripts||{},dependencies:p.dependencies||{},devDependencies:p.devDependencies||{}},null,2))'
+else
+  echo 'package.json não encontrado'
+fi
+"""
+    command=["docker","exec",container,"sh","-lc",script]
+    try:
+        proc=subprocess.run(command,text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=30,check=False)
+    except Exception as exc:
+        return send(handler,500,{"ok":False,"error":"runtime_info_failed","detail":str(exc)[:300]})
+    return send(handler,200 if proc.returncode==0 else 422,{"ok":proc.returncode==0,"project":project,"kind":kind,"container":container,"output":(proc.stdout or "")[:120000],"stderr":(proc.stderr or "")[:4000],"returncode":proc.returncode})
+
+
 def cloudif_project_terminal_ensure(handler):
     if not _cloudif_pub_auth(handler): return send(handler,403,{"ok":False,"error":"forbidden"})
     payload=_cloudif_pub_json(handler)
@@ -3873,6 +3916,8 @@ class H(BaseHTTPRequestHandler):
             return cloudif_project_runtime_inspect(self)
         if _cloudif_pub_path == "/komodo/project/audit":
             return cloudif_project_audit(self)
+        if _cloudif_pub_path == "/komodo/project/runtime-info":
+            return cloudif_project_runtime_info(self)
         if _cloudif_pub_path == "/komodo/project/repair":
             return cloudif_project_repair(self)
         if _cloudif_pub_path == "/komodo/project/terminal/ensure":

@@ -59,7 +59,7 @@ class PublicationManagementUITest(unittest.TestCase):
 
     def test_information_uses_real_project_links(self):
         markup=ui.publication_panel('demo','Django')
-        self.assertIn('Framework',markup);self.assertIn('Django',markup)
+        self.assertIn('Informações do PHP',markup);self.assertIn('Informações do Node.js',markup)
         self.assertIn('Banco vinculado',markup);self.assertIn('demo-db',markup)
         self.assertIn('publication-database-link',markup)
         self.assertIn('https://demo-db.cloudiff.duckdns.org/project/default',markup)
