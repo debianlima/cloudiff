@@ -1,0 +1,165 @@
+# Arquitetura operacional atual
+
+Este capítulo consolida o comportamento implementado em produção para provisionamento, ACL, publicação, terminal, reconciliação e exclusão. Ele complementa os capítulos anteriores e representa o contrato operacional vigente.
+
+## Modelo em camadas
+
+```mermaid
+flowchart TB
+  UI[Portal CloudIFF] --> AUTH[Identidade e ACL]
+  UI --> JOBS[Jobs persistentes]
+  AUTH --> FORJA[Forja Agent]
+  AUTH --> KOMODO[Komodo Agent]
+  JOBS --> FORJA
+  JOBS --> KOMODO
+  JOBS --> PROXY[Publisher / Proxy Agent]
+  FORJA --> FG[Forgejo]
+  KOMODO --> K[Komodo Core]
+  K --> D[Docker / Periphery]
+  PROXY --> NPM[Nginx Proxy Manager]
+  UI --> TENANT[Tenant Guard / Supabase]
+  TENANT --> DB[(PostgreSQL + serviços Supabase)]
+```
+
+### Camada de experiência
+
+O Portal apresenta projetos, publicações, bancos, backups, conectores, permissões, ajuda e operações administrativas. Ele nunca deve tratar uma operação longa como concluída apenas por ter enviado a requisição: jobs persistentes e wizards consultam o estado real.
+
+### Camada de controle
+
+O plano de controle mantém projetos, ACLs, integrações, publicações, aliases, jobs e auditoria. Locks por projeto impedem efeitos concorrentes sobre o mesmo recurso.
+
+### Camada de agentes
+
+Os agentes adaptam contratos do plano de controle aos sistemas externos. Eles operam com idempotência, respostas estruturadas e reconciliação do estado observado.
+
+### Camada de execução
+
+Komodo, Docker e Periphery executam stacks do projeto, publicações e tenants. Cada projeto usa runtime isolado; imagens-base podem ser compartilhadas, mas processos, arquivos e redes permanecem separados.
+
+## Agentes e responsabilidades
+
+| Agente | Entrada principal | Responsabilidade | Resultado esperado |
+|---|---|---|---|
+| Forja Agent | `/project/ensure`, `/project/rollback` | Repositório pessoal, webhook, arquivos, commits e remoção | Repositório no owner correto e automação única |
+| Komodo Agent | `/komodo/project/ensure`, `/audit`, `/runtime-info`, `/terminal/ensure`, `/stack/destroy` | Stack, runtime, terminal, publicação, ACL e limpeza | Estado real reconciliado com o Portal |
+| Publisher Agent | publicação e promoção | Host versionado, certificado, alias estável e promoção | URL versionada e estável em HTTP 200 |
+| Tenant Guard | abertura e warmup | Inicialização, autorização e estabilidade do tenant | Banco/API disponíveis antes do redirecionamento |
+| Backup workers | timers e ações manuais | Backups de projeto, tenant e plataforma | Artefato auditável e política de retenção |
+| Reconcile workers | filas, timers e paths | Reparar divergências e retomar operações | Estado convergente ou falha explícita |
+
+## Provisionamento
+
+```mermaid
+sequenceDiagram
+  actor U as Usuário
+  participant P as Portal
+  participant J as Worker
+  participant F as Forja Agent
+  participant K as Komodo Agent
+  participant T as Tenant/Supabase
+  participant X as Proxy
+  U->>P: Criar projeto
+  P->>J: Job persistente + ACL + owner
+  J->>F: project/ensure
+  F->>F: criar repo no namespace pessoal
+  F-->>J: repo_url, repo_id, webhook
+  J->>K: project/ensure
+  K->>K: stack + runtime Apache/PHP/Node
+  K-->>J: stack_id, saúde, container
+  J->>T: vincular ou preparar tenant
+  J->>X: publicar URL inicial
+  J-->>P: succeeded / complete
+  P-->>U: Wizard concluído
+```
+
+O provisionador envia `owner` e ACL completa. O repositório é criado no namespace do solicitante. O Komodo recebe os mesmos vínculos e aplica permissões à stack principal, às publicações e à stack do tenant.
+
+## ACL de usuários e grupos
+
+Uma ACL possui entradas `user` ou `group`. Pertencer ao grupo geral de alunos não concede acesso automático a projetos de terceiros. Um grupo só herda acesso quando foi adicionado explicitamente à ACL do projeto.
+
+```mermaid
+flowchart LR
+  S[Sessão autenticada] --> O{É owner/admin/professor?}
+  O -- sim --> A[Acesso]
+  O -- não --> U{Usuário na ACL?}
+  U -- sim --> A
+  U -- não --> G{Algum grupo da sessão está na ACL?}
+  G -- sim --> A
+  G -- não --> D[Negar]
+```
+
+A sincronização aplica permissões a:
+
+- repositório Forgejo;
+- stack principal;
+- stacks de publicações;
+- stack do tenant/Supabase;
+- terminais autorizados.
+
+## Publicação versionada
+
+Cada publicação cria uma versão `dN`. Projetos PHP/Node reutilizam o runtime unificado Apache + PHP + Node, em vez de Nginx estático. A promoção só termina depois que a operação do Komodo conclui, a imagem correta está saudável e o alias de rede ativo foi confirmado.
+
+```mermaid
+flowchart LR
+  C[Commit] --> S[Snapshot imutável]
+  S --> I[Imagem versionada]
+  I --> D[Stack dN]
+  D --> H{Health + imagem correta?}
+  H -- não --> F[Falha explícita]
+  H -- sim --> V[URL versionada]
+  V --> P[Promoção]
+  P --> A[Alias ativo]
+  A --> E[URL estável]
+```
+
+## Terminal compartilhado
+
+O Portal envia ao Komodo o usuário autenticado, seus grupos, owner e ACL. O terminal tem nome por usuário e é aberto na stack da publicação ativa. Isso evita reutilizar a identidade do owner e evita conceder leitura global do servidor.
+
+A tela global **Containers** permanece restrita porque o Komodo 2.2.0 exige leitura do servidor inteiro. Recursos autorizados aparecem em **Stacks** e **Terminals**.
+
+## Exclusão de projeto
+
+A exclusão é idempotente e rastreia recursos derivados pelo slug, número público, IDs, labels e alvos dos terminais.
+
+```mermaid
+flowchart TD
+  V[Validar projeto] --> P[Remover publicação e aliases]
+  P --> R[Remover runtime principal]
+  R --> T[Remover terminais por usuário]
+  T --> S[Remover stacks versionadas]
+  S --> B[Remover builds e imagens específicas]
+  B --> F[Remover Forgejo e agentes]
+  F --> D[Remover registros do Portal]
+  D --> I[Reconciliação final]
+  I --> C{Restou recurso derivado?}
+  C -- sim --> E[Falha no wizard]
+  C -- não --> OK[Concluído]
+```
+
+São removidos terminais, publicações, builds, imagens específicas, snapshots, stacks versionadas, stack principal, repositório e registros do Portal. O tenant e os dados Supabase são preservados quando a política de exclusão do projeto determina preservação do banco.
+
+## Mensagens principais
+
+| Mensagem/endpoint | Emissor | Consumidor | Finalidade |
+|---|---|---|---|
+| `project/ensure` | Worker/Forja Agent | Forgejo/Komodo | Criar ou reconciliar projeto |
+| `project/rollback` | Exclusão administrativa | Forja Agent | Remover repositório e automação |
+| `komodo/project/audit` | Portal | Komodo Agent | Estado real de stack/container |
+| `komodo/project/runtime-info` | Portal | Komodo Agent | Diagnóstico PHP e Node |
+| `komodo/project/terminal/ensure` | Portal | Komodo Agent | Terminal do usuário autenticado |
+| `komodo/publication/deploy` | Publicador | Komodo Agent | Criar versão imutável |
+| `komodo/publication/promote` | Publicador | Komodo Agent | Trocar alias ativo com verificação |
+| `komodo/stack/destroy` | Exclusão | Komodo Agent | Limpeza principal e derivada |
+
+## Princípios de segurança
+
+- Tokens permanecem fora do repositório e das respostas do Portal.
+- ACL de grupo só vale quando explicitamente associada ao projeto.
+- Falhas transitórias podem ser reconciliadas, mas não mascaradas.
+- Uma operação só termina quando o estado observado confirma o efeito.
+- A exclusão falha se recursos derivados permanecerem.
+- Recursos compartilhados de runtime e dados preservados não são removidos por uma exclusão de projeto.

@@ -15,3 +15,7 @@ Responsável por entrada HTTPS, roteamento público, certificados e encaminhamen
 ## Tenants
 
 Cada tenant Supabase utiliza templates versionáveis. Dados e credenciais do tenant não fazem parte deste repositório.
+
+## Estado operacional vigente
+
+Os fluxos implementados de provisionamento, ACL, publicação versionada, terminal compartilhado e exclusão derivada estão consolidados em [Arquitetura operacional atual](manual-tecnico/12-ARQUITETURA-OPERACIONAL-ATUAL.md).

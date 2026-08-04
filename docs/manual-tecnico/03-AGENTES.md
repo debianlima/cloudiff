@@ -44,3 +44,7 @@ As ferramentas são descobertas por `initialize`, `resources/list`, `resources/r
 - dados mínimos da operação.
 
 Ferramentas de leitura podem executar diretamente. Ferramentas com efeito produzem plano e, quando protegidas, uma solicitação de aprovação antes de qualquer alteração.
+
+## Política atual de identidade e recursos derivados
+
+Os agentes recebem owner e ACL separadamente. O usuário autenticado nunca é substituído pelo owner ao abrir terminal. O Komodo Agent propaga a ACL para a stack principal, publicações e tenant; terminais são isolados por usuário e apontam para a publicação ativa. A exclusão administrativa varre terminais, stacks versionadas, builds, imagens e snapshots antes de declarar conclusão.

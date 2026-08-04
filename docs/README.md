@@ -30,3 +30,7 @@ Documentação técnica, inventários e evidências.
 > Esta seção é gerada por `scripts/generate-directory-readmes.py`. Conteúdo manual fora dos marcadores é preservado.
 
 <!-- CLOUDIFF-AUTO-DOC:END -->
+
+## Estado operacional atual
+
+- [Arquitetura operacional atual](manual-tecnico/12-ARQUITETURA-OPERACIONAL-ATUAL.md)

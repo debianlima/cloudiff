@@ -15,6 +15,7 @@ Este manual descreve a CloudIFF como plataforma de ensino, provisionamento, publ
 9. [Catálogo de serviços](09-SERVICOS.md)
 10. [Como evoluir a plataforma](10-DESENVOLVIMENTO.md)
 11. [Runtime unificado de projetos](11-RUNTIME-UNIFICADO.md)
+12. [Arquitetura operacional atual](12-ARQUITETURA-OPERACIONAL-ATUAL.md)
 
 ## Catálogos gerados do código
 

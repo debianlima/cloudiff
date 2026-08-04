@@ -9,6 +9,7 @@ Este repositório funciona também como uma apostila técnica da plataforma:
 - [Manual técnico completo](docs/manual-tecnico/README.md)
 - [Arquitetura e diagramas](docs/manual-tecnico/01-ARQUITETURA.md)
 - [Runtime unificado de projetos](docs/manual-tecnico/11-RUNTIME-UNIFICADO.md)
+- [Arquitetura operacional atual](docs/manual-tecnico/12-ARQUITETURA-OPERACIONAL-ATUAL.md)
 - [Fluxos de processo](docs/manual-tecnico/02-FLUXOS.md)
 - [Agentes e funções](docs/manual-tecnico/03-AGENTES.md)
 - [Protocolos de reconciliação](docs/manual-tecnico/04-RECONCILIACAO.md)
@@ -26,6 +27,11 @@ Este snapshot reúne o código-fonte e as configurações versionáveis dos trê
 - **runtime**: Komodo, agentes, stacks e serviços de execução;
 - **proxy**: Nginx Proxy Manager, configurações customizadas e automações de proxy;
 - **tenant-templates**: templates, scripts, testes e composições dos tenants Supabase.
+
+## Vídeos de apresentação
+
+- [Apresentação rápida da CloudIFF](https://youtu.be/cxH3K8s1R9M)
+- [Demonstração prática da plataforma](https://youtu.be/pJ7mx3VZuWU)
 
 ## Estrutura
 
