@@ -2947,8 +2947,9 @@ def _cloudif_v132_local_web_health(project, wait_seconds=90):
                 running=bool(state.get("Running")); item={"container":name,"running":running,"health":health or ("running" if running else str(state.get("Status") or "unknown")),"image":((info.get("Config") or {}).get("Image") or ""),"service":service,"config_files":config_files}
                 inspected.append(item)
                 if running and health in ("healthy",""):
-                    item.update({"ok":True,"expected_compose":expected_compose,"candidates":inspected})
-                    return item
+                    result=dict(item)
+                    result.update({"ok":True,"expected_compose":expected_compose,"candidates":[dict(x) for x in inspected]})
+                    return result
             except Exception as exc:
                 inspected.append({"container":name,"error":str(exc)[:220]})
         last={"ok":False,"container":inspected[0].get("container","") if inspected else "","running":bool(inspected and inspected[0].get("running")),"health":inspected[0].get("health","missing") if inspected else "missing","expected_compose":expected_compose,"candidates":inspected}
