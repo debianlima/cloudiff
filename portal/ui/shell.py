@@ -21,45 +21,26 @@ _FOOTER = (
 _TAB_GROUPS: "OrderedDict[str, tuple[tuple[str, str], ...]]" = OrderedDict(
     (
         (
-            "Painel",
+            "Painel geral",
             (
-                ("resumo", "Visão geral"),
+                ("publicacao", "Publicações"),
                 ("projetos", "Projetos"),
                 ("bancos", "Bancos e tenants"),
-            ),
-        ),
-        (
-            "Ferramentas",
-            (
-                ("opcoes-projeto", "Projeto"),
+                ("backup", "Backup"),
                 ("agentes", "Conectores"),
-                ("gestao-agentes", "Agentes AGIA"),
-                ("documentacao-mcp", "Gerenciamento MCP"),
             ),
         ),
         (
             "Administração",
             (
                 ("admin", "Administração do AD"),
-                ("monitor-saude", "Saúde da plataforma"),
-                ("admin-usuarios", "Usuários"),
-                ("admin-politicas", "Acessos"),
-                ("admin-identidades", "Identidades"),
-                ("admin-configuracoes", "Configurações"),
-                ("admin-auditoria", "Auditoria"),
-                ("admin-manutencao", "Manutenção"),
+                ("admin-manutencao", "Serviços globais"),
                 ("admin-excluir-projeto", "Excluir projeto"),
             ),
         ),
         (
             "Ajuda",
-            (
-                ("ajuda", "Primeiros passos"),
-                ("ajuda-token", "Tokens"),
-                ("ajuda-conectar", "Clientes"),
-                ("ajuda-aprovacoes", "Papéis"),
-                ("ajuda-ferramentas", "Referência"),
-            ),
+            (("ajuda", "Guia da plataforma"),),
         ),
     )
 )
@@ -105,16 +86,16 @@ _PROJECT_DESCRIPTIONS = {
 _TAB_TITLES = {tab: label for entries in _TAB_GROUPS.values() for tab, label in entries}
 _TAB_TITLES.update({tab: label for entries in _PROJECT_NAV.values() for tab, label in entries})
 _TAB_TITLES["projetos"] = "Projetos"
-_ASSET_VERSION = "20260803-2127"
+_ASSET_VERSION = "20260804-2315"
 
 _MODULE_TO_TAB = {
-    "overview": "resumo",
+    "overview": "publicacao",
     "projects": "projetos",
     "data": "bancos",
     "delivery": "publicacao",
     "environments": "operacao-producao",
-    "health": "monitor-saude",
-    "admin": "admin-usuarios",
+    "health": "publicacao",
+    "admin": "admin",
 }
 
 

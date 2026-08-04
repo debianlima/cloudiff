@@ -44,19 +44,15 @@ class LegacyShellTest(unittest.TestCase):
         self.assertNotIn("admin-usuarios", doc)
         self.assertNotIn(">Administração<", doc)
         self.assertIn('aria-current="page">Projetos</a>', doc)
-        self.assertIn(">Painel<", doc)
-        self.assertIn(">Ferramentas<", doc)
+        self.assertIn(">Painel geral<", doc)
+        self.assertNotIn(">Ferramentas<", doc)
         self.assertIn(">Conectores<", doc)
 
     def test_admin_receives_normalized_navigation(self):
         doc = transform(LEGACY, self.admin, "admin")
         expected = {
-            "resumo", "projetos", "bancos",
-            "opcoes-projeto", "agentes", "gestao-agentes", "documentacao-mcp",
-            "admin", "monitor-saude", "admin-usuarios", "admin-politicas",
-            "admin-identidades", "admin-configuracoes", "admin-auditoria",
-            "admin-manutencao", "admin-excluir-projeto",
-            "ajuda", "ajuda-token", "ajuda-conectar", "ajuda-aprovacoes", "ajuda-ferramentas",
+            "publicacao", "projetos", "bancos", "backup", "agentes",
+            "admin", "admin-manutencao", "admin-excluir-projeto", "ajuda",
         }
         actual = set(re.findall(r"\?tab=([a-z0-9-]+)", doc))
         self.assertEqual(expected, actual)

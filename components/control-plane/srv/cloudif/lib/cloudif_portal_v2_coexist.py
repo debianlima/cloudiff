@@ -38,6 +38,7 @@ def _install() -> None:
     from portal.core.auth import Identity
     from portal.core.http import Request
     from portal.core.legacy_shell import transform
+    from portal.ui.shell import render_legacy
     from portal.registry import registry
     from portal.wiring import install as wire
 
@@ -130,6 +131,21 @@ def _install() -> None:
                 return value
         return default
 
+    def tenant_admin_allowed(handler) -> bool:
+        groups = {group.strip().lower() for group in identity(handler.headers).groups}
+        return "cloudif-tenants-admin" in groups
+
+    def backup_body() -> str:
+        return r"""
+<section class="card backup-console">
+  <div class="section-title"><div><h2>Backups</h2><p>Backups reais de aplicações, containers e bancos vinculados aos projetos autorizados.</p></div><button class="btn light" id="backup-refresh" type="button">Atualizar</button></div>
+  <div class="help">A exclusão de projeto não apaga bancos. Backups de banco permanecem separados e devem ser administrados com cuidado.</div>
+  <div id="backup-console-list"><p>Carregando inventário…</p></div>
+</section>
+<style>.backup-console{display:grid;gap:16px}.backup-console-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}.backup-console-card{display:grid;gap:10px;padding:16px;border:1px solid var(--c-border,#dce3ed);border-radius:12px;background:var(--c-surface,#fff)}.backup-console-card h3{margin:0}.backup-console-meta{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.backup-console-meta div{padding:9px;background:var(--c-surface-2,#f8fafc);border-radius:8px}.backup-console-meta small{display:block;color:var(--c-muted,#64748b)}</style>
+<script>(()=>{const root=document.getElementById('backup-console-list'),refresh=document.getElementById('backup-refresh');const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));async function load(){refresh.disabled=true;root.innerHTML='<p>Consultando backups…</p>';try{const r=await fetch('/cloudiff/portal/api/project-backups',{credentials:'same-origin',headers:{Accept:'application/json'}});const d=await r.json();if(!r.ok||!d.ok)throw new Error(d.error||'backup_inventory_failed');const projects=d.projects||[];root.innerHTML=projects.length?'<div class="backup-console-grid">'+projects.map(p=>{const cfg=p.settings||{},items=p.items||[];return `<article class="backup-console-card"><div><h3>${esc(p.name||p.slug)}</h3><small>${esc(p.slug)}</small></div><div class="backup-console-meta"><div><small>Automático</small><strong>${cfg.enabled?'Ativado':'Desativado'}</strong></div><div><small>Arquivos</small><strong>${items.length}</strong></div><div><small>Última execução</small><strong>${esc(cfg.last_run||'Ainda não executado')}</strong></div><div><small>Envio remoto</small><strong>${cfg.remote_requested?'Solicitado':'Local'}</strong></div></div><a class="btn light" href="/cloudiff/portal/?tab=projetos&project=${encodeURIComponent(p.slug)}">Abrir projeto</a></article>`}).join('')+'</div>':'<p class="empty-state">Nenhum projeto ativo. Os backups históricos permanecem preservados no servidor.</p>'}catch(e){root.innerHTML=`<p class="pill bad">${esc(e.message)}</p>`}finally{refresh.disabled=false}}refresh.onclick=load;load()})();</script>
+"""
+
     def wrap(handler_class) -> None:
         if getattr(handler_class, "_v2_coexist_wrapped", False):
             return
@@ -149,11 +165,28 @@ def _install() -> None:
                     query = urllib.parse.parse_qs(parsed.query)
                     payload = job_status((query.get("job_id") or [""])[0])
                     return send_json(self, 200 if payload.get("ok") else 404, payload)
+                if path in {"/cloudif/portal/api/admin-delete-tenant-preview", "/cloudiff/portal/api/admin-delete-tenant-preview"}:
+                    if not tenant_admin_allowed(self):
+                        return send_json(self, 403, {"ok": False, "error": "forbidden"})
+                    from cloudif_admin_tenant_delete import preview
+                    query = urllib.parse.parse_qs(parsed.query)
+                    payload = preview((query.get("tenant") or [""])[0])
+                    return send_json(self, 200, payload)
+                if path in {"/cloudif/portal/api/admin-delete-tenant-status", "/cloudiff/portal/api/admin-delete-tenant-status"}:
+                    if not tenant_admin_allowed(self):
+                        return send_json(self, 403, {"ok": False, "error": "forbidden"})
+                    from cloudif_admin_tenant_delete import job_status as tenant_job_status
+                    query = urllib.parse.parse_qs(parsed.query)
+                    payload = tenant_job_status((query.get("job_id") or [""])[0])
+                    return send_json(self, 200 if payload.get("ok") else 404, payload)
                 if try_asset(self, path):
                     return
 
                 query = urllib.parse.parse_qs(parsed.query)
                 tab = (query.get("tab") or [""])[0]
+                if path in PORTAL_PATHS and tab == "backup":
+                    markup = render_legacy(identity(self.headers), "backup", "Backup", backup_body(), "", "")
+                    return send(self, 200, "text/html; charset=utf-8", markup.encode("utf-8"))
                 native_home = path in PORTAL_PATHS and tab in ("", "resumo", "inicio", "início", "overview")
                 match_path = "/cloudiff/portal" if path == "/" else path
                 native_nonportal = (path, "GET") in NATIVE_READY and path not in PORTAL_PATHS
@@ -175,7 +208,14 @@ def _install() -> None:
                         try:
                             markup = body.decode("utf-8")
                             selected_project = (query.get("project") or [""])[0]
-                            adapted = transform(markup, identity(self.headers), tab or "resumo", selected_project).encode("utf-8")
+                            adapted_markup = transform(markup, identity(self.headers), tab or "publicacao", selected_project)
+                            if tab == "admin" and tenant_admin_allowed(self):
+                                from cloudif_admin_tenant_delete import render_panel
+                                owner = sys.modules.get(handler_class.__module__)
+                                user = self.user()
+                                panel = render_panel(getattr(owner, "_prod_csrf_token")(user), (query.get("tenant") or [""])[0])
+                                adapted_markup = adapted_markup.replace("</main>", panel + "</main>", 1)
+                            adapted = adapted_markup.encode("utf-8")
                             return send(self, 200, "text/html; charset=utf-8", adapted, captured_headers)
                         except Exception:
                             # Auto-recovery: return byte-identical legacy output.
@@ -195,12 +235,30 @@ def _install() -> None:
                 if parsed.path not in {
                     "/cloudif/portal/action/admin-delete-project",
                     "/cloudiff/portal/action/admin-delete-project",
+                    "/cloudif/portal/action/admin-delete-tenant",
+                    "/cloudiff/portal/action/admin-delete-tenant",
                 }:
                     return previous_post(self)
                 content_length = int(self.headers.get("Content-Length", "0") or 0)
                 raw = self.rfile.read(content_length)
                 form = urllib.parse.parse_qs(raw.decode("utf-8", "ignore"))
                 value = lambda key: (form.get(key) or [""])[0].strip()
+                if parsed.path.endswith("/action/admin-delete-tenant"):
+                    try:
+                        if not tenant_admin_allowed(self):
+                            return send_json(self, 403, {"ok": False, "error": "forbidden"})
+                        owner = sys.modules.get(handler_class.__module__)
+                        user = self.user()
+                        token_ok = getattr(owner, "_prod_csrf_equal")(
+                            value("csrf_token"), getattr(owner, "_prod_csrf_token")(user)
+                        )
+                        if not token_ok:
+                            return send_json(self, 403, {"ok": False, "error": "invalid_csrf"})
+                        from cloudif_admin_tenant_delete import start_job as start_tenant_job
+                        job = start_tenant_job(value("tenant"), value("confirmation"), user.get("username") or "admin")
+                        return send_json(self, 202 if job.get("ok") else 409, job)
+                    except Exception as exc:
+                        return send_json(self, 500, {"ok": False, "error": type(exc).__name__, "detail": str(exc)[:300]})
                 if value("async") == "1":
                     try:
                         owner = sys.modules.get(handler_class.__module__)
