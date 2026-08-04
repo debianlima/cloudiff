@@ -1,6 +1,7 @@
 """Read-only data for the academic overview."""
 from __future__ import annotations
 
+import csv
 import json
 import os
 import sqlite3
@@ -9,6 +10,8 @@ from datetime import datetime, timezone
 from portal.core.rbac import is_global
 
 _DB = os.environ.get("CLOUDIF_PORTAL_DB", "/var/lib/cloudif/portal/cloudif-portal.db")
+_TENANTS_REGISTRY = os.environ.get("CLOUDIF_TENANTS_REGISTRY", "/srv/cloudif/registry/tenants.csv")
+_PROTECTED_TENANTS = {"akadmin"}
 
 
 def _fmt_bytes(n) -> str:
@@ -104,6 +107,24 @@ def server_metrics() -> dict:
     }
 
 
+def _registry_tenants() -> set[str]:
+    try:
+        with open(_TENANTS_REGISTRY, newline="", encoding="utf-8") as handle:
+            return {
+                (row.get("tenant") or "").strip()
+                for row in csv.DictReader(handle)
+                if (row.get("tenant") or "").strip()
+            }
+    except (OSError, csv.Error):
+        return set()
+
+
+def _tenant_belongs_to_user(tenant: str, username: str) -> bool:
+    tenant_key = (tenant or "").strip().lower()
+    user_key = (username or "").strip().lower()
+    return bool(user_key and (tenant_key == user_key or tenant_key.startswith(user_key + "-")))
+
+
 def _visible_projects(con: sqlite3.Connection, username: str) -> list[sqlite3.Row]:
     return con.execute(
         """
@@ -175,20 +196,32 @@ def academic_resources(identity) -> dict:
             tenant = (row["tenant"] or "").strip()
             if tenant:
                 tenants.setdefault(tenant, {"tenant": tenant, "projects": [], "primary": False})
+        registry_tenants = _registry_tenants()
+        for tenant in registry_tenants:
+            if tenant.lower() in _PROTECTED_TENANTS:
+                continue
+            if _tenant_belongs_to_user(tenant, identity.username):
+                tenants.setdefault(tenant, {"tenant": tenant, "projects": [], "primary": False})
         if is_global(identity):
             other_sites = con.execute(
                 "SELECT count(*) FROM project_publications WHERE is_active=1 AND project_slug NOT IN "
                 "(SELECT slug FROM projects WHERE lower(coalesce(owner,''))=lower(?))",
                 (identity.username,),
             ).fetchone()[0]
-            own_tenants = set(tenants)
+            own_tenants = {tenant.lower() for tenant in tenants}
             all_tenants = {(row[0] or "").strip() for row in con.execute(
                 "SELECT DISTINCT tenant FROM projects WHERE coalesce(tenant,'')<>''"
             )}
             all_tenants.update((row[0] or "").strip() for row in con.execute(
                 "SELECT DISTINCT tenant FROM project_tenants WHERE coalesce(tenant,'')<>''"
             ))
-            other_databases = len({tenant for tenant in all_tenants if tenant and tenant not in own_tenants})
+            all_tenants.update(registry_tenants)
+            other_databases = len({
+                tenant for tenant in all_tenants
+                if tenant
+                and tenant.lower() not in own_tenants
+                and tenant.lower() not in _PROTECTED_TENANTS
+            })
         con.close()
     except Exception:
         pass
