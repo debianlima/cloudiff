@@ -23,6 +23,7 @@ PORTAL_DB = Path(os.environ.get("CLOUDIF_PORTAL_DB", "/var/lib/cloudif/portal/cl
 ONBOARDING_DB = Path(os.environ.get("CLOUDIF_ONBOARDING_DB", "/var/lib/cloudif/onboarding/onboarding.db"))
 AUDIT_ROOT = BASE / "admin-tenant-deletions"
 JOB_ROOT = AUDIT_ROOT / ".jobs"
+JOB_RECEIPTS = AUDIT_ROOT / ".job-receipts"
 ROUTER_RENDER = BASE / "bin" / "cloudif-render-router-sso.sh"
 PROTECTED = frozenset({"akadmin"})
 TENANT_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,62}$")
@@ -40,22 +41,27 @@ def _run(cmd, timeout=300, cwd=None, check=False, stdout=None):
     )
 
 
-def _job_write(job_id, data):
-    JOB_ROOT.mkdir(parents=True, exist_ok=True)
-    JOB_ROOT.chmod(0o700)
-    path = JOB_ROOT / f"{job_id}.json"
-    tmp = path.with_suffix(".tmp")
+def _atomic_json(path, data):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.parent.chmod(0o700)
+    tmp = path.with_suffix(path.suffix + ".tmp")
     tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n")
+    tmp.chmod(0o600)
     os.replace(tmp, path)
+
+
+def _job_write(job_id, data):
+    _atomic_json(JOB_ROOT / f"{job_id}.json", data)
+    _atomic_json(JOB_RECEIPTS / f"{job_id}.json", data)
 
 
 def job_status(job_id):
     if not re.fullmatch(r"[a-f0-9]{32}", job_id or ""):
         return {"ok": False, "error": "invalid_job_id"}
-    path = JOB_ROOT / f"{job_id}.json"
-    if not path.exists():
-        return {"ok": False, "error": "job_not_found"}
-    return json.loads(path.read_text())
+    for path in (JOB_ROOT / f"{job_id}.json", JOB_RECEIPTS / f"{job_id}.json"):
+        if path.exists():
+            return json.loads(path.read_text())
+    return {"ok": False, "error": "job_not_found"}
 
 
 def _registry_rows():
@@ -196,6 +202,21 @@ def _delete_tenant_rows(db_path, tenant):
     return removed
 
 
+def _tenant_reference_count(db_path, tenant):
+    if not db_path.exists():
+        return 0
+    con = sqlite3.connect(db_path, timeout=30)
+    total = 0
+    try:
+        for (table,) in con.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"):
+            columns = [row[1] for row in con.execute(f'PRAGMA table_info("{table}")')]
+            for column in (c for c in columns if c in {"tenant", "tenant_slug", "db_tenant"}):
+                total += int(con.execute(f'SELECT COUNT(*) FROM "{table}" WHERE "{column}"=?', (tenant,)).fetchone()[0])
+    finally:
+        con.close()
+    return total
+
+
 def _purge_platform_database_tenant(tenant, audit):
     """Remove metadados centrais associados ao tenant excluído."""
     container = os.environ.get("SUPABASE_DB_CONTAINER", "supabase-db")
@@ -323,7 +344,16 @@ def execute(tenant, confirmation, actor, progress=None):
     progress("Roteador", "done" if router_ok else "failed", "Rotas atualizadas" if router_ok else router.stderr[-300:])
 
     final = preview(tenant)
-    absent = "tenant_not_found" in (final.get("blockers") or []) and not final.get("tenant_dir_present") and not final.get("registry_present") and not any((final.get("resources") or {}).values())
+    portal_residual = _tenant_reference_count(PORTAL_DB, tenant)
+    onboarding_residual = _tenant_reference_count(ONBOARDING_DB, tenant)
+    absent = (
+        "tenant_not_found" in (final.get("blockers") or [])
+        and not final.get("tenant_dir_present")
+        and not final.get("registry_present")
+        and not any((final.get("resources") or {}).values())
+        and portal_residual == 0
+        and onboarding_residual == 0
+    )
     result = {
         "ok": bool(router_ok and absent),
         "tenant": tenant,
@@ -337,6 +367,7 @@ def execute(tenant, confirmation, actor, progress=None):
         "platform_removed": platform_removed,
         "router": {"ok": router_ok, "stdout": router.stdout[-1500:], "stderr": router.stderr[-1500:]},
         "final_preview": final,
+        "final_references": {"portal": portal_residual, "onboarding": onboarding_residual},
         "audit_dir": str(audit),
     }
     if not result["ok"]:
@@ -391,6 +422,7 @@ def run_job_worker(job_id):
             "result": result,
             "finished_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
             "updated_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+            "receipt_retention_days": 30,
         })
         if not result.get("ok"):
             current["error"] = result.get("error", "tenant_delete_failed")
