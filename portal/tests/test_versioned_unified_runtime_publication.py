@@ -16,6 +16,7 @@ class VersionedUnifiedRuntimePublicationTests(unittest.TestCase):
         self.assertIn('runtime\"]=\"unified-php-node',self.source)
         self.assertIn('\"run_build\": bool(unified_runtime)',self.source)
         self.assertIn('actual_image==expected_image',self.source)
+        self.assertIn('\"auto_pull\": not bool(unified_runtime)',self.source)
         self.assertIn('context: .',self.source)
         self.assertIn('version_runtime_stage_failed',self.source)
         self.assertIn('shutil.copytree(snap_dir / "site",staged_site)',self.source)

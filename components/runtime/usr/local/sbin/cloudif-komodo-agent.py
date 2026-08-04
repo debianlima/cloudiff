@@ -3730,6 +3730,7 @@ networks:
         "server_id": server_id,
         "files_on_host": False,
         "run_build": bool(unified_runtime),
+        "auto_pull": not bool(unified_runtime),
         "file_contents": content,
         "file_paths": [],
         "linked_repo": "",
