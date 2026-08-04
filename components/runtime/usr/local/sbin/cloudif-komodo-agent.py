@@ -565,23 +565,26 @@ def stack_absent(stack_id, stack_name):
     return True, {"ok": True, "found": None}
 
 def _cloudif_project_containers(project):
-    compose_project = "cloudif-" + safe_slug(project)
-    ids=[]
-    for label in (f"cloudif.project={project}", f"com.docker.compose.project={compose_project}"):
-        proc=subprocess.run(["docker","ps","-a","--filter",f"label={label}","--format","{{.ID}}"],text=True,capture_output=True,timeout=30,check=False)
-        ids.extend(x.strip() for x in (proc.stdout or "").splitlines() if x.strip())
+    project = safe_slug(project)
+    expected_root = str((Path("/etc/komodo/stacks") / ("cloudif-" + project)).resolve())
+    proc=subprocess.run(["docker","ps","-a","--format","{{.ID}}"],text=True,capture_output=True,timeout=30,check=False)
     items=[]; errors=[]
-    for cid in dict.fromkeys(ids):
+    for cid in [x.strip() for x in (proc.stdout or "").splitlines() if x.strip()]:
         try:
             raw=subprocess.check_output(["docker","inspect",cid],text=True,timeout=20)
             info=json.loads(raw)[0]; cfg=info.get("Config") or {}; labels=cfg.get("Labels") or {}; name=str(info.get("Name") or "").lstrip('/')
+            config_files=str(labels.get("com.docker.compose.project.config_files") or "")
+            explicit_project=str(labels.get("cloudif.project") or "")
+            belongs = explicit_project == project or any(path.strip().startswith(expected_root + "/") for path in config_files.split(',') if path.strip())
+            if not belongs:
+                continue
             service=str(labels.get("com.docker.compose.service") or labels.get("cloudif.service") or "")
             lowered=(name+" "+service+" "+json.dumps(labels,ensure_ascii=False)).lower()
             database=any(marker in lowered for marker in ("cloudif.role=database","cloudif.service=database","-db-","_db_","postgres","supabase-db"))
-            items.append({"id":cid,"name":name,"labels":labels,"service":service,"database":database,"compose_project":labels.get("com.docker.compose.project","")})
+            items.append({"id":cid,"name":name,"labels":labels,"service":service,"database":database,"config_files":config_files})
         except Exception as exc:
             errors.append({"id":cid,"error":str(exc)[:300]})
-    return {"ok": not errors, "items": items, "errors": errors}
+    return {"ok": proc.returncode == 0 and not errors, "items": items, "errors": errors, "stderr": (proc.stderr or "")[:500], "expected_root": expected_root}
 
 
 def _cloudif_remove_project_application_containers(project):

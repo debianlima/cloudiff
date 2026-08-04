@@ -10,7 +10,7 @@ class ProjectDeleteIdempotentCleanupTests(unittest.TestCase):
   for marker in ('def _cleanup_already_deleted','already_deleted','Projeto já excluído; resíduos verificados','_destroy_runtime(slug,tenant)'):
    self.assertIn(marker,self.delete)
  def test_compose_labels_find_orphan_web_container(self):
-  for marker in ('com.docker.compose.project','com.docker.compose.service','compose_project = "cloudif-" + safe_slug(project)'):
+  for marker in ('com.docker.compose.project.config_files','com.docker.compose.service','expected_root = str((Path("/etc/komodo/stacks")'):
    self.assertIn(marker,self.agent)
  def test_database_containers_remain_preserved(self):
   self.assertIn('if item.get("database")',self.agent)
