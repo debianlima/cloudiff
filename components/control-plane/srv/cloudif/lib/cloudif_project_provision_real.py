@@ -38,7 +38,7 @@ def load_env_files():
             k, v = line.split("=", 1)
             k = k.strip()
             v = v.strip().strip('"').strip("'")
-            if k and k not in os.environ:
+            if k and (k not in os.environ or not str(os.environ.get(k) or '').strip()):
                 os.environ[k] = v
 
 def env(k, default=""):
@@ -579,19 +579,25 @@ def _v101_forja_project_ensure(job, report):
 _original_forgejo_v101 = forgejo
 
 def forgejo(job, report):
+    comp = report["components"]["forgejo"]
+    comp.setdefault("actions", [])
     try:
         if _v101_forja_project_ensure(job, report):
             return
     except Exception as e:
-        comp = report["components"]["forgejo"]
-        comp.setdefault("actions", [])
         comp["actions"].append({
             "name": "forja_agent_project_ensure_exception",
             "ok": False,
             "message": str(e),
         })
-
-    return _original_forgejo_v101(job, report)
+    comp["ok"] = False
+    if not comp.get("status") or comp.get("status") == "pending":
+        comp["status"] = "forja_agent_error"
+    comp["actions"].append({
+        "name": "direct_forgejo_fallback_disabled",
+        "ok": False,
+        "message": "Fallback direto desativado. O provisionamento usa exclusivamente o Forja Agent.",
+    })
 
 
 
@@ -829,7 +835,7 @@ def _v101_forja_project_ensure(job, report):
         comp["repository"] = repo_name
         comp["repository_path"] = repo_path
         comp["url"] = repo_url
-        comp["clone_url"] = _v115_repo_clone_url(slug)
+        comp["clone_url"] = _v115_repo_clone_url(slug, owner)
 
         project_data = data.get("project") if isinstance(data.get("project"), dict) else {}
         forgejo_data = project_data.get("forgejo") if isinstance(project_data.get("forgejo"), dict) else {}
