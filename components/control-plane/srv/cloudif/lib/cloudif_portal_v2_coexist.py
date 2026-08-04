@@ -176,7 +176,7 @@ def _install() -> None:
   <div class="admin-wizard-panels">
     <section id="admin-step-tenant" class="admin-wizard-panel active" role="tabpanel" aria-labelledby="admin-tab-tenant">
       <div class="admin-panel-heading"><div><span>Etapa 1</span><h3>Ações avançadas do tenant</h3></div><p>Sincronize papéis, regenere o roteador ou restaure a estrutura do tenant.</p></div>
-      <form method="post" action="/cloudif/portal/action/admin_tenant_advanced" class="admin-tenant-actions">
+      <form method="post" action="/cloudiff/portal/action/admin-tenant-advanced" class="admin-tenant-actions" id="admin-tenant-actions">
         <input type="hidden" name="csrf_token" value="{html.escape(csrf_token)}">
         <label>Tenant<select name="tenant" required><option value="">Selecione</option>{options}</select></label>
         <div class="admin-action-cards">
@@ -184,6 +184,7 @@ def _install() -> None:
           <button class="admin-action-card" name="op" value="render_router"><span>Render router</span><small>Recria as rotas e o SSO dos tenants registrados.</small></button>
           <button class="admin-action-card" name="op" value="ensure"><span>Ensure/restore</span><small>Valida e restaura a estrutura operacional do tenant.</small></button>
         </div>
+        <div id="admin-tenant-action-status" class="admin-action-status" role="status">Selecione um tenant e uma ação.</div>
       </form>
     </section>
     <section id="admin-step-delete" class="admin-wizard-panel" role="tabpanel" aria-labelledby="admin-tab-delete" hidden>{delete_panel}</section>
@@ -191,9 +192,10 @@ def _install() -> None:
   </div>
 </section>
 <style>
-.admin-operation-center{{display:grid;gap:18px;margin:18px 0 24px!important;overflow:hidden}}.admin-eyebrow{{display:block;margin-bottom:5px;font-size:.72rem;font-weight:850;letter-spacing:.08em;text-transform:uppercase;color:#4f46e5}}.admin-wizard-tabs{{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}}.admin-wizard-tabs button{{display:grid;grid-template-columns:34px 1fr;gap:2px 10px;align-items:center;min-height:82px;padding:13px;border:1px solid var(--c-border,#dce3ed);border-radius:12px;background:#fff;color:var(--c-text,#172033);text-align:left;box-shadow:none!important}}.admin-wizard-tabs button>span{{grid-row:1/3;width:32px;height:32px;display:grid;place-items:center;border-radius:10px;background:#eef2ff;color:#4f46e5;font-weight:850}}.admin-wizard-tabs button strong{{font-size:.9rem}}.admin-wizard-tabs button small{{color:var(--c-muted,#64748b);line-height:1.25}}.admin-wizard-tabs button[aria-selected="true"]{{border-color:#818cf8;background:#eef2ff;color:#3730a3}}.admin-wizard-tabs button[aria-selected="true"]>span{{background:#4f46e5;color:#fff}}.admin-wizard-panels{{border:1px solid var(--c-border,#dce3ed);border-radius:14px;background:#f8fafc;overflow:hidden}}.admin-wizard-panel{{display:none;padding:20px}}.admin-wizard-panel.active{{display:grid;gap:16px}}.admin-panel-heading{{display:flex;justify-content:space-between;gap:18px;align-items:flex-start}}.admin-panel-heading span{{font-size:.72rem;font-weight:850;text-transform:uppercase;color:#4f46e5}}.admin-panel-heading h3,.admin-panel-heading p{{margin:3px 0 0}}.admin-panel-heading p{{max-width:580px;color:var(--c-muted,#64748b)}}.admin-tenant-actions{{display:grid;gap:14px}}.admin-tenant-actions>label{{display:grid;gap:6px;max-width:520px}}.admin-action-cards{{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}}.admin-action-card{{display:grid;gap:5px;min-height:112px;padding:16px!important;border:1px solid var(--c-border,#dce3ed)!important;border-radius:12px!important;background:#fff!important;color:var(--c-text,#172033)!important;text-align:left!important}}.admin-action-card:hover{{border-color:#818cf8!important;background:#f5f3ff!important}}.admin-action-card span{{font-weight:850}}.admin-action-card small{{color:var(--c-muted,#64748b);line-height:1.4}}.admin-wizard-panel .admin-ad-console,.admin-wizard-panel .tenant-delete-tool{{display:grid;gap:16px;min-width:0}}.admin-wizard-panel .admin-ad-console>.section-title,.admin-wizard-panel .tenant-delete-tool>.section-title{{padding-bottom:12px;border-bottom:1px solid var(--c-border,#dce3ed)}}@media(max-width:860px){{.admin-wizard-tabs,.admin-action-cards{{grid-template-columns:1fr}}.admin-wizard-tabs button{{min-height:68px}}.admin-panel-heading{{display:grid}}}}
+.admin-operation-center{{display:grid;gap:18px;margin:18px 0 24px!important;overflow:hidden}}.admin-eyebrow{{display:block;margin-bottom:5px;font-size:.72rem;font-weight:850;letter-spacing:.08em;text-transform:uppercase;color:#176b35}}.admin-wizard-tabs{{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}}.admin-wizard-tabs button{{display:grid;grid-template-columns:34px 1fr;gap:2px 10px;align-items:center;min-height:82px;padding:13px;border:1px solid var(--c-border,#dce3ed);border-radius:12px;background:#fff;color:var(--c-text,#172033);text-align:left;box-shadow:none!important}}.admin-wizard-tabs button>span{{grid-row:1/3;width:32px;height:32px;display:grid;place-items:center;border-radius:10px;background:#edf7f0;color:#176b35;font-weight:850}}.admin-wizard-tabs button strong{{font-size:.9rem}}.admin-wizard-tabs button small{{color:var(--c-muted,#64748b);line-height:1.25}}.admin-wizard-tabs button[aria-selected="true"]{{border-color:#67a875;background:#edf7f0;color:#0f5132}}.admin-wizard-tabs button[aria-selected="true"]>span{{background:#176b35;color:#fff}}.admin-wizard-panels{{border:1px solid var(--c-border,#dce3ed);border-radius:14px;background:#f8fafc;overflow:hidden}}.admin-wizard-panel{{display:none;padding:20px}}.admin-wizard-panel.active{{display:grid;gap:16px}}.admin-panel-heading{{display:flex;justify-content:space-between;gap:18px;align-items:flex-start}}.admin-panel-heading span{{font-size:.72rem;font-weight:850;text-transform:uppercase;color:#176b35}}.admin-panel-heading h3,.admin-panel-heading p{{margin:3px 0 0}}.admin-panel-heading p{{max-width:580px;color:var(--c-muted,#64748b)}}.admin-tenant-actions{{display:grid;gap:14px}}.admin-tenant-actions>label{{display:grid;gap:6px;max-width:520px}}.admin-action-cards{{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}}.admin-action-card{{display:grid;gap:5px;min-height:112px;padding:16px!important;border:1px solid var(--c-border,#dce3ed)!important;border-radius:12px!important;background:#fff!important;color:var(--c-text,#172033)!important;text-align:left!important}}.admin-action-card:hover{{border-color:#67a875!important;background:#f2f8f3!important}}.admin-action-card span{{font-weight:850}}.admin-action-card small{{color:var(--c-muted,#64748b);line-height:1.4}}.admin-action-status{{padding:13px 14px;border:1px solid var(--c-border,#dce3ed);border-radius:10px;background:#fff;color:#172033;white-space:pre-wrap}}.admin-action-status.running{{border-color:#67a875;background:#edf7f0;color:#0f5132}}.admin-action-status.ok{{border-color:#86c493;background:#f0fdf4;color:#14532d}}.admin-action-status.bad{{border-color:#fecaca;background:#fef2f2;color:#991b1b}}.admin-wizard-panel .admin-ad-console,.admin-wizard-panel .tenant-delete-tool{{display:grid;gap:16px;min-width:0}}.admin-wizard-panel .admin-ad-console>.section-title,.admin-wizard-panel .tenant-delete-tool>.section-title{{padding-bottom:12px;border-bottom:1px solid var(--c-border,#dce3ed)}}@media(max-width:860px){{.admin-wizard-tabs,.admin-action-cards{{grid-template-columns:1fr}}.admin-wizard-tabs button{{min-height:68px}}.admin-panel-heading{{display:grid}}}}
 </style>
-<script>(()=>{{const tabs=[...document.querySelectorAll('[data-admin-step]')],panels=[...document.querySelectorAll('.admin-wizard-panel')];if(!tabs.length)return;function open(name,focus=false){{tabs.forEach(tab=>{{const active=tab.dataset.adminStep===name;tab.setAttribute('aria-selected',active?'true':'false');tab.tabIndex=active?0:-1;if(active&&focus)tab.focus()}});panels.forEach(panel=>{{const active=panel.id===`admin-step-${{name}}`;panel.hidden=!active;panel.classList.toggle('active',active)}})}}tabs.forEach((tab,index)=>{{tab.onclick=()=>open(tab.dataset.adminStep);tab.onkeydown=e=>{{if(!['ArrowLeft','ArrowRight','Home','End'].includes(e.key))return;e.preventDefault();let target=index;if(e.key==='ArrowRight')target=(index+1)%tabs.length;if(e.key==='ArrowLeft')target=(index-1+tabs.length)%tabs.length;if(e.key==='Home')target=0;if(e.key==='End')target=tabs.length-1;open(tabs[target].dataset.adminStep,true)}}}});open('tenant') }})();</script>'''
+<script>(()=>{{const tabs=[...document.querySelectorAll('[data-admin-step]')],panels=[...document.querySelectorAll('.admin-wizard-panel')];if(!tabs.length)return;function open(name,focus=false){{tabs.forEach(tab=>{{const active=tab.dataset.adminStep===name;tab.setAttribute('aria-selected',active?'true':'false');tab.tabIndex=active?0:-1;if(active&&focus)tab.focus()}});panels.forEach(panel=>{{const active=panel.id===`admin-step-${{name}}`;panel.hidden=!active;panel.classList.toggle('active',active)}})}}tabs.forEach((tab,index)=>{{tab.onclick=()=>open(tab.dataset.adminStep);tab.onkeydown=e=>{{if(!['ArrowLeft','ArrowRight','Home','End'].includes(e.key))return;e.preventDefault();let target=index;if(e.key==='ArrowRight')target=(index+1)%tabs.length;if(e.key==='ArrowLeft')target=(index-1+tabs.length)%tabs.length;if(e.key==='Home')target=0;if(e.key==='End')target=tabs.length-1;open(tabs[target].dataset.adminStep,true)}}}});const form=document.getElementById('admin-tenant-actions'),status=document.getElementById('admin-tenant-action-status');if(form)form.addEventListener('submit',async e=>{{e.preventDefault();const submitter=e.submitter;if(!submitter)return;const fd=new FormData(form),tenant=String(fd.get('tenant')||'').trim(),op=String(submitter.value||'');if(!tenant){{status.className='admin-action-status bad';status.textContent='Selecione um tenant.';return}}const csrf=String(fd.get('csrf_token')||'');const body=new URLSearchParams({{tenant,op,csrf_token:csrf}});form.querySelectorAll('button').forEach(b=>b.disabled=true);status.className='admin-action-status running';status.textContent='Executando '+submitter.querySelector('span').textContent+' em '+tenant+'…';try{{const r=await fetch(form.action,{{method:'POST',credentials:'same-origin',headers:{{Accept:'application/json','Content-Type':'application/x-www-form-urlencoded;charset=UTF-8','X-CSRF-Token':csrf}},body}});const type=(r.headers.get('content-type')||'').toLowerCase();const text=await r.text();if(!type.includes('application/json'))throw new Error('O servidor retornou uma página legada em vez de JSON.');const data=JSON.parse(text);if(!r.ok||!data.ok)throw new Error(data.error||data.stderr||('HTTP '+r.status));status.className='admin-action-status ok';status.textContent='Concluído: '+data.label+'
+'+(data.stdout||data.message||'Operação executada com sucesso.')}}catch(err){{status.className='admin-action-status bad';status.textContent='Falha: '+err.message}}finally{{form.querySelectorAll('button').forEach(b=>b.disabled=false)}}}});open('tenant') }})();</script>'''
 
     def help_body() -> str:
         return r"""
@@ -365,12 +367,45 @@ def _install() -> None:
                     "/cloudiff/portal/action/admin-delete-project",
                     "/cloudif/portal/action/admin-delete-tenant",
                     "/cloudiff/portal/action/admin-delete-tenant",
+                    "/cloudif/portal/action/admin-tenant-advanced",
+                    "/cloudiff/portal/action/admin-tenant-advanced",
                 }:
                     return previous_post(self)
                 content_length = int(self.headers.get("Content-Length", "0") or 0)
                 raw = self.rfile.read(content_length)
                 form = urllib.parse.parse_qs(raw.decode("utf-8", "ignore"))
                 value = lambda key: (form.get(key) or [""])[0].strip()
+                if parsed.path.endswith("/action/admin-tenant-advanced"):
+                    try:
+                        if not tenant_admin_allowed(self):
+                            return send_json(self, 403, {"ok": False, "error": "forbidden"})
+                        owner = sys.modules.get(handler_class.__module__)
+                        user = self.user()
+                        token_ok = getattr(owner, "_prod_csrf_equal")(
+                            value("csrf_token"), getattr(owner, "_prod_csrf_token")(user)
+                        )
+                        if not token_ok:
+                            return send_json(self, 403, {"ok": False, "error": "invalid_csrf"})
+                        tenant = getattr(owner, "slugify")(value("tenant"))
+                        op = value("op")
+                        labels = {"sync_roles": "Sync roles", "render_router": "Render router", "ensure": "Ensure/restore"}
+                        if not tenant or op not in labels:
+                            return send_json(self, 400, {"ok": False, "error": "invalid_operation"})
+                        if op == "sync_roles":
+                            command = ["bash", "-lc", f"/srv/cloudif/bin/cloudif-sync-db-passwords.sh {tenant!r}"]
+                            timeout = 240
+                        elif op == "render_router":
+                            command = ["bash", "-lc", "/srv/cloudif/bin/cloudif-render-router-sso.sh"]
+                            timeout = 240
+                        else:
+                            command = ["bash", "-lc", f"/usr/local/sbin/cloudif-tenant-ensure-bg.sh {tenant!r} restore {(user.get('username') or 'admin')!r}"]
+                            timeout = 30
+                        rc, out, err = getattr(owner, "run")(command, timeout)
+                        getattr(owner, "log_action")(user.get("username") or "admin", f"admin_{op}", tenant, rc, out, err)
+                        payload = {"ok": rc == 0, "tenant": tenant, "operation": op, "label": labels[op], "rc": rc, "stdout": (out or "")[-4000:], "stderr": (err or "")[-2000:]}
+                        return send_json(self, 200 if rc == 0 else 422, payload)
+                    except Exception as exc:
+                        return send_json(self, 500, {"ok": False, "error": type(exc).__name__, "detail": str(exc)[:300]})
                 if parsed.path.endswith("/action/admin-delete-tenant"):
                     try:
                         if not tenant_admin_allowed(self):
