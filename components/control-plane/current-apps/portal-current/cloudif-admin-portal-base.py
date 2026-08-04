@@ -5115,6 +5115,31 @@ def _rd_projects(user):
           'stack_id':sid or '','service':p.get('komodo_service') or 'web'})
     return rows
 
+def _rd_project_access(slug):
+    access={'owner':'','acl':[]}
+    try:
+        with sqlite3.connect(str(DB)) as con:
+            con.row_factory=sqlite3.Row
+            row=con.execute('select owner from projects where slug=?',(slug,)).fetchone()
+            access['owner']=str(row['owner'] or '').strip().lower() if row else ''
+            cols={r[1] for r in con.execute('pragma table_info(project_acl)')}
+            type_col='subject_type' if 'subject_type' in cols else ('principal_type' if 'principal_type' in cols else 'type')
+            subject_col='subject' if 'subject' in cols else ('principal' if 'principal' in cols else 'username')
+            for item in con.execute(f'select {type_col} as kind,{subject_col} as subject from project_acl where slug=?',(slug,)).fetchall():
+                kind=str(item['kind'] or '').strip().lower();subject=str(item['subject'] or '').strip()
+                if kind in {'user','group'} and subject: access['acl'].append({'type':kind,'subject':subject})
+    except Exception: pass
+    return access
+
+def _rd_actor_allowed(user, access):
+    username=str(user.get('username') or '').strip().lower();groups={str(x).strip() for x in (user.get('groups') or [])}
+    if user.get('admin') or username==str(access.get('owner') or '').lower(): return True
+    if groups.intersection({'CloudIF-Tenants-Admin','CloudIF-Professor','Domain Admins','domain admins'}): return True
+    for item in access.get('acl') or []:
+        if item.get('type')=='user' and str(item.get('subject') or '').lower()==username:return True
+        if item.get('type')=='group' and str(item.get('subject') or '') in groups:return True
+    return False
+
 def _rd_can_repair(user):
     groups=set(user.get('groups') or [])
     return bool(user.get('admin') or 'CloudIF-Tenants-Admin' in groups or 'CloudIF-Professor' in groups)
@@ -5254,8 +5279,12 @@ if 'Portal' in globals() and not globals().get('_rd_wrapped'):
                 terminal='nodeinfo-'+slug
                 shell="sh -lc 'clear; echo CloudIFF-Node.js; node -e \"console.log(process.version);console.log(JSON.stringify(process.versions,null,2))\"; echo; echo npm=$(npm --version 2>/dev/null || echo indisponivel); if [ -f /var/www/html/api/package.json ]; then echo; cat /var/www/html/api/package.json; fi; echo; echo Terminal-interativo-liberado; exec sh'"
             elif kind:return self.send_error(404)
+            access=_rd_project_access(slug)
+            if not _rd_actor_allowed(user,access):return self.send_error(403)
+            actor=str(user.get('username') or '').strip().lower()
+            actor_groups=[str(x).strip() for x in (user.get('groups') or []) if str(x).strip()]
             try:
-                ensured=_rd_agent('/komodo/project/terminal/ensure',{'project':slug,'stack_id':p['stack_id'],'service':p['service'],'terminal':terminal,'shell':shell},timeout=45)
+                ensured=_rd_agent('/komodo/project/terminal/ensure',{'project':slug,'stack_id':p['stack_id'],'service':p['service'],'terminal':terminal,'shell':shell,'actor_username':actor,'actor_groups':actor_groups,'project_owner':access.get('owner') or '','access':access},timeout=45)
                 target=str(ensured.get('url') or '')
                 if not target:raise RuntimeError(str(ensured.get('error') or 'terminal_url_missing'))
             except Exception as exc:

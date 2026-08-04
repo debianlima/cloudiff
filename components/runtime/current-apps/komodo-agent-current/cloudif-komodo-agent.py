@@ -3488,12 +3488,28 @@ fi
 def cloudif_project_terminal_ensure(handler):
     if not _cloudif_pub_auth(handler): return send(handler,403,{"ok":False,"error":"forbidden"})
     payload=_cloudif_pub_json(handler)
+    actor=str(payload.get("actor_username") or "").strip().lower()
+    actor_groups={str(x).strip() for x in (payload.get("actor_groups") or []) if str(x).strip()}
+    access=payload.get("access") if isinstance(payload.get("access"),dict) else {}
+    owner=str(access.get("owner") or payload.get("project_owner") or "").strip().lower()
+    allowed=bool(actor and (actor==owner or actor_groups.intersection({"CloudIF-Tenants-Admin","CloudIF-Professor","Domain Admins","domain admins"})))
+    for item in access.get("acl") or []:
+        kind=str(item.get("type") or "").strip().lower();subject=str(item.get("subject") or "").strip()
+        if kind=="user" and subject.lower()==actor: allowed=True
+        if kind=="group" and subject in actor_groups: allowed=True
+    if not allowed:return send(handler,403,{"ok":False,"error":"actor_not_authorized","actor":actor,"project":payload.get("project")})
+    integration=find_integration(safe_slug(payload.get("project") or ""))
+    if integration:
+        sync=_cloudif_sync_project_authz(payload.get("project"),owner,access.get("acl") or [],normalize_resource_id(integration.get("stack_id")),normalize_resource_id(integration.get("repo_id")))
+        if not sync.get("ok"):return send(handler,422,{"ok":False,"error":"actor_permission_sync_failed","actor":actor,"sync":sync})
     audit=_cloudif_project_audit_data(payload)
     if not audit.get("ok"): return send(handler,400,audit)
     if not audit.get("running") or not audit.get("server_id") or not audit.get("container_name"):
         return send(handler,422,{"ok":False,"error":"container_not_running","audit":audit})
     target={"type":"Container","params":{"server":audit["server_id"],"container":audit["container_name"]}}
-    terminal=audit["terminal"]; shell=audit["shell"]
+    base_terminal=audit["terminal"]; shell=audit["shell"]
+    actor_key=safe_slug(actor)[:40] or "user"
+    terminal=(base_terminal[:70]+"-"+actor_key)[:120]
     listed,_=komodo_call("read","ListTerminals",{"target":target})
     items=listed.get("data") if isinstance(listed.get("data"),list) else []
     existing=next((x for x in items if isinstance(x,dict) and x.get("name")==terminal),None)
@@ -3505,7 +3521,7 @@ def cloudif_project_terminal_ensure(handler):
         if not result.get("ok"): return send(handler,502,{"ok":False,"error":"terminal_create_failed","result":result,"audit":audit})
         created=True
     url=f"https://komodoiff.duckdns.org/servers/{audit['server_id']}/container/{audit['container_name']}/terminal/{terminal}"
-    return send(handler,200,{"ok":True,"created":created,"terminal":terminal,"target":target,"server_id":audit["server_id"],"container_name":audit["container_name"],"url":url,"audit":audit})
+    return send(handler,200,{"ok":True,"created":created,"terminal":terminal,"target":target,"server_id":audit["server_id"],"container_name":audit["container_name"],"url":url,"actor_username":actor,"project_owner":owner,"audit":audit})
 
 def cloudif_publication_deploy(handler):
     import shutil
