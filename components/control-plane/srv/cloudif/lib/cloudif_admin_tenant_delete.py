@@ -372,97 +372,97 @@ def start_job(tenant, confirmation, actor):
 
 
 def render_panel(csrf_token, selected=""):
-    tenants = []
     rows, _fields = _registry_rows()
-    for row in rows:
-        tenant = (row.get("tenant") or "").strip()
-        if tenant:
-            tenants.append(tenant)
+    tenants = sorted({(row.get("tenant") or "").strip() for row in rows if (row.get("tenant") or "").strip()})
     options = "".join(
         f'<option value="{tenant}"{" selected" if tenant == selected else ""}>{tenant}</option>'
-        for tenant in sorted(set(tenants))
+        for tenant in tenants
     )
-    return f'''
+    return f"""
 <section class="card tenant-delete-tool">
   <div class="section-title"><div><h2>Excluir banco e tenant</h2><p>Operação destrutiva, separada da exclusão de projetos.</p></div><span class="pill warn">Backup obrigatório</span></div>
   <div class="help"><strong>Proteções:</strong> o tenant administrativo não pode ser removido; tenants vinculados a projetos são bloqueados; um dump lógico final é criado antes dos volumes serem apagados.</div>
   <form id="tenant-delete-preview-form">
     <input type="hidden" name="csrf_token" value="{csrf_token}">
-    <label>Tenant</label>
-    <select name="tenant" required><option value="">Selecione</option>{options}</select>
-    <button class="btn red" type="submit">Analisar remoção</button>
+    <label>Tenant<select name="tenant" required><option value="">Selecione</option>{options}</select></label>
+    <button class="btn red" type="submit">Abrir wizard de exclusão</button>
   </form>
-  <div id="tenant-delete-preview" hidden></div>
-  <div id="tenant-delete-progress" hidden aria-live="polite"></div>
+  <div id="tenant-delete-modal" class="tenant-delete-modal" hidden aria-hidden="true">
+    <div class="tenant-delete-backdrop" data-delete-close></div>
+    <section class="tenant-delete-dialog" role="dialog" aria-modal="true" aria-labelledby="tenant-delete-title">
+      <header><div><span class="tenant-delete-kicker">Exclusão definitiva</span><h2 id="tenant-delete-title">Preparando análise</h2><p id="tenant-delete-subtitle">Nenhuma alteração foi feita.</p></div><button type="button" class="btn light" data-delete-close>Fechar</button></header>
+      <div id="tenant-delete-modal-body" class="tenant-delete-modal-body"></div>
+      <footer id="tenant-delete-modal-footer"></footer>
+    </section>
+  </div>
 </section>
 <style>
-.tenant-delete-tool{{display:grid;gap:16px}}.tenant-delete-tool form{{display:grid;gap:10px;max-width:620px}}.tenant-delete-preview-grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin:14px 0}}.tenant-delete-preview-grid>div{{padding:12px;border:1px solid var(--c-border,#dce3ed);border-radius:10px;background:#f5faf6}}.tenant-delete-steps{{display:grid;gap:8px;padding:0;list-style:none}}.tenant-delete-steps li{{display:grid;grid-template-columns:auto 1fr;gap:8px 12px;align-items:center;padding:10px;border:1px solid var(--c-border,#dce3ed);border-radius:10px}}.tenant-delete-steps small{{grid-column:2;color:#111}}.tenant-delete-confirmation{{display:grid;gap:10px;max-width:720px}}.tenant-delete-confirmation input{{font-family:ui-monospace,monospace}}.tenant-delete-tool progress{{height:12px;accent-color:#8fb8e8}}
+.tenant-delete-tool{{display:grid;gap:16px}}.tenant-delete-tool form{{display:grid;gap:10px;max-width:620px}}body.tenant-delete-modal-open{{overflow:hidden}}.tenant-delete-modal{{position:fixed;inset:0;z-index:10000;display:grid;place-items:center;padding:24px}}.tenant-delete-modal[hidden]{{display:none}}.tenant-delete-backdrop{{position:absolute;inset:0;background:rgba(15,23,42,.62);backdrop-filter:blur(2px)}}.tenant-delete-dialog{{position:relative;z-index:1;display:grid;grid-template-rows:auto minmax(0,1fr) auto;width:min(900px,100%);max-height:88vh;overflow:hidden;border:1px solid #cfe3f8;border-radius:18px;background:#fff;box-shadow:0 28px 90px rgba(15,23,42,.35)}}.tenant-delete-dialog>header{{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;padding:22px 24px;border-bottom:1px solid #dbeafe;background:#f5faff}}.tenant-delete-dialog h2{{margin:4px 0}}.tenant-delete-dialog header p{{margin:0;color:#111}}.tenant-delete-kicker{{font-size:.72rem;font-weight:850;letter-spacing:.08em;text-transform:uppercase;color:#111}}.tenant-delete-modal-body{{display:grid;gap:16px;padding:22px 24px;overflow:auto}}.tenant-delete-dialog>footer{{display:flex;justify-content:flex-end;gap:10px;padding:16px 24px;border-top:1px solid #dbeafe}}.tenant-delete-preview-grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px}}.tenant-delete-preview-grid>div{{padding:13px;border:1px solid #cfe3f8;border-radius:11px;background:#f5faff}}.tenant-delete-preview-grid small{{display:block;color:#111}}.tenant-delete-confirmation{{display:grid;gap:10px}}.tenant-delete-confirmation input{{font-family:ui-monospace,monospace}}.tenant-delete-timeline{{display:grid;gap:9px;margin:0;padding:0;list-style:none}}.tenant-delete-step{{display:grid;grid-template-columns:26px 1fr auto;gap:12px;align-items:center;padding:12px;border:1px solid #dbeafe;border-radius:11px}}.tenant-delete-step.pending{{opacity:.58}}.tenant-delete-step.running{{background:#edf6ff;border-color:#8fb8e8}}.tenant-delete-step.done{{background:#f0fdf4;border-color:#bbf7d0}}.tenant-delete-step.failed{{background:#fef2f2;border-color:#fecaca}}.tenant-delete-step-icon{{width:24px;height:24px;display:grid;place-items:center;border-radius:999px;background:#e5e7eb;color:#111;font-size:.72rem;font-weight:900}}.tenant-delete-step.running .tenant-delete-step-icon{{background:#8fb8e8}}.tenant-delete-step.done .tenant-delete-step-icon{{background:#86efac}}.tenant-delete-step.failed .tenant-delete-step-icon{{background:#fca5a5}}.tenant-delete-step small{{display:block;color:#111;margin-top:2px}}.tenant-delete-dots{{display:inline-flex;gap:4px;align-items:center}}.tenant-delete-dots i{{width:5px;height:5px;border-radius:999px;background:#111;animation:tenant-delete-pulse 1.1s infinite ease-in-out}}.tenant-delete-dots i:nth-child(2){{animation-delay:.18s}}.tenant-delete-dots i:nth-child(3){{animation-delay:.36s}}@keyframes tenant-delete-pulse{{0%,80%,100%{{opacity:.25;transform:translateY(0)}}40%{{opacity:1;transform:translateY(-3px)}}}}.tenant-delete-live{{display:flex;gap:10px;align-items:center;padding:12px;border:1px solid #cfe3f8;border-radius:11px;background:#edf6ff}}.tenant-delete-progress-wrap{{display:grid;gap:7px}}.tenant-delete-progress-wrap progress{{width:100%;height:12px;accent-color:#8fb8e8}}.tenant-delete-terminal{{padding:14px;border-radius:11px}}.tenant-delete-terminal.ok{{background:#f0fdf4;border:1px solid #bbf7d0}}.tenant-delete-terminal.bad{{background:#fef2f2;border:1px solid #fecaca}}@media(max-width:700px){{.tenant-delete-modal{{padding:0}}.tenant-delete-dialog{{width:100%;height:100%;max-height:none;border-radius:0}}.tenant-delete-step{{grid-template-columns:26px 1fr}}.tenant-delete-step>.pill{{grid-column:2;justify-self:start}}}}
 </style>
 <script>
 (() => {{
- const form=document.getElementById('tenant-delete-preview-form'); if(!form)return;
- const previewBox=document.getElementById('tenant-delete-preview'); const progressBox=document.getElementById('tenant-delete-progress');
- const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot',"'":'&#39;'}}[c]));
- const portal='/cloudiff/portal/';
- async function jsonFetch(url,options={{}}){{
-   const r=await fetch(url,{{credentials:'same-origin',...options}});
-   const type=(r.headers.get('content-type')||'').toLowerCase();
-   const text=await r.text();
-   if(!type.includes('application/json')){{const e=new Error(`A operação não chegou ao serviço de exclusão (HTTP ${{r.status}}). Atualize a página e tente novamente.`);e.status=r.status;throw e}}
-   let data;try{{data=JSON.parse(text)}}catch(_e){{throw new Error('O serviço de exclusão retornou uma resposta incompleta.')}}
-   if(!r.ok){{const e=new Error(data.detail||data.error||`HTTP ${{r.status}}`);e.status=r.status;e.payload=data;throw e}}
-   return data
- }}
- function initialTimeline(title,detail){{
-   progressBox.hidden=false;
-   progressBox.innerHTML=`<div class="section-title"><div><h3>Remoção do banco</h3><p>${{esc(title)}}</p></div><strong>0%</strong></div><progress max="100" value="0" style="width:100%"></progress><ol class="tenant-delete-steps"><li><span class="pill warn">Executando</span><strong>${{esc(title)}}</strong><small>${{esc(detail)}}</small></li></ol>`;
- }}
- function drawJob(job){{
-   progressBox.hidden=false;
-   const steps=(job.steps||[]).map(x=>`<li><span class="pill ${{x.status==='done'?'ok':x.status==='failed'?'bad':'warn'}}">${{x.status==='done'?'Concluído':x.status==='failed'?'Falhou':'Executando'}}</span><strong>${{esc(x.label)}}</strong><small>${{esc(x.detail||'')}}</small></li>`).join('');
-   const terminal=job.status==='succeeded'?'<p class="pill ok">Banco removido e ambiente atualizado com sucesso.</p>':job.status==='failed'?`<p class="pill bad">Falha: ${{esc(job.error||job.detail||job.result?.error||'não identificada')}}</p>`:'';
-   progressBox.innerHTML=`<div class="section-title"><div><h3>Remoção do banco</h3><p>${{esc(job.current_step||'Preparando')}}</p></div><strong>${{Number(job.progress||0)}}%</strong></div><progress max="100" value="${{Number(job.progress||0)}}" style="width:100%"></progress><ol class="tenant-delete-steps">${{steps}}</ol>${{terminal}}`;
- }}
- async function poll(id,attempt=0){{
-   try{{
-     const job=await jsonFetch(`${{portal}}?api=admin-delete-tenant-status&job_id=${{encodeURIComponent(id)}}`,{{headers:{{Accept:'application/json'}}}});
-     drawJob(job);
-     if(job.status==='queued'||job.status==='running')setTimeout(()=>poll(id,0),1200)
-   }}catch(e){{
-     const transient=[0,502,503,504].includes(Number(e.status||0));
-     if(transient&&attempt<20){{
-       const note=document.createElement('p');note.className='pill warn';note.textContent='A exclusão continua no servidor. Reconectando para recuperar o progresso…';progressBox.appendChild(note);setTimeout(()=>poll(id,attempt+1),1500);return
-     }}
-     progressBox.hidden=false;progressBox.insertAdjacentHTML('beforeend',`<p class="pill bad">${{esc(e.message)}}</p>`)
-   }}
- }}
+ const form=document.getElementById('tenant-delete-preview-form');if(!form)return;
+ const modal=document.getElementById('tenant-delete-modal'),body=document.getElementById('tenant-delete-modal-body'),footer=document.getElementById('tenant-delete-modal-footer'),title=document.getElementById('tenant-delete-title'),subtitle=document.getElementById('tenant-delete-subtitle');
+ const portal='/cloudiff/portal/',labels=['Validação','Backup final','Containers e volumes','Registry e permissões','Diretório do tenant','Roteador'];
+ const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}}[c]));
+ let activeJob='',terminal=false;
+ const dots=()=>'<span class="tenant-delete-dots" aria-label="Executando"><i></i><i></i><i></i></span>';
+ function openModal(){{modal.hidden=false;modal.setAttribute('aria-hidden','false');document.body.classList.add('tenant-delete-modal-open')}}
+ function closeModal(){{if(activeJob&&!terminal)return;modal.hidden=true;modal.setAttribute('aria-hidden','true');document.body.classList.remove('tenant-delete-modal-open')}}
+ modal.querySelectorAll('[data-delete-close]').forEach(x=>x.onclick=closeModal);
+ async function jsonFetch(url,options={{}}){{const r=await fetch(url,{{credentials:'same-origin',...options}}),type=(r.headers.get('content-type')||'').toLowerCase(),text=await r.text();if(!type.includes('application/json')){{const e=new Error(`A operação não chegou ao serviço de exclusão (HTTP ${{r.status}}).`);e.status=r.status;throw e}}let data;try{{data=JSON.parse(text)}}catch(_e){{throw new Error('O serviço retornou uma resposta incompleta.')}}if(!r.ok){{const e=new Error(data.detail||data.error||`HTTP ${{r.status}}`);e.status=r.status;throw e}}return data}}
+ function timeline(job={{}}){{const known=new Map((job.steps||[]).map(x=>[x.label,x]));return labels.map((label,index)=>{{const item=known.get(label)||{{status:'pending',detail:'Aguardando etapa anterior.'}},status=item.status||'pending',icon=status==='done'?'✓':status==='failed'?'!':status==='running'?dots():String(index+1),badge=status==='done'?'Concluído':status==='failed'?'Falhou':status==='running'?'Executando':'Aguardando';return `<li class="tenant-delete-step ${{status}}"><span class="tenant-delete-step-icon">${{icon}}</span><div><strong>${{esc(label)}}</strong><small>${{esc(item.detail||'')}}</small></div><span class="pill ${{status==='done'?'ok':status==='failed'?'bad':'muted'}}">${{badge}}</span></li>`}}).join('')}}
+ function preparing(message,detail){{title.textContent='Exclusão iniciada';subtitle.textContent=message;body.innerHTML=`<div class="tenant-delete-live">${{dots()}}<div><strong>${{esc(message)}}</strong><small>${{esc(detail)}}</small></div></div><div class="tenant-delete-progress-wrap"><progress max="100" value="2"></progress><small>O servidor está preparando a operação.</small></div><ol class="tenant-delete-timeline">${{timeline({{steps:[{{label:'Validação',status:'running',detail}}]}})}}</ol>`;footer.innerHTML='<button class="btn light" type="button" disabled>Aguarde…</button>'}}
+ function drawJob(job){{activeJob=['queued','running'].includes(job.status)?job.job_id||activeJob:'';terminal=!activeJob;const progress=Number(job.progress||0),failed=job.status==='failed',done=job.status==='succeeded';title.textContent=done?'Banco removido':failed?'A exclusão falhou':'Exclusão em andamento';subtitle.textContent=done?'Backup protegido e ambiente atualizado.':failed?'O processo foi interrompido com segurança.':job.current_step||'Preparando próxima etapa.';const live=!failed&&!done?`<div class="tenant-delete-live">${{dots()}}<div><strong>${{esc(job.current_step||'Executando')}}</strong><small>O servidor continua trabalhando. Não feche esta janela.</small></div></div>`:'';const terminalBox=done?'<div class="tenant-delete-terminal ok"><strong>Exclusão concluída.</strong><p>O backup final foi criado antes da remoção dos dados.</p></div>':failed?`<div class="tenant-delete-terminal bad"><strong>Não foi possível concluir.</strong><p>${{esc(job.error||job.detail||job.result?.error||'Falha não identificada.')}}</p></div>`:'';body.innerHTML=`${{live}}<div class="tenant-delete-progress-wrap"><progress max="100" value="${{progress}}"></progress><small>${{progress}}% concluído</small></div><ol class="tenant-delete-timeline">${{timeline(job)}}</ol>${{terminalBox}}`;footer.innerHTML=terminal?'<button class="btn" type="button" data-finish>Fechar</button>':'<button class="btn light" type="button" disabled>Exclusão em andamento…</button>';footer.querySelector('[data-finish]')?.addEventListener('click',()=>{{closeModal();location.reload()}})}}
+ async function poll(id,attempt=0){{try{{const job=await jsonFetch(`${{portal}}?api=admin-delete-tenant-status&job_id=${{encodeURIComponent(id)}}`,{{headers:{{Accept:'application/json'}}}});drawJob(job);if(['queued','running'].includes(job.status))setTimeout(()=>poll(id,0),1000)}}catch(e){{if([0,502,503,504].includes(Number(e.status||0))&&attempt<30){{subtitle.textContent='Reconectando ao processo…';setTimeout(()=>poll(id,attempt+1),1200);return}}activeJob='';terminal=true;drawJob({{status:'failed',progress:100,error:e.message,steps:[]}})}}}}
  form.addEventListener('submit',async e=>{{
    e.preventDefault();
-   const fd=new FormData(form),tenant=String(fd.get('tenant')||'');
-   previewBox.hidden=false;previewBox.innerHTML='<p class="pill warn">Analisando tenant, vínculos, containers e volumes…</p>';
-   initialTimeline('Análise de segurança','Conferindo se o banco pode ser removido. Nenhuma alteração foi feita ainda.');
+   const fd=new FormData(form),tenant=String(fd.get('tenant')||'').trim();
+   if(!tenant)return;
+   activeJob='';terminal=false;openModal();
+   preparing('Analisando o banco selecionado','Conferindo vínculos, containers, volumes e proteções. Nenhuma alteração foi feita.');
    try{{
      const p=await jsonFetch(`${{portal}}?api=admin-delete-tenant-preview&tenant=${{encodeURIComponent(tenant)}}`,{{headers:{{Accept:'application/json'}}}});
      const r=p.resources||{{}},blocked=(p.blockers||[]).length>0;
-     previewBox.innerHTML=`<div class="tenant-delete-preview-grid"><div><small>Projetos vinculados</small><strong>${{(p.linked_projects||[]).length}}</strong></div><div><small>Containers</small><strong>${{(r.containers||[]).length}}</strong></div><div><small>Volumes</small><strong>${{(r.volumes||[]).length}}</strong></div><div><small>Diretório</small><strong>${{p.tenant_dir_present?'Presente':'Ausente'}}</strong></div></div>${{blocked?`<p class="pill bad">Bloqueado: ${{esc((p.blockers||[]).join(', '))}}</p>`:`<div class="tenant-delete-confirmation"><p class="pill warn">A próxima etapa cria um backup final antes de remover containers e volumes.</p><label>Digite exatamente <strong>${{esc(p.confirmation)}}</strong></label><input id="tenant-delete-confirm" autocomplete="off"><button id="tenant-delete-start" class="btn red" type="button" disabled>Excluir banco definitivamente</button><p id="tenant-delete-confirm-status" class="small">Aguardando a confirmação exata.</p></div>`}}`;
-     if(blocked){{progressBox.hidden=true;return}}
-     const input=document.getElementById('tenant-delete-confirm'),start=document.getElementById('tenant-delete-start'),confirmStatus=document.getElementById('tenant-delete-confirm-status');
-     input.addEventListener('input',()=>{{const valid=input.value===p.confirmation;start.disabled=!valid;confirmStatus.textContent=valid?'Confirmação validada. Pronto para iniciar.':'Aguardando a confirmação exata.';confirmStatus.className=valid?'small pill ok':'small'}});
-     start.onclick=async()=>{{
-       const confirmation=input.value;if(confirmation!==p.confirmation)return;
-       start.disabled=true;input.disabled=true;
-       initialTimeline('Solicitação enviada','Criando o processo de exclusão e reservando o tenant para evitar operações simultâneas.');
-       const csrf=String(fd.get('csrf_token')||'');
-       const body=new URLSearchParams({{tenant,confirmation,csrf_token:csrf}});
-       try{{
-         const job=await jsonFetch(portal,{{method:'POST',headers:{{Accept:'application/json','Content-Type':'application/x-www-form-urlencoded;charset=UTF-8','X-CSRF-Token':csrf,'X-CloudIF-Action':'admin-delete-tenant'}},body}});
-         drawJob(job);poll(job.job_id)
-       }}catch(err){{
-         progressBox.insertAdjacentHTML('beforeend',`<p class="pill bad">${{esc(err.message)}}</p>`);start.disabled=false;input.disabled=false
-       }}
+     title.textContent='Confirmar exclusão definitiva';
+     subtitle.textContent=blocked?'Este banco não pode ser removido.':'Revise os recursos e confirme somente quando estiver seguro.';
+     body.innerHTML=`<div class="tenant-delete-preview-grid"><div><small>Projetos vinculados</small><strong>${{(p.linked_projects||[]).length}}</strong></div><div><small>Containers</small><strong>${{(r.containers||[]).length}}</strong></div><div><small>Volumes</small><strong>${{(r.volumes||[]).length}}</strong></div><div><small>Diretório</small><strong>${{p.tenant_dir_present?'Presente':'Ausente'}}</strong></div></div>${{blocked?`<div class="tenant-delete-terminal bad"><strong>Exclusão bloqueada.</strong><p>${{esc((p.blockers||[]).join(', '))}}</p></div>`:`<div class="tenant-delete-confirmation"><div class="tenant-delete-terminal bad"><strong>Esta ação é irreversível.</strong><p>O sistema criará um backup final antes de parar os serviços e apagar os volumes.</p></div><label>Digite exatamente <strong>${{esc(p.confirmation)}}</strong><input id="tenant-delete-confirm" autocomplete="off"></label><p id="tenant-delete-confirm-status">Aguardando a confirmação exata.</p></div>`}}`;
+     if(blocked){{
+       terminal=true;
+       footer.innerHTML='<button class="btn" type="button" data-close-blocked>Fechar</button>';
+       footer.querySelector('[data-close-blocked]').onclick=closeModal;
+       return;
      }}
-   }}catch(err){{previewBox.innerHTML=`<p class="pill bad">${{esc(err.message)}}</p>`;progressBox.hidden=true}}
- }})
+     footer.innerHTML='<button class="btn light" type="button" data-cancel>Cancelar</button><button id="tenant-delete-start" class="btn red" type="button" disabled>Excluir banco definitivamente</button>';
+     const input=document.getElementById('tenant-delete-confirm'),start=document.getElementById('tenant-delete-start'),status=document.getElementById('tenant-delete-confirm-status');
+     footer.querySelector('[data-cancel]').onclick=closeModal;
+     input.addEventListener('input',()=>{{
+       const valid=input.value===p.confirmation;
+       start.disabled=!valid;
+       status.textContent=valid?'Confirmação validada. Clique no botão vermelho para iniciar.':'Aguardando a confirmação exata.';
+       status.className=valid?'pill ok':'';
+     }});
+     start.onclick=async()=>{{
+       if(input.value!==p.confirmation)return;
+       start.disabled=true;footer.querySelector('[data-cancel]').disabled=true;input.disabled=true;
+       preparing('Exclusão iniciada','Criando o job, bloqueando operações simultâneas e preparando o backup final.');
+       const csrf=String(fd.get('csrf_token')||''),requestBody=new URLSearchParams({{tenant,confirmation:input.value,csrf_token:csrf}});
+       try{{
+         const job=await jsonFetch(portal,{{method:'POST',headers:{{Accept:'application/json','Content-Type':'application/x-www-form-urlencoded;charset=UTF-8','X-CSRF-Token':csrf,'X-CloudIF-Action':'admin-delete-tenant'}},body:requestBody}});
+         activeJob=job.job_id;drawJob(job);poll(job.job_id);
+       }}catch(err){{
+         activeJob='';terminal=true;
+         drawJob({{status:'failed',progress:100,error:err.message,steps:[{{label:'Validação',status:'failed',detail:err.message}}]}});
+       }}
+     }};
+   }}catch(err){{
+     activeJob='';terminal=true;
+     title.textContent='Não foi possível analisar';subtitle.textContent='Nenhuma alteração foi feita.';
+     body.innerHTML=`<div class="tenant-delete-terminal bad"><strong>Falha na análise.</strong><p>${{esc(err.message)}}</p></div>`;
+     footer.innerHTML='<button class="btn" type="button" data-error-close>Fechar</button>';
+     footer.querySelector('[data-error-close]').onclick=closeModal;
+   }}
+ }});
 }})();
 </script>
-'''
+"""
