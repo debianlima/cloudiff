@@ -6209,8 +6209,15 @@ if 'Portal' in globals() and not globals().get('_admin_project_delete_wrapped'):
             n=int(self.headers.get('Content-Length','0') or 0);form=urllib.parse.parse_qs(self.rfile.read(n).decode('utf-8','ignore'))
             val=lambda k:(form.get(k) or [''])[0].strip()
             if not _prod_csrf_equal(val('csrf_token'),_prod_csrf_token(user)):return _cloudif_security_reject(self,'Token CSRF inválido ou ausente.',403)
-            slug=val('slug');result=_admin_project_delete.execute(slug,val('confirm_text'),user.get('username') or 'admin')
-            return self.send_html(page(user,'admin-excluir-projeto',_admin_project_delete.render(_prod_csrf_token(user),selected='',result=result)),200 if result.get('ok') else 409)
+            slug=val('slug')
+            if not _admin_project_delete.consume_wizard_token(slug,val('wizard_token')):
+                if 'application/json' in (self.headers.get('Accept') or '').lower():
+                    raw=json.dumps({'ok':False,'error':'wizard_required'},ensure_ascii=False).encode();self.send_response(409);self.send_header('Content-Type','application/json');self.send_header('Content-Length',str(len(raw)));self.end_headers();self.wfile.write(raw);return
+                return self.send_html(page(user,'admin-excluir-projeto',_admin_project_delete.render(_prod_csrf_token(user),selected=slug,result={'ok':False,'error':'wizard_required'})),409)
+            result=_admin_project_delete.start_job(slug,val('confirm_text'),user.get('username') or 'admin')
+            if 'application/json' in (self.headers.get('Accept') or '').lower():
+                raw=json.dumps(result,ensure_ascii=False).encode();self.send_response(202 if result.get('ok') else 409);self.send_header('Content-Type','application/json');self.send_header('Cache-Control','no-store');self.send_header('Content-Length',str(len(raw)));self.end_headers();self.wfile.write(raw);return
+            return self.send_html(page(user,'admin-excluir-projeto',_admin_project_delete.render(_prod_csrf_token(user),selected=slug,result=result)),202 if result.get('ok') else 409)
         return _admin_project_delete_prev_post(self)
     Portal.do_GET=_admin_project_delete_get
     Portal.do_POST=_admin_project_delete_post

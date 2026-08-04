@@ -1399,11 +1399,7 @@ def render_project_card(p, forja_online, komodo_online):
         <button type="button" class="ci-menu-item" onclick="cloudifShowWizard('wiz_acl_{_v136b2_safe_id(slug)}')">Permissões</button>
         <a href="#modal-vincular-banco" onclick="cloudifSetProject('{h(slug)}','{h(tenant)}')">Vincular banco</a>
         <!-- CloudIF v135b3 delete git/komodo form -->
-<form method="post" action="/cloudiff/portal/git-komodo/action" style="margin:0">
-  <input type="hidden" name="op" value="delete_git_komodo">
-  <input type="hidden" name="slug" value="{h(slug)}">
-  <button type="submit" class="ci-menu-item ci-menu-danger">Excluir projeto</button>
-</form>
+<a class="ci-menu-item ci-menu-danger" href="/cloudiff/portal/?tab=admin-excluir-projeto&amp;slug={h(slug)}">Excluir projeto</a>
       </div>
     </details>
   </div>

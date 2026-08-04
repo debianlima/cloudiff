@@ -1,5 +1,7 @@
 import glob
 import html
+import hashlib
+import secrets
 import json
 import os
 import shutil
@@ -25,6 +27,29 @@ NOTIFICATIONS_DB = Path('/var/lib/cloudif/notifications/notifications.db')
 MONITOR_DB = Path('/var/lib/cloudif/monitoring/monitor.db')
 ONBOARDING_SECRETS = Path('/var/lib/cloudif/onboarding/secrets')
 JOB_ROOT = Path('/srv/cloudif/admin-project-deletions/.jobs')
+WIZARD_ROOT = JOB_ROOT / '.wizard-tokens'
+
+
+def issue_wizard_token(slug):
+    WIZARD_ROOT.mkdir(parents=True, exist_ok=True)
+    token=secrets.token_urlsafe(32)
+    payload={'slug':slug,'created_at':time.time(),'expires_at':time.time()+900}
+    target=WIZARD_ROOT/(hashlib.sha256(token.encode()).hexdigest()+'.json')
+    target.write_text(json.dumps(payload,ensure_ascii=False,separators=(',',':')))
+    os.chmod(target,0o600)
+    return token
+
+
+def consume_wizard_token(slug, token):
+    if not token or any(ch.isspace() for ch in token): return False
+    target=WIZARD_ROOT/(hashlib.sha256(token.encode()).hexdigest()+'.json')
+    try:
+        payload=json.loads(target.read_text())
+    except Exception:
+        return False
+    try: target.unlink()
+    except FileNotFoundError: pass
+    return payload.get('slug')==slug and float(payload.get('expires_at') or 0)>=time.time()
 
 
 def _job_write(job_id, data):
@@ -478,6 +503,7 @@ def render(csrf_token, selected='', result=None):
             f'{_result_stages(result)}<details><summary>Relatório técnico</summary><pre style="white-space:pre-wrap;overflow:auto;max-height:420px">{h(json.dumps(result, ensure_ascii=False, indent=2))}</pre></details></section>'
         )
     selected_preview = preview(selected) if selected else None
+    wizard_token = issue_wizard_token(selected) if selected_preview and selected_preview.get('ok') else ''
     preview_html = ''
     if selected_preview:
         preview_html = f'<pre style="white-space:pre-wrap;overflow:auto;max-height:360px">{h(json.dumps(selected_preview, ensure_ascii=False, indent=2))}</pre>'
@@ -493,6 +519,7 @@ def render(csrf_token, selected='', result=None):
   {f'''<form id="admin-delete-form" method="post" action="/cloudiff/portal/action/admin-delete-project">
     <input type="hidden" name="csrf_token" value="{h(csrf_token)}">
     <input type="hidden" name="slug" value="{h(selected)}">
+    <input type="hidden" name="wizard_token" value="{h(wizard_token)}">
     <label>Digite exatamente <code>EXCLUIR {h(selected)}</code><input name="confirm_text" required autocomplete="off"></label>
     <button class="btn danger" type="submit">Excluir projeto definitivamente</button><div id="admin-delete-progress" hidden aria-live="polite"></div>
   </form>''' if selected_preview and selected_preview.get('ok') else ''}
