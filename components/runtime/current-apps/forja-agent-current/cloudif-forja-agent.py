@@ -1004,6 +1004,15 @@ def cloudif_v117_project_rollback(handler):
         (not execute or result["forgejo"].get("deleted") is True or result["forgejo"].get("status") in ["already_absent", "missing_forgejo_token"])
         and st in [200, 201, 202]
     )
+    state_path = STATE_DIR / f"{slug}.json"
+    result["local_state"] = {
+        "path": str(state_path),
+        "present": state_path.exists(),
+        "removed": False,
+    }
+    if execute and result["ok"] and state_path.exists():
+        state_path.unlink()
+        result["local_state"]["removed"] = True
 
     return _cloudif_v117_send_json(handler, 200 if result["ok"] else 500, result)
 

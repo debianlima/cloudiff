@@ -1601,28 +1601,30 @@ def v53c_id(item):
 
 def v53c_get_compose_at_commit(project, commit):
     owner, repo_name, repo_path, stack_name = v53c_parts(project)
-    path = (
-        "/api/v1/repos/"
-        + urllib.parse.quote(owner)
-        + "/"
-        + urllib.parse.quote(repo_name)
-        + "/contents/docker-compose.yml?ref="
-        + urllib.parse.quote(commit)
-    )
-
-    res = v53c_forgejo_call("GET", path)
-
-    if not res.get("ok"):
-        return {"ok": False, "error": "compose_not_found", "detail": res}
-
-    encoded = res.get("data", {}).get("content", "")
-
-    try:
-        content = base64.b64decode(encoded).decode("utf-8", "ignore")
-    except Exception as e:
-        return {"ok": False, "error": "compose_decode_failed", "detail": str(e)}
-
-    return {"ok": True, "content": content, "forgejo": res.get("data", {})}
+    attempts = []
+    for filename in ("docker-compose.yml", "compose.yaml", "compose.yml"):
+        path = (
+            "/api/v1/repos/" + urllib.parse.quote(owner) + "/" + urllib.parse.quote(repo_name)
+            + "/contents/" + urllib.parse.quote(filename) + "?ref=" + urllib.parse.quote(commit)
+        )
+        for attempt in range(1, 4):
+            res = v53c_forgejo_call("GET", path)
+            attempts.append({"filename": filename, "attempt": attempt, "ok": bool(res.get("ok")), "status": int(res.get("status") or 0)})
+            if res.get("ok"):
+                encoded = res.get("data", {}).get("content", "")
+                try:
+                    content = base64.b64decode(encoded).decode("utf-8", "ignore")
+                except Exception as e:
+                    return {"ok": False, "error": "compose_decode_failed", "filename": filename, "detail": str(e), "attempts": attempts}
+                if not content.strip():
+                    return {"ok": False, "error": "compose_empty", "filename": filename, "attempts": attempts}
+                return {"ok": True, "content": content, "filename": filename, "attempts": attempts, "forgejo": res.get("data", {})}
+            status = int(res.get("status") or 0)
+            if status not in (0, 404, 408, 429, 500, 502, 503, 504):
+                break
+            if attempt < 3:
+                time.sleep(0.5 * attempt)
+    return {"ok": False, "error": "compose_not_found", "attempts": attempts}
 
 def v53c_locate_stack(project):
     owner, repo_name, repo_path, stack_name = v53c_parts(project)
@@ -1722,8 +1724,15 @@ def v53c_handle_rollback_filecontents(handler):
     )
 
     final_stack = _cloudif_v132_status_from_payload({"project_slug": project, "stack_id": stack_id})
+    deployed_contents=((update.get("data") or {}).get("info") or {}).get("deployed_contents") or []
+    same_content=any(str(x.get("contents") or "").strip()==str(compose.get("content") or "").strip() for x in deployed_contents if isinstance(x,dict))
+    logs=(operation_final or {}).get("logs") or []
+    rate_limited_pull=bool(logs) and all(str(x.get("stage") or "")=="Compose Pull" and "429 Too Many Requests" in str(x.get("stderr") or "") for x in logs if isinstance(x,dict))
+    busy=(final_stack.get("busy") or {}) if isinstance(final_stack,dict) else {}
+    final_healthy=bool(final_stack.get("ok") and final_stack.get("deploy_status") in {"ready","completed"} and not busy.get("repo") and not busy.get("stack"))
+    safe_noop=bool(update.get("ok") and deploy.get("ok") and not operation_ok and same_content and rate_limited_pull and final_healthy)
     result = {
-        "ok": bool(update.get("ok") and deploy.get("ok") and operation_ok),
+        "ok": bool(update.get("ok") and deploy.get("ok") and (operation_ok or safe_noop)),
         "project": project,
         "tenant": tenant,
         "actor": actor,
@@ -1737,9 +1746,12 @@ def v53c_handle_rollback_filecontents(handler):
         "deploy": deploy,
         "operation_id": operation_id,
         "operation_final": operation_final,
+        "safe_noop": safe_noop,
+        "same_content": same_content,
+        "rate_limited_pull": rate_limited_pull,
         "poll_snapshots": poll_snapshots[-20:],
         "final_status": final_stack,
-        "message": "Deploy por file_contents confirmado pelo Komodo." if operation_ok else "Deploy por file_contents não foi confirmado pelo Komodo."
+        "message": "Deploy por file_contents confirmado pelo Komodo." if operation_ok else ("Conteúdo já implantado; pull limitado por 429 tratado como no-op seguro." if safe_noop else "Deploy por file_contents não foi confirmado pelo Komodo.")
     }
 
     try:
@@ -1966,6 +1978,23 @@ def cloudif_v117_komodo_project_rollback(handler):
     repo = _cloudif_v117_repo_name(slug)
 
     sqlite_result = _cloudif_v117_sqlite_rollback(slug, execute=execute)
+    stack_path = Path('/etc/komodo/stacks') / ('cloudif-' + slug)
+    state_path = PROJECT_STATE / f'{slug}.json'
+    local_cleanup = {
+        "stack_path": str(stack_path),
+        "stack_present": stack_path.exists(),
+        "state_path": str(state_path),
+        "state_present": state_path.exists(),
+        "stack_removed": False,
+        "state_removed": False,
+    }
+    if execute:
+        if stack_path.exists():
+            shutil.rmtree(stack_path)
+            local_cleanup["stack_removed"] = True
+        if state_path.exists():
+            state_path.unlink()
+            local_cleanup["state_removed"] = True
 
     return _cloudif_v117_send_json(handler, 200, {
         "ok": True,
@@ -1974,10 +2003,11 @@ def cloudif_v117_komodo_project_rollback(handler):
         "project_slug": slug,
         "repo": repo,
         "sqlite": sqlite_result,
+        "local_cleanup": local_cleanup,
         "remote_stack_delete": {
-            "attempted": False,
-            "status": "remote_delete_pending",
-            "message": "Endpoint seguro de delete no Komodo Core ainda não mapeado; rollback limpou/avaliou mapeamentos locais do agent.",
+            "attempted": execute,
+            "status": "local_stack_removed" if execute else "dry_run",
+            "message": "O shell local da stack e o estado do agente são removidos no modo execute; o tenant/banco não é alterado.",
         },
     })
 
@@ -2924,6 +2954,36 @@ def cloudif_v132_project_deploy_full(handler):
 
 
 
+# CloudIF fixed local stack smoke BEGIN
+def cloudif_stack_http_smoke(handler):
+    import hashlib,hmac
+    cfg=load_env()
+    expected=str(cfg.get('KOMODO_PUBLICATION_TOKEN') or '')
+    supplied=str(handler.headers.get('X-CloudIF-Token') or handler.headers.get('Authorization','').replace('Bearer ','',1))
+    if not expected or not hmac.compare_digest(expected,supplied):
+        return send(handler,403,{'ok':False,'error':'forbidden'})
+    try:payload=handler.parse_json()
+    except Exception:return send(handler,400,{'ok':False,'error':'invalid_json'})
+    if set(payload)!={'project'}:
+        return send(handler,400,{'ok':False,'error':'invalid_request'})
+    project=str(payload.get('project') or '').strip()
+    targets={'sistema-de-biblioteca-teste':'http://127.0.0.1:18080/'}
+    url=targets.get(project)
+    if not url:return send(handler,404,{'ok':False,'error':'project_not_allowed'})
+    req=urllib.request.Request(url,headers={'User-Agent':'CloudIF-Komodo-Local-Smoke/1.0','Accept':'text/html'})
+    try:
+        with urllib.request.urlopen(req,timeout=8) as r:
+            raw=r.read(2*1024*1024+1);status=r.status;ctype=str(r.headers.get('Content-Type') or '')
+    except Exception as e:
+        return send(handler,502,{'ok':False,'error':'http_smoke_failed','error_type':type(e).__name__})
+    if len(raw)>2*1024*1024:return send(handler,502,{'ok':False,'error':'body_too_large'})
+    body=raw.decode('utf-8','replace')
+    ok=status==200 and ctype.lower().startswith('text/html') and len(raw)>=32 and '<html' in body.lower()
+    result={'ok':ok,'project':project,'status':status,'content_type':ctype,'size':len(raw),'sha256':hashlib.sha256(raw).hexdigest(),'html':True if '<html' in body.lower() else False,'target':'fixed-local','checked_at':now()}
+    return send(handler,200 if ok else 502,result)
+# CloudIF fixed local stack smoke END
+
+
 # CloudIF versioned publications BEGIN
 
 def _cloudif_pub_auth(handler):
@@ -3034,6 +3094,95 @@ def _cloudif_project_audit_data(payload):
       'container_stats':container.get('stats') or {}, 'server_id':server_id,
       'terminal_target_type':target.get('type'),'terminal_ok':terminal_ok,'terminal_command':cmd,'issues':issues,'healthy':not issues,'target':target}
 
+def cloudif_project_runtime_inspect(handler):
+    if not _cloudif_pub_auth(handler):
+        return send(handler,403,{'ok':False,'error':'forbidden'})
+    payload=_cloudif_pub_json(handler)
+    if not set(payload).issubset({'project','public_numbers'}):
+        return send(handler,400,{'ok':False,'error':'invalid_request'})
+    project=safe_slug(payload.get('project') or '')
+    if not project:
+        return send(handler,400,{'ok':False,'error':'invalid_project'})
+    numbers=[]
+    for value in payload.get('public_numbers') or []:
+        try:
+            number=int(value)
+            if 1 <= number <= 999999999:numbers.append(number)
+        except Exception:pass
+    repo=Path('/etc/komodo/stacks')/('cloudif-'+project)
+    repository_present=bool((repo/'.git').is_dir())
+    files=[];commit='';images=[]
+    if repository_present:
+        try:
+            commit=subprocess.check_output(['git','-C',str(repo),'rev-parse','HEAD'],text=True,stderr=subprocess.DEVNULL,timeout=12).strip()
+            files=subprocess.check_output(['git','-C',str(repo),'ls-tree','-r','--name-only',commit],text=True,stderr=subprocess.DEVNULL,timeout=12).splitlines()
+        except Exception:files=[];commit=''
+        for compose_name in ('docker-compose.yml','compose.yaml','compose.yml'):
+            try:
+                raw=subprocess.check_output(['git','-C',str(repo),'show',commit+':'+compose_name],text=True,stderr=subprocess.DEVNULL,timeout=12)
+            except Exception:continue
+            images.extend(re.findall(r'^\s*image:\s*["\']?([^"\'\s#]+)',raw,re.M))
+    file_set=set(files)
+    def has(name):return name in file_set or any(x.endswith('/'+name) for x in file_set)
+    framework='Não identificado';framework_evidence=[]
+    package={}
+    if repository_present and has('package.json'):
+        target=next((x for x in files if x=='package.json' or x.endswith('/package.json')),'package.json')
+        try:package=json.loads(subprocess.check_output(['git','-C',str(repo),'show',commit+':'+target],text=True,stderr=subprocess.DEVNULL,timeout=12))
+        except Exception:package={}
+        deps={**(package.get('dependencies') or {}),**(package.get('devDependencies') or {})}
+        mapping=(('next','Next.js'),('nuxt','Nuxt'),('@angular/core','Angular'),('@sveltejs/kit','SvelteKit'),('astro','Astro'),('vite','Vite'),('express','Express'))
+        match=next(((key,label) for key,label in mapping if key in deps),None)
+        framework=match[1] if match else 'Node.js'
+        framework_evidence=['package.json']+([match[0]] if match else [])
+    elif repository_present and (has('composer.json') or has('index.php')):
+        framework='PHP';framework_evidence=['composer.json' if has('composer.json') else 'index.php']
+    elif repository_present and (has('requirements.txt') or has('pyproject.toml')):
+        framework='Python';framework_evidence=['requirements.txt' if has('requirements.txt') else 'pyproject.toml']
+    elif repository_present and (has('index.html') or any(x.startswith(('site/','dist/','build/','public/')) and x.endswith('.html') for x in files)):
+        framework='Site estático';framework_evidence=['arquivo HTML publicado']
+    if framework=='Não identificado' and any('nginx' in x.lower() for x in images):
+        framework='Site estático';framework_evidence=['imagem Nginx no compose']
+    candidates=[]
+    try:
+        ids=subprocess.check_output(['docker','ps','-aq'],text=True,timeout=15).split()
+        if ids:
+            rows=json.loads(subprocess.check_output(['docker','inspect',*ids],text=True,timeout=30))
+            expected={project,'cloudif-'+project}
+            for info in rows:
+                cfg=info.get('Config') or {};labels=cfg.get('Labels') or {};name=str(info.get('Name') or '').lstrip('/')
+                compose_project=str(labels.get('com.docker.compose.project') or '')
+                direct=str(labels.get('cloudif.project') or '')
+                publication=any(re.match(r'^cloudif-p%d-d\d+-web$'%n,name) for n in numbers)
+                if direct==project or compose_project in expected or project in name or publication:
+                    candidates.append({'name':name,'image':cfg.get('Image') or '', 'running':bool((info.get('State') or {}).get('Running'))})
+    except Exception:pass
+    probes=(('node',['node','--version']),('npm',['npm','--version']),('php',['php','--version']),('python',['python3','--version']),('nginx',['nginx','-v']),('apache',['apache2','-v']),('httpd',['httpd','-v']))
+    runtimes={}
+    for container in candidates:
+        if not container['running']:continue
+        found={}
+        for key,cmd in probes:
+            try:
+                run=subprocess.run(['docker','exec',container['name'],*cmd],text=True,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,timeout=6)
+                text=' '.join((run.stdout or '').split())[:180]
+                if run.returncode==0 and text:found[key]=text
+            except Exception:pass
+        if found:runtimes[container['name']]=found
+    flat={}
+    for values in runtimes.values():
+        for key,value in values.items():flat.setdefault(key,value)
+    server='Nginx' if 'nginx' in flat or any('nginx' in x.lower() for x in images+[c['image'] for c in candidates]) else ('Apache' if 'apache' in flat or 'httpd' in flat else None)
+    return send(handler,200,{
+        'ok':True,'read_only':True,'project':project,
+        'repository':{'present':repository_present,'commit':commit,'file_count':len(files),'manifest_files':[x for x in files if x.rsplit('/',1)[-1] in ('package.json','composer.json','requirements.txt','pyproject.toml','index.php','index.html','docker-compose.yml','compose.yaml','compose.yml')][:30]},
+        'detection':{'framework':framework,'evidence':framework_evidence,'server':server,'runtimes':flat},
+        'containers':candidates,'container_probes':runtimes,'compose_images':sorted(set(images)),
+        'mutation_supported':False,'mutation_reason':'framework_change_requires_transactional_repository_proposal_build_validation_and_rollback',
+        'secrets_exposed':False,
+    })
+
+
 def cloudif_project_audit(handler):
     if not _cloudif_pub_auth(handler): return send(handler,403,{'ok':False,'error':'forbidden'})
     return send(handler,200,_cloudif_project_audit_data(_cloudif_pub_json(handler)))
@@ -3097,24 +3246,88 @@ def cloudif_publication_deploy(handler):
     status = _cloudif_v132_status_from_payload({"project_slug": project})
     if not status.get("ok"):
         return send(handler, 404, {"ok": False, "error": "base_project_not_found", "status": status})
-    commit = str(payload.get("commit") or (status.get("stack") or {}).get("latest_hash") or (status.get("repo") or {}).get("latest_hash") or "")
-    if len(commit) < 7:
-        return send(handler, 422, {"ok": False, "error": "commit_not_found"})
-    compose = v53c_get_compose_at_commit(project, commit)
     base_dir = Path(f"/etc/komodo/stacks/cloudif-{project}")
-    local_compose = base_dir / "docker-compose.yml"
-    if (not compose.get("ok") or "cloudif-publications" not in str(compose.get("content") or "")) and local_compose.is_file():
-        local_content = local_compose.read_text()
-        if "cloudif-publications" in local_content and "./site:/usr/share/nginx/html:ro" in local_content and "./nginx.conf:/etc/nginx/conf.d/default.conf:ro" in local_content:
-            compose = {"ok": True, "content": local_content, "source": "validated_local_fallback", "commit": commit}
-    if not compose.get("ok"):
-        return send(handler, 422, {"ok": False, "error": "compose_not_found", "compose": compose})
-    # Snapshot the deployed project files into an immutable per-deploy directory.
+    if not (base_dir / ".git").exists():
+        return send(handler, 422, {"ok": False, "error": "git_repository_missing", "base_dir": str(base_dir)})
+    subprocess.run(["git","-C",str(base_dir),"fetch","--quiet","origin","main"],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=60)
+    requested = str(payload.get("commit") or "").strip()
+    commit = ""
+    for candidate in (requested,"origin/main","HEAD"):
+        if not candidate: continue
+        pr=subprocess.run(["git","-C",str(base_dir),"rev-parse","--verify",candidate+"^{commit}"],text=True,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL)
+        if pr.returncode==0:
+            commit=pr.stdout.strip();break
+    if len(commit)!=40:
+        return send(handler, 422, {"ok": False, "error": "valid_git_commit_not_found"})
+    def git_file(path):
+        pr=subprocess.run(["git","-C",str(base_dir),"show",commit+":"+path],stdout=subprocess.PIPE,stderr=subprocess.DEVNULL)
+        return pr.stdout if pr.returncode==0 else b""
+    compose_content=b"";compose_name=""
+    for name in ("docker-compose.yml","compose.yaml","compose.yml"):
+        raw=git_file(name)
+        if raw.strip(): compose_content=raw;compose_name=name;break
+    compose_text=compose_content.decode("utf-8","ignore")
+    generated_compose=False
+    if not compose_text or "cloudif-publications" not in compose_text:
+        compose_text="""services:
+  web:
+    image: nginxinc/nginx-unprivileged:1.27-alpine
+    container_name: cloudif-p${CLOUDIF_PUBLIC_NUMBER}-d${CLOUDIF_DEPLOY_NUMBER}-web
+    restart: unless-stopped
+    read_only: true
+    user: "101:101"
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m
+      - /var/cache/nginx:rw,noexec,nosuid,size=16m
+      - /var/run:rw,noexec,nosuid,size=4m
+    volumes:
+      - ./site:/usr/share/nginx/html:ro
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O- http://127.0.0.1:80/__cloudif_health >/dev/null"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+    networks: [cloudif-publications]
+networks:
+  cloudif-publications:
+    external: true
+"""
+        compose_name="cloudif-generated-compose.yml";generated_compose=True
+    def git_tree(prefix=""):
+        cmd=["git","-C",str(base_dir),"ls-tree","-r","--name-only",commit]
+        if prefix: cmd.append(prefix)
+        tree=subprocess.run(cmd,text=True,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL)
+        return [x.strip() for x in tree.stdout.splitlines() if x.strip()]
+    publication_files=[]
+    publication_source=""
+    for prefix in ("site","dist","build","public"):
+        files=[x for x in git_tree(prefix) if x.startswith(prefix+"/")]
+        if files:
+            publication_source=prefix
+            publication_files=[(x,x[len(prefix)+1:]) for x in files]
+            break
+    if not publication_files and git_file("index.html").strip():
+        publication_source="root"
+        ignored={"README.md","docker-compose.yml","compose.yml","compose.yaml","Dockerfile","nginx.conf"}
+        publication_files=[(x,x) for x in git_tree() if x not in ignored and not x.startswith(".")]
+    generated_placeholder=not publication_files
+    nginx_content=git_file("nginx.conf")
+    generated_nginx=not bool(nginx_content.strip())
+    if generated_nginx:
+        nginx_content=b"""server {
+  listen 80;
+  server_name _;
+  root /usr/share/nginx/html;
+  index index.html;
+  location = /__cloudif_health { access_log off; return 200 'ok'; add_header Content-Type text/plain; }
+  location / { try_files $uri $uri/ /index.html; }
+}
+"""
+    compose={"ok":True,"content":compose_text,"filename":compose_name,"source":"git_commit","commit":commit}
     snap_dir = Path(f"/srv/cloudif/publications/p{public_number}/d{deploy_number}")
-    site_src = base_dir / "site"
-    nginx_src = base_dir / "nginx.conf"
-    if not site_src.is_dir() or not nginx_src.is_file():
-        return send(handler, 422, {"ok": False, "error": "publication_sources_missing", "base_dir": str(base_dir)})
     marker = snap_dir / ".cloudif-commit"
     valid_snapshot = snap_dir.is_dir() and marker.is_file() and (snap_dir / "site").is_dir() and (snap_dir / "nginx.conf").is_file()
     if valid_snapshot:
@@ -3123,21 +3336,68 @@ def cloudif_publication_deploy(handler):
             return send(handler, 409, {"ok": False, "error": "immutable_deploy_conflict", "existing_commit": existing_commit, "requested_commit": commit})
     else:
         if snap_dir.exists(): shutil.rmtree(snap_dir)
-        snap_dir.mkdir(parents=True, mode=0o750)
-        shutil.copytree(site_src, snap_dir / "site", symlinks=False)
-        shutil.copy2(nginx_src, snap_dir / "nginx.conf")
-        marker.write_text(commit + "\n")
-        marker.chmod(0o640)
+        snap_dir.mkdir(parents=True, mode=0o755)
+        (snap_dir / "site").mkdir(mode=0o755)
+        for source_rel,dest_rel in publication_files:
+            raw=git_file(source_rel);dst=snap_dir / "site" / dest_rel;dst.parent.mkdir(parents=True,exist_ok=True);dst.write_bytes(raw)
+        if generated_placeholder:
+            import html as _html
+            title=_html.escape(project.replace("-"," ").title())
+            safe_project=_html.escape(project)
+            safe_commit=_html.escape(commit[:12])
+            placeholder=f"""<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{title}</title><style>body{{margin:0;font-family:system-ui,sans-serif;background:#f7f7f5;color:#171717}}main{{max-width:720px;margin:0 auto;padding:12vh 24px}}small{{letter-spacing:.08em;text-transform:uppercase;color:#666}}h1{{font-size:clamp(2rem,7vw,4rem);line-height:1;margin:.4em 0}}p{{font-size:1.05rem;line-height:1.6;color:#555}}code{{font-size:.85rem}}</style></head><body><main><small>CloudIFF · pré-publicação</small><h1>{title}</h1><p>Este projeto já possui um endereço público, mas ainda não contém arquivos web. A próxima publicação substituirá esta página pelo site do projeto.</p><p><code>{safe_project} · {safe_commit}</code></p></main></body></html>"""
+            (snap_dir / "site" / "index.html").write_text(placeholder,encoding="utf-8")
+        (snap_dir / "nginx.conf").write_bytes(nginx_content)
+        marker.write_text(commit + "\n");marker.chmod(0o640)
         for fp in (snap_dir / "site").rglob("*"):
-            if fp.is_file(): fp.chmod(0o644)
+            if fp.is_dir(): fp.chmod(0o755)
+            elif fp.is_file(): fp.chmod(0o644)
+        snap_dir.chmod(0o755);(snap_dir / "site").chmod(0o755)
         (snap_dir / "nginx.conf").chmod(0o644)
+    import hashlib
+    digest=hashlib.sha256()
+    for fp in sorted((snap_dir / "site").rglob("*")):
+        if fp.is_file(): digest.update(str(fp.relative_to(snap_dir)).encode()+b"\0"+fp.read_bytes()+b"\0")
+    digest.update(b"nginx.conf\0"+(snap_dir / "nginx.conf").read_bytes())
+    content_digest=digest.hexdigest()
+    prior=[]
+    root=Path(f"/srv/cloudif/publications/p{public_number}")
+    for d in root.glob("d*"):
+        if d==snap_dir or not d.is_dir(): continue
+        try:n=int(d.name[1:])
+        except Exception:continue
+        if n>=deploy_number:continue
+        dm=d/".cloudif-content-sha256"
+        if dm.is_file() and dm.read_text().strip()==content_digest:prior.append(n)
+    (snap_dir / ".cloudif-content-sha256").write_text(content_digest+"\n")
+    republished_from=max(prior) if prior else None
+    if republished_from is not None:
+        (snap_dir / ".cloudif-republished-from").write_text(str(republished_from)+"\n")
     content = _cloudif_pub_transform_compose(compose.get("content"), public_number, deploy_number)
     content = content.replace("./site:/usr/share/nginx/html:ro", f"{snap_dir}/site:/usr/share/nginx/html:ro")
     content = content.replace("./nginx.conf:/etc/nginx/conf.d/default.conf:ro", f"{snap_dir}/nginx.conf:/etc/nginx/conf.d/default.conf:ro")
     if "cloudif-publications" not in content:
         return send(handler, 422, {"ok": False, "error": "publication_network_missing"})
     base_stack, base_stack_id, _ = _cloudif_v131_get_stack(project=project)
+    if not base_stack:
+        stacks_result = _cloudif_v131_core_call("read", "ListStacks", {})
+        expected_names = {project, f"cloudif-{project}"}
+        expected_repo = f"cloudif/{project}"
+        base_stack = next((item for item in _cloudif_v131_list_items(stacks_result.get("data"))
+                           if isinstance(item, dict) and (
+                               item.get("name") in expected_names
+                               or ((item.get("info") or {}).get("repo") == expected_repo)
+                               or ((item.get("config") or {}).get("repo") == expected_repo)
+                           )), {})
+        base_stack_id = _cloudif_v131_oid(base_stack)
     server_id = ((base_stack.get("info") or {}).get("server_id") or (base_stack.get("config") or {}).get("server_id") or "")
+    if not server_id:
+        servers_result = _cloudif_v131_core_call("read", "ListServers", {})
+        servers = [item for item in _cloudif_v131_list_items(servers_result.get("data")) if isinstance(item, dict)]
+        preferred = next((item for item in servers if item.get("name") == "Local"), None)
+        if preferred is None:
+            preferred = next((item for item in servers if (item.get("info") or {}).get("state") == "Ok"), None)
+        server_id = _cloudif_v131_oid(preferred or {})
     if not server_id:
         return send(handler, 422, {"ok": False, "error": "server_id_missing"})
     name = f"cloudif-p{public_number}-d{deploy_number}"
@@ -3205,7 +3465,9 @@ def cloudif_publication_deploy(handler):
         "ok": ok, "project": project, "public_number": public_number, "deploy_number": deploy_number,
         "commit": commit, "stack_id": stack_id, "stack_name": name, "container": container,
         "created": created, "deploy": dep, "operation_id": opid, "operation_final": final, "healthy": healthy,
-        "terminal": terminal
+        "terminal": terminal, "content_digest": content_digest, "source": "git_commit", "generated_compose": generated_compose,
+        "publication_source": publication_source or "generated_placeholder", "generated_placeholder": generated_placeholder, "generated_nginx": generated_nginx,
+        "republished": republished_from is not None, "republished_from": republished_from
     })
 
 def cloudif_publication_promote(handler):
@@ -3390,7 +3652,13 @@ class H(BaseHTTPRequestHandler):
 
     def do_POST(self):
 
+        _cloudif_http_smoke_path = self.path.split("?", 1)[0]
+        if _cloudif_http_smoke_path == "/komodo/stack/http-smoke":
+            return cloudif_stack_http_smoke(self)
+
         _cloudif_pub_path = self.path.split("?", 1)[0]
+        if _cloudif_pub_path == "/komodo/project/runtime-inspect":
+            return cloudif_project_runtime_inspect(self)
         if _cloudif_pub_path == "/komodo/project/audit":
             return cloudif_project_audit(self)
         if _cloudif_pub_path == "/komodo/project/repair":

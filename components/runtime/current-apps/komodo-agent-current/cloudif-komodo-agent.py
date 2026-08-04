@@ -1978,6 +1978,23 @@ def cloudif_v117_komodo_project_rollback(handler):
     repo = _cloudif_v117_repo_name(slug)
 
     sqlite_result = _cloudif_v117_sqlite_rollback(slug, execute=execute)
+    stack_path = Path('/etc/komodo/stacks') / ('cloudif-' + slug)
+    state_path = PROJECT_STATE / f'{slug}.json'
+    local_cleanup = {
+        "stack_path": str(stack_path),
+        "stack_present": stack_path.exists(),
+        "state_path": str(state_path),
+        "state_present": state_path.exists(),
+        "stack_removed": False,
+        "state_removed": False,
+    }
+    if execute:
+        if stack_path.exists():
+            shutil.rmtree(stack_path)
+            local_cleanup["stack_removed"] = True
+        if state_path.exists():
+            state_path.unlink()
+            local_cleanup["state_removed"] = True
 
     return _cloudif_v117_send_json(handler, 200, {
         "ok": True,
@@ -1986,10 +2003,11 @@ def cloudif_v117_komodo_project_rollback(handler):
         "project_slug": slug,
         "repo": repo,
         "sqlite": sqlite_result,
+        "local_cleanup": local_cleanup,
         "remote_stack_delete": {
-            "attempted": False,
-            "status": "remote_delete_pending",
-            "message": "Endpoint seguro de delete no Komodo Core ainda não mapeado; rollback limpou/avaliou mapeamentos locais do agent.",
+            "attempted": execute,
+            "status": "local_stack_removed" if execute else "dry_run",
+            "message": "O shell local da stack e o estado do agente são removidos no modo execute; o tenant/banco não é alterado.",
         },
     })
 

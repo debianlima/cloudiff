@@ -1004,6 +1004,15 @@ def cloudif_v117_project_rollback(handler):
         (not execute or result["forgejo"].get("deleted") is True or result["forgejo"].get("status") in ["already_absent", "missing_forgejo_token"])
         and st in [200, 201, 202]
     )
+    state_path = STATE_DIR / f"{slug}.json"
+    result["local_state"] = {
+        "path": str(state_path),
+        "present": state_path.exists(),
+        "removed": False,
+    }
+    if execute and result["ok"] and state_path.exists():
+        state_path.unlink()
+        result["local_state"]["removed"] = True
 
     return _cloudif_v117_send_json(handler, 200 if result["ok"] else 500, result)
 
@@ -2191,6 +2200,327 @@ def _v118_register_event(project_slug, repo, branch, path, action, status, commi
     return event_id
 
 
+# CloudIF workspace archive read-only BEGIN
+_CLOUDIF_ARCHIVE_SLUG_RE = re.compile(r'^[a-z0-9][a-z0-9-]{0,62}$')
+_CLOUDIF_ARCHIVE_REF_RE = re.compile(r'^[A-Za-z0-9._/-]{1,128}$')
+_CLOUDIF_ARCHIVE_MAX = 20 * 1024 * 1024
+
+def cloudif_workspace_archive(handler, qs):
+    if not cloudif_auth_ok(handler):
+        return cloudif_send_json(handler, 403, {'ok': False, 'error': 'invalid_token'})
+    slug = str((qs.get('slug') or [''])[0]).strip()
+    ref = str((qs.get('ref') or ['main'])[0]).strip()
+    if not _CLOUDIF_ARCHIVE_SLUG_RE.fullmatch(slug) or not _CLOUDIF_ARCHIVE_REF_RE.fullmatch(ref) or '..' in ref or ref.startswith('/') or ref.endswith('/'):
+        return cloudif_send_json(handler, 400, {'ok': False, 'error': 'invalid_request'})
+    project = load_project(slug)
+    if not project:
+        return cloudif_send_json(handler, 404, {'ok': False, 'error': 'project_not_found'})
+    owner = str(project.get('forgejo', {}).get('owner') or project.get('forgejo_owner') or CFG.get('FORGEJO_OWNER') or 'cloudif').strip()
+    repo = str(project.get('forgejo', {}).get('repo') or forgejo_repo_name(slug)).strip()
+    if '/' in repo:
+        ro, rr = repo.split('/', 1); owner = ro or owner; repo = rr
+    if not _CLOUDIF_ARCHIVE_SLUG_RE.fullmatch(owner) or not _CLOUDIF_ARCHIVE_SLUG_RE.fullmatch(repo):
+        return cloudif_send_json(handler, 409, {'ok': False, 'error': 'invalid_repo_mapping'})
+    base = forgejo_api_base().rstrip('/')
+    token = CFG.get('FORGEJO_TOKEN', '')
+    if not base or not token:
+        return cloudif_send_json(handler, 503, {'ok': False, 'error': 'forgejo_not_configured'})
+    url = f"{base}/repos/{urllib.parse.quote(owner, safe='')}/{urllib.parse.quote(repo, safe='')}/archive/{urllib.parse.quote(ref, safe='')}.tar.gz"
+    req = urllib.request.Request(url, headers={'Authorization': 'token ' + token, 'Accept': 'application/gzip', 'User-Agent': 'cloudif-forja-agent/archive'})
+    try:
+        with urllib.request.urlopen(req, timeout=30) as r:
+            raw = r.read(_CLOUDIF_ARCHIVE_MAX + 1)
+            ctype = r.headers.get('Content-Type', '')
+    except urllib.error.HTTPError as e:
+        return cloudif_send_json(handler, 404 if e.code == 404 else 502, {'ok': False, 'error': 'archive_unavailable', 'upstream_status': e.code})
+    except Exception:
+        return cloudif_send_json(handler, 502, {'ok': False, 'error': 'archive_unavailable'})
+    if len(raw) > _CLOUDIF_ARCHIVE_MAX:
+        return cloudif_send_json(handler, 413, {'ok': False, 'error': 'archive_too_large'})
+    if len(raw) < 2 or raw[:2] != b'\x1f\x8b':
+        return cloudif_send_json(handler, 502, {'ok': False, 'error': 'invalid_archive'})
+    digest = hashlib.sha256(raw).hexdigest()
+    handler.send_response(200)
+    handler.send_header('Content-Type', 'application/gzip')
+    handler.send_header('Cache-Control', 'private, no-store')
+    handler.send_header('X-Content-Type-Options', 'nosniff')
+    handler.send_header('X-CloudIF-Project', slug)
+    handler.send_header('X-CloudIF-Ref', ref)
+    handler.send_header('X-CloudIF-SHA256', digest)
+    handler.send_header('Content-Length', str(len(raw)))
+    handler.end_headers();handler.wfile.write(raw)
+# CloudIF workspace archive read-only END
+
+
+_PROPOSAL_PATH_RE = re.compile(r'^site/(?:[A-Za-z0-9_.-]+/)*[A-Za-z0-9_.-]+\.html$')
+_PROPOSAL_SHA_RE = re.compile(r'^[a-f0-9]{64}$')
+
+def _proposal_api(method, path, payload=None, timeout=45):
+    base = forgejo_api_base().rstrip('/')
+    token = CFG.get('FORGEJO_TOKEN','')
+    return http_json(method, base + path, token=token, payload=payload, timeout=timeout)
+
+def _proposal_repo(project, slug):
+    owner = str((project.get('forgejo') or {}).get('owner') or project.get('forgejo_owner') or project.get('forgejo_org') or CFG.get('FORGEJO_OWNER') or 'cloudif').strip()
+    repo = str((project.get('forgejo') or {}).get('repo') or project.get('repo') or project.get('repo_name') or forgejo_repo_name(slug)).strip()
+    if '/' in repo:
+        ro, rr = repo.split('/',1); owner = ro or owner; repo = rr
+    if not SLUG_RE.fullmatch(owner) or not SLUG_RE.fullmatch(repo):
+        raise ValueError('invalid_repo_mapping')
+    return owner, repo
+
+def cloudif_proposal_list(handler, qs):
+    allowed={'slug','state','limit'}
+    if set(qs)-allowed:
+        return json_response(handler,400,{'ok':False,'error':'invalid_query'})
+    slug=str((qs.get('slug') or [''])[0]).strip()
+    state=str((qs.get('state') or ['open'])[0]).strip()
+    limit_raw=str((qs.get('limit') or ['20'])[0]).strip()
+    if not SLUG_RE.fullmatch(slug) or state not in {'open','closed','all'}:
+        return json_response(handler,400,{'ok':False,'error':'invalid_query'})
+    try:limit=int(limit_raw)
+    except Exception:return json_response(handler,400,{'ok':False,'error':'invalid_query'})
+    if not (1<=limit<=50):return json_response(handler,400,{'ok':False,'error':'invalid_query'})
+    project=load_project(slug)
+    if not project:return json_response(handler,404,{'ok':False,'error':'project_not_found'})
+    owner,repo=_proposal_repo(project,slug)
+    qowner=urllib.parse.quote(owner,safe='');qrepo=urllib.parse.quote(repo,safe='')
+    query=urllib.parse.urlencode({'state':state,'limit':limit,'page':1})
+    upstream=_proposal_api('GET',f'/repos/{qowner}/{qrepo}/pulls?{query}')
+    if not upstream.get('ok'):
+        return json_response(handler,502,{'ok':False,'error':'forgejo_unavailable','upstream_status':upstream.get('status')})
+    rows=[]
+    for pr in (upstream.get('data') or [])[:limit]:
+        rows.append({
+            'number':pr.get('number'),'title':pr.get('title'),'state':pr.get('state'),
+            'draft':bool(pr.get('draft')),'head':(pr.get('head') or {}).get('ref'),
+            'base':(pr.get('base') or {}).get('ref'),'author':(pr.get('user') or {}).get('login'),
+            'created_at':pr.get('created_at'),'updated_at':pr.get('updated_at'),
+            'html_url':pr.get('html_url'),'mergeable':pr.get('mergeable'),
+        })
+    return json_response(handler,200,{'ok':True,'project_slug':slug,'repo':f'{owner}/{repo}','state':state,'count':len(rows),'proposals':rows,'read_only':True})
+
+def _proposal_number(data):
+    try:n=int(data.get('number'))
+    except Exception:raise ValueError('invalid_number')
+    if not (1<=n<=2147483647):raise ValueError('invalid_number')
+    return n
+
+def _proposal_detail(slug, number):
+    project=load_project(slug)
+    if not project:return None,None,None,{'ok':False,'status':404,'error':'project_not_found'}
+    owner,repo=_proposal_repo(project,slug)
+    qo=urllib.parse.quote(owner,safe='');qr=urllib.parse.quote(repo,safe='')
+    r=_proposal_api('GET',f'/repos/{qo}/{qr}/pulls/{number}')
+    if not r.get('ok'):
+        return owner,repo,None,{'ok':False,'status':404 if r.get('status')==404 else 502,'error':'proposal_not_found' if r.get('status')==404 else 'forgejo_unavailable'}
+    return owner,repo,r.get('data') or {},None
+
+def _controlled_pr(pr):
+    head_obj=pr.get('head') or {}
+    head_ref=str(head_obj.get('ref') or '')
+    head_label=str(head_obj.get('label') or '')
+    head=head_ref if head_ref.startswith('cloudif-proposal-') else head_label
+    base=str((pr.get('base') or {}).get('ref') or '')
+    return base=='main' and head.startswith('cloudif-proposal-'),head,base
+
+def cloudif_proposal_close(handler,data):
+    if set(data)!={'project_slug','number','trace_id','requested_by'}:
+        return json_response(handler,400,{'ok':False,'error':'invalid_request'})
+    slug=str(data.get('project_slug') or '').strip();trace=str(data.get('trace_id') or '').strip();requested_by=str(data.get('requested_by') or '').strip()
+    if not SLUG_RE.fullmatch(slug) or not trace or not requested_by:
+        return json_response(handler,400,{'ok':False,'error':'invalid_request'})
+    try:number=_proposal_number(data)
+    except ValueError:return json_response(handler,400,{'ok':False,'error':'invalid_request'})
+    owner,repo,pr,err=_proposal_detail(slug,number)
+    if err:return json_response(handler,err['status'],{'ok':False,'error':err['error']})
+    controlled,branch,base=_controlled_pr(pr)
+    if not controlled:return json_response(handler,409,{'ok':False,'error':'proposal_not_controlled'})
+    if pr.get('state')=='closed':
+        return json_response(handler,200,{'ok':True,'project_slug':slug,'number':number,'state':'closed','branch':branch,'already_closed':True,'branch_deleted':False,'trace_id':trace})
+    if pr.get('state')!='open':return json_response(handler,409,{'ok':False,'error':'proposal_not_open'})
+    if not str(pr.get('title') or '').startswith('WIP: '):return json_response(handler,409,{'ok':False,'error':'proposal_not_controlled'})
+    qo=urllib.parse.quote(owner,safe='');qr=urllib.parse.quote(repo,safe='')
+    r=_proposal_api('PATCH',f'/repos/{qo}/{qr}/pulls/{number}',{'state':'closed'})
+    if not r.get('ok'):return json_response(handler,502,{'ok':False,'error':'proposal_close_failed','upstream_status':r.get('status')})
+    out=r.get('data') or {}
+    if out.get('state')!='closed':return json_response(handler,502,{'ok':False,'error':'proposal_close_not_confirmed'})
+    result={'ok':True,'project_slug':slug,'repo':f'{owner}/{repo}','number':number,'state':'closed','branch':branch,'base':base,'already_closed':False,'branch_deleted':False,'requested_by':requested_by,'trace_id':trace}
+    save_event('proposal-close',slug,{**result,'time':now()})
+    return json_response(handler,200,result)
+
+def cloudif_proposal_delete_branch(handler,data):
+    if set(data)!={'project_slug','number','trace_id','requested_by'}:
+        return json_response(handler,400,{'ok':False,'error':'invalid_request'})
+    slug=str(data.get('project_slug') or '').strip();trace=str(data.get('trace_id') or '').strip();requested_by=str(data.get('requested_by') or '').strip()
+    if not SLUG_RE.fullmatch(slug) or not trace or not requested_by:
+        return json_response(handler,400,{'ok':False,'error':'invalid_request'})
+    try:number=_proposal_number(data)
+    except ValueError:return json_response(handler,400,{'ok':False,'error':'invalid_request'})
+    owner,repo,pr,err=_proposal_detail(slug,number)
+    if err:return json_response(handler,err['status'],{'ok':False,'error':err['error']})
+    controlled,branch,base=_controlled_pr(pr)
+    if not controlled or branch=='main':return json_response(handler,409,{'ok':False,'error':'proposal_not_controlled'})
+    if pr.get('state')!='closed' and not bool(pr.get('merged')):
+        return json_response(handler,409,{'ok':False,'error':'proposal_must_be_closed_or_merged'})
+    qo=urllib.parse.quote(owner,safe='');qr=urllib.parse.quote(repo,safe='');qb=urllib.parse.quote(branch,safe='')
+    existing=_proposal_api('GET',f'/repos/{qo}/{qr}/branches/{qb}')
+    if existing.get('status')==404:
+        return json_response(handler,200,{'ok':True,'project_slug':slug,'number':number,'branch':branch,'branch_deleted':False,'already_absent':True,'trace_id':trace})
+    if not existing.get('ok'):return json_response(handler,502,{'ok':False,'error':'branch_lookup_failed','upstream_status':existing.get('status')})
+    deleted=_proposal_api('DELETE',f'/repos/{qo}/{qr}/branches/{qb}')
+    if not deleted.get('ok') and deleted.get('status') not in (200,204):return json_response(handler,502,{'ok':False,'error':'branch_delete_failed','upstream_status':deleted.get('status')})
+    confirm=_proposal_api('GET',f'/repos/{qo}/{qr}/branches/{qb}')
+    if confirm.get('status')!=404:return json_response(handler,502,{'ok':False,'error':'branch_delete_not_confirmed'})
+    result={'ok':True,'project_slug':slug,'repo':f'{owner}/{repo}','number':number,'branch':branch,'base':base,'branch_deleted':True,'already_absent':False,'requested_by':requested_by,'trace_id':trace}
+    save_event('proposal-branch-delete',slug,{**result,'time':now()})
+    return json_response(handler,200,result)
+
+
+_PROPOSAL_COMMIT_RE = re.compile(r'^[a-f0-9]{40}$')
+_PROPOSAL_APPROVAL_RE = re.compile(r'^apr_[a-f0-9]{20}$')
+
+def cloudif_proposal_action(handler, data):
+    common={'project_slug','proposal_number','action','trace_id','approval_id','requested_by'}
+    action=str(data.get('action') or '').strip()
+    allowed=common|({'expected_head_sha'} if action=='merge' else set())
+    if set(data)!=allowed:
+        return json_response(handler,400,{'ok':False,'error':'invalid_request'})
+    slug=str(data.get('project_slug') or '').strip()
+    trace=str(data.get('trace_id') or '').strip()
+    approval_id=str(data.get('approval_id') or '').strip()
+    requested_by=str(data.get('requested_by') or '').strip()
+    try:number=int(data.get('proposal_number'))
+    except Exception:return json_response(handler,400,{'ok':False,'error':'invalid_request'})
+    if not SLUG_RE.fullmatch(slug) or action not in {'close','delete-branch','merge'} or number<1 or not requested_by or not trace:
+        return json_response(handler,400,{'ok':False,'error':'invalid_request'})
+    if action=='merge':
+        expected=str(data.get('expected_head_sha') or '').strip()
+        if not _PROPOSAL_COMMIT_RE.fullmatch(expected) or not _PROPOSAL_APPROVAL_RE.fullmatch(approval_id):
+            return json_response(handler,400,{'ok':False,'error':'invalid_request'})
+    elif not approval_id:
+        return json_response(handler,400,{'ok':False,'error':'invalid_request'})
+    project=load_project(slug)
+    if not project:return json_response(handler,404,{'ok':False,'error':'project_not_found'})
+    owner,repo=_proposal_repo(project,slug)
+    qowner=urllib.parse.quote(owner,safe='');qrepo=urllib.parse.quote(repo,safe='')
+    prr=_proposal_api('GET',f'/repos/{qowner}/{qrepo}/pulls/{number}')
+    if not prr.get('ok'):
+        return json_response(handler,404 if prr.get('status')==404 else 502,{'ok':False,'error':'proposal_not_found' if prr.get('status')==404 else 'forgejo_unavailable'})
+    pr=prr.get('data') or {}
+    controlled,head,base=_controlled_pr(pr)
+    state=str(pr.get('state') or '')
+    draft=bool(pr.get('draft'))
+    merged=bool(pr.get('merged'))
+    if not controlled:
+        return json_response(handler,409,{'ok':False,'error':'proposal_not_controlled'})
+    qbranch=urllib.parse.quote(head,safe='')
+    event={'project_slug':slug,'proposal_number':number,'action':action,'approval_id':approval_id,'requested_by':requested_by,'trace_id':trace,'repo':f'{owner}/{repo}','head':head,'base':base,'time':now()}
+    if action=='close':
+        if state=='closed':
+            return json_response(handler,200,{'ok':True,'action':'close','project_slug':slug,'proposal_number':number,'state':'closed','draft':draft,'head':head,'base':base,'already_closed':True,'branch_deleted':False,'main_modified':False,'approval_id':approval_id,'requested_by':requested_by,'trace_id':trace})
+        if state!='open' or merged:
+            return json_response(handler,409,{'ok':False,'error':'proposal_not_open'})
+        if not str(pr.get('title') or '').startswith('WIP: '):return json_response(handler,409,{'ok':False,'error':'proposal_not_controlled'})
+        changed=_proposal_api('PATCH',f'/repos/{qowner}/{qrepo}/pulls/{number}',{'state':'closed'})
+        if not changed.get('ok'):
+            return json_response(handler,502,{'ok':False,'error':'proposal_close_failed','upstream_status':changed.get('status')})
+        out=changed.get('data') or {}
+        result={'ok':True,'action':'close','project_slug':slug,'proposal_number':number,'state':out.get('state'),'draft':bool(out.get('draft')),'head':head,'base':base,'already_closed':False,'branch_deleted':False,'main_modified':False,'approval_id':approval_id,'requested_by':requested_by,'trace_id':trace}
+    elif action=='delete-branch':
+        if state=='open' and not merged:
+            return json_response(handler,409,{'ok':False,'error':'proposal_still_open'})
+        existing=_proposal_api('GET',f'/repos/{qowner}/{qrepo}/branches/{qbranch}')
+        if existing.get('status')==404:
+            return json_response(handler,200,{'ok':True,'action':'delete-branch','project_slug':slug,'proposal_number':number,'state':state,'draft':draft,'head':head,'base':base,'branch_deleted':False,'already_absent':True,'main_modified':False,'approval_id':approval_id,'requested_by':requested_by,'trace_id':trace})
+        if not existing.get('ok'):
+            return json_response(handler,502,{'ok':False,'error':'branch_lookup_failed','upstream_status':existing.get('status')})
+        deleted=_proposal_api('DELETE',f'/repos/{qowner}/{qrepo}/branches/{qbranch}')
+        if not deleted.get('ok') and deleted.get('status') not in (200,204):
+            return json_response(handler,502,{'ok':False,'error':'branch_delete_failed','upstream_status':deleted.get('status')})
+        verify=_proposal_api('GET',f'/repos/{qowner}/{qrepo}/branches/{qbranch}')
+        if verify.get('status')!=404:
+            return json_response(handler,502,{'ok':False,'error':'branch_delete_not_confirmed'})
+        result={'ok':True,'action':'delete-branch','project_slug':slug,'proposal_number':number,'state':state,'draft':draft,'head':head,'base':base,'branch_deleted':True,'already_absent':False,'main_modified':False,'approval_id':approval_id,'requested_by':requested_by,'trace_id':trace}
+    else:
+        expected=str(data.get('expected_head_sha') or '')
+        head_sha=str((pr.get('head') or {}).get('sha') or '')
+        if not hmac.compare_digest(head_sha,expected):
+            return json_response(handler,409,{'ok':False,'error':'head_sha_mismatch','actual_head_sha':head_sha})
+        if merged:
+            return json_response(handler,200,{'ok':True,'action':'merge','project_slug':slug,'proposal_number':number,'state':'closed','merged':True,'already_merged':True,'draft':draft,'head':head,'base':base,'head_sha':head_sha,'branch_deleted':False,'main_modified':True,'approval_id':approval_id,'requested_by':requested_by,'trace_id':trace})
+        if state!='open':return json_response(handler,409,{'ok':False,'error':'proposal_not_open'})
+        if not draft:return json_response(handler,409,{'ok':False,'error':'proposal_not_draft'})
+        original_title=str(pr.get('title') or '')
+        if not original_title.startswith('WIP: '):return json_response(handler,409,{'ok':False,'error':'proposal_not_controlled'})
+        ready_title=original_title[5:].strip() if original_title.startswith('WIP: ') else original_title
+        updated=_proposal_api('PATCH',f'/repos/{qowner}/{qrepo}/pulls/{number}',{'title':ready_title})
+        ready=updated.get('data') or {}
+        if not updated.get('ok') or bool(ready.get('draft')) or ready.get('state')!='open':
+            _proposal_api('PATCH',f'/repos/{qowner}/{qrepo}/pulls/{number}',{'title':original_title})
+            return json_response(handler,502,{'ok':False,'error':'proposal_ready_failed','upstream_status':updated.get('status')})
+        merged_res=_proposal_api('POST',f'/repos/{qowner}/{qrepo}/pulls/{number}/merge',{'Do':'merge','head_commit_id':expected,'delete_branch_after_merge':False,'force_merge':False,'merge_when_checks_succeed':False},timeout=60)
+        if not merged_res.get('ok'):
+            _proposal_api('PATCH',f'/repos/{qowner}/{qrepo}/pulls/{number}',{'title':original_title})
+            return json_response(handler,409 if merged_res.get('status') in {405,409,423} else 502,{'ok':False,'error':'proposal_merge_failed','upstream_status':merged_res.get('status'),'draft_restored':True})
+        merged_check=_proposal_api('GET',f'/repos/{qowner}/{qrepo}/pulls/{number}/merge')
+        detail=_proposal_api('GET',f'/repos/{qowner}/{qrepo}/pulls/{number}')
+        vpr=detail.get('data') or {}
+        if merged_check.get('status')!=204 or not detail.get('ok') or not bool(vpr.get('merged')) or vpr.get('state')!='closed':
+            return json_response(handler,502,{'ok':False,'error':'proposal_merge_not_confirmed'})
+        result={'ok':True,'action':'merge','project_slug':slug,'proposal_number':number,'state':'closed','merged':True,'already_merged':False,'merged_at':vpr.get('merged_at'),'draft':bool(vpr.get('draft')),'head':head,'base':base,'head_sha':head_sha,'merge_commit_sha':str(vpr.get('merge_commit_sha') or ''),'branch_deleted':False,'main_modified':True,'approval_id':approval_id,'requested_by':requested_by,'trace_id':trace}
+    save_event('proposal-action',slug,{**event,'result':result})
+    return json_response(handler,200,result)
+
+def cloudif_proposal_merge_route(handler,data):
+    expected={'project_slug','number','expected_head_sha','approval_id','requested_by','trace_id'}
+    if set(data)!=expected:
+        return json_response(handler,400,{'ok':False,'error':'invalid_request'})
+    normalized={'project_slug':data['project_slug'],'proposal_number':data['number'],'action':'merge','expected_head_sha':data['expected_head_sha'],'approval_id':data['approval_id'],'requested_by':data['requested_by'],'trace_id':data['trace_id']}
+    return cloudif_proposal_action(handler,normalized)
+
+
+def cloudif_proposal_create(handler, data):
+    allowed={'project_slug','base_branch','path','expected_sha256','find','replace','title','body','trace_id','approval_id','requested_by'}
+    if set(data)-allowed:
+        return json_response(handler,400,{'ok':False,'error':'invalid_request'})
+    slug=str(data.get('project_slug') or '').strip();base=str(data.get('base_branch') or 'main').strip();path=str(data.get('path') or '').strip();expected=str(data.get('expected_sha256') or '').strip();find_text=str(data.get('find') or '');replace_text=str(data.get('replace') or '');title=str(data.get('title') or '').strip();body=str(data.get('body') or '').strip();trace=str(data.get('trace_id') or '').strip();approval_id=str(data.get('approval_id') or '').strip();requested_by=str(data.get('requested_by') or '').strip()
+    if not SLUG_RE.fullmatch(slug) or base!='main' or not _PROPOSAL_PATH_RE.fullmatch(path) or not _PROPOSAL_SHA_RE.fullmatch(expected):
+        return json_response(handler,400,{'ok':False,'error':'invalid_request'})
+    if not (1<=len(find_text)<=512) or len(replace_text)>1024 or not (4<=len(title)<=160) or len(body)>4000 or not approval_id or not requested_by:
+        return json_response(handler,400,{'ok':False,'error':'invalid_request'})
+    project=load_project(slug)
+    if not project:return json_response(handler,404,{'ok':False,'error':'project_not_found'})
+    owner,repo=_proposal_repo(project,slug)
+    before=_v118_get_file(owner,repo,path,base)
+    if not before.get('exists'):return json_response(handler,404,{'ok':False,'error':'file_not_found'})
+    content=str(before.get('content') or '');actual=hashlib.sha256(content.encode('utf-8')).hexdigest()
+    if not hmac.compare_digest(actual,expected):return json_response(handler,409,{'ok':False,'error':'hash_mismatch','actual_sha256':actual})
+    if content.count(find_text)!=1:return json_response(handler,409,{'ok':False,'error':'match_count'})
+    updated=content.replace(find_text,replace_text,1);after_sha=hashlib.sha256(updated.encode('utf-8')).hexdigest()
+    branch='cloudif-proposal-'+hashlib.sha256((slug+path+expected+trace+secrets.token_hex(8)).encode()).hexdigest()[:20]
+    qowner=urllib.parse.quote(owner,safe='');qrepo=urllib.parse.quote(repo,safe='');qbranch=urllib.parse.quote(branch,safe='')
+    created=False;pr=None
+    try:
+        b=_proposal_api('POST',f'/repos/{qowner}/{qrepo}/branches',{'new_branch_name':branch,'old_branch_name':base})
+        if not b.get('ok'):return json_response(handler,502,{'ok':False,'error':'branch_create_failed','upstream_status':b.get('status')})
+        created=True
+        st,commit=_v118_put_file(owner,repo,path,branch,updated,'CloudIF: proposta '+title,sha=before.get('sha') or '')
+        if st not in (200,201):raise RuntimeError('commit_failed')
+        draft_title=title if title.startswith('WIP: ') else 'WIP: '+title
+        prr=_proposal_api('POST',f'/repos/{qowner}/{qrepo}/pulls',{'base':base,'head':branch,'title':draft_title,'body':body,'draft':True})
+        if not prr.get('ok'):raise RuntimeError('pull_request_failed')
+        pr=prr.get('data') or {}
+        if not bool(pr.get('draft')):raise RuntimeError('draft_not_confirmed')
+        result={'ok':True,'project_slug':slug,'repo':f'{owner}/{repo}','base_branch':base,'branch':branch,'path':path,'before_sha256':actual,'after_sha256':after_sha,'commit_sha':((commit.get('commit') or {}).get('sha') if isinstance(commit,dict) else '') or '', 'pull_request':{'number':pr.get('number'),'title':pr.get('title'),'draft':bool(pr.get('draft')),'state':pr.get('state'),'html_url':pr.get('html_url')},'approval_id':approval_id,'requested_by':requested_by,'trace_id':trace,'main_modified':False}
+        save_event('proposal',slug,{**result,'time':now()})
+        return json_response(handler,201,result)
+    except Exception as e:
+        if created and not pr:
+            _proposal_api('DELETE',f'/repos/{qowner}/{qrepo}/branches/{qbranch}')
+        return json_response(handler,502,{'ok':False,'error':str(e)[:120],'branch_cleaned':created and not pr})
+
+
 class Handler(BaseHTTPRequestHandler):
 
     def authorized(self):
@@ -2231,6 +2561,12 @@ class Handler(BaseHTTPRequestHandler):
 
         parsed = urllib.parse.urlparse(self.path)
         qs = urllib.parse.parse_qs(parsed.query)
+
+        if parsed.path == "/project/archive":
+            return cloudif_workspace_archive(self, qs)
+
+        if parsed.path == "/project/proposals":
+            return cloudif_proposal_list(self, qs)
 
         if parsed.path == "/health":
             return json_response(self, 200, {"ok": True, "service": "cloudif-forja-agent-v4", "time": now()})
@@ -2324,6 +2660,18 @@ class Handler(BaseHTTPRequestHandler):
             data = json.loads(raw.decode() or "{}")
         except Exception as e:
             return json_response(self, 400, {"ok": False, "error": "invalid_json", "detail": str(e)})
+
+        if path == "/project/proposal/merge":
+            return cloudif_proposal_merge_route(self, data)
+        if path == "/project/proposal/close":
+            return cloudif_proposal_close(self, data)
+        if path == "/project/proposal/delete-branch":
+            return cloudif_proposal_delete_branch(self, data)
+        if path == "/project/proposal/create":
+            return cloudif_proposal_create(self, data)
+
+        if path == "/project/proposal/action":
+            return cloudif_proposal_action(self, data)
 
         if path == "/project/release/prepare":
             code, result = prepare_project_release(data)
