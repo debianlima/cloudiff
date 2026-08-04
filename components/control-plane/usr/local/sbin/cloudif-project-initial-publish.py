@@ -75,16 +75,24 @@ def main():
   ready=False;detail='Template atualizado; sincronização e novo deploy obrigatórios.'
  if not ready:
   progress(job_path,job,'Atualizando o repositório e reconstruindo a stack.',1,detail)
+  deploy_confirmed=False
   if kind in ('onboarding','links'):
    full_payload={**payload,'force_reclone':True,'force_clone':True,'force_rebuild':True,'no_cache':False,'wait_for_completion':True,'max_wait_seconds':600,'poll_interval':5,'reset_reclone_after':False}
    _,deploy_result=request(kbase+'/komodo/project/deploy-full','POST',full_payload,kh,720)
-   if isinstance(deploy_result,dict) and deploy_result.get('ok') is False: raise RuntimeError('komodo_full_deploy_failed:'+str(deploy_result)[:300])
+   if isinstance(deploy_result,dict) and deploy_result.get('ok') is False: raise RuntimeError('komodo_full_deploy_failed:'+str(deploy_result)[:700])
+   if isinstance(deploy_result,dict):
+    local=deploy_result.get('local_health') or ((deploy_result.get('after') or {}).get('local_health') if isinstance(deploy_result.get('after'),dict) else {}) or {}
+    if deploy_result.get('ok') is True and deploy_result.get('deploy_status') in ('completed','ready') and local.get('ok') is True:
+     final=dict(deploy_result.get('after') or {})
+     final.update({'ok':True,'deploy_status':'completed','runtime':{'running':True,'container_name':local.get('container'),'health':local.get('health'),'image':local.get('image')}})
+     ready=True;detail=f"status=completed runtime_running=True container={local.get('container') or '-'} health={local.get('health') or '-'} local_reconciled=True"
+     deploy_confirmed=True
   else:
    request(kbase+'/komodo/stack/pull','POST',payload,kh,60)
    progress(job_path,job,'Iniciando o deploy da stack.',2,detail)
    request(kbase+'/komodo/stack/deploy','POST',payload,kh,60)
   deadline=time.monotonic()+1200;attempt=2;deploy_retries=0;next_retry=time.monotonic()+45
-  while time.monotonic()<deadline:
+  while not deploy_confirmed and time.monotonic()<deadline:
    attempt+=1
    try:ready,detail=deployment_ready()
    except Exception as exc:ready=False;detail=type(exc).__name__+': '+str(exc)
@@ -101,7 +109,7 @@ def main():
     progress(job_path,job,'Aguardando a confirmação do Komodo.',attempt,detail)
    if ready:break
    time.sleep(5)
-  else:raise RuntimeError('komodo_deploy_not_ready: '+detail)
+  if not deploy_confirmed and not ready: raise RuntimeError('komodo_deploy_not_ready: '+detail)
  progress(job_path,job,'Publicando o endereço inicial.',attempt if 'attempt' in locals() else 1,detail)
  commit=((final.get('stack') or {}).get('deployed_hash') or (final.get('repo') or {}).get('latest_hash') or '')
  if kind=='onboarding': seed_db(tenant)
