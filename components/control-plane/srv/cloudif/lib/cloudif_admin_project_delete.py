@@ -452,15 +452,15 @@ def render(csrf_token, selected='', result=None):
   box.innerHTML=`<div class="section-title"><div><h3>Exclusão em andamento</h3><p>${{esc(job.current_step||'Preparando')}}</p></div><strong>${{Number(job.progress||0)}}%</strong></div><progress max="100" value="${{Number(job.progress||0)}}" style="width:100%"></progress><ol class="admin-delete-steps">${{steps}}</ol>${{job.status==='failed'?`<p class="pill bad">Falha: ${{esc(job.error||job.detail||'não identificada')}}</p>`:''}}`;
  }}
  async function poll(id){{
-  const response=await fetch(`/cloudiff/portal/api/admin-delete-project-status?job_id=${{encodeURIComponent(id)}}`,{{headers:{{Accept:'application/json'}}}}); const job=await response.json(); draw(job);
+  const response=await fetch(`/cloudiff/portal/api/admin-delete-project-status?job_id=${{encodeURIComponent(id)}}`,{{headers:{{Accept:'application/json'}},credentials:'same-origin'}}); const type=(response.headers.get('content-type')||'').toLowerCase(); if(!type.includes('application/json'))throw new Error(`Resposta inválida do servidor (HTTP ${{response.status}})`); const job=await response.json(); if(!response.ok)throw new Error(job.error||`HTTP ${{response.status}}`); draw(job);
   if(job.status==='queued'||job.status==='running') return setTimeout(()=>poll(id),1000);
   button.disabled=false; button.textContent=job.status==='succeeded'?'Exclusão concluída':'Tentar novamente';
  }}
  form.addEventListener('submit',async event=>{{
   event.preventDefault(); if(!confirm('Confirma a exclusão definitiva? O banco será preservado.'))return;
   button.disabled=true; button.textContent='Iniciando…'; box.hidden=false; box.innerHTML='<p>Preparando exclusão…</p>';
-  const data=new FormData(form); data.set('async','1');
-  try{{ const response=await fetch(form.action,{{method:'POST',body:data,headers:{{Accept:'application/json'}}}}); const job=await response.json(); if(!response.ok)throw new Error(job.error||'Falha ao iniciar'); draw(job); poll(job.job_id); }}
+  const formData=new FormData(form); formData.set('async','1'); const csrf=(formData.get('csrf_token')||'').toString(); const data=new URLSearchParams(); for(const [key,value] of formData.entries())data.append(key,String(value));
+  try{{ const response=await fetch(form.action,{{method:'POST',body:data,credentials:'same-origin',headers:{{Accept:'application/json','Content-Type':'application/x-www-form-urlencoded;charset=UTF-8','X-CSRF-Token':csrf}}}}); const type=(response.headers.get('content-type')||'').toLowerCase(); const text=await response.text(); let job; try{{job=type.includes('application/json')?JSON.parse(text):{{error:text.replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim().slice(0,240)||`HTTP ${{response.status}}`}};}}catch(_e){{job={{error:`Resposta inválida do servidor (HTTP ${{response.status}})`}};}} if(!response.ok)throw new Error(job.error||job.detail||`HTTP ${{response.status}}`); draw(job); poll(job.job_id); }}
   catch(error){{box.innerHTML=`<p class="pill bad">${{esc(error.message)}}</p>`;button.disabled=false;button.textContent='Tentar novamente';}}
  }});
 }})();
