@@ -3044,47 +3044,46 @@ def tenant_acl_rows(tenant):
 
 def tenant_acl_html(tenant, user):
     rows = tenant_acl_rows(tenant)
-
-    if rows:
-        trs = ""
-        for r in rows:
-            remove = ""
-            if user["admin"]:
-                remove = f"""
+    owner = (tenant or "").strip()
+    extras = [
+        row for row in rows
+        if not (row["subject_type"] == "user" and norm(row["subject"]) == norm(owner))
+    ]
+    owner_row = (
+        f'<tr class="tenant-owner-row"><td>Proprietário</td><td><strong>{h(owner)}</strong>'
+        '<span class="pill ok tenant-owner-badge">Dono do banco</span></td>'
+        '<td><span class="tenant-owner-lock" title="O proprietário não pode ser removido">Protegido</span></td></tr>'
+    )
+    trs = owner_row
+    for row in extras:
+        remove = ""
+        if user["admin"]:
+            remove = f"""
 <form method="post" action="{url('/action/tenant_acl')}" style="display:inline">
   <input type="hidden" name="op" value="remove">
-  <input type="hidden" name="id" value="{h(r['id'])}">
+  <input type="hidden" name="id" value="{h(row['id'])}">
   <button class="btn red" type="submit">Remover</button>
 </form>"""
-            trs += f"<tr><td>{h(r['subject_type'])}</td><td>{h(r['subject'])}</td><td>{remove}</td></tr>"
-        table = f"<table><tr><th>Tipo</th><th>Usuário/Grupo</th><th>Ação</th></tr>{trs}</table>"
-    else:
-        table = '<p class="small">Nenhuma permissão adicional cadastrada para este banco.</p>'
-
+        kind = "Usuário" if row["subject_type"] == "user" else "Grupo"
+        trs += f'<tr><td>{h(kind)}</td><td>{h(row["subject"])}</td><td>{remove}</td></tr>'
+    table = f'<table class="tenant-acl-table"><tr><th>Vínculo</th><th>Usuário/Grupo</th><th>Ação</th></tr>{trs}</table>'
     if not user["admin"]:
         return table
-
     return table + f"""
 <div class="grid2">
   <div class="box">
     <h3>Adicionar permissão ao banco</h3>
-    <form method="post" action="{url('/action/tenant_acl')}">
+    <form method="post" action="{url('/action/tenant_acl')}" data-tenant-acl-form>
       <input type="hidden" name="op" value="add">
       <input type="hidden" name="tenant" value="{h(tenant)}">
+      <input type="hidden" name="identity_verified" value="">
       <label>Tipo</label>
-      <select name="subject_type">
-        <option value="user">Usuário</option>
-        <option value="group">Grupo</option>
-      </select>
+      <select name="subject_type"><option value="user">Usuário</option><option value="group">Grupo</option></select>
       <label>Usuário ou grupo</label>
-      <input name="subject" placeholder="ex: aluno123 ou CloudIF-Turma-2026">
-      <button class="btn" type="submit">Adicionar</button>
+      <input name="subject" placeholder="Digite para pesquisar no provedor de identidade" autocomplete="off">
+      <p class="small tenant-identity-note">Selecione um resultado validado antes de adicionar.</p>
+      <button class="btn" type="submit" disabled>Adicionar</button>
     </form>
-  </div>
-  <div class="box">
-    <h3>Busca AD</h3>
-    <p class="small">Pesquise o nome correto na Administração e volte para vincular.</p>
-    <a class="btn light" href="{url('?tab=admin')}">Ir para Administração</a>
   </div>
 </div>"""
 
@@ -3461,18 +3460,39 @@ def do_POST_v21(self):
             tenant = slugify(val("tenant"))
             stype = val("subject_type")
             subject = val("subject").strip()
+            verified = val("identity_verified").strip()
             if stype not in ["user", "group"]:
                 stype = "user"
-            if subject:
-                con.execute("""
-                  INSERT OR IGNORE INTO tenant_acl(tenant,subject_type,subject)
-                  VALUES(?,?,?)
-                """, (tenant, stype, subject))
-                con.commit()
-                log_action(user["username"], "tenant_acl_add", tenant, 0, f"{stype}:{subject}", "")
+            exact = False
+            if subject and verified == f"{stype}:{subject}":
+                try:
+                    import cloudif_ad_directory_module as directory
+                    directory_user = directory.user_from_headers(self.headers)
+                    payload = directory.search(subject, stype, user=directory_user, diagnostics=False)
+                    exact = any(
+                        norm(item.get("principal") or "") == norm(subject)
+                        and (item.get("type") or "") == stype
+                        for item in (payload.get("items") or [])
+                    )
+                except Exception as exc:
+                    log_action(user["username"], "tenant_acl_identity_lookup_failed", tenant, 1, subject, str(exc)[:300])
+            if not exact:
+                con.close()
+                log_action(user["username"], "tenant_acl_add_rejected", tenant, 1, f"{stype}:{subject}", "identidade não validada")
+                return self.send_html(page(user, "bancos", '<div class="card"><p class="pill bad">Selecione um usuário ou grupo retornado pelo provedor de identidade.</p><a class="btn light" href="/?tab=bancos">Voltar</a></div>'), 422)
+            con.execute("""
+              INSERT OR IGNORE INTO tenant_acl(tenant,subject_type,subject)
+              VALUES(?,?,?)
+            """, (tenant, stype, subject))
+            con.commit()
+            log_action(user["username"], "tenant_acl_add", tenant, 0, f"{stype}:{subject}", "identity_provider_verified")
         elif op == "remove":
             rid = val("id")
             row = con.execute("SELECT * FROM tenant_acl WHERE id=?", (rid,)).fetchone()
+            if row and row["subject_type"] == "user" and norm(row["subject"]) == norm(row["tenant"]):
+                con.close()
+                log_action(user["username"], "tenant_acl_remove_owner_blocked", row["tenant"], 1, str(dict(row)), "proprietário imutável")
+                return self.send_html(page(user, "bancos", '<div class="card"><p class="pill bad">O proprietário do banco não pode ser removido.</p><a class="btn light" href="/?tab=bancos">Voltar</a></div>'), 409)
             con.execute("DELETE FROM tenant_acl WHERE id=?", (rid,))
             con.commit()
             log_action(user["username"], "tenant_acl_remove", row["tenant"] if row else rid, 0, str(dict(row)) if row else "", "")

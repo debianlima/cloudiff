@@ -70,7 +70,9 @@
       input.insertAdjacentElement('afterend',results);
       var timer=0,controller=null;
       function close(){results.hidden=true;results.innerHTML='';input.setAttribute('aria-expanded','false');}
-      function choose(item){input.value=item.principal||item.username||item.label||'';type.value=item.type==='group'?'group':'user';close();input.focus();}
+      var verified=form.querySelector('input[name="identity_verified"]');var submit=form.querySelector('button[type="submit"]');var note=form.querySelector('.tenant-identity-note');
+      function invalidate(){if(verified)verified.value='';if(submit)submit.disabled=true;if(note)note.textContent='Selecione um resultado validado antes de adicionar.';}
+      function choose(item){var principal=item.principal||item.username||item.label||'';var kind=item.type==='group'?'group':'user';input.value=principal;type.value=kind;if(verified)verified.value=kind+':'+principal;if(submit)submit.disabled=false;if(note)note.textContent='Identidade validada pelo provedor: '+principal+'.';close();input.focus();}
       function render(items){
         results.innerHTML='';
         if(!items.length){results.innerHTML='<p class="tenant-acl-empty">Nenhum usuário ou grupo encontrado.</p>';results.hidden=false;input.setAttribute('aria-expanded','true');return;}
@@ -84,7 +86,7 @@
         results.hidden=false;input.setAttribute('aria-expanded','true');
       }
       input.addEventListener('input',function(){
-        window.clearTimeout(timer);var q=input.value.trim();if(q.length<2){close();return;}
+        invalidate();window.clearTimeout(timer);var q=input.value.trim();if(q.length<2){close();return;}
         timer=window.setTimeout(async function(){
           if(controller){controller.abort();}controller=new AbortController();
           results.hidden=false;results.innerHTML='<p class="tenant-acl-empty">Pesquisando no AD…</p>';input.setAttribute('aria-expanded','true');
@@ -107,7 +109,7 @@
         if(event.key==='ArrowUp'){event.preventDefault();if(current<=0){input.focus();}else{items[current-1].focus();}}
         if(event.key==='Escape'){close();input.focus();}
       });
-      document.addEventListener('click',function(event){if(!form.contains(event.target)){close();}});
+      type.addEventListener('change',invalidate);form.addEventListener('submit',function(event){if(!verified||verified.value!==(type.value+':'+input.value.trim())){event.preventDefault();invalidate();if(note)note.textContent='Selecione novamente a identidade na lista de resultados.';}});document.addEventListener('click',function(event){if(!form.contains(event.target)){close();}});
     });
   }
   enableTenantPermissionAutocomplete();
