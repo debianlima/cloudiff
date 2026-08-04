@@ -10,6 +10,7 @@ import re
 import shutil
 import sqlite3
 import subprocess
+import sys
 import threading
 import time
 import traceback
@@ -243,6 +244,7 @@ def execute(tenant, confirmation, actor, progress=None):
         progress("Validação", "failed", "Texto de confirmação incorreto")
         return {"ok": False, "error": "confirmation_mismatch", "expected": expected}
     progress("Validação", "done", "Tenant sem projetos vinculados")
+    progress("Backup final", "running", "Arquivando configuração e gerando dump lógico protegido")
 
     stamp = time.strftime("%Y%m%d-%H%M%S")
     audit = AUDIT_ROOT / f"{stamp}-{time.time_ns() % 1_000_000_000:09d}-{tenant}"
@@ -254,7 +256,6 @@ def execute(tenant, confirmation, actor, progress=None):
         shutil.make_archive(str(audit / "tenant-config"), "gztar", root_dir=tdir)
         (audit / "tenant-config.tar.gz").chmod(0o600)
 
-    progress("Backup final", "running", "Gerando dump lógico protegido")
     backup = _backup_database(tdir, audit)
     if not backup.get("ok"):
         progress("Backup final", "failed", backup.get("error", "Falha no backup"))
@@ -312,6 +313,86 @@ def execute(tenant, confirmation, actor, progress=None):
     return result
 
 
+def _job_unit(job_id):
+    return f"cloudif-tenant-delete-{job_id[:12]}.service"
+
+
+def _worker_update(job_id, label, status="running", detail=""):
+    labels = ["Validação", "Backup final", "Containers e volumes", "Registry e permissões", "Diretório do tenant", "Roteador"]
+    current = job_status(job_id)
+    steps = current.setdefault("steps", [])
+    item = next((x for x in steps if x.get("label") == label), None)
+    if item is None:
+        item = {"label": label}
+        steps.append(item)
+    now = time.strftime("%Y-%m-%dT%H:%M:%S%z")
+    item.update({"status": status, "detail": detail, "updated_at": now})
+    current["status"] = "running"
+    current["current_step"] = label
+    current["updated_at"] = now
+    done = sum(1 for x in steps if x.get("status") in {"done", "failed"})
+    current["progress"] = min(95, round(done * 100 / len(labels)))
+    _job_write(job_id, current)
+
+
+def run_job_worker(job_id):
+    current = job_status(job_id)
+    if not current.get("ok"):
+        return 2
+    tenant = current.get("tenant") or ""
+    actor = current.get("actor") or "portal"
+    lock = JOB_ROOT / f".{tenant}.lock"
+    try:
+        current.update({
+            "status": "running",
+            "unit": _job_unit(job_id),
+            "worker_pid": os.getpid(),
+            "updated_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+        })
+        _job_write(job_id, current)
+        confirmation = f"EXCLUIR BANCO {tenant}"
+        result = execute(tenant, confirmation, actor, lambda label, status="running", detail="": _worker_update(job_id, label, status, detail))
+        current = job_status(job_id)
+        current.update({
+            "status": "succeeded" if result.get("ok") else "failed",
+            "progress": 100,
+            "result": result,
+            "finished_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+            "updated_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+        })
+        if not result.get("ok"):
+            current["error"] = result.get("error", "tenant_delete_failed")
+        _job_write(job_id, current)
+        return 0 if result.get("ok") else 1
+    except Exception as exc:
+        current = job_status(job_id)
+        current.update({
+            "status": "failed", "progress": 100,
+            "error": type(exc).__name__, "detail": str(exc)[:500],
+            "traceback": traceback.format_exc(limit=10),
+            "finished_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+            "updated_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+        })
+        _job_write(job_id, current)
+        return 1
+    finally:
+        lock.unlink(missing_ok=True)
+
+
+def _launch_worker(job_id):
+    unit = _job_unit(job_id)
+    cmd = [
+        "systemd-run", "--quiet", "--collect", f"--unit={unit}",
+        "--property=Type=exec", "--property=TimeoutStartSec=infinity",
+        "--property=KillMode=process", "--property=Nice=10",
+        sys.executable, str(Path(__file__).resolve()), "--worker", job_id,
+    ]
+    proc = _run(cmd, timeout=30)
+    if proc.returncode != 0:
+        raise RuntimeError(f"worker_launch_failed: {proc.stderr[-500:]}")
+    return unit
+
+
 def start_job(tenant, confirmation, actor):
     tenant = (tenant or "").strip().lower()
     JOB_ROOT.mkdir(parents=True, exist_ok=True)
@@ -333,42 +414,33 @@ def start_job(tenant, confirmation, actor):
             return start_job(tenant, confirmation, actor)
         return {"ok": False, "error": "tenant_delete_already_running", "tenant": tenant}
 
+    expected = f"EXCLUIR BANCO {tenant}"
+    if confirmation != expected:
+        lock.unlink(missing_ok=True)
+        return {"ok": False, "error": "confirmation_mismatch", "expected": expected}
+
     job_id = uuid.uuid4().hex
-    state = {"ok": True, "job_id": job_id, "tenant": tenant, "actor": actor, "status": "queued", "progress": 0, "current_step": "Validação", "steps": [], "started_at": time.strftime("%Y-%m-%dT%H:%M:%S%z")}
+    now = time.strftime("%Y-%m-%dT%H:%M:%S%z")
+    state = {
+        "ok": True, "job_id": job_id, "tenant": tenant, "actor": actor,
+        "status": "queued", "progress": 0, "current_step": "Validação",
+        "steps": [], "started_at": now, "updated_at": now,
+        "unit": _job_unit(job_id),
+    }
     _job_write(job_id, state)
-
-    labels = ["Validação", "Backup final", "Containers e volumes", "Registry e permissões", "Diretório do tenant", "Roteador"]
-    def update(label, status="running", detail=""):
-        current = job_status(job_id)
-        steps = current.setdefault("steps", [])
-        item = next((x for x in steps if x.get("label") == label), None)
-        if item is None:
-            item = {"label": label}
-            steps.append(item)
-        item.update({"status": status, "detail": detail, "updated_at": time.strftime("%Y-%m-%dT%H:%M:%S%z")})
-        current["status"] = "running"
-        current["current_step"] = label
-        done = sum(1 for x in steps if x.get("status") in {"done", "failed"})
-        current["progress"] = min(95, round(done * 100 / len(labels)))
-        _job_write(job_id, current)
-
-    def worker():
-        try:
-            result = execute(tenant, confirmation, actor, update)
-            current = job_status(job_id)
-            current.update({"status": "succeeded" if result.get("ok") else "failed", "progress": 100, "result": result, "finished_at": time.strftime("%Y-%m-%dT%H:%M:%S%z")})
-            if not result.get("ok"):
-                current["error"] = result.get("error", "tenant_delete_failed")
-            _job_write(job_id, current)
-        except Exception as exc:
-            current = job_status(job_id)
-            current.update({"status": "failed", "progress": 100, "error": type(exc).__name__, "detail": str(exc)[:500], "traceback": traceback.format_exc(limit=10), "finished_at": time.strftime("%Y-%m-%dT%H:%M:%S%z")})
-            _job_write(job_id, current)
-        finally:
-            lock.unlink(missing_ok=True)
-
-    threading.Thread(target=worker, name=f"tenant-delete-{job_id[:8]}", daemon=False).start()
+    try:
+        _launch_worker(job_id)
+    except Exception as exc:
+        state.update({"status": "failed", "progress": 100, "error": "worker_launch_failed", "detail": str(exc)[:500], "finished_at": time.strftime("%Y-%m-%dT%H:%M:%S%z")})
+        _job_write(job_id, state)
+        lock.unlink(missing_ok=True)
+        return state
     return state
+
+
+if __name__ == "__main__":
+    if len(sys.argv) == 3 and sys.argv[1] == "--worker":
+        raise SystemExit(run_job_worker(sys.argv[2]))
 
 
 def render_panel(csrf_token, selected=""):
