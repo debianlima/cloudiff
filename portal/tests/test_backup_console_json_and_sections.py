@@ -4,6 +4,9 @@ import unittest
 class BackupConsoleJsonAndSectionsTests(unittest.TestCase):
  @classmethod
  def setUpClass(cls): cls.source=Path('components/control-plane/srv/cloudif/lib/cloudif_portal_v2_coexist.py').read_text()
+ def test_browser_uses_public_cloudiff_prefix(self):
+  self.assertIn("request('/cloudiff/portal/action/project-backup'",self.source)
+  self.assertNotIn("request('/cloudif/portal/action/project-backup'",self.source)
  def test_project_backup_route_returns_json(self):
   self.assertIn('parsed.path.endswith("/action/project-backup")',self.source)
   self.assertIn('return send_json(self,code,{"ok":True,"result":result})',self.source)
