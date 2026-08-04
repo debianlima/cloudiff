@@ -2727,6 +2727,11 @@ def render_hardware(user=None):
 
 def render_ajuda(user=None):
     content = """
+<div class="cm-card" style="margin-bottom:16px">
+  <div class="cm-section-title"><div><h3>GitHub e manual técnico</h3><p class="cm-muted">Código-fonte e documentação completa da arquitetura CloudIFF.</p></div></div>
+  <p>O repositório explica os componentes, fluxos de provisionamento e exclusão, agentes, ferramentas MCP, aprovações humanas, protocolos de reconciliação, modelo de dados, serviços, rotas, operação e finalidade de cada pasta e arquivo.</p>
+  <div class="cm-actions"><a class="cm-btn cm-btn-primary" href="https://github.com/debianlima/cloudiff" target="_blank" rel="noopener noreferrer">Abrir GitHub do projeto</a></div>
+</div>
 <div class="cm-grid">
   <div class="cm-card">
     <h3>Sou aluno</h3>
@@ -2742,7 +2747,7 @@ def render_ajuda(user=None):
   </div>
 </div>
 """
-    return layout("ajuda", "Ajuda", "Guia por perfil para uso do CloudIF.", content, user=user)
+    return layout("ajuda", "Guia da plataforma", "Uso diário e referência técnica da CloudIFF.", content, user=user)
 
 def render_tab(tab, user=None):
     if tab in ["resumo", "", None]:

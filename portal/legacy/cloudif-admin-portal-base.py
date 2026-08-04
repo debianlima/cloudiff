@@ -1154,7 +1154,8 @@ def render_admin(user):
 def render_help(user):
     return """
 <div class="card">
-  <h2>Ajuda</h2>
+  <div class="section-title"><div><h2>Guia da plataforma</h2><p class="small">Uso diário, arquitetura e referência técnica da CloudIFF.</p></div><a class="btn" href="https://github.com/debianlima/cloudiff" target="_blank" rel="noopener noreferrer">Abrir GitHub do projeto</a></div>
+  <div class="help"><b>Documentação técnica:</b> o repositório reúne arquitetura, fluxogramas, agentes, protocolos de reconciliação, modelo de dados, mensagens, aprovações, operação e um inventário de cada pasta e arquivo. O conteúdo é organizado como uma apostila para estudo, manutenção e evolução futura.</div>
   <div class="grid">
     <div class="box"><h3>Projeto</h3><p>Espaço de trabalho. Pode ter Git, Komodo e banco Supabase.</p></div>
     <div class="box"><h3>Projeto sem banco</h3><p>Permite começar pelo código e vincular banco depois.</p></div>

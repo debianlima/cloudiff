@@ -93,3 +93,35 @@ See the [main installation guide](https://supabase.com/docs/guides/self-hosting/
 ## License
 
 This repository is licensed under the Apache 2.0 License. See the main [Supabase repository](https://github.com/supabase/supabase) for details.
+
+<!-- CLOUDIFF-AUTO-DOC:BEGIN -->
+
+## Inventário automático de `tenant-templates/srv/cloudif/tenants/iff1742962`
+
+Modelos e snapshots de tenants Supabase.
+
+| Item | Tipo | Finalidade |
+|---|---|---|
+| [`dev/`](dev/) | Diretório | Modelos e snapshots de tenants Supabase. |
+| [`tests/`](tests/) | Diretório | Modelos e snapshots de tenants Supabase. |
+| [`utils/`](utils/) | Diretório | Modelos e snapshots de tenants Supabase. |
+| [`.gitattributes`](.gitattributes) | `arquivo` | Arquivo de suporte da plataforma. |
+| [`.gitignore`](.gitignore) | `arquivo` | Arquivo de suporte da plataforma. |
+| [`CHANGELOG.md`](CHANGELOG.md) | `.md` | Documento técnico ou operacional. |
+| [`CONFIG.md`](CONFIG.md) | `.md` | Documento técnico ou operacional. |
+| [`docker-compose.caddy.yml`](docker-compose.caddy.yml) | `.yml` | Definição declarativa de serviços Docker Compose. |
+| [`docker-compose.envoy.yml`](docker-compose.envoy.yml) | `.yml` | Definição declarativa de serviços Docker Compose. |
+| [`docker-compose.logs.yml`](docker-compose.logs.yml) | `.yml` | Definição declarativa de serviços Docker Compose. |
+| [`docker-compose.nginx.yml`](docker-compose.nginx.yml) | `.yml` | Definição declarativa de serviços Docker Compose. |
+| [`docker-compose.pg17.yml`](docker-compose.pg17.yml) | `.yml` | Definição declarativa de serviços Docker Compose. |
+| [`docker-compose.rustfs.yml`](docker-compose.rustfs.yml) | `.yml` | Definição declarativa de serviços Docker Compose. |
+| [`docker-compose.s3.yml`](docker-compose.s3.yml) | `.yml` | Definição declarativa de serviços Docker Compose. |
+| [`docker-compose.yml`](docker-compose.yml) | `.yml` | Definição declarativa de serviços Docker Compose. |
+| [`reset.sh`](reset.sh) | `.sh` | Automação Shell operacional da plataforma. |
+| [`run.sh`](run.sh) | `.sh` | Automação Shell operacional da plataforma. |
+| [`setup.sh`](setup.sh) | `.sh` | Automação Shell operacional da plataforma. |
+| [`versions.md`](versions.md) | `.md` | Documento técnico ou operacional. |
+
+> Esta seção é gerada por `scripts/generate-directory-readmes.py`. Conteúdo manual fora dos marcadores é preservado.
+
+<!-- CLOUDIFF-AUTO-DOC:END -->
