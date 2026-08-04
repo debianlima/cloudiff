@@ -3729,6 +3729,7 @@ networks:
     cfg = {
         "server_id": server_id,
         "files_on_host": False,
+        "run_build": bool(unified_runtime),
         "file_contents": content,
         "file_paths": [],
         "linked_repo": "",
@@ -3764,13 +3765,17 @@ networks:
     dep = _cloudif_v131_core_call("execute", "DeployStack", {"stack": stack_id}, timeout=60)
     opid = _cloudif_v131_oid(dep.get("data") or {})
     container = f"cloudif-p{public_number}-d{deploy_number}-web"
+    expected_image = f"cloudif/publication-p{public_number}-d{deploy_number}:php{runtime_manifest.get('php')}-node{runtime_manifest.get('node')}" if unified_runtime else "nginxinc/nginx-unprivileged:1.27-alpine"
     healthy = False
+    actual_image = ""
     final = {}
     timeout_s = int(payload.get("timeout") or 300)
     deadline = time.time() + timeout_s
     while time.time() < deadline:
-        pr = subprocess.run(["docker", "inspect", container, "--format", "{{.State.Status}}|{{if .State.Health}}{{.State.Health.Status}}{{end}}"], text=True, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
-        healthy = pr.returncode == 0 and pr.stdout.strip() == "running|healthy"
+        pr = subprocess.run(["docker", "inspect", container, "--format", "{{.State.Status}}|{{if .State.Health}}{{.State.Health.Status}}{{end}}|{{.Config.Image}}"], text=True, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+        parts=pr.stdout.strip().split("|",2) if pr.returncode==0 else []
+        actual_image=parts[2] if len(parts)==3 else ""
+        healthy = len(parts)==3 and parts[0]=="running" and parts[1]=="healthy" and actual_image==expected_image
         if opid:
             try:
                 updates = komodo_query_updates([opid])
@@ -3788,7 +3793,8 @@ networks:
         "ok": ok, "project": project, "public_number": public_number, "deploy_number": deploy_number,
         "commit": commit, "stack_id": stack_id, "stack_name": name, "container": container,
         "created": created, "deploy": dep, "operation_id": opid, "operation_final": final, "healthy": healthy,
-        "terminal": terminal, "content_digest": content_digest, "source": "git_commit", "generated_compose": generated_compose,
+        "terminal": terminal, "expected_image": expected_image, "actual_image": actual_image,
+        "content_digest": content_digest, "source": "git_commit", "generated_compose": generated_compose,
         "publication_source": publication_source or "generated_placeholder", "generated_placeholder": generated_placeholder, "generated_nginx": generated_nginx,
         "republished": republished_from is not None, "republished_from": republished_from
     })

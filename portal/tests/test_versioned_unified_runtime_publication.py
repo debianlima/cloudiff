@@ -14,6 +14,8 @@ class VersionedUnifiedRuntimePublicationTests(unittest.TestCase):
     def test_php_node_compose_uses_apache_health(self):
         self.assertIn('curl -fsS http://127.0.0.1/.cloudif-health',self.source)
         self.assertIn('runtime\"]=\"unified-php-node',self.source)
+        self.assertIn('\"run_build\": bool(unified_runtime)',self.source)
+        self.assertIn('actual_image==expected_image',self.source)
     def test_static_nginx_fallback_remains_for_static_sites(self):
         self.assertIn('nginxinc/nginx-unprivileged:1.27-alpine',self.source)
 
