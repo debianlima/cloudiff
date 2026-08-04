@@ -3421,17 +3421,14 @@ def cloudif_project_repair(handler):
     return send(handler,200 if after.get('healthy') else 202,{'ok':True,'actions':actions,'before':before,'after':after})
 
 def cloudif_project_runtime_info(handler):
-    if not authorized(handler):
+    if not _cloudif_pub_auth(handler):
         return send(handler,403,{"ok":False,"error":"forbidden"})
-    try:
-        payload=handler.parse_json()
-    except Exception as exc:
-        return send(handler,400,{"ok":False,"error":"invalid_json","detail":str(exc)[:200]})
+    payload=_cloudif_pub_json(handler)
     project=safe_slug(payload.get("project") or ""); kind=str(payload.get("kind") or "").strip().lower()
     stack_id=str(payload.get("stack_id") or ""); service=str(payload.get("service") or "web")
     if not project or kind not in {"php","node"}:
         return send(handler,400,{"ok":False,"error":"invalid_request"})
-    audit=_cloudif_project_audit_data(project,stack_id,service,"cloudif-"+project,"sh")
+    audit=_cloudif_project_audit_data({"project":project,"stack_id":stack_id,"service":service,"terminal":"cloudif-"+project,"shell":"sh"})
     container=str(audit.get("container_name") or "")
     if not audit.get("healthy") or not container:
         return send(handler,422,{"ok":False,"error":"container_not_running","audit":audit})
