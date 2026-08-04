@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """CloudIFF portal launcher with canonical authorization and UI normalization."""
 from pathlib import Path
+import re
 
 _POLICY_OLD = "return bool(user.get('admin') or groups.intersection({'cloudif-tenants-admin','domain admins'}))"
 _POLICY_NEW = "return bool(groups.intersection({'cloudif-tenants-admin','cloudif-professor'}))"
@@ -47,6 +48,14 @@ def _load_patched_portal():
     for old, new in _MESSAGE_REPLACEMENTS:
         source = _replace_all(source, old, new, old)
     source = _replace_all(source, _ADMIN_LOOKUP_BOX, '', 'atalho de administração do AD no banco')
+    source, removed_ad_boxes = re.subn(
+        r'  <div class="box">\s*<h3>Busca AD</h3>.*?</div>\n?',
+        '',
+        source,
+        flags=re.DOTALL,
+    )
+    if '<h3>Busca AD</h3>' in source or 'Ir para Administração</a>' in source:
+        raise RuntimeError('Atalhos residuais de Administração do AD encontrados no banco.')
     source = _replace_all(source, _TENANT_DETAILS_OLD, _TENANT_DETAILS_NEW, 'serviços e permissões do tenant')
     return source, source_path
 
