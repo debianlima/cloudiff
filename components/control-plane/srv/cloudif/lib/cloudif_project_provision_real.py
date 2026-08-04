@@ -117,6 +117,22 @@ def http_json(method, url, token="", data=None, extra_headers=None, timeout=30):
     except Exception as e:
         return 0, {"error": str(e)}, str(e)
 
+PORTAL_DB = "/var/lib/cloudif/portal/cloudif-portal.db"
+
+def _cloudif_project_access(slug, job=None):
+    owner=''; acl=[]
+    try:
+        c=sqlite3.connect(PORTAL_DB);c.row_factory=sqlite3.Row
+        row=c.execute('select owner from projects where slug=?',(slug,)).fetchone()
+        if row: owner=str(row['owner'] or '').strip().lower()
+        acl=[{'type':str(r['subject_type'] or ''),'subject':str(r['subject'] or '').strip()} for r in c.execute('select subject_type,subject from project_acl where slug=?',(slug,)).fetchall() if str(r['subject'] or '').strip()]
+        c.close()
+    except Exception: pass
+    user=(job or {}).get('user') if isinstance((job or {}).get('user'),dict) else {}
+    owner=owner or str((job or {}).get('owner') or user.get('username') or (job or {}).get('requested_by') or '').strip().lower()
+    if not owner: raise RuntimeError('project_owner_missing')
+    return {'owner':owner,'acl':acl}
+
 def report_init(job):
     slug = slugify(job.get("slug") or job.get("name"))
     d = BASE / slug
@@ -707,22 +723,24 @@ def _v115_repo_name(slug):
     slug = _v115_project_slug(slug)
     return slug if slug.startswith("cloudif-") else "cloudif-" + slug
 
-def _v115_repo_path(slug):
-    return "cloudif/" + _v115_repo_name(slug)
+def _v115_repo_path(slug, owner="cloudif"):
+    return str(owner or "cloudif") + "/" + _v115_repo_name(slug)
 
-def _v115_repo_url(slug):
-    return "https://cloudiff.duckdns.org/git/" + _v115_repo_path(slug)
+def _v115_repo_url(slug, owner="cloudif"):
+    return "https://cloudiff.duckdns.org/git/" + _v115_repo_path(slug, owner)
 
-def _v115_repo_clone_url(slug):
-    return _v115_repo_url(slug) + ".git"
+def _v115_repo_clone_url(slug, owner="cloudif"):
+    return _v115_repo_url(slug, owner) + ".git"
 
 def _v101_forja_project_ensure(job, report):
     agent_url, token = _v101_forja_cfg()
 
     slug = _v115_project_slug(report["slug"])
+    access = _cloudif_project_access(slug, job)
+    owner = access["owner"]
     repo_name = _v115_repo_name(slug)
-    repo_path = _v115_repo_path(slug)
-    repo_url = _v115_repo_url(slug)
+    repo_path = _v115_repo_path(slug, owner)
+    repo_url = _v115_repo_url(slug, owner)
     tenant = report.get("tenant") or ""
 
     comp = report["components"]["forgejo"]
@@ -747,8 +765,11 @@ def _v101_forja_project_ensure(job, report):
         "runtime_template": job.get("runtime_template") or "node22",
         "runtime_layout": job.get("runtime_layout") or "unified-v1",
 
-        "forgejo_org": env("FORGEJO_ORG", "cloudif"),
-        "org": env("FORGEJO_ORG", "cloudif"),
+        "forgejo_owner": owner,
+        "forgejo_owner_kind": "user",
+        "owner_user": owner,
+        "org": owner,
+        "access": access,
 
         # Padrão correto: projeto teste -> repo cloudif-teste
         "repo": repo_name,
@@ -783,7 +804,7 @@ def _v101_forja_project_ensure(job, report):
                 f"{slug}-proxy",
             ] + ([f"{tenant}-supabase"] if tenant else []),
             "repo": repo_path,
-            "repo_url": _v115_repo_clone_url(slug),
+            "repo_url": _v115_repo_clone_url(slug, owner),
         },
     }
 
@@ -1110,9 +1131,11 @@ def komodo(job, report):
     comp.setdefault("actions", [])
 
     slug = _v115_project_slug(report["slug"]) if "_v115_project_slug" in globals() else str(report["slug"])
+    access = _cloudif_project_access(slug, job)
+    owner = access["owner"]
     repo_name = _v115_repo_name(slug) if "_v115_repo_name" in globals() else "cloudif-" + slug
-    repo_path = _v115_repo_path(slug) if "_v115_repo_path" in globals() else "cloudif/" + repo_name
-    repo_url = _v115_repo_clone_url(slug) if "_v115_repo_clone_url" in globals() else f"https://cloudiff.duckdns.org/git/{repo_path}.git"
+    repo_path = _v115_repo_path(slug, owner) if "_v115_repo_path" in globals() else owner + "/" + repo_name
+    repo_url = _v115_repo_clone_url(slug, owner) if "_v115_repo_clone_url" in globals() else f"https://cloudiff.duckdns.org/git/{repo_path}.git"
 
     tenant = report.get("tenant") or ""
     agent_url = env("KOMODO_AGENT_URL", "http://10.62.91.2:18098").rstrip("/")
@@ -1147,8 +1170,10 @@ def komodo(job, report):
         "repo": repo_path,
         "repo_url": repo_url,
 
+        "owner_user": owner,
+        "access": access,
         "forgejo": {
-            "owner": "cloudif",
+            "owner": owner,
             "repo": repo_name,
             "repo_path": repo_path,
             "repo_url": repo_url,

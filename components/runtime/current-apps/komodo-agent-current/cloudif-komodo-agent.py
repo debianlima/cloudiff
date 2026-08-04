@@ -384,6 +384,24 @@ def create_or_update_stack(project, repo_info, server_id, runtime_layout="legacy
 
     return None, {"created": False, "attempts": attempts}
 
+def _cloudif_sync_project_authz(project, owner, acl, stack_id, repo_id):
+    payload={'project':safe_slug(project),'owner':str(owner or '').strip().lower(),'acl':acl if isinstance(acl,list) else [],'stack_id':str(stack_id or ''),'repo_id':str(repo_id or '')}
+    try:
+        proc=subprocess.run(['/usr/local/sbin/cloudif-komodo-project-authz.py'],input=json.dumps(payload),text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=90,check=False)
+        result=json.loads((proc.stdout or '{}').splitlines()[-1])
+        if proc.returncode not in (0,3) and result.get('ok') is not False:result={'ok':False,'error':'authz_helper_failed','detail':(proc.stderr or proc.stdout or '')[-500:]}
+        return result
+    except Exception as exc:return {'ok':False,'error':'komodo_authz_sync_failed','detail':str(exc)[:500]}
+
+def cloudif_project_authz_sync(handler):
+    if not _cloudif_pub_auth(handler): return send(handler,403,{'ok':False,'error':'forbidden'})
+    payload=_cloudif_pub_json(handler);project=safe_slug(payload.get('project') or payload.get('slug') or '')
+    integration=find_integration(project)
+    if not integration:return send(handler,404,{'ok':False,'error':'project_not_integrated'})
+    access=payload.get('access') if isinstance(payload.get('access'),dict) else {}
+    result=_cloudif_sync_project_authz(project,access.get('owner') or payload.get('owner_user'),access.get('acl') or [],normalize_resource_id(integration.get('stack_id')),normalize_resource_id(integration.get('repo_id')))
+    return send(handler,200 if result.get('ok') else 422,result)
+
 def ensure_project(payload):
     # CloudIF v125: aplica wrapper runtime para /write e payloads antes do provisionamento.
     _cloudif_v125_runtime_patch()
@@ -461,6 +479,13 @@ def ensure_project(payload):
     stack_id = item_id(stack)
     repo_id = item_id(repo)
     stack_name = stack.get("name") or ("cloudif-" + project)
+    access=payload.get("access") if isinstance(payload.get("access"),dict) else {}
+    authz=_cloudif_sync_project_authz(project,access.get("owner") or payload.get("owner_user") or actor,access.get("acl") or [],stack_id,repo_id)
+    result["authz"] = authz
+    if not authz.get("ok"):
+        result["stage"]="authz";result["message"]="Stack criada, mas as permissões do projeto não foram sincronizadas."
+        record_deployment(project,tenant,actor,"ensure","failed",result["message"],stack_id,stack_name,repo_id,repo_info["repo_name"],request=payload,response=result)
+        return result
 
     result["ok"] = True
     result["stage"] = "ready"
@@ -3915,6 +3940,8 @@ class H(BaseHTTPRequestHandler):
             return cloudif_project_audit(self)
         if _cloudif_pub_path == "/komodo/project/runtime-info":
             return cloudif_project_runtime_info(self)
+        if _cloudif_pub_path == "/komodo/project/authz-sync":
+            return cloudif_project_authz_sync(self)
         if _cloudif_pub_path == "/komodo/project/repair":
             return cloudif_project_repair(self)
         if _cloudif_pub_path == "/komodo/project/terminal/ensure":

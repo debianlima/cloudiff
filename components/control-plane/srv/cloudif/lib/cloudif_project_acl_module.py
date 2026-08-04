@@ -3,6 +3,9 @@ import html
 import sqlite3
 import time
 import urllib.parse
+import urllib.request
+import json
+import os
 from pathlib import Path
 
 DB = "/var/lib/cloudif/portal/cloudif-portal.db"
@@ -183,6 +186,26 @@ def is_owner_principal(slug, principal, role="", user=None):
 
     return False
 
+def sync_komodo_acl(slug):
+    row=project_row(slug);owner=str(row.get('owner') or '').strip().lower()
+    cfg,raw=acl_rows(slug);acl=[]
+    for item in raw:
+        n=normalize_acl_row(cfg,item);acl.append({'type':n['type'],'subject':n['principal']})
+    env={}
+    for path in ('/etc/cloudif/komodo-agent-client.env','/etc/cloudif/provision.env'):
+        try:
+            for line in Path(path).read_text().splitlines():
+                if '=' in line and not line.lstrip().startswith('#'):
+                    k,v=line.split('=',1);env[k.strip()]=v.strip().strip('"').strip("'")
+        except Exception:pass
+    base=(env.get('KOMODO_AGENT_URL') or 'http://10.62.91.2:18098').rstrip('/');token=env.get('KOMODO_AGENT_TOKEN') or ''
+    if not token:return {'ok':False,'error':'komodo_agent_token_missing'}
+    payload=json.dumps({'project':slug,'access':{'owner':owner,'acl':acl}}).encode()
+    req=urllib.request.Request(base+'/komodo/project/authz-sync',data=payload,method='POST',headers={'Content-Type':'application/json','X-CloudIF-Token':token,'Authorization':'Bearer '+token})
+    try:
+        with urllib.request.urlopen(req,timeout=45) as r:return json.load(r)
+    except Exception as exc:return {'ok':False,'error':'komodo_authz_sync_failed','detail':str(exc)[:300]}
+
 def add_acl(slug, principal, principal_type="user", role="access", user=None):
     import time as _time
 
@@ -241,7 +264,8 @@ def add_acl(slug, principal, principal_type="user", role="access", user=None):
 
         c.execute(sql, [values[x] for x in colnames])
         c.commit()
-
+        sync=sync_komodo_acl(slug)
+        if not sync.get('ok'): raise RuntimeError('Permissão salva, mas a sincronização com o Komodo falhou: '+str(sync.get('error') or 'erro'))
         return "Permissão adicionada."
     finally:
         c.close()
@@ -272,6 +296,8 @@ def remove_acl(slug, principal, principal_type="", role="", user=None, row_id=""
 
             c.execute(f"DELETE FROM {table} WHERE {cfg['id_col']}=?", (row_id,))
             c.commit()
+            sync=sync_komodo_acl(slug)
+            if not sync.get('ok'): raise RuntimeError('Permissão removida no Portal, mas a sincronização com o Komodo falhou: '+str(sync.get('error') or 'erro'))
             return "Permissão removida."
 
         where = f"{cfg['project_col']}=? AND {cfg['principal_col']}=?"
@@ -287,6 +313,8 @@ def remove_acl(slug, principal, principal_type="", role="", user=None, row_id=""
 
         c.execute(f"DELETE FROM {table} WHERE {where}", params)
         c.commit()
+        sync=sync_komodo_acl(slug)
+        if not sync.get('ok'): raise RuntimeError('Permissão removida no Portal, mas a sincronização com o Komodo falhou: '+str(sync.get('error') or 'erro'))
         return "Permissão removida."
     finally:
         c.close()

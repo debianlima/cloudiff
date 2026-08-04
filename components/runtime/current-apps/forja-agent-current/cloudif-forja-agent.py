@@ -182,14 +182,21 @@ def ensure_forgejo_repo(project):
         return {"ok": False, "message": "FORGEJO_TOKEN vazio."}
 
     slug = project["project_slug"]
-    owner = project.get("forgejo_owner") or CFG.get("FORGEJO_OWNER") or ""
+    owner = project.get("forgejo_owner") or project.get("owner_user") or ((project.get("access") or {}).get("owner") if isinstance(project.get("access"),dict) else "") or ""
+    owner_kind = str(project.get("forgejo_owner_kind") or "user").lower()
     repo = forgejo_repo_name(slug)
     root = clean_url(CFG.get("FORGEJO_URL", ""))
     private = bool_value(CFG.get("FORGEJO_PRIVATE"), True)
     auto_init = bool_value(CFG.get("FORGEJO_AUTO_INIT"), True)
 
     if owner:
-        ensure_forgejo_org(owner)
+        if owner_kind == "user":
+            user_check=http_json("GET",f"{base}/users/{urllib.parse.quote(owner)}",token=token,timeout=8)
+            if not user_check.get("ok"):
+                return {"ok":False,"error":"forgejo_user_not_found","owner":owner,"message":"O usuário solicitante ainda não existe no Forgejo. Faça o primeiro login e tente novamente."}
+        else:
+            org_result=ensure_forgejo_org(owner)
+            if not org_result.get("ok"): return org_result
         check = http_json("GET", f"{base}/repos/{urllib.parse.quote(owner)}/{urllib.parse.quote(repo)}", token=token, timeout=8)
         if check["ok"]:
             return {"ok": True, "created": False, "owner": owner, "repo": repo, "url": f"{root}/{owner}/{repo}", "message": "Repositório já existe."}
@@ -210,13 +217,14 @@ def ensure_forgejo_repo(project):
             "auto_init": auto_init,
             "default_branch": "main",
         }
-        res = http_json("POST", f"{base}/orgs/{urllib.parse.quote(owner)}/repos", token=token, payload=payload, timeout=10)
+        endpoint=f"{base}/admin/users/{urllib.parse.quote(owner)}/repos" if owner_kind=="user" else f"{base}/orgs/{urllib.parse.quote(owner)}/repos"
+        res = http_json("POST", endpoint, token=token, payload=payload, timeout=10)
         if res["ok"]:
             data = res.get("data", {})
             return {"ok": True, "created": True, "owner": owner, "repo": repo, "url": data.get("html_url") or f"{root}/{owner}/{repo}", "message": "Repositório criado."}
 
         if res.get("status") not in {403, 404}:
-            return {"ok": False, "message": "Falha ao criar repo na org.", "detail": res}
+            return {"ok": False, "message": "Falha ao criar repositório no namespace solicitado.", "owner":owner, "owner_kind":owner_kind, "detail": res}
 
     payload = {
         "name": repo,
