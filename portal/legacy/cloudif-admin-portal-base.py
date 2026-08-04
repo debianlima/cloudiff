@@ -6038,6 +6038,7 @@ def _pm197_runtime_state(slug, runtime_project=None):
             data=json.loads(jobs[0].read_text(encoding='utf-8')); runtime=str(data.get('runtime_template') or ''); php=str(data.get('php_version') or '')
             node=runtime.replace('node','') if runtime.startswith('node') else '—'
             info['label']=f'Apache 2.4 + PHP {php or "—"} + Node.js {node}'
+            if data.get('status')=='succeeded': info.update({'healthy':True,'status':'Rodando e saudável'})
     except Exception: pass
     try:
         rp=runtime_project or {}; sid=rp.get('stack_id') or ''

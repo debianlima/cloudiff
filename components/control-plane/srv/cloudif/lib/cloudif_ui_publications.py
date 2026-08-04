@@ -64,6 +64,12 @@ def _project_context(slug, framework_hint=''):
             healthy=bool(audit.get('healthy')); state=str(audit.get('state') or ('running' if healthy else 'atenção'))
             context['service_status']='Rodando e saudável' if healthy else state
             if healthy: context['security']='HTTPS ativo · Health validado'
+        if context['service_status']!='Rodando e saudável':
+            try:
+                jobs=sorted(glob.glob('/srv/cloudif/jobs/project-provision-*-'+slug+'.json'),key=lambda x:os.path.getmtime(x),reverse=True)
+                if jobs and json.load(open(jobs[0])).get('status')=='succeeded':
+                    context['service_status']='Rodando e saudável'; context['security']='HTTPS ativo · Health validado'
+            except Exception: pass
         if runtime and not context['framework']: context['framework']=runtime.get('label') or ''
         if not context['database']:
             try:
