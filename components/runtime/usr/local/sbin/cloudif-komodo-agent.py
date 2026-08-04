@@ -2607,6 +2607,20 @@ def cloudif_v131_project_deploy_full(handler):
     actions.append(pull_stack)
     _cloudif_v131_wait(payload.get("wait_after_stack_pull", 10))
 
+    if force_rebuild:
+        rebuild_action = _cloudif_v132_force_local_rebuild(project, no_cache=no_cache)
+        actions.append(rebuild_action)
+        if not rebuild_action.get("ok"):
+            return _cloudif_v131_send_json(handler, 500, {
+                "ok": False,
+                "error": "force_rebuild_failed",
+                "project": project,
+                "repo_id": repo_id,
+                "stack_id": stack_id,
+                "actions": actions,
+                "rebuild": rebuild_action,
+            })
+
     if deploy:
         deploy_stack = _cloudif_v131_core_call("execute", "DeployStack", {"stack": stack_id}, timeout=60)
         actions.append(deploy_stack)
@@ -2643,12 +2657,15 @@ def cloudif_v131_project_deploy_full(handler):
             "CloneRepo",
             "UpdateStack(reclone=true) quando necessário",
             "PullStack",
+            "docker compose build/up --force-recreate quando force_rebuild=true",
             "DeployStack quando deploy=true",
             "GetRepo/GetStack",
         ],
         "before": before,
         "after": after,
         "actions": actions,
+        "force_rebuild": force_rebuild,
+        "no_cache": no_cache,
         "reset_reclone_after": reset_reclone_after,
         "reset_action": reset_action,
         "message": "Deploy completo Komodo v131 executado.",
@@ -2868,6 +2885,29 @@ def _cloudif_v132_wait_for_completion(project, repo_id, stack_id, max_wait_secon
 
         time.sleep(float(interval))
 
+def _cloudif_v132_force_local_rebuild(project, no_cache=False):
+    project = safe_slug(project)
+    stack_dir = Path("/etc/komodo/stacks") / ("cloudif-" + project)
+    compose = stack_dir / "docker-compose.yml"
+    if not compose.is_file():
+        return {"ok": False, "error": "local_stack_compose_missing", "stack_dir": str(stack_dir)}
+    build_cmd = ["docker", "compose", "build"]
+    if no_cache:
+        build_cmd.append("--no-cache")
+    build = subprocess.run(build_cmd, cwd=stack_dir, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=1800)
+    if build.returncode != 0:
+        return {"ok": False, "error": "local_compose_build_failed", "returncode": build.returncode, "detail": (build.stderr or build.stdout)[-1200:]}
+    up = subprocess.run(["docker", "compose", "up", "-d", "--force-recreate"], cwd=stack_dir, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=900)
+    return {
+        "ok": up.returncode == 0,
+        "operation": "local_compose_rebuild",
+        "stack_dir": str(stack_dir),
+        "build_returncode": build.returncode,
+        "up_returncode": up.returncode,
+        "detail": ((up.stderr or up.stdout) if up.returncode else (up.stdout or build.stdout))[-1200:],
+    }
+
+
 def cloudif_v132_project_deploy_full(handler):
     payload = _cloudif_v131_read_json(handler)
 
@@ -2887,6 +2927,8 @@ def cloudif_v132_project_deploy_full(handler):
     deploy = bool(payload.get("deploy", True))
     force_reclone = bool(payload.get("force_reclone", False))
     force_clone = bool(payload.get("force_clone", True))
+    force_rebuild = bool(payload.get("force_rebuild", False))
+    no_cache = bool(payload.get("no_cache", False))
     wait_for_completion = bool(payload.get("wait_for_completion", True))
     max_wait_seconds = int(payload.get("max_wait_seconds", 90))
     poll_interval = int(payload.get("poll_interval", 5))
