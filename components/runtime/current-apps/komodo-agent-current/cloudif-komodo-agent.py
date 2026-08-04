@@ -603,6 +603,21 @@ def stack_action(action, payload):
     integration = find_integration(project)
 
     if not integration:
+        if action == "destroy":
+            container_cleanup = _cloudif_remove_project_application_containers(project)
+            result = {
+                "ok": bool(container_cleanup.get("ok")),
+                "stage": "integration",
+                "project": project,
+                "tenant": tenant,
+                "actor": actor,
+                "action": action,
+                "idempotent_absent": True,
+                "container_cleanup": container_cleanup,
+                "message": "Projeto já ausente do Komodo; containers de aplicação verificados." if container_cleanup.get("ok") else "Projeto ausente do Komodo, mas restaram containers de aplicação.",
+            }
+            record_deployment(project, tenant, actor, action, "ok" if result["ok"] else "failed", result["message"], request=payload, response=result)
+            return result
         result = {"ok": False, "stage": "integration", "message": "Projeto não integrado no Komodo.", "project": project}
         record_deployment(project, tenant, actor, action, "failed", result["message"], request=payload, response=result)
         return result
