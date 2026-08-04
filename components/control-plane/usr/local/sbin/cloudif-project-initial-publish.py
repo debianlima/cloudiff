@@ -100,12 +100,22 @@ def main():
  progress(job_path,job,'Verificando os endereços públicos.',attempt if 'attempt' in locals() else 1)
  for public_url in (pub.get('stable_url'),pub.get('version_url')):
   if not public_url: raise RuntimeError('public_url_missing')
-  try:
-   req=urllib.request.Request(public_url,headers={'User-Agent':'CloudIF-Homologation/1.0'})
-   with urllib.request.urlopen(req,timeout=30) as response:
-    if response.status!=200: raise RuntimeError('public_health_status_'+str(response.status))
-  except urllib.error.HTTPError as exc:
-   raise RuntimeError('public_health_status_'+str(exc.code))
+  deadline=time.monotonic()+240;last_status='unknown';health_attempt=0
+  while time.monotonic()<deadline:
+   health_attempt+=1
+   try:
+    req=urllib.request.Request(public_url,headers={'User-Agent':'CloudIF-Homologation/1.0'})
+    with urllib.request.urlopen(req,timeout=30) as response:
+     last_status=str(response.status)
+     if response.status==200: break
+   except urllib.error.HTTPError as exc:
+    last_status=str(exc.code)
+    if exc.code not in (404,425,429,500,502,503,504): raise RuntimeError('public_health_status_'+str(exc.code))
+   except Exception as exc:
+    last_status=type(exc).__name__
+   progress(job_path,job,'Aguardando o proxy público ficar saudável.',health_attempt,f'{public_url} status={last_status}')
+   time.sleep(min(12,2+health_attempt))
+  else: raise RuntimeError('public_health_timeout_'+last_status)
  update_db(slug,tenant,owner,num,commit)
  result={'ok':True,'project':slug,'template_kind':kind,'public_number':num,'stable_url':pub['stable_url'],'version_url':pub['version_url'],'deployed_services':((final.get('stack') or {}).get('deployed_services') or [])}
  out=Path(f'/srv/cloudif/provisioning/projects/{slug}/initial-publication.json'); out.parent.mkdir(parents=True,exist_ok=True); out.write_text(json.dumps(result,ensure_ascii=False,indent=2)+'\n')
