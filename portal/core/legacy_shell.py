@@ -375,6 +375,16 @@ def group_resources_by_user(body: str, tab: str, identity: Identity, selected_pr
 
 def transform(markup: str, identity: Identity, tab: str, selected_project: str = "") -> str:
     page = parse_legacy(markup, tab)
+    if page.tab == "publicacao":
+        body = individual_publication_body(page.body, selected_project) if selected_project else page.body
+        return render_legacy(
+            identity=identity,
+            active_tab=page.tab,
+            title=page.title,
+            body=body,
+            legacy_head="",
+            legacy_scripts=page.scripts,
+        )
     return render_legacy(
         identity=identity,
         active_tab=page.tab,
