@@ -1,13 +1,78 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
+
 TENANT="${1:?tenant}"
-ENV=/etc/cloudif/npm-publisher-client.env
-TOKEN="$(grep -E '^NPM_PUBLISHER_TOKEN=' "$ENV" | tail -1 | cut -d= -f2- | tr -d '"' | tr -d "'")"
-[ -n "$TOKEN" ] || { echo "NPM publisher token ausente" >&2; exit 1; }
-JSON="$(python3 -c 'import json,sys; print(json.dumps({"tenant":sys.argv[1]}))' "$TENANT")"
-curl -fsS --connect-timeout 5 --max-time 360 \
+[[ "$TENANT" =~ ^[a-z0-9][a-z0-9-]{0,62}$ ]] || {
+  echo "Tenant inválido: $TENANT" >&2
+  exit 2
+}
+
+ENV_FILE="${CLOUDIF_NPM_PUBLISHER_ENV:-/etc/cloudif/npm-publisher-client.env}"
+DOMAIN="${CLOUDIF_DOMAIN:-cloudiff.duckdns.org}"
+HOST="${TENANT}.${DOMAIN}"
+PUBLIC_URL="https://${HOST}/project/default"
+PUBLISHER_URL="${CLOUDIF_TENANT_PUBLISHER_URL:-http://10.62.91.3/tenant}"
+PUBLISHER_HOST="${CLOUDIF_TENANT_PUBLISHER_HOST:-cloudif-publisher.internal}"
+WAIT_SECONDS="${CLOUDIF_TENANT_CERTIFICATE_WAIT_SECONDS:-240}"
+[[ "$WAIT_SECONDS" =~ ^[0-9]+$ ]] || WAIT_SECONDS=240
+
+TOKEN="$(grep -E '^NPM_PUBLISHER_TOKEN=' "$ENV_FILE" 2>/dev/null | tail -1 | cut -d= -f2- | tr -d '"' | tr -d "'")"
+[ -n "$TOKEN" ] || {
+  echo "NPM publisher token ausente em $ENV_FILE" >&2
+  exit 1
+}
+
+REQUEST_JSON="$(python3 -c 'import json,sys; print(json.dumps({"tenant":sys.argv[1]}))' "$TENANT")"
+RESPONSE_FILE="$(mktemp)"
+ERROR_FILE="$(mktemp)"
+trap 'rm -f "$RESPONSE_FILE" "$ERROR_FILE"' EXIT
+
+curl -fsS --retry 2 --retry-all-errors --connect-timeout 5 --max-time 120 \
   -H 'Content-Type: application/json' \
-  -H 'Host: cloudif-publisher.internal' \
+  -H "Host: $PUBLISHER_HOST" \
   -H "X-CloudIF-Token: $TOKEN" \
-  --data "$JSON" \
-  http://10.62.91.3/tenant
+  --data "$REQUEST_JSON" \
+  --output "$RESPONSE_FILE" \
+  "$PUBLISHER_URL"
+
+# A chamada interna apenas solicita/reconcilia o proxy. O sucesso real é o TLS
+# público válido para o hostname do tenant; sem isso o provisionamento falha.
+DEADLINE=$((SECONDS + WAIT_SECONDS))
+LAST_CODE="000"
+LAST_ERROR=""
+while (( SECONDS < DEADLINE )); do
+  : >"$ERROR_FILE"
+  if LAST_CODE="$(curl --silent --show-error --output /dev/null \
+      --write-out '%{http_code}' --connect-timeout 5 --max-time 20 \
+      "$PUBLIC_URL" 2>"$ERROR_FILE")"; then
+    if [ "$LAST_CODE" != "000" ]; then
+      python3 - "$TENANT" "$HOST" "$PUBLIC_URL" "$LAST_CODE" "$RESPONSE_FILE" <<'PY'
+import json
+import pathlib
+import sys
+
+tenant, host, url, status, response_file = sys.argv[1:]
+raw = pathlib.Path(response_file).read_text(errors="replace").strip()
+try:
+    publisher = json.loads(raw) if raw else {}
+except json.JSONDecodeError:
+    publisher = {"raw": raw[:1000]}
+print(json.dumps({
+    "ok": True,
+    "tenant": tenant,
+    "host": host,
+    "url": url,
+    "http_status": int(status),
+    "tls_verified": True,
+    "publisher": publisher,
+}, ensure_ascii=False))
+PY
+      exit 0
+    fi
+  fi
+  LAST_ERROR="$(tail -c 1000 "$ERROR_FILE" 2>/dev/null || true)"
+  sleep 5
+done
+
+echo "Certificado TLS do tenant não ficou válido em ${PUBLIC_URL}. HTTP=${LAST_CODE}. ${LAST_ERROR}" >&2
+exit 1

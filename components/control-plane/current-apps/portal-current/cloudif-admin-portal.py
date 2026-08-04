@@ -1,18 +1,17 @@
 #!/usr/bin/env python3
-"""CloudIFF portal launcher with the professor/admin deletion policy applied.
+"""CloudIFF portal launcher with canonical CloudIF deletion authorization.
 
-The preserved base file remains byte-for-byte identical to the generated portal.
-Only the dedicated project-deletion guard and its denial messages are changed
-before execution. The route keeps its existing CSRF check (`_prod_csrf_equal`)
-and endpoint `/cloudiff/portal/action/admin-delete-project`.
+The generated base portal is preserved. Only the dedicated project-deletion
+guard is replaced so that CloudIF-Tenants-Admin and CloudIF-Professor are the
+only accepted groups. CSRF and confirmation protections remain in the base.
 """
 from pathlib import Path
 
 _POLICY_OLD = "return bool(user.get('admin') or groups.intersection({'cloudif-tenants-admin','domain admins'}))"
-_POLICY_NEW = "return bool(user.get('admin') or groups.intersection({'cloudif-tenants-admin','domain admins','cloudif-professor'}))"
+_POLICY_NEW = "return bool(groups.intersection({'cloudif-tenants-admin','cloudif-professor'}))"
 _REPLACEMENTS = (
-    ('Área restrita à administração global.', 'Área restrita a professor ou administrador.'),
-    ('Acesso restrito à administração global.', 'Acesso restrito a professor ou administrador.'),
+    ('Área restrita à administração global.', 'Área restrita a CloudIF-Professor ou CloudIF-Tenants-Admin.'),
+    ('Acesso restrito à administração global.', 'Acesso restrito a CloudIF-Professor ou CloudIF-Tenants-Admin.'),
 )
 
 
