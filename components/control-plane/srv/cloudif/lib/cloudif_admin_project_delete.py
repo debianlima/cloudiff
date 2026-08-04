@@ -272,9 +272,9 @@ def _post_json(url, token, payload, timeout=90, host=''):
         return {'ok':False,'status':0,'error':type(exc).__name__,'detail':str(exc)[:300]}
 
 
-def _destroy_runtime(slug, tenant):
+def _destroy_runtime(slug, tenant, public_number=0):
     cfg=_env('/etc/cloudif/komodo-agent-client.env')
-    return _post_json((cfg.get('KOMODO_AGENT_URL') or 'http://10.62.91.2:18098').rstrip('/')+'/komodo/stack/destroy',cfg.get('KOMODO_AGENT_TOKEN',''),{'project':slug,'tenant':tenant,'actor':'admin-project-delete'})
+    return _post_json((cfg.get('KOMODO_AGENT_URL') or 'http://10.62.91.2:18098').rstrip('/')+'/komodo/stack/destroy',cfg.get('KOMODO_AGENT_TOKEN',''),{'project':slug,'tenant':tenant,'public_number':int(public_number or 0),'actor':'admin-project-delete'})
 
 
 def _unpublish(public_number):
@@ -405,7 +405,7 @@ def _cleanup_already_deleted(slug, actor, progress):
     tenant=_recover_tenant(slug)
     progress('Validação','done','Projeto já removido do Portal; verificando resíduos')
     progress('Stack e runtime','running','Verificando containers e stack órfãos')
-    runtime=_destroy_runtime(slug,tenant)
+    runtime=_destroy_runtime(slug,tenant,0)
     progress('Stack e runtime','done' if runtime.get('ok') else 'failed','Resíduos removidos' if runtime.get('ok') else 'Ainda há resíduos')
     remote=forja_rollback(slug,execute=True)
     agent_identity=_delete_agent_identity(slug); onboarding_state=_delete_onboarding_state(slug); observability=_delete_observability(slug); backup_state=_delete_backup_state(slug)
@@ -452,7 +452,7 @@ def execute(slug, confirmation, actor, progress=None):
         result={'ok':False,'error':'publication_delete_failed','publication':publication,'audit_dir':str(audit)}
         (audit/'result.json').write_text(json.dumps(result,ensure_ascii=False,indent=2)+'\n');return result
     progress('Stack e runtime', 'running', 'Removendo stack sem tocar no banco')
-    runtime = _destroy_runtime(slug, plan.get('tenant_preserved') or '')
+    runtime = _destroy_runtime(slug, plan.get('tenant_preserved') or '', public_number)
     progress('Stack e runtime', 'done' if runtime.get('ok') else 'failed', f"HTTP {runtime.get('status') or '-'}")
     if not runtime.get('ok'):
         result={'ok':False,'error':'runtime_destroy_failed','runtime':runtime,'publication':publication,'audit_dir':str(audit)}

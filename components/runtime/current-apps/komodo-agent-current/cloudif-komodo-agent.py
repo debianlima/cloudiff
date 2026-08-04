@@ -679,6 +679,152 @@ def _cloudif_remove_project_application_containers(project):
     return {"ok": not errors and not remaining_application, "removed": removed, "errors": errors, "remaining_application": remaining_application, "preserved_database": preserved_database}
 
 
+
+def _cloudif_delete_related_resources(project, public_number=0, tenant=''):
+    project=safe_slug(project)
+    tenant=safe_slug(tenant)
+    public_numbers={str(int(public_number))} if str(public_number or '').isdigit() and int(public_number or 0)>0 else set()
+    base_name='cloudif-'+project
+    publication_stack_re=re.compile(r'^cloudif-p(\d+)-d(\d+)$')
+    publication_container_re=re.compile(r'^cloudif-p(\d+)-d(\d+)-web$')
+    terminal_prefix=base_name+'-'
+    result={
+        'ok':True,'project':project,'tenant_preserved':tenant,'public_numbers':[],
+        'terminals':{'matched':[],'deleted':[],'errors':[]},
+        'publication_stacks':{'matched':[],'destroyed':[],'deleted':[],'errors':[]},
+        'builds':{'matched':[],'deleted':[],'errors':[]},
+        'images':{'matched':[],'deleted':[],'errors':[]},
+        'paths':{'matched':[],'deleted':[],'errors':[]},
+        'tenant_stack_preserved':'cloudif-tenant-'+tenant if tenant else '',
+    }
+    # Discover public number from containers and stack names when it was not supplied.
+    try:
+        ids=subprocess.check_output(['docker','ps','-aq'],text=True,timeout=20).split()
+        if ids:
+            rows=json.loads(subprocess.check_output(['docker','inspect',*ids],text=True,timeout=30))
+            expected_root=str((Path('/etc/komodo/stacks')/base_name).resolve())
+            for row in rows:
+                name=str(row.get('Name') or '').lstrip('/')
+                labels=((row.get('Config') or {}).get('Labels') or {})
+                files=[str(x).strip() for x in str(labels.get('com.docker.compose.project.config_files') or '').split(',')]
+                explicit=str(labels.get('cloudif.project') or '')
+                if explicit==project or any(x.startswith(expected_root+'/') for x in files if x):
+                    match=publication_container_re.match(name)
+                    if match: public_numbers.add(match.group(1))
+    except Exception as exc:
+        result['publication_stacks']['errors'].append({'stage':'container_discovery','error':str(exc)[:300]})
+
+    listed,_=komodo_call('read','ListStacks',{'limit':0})
+    stacks=listed.get('data') if isinstance(listed.get('data'),list) else []
+    related_stack_ids=set()
+    publication_stacks=[]
+    for item in stacks:
+        if not isinstance(item,dict): continue
+        name=str(item.get('name') or '')
+        rid=normalize_resource_id(item.get('_id') or item.get('id'))
+        if name==base_name and rid: related_stack_ids.add(rid)
+        match=publication_stack_re.match(name)
+        if match and (not public_numbers or match.group(1) in public_numbers):
+            public_numbers.add(match.group(1))
+            publication_stacks.append({'id':rid,'name':name})
+            if rid: related_stack_ids.add(rid)
+    result['public_numbers']=sorted(public_numbers)
+
+    # Terminals are independent resources and must be removed before their stacks.
+    terminals_res,_=komodo_call('read','ListTerminals',{'limit':0,'use_names':False})
+    terminals=terminals_res.get('data') if isinstance(terminals_res.get('data'),list) else []
+    for item in terminals:
+        if not isinstance(item,dict): continue
+        name=str(item.get('name') or '')
+        target=item.get('target') if isinstance(item.get('target'),dict) else {}
+        params=target.get('params') if isinstance(target.get('params'),dict) else {}
+        target_stack=normalize_resource_id(params.get('stack')) if target.get('type')=='Stack' else ''
+        container=str(params.get('container') or '') if target.get('type')=='Container' else ''
+        container_match=publication_container_re.match(container)
+        belongs=(name.startswith(terminal_prefix) or target_stack in related_stack_ids or bool(container_match and container_match.group(1) in public_numbers))
+        if not belongs: continue
+        result['terminals']['matched'].append(name)
+        deleted,_=komodo_call('write','DeleteTerminal',{'target':target,'terminal':name})
+        if deleted.get('ok'): result['terminals']['deleted'].append(name)
+        else: result['terminals']['errors'].append({'name':name,'response':deleted})
+
+    # Destroy and delete only publication stacks. Tenant stack is intentionally excluded.
+    for item in publication_stacks:
+        name=item['name'];rid=item['id']
+        result['publication_stacks']['matched'].append(name)
+        destroyed,_=komodo_call('execute','DestroyStack',{'stack':rid or name})
+        destroy_ok=destroyed.get('ok')
+        if destroy_ok:
+            opid=normalize_resource_id((destroyed.get('data') or {}).get('_id') if isinstance(destroyed.get('data'),dict) else '')
+            if opid:
+                final=_cloudif_pub_wait_operation(opid,timeout=180)
+                destroy_ok=final.get('success') is True
+        if destroy_ok: result['publication_stacks']['destroyed'].append(name)
+        else:
+            text=json.dumps(destroyed,ensure_ascii=False)
+            if 'Did not find any Stack matching' not in text:
+                result['publication_stacks']['errors'].append({'name':name,'stage':'destroy','response':destroyed})
+        deleted,_=komodo_call('write','DeleteStack',{'id':rid or name})
+        if deleted.get('ok') or 'Did not find any Stack matching' in json.dumps(deleted,ensure_ascii=False):
+            result['publication_stacks']['deleted'].append(name)
+        else: result['publication_stacks']['errors'].append({'name':name,'stage':'delete','response':deleted})
+
+    # Komodo Build resources, when present, are matched by project slug or publication number.
+    builds_res,_=komodo_call('read','ListBuilds',{'limit':0})
+    builds=builds_res.get('data') if isinstance(builds_res.get('data'),list) else []
+    for item in builds:
+        if not isinstance(item,dict): continue
+        name=str(item.get('name') or '')
+        rid=normalize_resource_id(item.get('_id') or item.get('id'))
+        config=item.get('config') if isinstance(item.get('config'),dict) else {}
+        haystack=' '.join([name,str(config.get('repo') or ''),str(config.get('image_name') or ''),json.dumps(config,ensure_ascii=False)])
+        belongs=(project in haystack or any(('p'+n) in haystack or ('publication-p'+n) in haystack for n in public_numbers))
+        if not belongs: continue
+        result['builds']['matched'].append(name)
+        deleted,_=komodo_call('write','DeleteBuild',{'id':rid or name})
+        if deleted.get('ok'): result['builds']['deleted'].append(name)
+        else: result['builds']['errors'].append({'name':name,'response':deleted})
+
+    # Remove only project-specific images; shared runtime base images are never matched.
+    try:
+        rows=subprocess.check_output(['docker','images','--format','{{.Repository}}:{{.Tag}}'],text=True,timeout=30).splitlines()
+        image_names=[]
+        for image in rows:
+            if any(image.startswith('cloudif/publication-p'+n+'-d') for n in public_numbers) or any(image.startswith('cloudif/project-'+n+':') for n in public_numbers):
+                image_names.append(image)
+        result['images']['matched']=sorted(set(image_names))
+        for image in result['images']['matched']:
+            proc=subprocess.run(['docker','image','rm','-f',image],text=True,capture_output=True,timeout=120,check=False)
+            if proc.returncode==0: result['images']['deleted'].append(image)
+            else: result['images']['errors'].append({'image':image,'error':(proc.stderr or proc.stdout or '')[:500]})
+    except Exception as exc:
+        result['images']['errors'].append({'error':str(exc)[:300]})
+
+    # Remove immutable publication snapshots and version stack directories.
+    paths=[]
+    for number in public_numbers:
+        paths.append(Path('/srv/cloudif/publications')/('p'+number))
+        paths.extend(Path('/etc/komodo/stacks').glob('cloudif-p'+number+'-d*'))
+    for path in sorted(set(paths),key=lambda x:str(x)):
+        if not path.exists(): continue
+        result['paths']['matched'].append(str(path))
+        try:
+            if path.is_dir(): shutil.rmtree(path)
+            else: path.unlink()
+            result['paths']['deleted'].append(str(path))
+        except Exception as exc: result['paths']['errors'].append({'path':str(path),'error':str(exc)[:300]})
+
+    # Verify no derived resources remain. Tenant stack is excluded by design.
+    after_stacks,_=komodo_call('read','ListStacks',{'limit':0})
+    after_items=after_stacks.get('data') if isinstance(after_stacks.get('data'),list) else []
+    remaining_stacks=[str(x.get('name') or '') for x in after_items if isinstance(x,dict) and publication_stack_re.match(str(x.get('name') or '')) and (not public_numbers or publication_stack_re.match(str(x.get('name') or '')).group(1) in public_numbers)]
+    after_terms,_=komodo_call('read','ListTerminals',{'limit':0,'use_names':False})
+    after_term_items=after_terms.get('data') if isinstance(after_terms.get('data'),list) else []
+    remaining_terminals=[str(x.get('name') or '') for x in after_term_items if isinstance(x,dict) and str(x.get('name') or '').startswith(terminal_prefix)]
+    result['remaining']={'publication_stacks':remaining_stacks,'terminals':remaining_terminals}
+    result['ok']=not any((result['terminals']['errors'],result['publication_stacks']['errors'],result['builds']['errors'],result['images']['errors'],result['paths']['errors'],remaining_stacks,remaining_terminals))
+    return result
+
 def stack_action(action, payload):
     project = safe_slug(payload.get("project") or "")
     tenant = safe_slug(payload.get("tenant") or "")
@@ -687,9 +833,10 @@ def stack_action(action, payload):
 
     if not integration:
         if action == "destroy":
+            derived_cleanup = _cloudif_delete_related_resources(project,payload.get('public_number') or 0,tenant)
             container_cleanup = _cloudif_remove_project_application_containers(project)
             result = {
-                "ok": bool(container_cleanup.get("ok")),
+                "ok": bool(container_cleanup.get("ok") and derived_cleanup.get("ok")),
                 "stage": "integration",
                 "project": project,
                 "tenant": tenant,
@@ -697,6 +844,7 @@ def stack_action(action, payload):
                 "action": action,
                 "idempotent_absent": True,
                 "container_cleanup": container_cleanup,
+        "derived_cleanup": derived_cleanup,
                 "message": "Projeto já ausente do Komodo; containers de aplicação verificados." if container_cleanup.get("ok") else "Projeto ausente do Komodo, mas restaram containers de aplicação.",
             }
             record_deployment(project, tenant, actor, action, "ok" if result["ok"] else "failed", result["message"], request=payload, response=result)
@@ -736,6 +884,7 @@ def stack_action(action, payload):
         record_deployment(project, tenant, actor, action, "failed", result["message"], stack_id, stack_name, integration.get("repo_id"), integration.get("repo_name"), request=payload, response=result)
         return result
 
+    derived_cleanup = _cloudif_delete_related_resources(project,payload.get('public_number') or 0,tenant) if action=='destroy' else {'ok':True,'skipped':True}
     attempts = []
     ok = False
     last = None
@@ -793,7 +942,7 @@ def stack_action(action, payload):
         # podem responder "not found" em retomadas idempotentes depois que o recurso já sumiu.
         stack_final_ok = bool(verified_absent and container_cleanup.get("ok"))
         repo_final_ok = bool(repo_verified_absent)
-        ok = bool(operation_ok and stack_final_ok and repo_final_ok)
+        ok = bool(operation_ok and stack_final_ok and repo_final_ok and derived_cleanup.get('ok'))
     else:
         container_cleanup = {"ok": action != "destroy", "skipped": True}
 
