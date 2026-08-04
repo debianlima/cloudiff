@@ -15,6 +15,9 @@ import urllib.parse
 import json
 import html
 import re
+import subprocess
+import datetime as dt
+from pathlib import Path
 
 LIB = "/srv/cloudif/lib"
 DESIGN = LIB + "/portal/design"
@@ -217,15 +220,134 @@ def _install() -> None:
 <style>.platform-guide{display:grid;gap:20px}.guide-index{display:flex;flex-wrap:wrap;gap:8px}.guide-index a{padding:8px 11px;border:1px solid var(--ui141-border,var(--cif-border,#dce3ed));border-radius:999px;text-decoration:none}.guide-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px}.guide-grid article{display:grid;align-content:start;gap:10px;padding:18px;border:1px solid var(--ui141-border,var(--cif-border,#dce3ed));border-radius:14px;background:var(--ui141-surface,var(--cif-surface,#fff))}.guide-grid article>span{font-size:.75rem;font-weight:800;color:#176b35}.guide-grid h2,.guide-grid p{margin:0}.guide-grid ol{margin:0;padding-left:20px;display:grid;gap:6px}.guide-grid .btn{justify-self:start}</style>
 """
 
+    BACKUP_ROOT = Path("/srv/cloudif/managed-backups/projects")
+    BACKUP_STATE = Path("/var/lib/cloudif/portal/project-backup-settings.json")
+    BACKUP_REMOTE_ENV = Path("/etc/cloudif/project-backup-remote.env")
+
+    def _backup_owner(filename: str, slug: str) -> str:
+        name = filename or ""
+        if "__" in name:
+            return name.split("__", 1)[0].strip()
+        parts = slug.rsplit("-", 1)
+        return parts[-1] if len(parts) == 2 and parts[-1].lower().startswith("iff") else ""
+
+    def _backup_items(slug: str) -> list[dict]:
+        root = (BACKUP_ROOT / slug)
+        items = []
+        if not root.is_dir():
+            return items
+        for f in sorted(root.glob("*.tar.gz"), key=lambda x: x.stat().st_mtime, reverse=True):
+            meta = {}
+            side = Path(str(f) + ".json")
+            try:
+                meta = json.loads(side.read_text())
+            except Exception:
+                pass
+            items.append({
+                "filename": f.name,
+                "size": f.stat().st_size,
+                "modified": dt.datetime.fromtimestamp(f.stat().st_mtime, dt.timezone.utc).astimezone().isoformat(timespec="seconds"),
+                "type": meta.get("type") or ("database" if "database" in f.name and "application" not in f.name else "application"),
+                "sha256": meta.get("sha256") or "",
+                "owner": meta.get("owner") or _backup_owner(f.name, slug),
+                "tenant": meta.get("tenant") or "",
+                "container": meta.get("container") or meta.get("container_scope") or "",
+            })
+        return items
+
+    def _backup_schedule(unit: str, label: str) -> dict:
+        try:
+            out = subprocess.check_output(
+                ["systemctl", "show", unit, "-p", "ActiveState", "-p", "UnitFileState", "-p", "NextElapseUSecRealtime", "--value"],
+                text=True, timeout=8,
+            ).splitlines()
+            values = (out + ["", "", ""])[:3]
+            return {"unit": unit, "label": label, "active": values[0], "enabled": values[1], "next": values[2]}
+        except Exception as exc:
+            return {"unit": unit, "label": label, "active": "unknown", "enabled": "unknown", "next": "", "error": str(exc)[:120]}
+
+    def _backup_remote_status() -> dict:
+        env = {}
+        try:
+            for raw in BACKUP_REMOTE_ENV.read_text().splitlines():
+                line = raw.strip()
+                if line and not line.startswith("#") and "=" in line:
+                    k, v = line.split("=", 1); env[k.strip()] = v.strip().strip('"\'')
+        except Exception:
+            pass
+        host = env.get("REMOTE_HOST") or ""
+        port = int(env.get("REMOTE_PORT") or 22)
+        enabled = env.get("REMOTE_ENABLED") == "1"
+        ready = env.get("REMOTE_READY") == "1"
+        reachable = False
+        if host and enabled and ready:
+            try:
+                reachable = subprocess.run(["nc", "-z", "-w", "3", host, str(port)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=5).returncode == 0
+            except Exception:
+                reachable = False
+        status = "online" if reachable else ("aguardando destino" if enabled and not ready else ("offline" if enabled else "desativado"))
+        return {"configured": bool(host), "enabled": enabled, "ready": ready, "reachable": reachable, "status": status, "host": host, "port": port}
+
+    def backup_inventory(owner, user: dict) -> dict:
+        active = []
+        active_slugs = set()
+        try:
+            for project in getattr(owner, "_cpx_allowed_projects")(user):
+                slug = project["slug"]
+                active_slugs.add(slug)
+                try:
+                    settings, items = getattr(owner, "_pb_status")(slug)
+                except Exception as exc:
+                    settings, items = {"enabled": False, "error": str(exc)[:160]}, []
+                active.append({"slug": slug, "name": project.get("name") or slug, "owner": project.get("owner") or "", "settings": settings, "items": items, "can_manage": bool(getattr(owner, "_pb_manage")(user, project))})
+        except Exception:
+            pass
+        username = (user.get("username") or "").lower()
+        groups = set(user.get("groups") or [])
+        global_access = bool(user.get("admin") or groups.intersection({"CloudIF-Tenants-Admin", "CloudIF-Professor", "cloudif-tenants-admin", "cloudif-professor"}))
+        history = []
+        if BACKUP_ROOT.is_dir():
+            for directory in sorted((x for x in BACKUP_ROOT.iterdir() if x.is_dir()), key=lambda x: x.name):
+                if directory.name in active_slugs:
+                    continue
+                items = _backup_items(directory.name)
+                owner_name = next((x.get("owner") for x in items if x.get("owner")), "")
+                if not global_access and owner_name.lower() != username:
+                    continue
+                history.append({
+                    "slug": directory.name,
+                    "owner": owner_name,
+                    "items": items[:12],
+                    "total_files": len(items),
+                    "total_size": sum(int(x.get("size") or 0) for x in items),
+                    "last_backup": items[0]["modified"] if items else None,
+                    "database_files": sum(1 for x in items if x.get("type") == "database"),
+                    "application_files": sum(1 for x in items if x.get("type") == "application"),
+                })
+        return {
+            "ok": True,
+            "active": active,
+            "history": history,
+            "history_total": len(history),
+            "remote": _backup_remote_status(),
+            "schedules": [
+                _backup_schedule("cloudif-project-backup-auto.timer", "Backup automático dos projetos"),
+                _backup_schedule("cloudif-tenant-db-backup-v2.timer", "Backup dos bancos e tenants"),
+                _backup_schedule("cloudif-config-backup.timer", "Backup da configuração da plataforma"),
+            ],
+            "retention_days": 14,
+        }
+
     def backup_body(csrf_token: str) -> str:
         return r"""
 <section class="card backup-console">
-  <div class="section-title"><div><h2>Backup dos projetos</h2><p>Sincronização, estágio, retenção e arquivos reais do mecanismo já configurado.</p></div><button class="btn light" id="backup-refresh" type="button">Atualizar</button></div>
+  <div class="section-title"><div><h2>Backup</h2><p>Agenda, servidor remoto, projetos ativos e acervo histórico do mecanismo já configurado.</p></div><button class="btn light" id="backup-refresh" type="button">Atualizar</button></div>
+  <div class="ai-disclaimer" role="note"><strong>Aviso de testes e homologação:</strong> a plataforma está em desenvolvimento e homologação. Mantenha cópias próprias das informações importantes, mesmo quando o backup automático estiver ativo.</div>
   <div class="help"><strong>Separação de dados:</strong> backup de aplicação reúne publicações, configuração e metadados. Backup de banco contém dumps lógicos. Segredos e arquivos <code>.env</code> não são incluídos.</div>
-  <div id="backup-console-list"><p>Consultando o estágio de backup…</p></div>
+  <div id="backup-console-list"><p>Consultando agenda e arquivos de backup…</p></div>
 </section>
-<style>.backup-console{display:grid;gap:16px}.backup-console-grid{display:grid;gap:14px}.backup-console-card{display:grid;gap:14px;padding:18px;border:1px solid var(--ui141-border,var(--cif-border,#dce3ed));border-radius:14px;background:var(--ui141-surface,var(--cif-surface,#fff))}.backup-console-card h3{margin:0}.backup-console-meta{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:9px}.backup-console-meta div{padding:11px;background:#f8fafc;border-radius:9px}.backup-console-meta small{display:block;color:var(--ui141-muted,var(--cif-muted,#64748b))}.backup-console-actions{display:flex;gap:8px;flex-wrap:wrap}.backup-file-list{display:grid;gap:8px}.backup-file{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;padding:11px;border:1px solid var(--ui141-border,var(--cif-border,#dce3ed));border-radius:10px}.backup-file small{display:block;color:var(--ui141-muted,var(--cif-muted,#64748b))}@media(max-width:680px){.backup-file{grid-template-columns:1fr}}</style>
-<script>(()=>{const root=document.getElementById('backup-console-list'),refresh=document.getElementById('backup-refresh'),csrf=__CSRF__;const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));const bytes=n=>{n=Number(n||0);for(const u of ['B','KB','MB','GB','TB']){if(n<1024)return `${n.toFixed(n<10&&u!=='B'?1:0)} ${u}`;n/=1024}return `${n.toFixed(1)} PB`};async function request(url,options={}){const r=await fetch(url,{credentials:'same-origin',...options});const type=(r.headers.get('content-type')||'').toLowerCase();const text=await r.text();if(!type.includes('application/json'))throw new Error(`O servidor retornou uma página em vez de JSON (HTTP ${r.status})`);let d;try{d=JSON.parse(text)}catch(_){throw new Error('Resposta JSON inválida do serviço de backup')}if(!r.ok||!d.ok)throw new Error(d.error||`HTTP ${r.status}`);return d}async function action(slug,op,extra={}){const body=new URLSearchParams({csrf_token:csrf,slug,op,...extra});await request('/cloudif/portal/action/project-backup',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded;charset=UTF-8','X-CSRF-Token':csrf},body});await load()}function file(x,slug){return `<div class="backup-file"><div><strong>${x.type==='database'?'Banco de dados':'Aplicação e containers'}</strong><small>${esc(x.modified||'')} · ${bytes(x.size)} · SHA-256 ${esc((x.sha256||'').slice(0,12))}… · estágio ${esc(x.remote||'local')}</small></div><a class="btn light" href="/cloudif/portal/download/project-backup?slug=${encodeURIComponent(slug)}&file=${encodeURIComponent(x.filename)}">Baixar</a></div>`}async function load(){refresh.disabled=true;root.innerHTML='<p>Consultando o estágio de backup…</p>';try{const d=await request('/cloudif/portal/api/project-backups',{headers:{Accept:'application/json'}});const projects=d.projects||[];root.innerHTML=projects.length?'<div class="backup-console-grid">'+projects.map(p=>{const c=p.settings||{},remote=c.remote||{},items=p.items||[];const can=!!p.can_manage;return `<article class="backup-console-card"><div class="section-title"><div><h3>${esc(p.name||p.slug)}</h3><small>${esc(p.slug)}</small></div><span class="pill ${c.last_result==='ok'?'ok':c.last_result?'bad':'muted'}">${esc(c.last_result||'sem execução')}</span></div><div class="backup-console-meta"><div><small>Automático local</small><strong>${c.enabled?'Ativado':'Desativado'}</strong></div><div><small>Última execução</small><strong>${esc(c.last_run||'Ainda não executado')}</strong></div><div><small>Retenção</small><strong>${Number(c.retention||14)} dias</strong></div><div><small>Servidor remoto</small><strong>${esc(remote.status||'não configurado')}</strong></div><div><small>Sincronização remota</small><strong>${c.remote_requested?'Solicitada':'Desativada'}</strong></div><div><small>Arquivos disponíveis</small><strong>${items.length}</strong></div></div>${can?`<div class="backup-console-actions"><button class="btn" data-op="backup_now" data-slug="${esc(p.slug)}">Gerar backup agora</button><button class="btn light" data-op="set_auto" data-slug="${esc(p.slug)}" data-enabled="${c.enabled?'0':'1'}" data-remote="${c.remote_requested?'1':'0'}">${c.enabled?'Desativar automático':'Ativar automático'}</button><button class="btn light" data-op="set_remote" data-slug="${esc(p.slug)}" data-enabled="${c.enabled?'1':'0'}" data-remote="${c.remote_requested?'0':'1'}">${c.remote_requested?'Desativar sincronização':'Ativar sincronização'}</button></div>`:''}<div class="backup-file-list">${items.length?items.map(x=>file(x,p.slug)).join(''):'<div class="empty-state">Nenhum arquivo disponível.</div>'}</div></article>`}).join('')+'</div>':'<div class="empty-state"><h3>Nenhum projeto ativo</h3><p>Os backups históricos continuam preservados no servidor. Novos projetos aparecerão aqui após a criação.</p></div>';root.querySelectorAll('[data-op]').forEach(b=>b.onclick=async()=>{b.disabled=true;try{const op=b.dataset.op==='set_remote'?'set_auto':b.dataset.op;await action(b.dataset.slug,op,{enabled:b.dataset.enabled||'0',remote_requested:b.dataset.remote||'0'})}catch(e){alert(e.message)}finally{b.disabled=false}})}catch(e){root.innerHTML=`<p class="pill bad">${esc(e.message)}</p>`}finally{refresh.disabled=false}}refresh.onclick=load;load()})();</script>
+<style>.backup-console{display:grid;gap:16px}.backup-overview-grid,.backup-console-meta{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}.backup-overview-grid>div,.backup-console-meta>div{padding:12px;border:1px solid var(--border,#dce3ed);border-radius:11px;background:#f8fafc}.backup-overview-grid small,.backup-console-meta small{display:block;color:var(--muted,#64748b)}.backup-section{display:grid;gap:12px}.backup-section-head{display:flex;align-items:end;justify-content:space-between;gap:14px}.backup-console-grid{display:grid;gap:12px}.backup-console-card{display:grid;gap:14px;padding:17px;border:1px solid var(--border,#dce3ed);border-radius:14px;background:#fff}.backup-console-actions{display:flex;gap:8px;flex-wrap:wrap}.backup-history-card>summary{display:flex;align-items:center;justify-content:space-between;gap:12px;cursor:pointer;list-style:none}.backup-history-card>summary::-webkit-details-marker{display:none}.backup-history-body{display:grid;gap:12px;padding-top:14px}.backup-file-list{display:grid;gap:7px}.backup-file{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;padding:10px;border:1px solid var(--border,#dce3ed);border-radius:10px}.backup-file small{display:block;color:var(--muted,#64748b)}.backup-schedule-list{display:grid;gap:7px}.backup-schedule{display:flex;justify-content:space-between;gap:12px;padding:10px;border-bottom:1px solid var(--border,#dce3ed)}@media(max-width:680px){.backup-file{grid-template-columns:1fr}.backup-history-card>summary,.backup-section-head{align-items:flex-start;display:grid}}</style>
+<script>(()=>{const root=document.getElementById('backup-console-list'),refresh=document.getElementById('backup-refresh'),csrf=__CSRF__;const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));const bytes=n=>{n=Number(n||0);for(const u of ['B','KB','MB','GB','TB']){if(n<1024)return `${n.toFixed(n<10&&u!=='B'?1:0)} ${u}`;n/=1024}return `${n.toFixed(1)} PB`};async function request(url,options={}){const r=await fetch(url,{credentials:'same-origin',...options});const type=(r.headers.get('content-type')||'').toLowerCase(),text=await r.text();if(!type.includes('application/json'))throw new Error(`Resposta inválida do serviço de backup (HTTP ${r.status})`);const d=JSON.parse(text);if(!r.ok||!d.ok)throw new Error(d.error||`HTTP ${r.status}`);return d}async function action(slug,op,extra={}){const body=new URLSearchParams({csrf_token:csrf,slug,op,...extra});await request('/cloudif/portal/action/project-backup',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded;charset=UTF-8','X-CSRF-Token':csrf},body});await load()}function file(x,slug,historical=false){const url=historical?`/cloudiff/portal/download/backup-history?slug=${encodeURIComponent(slug)}&file=${encodeURIComponent(x.filename)}`:`/cloudif/portal/download/project-backup?slug=${encodeURIComponent(slug)}&file=${encodeURIComponent(x.filename)}`;return `<div class="backup-file"><div><strong>${x.type==='database'?'Banco de dados':'Aplicação e containers'}</strong><small>${esc(x.modified||'')} · ${bytes(x.size)}${x.sha256?` · SHA-256 ${esc(x.sha256.slice(0,12))}…`:''}</small></div><a class="btn light" href="${url}">Baixar</a></div>`}function activeCard(p){const c=p.settings||{},r=c.remote||{},items=p.items||[];return `<article class="backup-console-card"><div class="section-title"><div><h3>${esc(p.name||p.slug)}</h3><small>${esc(p.slug)}</small></div><span class="pill ${c.last_result?'ok':'muted'}">${c.last_result?'com execução':'sem execução'}</span></div><div class="backup-console-meta"><div><small>Automático local</small><strong>${c.enabled?'Ativado':'Desativado'}</strong></div><div><small>Última execução</small><strong>${esc(c.last_run||'Ainda não executado')}</strong></div><div><small>Retenção</small><strong>${Number(c.retention||14)} dias</strong></div><div><small>Servidor remoto</small><strong>${esc(r.status||'não configurado')}</strong></div><div><small>Arquivos</small><strong>${items.length}</strong></div></div>${p.can_manage?`<div class="backup-console-actions"><button class="btn" data-op="backup_now" data-slug="${esc(p.slug)}">Gerar backup agora</button><button class="btn light" data-op="set_auto" data-slug="${esc(p.slug)}" data-enabled="${c.enabled?'0':'1'}" data-remote="${c.remote_requested?'1':'0'}">${c.enabled?'Desativar automático':'Ativar automático'}</button><button class="btn light" data-op="set_remote" data-slug="${esc(p.slug)}" data-enabled="${c.enabled?'1':'0'}" data-remote="${c.remote_requested?'0':'1'}">${c.remote_requested?'Desativar sincronização':'Ativar sincronização'}</button></div>`:''}<div class="backup-file-list">${items.length?items.slice(0,8).map(x=>file(x,p.slug)).join(''):'<div class="empty-state">Nenhum arquivo disponível.</div>'}</div></article>`}function historyCard(p){return `<details class="backup-console-card backup-history-card"><summary><span><strong>${esc(p.slug)}</strong><small>${esc(p.owner||'proprietário não identificado')} · última cópia ${esc(p.last_backup||'—')}</small></span><span class="pill warn">Projeto removido · ${p.total_files} arquivos</span></summary><div class="backup-history-body"><div class="backup-console-meta"><div><small>Banco</small><strong>${p.database_files}</strong></div><div><small>Aplicação</small><strong>${p.application_files}</strong></div><div><small>Espaço preservado</small><strong>${bytes(p.total_size)}</strong></div><div><small>Retenção</small><strong>Preservado para revisão</strong></div></div><div class="backup-file-list">${p.items.map(x=>file(x,p.slug,true)).join('')}</div>${p.total_files>p.items.length?`<p class="small">Exibindo os ${p.items.length} arquivos mais recentes de ${p.total_files}.</p>`:''}</div></details>`}async function load(){refresh.disabled=true;root.innerHTML='<p>Consultando agenda e arquivos de backup…</p>';try{const d=await request('/cloudiff/portal/api/backup-overview',{headers:{Accept:'application/json'}}),r=d.remote||{},s=d.schedules||[],a=d.active||[],h=d.history||[];root.innerHTML=`<div class="backup-overview-grid"><div><small>Backup automático</small><strong>${s.some(x=>x.active==='active')?'Ativo':'Verificar serviço'}</strong></div><div><small>Servidor remoto</small><strong>${esc(r.status||'não configurado')}</strong>${r.host?`<small>${esc(r.host)}:${r.port}</small>`:''}</div><div><small>Retenção padrão</small><strong>${d.retention_days} dias</strong></div><div><small>Projetos históricos</small><strong>${d.history_total}</strong></div></div><section class="backup-section"><div class="backup-section-head"><div><h3>Agendamentos</h3><p class="small">Timers reais configurados no servidor.</p></div></div><div class="backup-console-card backup-schedule-list">${s.map(x=>`<div class="backup-schedule"><span><strong>${esc(x.label)}</strong><small>${esc(x.unit)}</small></span><span class="pill ${x.active==='active'?'ok':'warn'}">${esc(x.active)}${x.next?` · ${esc(x.next)}`:''}</span></div>`).join('')}</div></section><section class="backup-section"><div class="backup-section-head"><div><h3>Projetos ativos</h3><p class="small">Controles de geração, agenda e sincronização.</p></div><span class="pill">${a.length}</span></div><div class="backup-console-grid">${a.length?a.map(activeCard).join(''):'<div class="empty-state"><h3>Nenhum projeto ativo</h3><p>Novos projetos aparecerão aqui automaticamente.</p></div>'}</div></section><section class="backup-section"><div class="backup-section-head"><div><h3>Backups históricos</h3><p class="small">Arquivos preservados de projetos removidos. Somente leitura.</p></div><span class="pill warn">${h.length} projetos</span></div><div class="backup-console-grid">${h.length?h.map(historyCard).join(''):'<div class="empty-state">Nenhum backup histórico autorizado.</div>'}</div></section>`;root.querySelectorAll('[data-op]').forEach(b=>b.onclick=async()=>{b.disabled=true;try{const op=b.dataset.op==='set_remote'?'set_auto':b.dataset.op;await action(b.dataset.slug,op,{enabled:b.dataset.enabled||'0',remote_requested:b.dataset.remote||'0'})}catch(e){alert(e.message)}finally{b.disabled=false}})}catch(e){root.innerHTML=`<p class="pill bad">${esc(e.message)}</p>`}finally{refresh.disabled=false}}refresh.onclick=load;load()})();</script>
 """.replace('__CSRF__', json.dumps(csrf_token))
 
 
@@ -280,6 +402,42 @@ def _install() -> None:
                     query = urllib.parse.parse_qs(parsed.query)
                     payload = tenant_job_status((query.get("job_id") or [""])[0])
                     return send_json(self, 200 if payload.get("ok") else 404, payload)
+                if path in {"/cloudif/portal/api/backup-overview", "/cloudiff/portal/api/backup-overview"}:
+                    owner = sys.modules.get(handler_class.__module__)
+                    user = self.user()
+                    return send_json(self, 200, backup_inventory(owner, user))
+                if path in {"/cloudif/portal/download/backup-history", "/cloudiff/portal/download/backup-history"}:
+                    owner = sys.modules.get(handler_class.__module__)
+                    user = self.user()
+                    q = urllib.parse.parse_qs(parsed.query)
+                    slug = (q.get("slug") or [""])[0].strip()
+                    filename = (q.get("file") or [""])[0].strip()
+                    if not re.fullmatch(r"[A-Za-z0-9_.-]+", slug or "") or filename != Path(filename).name or not filename.endswith(".tar.gz"):
+                        return send_json(self, 400, {"ok": False, "error": "invalid_file"})
+                    file_path = (BACKUP_ROOT / slug / filename).resolve()
+                    root_path = (BACKUP_ROOT / slug).resolve()
+                    if root_path not in file_path.parents or not file_path.is_file():
+                        return send_json(self, 404, {"ok": False, "error": "not_found"})
+                    items = _backup_items(slug)
+                    item = next((x for x in items if x.get("filename") == filename), None)
+                    groups = set(user.get("groups") or [])
+                    global_access = bool(user.get("admin") or groups.intersection({"CloudIF-Tenants-Admin", "CloudIF-Professor", "cloudif-tenants-admin", "cloudif-professor"}))
+                    if not item or (not global_access and (item.get("owner") or "").lower() != (user.get("username") or "").lower()):
+                        return send_json(self, 403, {"ok": False, "error": "forbidden"})
+                    self.send_response(200)
+                    self.send_header("Content-Type", "application/gzip")
+                    self.send_header("Content-Disposition", f'attachment; filename="{filename}"')
+                    self.send_header("Content-Length", str(file_path.stat().st_size))
+                    self.send_header("Cache-Control", "private, no-store")
+                    self.end_headers()
+                    with file_path.open("rb") as src:
+                        while True:
+                            chunk = src.read(1024 * 1024)
+                            if not chunk: break
+                            self.wfile.write(chunk)
+                    try: getattr(owner, "log_action")(user.get("username") or "portal", "download_historical_backup", slug, 0, filename, "")
+                    except Exception: pass
+                    return
                 if try_asset(self, path):
                     return
 
