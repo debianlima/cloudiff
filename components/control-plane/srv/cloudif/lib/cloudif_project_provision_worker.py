@@ -23,6 +23,28 @@ def run(cmd,timeout=180):
  if p.stdout:log('STDOUT '+p.stdout[-4000:])
  if p.stderr:log('STDERR '+p.stderr[-4000:])
  return p
+def persist_forgejo_result(slug, job):
+ import sqlite3
+ report_path=Path('/srv/cloudif/provisioning/projects')/slug/'provision-report.json'
+ report=json.loads(report_path.read_text());forgejo=(report.get('components') or {}).get('forgejo') or {}
+ repo_url=str(forgejo.get('url') or '').strip();clone_url=str(forgejo.get('clone_url') or '').strip();repo_path=str(forgejo.get('repository_path') or '').strip()
+ if not repo_url:return
+ db='/var/lib/cloudif/portal/cloudif-portal.db';c=sqlite3.connect(db)
+ cols={r[1] for r in c.execute('pragma table_info(projects)')}
+ updates=[];params=[]
+ if 'repo_url' in cols:updates.append('repo_url=?');params.append(repo_url)
+ if 'updated_at' in cols:updates.append("updated_at=strftime('%Y-%m-%dT%H:%M:%SZ','now')")
+ if updates:c.execute('update projects set '+','.join(updates)+' where slug=?',params+[slug])
+ icols={r[1] for r in c.execute('pragma table_info(project_integrations)')}
+ irow=c.execute('select rowid from project_integrations where project=?',(slug,)).fetchone() if 'project' in icols else None
+ if irow:
+  iupdates=[];iparams=[]
+  for col,val in (('repo_url',repo_url),('forgejo_repo_url',repo_url),('clone_url',clone_url),('repo_path',repo_path),('forgejo_owner',repo_path.split('/',1)[0] if '/' in repo_path else '')):
+   if col in icols:iupdates.append(col+'=?');iparams.append(val)
+  if iupdates:c.execute('update project_integrations set '+','.join(iupdates)+' where project=?',iparams+[slug])
+ c.commit();c.close()
+ job['repo_url']=repo_url;job['repo_clone_url']=clone_url;job['repo_path']=repo_path
+
 def verify_onboarding(slug):
  import sqlite3
  c=sqlite3.connect('/var/lib/cloudif/onboarding/onboarding.db');c.row_factory=sqlite3.Row
@@ -52,6 +74,8 @@ def main():
     if failures: detail='; '.join(failures)[:700]
    except Exception: pass
    raise RuntimeError('project_provision_failed: '+detail)
+  persist_forgejo_result(slug,job)
+  atomic_job(path,job)
   set_state(path,job,'running','onboarding-reconcile')
   p=run(['/bin/systemctl','start','cloudif-project-onboarding-reconcile.service'],300)
   if p.returncode:raise RuntimeError('onboarding_reconcile_failed')
