@@ -6029,6 +6029,23 @@ def _pm197_job_state(slug):
     except Exception:
         return {'status':'unknown','step':'','error':'','updated_at':''}
 
+def _pm197_runtime_state(slug, runtime_project=None):
+    info={'label':'Não identificado','service':'web','status':'Não verificado','healthy':False}
+    try:
+        import pathlib,json
+        jobs=sorted(pathlib.Path('/srv/cloudif/jobs').glob('project-provision-*-'+slug+'.json'),key=lambda x:x.stat().st_mtime,reverse=True)
+        if jobs:
+            data=json.loads(jobs[0].read_text(encoding='utf-8')); runtime=str(data.get('runtime_template') or ''); php=str(data.get('php_version') or '')
+            node=runtime.replace('node','') if runtime.startswith('node') else '—'
+            info['label']=f'Apache 2.4 + PHP {php or "—"} + Node.js {node}'
+    except Exception: pass
+    try:
+        rp=runtime_project or {}; sid=rp.get('stack_id') or ''
+        audit=_rd_agent('/komodo/project/audit',{'project':slug,'stack_id':sid,'service':'web','terminal':'cloudif-'+slug,'shell':'sh'},timeout=15)
+        info['healthy']=bool(audit.get('healthy')); info['status']='Rodando e saudável' if info['healthy'] else str(audit.get('state') or 'Atenção')
+    except Exception: pass
+    return info
+
 def _pm197_provision_status(slug):
     import pathlib,json
     jobs=sorted(pathlib.Path('/srv/cloudif/jobs').glob('project-provision-*-'+slug+'.json'),key=lambda x:x.stat().st_mtime,reverse=True)
@@ -6058,6 +6075,7 @@ def _pm197_render(user):
         forge_target=str(p['repo_url'] or '').strip()
         runtime_project=runtime_projects.get(slug) or {}
         provision_state=_pm197_job_state(slug)
+        runtime_state=_pm197_runtime_state(slug,runtime_project)
         terminal_target=url('/action/open-project-terminal')+'?slug='+urllib.parse.quote(slug,safe='') if runtime_project.get('stack_id') else ''
         studio=supabase_studio_url(p['tenant']) if p['tenant'] else ''
         acl_id='wiz_acl_'+safe
@@ -6069,6 +6087,7 @@ def _pm197_render(user):
 <section class="project-final__section"><h3>Banco vinculado</h3><p><strong>{h(p['tenant'] or 'Nenhum tenant vinculado')}</strong></p><div class="project-final__actions">{bank_action}</div></section>
 <section class="project-final__section"><h3>Repositório Forge</h3><p><strong>Forgejo</strong></p><p class="project-final__meta">{h(forge_target)}</p><div class="project-final__actions">{repo_action}</div></section>
 <section class="project-final__section"><h3>Komodo Publicação SSH</h3><p><strong>{'Stack '+h(runtime_project.get('stack_id')) if runtime_project.get('stack_id') else 'Container não vinculado'}</strong></p><p class="project-final__meta">Serviço: {h(runtime_project.get('service') or 'web')} · Status: {h(p['komodo_status'] or 'não configurado')}</p><div class="project-final__actions">{terminal_action}</div></section>
+<section class="project-final__section"><h3>Publicação</h3><p><strong>Serviço web: {h(runtime_state['status'])}</strong></p><p class="project-final__meta">Framework: {h(runtime_state['label'])}</p><div class="project-final__status"><span class="pill {'ok' if runtime_state['healthy'] else 'warn'}">{h(runtime_state['service'])}</span><span class="pill info">{h(runtime_state['label'])}</span></div></section>
 <section class="project-final__section"><h3>Estado técnico</h3><div class="project-final__status"><span class="pill {'ok' if p['tenant'] else 'muted'}">{'Banco vinculado' if p['tenant'] else 'Sem banco'}</span><span class="pill {'ok' if p['repo_url'] else 'muted'}">{'Repositório vinculado' if p['repo_url'] else 'Sem repositório'}</span></div><p class="project-final__meta">Use “Checar” para atualizar o estado real sem alterar a configuração.</p></section>
 <section class="project-final__section" data-provision-status="{h(provision_state['status'])}"><h3>Provisionamento</h3><p><strong>{h({'queued':'Na fila','running':'Em execução','succeeded':'Concluído','failed':'Falhou','not_started':'Não iniciado'}.get(provision_state['status'],provision_state['status']))}</strong></p><p class="project-final__meta">Etapa: {h(provision_state['step'] or '—')} · Atualizado: {h(provision_state['updated_at'] or '—')}</p>{('<p class="project-final__meta">'+h(provision_state['error'])+'</p>') if provision_state['error'] else ''}</section>
 <section class="project-final__section"><h3>Ações do projeto</h3><p class="project-final__meta"><strong>Checar projeto</strong> verifica repositório, banco e vínculo do container sem alterar a configuração. <strong>Permissões</strong> controla quem pode acessar este projeto.</p><div class="project-final__actions"><form method="post" action="{url('/action/project_action')}"><input type="hidden" name="csrf_token" value="{h(csrf_token)}"><input type="hidden" name="slug" value="{h(slug)}"><button class="btn gray" name="op" value="check">Checar projeto</button></form><button class="btn light" type="button" onclick="cloudifShowWizard('{acl_id}')">Gerenciar permissões</button></div></section>
