@@ -10,7 +10,7 @@ class PlatformBackupProgressModalTests(unittest.TestCase):
   self.assertIn('progressKind.textContent=kind',self.source)
  def test_platform_uses_progress_modal(self):
   self.assertIn('async function runPlatformBackup(button)',self.source)
-  self.assertIn("showProgress('Configuração central da CloudIFF','BACKUP DA PLATAFORMA')",self.source)
+  self.assertIn("showProgress('Configuração central da CloudIFF','BACKUP DA PLATAFORMA',[",self.source)
   self.assertIn("if(pb)pb.onclick=()=>runPlatformBackup(pb)",self.source)
  def test_platform_tracks_new_inventory_file(self):
   self.assertIn('async function platformState()',self.source)
