@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 import base64,json,sqlite3,sys,time,urllib.request,urllib.error
 from pathlib import Path
+LIB=Path("/srv/cloudif/lib")
+if str(LIB) not in sys.path: sys.path.insert(0,str(LIB))
 DB='/var/lib/cloudif/portal/cloudif-portal.db'
 def read_env(path):
  d={}; p=Path(path)

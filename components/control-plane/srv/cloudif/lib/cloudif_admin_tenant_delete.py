@@ -196,6 +196,31 @@ def _delete_tenant_rows(db_path, tenant):
     return removed
 
 
+def _purge_platform_database_tenant(tenant, audit):
+    """Remove metadados centrais associados ao tenant excluído."""
+    container = os.environ.get("SUPABASE_DB_CONTAINER", "supabase-db")
+    db_user = os.environ.get("SUPABASE_DB_USER", "postgres")
+    db_name = os.environ.get("SUPABASE_DB_NAME", "postgres")
+    tenant_literal = "'" + str(tenant).replace("'", "''") + "'"
+    sql = f"""
+BEGIN;
+CREATE TEMP TABLE cloudif_deleted_slugs AS
+  SELECT slug FROM cloudif.project_registry WHERE tenant = {tenant_literal};
+DELETE FROM cloudif.project_acl WHERE slug IN (SELECT slug FROM cloudif_deleted_slugs);
+DELETE FROM cloudif.project_events WHERE slug IN (SELECT slug FROM cloudif_deleted_slugs);
+DELETE FROM cloudif.project_registry WHERE tenant = {tenant_literal};
+COMMIT;
+"""
+    # Use stdin so the transaction remains atomic and no SQL reaches argv/logs.
+    proc = subprocess.run(
+        ["docker", "exec", "-i", container, "psql", "-U", db_user, "-d", db_name, "-v", "ON_ERROR_STOP=1"],
+        input=sql, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=120, check=False,
+    )
+    result = {"ok": proc.returncode == 0, "stdout": proc.stdout[-1000:], "stderr": proc.stderr[-1000:]}
+    (audit / "platform-db-cleanup.json").write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n")
+    return result
+
+
 def _backup_database(tdir, audit):
     proc = _run(["docker", "compose", "--env-file", ".env", "ps", "-q", "db"], timeout=60, cwd=tdir)
     cid = proc.stdout.strip().splitlines()[0] if proc.stdout.strip() else ""
@@ -279,7 +304,13 @@ def execute(tenant, confirmation, actor, progress=None):
     registry_removed = _remove_registry_row(tenant, audit)
     portal_removed = _delete_tenant_rows(PORTAL_DB, tenant)
     onboarding_removed = _delete_tenant_rows(ONBOARDING_DB, tenant)
-    progress("Registry e permissões", "done", f"{sum(portal_removed.values()) + sum(onboarding_removed.values())} registro(s)")
+    platform_removed = _purge_platform_database_tenant(tenant, audit)
+    if not platform_removed.get("ok"):
+        progress("Registry e permissões", "failed", "Falha ao limpar metadados centrais")
+        result = {"ok": False, "error": "platform_metadata_cleanup_failed", "platform_removed": platform_removed, "audit_dir": str(audit)}
+        (audit / "result.json").write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n")
+        return result
+    progress("Registry e permissões", "done", f"{sum(portal_removed.values()) + sum(onboarding_removed.values())} registro(s) locais e metadados centrais")
 
     progress("Diretório do tenant", "running", "Removendo configuração local")
     if tdir.exists():
@@ -303,6 +334,7 @@ def execute(tenant, confirmation, actor, progress=None):
         "registry_removed": registry_removed,
         "portal_removed": portal_removed,
         "onboarding_removed": onboarding_removed,
+        "platform_removed": platform_removed,
         "router": {"ok": router_ok, "stdout": router.stdout[-1500:], "stderr": router.stderr[-1500:]},
         "final_preview": final,
         "audit_dir": str(audit),
