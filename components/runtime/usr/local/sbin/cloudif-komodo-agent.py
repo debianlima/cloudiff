@@ -8,6 +8,7 @@ from pathlib import Path
 import re
 import sqlite3
 import subprocess
+import shutil
 import ssl
 import time
 import urllib.error
