@@ -1156,6 +1156,12 @@ def render_help(user):
 <div class="card">
   <div class="section-title"><div><h2>Guia da plataforma</h2><p class="small">Uso diário, arquitetura e referência técnica da CloudIFF.</p></div><a class="btn" href="https://github.com/debianlima/cloudiff" target="_blank" rel="noopener noreferrer">Abrir GitHub do projeto</a></div>
   <div class="help"><b>Documentação técnica:</b> o repositório reúne arquitetura, fluxogramas, agentes, protocolos de reconciliação, modelo de dados, mensagens, aprovações, operação e um inventário de cada pasta e arquivo. O conteúdo é organizado como uma apostila para estudo, manutenção e evolução futura.</div>
+  <h3>Vídeos rápidos</h3>
+  <div class="grid">
+    <div class="box"><h3>Apresentação rápida da CloudIFF</h3><p>Visão breve da plataforma, seus recursos e a experiência de uso.</p><a class="btn" href="https://youtu.be/cxH3K8s1R9M" target="_blank" rel="noopener noreferrer">Assistir no YouTube</a></div>
+    <div class="box"><h3>Demonstração prática da plataforma</h3><p>Vídeo curto mostrando o uso da CloudIFF e o fluxo de trabalho.</p><a class="btn" href="https://youtu.be/pJ7mx3VZuWU" target="_blank" rel="noopener noreferrer">Assistir no YouTube</a></div>
+  </div>
+  <h3>Conceitos principais</h3>
   <div class="grid">
     <div class="box"><h3>Projeto</h3><p>Espaço de trabalho. Pode ter Git, Komodo e banco Supabase.</p></div>
     <div class="box"><h3>Projeto sem banco</h3><p>Permite começar pelo código e vincular banco depois.</p></div>

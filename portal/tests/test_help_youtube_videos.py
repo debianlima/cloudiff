@@ -4,7 +4,7 @@ import unittest
 class HelpYoutubeVideosTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.source=Path('components/control-plane/current-apps/portal-current/cloudif_portal_sections98.py').read_text()
+        cls.source=Path('components/control-plane/current-apps/portal-current/cloudif_portal_sections98.py').read_text()+Path('components/control-plane/current-apps/portal-current/cloudif-admin-portal-base.py').read_text()
     def test_both_videos_are_present(self):
         self.assertIn('https://youtu.be/cxH3K8s1R9M',self.source)
         self.assertIn('https://youtu.be/pJ7mx3VZuWU',self.source)
