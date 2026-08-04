@@ -35,8 +35,8 @@ curl -fsS --retry 2 --retry-all-errors --connect-timeout 5 --max-time 120 \
   --output "$RESPONSE_FILE" \
   "$PUBLISHER_URL"
 
-# A chamada interna apenas solicita/reconcilia o proxy. O sucesso real é o TLS
-# público válido para o hostname do tenant; sem isso o provisionamento falha.
+# A chamada interna apenas solicita/reconcilia o proxy. O sucesso real exige
+# TLS público válido e uma rota que não esteja ausente nem quebrada.
 DEADLINE=$((SECONDS + WAIT_SECONDS))
 LAST_CODE="000"
 LAST_ERROR=""
@@ -45,8 +45,9 @@ while (( SECONDS < DEADLINE )); do
   if LAST_CODE="$(curl --silent --show-error --output /dev/null \
       --write-out '%{http_code}' --connect-timeout 5 --max-time 20 \
       "$PUBLIC_URL" 2>"$ERROR_FILE")"; then
-    if [ "$LAST_CODE" != "000" ]; then
-      python3 - "$TENANT" "$HOST" "$PUBLIC_URL" "$LAST_CODE" "$RESPONSE_FILE" <<'PY'
+    case "$LAST_CODE" in
+      2??|3??|401|403)
+        python3 - "$TENANT" "$HOST" "$PUBLIC_URL" "$LAST_CODE" "$RESPONSE_FILE" <<'PY'
 import json
 import pathlib
 import sys
@@ -64,15 +65,17 @@ print(json.dumps({
     "url": url,
     "http_status": int(status),
     "tls_verified": True,
+    "route_verified": True,
     "publisher": publisher,
 }, ensure_ascii=False))
 PY
-      exit 0
-    fi
+        exit 0
+        ;;
+    esac
   fi
   LAST_ERROR="$(tail -c 1000 "$ERROR_FILE" 2>/dev/null || true)"
   sleep 5
 done
 
-echo "Certificado TLS do tenant não ficou válido em ${PUBLIC_URL}. HTTP=${LAST_CODE}. ${LAST_ERROR}" >&2
+echo "Certificado/rota HTTPS do tenant não ficou válido em ${PUBLIC_URL}. HTTP=${LAST_CODE}. ${LAST_ERROR}" >&2
 exit 1

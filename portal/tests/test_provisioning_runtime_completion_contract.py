@@ -20,8 +20,10 @@ class ProvisioningRuntimeCompletionContractTest(unittest.TestCase):
         source = Path('components/control-plane/srv/cloudif/bin/cloudif-ensure-tenant-certificate.sh').read_text(encoding='utf-8')
         self.assertIn('https://${HOST}/project/default', source)
         self.assertIn('tls_verified', source)
+        self.assertIn('route_verified', source)
         self.assertIn('CLOUDIF_TENANT_CERTIFICATE_WAIT_SECONDS', source)
         self.assertIn("--write-out '%{http_code}'", source)
+        self.assertIn('2??|3??|401|403', source)
         self.assertNotIn('curl -k', source)
         self.assertIn('exit 1', source)
 
