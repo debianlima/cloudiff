@@ -5376,8 +5376,12 @@ import cloudif_approval_panel as _ap_panel
 def _ap_cfg(key,default=''):
     return os.environ.get(key) or setting_value(key,default)
 def _ap_raw():
-    code,data=_ap_panel.request(_ap_cfg('CLOUDIF_APPROVAL_URL','http://127.0.0.1:18204'),_ap_cfg('CLOUDIF_APPROVAL_TOKEN',''),'GET','/v1/approvals?status=all')
-    if code!=200 or not data.get('ok'):raise RuntimeError('approval_api_unavailable')
+    try:
+        code,data=_ap_panel.request(_ap_cfg('CLOUDIF_APPROVAL_URL','http://127.0.0.1:18204'),_ap_cfg('CLOUDIF_APPROVAL_TOKEN',''),'GET','/v1/approvals?status=all')
+    except Exception:
+        return []
+    if code!=200 or not isinstance(data,dict) or not data.get('ok'):
+        return []
     return data.get('approvals') or []
 def _ap_visible(user):
     slugs={x['slug'] for x in user_visible_projects(user['username'],user['groups'])}
