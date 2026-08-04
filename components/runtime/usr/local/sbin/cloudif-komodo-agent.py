@@ -3534,6 +3534,26 @@ fi
     return send(handler,200 if proc.returncode==0 else 422,{"ok":proc.returncode==0,"project":project,"kind":kind,"container":container,"output":(proc.stdout or "")[:120000],"stderr":(proc.stderr or "")[:4000],"returncode":proc.returncode})
 
 
+def _cloudif_reconcile_unified_stack_metadata(project, stack_id):
+    project=safe_slug(project);stack_id=normalize_resource_id(stack_id)
+    compose=Path('/etc/komodo/stacks')/('cloudif-'+project)/'.cloudif'/'docker-compose.yml'
+    if not project or not stack_id or not compose.is_file():
+        return {'ok':True,'changed':False,'reason':'not_unified'}
+    update,_=komodo_call('write','UpdateStack',{'id':stack_id,'config':{'project_name':'cloudif','file_paths':['.cloudif/docker-compose.yml'],'run_directory':'.'}})
+    if not update.get('ok'):
+        return {'ok':False,'error':'stack_metadata_update_failed','update':update}
+    refresh,_=komodo_call('write','RefreshStackCache',{'stack':stack_id})
+    if not refresh.get('ok'):
+        return {'ok':False,'error':'stack_cache_refresh_failed','refresh':refresh}
+    deadline=time.time()+30
+    services=[]
+    while time.time()<deadline:
+        listed,_=komodo_call('read','ListStackServices',{'stack':stack_id})
+        services=listed.get('data') if isinstance(listed.get('data'),list) else []
+        if services: break
+        time.sleep(2)
+    return {'ok':bool(services),'changed':True,'services':[str(x.get('service') or '') for x in services if isinstance(x,dict)],'error':'' if services else 'stack_services_not_discovered'}
+
 def cloudif_project_terminal_ensure(handler):
     if not _cloudif_pub_auth(handler): return send(handler,403,{"ok":False,"error":"forbidden"})
     payload=_cloudif_pub_json(handler)
@@ -3552,6 +3572,8 @@ def cloudif_project_terminal_ensure(handler):
         stack_ids=_cloudif_related_stack_ids(payload.get("project"),integration)
         sync=_cloudif_sync_project_authz(payload.get("project"),owner,access.get("acl") or [],normalize_resource_id(integration.get("stack_id")),normalize_resource_id(integration.get("repo_id")),stack_ids)
         if not sync.get("ok"):return send(handler,422,{"ok":False,"error":"actor_permission_sync_failed","actor":actor,"sync":sync})
+    metadata=_cloudif_reconcile_unified_stack_metadata(payload.get("project"),normalize_resource_id((integration or {}).get("stack_id") or payload.get("stack_id")))
+    if not metadata.get("ok"): return send(handler,422,{"ok":False,"error":"stack_metadata_reconcile_failed","metadata":metadata})
     audit=_cloudif_project_audit_data(payload)
     if not audit.get("ok"): return send(handler,400,audit)
     if not audit.get("running") or not audit.get("server_id") or not audit.get("container_name"):
