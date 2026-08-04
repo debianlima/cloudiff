@@ -100,8 +100,8 @@ def _project_information(context):
         database_value=f'<strong>{h(database or "Nenhum banco vinculado")}</strong>'
     return (
         '<div class="publication-information">'
-        f'<a class="publication-info-card publication-runtime-link" href="/cloudiff/portal/action/project-runtime-info?slug={h(context.get("slug") or "")}&amp;kind=php"><span>PHP</span><strong>Informações do PHP</strong><small>Versão, configuração e extensões</small></a>'
-        f'<a class="publication-info-card publication-runtime-link" href="/cloudiff/portal/action/project-runtime-info?slug={h(context.get("slug") or "")}&amp;kind=node"><span>Node.js</span><strong>Informações do Node.js</strong><small>Runtime, npm e dependências</small></a>'
+        f'<div class="publication-info-card publication-runtime-card"><span>PHP</span><strong>Configuração do PHP</strong><small>phpinfo, módulos e terminal interativo</small><a class="btn light publication-runtime-button" href="/cloudiff/portal/action/open-project-terminal?slug={h(context.get("slug") or "")}&amp;kind=php">Abrir no Komodo</a></div>'
+        f'<div class="publication-info-card publication-runtime-card"><span>Node.js</span><strong>Runtime do Node.js</strong><small>Versões, npm, dependências e terminal</small><a class="btn light publication-runtime-button" href="/cloudiff/portal/action/open-project-terminal?slug={h(context.get("slug") or "")}&amp;kind=node">Abrir no Komodo</a></div>'
         f'<div class="publication-info-card"><span>Versões</span><strong>{h((context.get("runtime") or {}).get("versions") or "Não identificadas")}</strong><small>Runtime provisionado</small></div>'
         f'<div class="publication-info-card"><span>Serviço web</span><strong>{h(context.get("service_status"))}</strong><small>Estado real do container</small></div>'
         f'<div class="publication-info-card"><span>Banco vinculado</span>{database_value}<small>Tenant da aplicação</small></div>'

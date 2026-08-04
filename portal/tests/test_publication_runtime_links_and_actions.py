@@ -11,10 +11,11 @@ class PublicationRuntimeLinksAndActionsTests(unittest.TestCase):
         info=self.pub[self.pub.index('def _project_information'):self.pub.index('def publication_panel')]
         self.assertNotIn('<span>Framework</span>',info)
         self.assertNotIn('<span>Ambiente</span>',info)
-        self.assertIn('Informações do PHP',info)
-        self.assertIn('Informações do Node.js',info)
+        self.assertIn('Configuração do PHP',info)
+        self.assertIn('Runtime do Node.js',info)
+        self.assertIn('Abrir no Komodo',info)
     def test_runtime_pages_are_authenticated_project_routes(self):
-        for marker in ('project-runtime-info','_rd_projects(user)','kind not in (\'php\',\'node\')','Voltar à publicação'):
+        for marker in ('project-runtime-info','_rd_projects(user)','kind not in (\'php\',\'node\')','open-project-terminal'):
             self.assertIn(marker,self.base)
     def test_agent_accepts_only_fixed_php_or_node_queries(self):
         for marker in ('kind not in {"php","node"}','php -v','php -m','process.versions','package.json'):

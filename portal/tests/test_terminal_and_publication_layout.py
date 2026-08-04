@@ -15,7 +15,7 @@ class TerminalAndPublicationLayoutTests(unittest.TestCase):
   for marker in ("unified_compose=stack_root/'.cloudif'/'docker-compose.yml'",'com.docker.compose.project.config_files','local_discovered','ListServers'):
    self.assertIn(marker,self.agent)
  def test_publication_replaces_generic_runtime_cards_with_diagnostics(self):
-  for marker in ('Informações do PHP','Informações do Node.js','Apache 2.4 · PHP','<span>Versões</span>'):
+  for marker in ('Configuração do PHP','Runtime do Node.js','Apache 2.4 · PHP','<span>Versões</span>'):
    self.assertIn(marker,self.pub)
   self.assertNotIn('<span>Ambiente</span>',self.pub)
   self.assertNotIn('<span>Framework</span>',self.pub)
