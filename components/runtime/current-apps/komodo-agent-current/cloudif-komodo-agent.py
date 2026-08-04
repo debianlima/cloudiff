@@ -3678,7 +3678,7 @@ COPY --chown=www-data:www-data site/ /var/www/html/
   web:
     image: cloudif/publication-p{public_number}-d{deploy_number}:php{php}-node{node}
     build:
-      context: {snap_dir}
+      context: .
       dockerfile: Dockerfile.runtime
     container_name: cloudif-p${{CLOUDIF_PUBLIC_NUMBER}}-d${{CLOUDIF_DEPLOY_NUMBER}}-web
     restart: unless-stopped
@@ -3762,6 +3762,16 @@ networks:
         update = {"ok": True, "created": cr}
     if not stack_id:
         return send(handler, 422, {"ok": False, "error": "stack_id_missing"})
+    if unified_runtime:
+        version_stack_dir=Path("/etc/komodo/stacks") / name
+        staged_site=version_stack_dir / "site"
+        try:
+            version_stack_dir.mkdir(parents=True,exist_ok=True)
+            if staged_site.exists(): shutil.rmtree(staged_site)
+            shutil.copytree(snap_dir / "site",staged_site)
+            shutil.copy2(snap_dir / "Dockerfile.runtime",version_stack_dir / "Dockerfile.runtime")
+        except Exception as exc:
+            return send(handler,422,{"ok":False,"error":"version_runtime_stage_failed","detail":str(exc)[:500],"stack_dir":str(version_stack_dir)})
     dep = _cloudif_v131_core_call("execute", "DeployStack", {"stack": stack_id}, timeout=60)
     opid = _cloudif_v131_oid(dep.get("data") or {})
     container = f"cloudif-p{public_number}-d{deploy_number}-web"
