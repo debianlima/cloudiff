@@ -266,6 +266,26 @@ def parse_repo(repo_url, project):
         "git_provider": FORGEJO_PROVIDER,
     }
 
+def _cloudif_repo_item_path(item):
+    if not isinstance(item,dict): return ''
+    cfg=item.get('config') if isinstance(item.get('config'),dict) else {}
+    info=item.get('info') if isinstance(item.get('info'),dict) else {}
+    return str(cfg.get('repo') or info.get('repo') or '').strip().removesuffix('.git')
+
+def _cloudif_reconcile_local_repo_origin(project, repo_info):
+    base=Path('/etc/komodo/stacks')/('cloudif-'+safe_slug(project))
+    if not (base/'.git').exists(): return {'ok':True,'changed':False,'reason':'clone_absent'}
+    try:
+        old=subprocess.check_output(['git','-C',str(base),'remote','get-url','origin'],text=True,timeout=20).strip()
+        parsed=urllib.parse.urlsplit(old)
+        wanted_path='/git/'+repo_info['repo_path']+'.git'
+        new=urllib.parse.urlunsplit((parsed.scheme,parsed.netloc,wanted_path,'',''))
+        if old==new:return {'ok':True,'changed':False,'origin_path':wanted_path}
+        subprocess.run(['git','-C',str(base),'remote','set-url','origin',new],check=True,timeout=20)
+        subprocess.run(['git','-C',str(base),'fetch','--quiet','origin','main'],check=True,timeout=90)
+        return {'ok':True,'changed':True,'origin_path':wanted_path}
+    except Exception as exc:return {'ok':False,'error':'local_repo_origin_reconcile_failed','detail':str(exc)[:500]}
+
 def find_by_name(items, name):
     if not isinstance(items, list):
         return None
@@ -294,7 +314,8 @@ def choose_server(servers_data):
 def create_or_update_repo(repo_info, server_id):
     repos_resp, _ = komodo_call("read", "ListRepos", {})
     repos = repos_resp.get("data") if repos_resp.get("ok") else []
-    existing = find_by_name(repos, repo_info["repo_name"])
+    exact=next((x for x in repos if isinstance(x,dict) and _cloudif_repo_item_path(x)==repo_info["repo_path"]),None)
+    existing = exact or find_by_name(repos, repo_info["repo_name"])
 
     desired_config = {
         "server_id": server_id,
@@ -430,8 +451,8 @@ def _cloudif_related_stack_ids(project, integration=None):
         if tenant_id: related.append(tenant_id)
     return list(dict.fromkeys(x for x in related if x))
 
-def _cloudif_sync_project_authz(project, owner, acl, stack_id, repo_id, stack_ids=None):
-    payload={'project':safe_slug(project),'owner':str(owner or '').strip().lower(),'acl':acl if isinstance(acl,list) else [],'stack_id':str(stack_id or ''),'stack_ids':stack_ids if isinstance(stack_ids,list) else ([str(stack_id)] if stack_id else []),'repo_id':str(repo_id or '')}
+def _cloudif_sync_project_authz(project, owner, acl, stack_id, repo_id, stack_ids=None, server_id=""):
+    payload={'project':safe_slug(project),'owner':str(owner or '').strip().lower(),'acl':acl if isinstance(acl,list) else [],'stack_id':str(stack_id or ''),'stack_ids':stack_ids if isinstance(stack_ids,list) else ([str(stack_id)] if stack_id else []),'repo_id':str(repo_id or ''),'server_id':str(server_id or '')}
     try:
         proc=subprocess.run(['/usr/local/sbin/cloudif-komodo-project-authz.py'],input=json.dumps(payload),text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=90,check=False)
         result=json.loads((proc.stdout or '{}').splitlines()[-1])
@@ -446,7 +467,7 @@ def cloudif_project_authz_sync(handler):
     if not integration:return send(handler,404,{'ok':False,'error':'project_not_integrated'})
     access=payload.get('access') if isinstance(payload.get('access'),dict) else {}
     stack_ids=_cloudif_related_stack_ids(project,integration)
-    result=_cloudif_sync_project_authz(project,access.get('owner') or payload.get('owner_user'),access.get('acl') or [],normalize_resource_id(integration.get('stack_id')),normalize_resource_id(integration.get('repo_id')),stack_ids)
+    result=_cloudif_sync_project_authz(project,access.get('owner') or payload.get('owner_user'),access.get('acl') or [],normalize_resource_id(integration.get('stack_id')),normalize_resource_id(integration.get('repo_id')),stack_ids,normalize_resource_id(integration.get('server_id')))
     return send(handler,200 if result.get('ok') else 422,result)
 
 def ensure_project(payload):
@@ -507,8 +528,9 @@ def ensure_project(payload):
 
     repo, repo_action = create_or_update_repo(repo_info, server_id)
     result["repo_action"] = repo_action
+    result["local_repo_origin"] = _cloudif_reconcile_local_repo_origin(project,repo_info)
 
-    if not repo:
+    if not repo or not result["local_repo_origin"].get("ok"):
         result["stage"] = "repo"
         result["message"] = "Não foi possível criar/atualizar Repo no Komodo."
         record_deployment(project, tenant, actor, "ensure", "failed", result["message"], server_id, "", "", repo_info["repo_name"], request=payload, response=result)
@@ -529,7 +551,7 @@ def ensure_project(payload):
     access=payload.get("access") if isinstance(payload.get("access"),dict) else {}
     temp_integration={'stack_id':stack_id,'repo_id':repo_id,'tenant':tenant}
     stack_ids=_cloudif_related_stack_ids(project,temp_integration)
-    authz=_cloudif_sync_project_authz(project,access.get("owner") or payload.get("owner_user") or actor,access.get("acl") or [],stack_id,repo_id,stack_ids)
+    authz=_cloudif_sync_project_authz(project,access.get("owner") or payload.get("owner_user") or actor,access.get("acl") or [],stack_id,repo_id,stack_ids,server_id)
     result["authz"] = authz
     if not authz.get("ok"):
         result["stage"]="authz";result["message"]="Stack criada, mas as permissões do projeto não foram sincronizadas."
@@ -539,7 +561,7 @@ def ensure_project(payload):
     result["ok"] = True
     result["stage"] = "ready"
     result["message"] = "Projeto sincronizado no Komodo com Forgejo normalizado."
-    result["repo"] = {"id": repo_id, "name": repo_info["repo_name"]}
+    result["repo"] = {"id": repo_id, "name": repo_info["repo_name"], "owner": repo_info["owner"], "path": repo_info["repo_path"], "url": repo_info["repo_url"]}
     result["stack"] = {"id": stack_id, "name": stack_name, "state": stack.get("state")}
 
     db_exec("""
@@ -3774,18 +3796,18 @@ def cloudif_project_terminal_ensure(handler):
     integration=find_integration(safe_slug(payload.get("project") or ""))
     if integration:
         stack_ids=_cloudif_related_stack_ids(payload.get("project"),integration)
-        sync=_cloudif_sync_project_authz(payload.get("project"),owner,access.get("acl") or [],normalize_resource_id(integration.get("stack_id")),normalize_resource_id(integration.get("repo_id")),stack_ids)
+        sync=_cloudif_sync_project_authz(payload.get("project"),owner,access.get("acl") or [],normalize_resource_id(integration.get("stack_id")),normalize_resource_id(integration.get("repo_id")),stack_ids,normalize_resource_id(integration.get("server_id")))
         if not sync.get("ok"):return send(handler,422,{"ok":False,"error":"actor_permission_sync_failed","actor":actor,"sync":sync})
     base_stack_id=normalize_resource_id((integration or {}).get("stack_id") or payload.get("stack_id"))
     metadata=_cloudif_reconcile_unified_stack_metadata(payload.get("project"),base_stack_id)
-    if not metadata.get("ok"): return send(handler,422,{"ok":False,"error":"stack_metadata_reconcile_failed","metadata":metadata})
     active=_cloudif_active_publication_stack(payload.get("project"),base_stack_id)
-    audit_payload=dict(payload);audit_payload["stack_id"]=active.get("stack_id") or base_stack_id
+    audit_payload=dict(payload);audit_payload["stack_id"]=active.get("stack_id") if active.get("ok") else base_stack_id
     audit=_cloudif_project_audit_data(audit_payload)
     if not audit.get("ok"): return send(handler,400,audit)
     if not audit.get("running") or not audit.get("server_id") or not audit.get("container_name"):
         return send(handler,422,{"ok":False,"error":"container_not_running","audit":audit})
-    target={"type":"Stack","params":{"stack":audit["resolved_stack_id"],"service":audit["service"]}}
+    use_stack=bool(active.get("ok") and audit.get("resolved_stack_id"))
+    target={"type":"Stack","params":{"stack":audit["resolved_stack_id"],"service":audit["service"]}} if use_stack else {"type":"Container","params":{"server":audit["server_id"],"container":audit["container_name"]}}
     base_terminal=audit["terminal"]; shell=audit["shell"]
     actor_key=safe_slug(actor)[:40] or "user"
     terminal=(base_terminal[:70]+"-"+actor_key)[:120]
@@ -3799,8 +3821,8 @@ def cloudif_project_terminal_ensure(handler):
         result,_=komodo_call("write","CreateTerminal",{"target":target,"name":terminal,"command":shell,"mode":"exec"})
         if not result.get("ok"): return send(handler,502,{"ok":False,"error":"terminal_create_failed","result":result,"audit":audit})
         created=True
-    url=f"https://komodoiff.duckdns.org/stacks/{audit['resolved_stack_id']}/service/{audit['service']}/terminal/{terminal}"
-    return send(handler,200,{"ok":True,"created":created,"terminal":terminal,"target":target,"server_id":audit["server_id"],"container_name":audit["container_name"],"url":url,"actor_username":actor,"project_owner":owner,"active_publication":active,"audit":audit})
+    url=(f"https://komodoiff.duckdns.org/stacks/{audit['resolved_stack_id']}/service/{audit['service']}/terminal/{terminal}" if use_stack else f"https://komodoiff.duckdns.org/servers/{audit['server_id']}/container/{audit['container_name']}/terminal/{terminal}")
+    return send(handler,200,{"ok":True,"created":created,"terminal":terminal,"target":target,"server_id":audit["server_id"],"container_name":audit["container_name"],"url":url,"actor_username":actor,"project_owner":owner,"active_publication":active,"stack_metadata":metadata,"target_mode":"stack" if use_stack else "container","audit":audit})
 
 def cloudif_publication_deploy(handler):
     import shutil

@@ -839,6 +839,15 @@ def _v101_forja_project_ensure(job, report):
 
         project_data = data.get("project") if isinstance(data.get("project"), dict) else {}
         forgejo_data = project_data.get("forgejo") if isinstance(project_data.get("forgejo"), dict) else {}
+        actual_owner=str(forgejo_data.get("owner") or "").strip().lower()
+        actual_url=str(forgejo_data.get("url") or "").strip()
+        if actual_owner != owner:
+            comp["ok"] = False
+            comp["status"] = "forgejo_owner_mismatch"
+            comp["actions"].append({"name":"forgejo_owner_validation","ok":False,"message":"O repositório foi criado em owner diferente do usuário solicitante.","expected_owner":owner,"actual_owner":actual_owner})
+            return False
+        if actual_url:
+            comp["url"] = actual_url
 
         if forgejo_data:
             comp["forja_agent_forgejo"] = {

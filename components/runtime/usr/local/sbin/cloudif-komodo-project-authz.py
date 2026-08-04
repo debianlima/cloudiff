@@ -12,6 +12,7 @@ def main():
     stack_ids=[str(x).strip() for x in (payload.get('stack_ids') or []) if str(x).strip()]
     if stack_id and stack_id not in stack_ids: stack_ids.insert(0,stack_id)
     repo_id=str(payload.get('repo_id') or '').strip()
+    server_id=str(payload.get('server_id') or '').strip()
     acl=payload.get('acl') if isinstance(payload.get('acl'),list) else []
     if not project or not owner or not stack_ids or not repo_id:
         print(json.dumps({'ok':False,'error':'missing_identity_or_resource'}));return 2
@@ -25,7 +26,7 @@ def main():
     previous=[]
     try: previous=json.loads(state_path.read_text()).get('targets') or []
     except Exception: pass
-    data={'project':project,'owner':owner,'stack_id':stack_id,'stack_ids':stack_ids,'repo_id':repo_id,'desired':desired,'previous':previous}
+    data={'project':project,'owner':owner,'stack_id':stack_id,'stack_ids':stack_ids,'repo_id':repo_id,'server_id':server_id,'desired':desired,'previous':previous}
     js=r'''
 const p=JSON.parse(process.env.CLOUDIF_AUTHZ_PAYLOAD);
 const d=db.getSiblingDB('komodo');
@@ -43,9 +44,9 @@ for(const item of p.desired){
   if(!g){d.UserGroup.insertOne({name:item.subject,everyone:false,users:[]});g=d.UserGroup.findOne({name:item.subject});}
   target={type:'UserGroup',id:hex(g._id)};
  }
- const resources=(p.stack_ids||[]).map(id=>({type:'Stack',id:id}));resources.push({type:'Repo',id:p.repo_id});
+ const resources=(p.stack_ids||[]).map(id=>({type:'Stack',id:id,level:item.level}));resources.push({type:'Repo',id:p.repo_id,level:item.level});if(p.server_id)resources.push({type:'Server',id:p.server_id,level:'None'});
  for(const resource of resources){
-  d.Permission.updateOne({'user_target.type':target.type,'user_target.id':target.id,'resource_target.type':resource.type,'resource_target.id':resource.id},{$set:{user_target:target,resource_target:resource,level:item.level,specific:['Terminal','Inspect']}},{upsert:true});
+  d.Permission.updateOne({'user_target.type':target.type,'user_target.id':target.id,'resource_target.type':resource.type,'resource_target.id':resource.id},{$set:{user_target:target,resource_target:resource,level:resource.level,specific:['Terminal','Inspect']}},{upsert:true});
   desired.push({user_target:target,resource_target:resource});
  }
 }
