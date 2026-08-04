@@ -348,10 +348,17 @@ def render_acl_modal(slug, user=None):
             table_rows.append('<tr><td colspan="4" class="small">Nenhuma permissão cadastrada para este projeto.</td></tr>')
 
         body = f"""
-<p class="small">Tabela real detectada: <code>{h(detected)}</code></p>
-{f'<p class="small">Dono detectado: <strong>{h(owner)}</strong></p>' if owner else ''}
+<div class="acl-modal-meta">
+  <div><span>Fonte de permissões</span><strong><code>{h(detected)}</code></strong></div>
+  {f'<div><span>Proprietário protegido</span><strong>{h(owner)}</strong></div>' if owner else ''}
+</div>
 
-<table class="cm-table">
+<section class="acl-modal-section acl-current-section">
+  <div class="acl-modal-section-head">
+    <div><h4>Permissões atuais</h4><p>Usuários e grupos com acesso ao projeto.</p></div>
+    <span class="acl-count">{len(rows)} acesso{'' if len(rows)==1 else 's'}</span>
+  </div>
+<table class="cm-table acl-current-table">
   <thead>
     <tr>
       <th>Tipo</th>
@@ -364,26 +371,30 @@ def render_acl_modal(slug, user=None):
     {''.join(table_rows)}
   </tbody>
 </table>
+</section>
 
-<h4>Adicionar permissão</h4>
-<p class="small">Pesquise usuários e grupos reais no diretório, ou informe exatamente o usuário/grupo.</p>
+<section class="acl-modal-section acl-add-section">
+  <div class="acl-modal-section-head">
+    <div><h4>Adicionar permissão</h4><p>Pesquise uma identidade real no diretório institucional.</p></div>
+  </div>
 
-<div class="cm-field">
+<div class="cm-field acl-search-field">
   <label>Buscar usuário ou grupo</label>
   <input id="acl_search_{h(modal_id)}" placeholder="Digite login, matrícula, nome completo ou grupo" autocomplete="off">
   <div id="acl_results_{h(modal_id)}" class="acl-search-results"></div>
   <div class="acl-search-help">Clique em um resultado para preencher automaticamente o usuário/grupo e o tipo de permissão.</div>
 </div>
 
-<form method="post" action="/cloudiff/portal/action/project_acl" onsubmit="return cloudifValidateAclSelection_{h(modal_id)}()">
+<form class="acl-add-form" method="post" action="/cloudiff/portal/action/project_acl" onsubmit="return cloudifValidateAclSelection_{h(modal_id)}()">
   <input type="hidden" name="op" value="add">
   <input type="hidden" name="slug" value="{h(slug)}">
   <input type="hidden" name="role" value="access">
   <input type="hidden" id="acl_principal_hidden_{h(modal_id)}" name="principal" required>
   <input type="hidden" id="acl_principal_type_hidden_{h(modal_id)}" name="principal_type" required>
 
+  <div class="acl-selection-grid">
   <div class="cm-field">
-    <label>Tipo</label>
+    <label>Tipo identificado</label>
     <select id="acl_principal_type_view_{h(modal_id)}" disabled>
       <option value="">Selecione na busca</option>
       <option value="user">Usuário</option>
@@ -395,11 +406,13 @@ def render_acl_modal(slug, user=None):
     <label>Usuário ou grupo selecionado</label>
     <input id="acl_principal_{h(modal_id)}" disabled placeholder="Selecione um resultado da busca">
   </div>
+  </div>
 
-  <div class="cm-actions">
+  <div class="cm-actions acl-form-actions">
     <button class="cm-btn cm-primary" type="submit">Adicionar permissão</button>
   </div>
 </form>
+</section>
 
 <script>
 (function(){{
@@ -590,21 +603,49 @@ def render_acl_modal(slug, user=None):
 """
 
     return f"""
+<style>
+#{h(modal_id)} .wizard-box{{width:min(880px,100%);overflow:hidden}}
+#{h(modal_id)} .wizard-head{{align-items:center;padding:22px 24px}}
+#{h(modal_id)} .wizard-head h3{{font-size:1.3rem}}
+#{h(modal_id)} .wizard-head p{{margin:4px 0 0;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.75rem}}
+#{h(modal_id)} .acl-modal-content{{display:grid;gap:18px;padding:20px 24px 24px}}
+#{h(modal_id)} .acl-modal-meta{{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}}
+#{h(modal_id)} .acl-modal-meta>div{{display:grid;gap:4px;padding:12px 14px;border:1px solid var(--c-border,#dce3ed);border-radius:10px;background:var(--c-surface-2,#f8fafc);min-width:0}}
+#{h(modal_id)} .acl-modal-meta span{{font-size:.68rem;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--c-muted,#64748b)}}
+#{h(modal_id)} .acl-modal-meta strong{{font-size:.82rem;overflow-wrap:anywhere}}
+#{h(modal_id)} .acl-modal-section{{display:grid;gap:14px;padding:16px;border:1px solid var(--c-border,#dce3ed);border-radius:12px;background:var(--c-surface,#fff)}}
+#{h(modal_id)} .acl-modal-section-head{{display:flex;align-items:flex-start;justify-content:space-between;gap:14px}}
+#{h(modal_id)} .acl-modal-section-head h4{{margin:0;font-size:.98rem}}
+#{h(modal_id)} .acl-modal-section-head p{{margin:3px 0 0;color:var(--c-muted,#64748b);font-size:.78rem}}
+#{h(modal_id)} .acl-count{{flex:none;padding:4px 8px;border-radius:999px;background:var(--c-surface-2,#f1f5f9);color:var(--c-muted,#64748b);font-size:.7rem;font-weight:800}}
+#{h(modal_id)} .acl-current-table{{margin:0}}
+#{h(modal_id)} .acl-current-table td,#{h(modal_id)} .acl-current-table th{{vertical-align:middle}}
+#{h(modal_id)} .acl-search-field{{position:relative;margin:0}}
+#{h(modal_id)} .acl-search-help{{margin-top:6px;font-size:.72rem;color:var(--c-muted,#64748b)}}
+#{h(modal_id)} .acl-selection-grid{{display:grid;grid-template-columns:minmax(180px,.7fr) minmax(0,1.3fr);gap:12px}}
+#{h(modal_id)} .acl-add-form{{display:grid;gap:12px}}
+#{h(modal_id)} .acl-form-actions{{display:flex;justify-content:flex-end;margin:2px 0 0}}
+#{h(modal_id)} .acl-form-actions .cm-btn{{width:auto;min-width:170px}}
+#{h(modal_id)} .pill{{white-space:nowrap}}
+@media(max-width:700px){{
+  #{h(modal_id)} .wizard-head{{padding:18px}}
+  #{h(modal_id)} .acl-modal-content{{padding:16px;gap:14px}}
+  #{h(modal_id)} .acl-modal-meta,#{h(modal_id)} .acl-selection-grid{{grid-template-columns:1fr}}
+  #{h(modal_id)} .acl-current-section{{overflow-x:auto}}
+  #{h(modal_id)} .acl-current-table{{min-width:620px}}
+  #{h(modal_id)} .acl-form-actions .cm-btn{{width:100%}}
+}}
+</style>
 <div id="{h(modal_id)}" class="wizard">
   <div class="wizard-box">
     <div class="wizard-head">
       <div>
-        <h3>Permissões</h3>
-        <p class="small">{h(slug)}</p>
+        <h3>Gerenciar permissões</h3>
+        <p>{h(slug)}</p>
       </div>
-      <button class="wizard-close" type="button" onclick="cloudifHideWizard('{h(modal_id)}')">×</button>
+      <button class="wizard-close" type="button" aria-label="Fechar" onclick="cloudifHideWizard('{h(modal_id)}')">×</button>
     </div>
-
-    {body}
-
-    <div class="cm-actions">
-      <a class="cm-btn cm-secondary" href="#" onclick="cloudifHideWizard('{h(modal_id)}')">Fechar</a>
-    </div>
+    <div class="acl-modal-content">{body}</div>
   </div>
 </div>
 """
