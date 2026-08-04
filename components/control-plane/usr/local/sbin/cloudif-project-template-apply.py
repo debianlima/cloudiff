@@ -37,6 +37,127 @@ def build(kind,slug,owner,tenant,num):
  nginx='server { listen 80; root /usr/share/nginx/html; index index.html; location = /health { default_type application/json; return 200 \'{"ok":true}\'; } location / { try_files $uri $uri/ /index.html; } }\n'
  return [('README.md',f'# {title}\n\nPortal: {portal}\nForgejo: {forge}\nKomodo: {kom}\nSupabase: {sup}\nSite: {site}\n'),('site/index.html',html),('nginx.conf',nginx),('.env',f'CLOUDIF_PUBLIC_NUMBER={num}\nCLOUDIF_DEPLOY_NUMBER=1\n'),('docker-compose.yml',compose)]
 
+def project_readme(slug,owner,tenant,num,runtime,php_version):
+ portal='https://cloudiff.duckdns.org/'
+ forge=f'https://cloudiff.duckdns.org/git/cloudif/cloudif-{slug}'
+ kom='https://komodoiff.duckdns.org/'
+ sup=f'https://{tenant}.cloudiff.duckdns.org/project/default'
+ site=f'https://{num}.cloudiff.duckdns.org/'
+ node_version=runtime.replace('node','') if runtime.startswith('node') else ''
+ if runtime.startswith('node'):
+  runtime_title=f'Node.js {node_version} + PHP {php_version}'
+  quick="""1. Coloque HTML, CSS, JavaScript, imagens e outros arquivos públicos dentro de `site/`.
+2. Coloque scripts PHP dentro de `php/`. Eles serão acessíveis por `/php/<arquivo>.php`.
+3. Edite `package.json` e `server.js` quando precisar de rotas, dependências ou APIs Node.
+4. Faça commit e push na branch `main`. O webhook do Forgejo solicita a atualização automática da stack.
+5. Acompanhe o deploy no Portal ou no Komodo e confirme a URL pública."""
+  structure=f"""| Caminho | Para que serve | Pode alterar? |
+|---|---|---|
+| `site/` | Frontend público: HTML, CSS, JavaScript, imagens e arquivos estáticos. A raiz `/` usa essa pasta. | **Sim.** Substitua todo o conteúdo de exemplo pelo seu site. |
+| `php/` | Aplicação PHP executada em um container Apache separado. A rota pública é `/php/`. | **Sim.** Coloque aqui seus arquivos `.php`, classes e includes. Preserve `health.php` ou forneça um healthcheck equivalente. |
+| `server.js` | Entrada Node. Serve `site/`, fornece `/health` e encaminha `/php` ao serviço PHP. | **Sim, com cuidado.** Deve escutar `process.env.PORT` com padrão `80` e manter `/health`. |
+| `package.json` | Dependências e comando de inicialização do Node. | **Sim.** O script `start` precisa iniciar o servidor sem modo interativo. |
+| `Dockerfile` | Constrói o container Node {node_version}. | **Avançado.** Preserve uma aplicação que escute na porta 80. |
+| `Dockerfile.php` | Constrói PHP {php_version} + Apache e copia `php/`. | **Avançado.** Pode instalar extensões, mantendo Apache e healthcheck compatíveis. |
+| `docker-compose.yml` | Liga `web` e `php`, healthchecks, rede e aliases usados pelo publicador. | **Gerenciado/avançado.** Não remova o serviço `web`, a rede, aliases ou healthchecks sem configuração equivalente. |
+| `.env` | Identificadores da publicação usados pelo Compose. | **Não alterar normalmente.** Não coloque senhas ou tokens aqui. |
+| `README.md` | Manual do repositório. | **Sim.** Pode complementar com a documentação do sistema. |"""
+  replace="""Você pode apagar o conteúdo de exemplo de `site/` e `php/` e colocar sua aplicação real. Não apague os arquivos de infraestrutura da raiz sem substituí-los por uma configuração compatível.
+
+Para um projeto Node comum, copie o código para a raiz ou organize subpastas e ajuste `package.json`, `server.js` e `Dockerfile`. Para frameworks que geram uma pasta de build, configure o servidor para entregar essa saída pela porta 80.
+
+O PHP já está habilitado. Um arquivo `php/relatorio.php` ficará disponível em `https://<numero>.cloudiff.duckdns.org/php/relatorio.php`."""
+ elif runtime=='php-apache':
+  runtime_title=f'PHP {php_version} + Apache'
+  quick="""1. Coloque a aplicação PHP dentro de `site/`.
+2. Mantenha um `index.php` ou outro arquivo inicial compatível com o Apache.
+3. Faça commit e push na branch `main`.
+4. Acompanhe o deploy no Portal ou no Komodo e confirme a URL pública."""
+  structure=f"""| Caminho | Para que serve | Pode alterar? |
+|---|---|---|
+| `site/` | Raiz pública do Apache. Recebe PHP, HTML, CSS, JavaScript e imagens. | **Sim.** Substitua o exemplo pela aplicação real. Preserve `health.php` ou forneça equivalente. |
+| `Dockerfile` | Constrói PHP {php_version} + Apache e copia `site/`. | **Avançado.** Pode instalar extensões e Composer, preservando porta 80 e saúde. |
+| `docker-compose.yml` | Define serviço web, aliases, rede e healthcheck. | **Gerenciado/avançado.** Preserve o serviço `web` e o contrato de publicação. |
+| `.env` | Identificadores da publicação. | **Não alterar normalmente.** Não armazene segredos. |
+| `README.md` | Manual do projeto. | **Sim.** |"""
+  replace="""Você pode apagar o conteúdo de exemplo de `site/` e colocar seu projeto PHP. O deploy será automático após o push na `main`, desde que o container continue saudável e atendendo na porta 80."""
+ else:
+  runtime_title='Site estático + Nginx'
+  quick="""1. Coloque HTML, CSS, JavaScript, imagens e outros arquivos dentro de `site/`.
+2. Mantenha `site/index.html` como página inicial ou ajuste o Nginx.
+3. Faça commit e push na branch `main`.
+4. Acompanhe o deploy e confirme a URL pública."""
+  structure="""| Caminho | Para que serve | Pode alterar? |
+|---|---|---|
+| `site/` | Conteúdo público servido pelo Nginx. | **Sim.** Substitua todo o exemplo. |
+| `nginx.conf` | Rotas, fallback de SPA e endpoint `/health`. | **Com cuidado.** Preserve `listen 80` e `/health`. |
+| `docker-compose.yml` | Serviço web, rede, aliases e healthcheck. | **Gerenciado/avançado.** Preserve o contrato de publicação. |
+| `.env` | Identificadores da publicação. | **Não alterar normalmente.** Não armazene segredos. |
+| `README.md` | Manual do projeto. | **Sim.** |"""
+  replace="""Você pode apagar o conteúdo de exemplo de `site/` e colocar seu site estático completo. O push na `main` aciona a atualização automática."""
+ return f"""# {slug.replace('-', ' ').title()}
+
+Projeto CloudIFF de **{owner}** · runtime **{runtime_title}**.
+
+## Atalhos
+
+- [Portal]({portal})
+- [Forgejo]({forge})
+- [Komodo]({kom})
+- [Supabase]({sup})
+- [Site publicado]({site})
+
+## Comece por aqui
+
+{quick}
+
+## Onde colocar o código
+
+{structure}
+
+## Posso substituir o projeto de exemplo?
+
+{replace}
+
+## Contrato mínimo de publicação
+
+A publicação automática depende destes requisitos:
+
+- a branch de implantação é `main`;
+- o serviço público do Compose se chama `web`;
+- o serviço `web` atende HTTP na porta `80` dentro do container;
+- `GET /health` responde com sucesso;
+- o serviço participa da rede externa `cloudif-publications`;
+- os aliases `cloudif-p${{CLOUDIF_PUBLIC_NUMBER}}-d${{CLOUDIF_DEPLOY_NUMBER}}-web` e `cloudif-p${{CLOUDIF_PUBLIC_NUMBER}}-active-web` permanecem disponíveis;
+- segredos não são enviados ao Git. Use o Portal, o tenant ou um mecanismo próprio de segredo.
+
+Se você trocar Dockerfiles ou Compose, a CloudIFF continuará publicando desde que esse contrato seja preservado.
+
+## O que acontece após um push
+
+```mermaid
+flowchart LR
+  A[Commit na main] --> B[Webhook Forgejo]
+  B --> C[CloudIFF valida o evento]
+  C --> D[Komodo atualiza e reconstrói a stack]
+  D --> E[Healthcheck]
+  E -->|saudável| F[Publicação disponível]
+  E -->|falhou| G[Erro e logs no Portal/Komodo]
+```
+
+## Banco de dados
+
+O tenant deste projeto é `{tenant}`. O código pode usar PostgreSQL, API REST, autenticação e Storage conforme as permissões concedidas no Portal. Não grave chaves administrativas no repositório.
+
+## Antes de alterar arquivos de infraestrutura
+
+1. Faça uma branch ou commit de segurança.
+2. Preserve o contrato mínimo acima.
+3. Valide localmente o build e o healthcheck.
+4. Faça push e acompanhe logs no Komodo.
+5. Em caso de falha, reverta o commit ou restaure a versão anterior pelo Portal.
+"""
+
 def runtime_overlay(template,php_version='8.3'):
  template=(template or 'static-nginx').strip().lower(); php_version=str(php_version or '8.3').strip()
  if php_version not in ('8.2','8.3','8.4'): raise ValueError('unsupported_php_version')
@@ -73,13 +194,14 @@ def main():
  if marker.exists():
   try:
    old_marker=json.loads(marker.read_text())
-   if old_marker.get('kind')==kind and old_marker.get('runtime_template')==runtime and old_marker.get('php_version','8.3')==php_version and old_marker.get('version')==7:
+   if old_marker.get('kind')==kind and old_marker.get('runtime_template')==runtime and old_marker.get('php_version','8.3')==php_version and old_marker.get('version')==8:
     print(json.dumps({'ok':True,'skipped':True,'reason':'template_already_applied','kind':kind,'project':slug,'public_number':num},ensure_ascii=False)); return
   except Exception: pass
  cfg=read_env('/etc/cloudif/forja-agent-client.env'); base=(cfg.get('FORJA_AGENT_URL') or 'http://10.62.91.2:18095').rstrip('/'); tok=cfg.get('FORJA_AGENT_TOKEN','')
  if not tok: raise SystemExit('missing_forja_token')
  results=[]
  files=merge_runtime(build(kind,slug,owner,tenant,num),runtime,php_version)
+ files=[(path,content) for path,content in files if path!='README.md']+[('README.md',project_readme(slug,owner,tenant,num,runtime,php_version))]
  for path,content in files:
   payload={'project_slug':slug,'path':path,'branch':'main','message':f'CloudIF: aplicar template {kind} ({path})','source':'project-template-automation','content_b64':base64.b64encode(content.encode()).decode()}
   last=None
@@ -89,6 +211,6 @@ def main():
   if not last or not last.get('ok'): raise RuntimeError(f'commit_failed:{path}:{last}')
   results.append({'path':path,'commit':last.get('commit_sha','')})
  marker.parent.mkdir(parents=True,exist_ok=True)
- marker.write_text(json.dumps({'kind':kind,'runtime_template':runtime,'php_version':php_version,'version':7,'project':slug,'public_number':num,'applied_at':time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime()),'files':results},ensure_ascii=False,indent=2)+'\n')
+ marker.write_text(json.dumps({'kind':kind,'runtime_template':runtime,'php_version':php_version,'version':8,'project':slug,'public_number':num,'applied_at':time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime()),'files':results},ensure_ascii=False,indent=2)+'\n')
  print(json.dumps({'ok':True,'kind':kind,'project':slug,'public_number':num,'files':results},ensure_ascii=False))
 if __name__=='__main__': main()
