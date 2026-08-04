@@ -5108,7 +5108,18 @@ def _rd_forja(path,payload,timeout=45):
 def _rd_canonical_repo(slug):
     slug=_rd_parse.quote(str(slug or '').strip().lower(),safe='-')
     name=slug if slug.startswith('cloudif-') else 'cloudif-'+slug
-    return name,'https://cloudiff.duckdns.org/git/cloudif/'+name
+    owner='';confirmed=''
+    try:
+        with sqlite3.connect(str(DB)) as con:
+            con.row_factory=sqlite3.Row
+            row=con.execute('select owner,repo_url from projects where slug=?',(slug,)).fetchone()
+            integration=con.execute('select forgejo_repo_url,repo_url from project_integrations where project=?',(slug,)).fetchone()
+            owner=str((row['owner'] if row else '') or '').strip().lower()
+            confirmed=str((integration['forgejo_repo_url'] if integration else '') or (integration['repo_url'] if integration else '') or '').strip()
+    except Exception:pass
+    if confirmed:return name,confirmed.rstrip('.git') if confirmed.endswith('.git') else confirmed
+    if not owner:raise RuntimeError('project_owner_missing')
+    return name,'https://cloudiff.duckdns.org/git/'+owner+'/'+name
 
 def _rd_projects(user):
     from cloudif_ui_data import discover_projects
@@ -5310,7 +5321,7 @@ if 'Portal' in globals() and not globals().get('_rd_wrapped'):
         if not p or not p['stack_id']:return _cpx_send_json(self,{'ok':False,'error':'Projeto sem stack vinculado'},422)
         try:
             repo_name,repo_url=_rd_canonical_repo(slug)
-            forgejo=_rd_forja('/forgejo/ensure-repo',{'project_slug':slug,'slug':slug,'name':p.get('name') or slug,'tenant':p.get('tenant') or 'unknown','forgejo_owner':'cloudif'},timeout=60)
+            forgejo=_rd_forja('/forgejo/ensure-repo',{'project_slug':slug,'slug':slug,'name':p.get('name') or slug,'tenant':p.get('tenant') or 'unknown','forgejo_owner':_rd_project_access(slug).get('owner') or user.get('username')},timeout=60)
             try:
                 with sqlite3.connect(str(DB)) as con:
                     con.execute('UPDATE projects SET repo_url=?, updated_at=CURRENT_TIMESTAMP WHERE slug=?',(repo_url,slug))

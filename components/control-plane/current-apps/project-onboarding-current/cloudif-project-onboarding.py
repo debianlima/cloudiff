@@ -56,7 +56,7 @@ def external(method,base,path,token,payload=None,timeout=120):
   return e.code,b
 def connector_reconcile(p):
  slug=str(p.get('slug') or '');name=str(p.get('name') or slug);tenant=str(p.get('tenant') or '');owner=str(p.get('owner') or '');lifecycle=str(p.get('status') or 'draft')
- payload={'project_slug':slug,'project':slug,'slug':slug,'name':name,'tenant':tenant,'owner_user':owner,'forgejo_owner':'cloudif','actor':'cloudif-project-onboarding','repo_url':str(p.get('repo_url') or ''),'action':'integrate','source':'cloudif-onboarding'}
+ payload={'project_slug':slug,'project':slug,'slug':slug,'name':name,'tenant':tenant,'owner_user':owner,'forgejo_owner':owner,'actor':'cloudif-project-onboarding','repo_url':str(p.get('repo_url') or ''),'action':'integrate','source':'cloudif-onboarding'}
  connectors={}
  fc,fd=external('POST',FORJA_URL,'/forgejo/ensure-repo',FORJA_TOKEN,payload,120)
  connectors['forgejo']={'status':'ready' if fc in (200,201,202) and fd.get('ok') else 'error','http':fc,'managed':True}

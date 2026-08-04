@@ -23,6 +23,14 @@ def seed_db(tenant):
  sql='''CREATE TABLE IF NOT EXISTS public.cloudif_tutorial_steps (id integer PRIMARY KEY,title text NOT NULL,completed boolean NOT NULL DEFAULT false,created_at timestamptz NOT NULL DEFAULT now()); ALTER TABLE public.cloudif_tutorial_steps ENABLE ROW LEVEL SECURITY; DROP POLICY IF EXISTS cloudif_tutorial_read ON public.cloudif_tutorial_steps; CREATE POLICY cloudif_tutorial_read ON public.cloudif_tutorial_steps FOR SELECT TO anon, authenticated USING (true); GRANT USAGE ON SCHEMA public TO anon, authenticated; GRANT SELECT ON public.cloudif_tutorial_steps TO anon, authenticated; INSERT INTO public.cloudif_tutorial_steps(id,title,completed) VALUES (1,'Entrar no Portal CloudIF',true),(2,'Editar um arquivo no Forgejo',false),(3,'Acompanhar o deploy no Komodo',false),(4,'Consultar o banco no Supabase',false),(5,'Entender os webhooks',false) ON CONFLICT(id) DO UPDATE SET title=excluded.title; NOTIFY pgrst, 'reload schema';'''
  p=subprocess.run(['docker','exec','-i',name,'psql','-U','postgres','-d','postgres','-v','ON_ERROR_STOP=1'],input=sql,text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=120)
  if p.returncode: raise RuntimeError('seed_db_failed:'+p.stderr[-300:])
+def canonical_repo_url(c,slug,owner):
+ row=c.execute('select forgejo_repo_url,repo_url from project_integrations where project=?',(slug,)).fetchone()
+ if row:
+  confirmed=str(row[0] or row[1] or '').strip()
+  if confirmed:return confirmed.rstrip('.git') if confirmed.endswith('.git') else confirmed
+ owner=str(owner or '').strip().lower()
+ if not owner:raise RuntimeError('project_owner_missing')
+ return f'https://cloudiff.duckdns.org/git/{owner}/cloudif-{slug}'
 def update_db(slug,tenant,owner,num,commit=''):
  c=sqlite3.connect(DB); c.row_factory=sqlite3.Row
  c.execute('''CREATE TABLE IF NOT EXISTS project_publications (id INTEGER PRIMARY KEY AUTOINCREMENT,project_slug TEXT NOT NULL,public_number INTEGER NOT NULL,deploy_number INTEGER NOT NULL,version TEXT NOT NULL DEFAULT '',commit_sha TEXT NOT NULL DEFAULT '',stable_hostname TEXT NOT NULL,version_hostname TEXT NOT NULL,status TEXT NOT NULL,is_active INTEGER NOT NULL DEFAULT 0,created_by TEXT NOT NULL DEFAULT '',created_at TEXT NOT NULL,published_at TEXT,message TEXT NOT NULL DEFAULT '',detail_json TEXT NOT NULL DEFAULT '{}',UNIQUE(project_slug,deploy_number),UNIQUE(version_hostname))''')
@@ -31,7 +39,8 @@ def update_db(slug,tenant,owner,num,commit=''):
  c.execute('''insert into project_publications(project_slug,public_number,deploy_number,version,commit_sha,stable_hostname,version_hostname,status,is_active,created_by,created_at,published_at,message,detail_json) values(?,?,?,?,?,?,?,?,?,?,?,?,?,?) on conflict(project_slug,deploy_number) do update set commit_sha=excluded.commit_sha,status='published',is_active=1,published_at=excluded.published_at,message=excluded.message''',(slug,num,1,'d1',commit,f'{num}.cloudiff.duckdns.org',f'{num}-d1.cloudiff.duckdns.org','published',1,owner,now,now,'Publicação inicial automática',json.dumps({'tenant':tenant})))
  cols=[r[1] for r in c.execute('pragma table_info(projects)')]
  updates={}
- for k,v in {'status':'published','repo_url':f'https://cloudiff.duckdns.org/git/cloudif/cloudif-{slug}','komodo_status':'running','updated_at':now}.items():
+ repo_url=canonical_repo_url(c,slug,owner)
+ for k,v in {'status':'published','repo_url':repo_url,'komodo_status':'running','updated_at':now}.items():
   if k in cols: updates[k]=v
  if updates:
   c.execute('update projects set '+','.join(k+'=?' for k in updates)+' where slug=?',list(updates.values())+[slug])
