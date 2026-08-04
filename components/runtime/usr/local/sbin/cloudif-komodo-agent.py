@@ -562,6 +562,39 @@ def stack_absent(stack_id, stack_name):
             return False, {"ok": True, "found": {"id": item_id, "name": item_name}}
     return True, {"ok": True, "found": None}
 
+def _cloudif_project_containers(project):
+    cmd = ["docker", "ps", "-a", "--filter", f"label=cloudif.project={project}", "--format", "{{.ID}}|{{.Names}}|{{.Labels}}"]
+    proc = subprocess.run(cmd, text=True, capture_output=True, timeout=30, check=False)
+    items = []
+    for line in (proc.stdout or "").splitlines():
+        parts = line.split("|", 2)
+        if len(parts) != 3:
+            continue
+        cid, name, labels = parts
+        lowered = (name + " " + labels).lower()
+        database = any(marker in lowered for marker in ("cloudif.role=database", "cloudif.service=database", "-db-", "_db_", "postgres", "supabase-db"))
+        items.append({"id": cid, "name": name, "labels": labels, "database": database})
+    return {"ok": proc.returncode == 0, "items": items, "stderr": (proc.stderr or "")[:500]}
+
+
+def _cloudif_remove_project_application_containers(project):
+    before = _cloudif_project_containers(project)
+    removed = []
+    errors = []
+    for item in before.get("items", []):
+        if item.get("database"):
+            continue
+        proc = subprocess.run(["docker", "rm", "-f", item["id"]], text=True, capture_output=True, timeout=60, check=False)
+        if proc.returncode == 0:
+            removed.append(item["name"])
+        else:
+            errors.append({"name": item["name"], "error": (proc.stderr or proc.stdout or "")[:500]})
+    after = _cloudif_project_containers(project)
+    remaining_application = [x for x in after.get("items", []) if not x.get("database")]
+    preserved_database = [x["name"] for x in after.get("items", []) if x.get("database")]
+    return {"ok": not errors and not remaining_application, "removed": removed, "errors": errors, "remaining_application": remaining_application, "preserved_database": preserved_database}
+
+
 def stack_action(action, payload):
     project = safe_slug(payload.get("project") or "")
     tenant = safe_slug(payload.get("tenant") or "")
@@ -656,7 +689,10 @@ def stack_action(action, payload):
         else:
             delete_repo = {"ok": True, "skipped": True, "reason": "repo_not_found"}
         repo_verified_absent, repo_absence_check = repo_absent(repo_id, repo_name)
-        ok = bool(operation_ok and delete_stack.get("ok") and verified_absent and delete_repo.get("ok") and repo_verified_absent)
+        container_cleanup = _cloudif_remove_project_application_containers(project)
+        ok = bool(operation_ok and delete_stack.get("ok") and verified_absent and delete_repo.get("ok") and repo_verified_absent and container_cleanup.get("ok"))
+    else:
+        container_cleanup = {"ok": action != "destroy", "skipped": True}
 
     result = {
         "ok": ok,
@@ -675,6 +711,7 @@ def stack_action(action, payload):
         "delete_repo": delete_repo,
         "repo_verified_absent": repo_verified_absent,
         "repo_absence_check": repo_absence_check,
+        "container_cleanup": container_cleanup,
         "message": ("Stack destruída e ausência confirmada." if action == "destroy" and ok else "Ação executada.") if ok else "Ação não concluída ou ausência da stack não confirmada.",
     }
 
