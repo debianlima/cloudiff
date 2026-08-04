@@ -17,7 +17,7 @@ class UserOwnedForgejoAndKomodoAclTests(unittest.TestCase):
   self.assertIn('forgejo_user_not_found',self.forja)
   self.assertIn('forgejo_owner_kind',self.forja)
  def test_komodo_owner_and_acl_permissions(self):
-  for m in ("'level':'Write'","'level':'Execute'","specific:['Terminal','Inspect']","resource of [{type:'Stack'","{type:'Repo'"):
+  for m in ("'level':'Write'","'level':'Execute'","specific:['Terminal','Inspect']","(p.stack_ids||[]).map","{type:'Repo'"):
    self.assertIn(m,self.helper)
  def test_acl_changes_trigger_komodo_sync(self):
   self.assertIn('def sync_komodo_acl',self.acl)
