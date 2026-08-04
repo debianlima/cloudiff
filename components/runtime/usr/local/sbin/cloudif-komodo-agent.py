@@ -3793,13 +3793,15 @@ networks:
                 final = updates.get(opid) if isinstance(updates, dict) else {}
             except Exception:
                 final = {}
-        if healthy:
+        operation_complete = (not opid) or bool(final and str(final.get("status") or "").lower()=="complete" and final.get("success") is True)
+        if healthy and operation_complete:
             break
         if final and final.get("success") is False:
             break
         time.sleep(4)
-    terminal = _cloudif_ensure_container_terminal(server_id, container) if healthy else {"ok": False, "created": False, "error": "container_not_healthy"}
-    ok = bool(update.get("ok") and dep.get("ok") and healthy and terminal.get("ok"))
+    operation_complete = (not opid) or bool(final and str(final.get("status") or "").lower()=="complete" and final.get("success") is True)
+    terminal = _cloudif_ensure_container_terminal(server_id, container) if healthy and operation_complete else {"ok": False, "created": False, "error": "container_or_operation_not_ready"}
+    ok = bool(update.get("ok") and dep.get("ok") and healthy and operation_complete and terminal.get("ok"))
     return send(handler, 200 if ok else 422, {
         "ok": ok, "project": project, "public_number": public_number, "deploy_number": deploy_number,
         "commit": commit, "stack_id": stack_id, "stack_name": name, "container": container,
@@ -3851,12 +3853,17 @@ def cloudif_publication_promote(handler):
             if name != target:
                 reconnect(name, False)
         reconnect(target, True)
+        deadline=time.time()+10
+        while time.time()<deadline and active_alias not in aliases(target):
+            time.sleep(1)
+        if active_alias not in aliases(target):
+            raise RuntimeError("active_alias_not_applied")
     except Exception as e:
         if previous:
             try: reconnect(previous, True)
             except Exception: pass
         return send(handler, 422, {"ok": False, "error": "promotion_failed", "detail": str(e), "previous": previous})
-    return send(handler, 200, {"ok": True, "public_number": public_number, "deploy_number": deploy_number, "target": target, "previous": previous})
+    return send(handler, 200, {"ok": True, "public_number": public_number, "deploy_number": deploy_number, "target": target, "previous": previous, "active_alias": active_alias, "aliases": aliases(target)})
 
 
 def cloudif_container_telemetry(handler):
