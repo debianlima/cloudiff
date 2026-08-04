@@ -483,12 +483,6 @@ def _install() -> None:
                             selected_project = (query.get("project") or [""])[0]
                             owner = sys.modules.get(handler_class.__module__)
                             adapted_markup = transform(markup, identity(self.headers), tab or "publicacao", selected_project)
-                            if tab == "agentes":
-                                try:
-                                    identities = getattr(owner, "_oi_panel")(self.user())
-                                    adapted_markup = adapted_markup.replace("</main>", identities + "</main>", 1)
-                                except Exception:
-                                    pass
                             if tab == "admin" and tenant_admin_allowed(self):
                                 from cloudif_admin_tenant_delete import render_panel
                                 owner = sys.modules.get(handler_class.__module__)
