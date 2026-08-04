@@ -26,7 +26,7 @@ def _runtime_from_job(slug):
             job=json.load(open(path)); runtime=str(job.get('runtime_template') or ''); php=str(job.get('php_version') or '')
             node=runtime.replace('node','') if runtime.startswith('node') else ''
             if node or php:
-                return {'node':node or '—','php':php or '—','apache':'2.4','label':f"Apache 2.4 + PHP {php or '—'} + Node.js {node or '—'}"}
+                return {'node':node or '—','php':php or '—','apache':'2.4','environment':'Apache + PHP + Node.js','versions':f"Apache 2.4 · PHP {php or '—'} · Node.js {node or '—'}",'framework':'Aplicação PHP com API Node.js'}
         except Exception: pass
     return {}
 
@@ -64,13 +64,7 @@ def _project_context(slug, framework_hint=''):
             healthy=bool(audit.get('healthy')); state=str(audit.get('state') or ('running' if healthy else 'atenção'))
             context['service_status']='Rodando e saudável' if healthy else state
             if healthy: context['security']='HTTPS ativo · Health validado'
-        if context['service_status']!='Rodando e saudável':
-            try:
-                jobs=sorted(glob.glob('/srv/cloudif/jobs/project-provision-*-'+slug+'.json'),key=lambda x:os.path.getmtime(x),reverse=True)
-                if jobs and json.load(open(jobs[0])).get('status')=='succeeded':
-                    context['service_status']='Rodando e saudável'; context['security']='HTTPS ativo · Health validado'
-            except Exception: pass
-        if runtime and not context['framework']: context['framework']=runtime.get('label') or ''
+        if runtime and not context['framework']: context['framework']=runtime.get('framework') or 'Aplicação web'
         if not context['database']:
             try:
                 tenant=con.execute('select tenant from project_tenants where project=? order by is_primary desc,id limit 1',(slug,)).fetchone()
@@ -106,12 +100,13 @@ def _project_information(context):
         database_value=f'<strong>{h(database or "Nenhum banco vinculado")}</strong>'
     return (
         '<div class="publication-information">'
-        f'<div><span>Framework</span><strong>{h(context.get("framework"))}</strong></div>'
-        f'<div><span>Serviço web</span><strong>{h(context.get("service_status"))}</strong></div>'
-        f'<div><span>Versões</span><strong>{h((context.get("runtime") or {}).get("label") or context.get("framework"))}</strong></div>'
-        f'<div><span>Banco vinculado</span>{database_value}</div>'
-        f'<div><span>Segurança</span><strong>{h(context.get("security"))}</strong></div>'
-        f'<div><span>Repositório Forge</span>{repo_value}</div>'
+        f'<div class="publication-info-card publication-info-primary"><span>Framework</span><strong>{h(context.get("framework"))}</strong><small>Estrutura da aplicação</small></div>'
+        f'<div class="publication-info-card"><span>Ambiente</span><strong>{h((context.get("runtime") or {}).get("environment") or "Não identificado")}</strong><small>Servidor e interpretadores</small></div>'
+        f'<div class="publication-info-card"><span>Versões</span><strong>{h((context.get("runtime") or {}).get("versions") or "Não identificadas")}</strong><small>Runtime provisionado</small></div>'
+        f'<div class="publication-info-card"><span>Serviço web</span><strong>{h(context.get("service_status"))}</strong><small>Estado real do container</small></div>'
+        f'<div class="publication-info-card"><span>Banco vinculado</span>{database_value}<small>Tenant da aplicação</small></div>'
+        f'<div class="publication-info-card"><span>Segurança</span><strong>{h(context.get("security"))}</strong><small>HTTPS e healthcheck</small></div>'
+        f'<div class="publication-info-card publication-info-wide"><span>Repositório Forge</span>{repo_value}<small>Código-fonte do projeto</small></div>'
         '</div>'
     )
 

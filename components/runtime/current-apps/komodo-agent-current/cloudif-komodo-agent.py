@@ -3239,7 +3239,12 @@ def _cloudif_project_audit_data(payload):
             if raw_id:
                 stack_id=str(raw_id); stack,_=komodo_call('read','GetStack',{'stack':stack_id}); data=stack.get('data') if isinstance(stack.get('data'),dict) else {}
     info=data.get('info') if isinstance(data.get('info'),dict) else {}
+    config=data.get('config') if isinstance(data.get('config'),dict) else {}
+    stack_root=Path('/etc/komodo/stacks')/('cloudif-'+project)
+    unified_compose=stack_root/'.cloudif'/'docker-compose.yml'
     missing=list(info.get('missing_files') or [])
+    if unified_compose.is_file():
+        missing=[x for x in missing if str(x) not in ('docker-compose.yml','.cloudif/docker-compose.yml')]
     services_result,_=komodo_call('read','ListStackServices',{'stack':stack_id})
     services=services_result.get('data') if isinstance(services_result.get('data'),list) else []
     service_row=next((x for x in services if isinstance(x,dict) and x.get('service')==service),None)
@@ -3247,6 +3252,18 @@ def _cloudif_project_audit_data(payload):
         service_row=next((x for x in services if isinstance(x,dict) and isinstance(x.get('container'),dict) and str((x.get('container') or {}).get('state') or '').lower()=='running'),service_row)
     if service_row and service_row.get('service'): service=safe_slug(service_row.get('service'))
     container=(service_row or {}).get('container') if isinstance((service_row or {}).get('container'),dict) else {}
+    if not container or str(container.get('state') or '').lower()!='running':
+        expected_compose=str(unified_compose.resolve())
+        try:
+            ids=subprocess.check_output(['docker','ps','-aq'],text=True,timeout=15).split()
+            if ids:
+                rows=json.loads(subprocess.check_output(['docker','inspect',*ids],text=True,timeout=30))
+                local=next((row for row in rows if str(((row.get('Config') or {}).get('Labels') or {}).get('com.docker.compose.service') or '')==service and expected_compose in str(((row.get('Config') or {}).get('Labels') or {}).get('com.docker.compose.project.config_files') or '').split(',') and bool((row.get('State') or {}).get('Running'))),None)
+                if local:
+                    state=local.get('State') or {};cfg=local.get('Config') or {}
+                    container={'name':str(local.get('Name') or '').lstrip('/'),'state':'running','status':str(state.get('Status') or 'running'),'image':str(cfg.get('Image') or ''),'stats':{},'local_discovered':True}
+        except Exception:
+            pass
     if not container or str(container.get('state') or '').lower()!='running':
         all_result,_=komodo_call('read','ListAllDockerContainers',{})
         all_items=all_result.get('data') if isinstance(all_result,dict) else all_result
@@ -3259,7 +3276,15 @@ def _cloudif_project_audit_data(payload):
         if found:
             container=dict(found)
     state=str(container.get('state') or 'missing').lower()
-    server_id=str(container.get('server_id') or '')
+    server_id=str(container.get('server_id') or info.get('server_id') or config.get('server_id') or '')
+    if not server_id and state=='running':
+        servers_result,_=komodo_call('read','ListServers',{})
+        server_items=servers_result.get('data') if isinstance(servers_result.get('data'),list) else []
+        preferred=next((x for x in server_items if isinstance(x,dict) and x.get('name')=='Local'),None) or next((x for x in server_items if isinstance(x,dict) and str((x.get('info') or {}).get('state') or '').lower()=='ok'),None)
+        if preferred:
+            raw_id=preferred.get('_id') or preferred.get('id') or ''
+            if isinstance(raw_id,dict): raw_id=raw_id.get('$oid') or ''
+            server_id=str(raw_id or '')
     container_name=str(container.get('name') or '')
     target={'type':'Container','params':{'server':server_id,'container':container_name}} if server_id and container_name else {'type':'Stack','params':{'stack':stack_id,'service':service}}
     listed,_=komodo_call('read','ListTerminals',{'target':target}); items=listed.get('data') if isinstance(listed.get('data'),list) else []
@@ -3268,7 +3293,7 @@ def _cloudif_project_audit_data(payload):
     terminal_ok=bool(item and cmd.endswith(' '+shell))
     running=state=='running'
     issues=[]
-    if not stack.get('ok'): issues.append('stack_unavailable')
+    if not stack.get('ok') and not container.get('local_discovered'): issues.append('stack_unavailable')
     if missing: issues.append('missing_compose')
     if not running: issues.append('stack_not_running')
     if not terminal_ok: issues.append('terminal_invalid')

@@ -8,7 +8,7 @@ class ProjectRuntimeStatusUITests(unittest.TestCase):
         cls.base=Path('components/control-plane/current-apps/portal-current/cloudif-admin-portal-base.py').read_text()
         cls.agent=Path('components/runtime/current-apps/komodo-agent-current/cloudif-komodo-agent.py').read_text()
     def test_publication_detects_runtime_from_project_job(self):
-        for marker in ('def _runtime_from_job','Apache 2.4 + PHP','Node.js','runtime_template','php_version'):
+        for marker in ('def _runtime_from_job','Apache 2.4 · PHP','Node.js','runtime_template','php_version'):
             self.assertIn(marker,self.pub)
     def test_publication_shows_web_service_and_versions(self):
         for marker in ('Serviço web','Versões','Rodando e saudável','/komodo/project/audit'):
