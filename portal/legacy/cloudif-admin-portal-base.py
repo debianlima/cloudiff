@@ -1139,7 +1139,6 @@ def render_admin(user):
         <label>Tenant</label>
         <select name="tenant">{tenant_opts}</select>
         <button class="btn" name="op" value="sync_roles">Sync roles</button>
-        <button class="btn blue" name="op" value="render_router">Render router</button>
         <button class="btn amber" name="op" value="ensure">Ensure/restore</button>
       </form>
     </div>
@@ -3044,47 +3043,46 @@ def tenant_acl_rows(tenant):
 
 def tenant_acl_html(tenant, user):
     rows = tenant_acl_rows(tenant)
-
-    if rows:
-        trs = ""
-        for r in rows:
-            remove = ""
-            if user["admin"]:
-                remove = f"""
+    owner = (tenant or "").strip()
+    extras = [
+        row for row in rows
+        if not (row["subject_type"] == "user" and norm(row["subject"]) == norm(owner))
+    ]
+    owner_row = (
+        f'<tr class="tenant-owner-row"><td>Proprietário</td><td><strong>{h(owner)}</strong>'
+        '<span class="pill ok tenant-owner-badge">Dono do banco</span></td>'
+        '<td><span class="tenant-owner-lock" title="O proprietário não pode ser removido">Protegido</span></td></tr>'
+    )
+    trs = owner_row
+    for row in extras:
+        remove = ""
+        if user["admin"]:
+            remove = f"""
 <form method="post" action="{url('/action/tenant_acl')}" style="display:inline">
   <input type="hidden" name="op" value="remove">
-  <input type="hidden" name="id" value="{h(r['id'])}">
+  <input type="hidden" name="id" value="{h(row['id'])}">
   <button class="btn red" type="submit">Remover</button>
 </form>"""
-            trs += f"<tr><td>{h(r['subject_type'])}</td><td>{h(r['subject'])}</td><td>{remove}</td></tr>"
-        table = f"<table><tr><th>Tipo</th><th>Usuário/Grupo</th><th>Ação</th></tr>{trs}</table>"
-    else:
-        table = '<p class="small">Nenhuma permissão adicional cadastrada para este banco.</p>'
-
+        kind = "Usuário" if row["subject_type"] == "user" else "Grupo"
+        trs += f'<tr><td>{h(kind)}</td><td>{h(row["subject"])}</td><td>{remove}</td></tr>'
+    table = f'<table class="tenant-acl-table"><tr><th>Vínculo</th><th>Usuário/Grupo</th><th>Ação</th></tr>{trs}</table>'
     if not user["admin"]:
         return table
-
     return table + f"""
 <div class="grid2">
   <div class="box">
     <h3>Adicionar permissão ao banco</h3>
-    <form method="post" action="{url('/action/tenant_acl')}">
+    <form method="post" action="{url('/action/tenant_acl')}" data-tenant-acl-form>
       <input type="hidden" name="op" value="add">
       <input type="hidden" name="tenant" value="{h(tenant)}">
+      <input type="hidden" name="identity_verified" value="">
       <label>Tipo</label>
-      <select name="subject_type">
-        <option value="user">Usuário</option>
-        <option value="group">Grupo</option>
-      </select>
+      <select name="subject_type"><option value="user">Usuário</option><option value="group">Grupo</option></select>
       <label>Usuário ou grupo</label>
-      <input name="subject" placeholder="ex: aluno123 ou CloudIF-Turma-2026">
-      <button class="btn" type="submit">Adicionar</button>
+      <input name="subject" placeholder="Digite para pesquisar no provedor de identidade" autocomplete="off">
+      <p class="small tenant-identity-note">Selecione um resultado validado antes de adicionar.</p>
+      <button class="btn" type="submit" disabled>Adicionar</button>
     </form>
-  </div>
-  <div class="box">
-    <h3>Busca AD</h3>
-    <p class="small">Pesquise o nome correto na Administração e volte para vincular.</p>
-    <a class="btn light" href="{url('?tab=admin')}">Ir para Administração</a>
   </div>
 </div>"""
 
@@ -3461,18 +3459,39 @@ def do_POST_v21(self):
             tenant = slugify(val("tenant"))
             stype = val("subject_type")
             subject = val("subject").strip()
+            verified = val("identity_verified").strip()
             if stype not in ["user", "group"]:
                 stype = "user"
-            if subject:
-                con.execute("""
-                  INSERT OR IGNORE INTO tenant_acl(tenant,subject_type,subject)
-                  VALUES(?,?,?)
-                """, (tenant, stype, subject))
-                con.commit()
-                log_action(user["username"], "tenant_acl_add", tenant, 0, f"{stype}:{subject}", "")
+            exact = False
+            if subject and verified == f"{stype}:{subject}":
+                try:
+                    import cloudif_ad_directory_module as directory
+                    directory_user = directory.user_from_headers(self.headers)
+                    payload = directory.search(subject, stype, user=directory_user, diagnostics=False)
+                    exact = any(
+                        norm(item.get("principal") or "") == norm(subject)
+                        and (item.get("type") or "") == stype
+                        for item in (payload.get("items") or [])
+                    )
+                except Exception as exc:
+                    log_action(user["username"], "tenant_acl_identity_lookup_failed", tenant, 1, subject, str(exc)[:300])
+            if not exact:
+                con.close()
+                log_action(user["username"], "tenant_acl_add_rejected", tenant, 1, f"{stype}:{subject}", "identidade não validada")
+                return self.send_html(page(user, "bancos", '<div class="card"><p class="pill bad">Selecione um usuário ou grupo retornado pelo provedor de identidade.</p><a class="btn light" href="/?tab=bancos">Voltar</a></div>'), 422)
+            con.execute("""
+              INSERT OR IGNORE INTO tenant_acl(tenant,subject_type,subject)
+              VALUES(?,?,?)
+            """, (tenant, stype, subject))
+            con.commit()
+            log_action(user["username"], "tenant_acl_add", tenant, 0, f"{stype}:{subject}", "identity_provider_verified")
         elif op == "remove":
             rid = val("id")
             row = con.execute("SELECT * FROM tenant_acl WHERE id=?", (rid,)).fetchone()
+            if row and row["subject_type"] == "user" and norm(row["subject"]) == norm(row["tenant"]):
+                con.close()
+                log_action(user["username"], "tenant_acl_remove_owner_blocked", row["tenant"], 1, str(dict(row)), "proprietário imutável")
+                return self.send_html(page(user, "bancos", '<div class="card"><p class="pill bad">O proprietário do banco não pode ser removido.</p><a class="btn light" href="/?tab=bancos">Voltar</a></div>'), 409)
             con.execute("DELETE FROM tenant_acl WHERE id=?", (rid,))
             con.commit()
             log_action(user["username"], "tenant_acl_remove", row["tenant"] if row else rid, 0, str(dict(row)) if row else "", "")
@@ -5405,7 +5424,8 @@ if 'Portal' in globals() and not globals().get('_ap_portal_wrapped'):
             code,data=_ap_panel.request(_ap_cfg('CLOUDIF_APPROVAL_URL','http://127.0.0.1:18204'),_ap_cfg('CLOUDIF_APPROVAL_TOKEN',''),'POST',endpoint,payload)
             if code!=200 or not data.get('ok'):return _cloudif_security_reject(self,'A decisão não pôde ser registrada.',409)
             log_action(user['username'],'approval_'+operation,aid,0,item['project_slug'],'')
-            return self.redirect('/cloudiff/portal/?tab=aprovacoes')
+            return_to=val('return_to').strip()
+            return self.redirect('/cloudiff/portal/?tab='+('agentes' if return_to=='agentes' else 'aprovacoes'))
         return _ap_prev_post(self)
     Portal.do_GET=_ap_get;Portal.do_POST=_ap_post;_ap_portal_wrapped=True
 # CloudIF human approvals END
@@ -5513,7 +5533,7 @@ if 'Portal' in globals() and not globals().get('_ap_tab_wrapped'):
 # CloudIF AI agents guide BEGIN
 import cloudif_ai_agents_guide as _aig
 def _aig_data(user):return _aig.guide_data(_oi_visible(user))
-def _aig_render(user):return _aig.render(_oi_visible(user),_prod_csrf_token(user))
+def _aig_render(user):return _aig.render(_oi_visible(user),_prod_csrf_token(user),_ap_visible(user),_ap_can_decide(user))
 if 'Portal' in globals() and not globals().get('_aig_wrapped'):
     _aig_prev_get=Portal.do_GET
     def _aig_get(self):
@@ -5865,7 +5885,8 @@ if 'Portal' in globals() and not globals().get('_tenant_control134_wrapped'):
     _tenant_control134_prev_post=Portal.do_POST
     def _tenant_control134_post(self):
         path=urllib.parse.urlparse(self.path).path.rstrip('/')
-        if path not in ('/cloudiff/portal/action/project_action','/cloudif/portal/action/project_action','/action/project_action','/project_action'):
+        internal_action=(self.headers.get('X-CloudIF-Action') or '').strip()
+        if path not in ('/cloudiff/portal/action/project_action','/cloudif/portal/action/project_action','/action/project_action','/project_action') and not (path in ('','/cloudiff/portal','/cloudif/portal') and internal_action=='project_action'):
             return _tenant_control134_prev_post(self)
         if not _cloudif_security_valid_origin(self):
             return _cloudif_security_reject(self,'Origem da requisição não autorizada.',403)
@@ -5893,11 +5914,18 @@ if 'Portal' in globals() and not globals().get('_tenant_control134_wrapped'):
                 return self.send_html(page(user,'projetos',result),200)
             target=str(result.get('slug') or slug);msg=str(result.get('message') or 'Projeto salvo.')
             log_action(user['username'],'project_action',target,0,json.dumps({'action':action,'global_admin':global_admin},separators=(',',':')),'')
+            if (self.headers.get('X-CloudIF-Async') or '').strip()=='project-provision':
+                payload={'ok':True,'slug':target,'tenant':str(result.get('tenant') or ''),'message':msg,'status_url':'/cloudiff/portal/api/project-provision-status?slug='+urllib.parse.quote(target)}
+                raw=json.dumps(payload,ensure_ascii=False,separators=(',',':')).encode('utf-8')
+                self.send_response(202);self.send_header('Content-Type','application/json; charset=utf-8');self.send_header('Cache-Control','no-store');self.send_header('X-Content-Type-Options','nosniff');self.send_header('Content-Length',str(len(raw)));self.end_headers();self.wfile.write(raw);return
             return self.redirect('/?tab=projetos&project='+urllib.parse.quote(target)+'&msg='+urllib.parse.quote(msg))
         except PermissionError as e:
             log_action(user['username'],'project_action',slug,1,'',str(e));return _cloudif_security_reject(self,str(e),403)
         except Exception as e:
-            log_action(user['username'],'project_action',slug,1,'',type(e).__name__+': '+str(e));return self.redirect('/?tab=projetos&project='+urllib.parse.quote(slug)+'&msg='+urllib.parse.quote('Erro ao salvar projeto: '+str(e)))
+            log_action(user['username'],'project_action',slug,1,'',type(e).__name__+': '+str(e))
+            if (self.headers.get('X-CloudIF-Async') or '').strip()=='project-provision':
+                raw=json.dumps({'ok':False,'error':'project_provision_start_failed','detail':str(e)[:500]},ensure_ascii=False,separators=(',',':')).encode('utf-8');self.send_response(500);self.send_header('Content-Type','application/json; charset=utf-8');self.send_header('Cache-Control','no-store');self.send_header('Content-Length',str(len(raw)));self.end_headers();self.wfile.write(raw);return
+            return self.redirect('/?tab=projetos&project='+urllib.parse.quote(slug)+'&msg='+urllib.parse.quote('Erro ao salvar projeto: '+str(e)))
     Portal.do_POST=_tenant_control134_post;_tenant_control134_wrapped=True
 # CloudIF unified tenant/project action control END
 
@@ -5961,6 +5989,7 @@ _PM197_CSS=r'''<style id="cloudif-project-management-final">
 #pm197_new .pm-new-step.is-active{display:grid!important;gap:14px}
 #pm197_new [hidden]{display:none!important}
 body.cloudif-modal-open{overflow:hidden}
+.pm-live{display:grid;gap:16px;padding:24px 28px 28px}.pm-live[hidden]{display:none!important}.pm-live-status{display:flex;align-items:center;gap:12px;padding:14px;border:1px solid #cfe3f8;border-radius:12px;background:#edf6ff}.pm-live-dots{display:inline-flex;gap:4px}.pm-live-dots i{width:6px;height:6px;border-radius:50%;background:#111;animation:pmLivePulse 1.1s infinite ease-in-out}.pm-live-dots i:nth-child(2){animation-delay:.18s}.pm-live-dots i:nth-child(3){animation-delay:.36s}@keyframes pmLivePulse{0%,80%,100%{opacity:.25;transform:translateY(0)}40%{opacity:1;transform:translateY(-3px)}}.pm-live-progress{display:grid;gap:7px}.pm-live-progress progress{width:100%;height:12px;accent-color:#8fb8e8}.pm-live-steps{display:grid;gap:9px;margin:0;padding:0;list-style:none}.pm-live-step{display:grid;grid-template-columns:26px 1fr auto;gap:12px;align-items:center;padding:12px;border:1px solid #dbeafe;border-radius:11px;background:#fff}.pm-live-step.pending{opacity:.58}.pm-live-step.running{background:#edf6ff;border-color:#8fb8e8}.pm-live-step.done{background:#f0fdf4;border-color:#bbf7d0}.pm-live-step.failed{background:#fef2f2;border-color:#fecaca}.pm-live-step-icon{width:24px;height:24px;display:grid;place-items:center;border-radius:50%;background:#e5e7eb;font-size:.72rem;font-weight:900}.pm-live-step.running .pm-live-step-icon{background:#8fb8e8}.pm-live-step.done .pm-live-step-icon{background:#86efac}.pm-live-step.failed .pm-live-step-icon{background:#fca5a5}.pm-live-step small{display:block;color:#111;margin-top:2px}.pm-live-terminal{padding:15px;border-radius:11px}.pm-live-terminal.ok{background:#f0fdf4;border:1px solid #bbf7d0}.pm-live-terminal.bad{background:#fef2f2;border:1px solid #fecaca}.pm-live-actions{display:flex;justify-content:flex-end;gap:10px}
 @media(max-width:860px){.pm-new-layout{grid-template-columns:1fr}.pm-new-summary{position:static}.pm-choice-grid{grid-template-columns:1fr}.pm-runtime-options{grid-template-columns:1fr}.pm-new-steps{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:560px){.cloudif-wizard{padding:8px}.cloudif-wizard>.wizard-box,.cloudif-wizard>.card{max-height:97vh;border-radius:14px}.cloudif-wizard .wizard-head{padding:18px}.pm-new-shell{padding:0 18px 18px}.pm-new-steps{grid-template-columns:1fr}.pm-new-footer{margin:20px -18px -18px;padding:14px 18px;display:grid;grid-template-columns:1fr}.pm-new-footer .btn{width:100%!important}.pm-new-footer .btn:first-child{order:0}.pm-new-footer .btn:last-child{order:1}}
 @media(max-width:820px){.project-final__grid{grid-template-columns:1fr}.project-management-final__head{align-items:flex-start}.project-final>summary{align-items:flex-start}.project-final__actions,.project-final__actions form{display:grid;grid-template-columns:1fr;width:100%}.project-final__actions .btn{width:100%!important;text-align:center}}
 </style>'''
@@ -5980,6 +6009,19 @@ def _pm197_job_state(slug):
         return {'status':str(data.get('status') or 'unknown'),'step':str(data.get('current_step') or ''),'error':str(data.get('last_error') or ''),'updated_at':str(data.get('updated_at') or '')}
     except Exception:
         return {'status':'unknown','step':'','error':'','updated_at':''}
+
+def _pm197_provision_status(slug):
+    import pathlib,json
+    jobs=sorted(pathlib.Path('/srv/cloudif/jobs').glob('project-provision-*-'+slug+'.json'),key=lambda x:x.stat().st_mtime,reverse=True)
+    if not jobs:return {'ok':False,'error':'job_not_found','slug':slug}
+    data=json.loads(jobs[0].read_text(encoding='utf-8'))
+    report={}
+    report_path=pathlib.Path('/srv/cloudif/provisioning/projects')/slug/'provision-report.json'
+    if report_path.is_file():
+        try:report=json.loads(report_path.read_text(encoding='utf-8'))
+        except Exception:report={}
+    components=report.get('components') or {}
+    return {'ok':True,'slug':slug,'status':str(data.get('status') or 'unknown'),'current_step':str(data.get('current_step') or ''),'last_error':str(next((a.get('message') or a.get('detail') for c in (report.get('components') or {}).values() for a in (c.get('actions') or []) if a.get('ok') is False),data.get('last_error') or '')),'updated_at':str(data.get('updated_at') or ''),'tenant':str(data.get('tenant') or ''),'runtime_template':str(data.get('runtime_template') or ''),'components':{k:{'ok':bool((components.get(k) or {}).get('ok')),'status':str((components.get(k) or {}).get('status') or 'pending')} for k in ('forgejo','komodo','supabase')},'result':data.get('result') or {},'secrets_exposed':False}
 
 def _pm197_render(user):
     rows=user_visible_projects(user['username'],user['groups']);tenants=visible_tenants(user['username'],user['groups'])
@@ -6027,18 +6069,23 @@ def _pm197_render(user):
     return f'''{_PM197_CSS}<script>function cloudifShowWizard(id){{document.querySelectorAll('.cloudif-wizard').forEach(x=>x.style.display='none');const target=document.getElementById(id);if(target){{target.style.display='grid';document.body.classList.add('cloudif-modal-open');const focus=target.querySelector('input,select,textarea,button');if(focus)setTimeout(()=>focus.focus(),0)}}}}function cloudifCancelWizard(){{document.querySelectorAll('.cloudif-wizard').forEach(x=>x.style.display='none');document.body.classList.remove('cloudif-modal-open')}}function cloudifHideWizard(id){{const target=document.getElementById(id);if(target)target.style.display='none';document.body.classList.remove('cloudif-modal-open')}}document.addEventListener('click',e=>{{const modal=e.target.closest('.cloudif-wizard');if(modal&&e.target===modal)cloudifHideWizard(modal.id)}});document.addEventListener('keydown',e=>{{if(e.key==='Escape')cloudifCancelWizard()}});document.addEventListener('toggle',e=>{{const d=e.target;if(d.matches&&d.matches('.project-final[open]'))document.querySelectorAll('.project-final[open]').forEach(x=>{{if(x!==d)x.open=false}})}},true);if(document.querySelector('[data-provision-status=\"queued\"],[data-provision-status=\"running\"]'))setTimeout(()=>location.reload(),5000);(function(){{
  const form=document.getElementById('pm197_new_form');if(!form)return;
  const modal=document.getElementById('pm197_new');const steps=[...form.querySelectorAll('.pm-new-step')];const stepItems=[...modal.querySelectorAll('.pm-new-steps li')];const progress=modal.querySelector('.pm-new-progress span');const previous=form.querySelector('[data-pm-nav="previous"]');const next=form.querySelector('[data-pm-nav="next"]');const submit=form.querySelector('[data-pm-nav="submit"]');let current=0;
- const username=form.dataset.username||'usuario';const labels={{link:'Tenant existente',create:'Novo tenant dedicado',skip:'Sem banco'}};const runtimeLabels={{'static-nginx':'Site estático + Nginx',node20:'Node.js 20',node22:'Node.js 22',node24:'Node.js 24','php83-apache':'PHP 8.3 + Apache'}};
+ const username=form.dataset.username||'usuario';const labels={{link:'Tenant existente',create:'Novo tenant dedicado',skip:'Sem banco'}};const runtimeLabels={{'static-nginx':'Site estático + Nginx',node20:'Node.js 20 + PHP',node22:'Node.js 22 + PHP',node24:'Node.js 24 + PHP','php-apache':'PHP + Apache'}};
  function slugify(v){{v=String(v||'').toLowerCase();v=v.normalize?v.normalize('NFD').replace(/[\u0300-\u036f]/g,''):v;return v.replace(/[^a-z0-9]+/g,'')}}
  function stamp(){{const d=new Date(),p=n=>String(n).padStart(2,'0');return d.getFullYear()+p(d.getMonth()+1)+p(d.getDate())+p(d.getHours())+p(d.getMinutes())+p(d.getSeconds())}}
  function setSummary(key,value){{const el=form.querySelector('[data-pm-summary="'+key+'"]');if(el)el.textContent=value}}
  function updateTenant(){{const mode=form.querySelector('[name=db_mode]:checked');const selected=mode?mode.value:'link';const existing=form.querySelector('[name=tenant_existing]');const suffix=form.querySelector('[name=tenant_suffix]');const hidden=form.querySelector('[name=tenant]');const existingWrap=form.querySelector('.pm-tenant-select');const createWrap=form.querySelector('.pm-tenant-create');let tenant='';if(selected==='link')tenant=existing?existing.value:'';if(selected==='create'){{let base=slugify(suffix&&suffix.value?suffix.value:(form.elements.name.value||''));if(!base)base=stamp();tenant=username+'-'+base}}if(existingWrap)existingWrap.hidden=selected!=='link';if(createWrap)createWrap.hidden=selected!=='create';if(hidden)hidden.value=tenant;const preview=form.querySelector('[data-pm-tenant-preview]');if(preview)preview.textContent=tenant||'Nenhum tenant';setSummary('db',selected==='create'?tenant:(labels[selected]||'Tenant existente'))}}
- function updateSummary(){{const runtime=form.querySelector('[name=runtime_template]:checked');setSummary('name',form.elements.name.value.trim()||'Nome ainda não informado');setSummary('runtime',runtimeLabels[runtime&&runtime.value]||runtimeLabels['static-nginx']);updateTenant()}}
+ function updateSummary(){{const runtime=form.querySelector('[name=runtime_template]:checked');setSummary('name',form.elements.name.value.trim()||'Nome ainda não informado');const php=form.querySelector('[name=php_version]');setSummary('runtime',(runtimeLabels[runtime&&runtime.value]||runtimeLabels['static-nginx'])+' · PHP '+(php?php.value:'8.3'));updateTenant()}}
  function validateStep(){{const panel=steps[current];const required=[...panel.querySelectorAll('[required]')];for(const field of required){{if(!field.checkValidity()){{field.reportValidity();return false}}}}const mode=form.querySelector('[name=db_mode]:checked');if(current===1&&mode&&mode.value==='link'){{const select=form.querySelector('[name=tenant_existing]');if(select&&!select.value){{select.setCustomValidity('Selecione um tenant existente.');select.reportValidity();select.setCustomValidity('');return false}}}}return true}}
  function show(index){{current=Math.max(0,Math.min(index,steps.length-1));steps.forEach((x,i)=>x.classList.toggle('is-active',i===current));stepItems.forEach((x,i)=>{{x.classList.toggle('is-active',i===current);x.classList.toggle('is-complete',i<current);x.setAttribute('aria-current',i===current?'step':'false')}});if(progress)progress.style.width=((current+1)/steps.length*100)+'%';if(previous)previous.hidden=current===0;if(next)next.hidden=current===steps.length-1;if(submit)submit.hidden=current!==steps.length-1;const focus=steps[current].querySelector('input:not([type=hidden]),select,textarea,button');if(focus)setTimeout(()=>focus.focus(),0);updateSummary()}}
- form.addEventListener('input',updateSummary);form.addEventListener('change',updateSummary);if(previous)previous.addEventListener('click',()=>show(current-1));if(next)next.addEventListener('click',()=>{{if(validateStep())show(current+1)}});stepItems.forEach((item,i)=>item.addEventListener('click',()=>{{if(i<=current||validateStep())show(i)}}));form.addEventListener('submit',e=>{{if(current!==steps.length-1){{e.preventDefault();if(validateStep())show(current+1)}}}});show(0)
+ form.addEventListener('input',updateSummary);form.addEventListener('change',updateSummary);if(previous)previous.addEventListener('click',()=>show(current-1));if(next)next.addEventListener('click',()=>{{if(validateStep())show(current+1)}});stepItems.forEach((item,i)=>item.addEventListener('click',()=>{{if(i<=current||validateStep())show(i)}}));const live=document.getElementById('pm197_provision_live'),shell=modal.querySelector('.pm-new-shell'),headTitle=document.getElementById('pm197_new_title'),headText=modal.querySelector('.wizard-head p'),closeButton=modal.querySelector('.wizard-close');const liveLabels=['Registro do projeto','Repositório Forgejo','Stack e containers','Banco e tenant','Identidade e permissões','Template da aplicação','Publicação inicial','Conclusão'];let provisioning=false;
+ function liveDots(){{return '<span class="pm-live-dots"><i></i><i></i><i></i></span>'}}
+ function stateFor(data,index){{const step=data.current_step||'queued',status=data.status||'queued',components=data.components||{{}};if(status==='succeeded')return'done';if(index===0)return'done';if(index===1)return components.forgejo?.ok?'done':status==='failed'&&step==='provision'?'failed':step==='provision'?'running':'pending';if(index===2)return components.komodo?.ok?'done':status==='failed'&&components.forgejo?.ok?'failed':components.forgejo?.ok&&step==='provision'?'running':'pending';if(index===3)return !data.tenant?'done':components.supabase?.ok?'done':status==='failed'&&components.komodo?.ok?'failed':components.komodo?.ok&&step==='provision'?'running':'pending';if(status==='failed'){{const failIndex={{queued:0,'onboarding-reconcile':4,template:5,'initial-publication':6}}[step]??index;return index<failIndex?'done':index===failIndex?'failed':'pending'}}if(index===4)return ['onboarding-reconcile','template','initial-publication','complete'].includes(step)?(step==='onboarding-reconcile'?'running':'done'):'pending';if(index===5)return ['template','initial-publication','complete'].includes(step)?(step==='template'?'running':'done'):'pending';if(index===6)return ['initial-publication','complete'].includes(step)?(step==='initial-publication'?'running':'done'):'pending';if(index===7)return status==='succeeded'?'done':'pending';return'pending'}}
+ function drawLive(data){{const states=liveLabels.map((_,i)=>stateFor(data,i)),done=states.filter(x=>x==='done').length,progress=data.status==='succeeded'?100:Math.max(5,Math.round(done/liveLabels.length*100));const terminal=data.status==='succeeded'?'<div class="pm-live-terminal ok"><strong>Projeto provisionado.</strong><p>Repositório, recursos, identidade e publicação inicial foram reconciliados.</p></div>':data.status==='failed'?`<div class="pm-live-terminal bad"><strong>O provisionamento falhou.</strong><p>${{String(data.last_error||'Falha não identificada.').replace(/[&<>]/g,'')}}</p></div>`:'';live.innerHTML=`${{data.status==='queued'||data.status==='running'?`<div class="pm-live-status">${{liveDots()}}<div><strong>Provisionamento em andamento</strong><small>Etapa atual: ${{data.current_step||'preparando'}}. Não feche esta janela.</small></div></div>`:''}}<div class="pm-live-progress"><progress max="100" value="${{progress}}"></progress><small>${{progress}}% concluído</small></div><ol class="pm-live-steps">${{liveLabels.map((label,i)=>{{const st=states[i],icon=st==='done'?'✓':st==='failed'?'!':st==='running'?liveDots():String(i+1),badge=st==='done'?'Concluído':st==='failed'?'Falhou':st==='running'?'Executando':'Aguardando';return `<li class="pm-live-step ${{st}}"><span class="pm-live-step-icon">${{icon}}</span><div><strong>${{label}}</strong><small>${{st==='running'?'O agente está executando esta etapa.':st==='done'?'Etapa finalizada.':'Aguardando a etapa anterior.'}}</small></div><span class="pill ${{st==='done'?'ok':st==='failed'?'bad':'muted'}}">${{badge}}</span></li>`}}).join('')}}</ol>${{terminal}}<div class="pm-live-actions">${{data.status==='succeeded'?'<button class="btn primary" type="button" data-pm-open-project>Abrir projeto</button>':data.status==='failed'?'<button class="btn gray" type="button" data-pm-close-live>Fechar</button>':'<button class="btn gray" type="button" disabled>Provisionando…</button>'}}</div>`;live.querySelector('[data-pm-open-project]')?.addEventListener('click',()=>location.href='/cloudiff/portal/?tab=projetos&project='+encodeURIComponent(data.slug));live.querySelector('[data-pm-close-live]')?.addEventListener('click',()=>location.reload())}}
+ async function pollProvision(url){{try{{const r=await fetch(url,{{credentials:'same-origin',headers:{{Accept:'application/json'}}}}),d=await r.json();if(!r.ok||!d.ok)throw new Error(d.detail||d.error||'Falha ao consultar provisionamento.');drawLive(d);if(d.status==='queued'||d.status==='running')setTimeout(()=>pollProvision(url),1200)}}catch(err){{drawLive({{status:'failed',current_step:'queued',last_error:err.message,components:{{}}}})}}}}
+ form.addEventListener('submit',async e=>{{e.preventDefault();if(current!==steps.length-1){{if(validateStep())show(current+1);return}}if(!validateStep()||provisioning)return;provisioning=true;updateSummary();shell.hidden=true;live.hidden=false;headTitle.textContent='Provisionando projeto';headText.textContent='Acompanhe cada integração sem sair desta janela.';closeButton.hidden=true;drawLive({{status:'queued',current_step:'queued',components:{{}},tenant:form.elements.tenant.value}});const csrf=form.elements.csrf_token.value,body=new URLSearchParams(new FormData(form));try{{const r=await fetch('/cloudiff/portal/',{{method:'POST',credentials:'same-origin',headers:{{Accept:'application/json','Content-Type':'application/x-www-form-urlencoded;charset=UTF-8','X-CSRF-Token':csrf,'X-CloudIF-Action':'project_action','X-CloudIF-Async':'project-provision'}},body}}),type=(r.headers.get('content-type')||'').toLowerCase(),text=await r.text();if(!type.includes('application/json'))throw new Error('A solicitação não chegou ao serviço de provisionamento.');const d=JSON.parse(text);if(!r.ok||!d.ok)throw new Error(d.detail||d.error||'Não foi possível iniciar o provisionamento.');drawLive({{status:'queued',current_step:'queued',components:{{}},slug:d.slug,tenant:d.tenant}});pollProvision(d.status_url)}}catch(err){{drawLive({{status:'failed',current_step:'queued',last_error:err.message,components:{{}}}})}}}});show(0)
 }})();</script>
 <section id="cloudif-project-list" class="card project-management-final"><header class="project-management-final__head"><div><h2>Projetos por usuário</h2><p>Abra um projeto para consultar recursos e executar ações.</p></div><button class="btn" type="button" onclick="cloudifShowWizard('pm197_new')">Novo projeto</button></header>{''.join(owner_html) if owner_html else '<div class="box">Nenhum projeto visível.</div>'}</section>
-<div id="pm197_new" class="wizard cloudif-wizard" role="dialog" aria-modal="true" aria-labelledby="pm197_new_title"><div class="wizard-box"><div class="wizard-head"><div><h3 id="pm197_new_title">Novo projeto</h3><p>Configure uma etapa por vez. O resumo permanece visível para conferir as escolhas antes do provisionamento.</p></div><button class="wizard-close" type="button" onclick="cloudifHideWizard('pm197_new')">×</button></div><div class="pm-new-shell"><ol class="pm-new-steps"><li data-step="1">Identificação</li><li data-step="2">Banco</li><li data-step="3">Tecnologia</li><li data-step="4">Provisionamento</li></ol><div class="pm-new-progress" aria-hidden="true"><span></span></div><form id="pm197_new_form" data-username="{h(user['username'])}" method="post" action="{url('/action/project_action')}"><input type="hidden" name="csrf_token" value="{h(csrf_token)}"><input type="hidden" name="action" value="create_project"><input type="hidden" name="create_repo" value="1"><input type="hidden" name="setup_komodo" value="1"><input type="hidden" name="tenant" value=""><div class="pm-new-layout"><div class="pm-new-main"><section class="pm-new-step pm-new-section" data-pm-step="0"><div class="pm-new-section__head"><h4>Identificação do projeto</h4><p>Informe um nome claro e descreva a finalidade da aplicação.</p></div><label class="pm-field"><span>Nome do projeto</span><input name="name" required maxlength="120" placeholder="Ex.: Sistema de Biblioteca" autocomplete="off"><small>O slug técnico será gerado automaticamente.</small></label><label class="pm-field"><span>Descrição</span><textarea name="description" rows="4" maxlength="500" placeholder="Ex.: Aplicação para empréstimos, acervo e usuários."></textarea></label></section><section class="pm-new-step pm-new-section" data-pm-step="1"><div class="pm-new-section__head"><h4>Banco de dados</h4><p>Escolha um tenant existente, crie um tenant personalizado ou continue sem banco.</p></div><div class="pm-choice-grid"><label class="pm-choice"><input type="radio" name="db_mode" value="link" checked><strong>Vincular existente</strong><small>Usa um tenant já provisionado.</small></label><label class="pm-choice"><input type="radio" name="db_mode" value="create"><strong>Criar novo tenant</strong><small>Permite personalizar o nome.</small></label><label class="pm-choice"><input type="radio" name="db_mode" value="skip"><strong>Sem banco</strong><small>Adicione um tenant depois.</small></label></div><label class="pm-field pm-tenant-select"><span>Tenant existente</span><select name="tenant_existing"><option value="">Selecione um tenant</option>{tenant_opts}</select></label><div class="pm-tenant-create" hidden><label class="pm-field"><span>Nome do novo tenant</span><input name="tenant_suffix" maxlength="48" placeholder="Ex.: biblioteca" autocomplete="off"><small>O prefixo do seu usuário será aplicado automaticamente. Se ficar vazio, será usada data/hora.</small></label><div class="pm-tenant-preview"><span>Tenant que será criado</span><code data-pm-tenant-preview>{h(user['username'])}-biblioteca</code></div></div></section><section class="pm-new-step pm-new-section" data-pm-step="2"><div class="pm-new-section__head"><h4>Tecnologia web</h4><p>Essa escolha define Dockerfile, serviço e template inicial.</p></div><div class="pm-runtime-options"><label class="pm-choice"><input type="radio" name="runtime_template" value="static-nginx" checked><strong>Site estático + Nginx</strong><small>HTML, CSS e JavaScript.</small></label><label class="pm-choice"><input type="radio" name="runtime_template" value="node20"><strong>Node.js 20</strong><small>Express com runtime LTS.</small></label><label class="pm-choice"><input type="radio" name="runtime_template" value="node22"><strong>Node.js 22</strong><small>Express com LTS atual.</small></label><label class="pm-choice"><input type="radio" name="runtime_template" value="node24"><strong>Node.js 24</strong><small>Runtime homologado mais recente.</small></label><label class="pm-choice"><input type="radio" name="runtime_template" value="php83-apache"><strong>PHP 8.3 + Apache</strong><small>Aplicação PHP tradicional.</small></label></div></section><section class="pm-new-step pm-new-section" data-pm-step="3"><div class="pm-new-section__head"><h4>Provisionamento</h4><p>Confira as integrações que serão executadas pelos agentes.</p></div><ul class="pm-provision-list"><li>repositório Forgejo, template e webhooks;</li><li>stack, container e terminal no Komodo;</li><li>tenant Supabase conforme a opção selecionada;</li><li>ACL inicial do proprietário e reconciliação;</li><li>publicação inicial e verificação de saúde.</li></ul></section></div><aside class="pm-new-summary" aria-label="Resumo do provisionamento"><div><h4>Resumo</h4><p>As escolhas são atualizadas durante a navegação.</p></div><dl><div><dt>Projeto</dt><dd data-pm-summary="name">Nome ainda não informado</dd></div><div><dt>Banco</dt><dd data-pm-summary="db">Tenant existente</dd></div><div><dt>Tecnologia</dt><dd data-pm-summary="runtime">Site estático + Nginx</dd></div></dl></aside></div><div class="pm-new-footer"><div class="pm-new-nav"><button class="btn gray" type="button" data-pm-nav="previous">Anterior</button><div class="pm-new-nav__right"><button class="btn gray" type="button" onclick="cloudifHideWizard('pm197_new')">Cancelar</button><button class="btn primary" type="button" data-pm-nav="next">Continuar</button><button class="btn primary" type="submit" data-pm-nav="submit" hidden>Criar e provisionar projeto</button></div></div></div></form></div></div></div>{''.join(wizards)}'''
+<div id="pm197_new" class="wizard cloudif-wizard" role="dialog" aria-modal="true" aria-labelledby="pm197_new_title"><div class="wizard-box"><div class="wizard-head"><div><h3 id="pm197_new_title">Novo projeto</h3><p>Configure uma etapa por vez. O resumo permanece visível para conferir as escolhas antes do provisionamento.</p></div><button class="wizard-close" type="button" onclick="cloudifHideWizard('pm197_new')">×</button></div><div class="pm-new-shell"><ol class="pm-new-steps"><li data-step="1">Identificação</li><li data-step="2">Banco</li><li data-step="3">Tecnologia</li><li data-step="4">Provisionamento</li></ol><div class="pm-new-progress" aria-hidden="true"><span></span></div><form id="pm197_new_form" data-username="{h(user['username'])}" method="post" action="{url('/action/project_action')}"><input type="hidden" name="csrf_token" value="{h(csrf_token)}"><input type="hidden" name="action" value="create_project"><input type="hidden" name="create_repo" value="1"><input type="hidden" name="setup_komodo" value="1"><input type="hidden" name="tenant" value=""><div class="pm-new-layout"><div class="pm-new-main"><section class="pm-new-step pm-new-section" data-pm-step="0"><div class="pm-new-section__head"><h4>Identificação do projeto</h4><p>Informe um nome claro e descreva a finalidade da aplicação.</p></div><label class="pm-field"><span>Nome do projeto</span><input name="name" required maxlength="120" placeholder="Ex.: Sistema de Biblioteca" autocomplete="off"><small>O slug técnico será gerado automaticamente.</small></label><label class="pm-field"><span>Descrição</span><textarea name="description" rows="4" maxlength="500" placeholder="Ex.: Aplicação para empréstimos, acervo e usuários."></textarea></label></section><section class="pm-new-step pm-new-section" data-pm-step="1"><div class="pm-new-section__head"><h4>Banco de dados</h4><p>Escolha um tenant existente, crie um tenant personalizado ou continue sem banco.</p></div><div class="pm-choice-grid"><label class="pm-choice"><input type="radio" name="db_mode" value="link" checked><strong>Vincular existente</strong><small>Usa um tenant já provisionado.</small></label><label class="pm-choice"><input type="radio" name="db_mode" value="create"><strong>Criar novo tenant</strong><small>Permite personalizar o nome.</small></label><label class="pm-choice"><input type="radio" name="db_mode" value="skip"><strong>Sem banco</strong><small>Adicione um tenant depois.</small></label></div><label class="pm-field pm-tenant-select"><span>Tenant existente</span><select name="tenant_existing"><option value="">Selecione um tenant</option>{tenant_opts}</select></label><div class="pm-tenant-create" hidden><label class="pm-field"><span>Nome do novo tenant</span><input name="tenant_suffix" maxlength="48" placeholder="Ex.: biblioteca" autocomplete="off"><small>O prefixo do seu usuário será aplicado automaticamente. Se ficar vazio, será usada data/hora.</small></label><div class="pm-tenant-preview"><span>Tenant que será criado</span><code data-pm-tenant-preview>{h(user['username'])}-biblioteca</code></div></div></section><section class="pm-new-step pm-new-section" data-pm-step="2"><div class="pm-new-section__head"><h4>Tecnologia web</h4><p>Essa escolha define Dockerfile, serviço e template inicial.</p></div><div class="pm-runtime-options"><label class="pm-choice"><input type="radio" name="runtime_template" value="static-nginx" checked><strong>Site estático + Nginx</strong><small>HTML, CSS e JavaScript.</small></label><label class="pm-choice"><input type="radio" name="runtime_template" value="node20"><strong>Node.js 20 + PHP</strong><small>Node como serviço principal e PHP integrado em <code>/php</code>.</small></label><label class="pm-choice"><input type="radio" name="runtime_template" value="node22"><strong>Node.js 22 + PHP</strong><small>Node como serviço principal e PHP integrado em <code>/php</code>.</small></label><label class="pm-choice"><input type="radio" name="runtime_template" value="node24"><strong>Node.js 24 + PHP</strong><small>Node como serviço principal e PHP integrado em <code>/php</code>.</small></label><label class="pm-choice"><input type="radio" name="runtime_template" value="php-apache"><strong>PHP + Apache</strong><small>Aplicação PHP como serviço web principal.</small></label></div><label class="pm-field"><span>Versão do PHP</span><select name="php_version" required><option value="8.2">PHP 8.2</option><option value="8.3" selected>PHP 8.3 — padrão</option><option value="8.4">PHP 8.4</option></select><small>PHP é provisionado em todos os novos projetos.</small></label></section><section class="pm-new-step pm-new-section" data-pm-step="3"><div class="pm-new-section__head"><h4>Provisionamento</h4><p>Confira as integrações que serão executadas pelos agentes.</p></div><ul class="pm-provision-list"><li>repositório Forgejo, template e webhooks;</li><li>stack, container e terminal no Komodo;</li><li>tenant Supabase conforme a opção selecionada;</li><li>ACL inicial do proprietário e reconciliação;</li><li>publicação inicial e verificação de saúde.</li></ul></section></div><aside class="pm-new-summary" aria-label="Resumo do provisionamento"><div><h4>Resumo</h4><p>As escolhas são atualizadas durante a navegação.</p></div><dl><div><dt>Projeto</dt><dd data-pm-summary="name">Nome ainda não informado</dd></div><div><dt>Banco</dt><dd data-pm-summary="db">Tenant existente</dd></div><div><dt>Tecnologia</dt><dd data-pm-summary="runtime">Site estático + Nginx · PHP 8.3</dd></div></dl></aside></div><div class="pm-new-footer"><div class="pm-new-nav"><button class="btn gray" type="button" data-pm-nav="previous">Anterior</button><div class="pm-new-nav__right"><button class="btn gray" type="button" onclick="cloudifHideWizard('pm197_new')">Cancelar</button><button class="btn primary" type="button" data-pm-nav="next">Continuar</button><button class="btn primary" type="submit" data-pm-nav="submit" hidden>Criar e provisionar projeto</button></div></div></div></form></div><section id="pm197_provision_live" class="pm-live" hidden aria-live="polite"></section></div></div>{''.join(wizards)}'''
 
 render_projects=_pm197_render
 if 'page' in globals() and not globals().get('_pm197_page_wrapped'):
@@ -6051,9 +6098,12 @@ if 'page' in globals() and not globals().get('_pm197_page_wrapped'):
 if 'Portal' in globals() and not globals().get('_pm197_route_wrapped'):
     _pm197_prev_get=Portal.do_GET
     def _pm197_get(self):
-        parsed=urllib.parse.urlparse(self.path)
-        tab=(urllib.parse.parse_qs(parsed.query).get('tab') or [''])[0]
-        if tab=='projetos' and parsed.path.rstrip('/') in ('','/cloudiff/portal','/cloudif/portal'):
+        parsed=urllib.parse.urlparse(self.path);query=urllib.parse.parse_qs(parsed.query);path=parsed.path.rstrip('/')
+        tab=(query.get('tab') or [''])[0];api=(query.get('api') or [''])[0]
+        if path in ('/cloudiff/portal/api/project-provision-status','/cloudif/portal/api/project-provision-status') or (path in ('','/cloudiff/portal','/cloudif/portal') and api=='project-provision-status'):
+            user=self.user();slug=(query.get('slug') or [''])[0].strip();visible={str(x['slug']) for x in user_visible_projects(user['username'],user['groups'])};groups={str(x).strip().lower() for x in (user.get('groups') or [])};allowed=slug in visible or bool(user.get('admin') or groups.intersection({'cloudif-tenants-admin','cloudif-professor'}))
+            payload=_pm197_provision_status(slug) if allowed and slug else {'ok':False,'error':'project_not_authorized'};code=200 if payload.get('ok') else (403 if payload.get('error')=='project_not_authorized' else 404);raw=json.dumps(payload,ensure_ascii=False,separators=(',',':')).encode('utf-8');self.send_response(code);self.send_header('Content-Type','application/json; charset=utf-8');self.send_header('Cache-Control','no-store');self.send_header('X-Content-Type-Options','nosniff');self.send_header('Content-Length',str(len(raw)));self.end_headers();self.wfile.write(raw);return
+        if tab=='projetos' and path in ('','/cloudiff/portal','/cloudif/portal'):
             user=self.user()
             doc=page(user,'projetos',_pm197_render(user))
             if 'cloudif-project-management-final' not in doc:

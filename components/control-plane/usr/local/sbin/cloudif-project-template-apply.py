@@ -37,45 +37,49 @@ def build(kind,slug,owner,tenant,num):
  nginx='server { listen 80; root /usr/share/nginx/html; index index.html; location = /health { default_type application/json; return 200 \'{"ok":true}\'; } location / { try_files $uri $uri/ /index.html; } }\n'
  return [('README.md',f'# {title}\n\nPortal: {portal}\nForgejo: {forge}\nKomodo: {kom}\nSupabase: {sup}\nSite: {site}\n'),('site/index.html',html),('nginx.conf',nginx),('.env',f'CLOUDIF_PUBLIC_NUMBER={num}\nCLOUDIF_DEPLOY_NUMBER=1\n'),('docker-compose.yml',compose)]
 
-def runtime_overlay(template):
- template=(template or 'static-nginx').strip().lower()
+def runtime_overlay(template,php_version='8.3'):
+ template=(template or 'static-nginx').strip().lower(); php_version=str(php_version or '8.3').strip()
+ if php_version not in ('8.2','8.3','8.4'): raise ValueError('unsupported_php_version')
  if template in ('node20','node22','node24'):
   version=template.replace('node','')
   docker=f"FROM node:{version}-alpine\nWORKDIR /app\nCOPY package*.json ./\nRUN npm install --omit=dev\nCOPY . .\nEXPOSE 80\nCMD [\"npm\",\"start\"]\n"
   package='{"name":"cloudif-app","private":true,"scripts":{"start":"node server.js"},"dependencies":{"express":"^4.21.0"}}\n'
-  server="const express=require('express');const app=express();app.use(express.static('site'));app.get('/health',(_,r)=>r.json({ok:true}));app.listen(80,'0.0.0.0');\n"
-  compose='services:\n  web:\n    build: .\n    container_name: cloudif-p${CLOUDIF_PUBLIC_NUMBER}-d${CLOUDIF_DEPLOY_NUMBER}-web\n    restart: unless-stopped\n    healthcheck:\n      test: [\"CMD-SHELL\", \"wget -qO- http://127.0.0.1/health >/dev/null 2>&1\"]\n      interval: 15s\n      timeout: 5s\n      retries: 10\n    networks:\n      cloudif-publications:\n        aliases:\n          - cloudif-p${CLOUDIF_PUBLIC_NUMBER}-d${CLOUDIF_DEPLOY_NUMBER}-web\n          - cloudif-p${CLOUDIF_PUBLIC_NUMBER}-active-web\nnetworks:\n  cloudif-publications:\n    external: true\n'
-  return [('Dockerfile',docker),('package.json',package),('server.js',server),('docker-compose.yml',compose)]
- if template=='php83-apache':
-  docker="""FROM php:8.3-apache
-COPY site/ /var/www/html/
-RUN printf '<Directory /var/www/html>\nAllowOverride All\nRequire all granted\n</Directory>\n' > /etc/apache2/conf-available/cloudif.conf && a2enconf cloudif
+  server="""const express=require('express');const http=require('http');const app=express();
+app.use(express.static('site'));
+app.get('/health',(_,r)=>r.json({ok:true,node:process.version,php:true}));
+app.use('/php',(req,res)=>{const p=http.request({host:'php',port:80,path:req.url||'/',method:req.method,headers:req.headers},up=>{res.writeHead(up.statusCode||502,up.headers);up.pipe(res)});p.on('error',()=>res.status(502).json({ok:false,error:'php_unavailable'}));req.pipe(p)});
+app.listen(80,'0.0.0.0');
 """
+  php_docker=f"FROM php:{php_version}-apache\nCOPY php/ /var/www/html/\nRUN printf '<Directory /var/www/html>\\nAllowOverride All\\nRequire all granted\\n</Directory>\\n' > /etc/apache2/conf-available/cloudif.conf && a2enconf cloudif\n"
+  compose='services:\n  web:\n    build: .\n    container_name: cloudif-p${CLOUDIF_PUBLIC_NUMBER}-d${CLOUDIF_DEPLOY_NUMBER}-web\n    restart: unless-stopped\n    depends_on:\n      php:\n        condition: service_healthy\n    healthcheck:\n      test: [\"CMD-SHELL\", \"wget -qO- http://127.0.0.1/health >/dev/null 2>&1\"]\n      interval: 15s\n      timeout: 5s\n      retries: 10\n    networks:\n      cloudif-publications:\n        aliases:\n          - cloudif-p${CLOUDIF_PUBLIC_NUMBER}-d${CLOUDIF_DEPLOY_NUMBER}-web\n          - cloudif-p${CLOUDIF_PUBLIC_NUMBER}-active-web\n  php:\n    build:\n      context: .\n      dockerfile: Dockerfile.php\n    restart: unless-stopped\n    healthcheck:\n      test: [\"CMD-SHELL\", \"curl -fsS http://127.0.0.1/health.php >/dev/null\"]\n      interval: 15s\n      timeout: 5s\n      retries: 10\n    networks:\n      - cloudif-publications\nnetworks:\n  cloudif-publications:\n    external: true\n'
+  return [('Dockerfile',docker),('Dockerfile.php',php_docker),('package.json',package),('server.js',server),('php/index.php',f"<?php echo 'CloudIF PHP {php_version}';"),('php/health.php',"<?php header('Content-Type: application/json'); echo '{\"ok\":true}';"),('docker-compose.yml',compose)]
+ if template=='php-apache':
+  docker=f"FROM php:{php_version}-apache\nCOPY site/ /var/www/html/\nRUN printf '<Directory /var/www/html>\\nAllowOverride All\\nRequire all granted\\n</Directory>\\n' > /etc/apache2/conf-available/cloudif.conf && a2enconf cloudif\n"
   compose='services:\n  web:\n    build: .\n    container_name: cloudif-p${CLOUDIF_PUBLIC_NUMBER}-d${CLOUDIF_DEPLOY_NUMBER}-web\n    restart: unless-stopped\n    healthcheck:\n      test: [\"CMD-SHELL\", \"curl -fsS http://127.0.0.1/health.php >/dev/null\"]\n      interval: 15s\n      timeout: 5s\n      retries: 10\n    networks:\n      cloudif-publications:\n        aliases:\n          - cloudif-p${CLOUDIF_PUBLIC_NUMBER}-d${CLOUDIF_DEPLOY_NUMBER}-web\n          - cloudif-p${CLOUDIF_PUBLIC_NUMBER}-active-web\nnetworks:\n  cloudif-publications:\n    external: true\n'
-  return [('Dockerfile',docker),('site/index.php',"<?php echo 'CloudIF PHP 8.3';"),('site/health.php',"<?php header('Content-Type: application/json'); echo '{\"ok\":true}';"),('docker-compose.yml',compose)]
+  return [('Dockerfile',docker),('site/index.php',f"<?php echo 'CloudIF PHP {php_version}';"),('site/health.php',"<?php header('Content-Type: application/json'); echo '{\"ok\":true}';"),('docker-compose.yml',compose)]
  return []
 
-def merge_runtime(files,template):
- overlay=runtime_overlay(template)
+def merge_runtime(files,template,php_version="8.3"):
+ overlay=runtime_overlay(template,php_version)
  if not overlay:return files
  names={name for name,_ in overlay}
  return [(name,content) for name,content in files if name not in names]+overlay
 
 def main():
- job=json.loads(Path(sys.argv[1]).read_text()); kind=job.get('template_kind','none'); runtime=job.get('runtime_template','static-nginx')
+ job=json.loads(Path(sys.argv[1]).read_text()); kind=job.get('template_kind','none'); runtime=job.get('runtime_template','static-nginx'); php_version=job.get('php_version','8.3')
  if kind not in ('onboarding','links'): print({'skipped':True,'kind':kind}); return
  slug=job['slug']; owner=(job.get('user') or {}).get('username',''); tenant=job['tenant']; num=public_number(slug)
  marker=Path(f'/srv/cloudif/provisioning/projects/{slug}/template-applied.json')
  if marker.exists():
   try:
    old_marker=json.loads(marker.read_text())
-   if old_marker.get('kind')==kind and old_marker.get('runtime_template')==runtime and old_marker.get('version')==5:
+   if old_marker.get('kind')==kind and old_marker.get('runtime_template')==runtime and old_marker.get('php_version','8.3')==php_version and old_marker.get('version')==6:
     print(json.dumps({'ok':True,'skipped':True,'reason':'template_already_applied','kind':kind,'project':slug,'public_number':num},ensure_ascii=False)); return
   except Exception: pass
  cfg=read_env('/etc/cloudif/forja-agent-client.env'); base=(cfg.get('FORJA_AGENT_URL') or 'http://10.62.91.2:18095').rstrip('/'); tok=cfg.get('FORJA_AGENT_TOKEN','')
  if not tok: raise SystemExit('missing_forja_token')
  results=[]
- files=merge_runtime(build(kind,slug,owner,tenant,num),runtime)
+ files=merge_runtime(build(kind,slug,owner,tenant,num),runtime,php_version)
  for path,content in files:
   payload={'project_slug':slug,'path':path,'branch':'main','message':f'CloudIF: aplicar template {kind} ({path})','source':'project-template-automation','content_b64':base64.b64encode(content.encode()).decode()}
   last=None
@@ -85,6 +89,6 @@ def main():
   if not last or not last.get('ok'): raise RuntimeError(f'commit_failed:{path}:{last}')
   results.append({'path':path,'commit':last.get('commit_sha','')})
  marker.parent.mkdir(parents=True,exist_ok=True)
- marker.write_text(json.dumps({'kind':kind,'runtime_template':runtime,'version':5,'project':slug,'public_number':num,'applied_at':time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime()),'files':results},ensure_ascii=False,indent=2)+'\n')
+ marker.write_text(json.dumps({'kind':kind,'runtime_template':runtime,'php_version':php_version,'version':6,'project':slug,'public_number':num,'applied_at':time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime()),'files':results},ensure_ascii=False,indent=2)+'\n')
  print(json.dumps({'ok':True,'kind':kind,'project':slug,'public_number':num,'files':results},ensure_ascii=False))
 if __name__=='__main__': main()
