@@ -5915,7 +5915,7 @@ if 'Portal' in globals() and not globals().get('_tenant_control134_wrapped'):
             target=str(result.get('slug') or slug);msg=str(result.get('message') or 'Projeto salvo.')
             log_action(user['username'],'project_action',target,0,json.dumps({'action':action,'global_admin':global_admin},separators=(',',':')),'')
             if (self.headers.get('X-CloudIF-Async') or '').strip()=='project-provision':
-                payload={'ok':True,'slug':target,'tenant':str(result.get('tenant') or ''),'message':msg,'status_url':'/cloudiff/portal/?api=project-provision-status&slug='+urllib.parse.quote(target)}
+                payload={'ok':True,'slug':target,'tenant':str(result.get('tenant') or ''),'message':msg,'status_url':'/cloudiff/portal/api/project-provision-status?slug='+urllib.parse.quote(target)}
                 raw=json.dumps(payload,ensure_ascii=False,separators=(',',':')).encode('utf-8')
                 self.send_response(202);self.send_header('Content-Type','application/json; charset=utf-8');self.send_header('Cache-Control','no-store');self.send_header('X-Content-Type-Options','nosniff');self.send_header('Content-Length',str(len(raw)));self.end_headers();self.wfile.write(raw);return
             return self.redirect('/?tab=projetos&project='+urllib.parse.quote(target)+'&msg='+urllib.parse.quote(msg))
@@ -6100,7 +6100,7 @@ if 'Portal' in globals() and not globals().get('_pm197_route_wrapped'):
     def _pm197_get(self):
         parsed=urllib.parse.urlparse(self.path);query=urllib.parse.parse_qs(parsed.query);path=parsed.path.rstrip('/')
         tab=(query.get('tab') or [''])[0];api=(query.get('api') or [''])[0]
-        if path in ('','/cloudiff/portal','/cloudif/portal') and api=='project-provision-status':
+        if path in ('/cloudiff/portal/api/project-provision-status','/cloudif/portal/api/project-provision-status') or (path in ('','/cloudiff/portal','/cloudif/portal') and api=='project-provision-status'):
             user=self.user();slug=(query.get('slug') or [''])[0].strip();visible={str(x['slug']) for x in user_visible_projects(user['username'],user['groups'])};groups={str(x).strip().lower() for x in (user.get('groups') or [])};allowed=slug in visible or bool(user.get('admin') or groups.intersection({'cloudif-tenants-admin','cloudif-professor'}))
             payload=_pm197_provision_status(slug) if allowed and slug else {'ok':False,'error':'project_not_authorized'};code=200 if payload.get('ok') else (403 if payload.get('error')=='project_not_authorized' else 404);raw=json.dumps(payload,ensure_ascii=False,separators=(',',':')).encode('utf-8');self.send_response(code);self.send_header('Content-Type','application/json; charset=utf-8');self.send_header('Cache-Control','no-store');self.send_header('X-Content-Type-Options','nosniff');self.send_header('Content-Length',str(len(raw)));self.end_headers();self.wfile.write(raw);return
         if tab=='projetos' and path in ('','/cloudiff/portal','/cloudif/portal'):

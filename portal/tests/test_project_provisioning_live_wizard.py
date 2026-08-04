@@ -14,6 +14,7 @@ class ProjectProvisioningLiveWizardTests(unittest.TestCase):
         self.assertIn("self.send_response(202)", self.source)
 
     def test_status_api_is_authorized_and_hides_secrets(self):
+        self.assertIn("/cloudiff/portal/api/project-provision-status", self.source)
         self.assertIn("api=='project-provision-status'", self.source)
         self.assertIn("project_not_authorized", self.source)
         self.assertIn("'secrets_exposed':False", self.source)
