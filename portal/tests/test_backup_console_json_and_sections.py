@@ -16,6 +16,7 @@ class BackupConsoleJsonAndSectionsTests(unittest.TestCase):
  def test_tenant_archives_are_in_inventory(self):
   self.assertIn('TENANT_BACKUP_ROOT',self.source)
   self.assertIn('def _tenant_backup_items()',self.source)
+  self.assertIn('if len(parts)>2',self.source)
   self.assertIn('"tenants": {"items": _tenant_backup_items()',self.source)
  def test_tenant_download_is_admin_protected(self):
   self.assertIn('/download/tenant-backup',self.source)

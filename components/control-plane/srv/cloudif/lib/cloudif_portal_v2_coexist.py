@@ -401,7 +401,7 @@ def _install() -> None:
                 listed=subprocess.check_output(['tar','-tzf',str(f)],text=True,timeout=20).splitlines()
                 for entry in listed:
                     parts=entry.strip('/').split('/')
-                    if len(parts)>1 and parts[1] and parts[1] not in tenants:
+                    if len(parts)>2 and parts[1] and parts[1] not in tenants:
                         tenants.append(parts[1])
             except Exception:
                 pass
