@@ -1268,7 +1268,7 @@ def _v118_register_event(project_slug, repo, branch, path, action, status, commi
     con.close()
     return event_id
 
-def _v118_trigger_komodo(project_slug, repo, branch, path, commit_sha, action):
+def _v118_trigger_komodo(project_slug, owner, repo, branch, path, commit_sha, action):
     hook = _v118_cfg("KOMODO_WEBHOOK_URL", "").strip()
     if not hook:
         return {"ok": True, "executed": False, "message": "KOMODO_WEBHOOK_URL não configurado."}
@@ -1276,8 +1276,8 @@ def _v118_trigger_komodo(project_slug, repo, branch, path, commit_sha, action):
     payload = {
         "project_slug": project_slug,
         "slug": project_slug,
-        "repo": f"cloudif/{repo}",
-        "repo_url": f"https://cloudiff.duckdns.org/git/cloudif/{repo}.git",
+        "repo": f"{owner}/{repo}",
+        "repo_url": f"https://cloudiff.duckdns.org/git/{owner}/{repo}.git",
         "branch": branch,
         "source": "forja-agent-fileops-v118",
         "file_event": {
@@ -1329,8 +1329,15 @@ def cloudif_v118_file_commit(handler):
     else:
         content = str(payload.get("content") or "")
 
-    owner = _v118_cfg("FORGEJO_OWNER", "cloudif")
-    repo = _v118_repo_name(slug)
+    owner = _v118_slug(payload.get("owner") or payload.get("repo_owner") or "")
+    repo = _v118_slug(payload.get("repo") or "") or _v118_repo_name(slug)
+    repo_path = str(payload.get("repo_path") or "").strip().removesuffix('.git')
+    if repo_path and '/' in repo_path:
+        path_owner,path_repo=repo_path.split('/',1)
+        owner=_v118_slug(path_owner) or owner
+        repo=_v118_slug(path_repo) or repo
+    if not owner:
+        return _v118_send_json(handler, 422, {"ok":False,"error":"repo_owner_required","project_slug":slug})
 
     before = _v118_get_file(owner, repo, path, branch)
 
@@ -1362,12 +1369,14 @@ def cloudif_v118_file_commit(handler):
 
     komodo = {}
     if ok:
-        komodo = _v118_trigger_komodo(slug, repo, branch, path, commit_sha, "commit")
+        komodo = _v118_trigger_komodo(slug, owner, repo, branch, path, commit_sha, "commit")
 
     return _v118_send_json(handler, 200 if ok else 502, {
         "ok": ok,
         "project_slug": slug,
+        "owner": owner,
         "repo": repo,
+        "repo_path": f"{owner}/{repo}",
         "path": path,
         "branch": branch,
         "event_id": event_id,

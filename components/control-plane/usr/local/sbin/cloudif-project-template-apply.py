@@ -27,7 +27,7 @@ def build(kind,slug,owner,tenant,num):
  if kind=='onboarding':
   from cloudif_onboarding_v2 import build_onboarding_v2
   return build_onboarding_v2(slug,owner,tenant,num)
- portal='https://cloudiff.duckdns.org/'; forge=f'https://cloudiff.duckdns.org/git/cloudif/cloudif-{slug}'; kom='https://komodoiff.duckdns.org/'; sup=f'https://{tenant}.cloudiff.duckdns.org/project/default'; site=f'https://{num}.cloudiff.duckdns.org/'
+ portal='https://cloudiff.duckdns.org/'; forge=f'https://cloudiff.duckdns.org/git/{owner}/cloudif-{slug}'; kom='https://komodoiff.duckdns.org/'; sup=f'https://{tenant}.cloudiff.duckdns.org/project/default'; site=f'https://{num}.cloudiff.duckdns.org/'
  if kind=='onboarding':
   title='Primeiros Passos CloudIF'; body=f'''<h2>Aprenda usando este projeto</h2><div class="steps"><article><svg viewBox="0 0 600 180"><rect width="600" height="180" rx="18" fill="#0b4768"/><text x="30" y="70" fill="white" font-size="30">Portal CloudIF</text><text x="30" y="120" fill="white" font-size="20">Crie, publique e acompanhe o projeto.</text></svg><p>Abra o Portal e acompanhe permissões, provisionamento e publicações.</p></article><article><svg viewBox="0 0 600 180"><rect width="600" height="180" rx="18" fill="#6d3bd1"/><text x="30" y="70" fill="white" font-size="30">Forgejo</text><text x="30" y="120" fill="white" font-size="20">Edite, faça commit e observe o webhook.</text></svg><p>Edite <code>site/index.html</code>, faça commit na main e acompanhe o webhook.</p></article><article><svg viewBox="0 0 600 180"><rect width="600" height="180" rx="18" fill="#08796d"/><text x="30" y="70" fill="white" font-size="30">Komodo</text><text x="30" y="120" fill="white" font-size="20">Veja stack, container, logs e saúde.</text></svg><p>Confira o stack e o healthcheck do serviço web.</p></article><article><svg viewBox="0 0 600 180"><rect width="600" height="180" rx="18" fill="#078a54"/><text x="30" y="70" fill="white" font-size="30">Supabase</text><text x="30" y="120" fill="white" font-size="20">Use PostgreSQL, API REST e RLS.</text></svg><p>Abra o tenant, crie tabelas e use a API conforme as políticas.</p></article><article><h3>Webhooks habilitados</h3><ul><li>Push Forgejo → CloudIF</li><li>Release Forgejo → publicação</li><li>CloudIF → Komodo para pull/deploy</li><li>Supabase por tabela e evento quando configurado no Portal</li></ul></article></div>'''
  else:
@@ -80,7 +80,7 @@ Arquivos em `.cloudif/` não são exemplos descartáveis. Eles formam o contrato
 5. A CloudIFF valida o healthcheck e publica por HTTPS.
 
 Site: https://{num}.cloudiff.duckdns.org/
-Forgejo: https://cloudiff.duckdns.org/git/cloudif/cloudif-{slug}
+Forgejo: https://cloudiff.duckdns.org/git/{owner}/cloudif-{slug}
 Supabase: https://{tenant}.cloudiff.duckdns.org/project/default
 
 ## Contrato da plataforma
@@ -247,7 +247,7 @@ def main():
  files=merge_runtime(build(kind,slug,owner,tenant,num),runtime,php_version)
  files=[(path,content) for path,content in files if path!='README.md']+[('README.md',project_readme(slug,owner,tenant,num,runtime,php_version))]
  for path,content in files:
-  payload={'project_slug':slug,'path':path,'branch':'main','message':f'CloudIF: aplicar template {kind} ({path})','source':'project-template-automation','content_b64':base64.b64encode(content.encode()).decode()}
+  payload={'project_slug':slug,'owner':owner,'repo_owner':owner,'repo':f'cloudif-{slug}','repo_path':f'{owner}/cloudif-{slug}','path':path,'branch':'main','message':f'CloudIF: aplicar template {kind} ({path})','source':'project-template-automation','content_b64':base64.b64encode(content.encode()).decode()}
   last=None
   for i in range(10):
    try:last=post(base+'/project/file/commit',tok,payload); break
