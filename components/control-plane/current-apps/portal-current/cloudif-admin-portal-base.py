@@ -4902,7 +4902,7 @@ def _cpx_container_allowed(user,name):
     m=_cpx_re.match(r'^cloudif-p(\d+)-d\d+-web$',name or '')
     if m:
         num=int(m.group(1));return any(num in p['public_numbers'] for p in _cpx_allowed_projects(user))
-    for p in _cpx_allowed_projects(user):
+    for p in _pb_all_projects(user):
         tenant=_cpx_re.sub(r'[^a-zA-Z0-9_.-]','',p.get('tenant') or p.get('owner') or '')
         if tenant and (name or '').startswith('cloudif_'+tenant+'-'): return True
     return False
@@ -5003,12 +5003,25 @@ import subprocess as _pb_subprocess
 import urllib.parse as _pb_parse
 from pathlib import Path as _pb_Path
 
+def _pb_is_professor(user):
+    groups={str(x or '').strip().lower() for x in (user.get('groups') or [])}
+    return bool(groups.intersection({'cloudif-professor','cloudif-professores'}))
+
+def _pb_all_projects(user):
+    if not (user.get('admin') or _pb_is_professor(user)):
+        return _cpx_allowed_projects(user)
+    con=db();rows=con.execute('select * from projects order by updated_at desc,name').fetchall();out=[]
+    for row in rows:
+        p=dict(row);pubs=[dict(x) for x in con.execute('select public_number from project_publications where project_slug=? group by public_number',(p['slug'],))]
+        out.append({'slug':p['slug'],'name':p.get('name') or p['slug'],'tenant':p.get('tenant') or p.get('tenant_default') or p.get('owner') or user.get('username'),'owner':p.get('owner') or '', 'public_numbers':[int(x['public_number']) for x in pubs if x.get('public_number')]})
+    con.close();return out
+
 def _pb_project(user,slug):
-    return next((p for p in _cpx_allowed_projects(user) if p.get('slug')==slug),None)
+    return next((p for p in _pb_all_projects(user) if p.get('slug')==slug),None)
 
 def _pb_manage(user,p):
-    groups=set(user.get('groups') or [])
-    return bool(p and (user.get('admin') or 'CloudIF-Tenants-Admin' in groups or 'CloudIF-Professor' in groups or p.get('owner')==user.get('username')))
+    groups={str(x or '').strip().lower() for x in (user.get('groups') or [])}
+    return bool(p and (user.get('admin') or _pb_is_professor(user) or 'cloudif-tenants-admin' in groups or p.get('owner')==user.get('username')))
 
 def _pb_call(*args,timeout=60):
     raw=_pb_subprocess.check_output(['/usr/local/sbin/cloudif-project-backup.py',*args],text=True,timeout=timeout)
