@@ -27,25 +27,40 @@ class AIConnectorsHubTests(unittest.TestCase):
             'instructions': {'mcp_endpoint': 'https://cloudiff.example/mcp'},
         }
         html = self.module.render([row], 'csrf-test')
-        self.assertIn('Gerar nova chave', html)
+        self.assertIn('Modo legado: gerar token', html)
         self.assertIn('/cloudiff/portal/action/rotate-project-credential', html)
         self.assertIn('Exibição única', html)
-        self.assertIn('não altera o funcionamento do Portal web', html)
-        self.assertIn('Configuração para clientes MCP', html)
+        self.assertIn('OAuth público com PKCE', html)
+        self.assertIn('Client Secret vazio', html)
+        self.assertIn('Configuração pronta para copiar', html)
 
 
 
-    def test_oauth_details_include_callbacks_and_client_secret(self):
+    def test_public_oauth_details_are_project_specific_and_secretless(self):
         row = {
             'project_slug': 'projeto-teste', 'client_id': 'client-projeto-teste',
+            'owner_user': 'iff0001', 'tenant': 'iff0001-projeto-teste',
             'role_profile': 'developer', 'environment': 'project',
             'scopes': ['project:read'], 'instructions': {'mcp_endpoint': 'https://cloudiff.duckdns.org/cloudiff/mcp'},
         }
         html = self.module.render([row], 'csrf-test')
-        for marker in ('Client Secret', '/cloudiff/mcp/oauth/authorize', '/cloudiff/mcp/oauth/token',
-                       '/cloudiff/mcp/oauth/revoke', 'https://claude.ai/api/mcp/auth_callback',
-                       'https://chatgpt.com/connector/oauth/&lt;callback_id&gt;', 'Llama/Ollama'):
+        for marker in (
+            'Client Secret', 'Deixe vazio', 'token_endpoint_auth_method=none', 'PKCE', 'S256',
+            '/cloudiff/mcp/oauth/authorize', '/cloudiff/mcp/oauth/token',
+            'https://claude.ai/api/mcp/auth_callback', 'ChatGPT', 'Claude', 'Llama / Ollama',
+            'client-projeto-teste', 'iff0001-projeto-teste',
+            'https://cloudiff.duckdns.org/git/iff0001/cloudif-projeto-teste.git',
+        ):
             self.assertIn(marker, html)
+        self.assertNotIn('Use a chave gerada no Portal', html)
+        self.assertNotIn('Client Secret OAuth', html)
+
+    def test_generic_config_uses_public_oauth_without_token_headers(self):
+        config = self.module.config_json('https://cloudiff.example/mcp', 'client-project', 'project')
+        for marker in ('"token_endpoint_auth_method": "none"', '"code_challenge_method": "S256"', '"client_secret": ""'):
+            self.assertIn(marker, config)
+        self.assertNotIn('Authorization', config)
+        self.assertNotIn('CLOUDIFF_TOKEN', config)
 
     def test_pending_approval_is_embedded_in_project_card(self):
         row = {

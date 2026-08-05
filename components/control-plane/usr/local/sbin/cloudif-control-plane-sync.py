@@ -6,9 +6,12 @@ os.makedirs(os.path.dirname(DST),exist_ok=True)
 src=sqlite3.connect(f'file:{SRC}?mode=ro',uri=True,timeout=10); src.row_factory=sqlite3.Row
 projects={r['slug']:dict(r) for r in src.execute('select * from projects')}
 ints={r['project']:dict(r) for r in src.execute('select * from project_integrations')}
-acl={}
+tenant_acl={}
 for r in src.execute("select tenant,subject_type,subject from tenant_acl"):
-    acl.setdefault(r['tenant'],[]).append({'type':r['subject_type'],'subject':r['subject']})
+    tenant_acl.setdefault(r['tenant'],[]).append({'type':r['subject_type'],'subject':r['subject']})
+project_acl={}
+for r in src.execute("select slug,subject_type,subject from project_acl"):
+    project_acl.setdefault(r['slug'],[]).append({'type':r['subject_type'],'subject':r['subject']})
 fd,tmp=tempfile.mkstemp(prefix='control-plane-',suffix='.db',dir=os.path.dirname(DST)); os.close(fd)
 try:
     db=sqlite3.connect(tmp)
@@ -30,7 +33,7 @@ try:
         db.execute('insert into projects values(?,?,?,?,?,?,?,?,?,?,?,?,?)',(pid,slug,p.get('name') or slug,p.get('tenant') or p.get('tenant_default') or '',p.get('owner') or '',p.get('status') or 'unknown',repo,stack_id,stack_name,i.get('forgejo_status') or ('configured' if repo else 'missing'),i.get('supabase_status') or 'unknown',i.get('komodo_status') or p.get('komodo_status') or 'unknown',now))
         for connector,enabled,status in [('forgejo',bool(repo),i.get('forgejo_status') or ('configured' if repo else 'missing')),('supabase',True,i.get('supabase_status') or 'unknown'),('publication',bool(stack_id),i.get('komodo_status') or 'unknown'),('ai',False,'disabled')]:
             db.execute('insert into project_connectors values(?,?,?,?,?)',(pid,connector,1 if enabled else 0,status,'{}'))
-        subjects=list(acl.get(p.get('tenant') or '',[]))
+        subjects=list(project_acl.get(slug,[]))+list(tenant_acl.get(p.get('tenant') or '',[]))
         if p.get('owner'): subjects.append({'type':'user','subject':p['owner']})
         seen=set()
         for a in subjects:

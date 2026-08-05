@@ -31,6 +31,29 @@ def _agent_clients():
     req=urllib.request.Request(AGENT_URL+'/v1/clients',headers={'Authorization':'Bearer '+AGENT_ADMIN_TOKEN,'Accept':'application/json'})
     with urllib.request.urlopen(req,timeout=5) as x:return json.load(x).get('clients') or []
 def _oauth_client(client_id):return next((x for x in _agent_clients() if x.get('client_id')==client_id and x.get('status')=='active'),None)
+def _client_projects(row):
+    if not row:return []
+    raw=row.get('project_slugs_json') if isinstance(row,dict) else None
+    try:projects=json.loads(raw or '[]') if isinstance(raw,str) else list(row.get('project_slugs') or [])
+    except Exception:projects=[]
+    return [str(x).strip() for x in projects if str(x).strip()]
+def _header_groups(value):
+    return {x.strip().casefold() for x in re.split(r'[|,;]',str(value or '')) if x.strip()}
+def _public_oauth_client(client_id,username,groups_header):
+    row=_oauth_client(client_id);projects=_client_projects(row)
+    if not row or len(projects)!=1 or not username:return None
+    slug=projects[0]
+    try:data=control('/v1/projects/'+urllib.parse.quote(slug,safe=''))
+    except Exception:return None
+    project=data.get('project') or {};acl=data.get('acl') or []
+    user=str(username).strip().casefold();groups=_header_groups(groups_header)
+    allowed=user==str(project.get('owner') or row.get('owner_user') or '').strip().casefold()
+    for item in acl:
+        kind=str(item.get('subject_type') or '').strip().casefold();subject=str(item.get('subject') or '').strip().casefold()
+        if kind=='user' and subject==user:allowed=True
+        if kind=='group' and subject in groups:allowed=True
+    if not allowed:return None
+    return {'client_id':client_id,'project_slug':slug,'authorized_user':str(username).strip(),'public_client':True,'owner_user':str(row.get('owner_user') or '')}
 def _callback_allowed(uri):
     try:u=urlparse(uri)
     except Exception:return False
@@ -67,7 +90,7 @@ def _oauth_cleanup():
 
 def _oauth_metadata(resource=False):
     if resource:return {'resource':MCP_RESOURCE,'authorization_servers':[OAUTH_ISSUER],'bearer_methods_supported':['header'],'scopes_supported':['mcp','offline_access']}
-    return {'issuer':OAUTH_ISSUER,'authorization_endpoint':OAUTH_ISSUER+'/cloudiff/mcp/oauth/authorize','token_endpoint':OAUTH_ISSUER+'/cloudiff/mcp/oauth/token','revocation_endpoint':OAUTH_ISSUER+'/cloudiff/mcp/oauth/revoke','response_types_supported':['code'],'grant_types_supported':['authorization_code','refresh_token'],'code_challenge_methods_supported':['S256'],'token_endpoint_auth_methods_supported':['client_secret_post','client_secret_basic'],'scopes_supported':['mcp','offline_access'],'resource':MCP_RESOURCE}
+    return {'issuer':OAUTH_ISSUER,'authorization_endpoint':OAUTH_ISSUER+'/cloudiff/mcp/oauth/authorize','token_endpoint':OAUTH_ISSUER+'/cloudiff/mcp/oauth/token','revocation_endpoint':OAUTH_ISSUER+'/cloudiff/mcp/oauth/revoke','response_types_supported':['code'],'grant_types_supported':['authorization_code','refresh_token'],'code_challenge_methods_supported':['S256'],'token_endpoint_auth_methods_supported':['none','client_secret_post','client_secret_basic'],'scopes_supported':['mcp','offline_access'],'resource':MCP_RESOURCE}
 
 def audit_async(event):
     if not AUDIT_TOKEN:return
@@ -130,7 +153,29 @@ TOOLS=[
  {'name':'deployment.rollback-test.plan','description':'Planeja rollback manual apenas para um job histórico publicado do ambiente isolado','inputSchema':{'type':'object','properties':{'slug':{'type':'string','enum':['sistema-de-biblioteca-teste']},'target_job_id':{'type':'integer','minimum':1,'maximum':2147483647}},'required':['slug','target_job_id'],'additionalProperties':False}},
  {'name':'approval.request-rollback-test','description':'Solicita aprovação humana separada para rollback manual no ambiente isolado','inputSchema':{'type':'object','properties':{'slug':{'type':'string','enum':['sistema-de-biblioteca-teste']},'target_job_id':{'type':'integer','minimum':1,'maximum':2147483647},'expected_current_job_id':{'type':'integer','minimum':1,'maximum':2147483647},'expected_current_commit':{'type':'string','pattern':'^[a-f0-9]{40}$'},'target_commit':{'type':'string','pattern':'^[a-f0-9]{40}$'},'reason':{'type':'string','minLength':4,'maxLength':500},'ttl_seconds':{'type':'integer','minimum':60,'maximum':86400}},'required':['slug','target_job_id','expected_current_job_id','expected_current_commit','target_commit','reason'],'additionalProperties':False}},
  {'name':'deployment.rollback-test','description':'Executa rollback manual aprovado para release histórica do ambiente isolado','inputSchema':{'type':'object','properties':{'slug':{'type':'string','enum':['sistema-de-biblioteca-teste']},'target_job_id':{'type':'integer','minimum':1,'maximum':2147483647},'expected_current_job_id':{'type':'integer','minimum':1,'maximum':2147483647},'expected_current_commit':{'type':'string','pattern':'^[a-f0-9]{40}$'},'target_commit':{'type':'string','pattern':'^[a-f0-9]{40}$'},'approval_id':{'type':'string','pattern':'^apr_[a-f0-9]{20}$'}},'required':['slug','target_job_id','expected_current_job_id','expected_current_commit','target_commit','approval_id'],'additionalProperties':False}},
-]
+ ]
+READ_ONLY_TOOLS={
+ 'project.list','project.get','project.connectors','runtime.catalog','runtime.detect','runtime.plan','runtime.validate',
+ 'build.plan','build.status','build.logs.read','build.artifact.get','deployment.preview.plan','deployment.preview.status',
+ 'approval.get','forgejo.proposal.list','forgejo.proposal.merge.plan','supabase.migrations.inspect','supabase.migrations.plan',
+ 'deployment.production.activation.plan','deployment.production.readiness','deployment.production.homologation.plan',
+ 'deployment.production.plan','deployment.plan','deployment.promote-test.plan','deployment.promote-test.status','deployment.rollback-test.plan'
+}
+DESTRUCTIVE_TOOLS={
+ 'forgejo.proposal.delete-branch','forgejo.proposal.merge','deployment.production.homologation.deploy',
+ 'deployment.production.homologation.rollback','deployment.promote-test','deployment.rollback-test'
+}
+OPEN_WORLD_PREFIXES=('forgejo.','supabase.','deployment.','approval.','build.')
+for _tool in TOOLS:
+    _name=str(_tool.get('name') or '')
+    _readonly=_name in READ_ONLY_TOOLS
+    _tool['annotations']={
+        'title':_name.replace('.',' ').replace('-',' ').title(),
+        'readOnlyHint':_readonly,
+        'destructiveHint':_name in DESTRUCTIVE_TOOLS,
+        'idempotentHint':_readonly,
+        'openWorldHint':_name.startswith(OPEN_WORLD_PREFIXES),
+    }
 def control(path):
     r=urllib.request.Request(CONTROL+path,headers={'Authorization':'Bearer '+CONTROL_TOKEN,'Accept':'application/json'})
     with urllib.request.urlopen(r,timeout=8) as x:return json.loads(x.read().decode())
@@ -444,7 +489,8 @@ class H(BaseHTTPRequestHandler):
         if oauth:
             self._oauth=oauth
             if not self.headers.get('X-CloudIF-Client'):self.headers['X-CloudIF-Client']=oauth['client_id']
-            self.headers.replace_header('Authorization','Bearer '+oauth['secret'])
+            if not oauth.get('public_client'):
+                self.headers.replace_header('Authorization','Bearer '+oauth['secret'])
             return True
         client=self.headers.get('X-CloudIF-Client','').strip()
         if client:return got.startswith('Bearer ') and len(got)>20
@@ -452,9 +498,17 @@ class H(BaseHTTPRequestHandler):
     def authorize_client(self,scope,slug):
         client=self.headers.get('X-CloudIF-Client','').strip()
         if not client:return {'ok':True,'legacy':True,'client_id':'internal'}
-        raw=self.headers.get('Authorization','')[7:]
-        payload=json.dumps({'client_id':client,'token':raw,'scope':scope,'project_slug':slug},separators=(',',':')).encode()
-        req=urllib.request.Request(AGENT_URL+'/v1/authorize',data=payload,method='POST',headers={'Content-Type':'application/json','Authorization':'Bearer '+AGENT_ADMIN_TOKEN})
+        oauth=getattr(self,'_oauth',None) or {}
+        if oauth.get('public_client'):
+            project_slug=str(oauth.get('project_slug') or '')
+            if slug and slug!=project_slug:return {'ok':False,'reason':'project_denied'}
+            payload=json.dumps({'client_id':client,'scope':scope,'project_slug':slug or project_slug,'authorized_user':oauth.get('authorized_user','')},separators=(',',':')).encode()
+            path='/v1/authorize-public'
+        else:
+            raw=self.headers.get('Authorization','')[7:]
+            payload=json.dumps({'client_id':client,'token':raw,'scope':scope,'project_slug':slug},separators=(',',':')).encode()
+            path='/v1/authorize'
+        req=urllib.request.Request(AGENT_URL+path,data=payload,method='POST',headers={'Content-Type':'application/json','Authorization':'Bearer '+AGENT_ADMIN_TOKEN})
         with urllib.request.urlopen(req,timeout=5) as x:return json.load(x)
     def redirect(self,url):self.send_response(302);self.send_header('Location',url);self.send_header('Cache-Control','no-store');self.end_headers()
     def do_GET(self):
@@ -462,9 +516,11 @@ class H(BaseHTTPRequestHandler):
         if path in {'/.well-known/oauth-authorization-server','/cloudiff/mcp/.well-known/oauth-authorization-server','/oauth/.well-known/oauth-authorization-server'}:return self.sendj(200,_oauth_metadata())
         if path in {'/.well-known/oauth-protected-resource','/.well-known/oauth-protected-resource/cloudiff/mcp','/cloudiff/mcp/.well-known/oauth-protected-resource'}:return self.sendj(200,_oauth_metadata(True))
         if path in {'/authorize','/oauth/authorize','/cloudiff/mcp/oauth/authorize'}:
-            q=parse_qs(parsed.query);client_id=(q.get('client_id') or [''])[0];redirect_uri=(q.get('redirect_uri') or [''])[0];state=(q.get('state') or [''])[0];challenge=(q.get('code_challenge') or [''])[0]
-            if (q.get('response_type') or [''])[0]!='code' or not _oauth_client(client_id) or not _callback_allowed(redirect_uri):return self.sendj(400,{'error':'invalid_request'})
-            code=secrets.token_urlsafe(32);OAUTH_CODES[code]={'client_id':client_id,'redirect_uri':redirect_uri,'code_challenge':challenge,'expires_at':time.time()+300}
+            q=parse_qs(parsed.query);client_id=(q.get('client_id') or [''])[0];redirect_uri=(q.get('redirect_uri') or [''])[0];state=(q.get('state') or [''])[0];challenge=(q.get('code_challenge') or [''])[0];method=(q.get('code_challenge_method') or [''])[0]
+            username=self.headers.get('X-authentik-username','').strip();groups=self.headers.get('X-authentik-groups','')
+            client=_public_oauth_client(client_id,username,groups)
+            if (q.get('response_type') or [''])[0]!='code' or not client or not _callback_allowed(redirect_uri) or method!='S256' or not challenge:return self.sendj(400,{'error':'invalid_request'})
+            code=secrets.token_urlsafe(32);OAUTH_CODES[code]={**client,'redirect_uri':redirect_uri,'code_challenge':challenge,'expires_at':time.time()+300}
             return self.redirect(redirect_uri+('&' if '?' in redirect_uri else '?')+urlencode({'code':code,**({'state':state} if state else {})}))
         if path=='/health':
             try: h=control('/health');self.sendj(200,{'ok':True,'service':'cloudif-mcp-gateway','control_plane':bool(h.get('ok')),'oauth':True})
@@ -482,9 +538,10 @@ class H(BaseHTTPRequestHandler):
             if grant=='authorization_code':
                 code=(form.get('code') or [''])[0];row=OAUTH_CODES.pop(code,None)
                 if not row or row['client_id']!=client_id or row['redirect_uri']!=(form.get('redirect_uri') or [''])[0] or not _pkce_ok((form.get('code_verifier') or [''])[0],row.get('code_challenge')):return self.sendj(400,{'error':'invalid_grant'})
-                client=_validate_client_secret(client_id,secret)
+                client=_validate_client_secret(client_id,secret) if secret else (row if row.get('public_client') else None)
             elif grant=='refresh_token':
-                ref=(form.get('refresh_token') or [''])[0];saved=OAUTH_REFRESH.pop(ref,None);client=_validate_client_secret(client_id,secret) if saved and saved.get('client_id')==client_id else None
+                ref=(form.get('refresh_token') or [''])[0];saved=OAUTH_REFRESH.pop(ref,None)
+                client=(_validate_client_secret(client_id,secret) if secret else saved) if saved and saved.get('client_id')==client_id else None
             else:return self.sendj(400,{'error':'unsupported_grant_type'})
             return self.sendj(200,_oauth_token(client)) if client else self.sendj(401,{'error':'invalid_client'})
         if path in {'/revoke','/oauth/revoke','/cloudiff/mcp/oauth/revoke'}:
@@ -497,6 +554,11 @@ class H(BaseHTTPRequestHandler):
             rid=req.get('id'); method=req.get('method'); params=req.get('params') or {}
             args=params.get('arguments') or {};tool=params.get('name') if method=='tools/call' else method
             slug=str(args.get('slug') or '')
+            if method=='resources/read':
+                resource_uri=str(params.get('uri') or '')
+                if resource_uri.startswith('cloudiff://guide/project/'):slug=resource_uri.rsplit('/',1)[-1].strip()
+            elif method=='prompts/get':
+                slug=str((params.get('arguments') or {}).get('slug') or '')
             scope=SCOPE_BY_TOOL.get(tool,'project:read')
             trace_id=self.headers.get('X-CloudIF-Trace-Id') or uuid.uuid4().hex
             authz=self.authorize_client(scope,slug)
@@ -528,7 +590,7 @@ class H(BaseHTTPRequestHandler):
             elif method=='tools/list':result={'tools':TOOLS}
             elif method=='tools/call':
                 name=params.get('name');args=params.get('arguments') or {}
-                if name=='project.list': data=control('/v1/projects');content=data.get('projects',[])
+                if name=='project.list': data=control('/v1/projects');allowed=set(authz.get('project_slugs') or []);content=[x for x in data.get('projects',[]) if not allowed or x.get('slug') in allowed]
                 elif name in {'project.get','project.connectors'}:
                     slug=str(args.get('slug') or '').strip()
                     if not slug:raise ValueError('slug obrigatório')

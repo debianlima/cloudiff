@@ -107,6 +107,23 @@ class H(BaseHTTPRequestHandler):
    if environment=='production':self.out(403,{'ok':False,'error':'production_disabled'});return
    if role=='test-operator' and projects!=['sistema-de-biblioteca-teste']:self.out(400,{'ok':False,'error':'test_operator_project_mismatch'});return
    x=c();x.execute('insert into clients(client_id,name,owner_user,tenant,status,token_hash,role_profile,environment,scopes_json,project_slugs_json,rate_per_minute,daily_quota,created_at,updated_at) values(?,?,?,?,?,?,?,?,?,?,?,?,?,?)',(cid,str(d.get('name')or cid),str(d.get('owner_user')or''),str(d.get('tenant')or''),'active',hash_token(raw),role,environment,json.dumps(scopes,separators=(',',':')),json.dumps(projects,separators=(',',':')),max(1,min(int(d.get('rate_per_minute') or 60),600)),max(1,min(int(d.get('daily_quota') or 1000),100000)),now,now));x.commit();x.close();self.out(201,{'ok':True,'client_id':cid,'token':raw,'role_profile':role,'environment':environment,'scopes':scopes});return
+  if p=='/v1/authorize-public':
+   cid=str(d.get('client_id') or '');scope=str(d.get('scope') or 'project:read');slug=str(d.get('project_slug') or '');authorized_user=str(d.get('authorized_user') or '')
+   now=time.gmtime();minute=time.strftime('%Y%m%d%H%M',now);day=time.strftime('%Y%m%d',now)
+   x=c();x.execute('begin immediate');r=x.execute('select * from clients where client_id=?',(cid,)).fetchone();allowed=False;reason='invalid_client';minute_calls=day_calls=0;projects=[]
+   if r and r['status']=='active' and authorized_user:
+    scopes=json.loads(r['scopes_json']);projects=json.loads(r['project_slugs_json']);coherent,coherence_reason=role_coherent(r,scopes,projects)
+    if not coherent:reason=coherence_reason
+    elif not (scope in scopes or '*' in scopes):reason='scope_denied'
+    elif projects and slug and slug not in projects:reason='project_denied'
+    else:
+     minute_calls=(x.execute('select calls from usage where client_id=? and window_key=?',(cid,'m:'+minute)).fetchone() or [0])[0]
+     day_calls=(x.execute('select calls from usage where client_id=? and window_key=?',(cid,'d:'+day)).fetchone() or [0])[0]
+     if minute_calls>=r['rate_per_minute']:reason='rate_limit'
+     elif day_calls>=r['daily_quota']:reason='daily_quota'
+     else:
+      x.execute('insert into usage values(?,?,1) on conflict(client_id,window_key) do update set calls=calls+1',(cid,'m:'+minute));x.execute('insert into usage values(?,?,1) on conflict(client_id,window_key) do update set calls=calls+1',(cid,'d:'+day));x.execute('update clients set last_used_at=? where client_id=?',(time.strftime('%Y-%m-%dT%H:%M:%SZ',now),cid));allowed=True;reason='allowed';minute_calls+=1;day_calls+=1
+   x.commit();x.close();self.out(200,{'ok':allowed,'reason':reason,'client_id':cid,'owner_user':r['owner_user'] if r else '','authorized_user':authorized_user if allowed else '','tenant':r['tenant'] if r else '','role_profile':r['role_profile'] if r else '','environment':r['environment'] if r else '','project_slugs':projects,'minute_calls':minute_calls,'daily_calls':day_calls,'rate_per_minute':r['rate_per_minute'] if r else 0,'daily_quota':r['daily_quota'] if r else 0,'public_client':True});return
   if p=='/v1/authorize':
    cid=str(d.get('client_id') or '');raw=str(d.get('token') or '');scope=str(d.get('scope') or 'project:read');slug=str(d.get('project_slug') or '')
    now=time.gmtime();minute=time.strftime('%Y%m%d%H%M',now);day=time.strftime('%Y%m%d',now)
@@ -123,7 +140,7 @@ class H(BaseHTTPRequestHandler):
      elif day_calls>=r['daily_quota']:reason='daily_quota'
      else:
       x.execute('insert into usage values(?,?,1) on conflict(client_id,window_key) do update set calls=calls+1',(cid,'m:'+minute));x.execute('insert into usage values(?,?,1) on conflict(client_id,window_key) do update set calls=calls+1',(cid,'d:'+day));x.execute('update clients set last_used_at=? where client_id=?',(time.strftime('%Y-%m-%dT%H:%M:%SZ',now),cid));allowed=True;reason='allowed';minute_calls+=1;day_calls+=1
-   x.commit();x.close();self.out(200,{'ok':allowed,'reason':reason,'client_id':cid,'owner_user':r['owner_user'] if r else '','tenant':r['tenant'] if r else '','role_profile':r['role_profile'] if r else '','environment':r['environment'] if r else '','minute_calls':minute_calls,'daily_calls':day_calls,'rate_per_minute':r['rate_per_minute'] if r else 0,'daily_quota':r['daily_quota'] if r else 0});return
+   x.commit();x.close();self.out(200,{'ok':allowed,'reason':reason,'client_id':cid,'owner_user':r['owner_user'] if r else '','tenant':r['tenant'] if r else '','role_profile':r['role_profile'] if r else '','environment':r['environment'] if r else '','project_slugs':json.loads(r['project_slugs_json']) if r else [],'minute_calls':minute_calls,'daily_calls':day_calls,'rate_per_minute':r['rate_per_minute'] if r else 0,'daily_quota':r['daily_quota'] if r else 0});return
   if p=='/v1/validate':
    cid=str(d.get('client_id')or'');raw=str(d.get('token')or'');scope=str(d.get('scope')or'project:read');slug=str(d.get('project_slug')or'')
    x=c();r=x.execute('select * from clients where client_id=?',(cid,)).fetchone()
