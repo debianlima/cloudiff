@@ -11,6 +11,9 @@ class HelpExternalConnectionsTests(unittest.TestCase):
         cls.focused = Path(
             "components/control-plane/current-apps/portal-current/cloudif_unique_pages98.py"
         ).read_text()
+        cls.navigation = Path(
+            "components/control-plane/current-apps/portal-current/cloudif-admin-portal-base.py"
+        ).read_text()
         cls.manual = Path("docs/manual-tecnico/13-ACESSO-EXTERNO.md").read_text()
 
     def test_help_lists_supported_https_connections(self):
@@ -60,6 +63,10 @@ class HelpExternalConnectionsTests(unittest.TestCase):
         ):
             self.assertNotIn(marker, self.canonical)
             self.assertNotIn(marker, self.focused)
+
+    def test_help_navigation_names_only_supported_connections(self):
+        self.assertIn("Aplicações, Git, Komodo e MCP", self.navigation)
+        self.assertNotIn("ChatGPT, Claude e Llama", self.navigation)
 
     def test_manual_distinguishes_get_from_post(self):
         self.assertIn("POST", self.manual)
