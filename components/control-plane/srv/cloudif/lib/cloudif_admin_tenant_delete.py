@@ -244,6 +244,48 @@ COMMIT;
     return result
 
 
+def _publisher_env(path=Path(os.environ.get("CLOUDIF_NPM_PUBLISHER_ENV", "/etc/cloudif/npm-publisher-client.env"))):
+    values = {}
+    if path.exists():
+        for line in path.read_text(errors="ignore").splitlines():
+            line = line.strip()
+            if line and not line.startswith("#") and "=" in line:
+                key, value = line.split("=", 1)
+                values[key.strip()] = value.strip().strip('"').strip("'")
+    return values
+
+
+def _remove_proxy_tenant(tenant, audit):
+    values = _publisher_env()
+    token = values.get("NPM_PUBLISHER_TOKEN", "")
+    url = os.environ.get("CLOUDIF_TENANT_UNPUBLISH_URL", "http://10.62.91.3/tenant/delete")
+    host = os.environ.get("CLOUDIF_TENANT_PUBLISHER_HOST", "cloudif-publisher.internal")
+    if not token:
+        result = {"ok": False, "error": "publisher_token_missing"}
+    else:
+        payload = json.dumps({"tenant": tenant}, ensure_ascii=False)
+        proc = _run([
+            "curl", "-fsS", "--retry", "5", "--retry-delay", "2", "--retry-all-errors",
+            "--connect-timeout", "8", "--max-time", "120",
+            "-H", "Content-Type: application/json", "-H", f"Host: {host}",
+            "-H", f"X-CloudIF-Token: {token}", "--data", payload, url,
+        ], timeout=150)
+        try:
+            data = json.loads(proc.stdout or "{}") if proc.returncode == 0 else {}
+        except json.JSONDecodeError:
+            data = {}
+        result = {
+            "ok": bool(proc.returncode == 0 and data.get("ok") is True and data.get("tenant") == tenant),
+            "removed": bool(data.get("removed")),
+            "certificate_preserved": str(data.get("certificate_preserved") or ""),
+            "stdout": proc.stdout[-1000:], "stderr": proc.stderr[-1000:],
+        }
+        if not result["ok"]:
+            result["error"] = "publisher_tenant_cleanup_failed"
+    (audit / "proxy-cleanup.json").write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n")
+    return result
+
+
 def _backup_database(tdir, audit):
     proc = _run(["docker", "compose", "--env-file", ".env", "ps", "-q", "db"], timeout=60, cwd=tdir)
     cid = proc.stdout.strip().splitlines()[0] if proc.stdout.strip() else ""
@@ -340,10 +382,14 @@ def execute(tenant, confirmation, actor, progress=None):
         shutil.rmtree(tdir)
     progress("Diretório do tenant", "done", "Diretório removido")
 
-    progress("Roteador", "running", "Renderizando rotas sem o tenant")
+    progress("Roteador", "running", "Removendo rota pública e renderizando rotas sem o tenant")
+    proxy_cleanup = _remove_proxy_tenant(tenant, audit)
     router = _run([str(ROUTER_RENDER)], timeout=300)
-    router_ok = router.returncode == 0
-    progress("Roteador", "done" if router_ok else "failed", "Rotas atualizadas" if router_ok else router.stderr[-300:])
+    router_ok = bool(router.returncode == 0 and proxy_cleanup.get("ok"))
+    progress(
+        "Roteador", "done" if router_ok else "failed",
+        "Rota pública e rotas internas removidas" if router_ok else (proxy_cleanup.get("error") or router.stderr[-300:]),
+    )
 
     final = preview(tenant)
     portal_residual = _tenant_reference_count(PORTAL_DB, tenant)
@@ -367,6 +413,7 @@ def execute(tenant, confirmation, actor, progress=None):
         "portal_removed": portal_removed,
         "onboarding_removed": onboarding_removed,
         "platform_removed": platform_removed,
+        "proxy_cleanup": proxy_cleanup,
         "router": {"ok": router_ok, "stdout": router.stdout[-1500:], "stderr": router.stderr[-1500:]},
         "final_preview": final,
         "final_references": {"portal": portal_residual, "onboarding": onboarding_residual},

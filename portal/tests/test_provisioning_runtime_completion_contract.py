@@ -16,14 +16,19 @@ class ProvisioningRuntimeCompletionContractTest(unittest.TestCase):
         self.assertIn('cloudif-ensure-tenant-certificate.sh', source)
         self.assertIn('tenant_runtime_error', source)
 
-    def test_certificate_step_verifies_public_tls_instead_of_internal_http_only(self):
+    def test_certificate_step_requires_exact_registered_tenant_route(self):
         source = Path('components/control-plane/srv/cloudif/bin/cloudif-ensure-tenant-certificate.sh').read_text(encoding='utf-8')
-        self.assertIn('https://${HOST}/project/default', source)
-        self.assertIn('tls_verified', source)
-        self.assertIn('route_verified', source)
-        self.assertIn('CLOUDIF_TENANT_CERTIFICATE_WAIT_SECONDS', source)
-        self.assertIn("--write-out '%{http_code}'", source)
-        self.assertIn('2??|3??|401|403', source)
+        provisioner = Path('components/control-plane/srv/cloudif/lib/cloudif_project_provision_real.py').read_text(encoding='utf-8')
+        self.assertIn('https://${HOST}/cloudiff/tenant-readiness', source)
+        self.assertIn('https://${HOST}/auth/v1/health', source)
+        self.assertIn('Tenant não registrado em $REGISTRY', source)
+        self.assertIn('[ "$READY_TENANT" = "$TENANT" ]', source)
+        self.assertIn('[ "$READY_HEADER" = "$TENANT" ]', source)
+        self.assertIn('registry_verified', source + provisioner)
+        self.assertIn('tls_verified', source + provisioner)
+        self.assertIn('route_verified', source + provisioner)
+        self.assertIn('api_verified', source + provisioner)
+        self.assertNotIn('2??|3??|401|403', source)
         self.assertNotIn('curl -k', source)
         self.assertIn('exit 1', source)
 

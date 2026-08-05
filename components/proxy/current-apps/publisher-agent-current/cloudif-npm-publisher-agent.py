@@ -200,6 +200,13 @@ def ensure_tenant(payload):
  render(state); save_state(state)
  return {'ok':True,'tenant':tenant,'hostname':host,'url':'https://'+host+'/','certificate':cert}
 
+def remove_tenant(payload):
+ tenant=str(payload.get('tenant') or '').strip().lower()
+ if not re.fullmatch(r'[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?',tenant): raise ValueError('invalid_tenant')
+ state=load_state(); removed=state.setdefault('tenants',{}).pop(tenant,None)
+ render(state); save_state(state)
+ return {'ok':True,'tenant':tenant,'removed':bool(removed),'certificate_preserved':str((removed or {}).get('cert') or '')}
+
 class H(BaseHTTPRequestHandler):
  def _json(self,code,obj):
   raw=json.dumps(obj,ensure_ascii=False).encode(); self.send_response(code); self.send_header('Content-Type','application/json'); self.send_header('Content-Length',str(len(raw))); self.end_headers(); self.wfile.write(raw)
@@ -217,6 +224,7 @@ class H(BaseHTTPRequestHandler):
    if self.path=='/alias': return self._json(200,alias_publish(payload))
    if self.path=='/unpublish': return self._json(200,unpublish(payload))
    if self.path=='/tenant': return self._json(200,ensure_tenant(payload))
+   if self.path=='/tenant/delete': return self._json(200,remove_tenant(payload))
    return self._json(404,{'ok':False,'error':'not_found'})
   except Exception as e: return self._json(422,{'ok':False,'error':type(e).__name__,'detail':str(e)[:500]})
  def log_message(self,fmt,*args): pass

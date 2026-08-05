@@ -1483,8 +1483,10 @@ SELECT cloudif.cloudif_register_project_event(
         certificate_verified = bool(
             crc == 0
             and certificate_data.get("ok") is True
+            and certificate_data.get("registry_verified") is True
             and certificate_data.get("tls_verified") is True
             and certificate_data.get("route_verified") is True
+            and certificate_data.get("api_verified") is True
         )
         comp["actions"].append({
             "name": "supabase_tenant_certificate",
