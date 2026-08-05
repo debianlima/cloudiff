@@ -74,6 +74,9 @@ server {{
     ssl_certificate_key /etc/letsencrypt/live/{cert}/privkey.pem;
     include conf.d/include/ssl-ciphers.conf;
     add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+    add_header X-Content-Type-Options nosniff always;
+    add_header Referrer-Policy strict-origin-when-cross-origin always;
+    add_header Content-Security-Policy "upgrade-insecure-requests; block-all-mixed-content" always;
     location / {{
         proxy_http_version 1.1;
         proxy_set_header Host $host;

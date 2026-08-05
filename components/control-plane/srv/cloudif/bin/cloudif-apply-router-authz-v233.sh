@@ -127,10 +127,11 @@ auth_snippet = '''        # CloudIF v244 tenant-auth BEGIN
 '''
 
 
-# CloudIF v250: adiciona redirect da raiz do subdomínio para o Studio
+# CloudIF v250: tenant ativo abre o Studio; domínio institucional abre o Portal.
 root_redirect_v250 = """
     # CloudIF v250 root redirect BEGIN
     location = / {
+        if ($cloudif_kong_port != "") { return 302 /project/default; }
         return 302 /cloudiff/portal/;
     }
     # CloudIF v250 root redirect END
