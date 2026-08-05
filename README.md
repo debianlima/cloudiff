@@ -18,11 +18,37 @@ Ela foi projetada para:
 | Capacidade | Resultado para cada projeto |
 |---|---|
 | Código | Repositório privado no Forgejo, acessível por Git HTTPS. |
-| Runtime | Container isolado com versões controladas de Apache, PHP e Node.js. |
+| Runtime | Runtime gerado fora do Git, com Apache, PHP e Node.js nas versões escolhidas. |
 | Dados | Tenant Supabase com Postgres, Auth, REST, Storage, Realtime e Studio. |
-| Publicação | Build, healthcheck, URL versionada, promoção e rollback pelo Komodo. |
+| Publicação | Cada `dN` possui stack, imagem, container, URL e terminais próprios, com promoção e rollback pelo Komodo. |
 | Agentes de IA | Identidade MCP própria, OAuth, escopos, ACL, aprovação humana e auditoria. |
 | Governança | Permissões por projeto, backups, logs, monitoramento e reconciliação idempotente. |
+
+## Contrato de um projeto
+
+O repositório de cada projeto guarda somente o código-fonte e sua documentação. A antiga pasta `site/` passa a ser a própria raiz do Git:
+
+```text
+index.php ou index.html
+api/
+assets/
+src/
+README.md
+```
+
+Arquivos operacionais da CloudIFF não são enviados ao Forgejo. Dockerfile, Compose, configuração de Apache e Supervisor, healthcheck, imagens, `.env`, segredos e metadados são gerados fora do repositório.
+
+Cada publicação é um runtime imutável e independente:
+
+```text
+d1 → stack + imagem + container + URL + terminais
+d2 → stack + imagem + container + URL + terminais
+dN → stack + imagem + container + URL + terminais
+```
+
+A ativação troca somente o alias da versão estável depois do healthcheck. Se o runtime de uma versão registrada não existir mais, a plataforma reconstrói o commit daquela `dN` antes de promovê-la.
+
+Quando uma pessoa é adicionada ou removida de um projeto ou banco, o reconciliador reaplica o estado completo: colaboradores do Forgejo, permissões do Komodo, terminais das publicações, integrações MCP e acesso ao tenant Supabase. Operações pendentes permanecem na fila e são repetidas até a convergência.
 
 ## Algoritmos operacionais
 
@@ -30,10 +56,10 @@ Ela foi projetada para:
 
 O diagrama resume os quatro algoritmos centrais da plataforma:
 
-1. **Provisionamento:** valida a solicitação, cria repositório, runtime e tenant, publica a rota e exige resposta saudável.
-2. **Publicação:** transforma uma alteração Git em build versionado, preview, aprovação, promoção ou rollback.
+1. **Provisionamento:** valida a solicitação, cria o repositório somente com código na raiz, o tenant e a publicação inicial `d1` em runtime próprio.
+2. **Publicação:** transforma um commit em uma nova `dN`, com imagem, container, URL e terminais independentes, pronta para promoção ou rollback.
 3. **Agentes MCP:** autentica o cliente, aplica escopos e ACL, solicita aprovação quando necessário e audita a execução.
-4. **Reconciliação:** compara o estado desejado com o observado e aplica correções idempotentes até os recursos convergirem.
+4. **Reconciliação:** reage a mudanças de projeto, banco e membresia, compara o estado desejado com o observado e repete correções idempotentes até convergir.
 
 Os contratos completos estão em [Arquitetura e diagramas](docs/manual-tecnico/01-ARQUITETURA.md), [Fluxos de processo](docs/manual-tecnico/02-FLUXOS.md) e [Arquitetura operacional atual](docs/manual-tecnico/12-ARQUITETURA-OPERACIONAL-ATUAL.md).
 

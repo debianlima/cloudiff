@@ -71,7 +71,7 @@ class HelpExternalConnectionsTests(unittest.TestCase):
             'class="guide-connection-url"',
             'overflow-wrap:anywhere',
             'word-break:break-word',
-            '#guia-conexoes,#guia-regras{grid-column:1/-1}',
+            '#guia-conexoes,#guia-membros,#guia-regras{grid-column:1/-1}',
         ):
             self.assertIn(marker, self.canonical)
         for marker in (
@@ -85,6 +85,42 @@ class HelpExternalConnectionsTests(unittest.TestCase):
     def test_help_navigation_names_only_supported_connections(self):
         self.assertIn("Aplicações, Git, Komodo e MCP", self.navigation)
         self.assertNotIn("ChatGPT, Claude e Llama", self.navigation)
+
+    def test_help_documents_source_root_and_versioned_runtimes(self):
+        for marker in (
+            "Código e runtime",
+            "pasta <code>site/</code> transformada na raiz",
+            "publicação inicial <code>d1</code> em container próprio",
+            "Cada versão <code>d1</code>, <code>d2</code>",
+            "stack, imagem, container e terminais próprios",
+        ):
+            self.assertIn(marker, self.canonical)
+        for marker in (
+            "Código-fonte e runtime",
+            "não existe pasta obrigatória <code>site/</code>",
+            "cada nova <code>dN</code>",
+        ):
+            self.assertIn(marker, self.focused)
+
+    def test_help_documents_membership_reconciliation(self):
+        for marker in (
+            "Membros e reconciliação de acessos",
+            "Qualquer inclusão ou remoção em um projeto ou banco",
+            "colaboradores do Forgejo",
+            "terminais das publicações",
+            "listas de acesso e permissões do tenant Supabase",
+            "tentada novamente até convergir",
+        ):
+            self.assertIn(marker, self.canonical)
+        for marker in (
+            "Membros e acessos",
+            "Adicionar ou remover alguém de um projeto ou banco",
+            "Retry",
+        ):
+            self.assertIn(marker, self.focused)
+
+    def test_help_menu_names_runtime_and_access_guide(self):
+        self.assertIn("Código, versões e acessos", self.navigation)
 
     def test_manual_distinguishes_get_from_post(self):
         self.assertIn("POST", self.manual)

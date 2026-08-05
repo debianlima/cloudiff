@@ -26,13 +26,38 @@ sequenceDiagram
   S-->>J: Tenant saudável
   J->>O: Reconcilia identidades, capacidades e credencial
   O-->>J: Projeto pronto para agente
-  J->>F: Aplica site/ e infraestrutura .cloudif/
-  J->>K: Reclona, verifica imagem-base, build e force-recreate
-  J->>X: Cria publicação inicial e valida URLs
+  J->>F: Publica somente o código-fonte na raiz do repositório
+  J->>K: Gera runtime fora do Git e cria stack/container próprios de d1
+  J->>X: Registra d1, valida URL versionada e promove o alias estável
   X-->>J: HTTP 200 em URL estável e versionada
   J-->>P: status=succeeded, step=complete
   P-->>U: Projeto provisionado
 ```
+
+## Inclusão e remoção de membros
+
+```mermaid
+sequenceDiagram
+  actor A as Administrador ou responsável
+  participant P as Portal
+  participant Q as Fila de reconciliação
+  participant W as Worker
+  participant F as Forgejo
+  participant K as Komodo
+  participant S as Supabase
+  participant M as MCP
+
+  A->>P: Adiciona ou remove pessoa do projeto ou banco
+  P->>Q: project.membership.changed ou tenant.membership.changed
+  Q->>W: Entrega estado desejado completo
+  W->>F: Reconcilia colaborador do repositório
+  W->>K: Reconcilia permissões e terminais de todas as dN
+  W->>S: Reconcilia acesso ao tenant
+  W->>M: Reconcilia identidade e integrações do projeto
+  W-->>Q: Convergente ou retry com backoff
+```
+
+A operação é orientada ao estado atual, não apenas à ação incremental. Repetir o evento não duplica recursos; remover uma pessoa elimina somente os recursos individuais gerenciados pela CloudIFF e preserva o proprietário.
 
 ## Exclusão de tenant
 

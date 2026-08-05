@@ -10,7 +10,7 @@
   <rect width="1600" height="1120" fill="#ffffff"/>
 
   <text x="80" y="82" font-family="Inter, Arial, sans-serif" font-size="48" font-weight="700" fill="#111512">Algoritmos operacionais da CloudIFF</text>
-  <text x="80" y="128" font-family="Inter, Arial, sans-serif" font-size="23" font-weight="400" fill="#5b635d">Do pedido do usuário ao serviço publicado, com identidade, aprovação, auditoria e rollback.</text>
+  <text x="80" y="128" font-family="Inter, Arial, sans-serif" font-size="23" font-weight="400" fill="#5b635d">Do código na raiz à publicação dN, com acessos reconciliados, auditoria e rollback.</text>
 
   <!-- Provisionamento -->
   <rect x="80" y="180" width="1440" height="190" rx="22" fill="#f7f9f7" stroke="#d9dedb" stroke-width="2"/>
@@ -32,12 +32,12 @@
     <line x1="730" y1="275" x2="756" y2="275" stroke="#12843a" stroke-width="3" marker-end="url(#arrow)"/>
     <rect x="766" y="228" width="170" height="94" rx="14" fill="#ffffff" stroke="#cfd6d1" stroke-width="2"/>
     <text x="851" y="260" text-anchor="middle" font-size="18" font-weight="700" fill="#111512">Forgejo</text>
-    <text x="851" y="286" text-anchor="middle" font-size="15" fill="#5b635d">repositório privado</text>
+    <text x="851" y="286" text-anchor="middle" font-size="15" fill="#5b635d">código na raiz</text>
 
     <line x1="938" y1="275" x2="964" y2="275" stroke="#12843a" stroke-width="3" marker-end="url(#arrow)"/>
     <rect x="974" y="228" width="170" height="94" rx="14" fill="#ffffff" stroke="#cfd6d1" stroke-width="2"/>
     <text x="1059" y="260" text-anchor="middle" font-size="18" font-weight="700" fill="#111512">Komodo</text>
-    <text x="1059" y="286" text-anchor="middle" font-size="15" fill="#5b635d">runtime isolado</text>
+    <text x="1059" y="286" text-anchor="middle" font-size="15" fill="#5b635d">container próprio d1</text>
 
     <line x1="1146" y1="275" x2="1172" y2="275" stroke="#12843a" stroke-width="3" marker-end="url(#arrow)"/>
     <rect x="1182" y="228" width="170" height="94" rx="14" fill="#ffffff" stroke="#cfd6d1" stroke-width="2"/>
@@ -55,7 +55,7 @@
   <rect x="80" y="400" width="12" height="190" rx="6" fill="#12843a"/>
   <text x="120" y="450" font-family="Inter, Arial, sans-serif" font-size="20" font-weight="700" fill="#12843a">02</text>
   <text x="120" y="486" font-family="Inter, Arial, sans-serif" font-size="28" font-weight="700" fill="#111512">Publicação</text>
-  <text x="120" y="518" font-family="Inter, Arial, sans-serif" font-size="17" fill="#5b635d">Entrega com versão e rollback</text>
+  <text x="120" y="518" font-family="Inter, Arial, sans-serif" font-size="17" fill="#5b635d">Uma stack e container por dN</text>
 
   <g font-family="Inter, Arial, sans-serif">
     <rect x="350" y="448" width="170" height="94" rx="14" fill="#ffffff" stroke="#cfd6d1" stroke-width="2"/>
@@ -65,17 +65,17 @@
     <line x1="522" y1="495" x2="548" y2="495" stroke="#12843a" stroke-width="3" marker-end="url(#arrow)"/>
     <rect x="558" y="448" width="170" height="94" rx="14" fill="#ffffff" stroke="#cfd6d1" stroke-width="2"/>
     <text x="643" y="480" text-anchor="middle" font-size="18" font-weight="700" fill="#111512">Build</text>
-    <text x="643" y="506" text-anchor="middle" font-size="15" fill="#5b635d">imagem versionada</text>
+    <text x="643" y="506" text-anchor="middle" font-size="15" fill="#5b635d">imagem própria dN</text>
 
     <line x1="730" y1="495" x2="756" y2="495" stroke="#12843a" stroke-width="3" marker-end="url(#arrow)"/>
     <rect x="766" y="448" width="170" height="94" rx="14" fill="#ffffff" stroke="#cfd6d1" stroke-width="2"/>
     <text x="851" y="480" text-anchor="middle" font-size="18" font-weight="700" fill="#111512">Healthcheck</text>
-    <text x="851" y="506" text-anchor="middle" font-size="15" fill="#5b635d">runtime saudável</text>
+    <text x="851" y="506" text-anchor="middle" font-size="15" fill="#5b635d">container dN saudável</text>
 
     <line x1="938" y1="495" x2="964" y2="495" stroke="#12843a" stroke-width="3" marker-end="url(#arrow)"/>
     <rect x="974" y="448" width="170" height="94" rx="14" fill="#ffffff" stroke="#cfd6d1" stroke-width="2"/>
     <text x="1059" y="480" text-anchor="middle" font-size="18" font-weight="700" fill="#111512">Preview</text>
-    <text x="1059" y="506" text-anchor="middle" font-size="15" fill="#5b635d">URL versionada</text>
+    <text x="1059" y="506" text-anchor="middle" font-size="15" fill="#5b635d">URL própria da dN</text>
 
     <line x1="1146" y1="495" x2="1172" y2="495" stroke="#12843a" stroke-width="3" marker-end="url(#arrow)"/>
     <rect x="1182" y="448" width="170" height="94" rx="14" fill="#ffffff" stroke="#cfd6d1" stroke-width="2"/>
@@ -85,7 +85,7 @@
     <line x1="1354" y1="495" x2="1380" y2="495" stroke="#12843a" stroke-width="3" marker-end="url(#arrow)"/>
     <rect x="1390" y="448" width="90" height="94" rx="14" fill="#12843a"/>
     <text x="1435" y="480" text-anchor="middle" font-size="15" font-weight="700" fill="#ffffff">Promover</text>
-    <text x="1435" y="506" text-anchor="middle" font-size="13" fill="#e9f5ed">ou rollback</text>
+    <text x="1435" y="506" text-anchor="middle" font-size="13" fill="#e9f5ed">alias ou rollback</text>
   </g>
 
   <!-- Agentes MCP -->
@@ -131,12 +131,12 @@
   <rect x="80" y="840" width="12" height="190" rx="6" fill="#12843a"/>
   <text x="120" y="890" font-family="Inter, Arial, sans-serif" font-size="20" font-weight="700" fill="#12843a">04</text>
   <text x="120" y="926" font-family="Inter, Arial, sans-serif" font-size="28" font-weight="700" fill="#111512">Reconciliação</text>
-  <text x="120" y="958" font-family="Inter, Arial, sans-serif" font-size="17" fill="#5b635d">Convergência segura e repetível</text>
+  <text x="120" y="958" font-family="Inter, Arial, sans-serif" font-size="17" fill="#5b635d">Membros, runtime e acessos convergentes</text>
 
   <g font-family="Inter, Arial, sans-serif">
     <rect x="350" y="888" width="170" height="94" rx="14" fill="#ffffff" stroke="#cfd6d1" stroke-width="2"/>
     <text x="435" y="920" text-anchor="middle" font-size="18" font-weight="700" fill="#111512">Desejado</text>
-    <text x="435" y="946" text-anchor="middle" font-size="15" fill="#5b635d">contrato do projeto</text>
+    <text x="435" y="946" text-anchor="middle" font-size="15" fill="#5b635d">ACL projeto e banco</text>
 
     <line x1="522" y1="935" x2="548" y2="935" stroke="#12843a" stroke-width="3" marker-end="url(#arrow)"/>
     <rect x="558" y="888" width="170" height="94" rx="14" fill="#ffffff" stroke="#cfd6d1" stroke-width="2"/>
@@ -156,7 +156,7 @@
     <line x1="1146" y1="935" x2="1172" y2="935" stroke="#12843a" stroke-width="3" marker-end="url(#arrow)"/>
     <rect x="1182" y="888" width="170" height="94" rx="14" fill="#ffffff" stroke="#cfd6d1" stroke-width="2"/>
     <text x="1267" y="920" text-anchor="middle" font-size="18" font-weight="700" fill="#111512">Aplicar</text>
-    <text x="1267" y="946" text-anchor="middle" font-size="15" fill="#5b635d">ação idempotente</text>
+    <text x="1267" y="946" text-anchor="middle" font-size="15" fill="#5b635d">Forgejo + Komodo + DB</text>
 
     <line x1="1354" y1="935" x2="1380" y2="935" stroke="#12843a" stroke-width="3" marker-end="url(#arrow)"/>
     <rect x="1390" y="888" width="90" height="94" rx="14" fill="#12843a"/>

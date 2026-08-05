@@ -5815,7 +5815,7 @@ def _nav95_render(user,current):
     monitor=[('monitor-saude','Status','', 'Saúde dos serviços',None),('monitor-transacoes','Atividades','', 'Operações recentes',None),('monitor-promocoes','Histórico','', 'Deploys e rollbacks',None),('monitor-filas','Filas','', 'Workers e processamento',None),('monitor-telemetria','Métricas','', 'Telemetria da plataforma',None)]
     platform=[('resumo','Visão geral','', 'Resumo da plataforma',None),('opcoes-projeto','Recursos','', 'Serviços, contêineres e backups',None),('operacao-producao','Produção','', 'Janelas e incidentes',None)]
     automation=[('agentes','IA','', 'Conectar agentes',None),('gestao-agentes','Agentes','', 'Identidades e estado',None),('capacidades','Ferramentas','', 'Capacidades por projeto',None),('reconciliacao','Automação','', 'Filas e reconciliação',None),('aprovacoes','Aprovações','', 'Decisões humanas',None),('documentacao-mcp','MCP','', 'Protocolo e documentação',None)]
-    help_items=[('ajuda','Ajuda','', 'Primeiros passos',None),('ajuda-token','Tokens','', 'Rotação e armazenamento',None),('ajuda-conectar','Clientes','', 'ChatGPT, Claude e Llama',None),('ajuda-aprovacoes','Papéis','', 'Como aprovações funcionam',None),('ajuda-ferramentas','Referência','', 'Ferramentas MCP',None)]
+    help_items=[('ajuda','Ajuda','', 'Código, versões e acessos',None),('ajuda-token','Tokens','', 'Rotação e armazenamento',None),('ajuda-conectar','Clientes','', 'Aplicações, Git, Komodo e MCP',None),('ajuda-aprovacoes','Papéis','', 'Como aprovações funcionam',None),('ajuda-ferramentas','Referência','', 'Ferramentas MCP',None)]
     administration=[]
     groups={str(x) for x in (user.get('groups') or [])}
     if user.get('admin') or groups.intersection({'CloudIF-Tenants-Admin','CloudIF-Professor'}):

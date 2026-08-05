@@ -61,7 +61,7 @@ Inclusões e remoções em projeto ou banco geram eventos de reconciliação. O 
 
 - colaboradores do Forgejo;
 - permissões do Komodo;
-- terminais individuais no container ativo;
+- terminais individuais em todas as publicações existentes;
 - listas de acesso do tenant Supabase;
 - integrações e identidade MCP do projeto.
 
