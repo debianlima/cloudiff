@@ -18,6 +18,25 @@ class TenantHttpsEntryContractTest(unittest.TestCase):
         self.assertIn("return 302 /cloudiff/portal/;", block)
         self.assertNotIn("location = / {\n        return 302 /cloudiff/portal/;", block)
 
+    def test_tenant_certificates_use_rsa_and_x1_chain(self):
+        for relative in (
+            "components/proxy/current-apps/publisher-agent-current/cloudif-npm-publisher-agent.py",
+            "components/proxy/usr/local/sbin/cloudif-npm-publisher-agent.py",
+        ):
+            source = (ROOT / relative).read_text()
+            for marker in (
+                "def cert_uses_rsa(name):",
+                "'--key-type','rsa'",
+                "'--rsa-key-size','2048'",
+                "'--preferred-chain','ISRG Root X1'",
+                "certificate_key_type_mismatch",
+            ):
+                self.assertIn(marker, source)
+            self.assertIn(
+                "cert_exists(name) and cert_covers(name,domains) and cert_uses_rsa(name)",
+                source,
+            )
+
     def test_tenant_proxy_enforces_secure_content(self):
         for relative in (
             "components/proxy/current-apps/publisher-agent-current/cloudif-npm-publisher-agent.py",
