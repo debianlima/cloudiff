@@ -75,6 +75,9 @@ class ProvisioningWaitsStartPageThemeTest(unittest.TestCase):
         self.assertIn('localStorage.setItem("cloudif-theme",value)', js)
         self.assertIn('html[data-theme="dark"]', tokens)
         self.assertIn('.theme-menu .theme-picker', css)
+        guide = (ROOT / 'components/control-plane/srv/cloudif/lib/cloudif_portal_v2_coexist.py').read_text()
+        self.assertIn('Conclusão real do provisionamento', guide)
+        self.assertIn('o botão Tema no cabeçalho', guide)
 
 
 if __name__ == '__main__':
