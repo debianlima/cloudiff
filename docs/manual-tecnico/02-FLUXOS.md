@@ -22,7 +22,7 @@ sequenceDiagram
   J->>K: ensure project / stack
   K-->>J: Stack convergida
   J->>S: Obtém lock tenant-<tenant>
-  J->>S: Cria ou repara tenant e aguarda 11 serviços
+  J->>S: Cria ou repara tenant e aguarda serviços críticos saudáveis
   S-->>J: Tenant saudável
   J->>O: Reconcilia identidades, capacidades e credencial
   O-->>J: Projeto pronto para agente
@@ -31,7 +31,8 @@ sequenceDiagram
   J->>X: Registra d1, valida URL versionada e promove o alias estável
   X-->>J: HTTP 200 em URL estável e versionada
   J-->>P: status=succeeded, step=complete
-  P-->>U: Projeto provisionado
+  J->>J: Aguarda d1, terminal e URLs públicas saudáveis
+  P-->>U: Projeto provisionado somente após readiness terminal
 ```
 
 ## Inclusão e remoção de membros

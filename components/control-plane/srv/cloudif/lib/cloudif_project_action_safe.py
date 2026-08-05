@@ -444,12 +444,12 @@ def main():
         return
 
     # Executa apenas o primeiro script real encontrado, com timeout, passando o JSON do job.
-    rc = run([found[0], str(job_file)], timeout=240)
+    rc = run([found[0], str(job_file)], timeout=int(os.environ.get('CLOUDIF_PROJECT_PROVISION_TIMEOUT', '7200')))
     if rc == 0 and job.get("template_kind") in ["onboarding", "links"]:
-        trc = run(["/usr/local/sbin/cloudif-project-template-apply.py", str(job_file)], timeout=420)
+        trc = run(["/usr/local/sbin/cloudif-project-template-apply.py", str(job_file)], timeout=int(os.environ.get('CLOUDIF_PROJECT_TEMPLATE_TIMEOUT', '900')))
         log(f"TEMPLATE_RC={trc}")
         if trc == 0:
-            prc = run(["/usr/local/sbin/cloudif-project-initial-publish.py", str(job_file)], timeout=900)
+            prc = run(["/usr/local/sbin/cloudif-project-initial-publish.py", str(job_file)], timeout=int(os.environ.get('CLOUDIF_INITIAL_PUBLICATION_TIMEOUT', '9000')))
             log(f"INITIAL_PUBLISH_RC={prc}")
     log("DONE")
 

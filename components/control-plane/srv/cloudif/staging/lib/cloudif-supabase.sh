@@ -67,17 +67,59 @@ cloudif_supabase_tenant_has_bad_containers() {
   return 1
 }
 
+cloudif_supabase_required_services() {
+  echo "${CLOUDIF_SUPABASE_REQUIRED_SERVICES:-db kong studio meta auth rest storage realtime supavisor}"
+}
+
 cloudif_supabase_tenant_basic_health() {
   TENANT="$1"
+  TDIR="$(cloudif_supabase_tenant_dir "$TENANT")"
 
   cloudif_supabase_tenant_exists "$TENANT" || return 1
   cloudif_supabase_tenant_has_compose "$TENANT" || return 1
 
-  if cloudif_supabase_tenant_has_bad_containers "$TENANT"; then
-    return 1
-  fi
+  for SERVICE in $(cloudif_supabase_required_services); do
+    CID="$(cd "$TDIR" && docker compose --env-file .env ps -q "$SERVICE" 2>/dev/null || true)"
+    [ -n "$CID" ] || return 1
+
+    STATE="$(docker inspect -f '{{.State.Status}}' "$CID" 2>/dev/null || true)"
+    [ "$STATE" = "running" ] || return 1
+
+    HEALTH="$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$CID" 2>/dev/null || true)"
+    case "$HEALTH" in
+      healthy|none) ;;
+      *) return 1 ;;
+    esac
+  done
 
   return 0
+}
+
+cloudif_supabase_wait_until_ready() {
+  TENANT="$1"
+  TIMEOUT="${2:-${CLOUDIF_TENANT_READY_TIMEOUT:-2700}}"
+  INTERVAL="${3:-${CLOUDIF_TENANT_READY_INTERVAL:-10}}"
+  START="$(date +%s)"
+  ATTEMPT=0
+
+  while true; do
+    ATTEMPT=$((ATTEMPT + 1))
+    if cloudif_supabase_tenant_basic_health "$TENANT"; then
+      echo "Tenant $TENANT pronto após $ATTEMPT verificações."
+      return 0
+    fi
+
+    NOW="$(date +%s)"
+    ELAPSED=$((NOW - START))
+    if [ "$ELAPSED" -ge "$TIMEOUT" ]; then
+      echo "Timeout aguardando tenant $TENANT após ${ELAPSED}s." >&2
+      cloudif_supabase_compose_ps "$TENANT" >&2 || true
+      return 1
+    fi
+
+    echo "Aguardando tenant $TENANT: serviços críticos ainda não estão prontos (${ELAPSED}s/${TIMEOUT}s)."
+    sleep "$INTERVAL"
+  done
 }
 
 cloudif_supabase_create_tenant() {

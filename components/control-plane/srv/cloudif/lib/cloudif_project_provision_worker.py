@@ -59,7 +59,8 @@ def main():
   candidates=['/usr/local/sbin/cloudif-project-provision.sh','/usr/local/sbin/cloudif-provision-project.sh']
   found=[c for c in candidates if Path(c).exists() and os.access(c,os.X_OK)]
   if not found:raise RuntimeError('external_provision_script_missing')
-  p=run([found[0],str(path)],2700)
+  provision_timeout=int(os.environ.get('CLOUDIF_PROJECT_PROVISION_TIMEOUT','7200'))
+  p=run([found[0],str(path)],provision_timeout)
   if p.returncode:
    detail=(p.stderr or p.stdout or '')[-420:]
    report_path=Path('/srv/cloudif/provisioning/projects')/slug/'provision-report.json'
@@ -89,10 +90,12 @@ def main():
   if p.returncode:raise RuntimeError('tenant_backup_timer_enable_failed: '+(p.stderr or p.stdout or '')[-420:])
   if job.get('template_kind') in ('onboarding','links'):
    set_state(path,job,'running','template')
-   p=run(['/usr/local/sbin/cloudif-project-template-apply.py',str(path)],480)
+   template_timeout=int(os.environ.get('CLOUDIF_PROJECT_TEMPLATE_TIMEOUT','900'))
+   p=run(['/usr/local/sbin/cloudif-project-template-apply.py',str(path)],template_timeout)
    if p.returncode:raise RuntimeError('template_apply_failed')
    set_state(path,job,'running','initial-publication')
-   p=run(['/usr/local/sbin/cloudif-project-initial-publish.py',str(path)],1200)
+   publication_timeout=int(os.environ.get('CLOUDIF_INITIAL_PUBLICATION_TIMEOUT','9000'))
+   p=run(['/usr/local/sbin/cloudif-project-initial-publish.py',str(path)],publication_timeout)
    if p.returncode:raise RuntimeError('initial_publication_failed: '+(p.stderr or p.stdout or '')[-420:])
   set_state(path,job,'succeeded','complete',result={'project_slug':slug,'role_profile':'project-admin','provisioned':True})
   log('SUCCEEDED slug='+slug)

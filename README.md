@@ -50,13 +50,25 @@ A ativação troca somente o alias da versão estável depois do healthcheck. Se
 
 Quando uma pessoa é adicionada ou removida de um projeto ou banco, o reconciliador reaplica o estado completo: colaboradores do Forgejo, permissões do Komodo, terminais das publicações, integrações MCP e acesso ao tenant Supabase. Operações pendentes permanecem na fila e são repetidas até a convergência.
 
+### Conclusão do provisionamento
+
+O job não termina quando os containers apenas aparecem. Para concluir, ele exige:
+
+- serviços críticos do tenant presentes, em execução e saudáveis;
+- certificado e rota HTTPS do tenant válidos;
+- stack, imagem e container próprios da `d1` saudáveis;
+- URL imutável da `d1` e URL estável respondendo;
+- terminal e associações do projeto reconciliados.
+
+Projetos novos recebem uma página inicial que ensina a publicar, clonar o Forgejo por HTTPS no Linux e Windows e consumir o Supabase em aplicações desktop por `supabase-js` ou REST HTTPS. O Portal também oferece tema **Claro**, **Escuro** ou **Sistema**, persistido no navegador.
+
 ## Algoritmos operacionais
 
 ![Algoritmos operacionais da CloudIFF](docs/assets/cloudiff-algoritmos-operacionais.svg)
 
 O diagrama resume os quatro algoritmos centrais da plataforma:
 
-1. **Provisionamento:** valida a solicitação, cria o repositório somente com código na raiz, o tenant e a publicação inicial `d1` em runtime próprio.
+1. **Provisionamento:** valida a solicitação, cria o repositório somente com código na raiz e permanece em execução até o tenant, a rota HTTPS e a publicação inicial `d1` estarem realmente prontos.
 2. **Publicação:** transforma um commit em uma nova `dN`, com imagem, container, URL e terminais independentes, pronta para promoção ou rollback.
 3. **Agentes MCP:** autentica o cliente, aplica escopos e ACL, solicita aprovação quando necessário e audita a execução.
 4. **Reconciliação:** reage a mudanças de projeto, banco e membresia, compara o estado desejado com o observado e repete correções idempotentes até convergir.

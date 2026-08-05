@@ -1186,6 +1186,13 @@ def render_help(user):
   <div class="help">
     <b>Professor/Admin:</b> cria/edita projetos, libera grupos, acompanha métricas e executa manutenção avançada.
   </div>
+  <h3>Provisionamento e primeira publicação</h3>
+  <div class="grid">
+    <div class="box"><h3>Conclusão real</h3><p>O projeto permanece em provisionamento enquanto o tenant inicia os serviços críticos, a rota HTTPS é validada e a publicação <code>d1</code> cria seu container saudável. Não feche a etapa como concluída antes desses testes.</p></div>
+    <div class="box"><h3>Página inicial d1</h3><p>Todo projeto novo recebe uma página prática com o fluxo de publicação, Git HTTPS no Linux e Windows e conexão de aplicações desktop ao Supabase por SDK ou REST HTTPS.</p></div>
+    <div class="box"><h3>Tema da aplicação</h3><p>Use o botão <b>Tema</b> no cabeçalho para escolher Claro, Escuro ou Sistema. A preferência fica salva neste navegador.</p></div>
+  </div>
+  <div class="help"><b>Conexões:</b> a página inicial ensina somente métodos publicados por HTTPS. Outras formas devem ser verificadas com a TI.</div>
 </div>"""
 
 

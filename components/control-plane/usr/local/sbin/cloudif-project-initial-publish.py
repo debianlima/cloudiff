@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import json
+import os
 import sqlite3
 import sys
 import time
@@ -122,6 +123,68 @@ def wait_public(url, timeout=600):
     raise RuntimeError('public_health_timeout_' + last)
 
 
+def deploy_initial_runtime(base, headers, payload):
+    expected = f"cloudif-p{int(payload['public_number'])}-d{int(payload['deploy_number'])}-web"
+    deploy_retries=0
+    last_status = 0
+    last = {}
+    request_timeout = int(os.environ.get('CLOUDIF_D1_DEPLOY_REQUEST_TIMEOUT', '1500'))
+
+    while True:
+        last_status, last = request(
+            base + '/komodo/publication/deploy',
+            'POST',
+            payload,
+            headers,
+            timeout=request_timeout,
+        )
+        terminal = last.get('terminal') if isinstance(last.get('terminal'), dict) else {}
+        ready = bool(
+            last_status // 100 == 2
+            and last.get('ok')
+            and last.get('healthy') is True
+            and str(last.get('container') or '') == expected
+            and str(last.get('stack_id') or '')
+            and terminal.get('ok')
+        )
+        if ready:
+            return last
+
+        transient = last_status in (0, 408, 409, 422, 425, 429, 500, 502, 503, 504)
+        if transient and deploy_retries < 2:
+            deploy_retries += 1
+            print('Repetindo o deploy após falha transitória do registry.', flush=True)
+            time.sleep(min(20 * deploy_retries, 40))
+            continue
+
+        raise RuntimeError(
+            'versioned_d1_not_ready:'
+            + json.dumps({
+                'http': last_status,
+                'expected_container': expected,
+                'response': last,
+            }, ensure_ascii=False)[:1400]
+        )
+
+
+def promote_initial_runtime(base, headers, project, number):
+    payload = {'project': project, 'public_number': number, 'deploy_number': 1}
+    deadline = time.monotonic() + int(os.environ.get('CLOUDIF_D1_PROMOTION_TIMEOUT', '300'))
+    last_status = 0
+    last = {}
+    while time.monotonic() < deadline:
+        last_status, last = request(
+            base + '/komodo/publication/promote',
+            'POST', payload, headers, timeout=90,
+        )
+        if last_status // 100 == 2 and last.get('ok'):
+            return last
+        if last_status not in (0, 409, 422, 425, 429, 500, 502, 503, 504):
+            break
+        time.sleep(5)
+    raise RuntimeError('d1_promotion_failed:' + json.dumps(last, ensure_ascii=False)[:800])
+
+
 def update_db(slug, tenant, owner, number, deployment, publisher, promotion):
     con = sqlite3.connect(DB)
     con.row_factory = sqlite3.Row
@@ -207,15 +270,11 @@ def main():
         'deploy_number': 1,
         'timeout': 600,
     }
-    status, deployment = request(
-        komodo_base + '/komodo/publication/deploy',
-        'POST',
-        deploy_payload,
+    deployment = deploy_initial_runtime(
+        komodo_base,
         komodo_headers,
-        timeout=900,
+        deploy_payload,
     )
-    if status // 100 != 2 or not deployment.get('ok'):
-        raise RuntimeError('versioned_d1_deploy_failed:' + json.dumps(deployment, ensure_ascii=False)[:900])
 
     publisher_cfg = envfile('/etc/cloudif/npm-publisher-client.env')
     publisher_token = publisher_cfg.get('NPM_PUBLISHER_TOKEN', '')
@@ -229,18 +288,16 @@ def main():
     if status // 100 != 2 or not publisher.get('ok'):
         raise RuntimeError('npm_publish_failed:' + json.dumps(publisher, ensure_ascii=False)[:500])
 
-    status, promotion = request(
-        komodo_base + '/komodo/publication/promote',
-        'POST',
-        {'project': slug, 'public_number': number, 'deploy_number': 1},
+    promotion = promote_initial_runtime(
+        komodo_base,
         komodo_headers,
-        timeout=180,
+        slug,
+        number,
     )
-    if status // 100 != 2 or not promotion.get('ok'):
-        raise RuntimeError('d1_promotion_failed:' + json.dumps(promotion, ensure_ascii=False)[:500])
 
-    wait_public(publisher['version_url'])
-    wait_public(publisher['stable_url'])
+    public_timeout = int(os.environ.get('CLOUDIF_D1_PUBLIC_READY_TIMEOUT', '1200'))
+    wait_public(publisher['version_url'], timeout=public_timeout)
+    wait_public(publisher['stable_url'], timeout=public_timeout)
     if kind == 'onboarding' and tenant:
         seed_db(tenant)
 

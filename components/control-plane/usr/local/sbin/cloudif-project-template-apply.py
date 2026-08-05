@@ -74,7 +74,7 @@ def public_number(slug):
 
 
 def build(kind, slug, owner, tenant, number):
-    if kind == 'onboarding':
+    if kind in ('onboarding', 'links'):
         from cloudif_onboarding_v2 import build_onboarding_v2
         return build_onboarding_v2(slug, owner, tenant, number)
 
@@ -138,13 +138,17 @@ Compose, Dockerfile, Apache, Supervisor, healthcheck, imagens e metadados de run
 
 Runtime selecionado: Apache + PHP {php_version} + Node.js {node_version}.
 
-## Fluxo
+## Publicar
 
-1. Edite o código na raiz.
-2. Faça commit e push na `main`.
-3. Crie uma publicação no Portal.
-4. Cada versão `d1`, `d2`, `d3` recebe stack, imagem, container e terminal próprios.
-5. Ativar uma versão altera apenas o alias estável; as demais versões permanecem independentes e podem ser reconstruídas pelo commit registrado.
+1. Clone por HTTPS no Linux ou Windows: `git clone https://cloudiff.duckdns.org/git/{owner}/cloudif-{slug}.git`.
+2. Edite o código na raiz e faça commit/push na `main`.
+3. No Portal, abra **Publicações** e crie uma nova versão.
+4. Cada `dN` recebe stack, imagem, container, URL e terminais próprios.
+5. Confira a URL imutável e ative a versão desejada.
+
+## Aplicações desktop e Supabase
+
+Use `https://{tenant}.cloudiff.duckdns.org` com `supabase-js` ou REST HTTPS e uma chave publicável/anon. Nunca distribua `service_role`, chave secreta, senha ou token administrativo no aplicativo.
 
 Site: https://{number}.cloudiff.duckdns.org/
 Forgejo: https://cloudiff.duckdns.org/git/{owner}/cloudif-{slug}
@@ -226,7 +230,7 @@ def main():
                 old.get('kind') == kind
                 and old.get('runtime_template') == runtime
                 and old.get('php_version', '8.3') == php_version
-                and old.get('version') == 10
+                and old.get('version') == 11
             ):
                 print(json.dumps({
                     'ok': True,
@@ -295,7 +299,7 @@ def main():
         'kind': kind,
         'runtime_template': runtime,
         'php_version': php_version,
-        'version': 10,
+        'version': 11,
         'project': slug,
         'public_number': number,
         'applied_at': runtime_meta['updated_at'],

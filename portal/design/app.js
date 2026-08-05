@@ -1,5 +1,20 @@
 (function(){
   "use strict";
+  var root=document.documentElement;
+  var themeMedia=window.matchMedia?window.matchMedia("(prefers-color-scheme: dark)"):null;
+  function selectedTheme(){try{return localStorage.getItem("cloudif-theme")||"system";}catch(error){return "system";}}
+  function resolvedTheme(value){return value==="system"?(themeMedia&&themeMedia.matches?"dark":"light"):value;}
+  function applyTheme(value,persist){
+    if(["light","dark","system"].indexOf(value)===-1){value="system";}
+    if(persist!==false){try{localStorage.setItem("cloudif-theme",value);}catch(error){}}
+    root.dataset.theme=resolvedTheme(value);root.dataset.themeChoice=value;
+    document.querySelectorAll("[data-theme-choice]").forEach(function(button){button.setAttribute("aria-pressed",button.dataset.themeChoice===value?"true":"false");});
+  }
+  window.cloudifApplyTheme=function(value){applyTheme(value,true);};
+  applyTheme(selectedTheme(),false);
+  document.querySelectorAll("[data-theme-choice]").forEach(function(button){button.addEventListener("click",function(){applyTheme(button.dataset.themeChoice,true);var menu=button.closest(".theme-menu");if(menu){menu.removeAttribute("open");}});});
+  if(themeMedia){var followSystem=function(){if(selectedTheme()==="system"){applyTheme("system",false);}};if(themeMedia.addEventListener){themeMedia.addEventListener("change",followSystem);}else if(themeMedia.addListener){themeMedia.addListener(followSystem);}}
+
   var nav=document.getElementById("nav");
   var toggle=document.getElementById("toggle");
   if(!nav||!toggle){return;}
@@ -10,6 +25,8 @@
   document.addEventListener("click",function(event){
     var profile=document.querySelector(".profile-menu[open]");
     if(profile&&!profile.contains(event.target)){profile.removeAttribute("open");}
+    var theme=document.querySelector(".theme-menu[open]");
+    if(theme&&!theme.contains(event.target)){theme.removeAttribute("open");}
     if(window.innerWidth>860||nav.contains(event.target)||toggle.contains(event.target)){return;}
     nav.classList.remove("is-open");
     toggle.setAttribute("aria-expanded","false");

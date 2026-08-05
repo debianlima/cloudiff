@@ -1435,21 +1435,32 @@ SELECT cloudif.cloudif_register_project_event(
             {"name": "trg_cloudif_project_acl_changed", "ok": True, "message": "Trigger criada/atualizada."},
         ])
         ensure_script = env("CLOUDIF_SUPABASE_ENSURE_SCRIPT", "/srv/cloudif/bin/cloudif-auto-ensure-supabase-tenant.sh")
-        erc, eout, eerr = run([ensure_script, tenant], timeout=2700)
+        ensure_timeout = int(env("CLOUDIF_TENANT_ENSURE_TIMEOUT", "5400") or "5400")
+        erc, eout, eerr = run([ensure_script, tenant], timeout=ensure_timeout)
         comp["actions"].append({
             "name": "supabase_tenant_runtime",
             "ok": erc == 0,
             "message": "Tenant Supabase criado e reconciliado." if erc == 0 else "Falha ao criar o tenant Supabase.",
             "detail": (eout + "\n" + eerr)[-1500:],
         })
-        hrc, hout, herr = run(["bash", "-lc", f"source /srv/cloudif/lib/cloudif-supabase.sh; cloudif_supabase_tenant_basic_health {tenant!r}"], timeout=120)
+        ready_timeout = int(env("CLOUDIF_TENANT_READY_TIMEOUT", "2700") or "2700")
+        ready_interval = int(env("CLOUDIF_TENANT_READY_INTERVAL", "10") or "10")
+        if erc == 0:
+            hrc, hout, herr = run([
+                "bash", "-lc",
+                "source /srv/cloudif/lib/cloudif-supabase.sh; "
+                f"cloudif_supabase_wait_until_ready {tenant!r} {ready_timeout} {ready_interval}",
+            ], timeout=ready_timeout + 90)
+        else:
+            hrc, hout, herr = 1, "", "tenant_ensure_failed"
         comp["actions"].append({
-            "name": "supabase_tenant_health",
+            "name": "supabase_tenant_readiness",
             "ok": hrc == 0,
-            "message": "Containers do tenant estão saudáveis." if hrc == 0 else "Tenant criado, mas ainda não está saudável.",
-            "detail": (hout + "\n" + herr)[-1000:],
+            "message": "Todos os serviços críticos do tenant estão prontos." if hrc == 0 else "O tenant não concluiu a inicialização dentro do prazo.",
+            "timeout_seconds": ready_timeout,
+            "detail": (hout + "\n" + herr)[-1800:],
         })
-        crc, cout, cerr = run(["/srv/cloudif/bin/cloudif-ensure-tenant-certificate.sh", tenant], timeout=420)
+        crc, cout, cerr = run(["/srv/cloudif/bin/cloudif-ensure-tenant-certificate.sh", tenant], timeout=600) if hrc == 0 else (1, "", "tenant_not_ready")
         comp["actions"].append({
             "name": "supabase_tenant_certificate",
             "ok": crc == 0,

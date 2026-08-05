@@ -35,6 +35,27 @@
   --bar-h:60px;
 }
 
+html[data-theme="dark"]{
+  color-scheme:dark;
+  --ink:#e8f2eb;
+  --ink-2:#b8c8bd;
+  --ink-3:#8fa398;
+  --paper:#07110b;
+  --surface:#101a14;
+  --rule:#2a4134;
+  --rule-soft:#1b2c22;
+  --iff:#48bd60;
+  --iff-dark:#95dfa3;
+  --iff-wash:#17351f;
+  --on-iff:#061009;
+  --drift:#e3a85f;
+  --drift-wash:#352516;
+  --halt:#ef8d94;
+  --halt-wash:#361a1d;
+  --focus:#78aef3;
+  --overlay:rgba(0,0,0,.66);
+}
+
 /* Visão geral (overview) — componentes reais */
 .ov-hero{display:flex;gap:var(--s6);flex-wrap:wrap;background:var(--iff);color:var(--on-iff);
   border-radius:var(--r-lg);padding:var(--s6);margin-bottom:var(--s5)}

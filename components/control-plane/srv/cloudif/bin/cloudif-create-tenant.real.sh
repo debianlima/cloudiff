@@ -200,18 +200,28 @@ for attempt in $(seq 1 60); do
   sleep 5
 done
 
+# Não conclua apenas porque os containers foram criados. Aguarde todos os
+# serviços críticos entrarem em execução e, quando houver healthcheck, ficarem
+# saudáveis.
+if [ -f /srv/cloudif/lib/cloudif-supabase.sh ]; then
+  # shellcheck source=/srv/cloudif/lib/cloudif-supabase.sh
+  source /srv/cloudif/lib/cloudif-supabase.sh
+  cloudif_supabase_wait_until_ready "$TENANT" "${CLOUDIF_TENANT_READY_TIMEOUT:-2700}" "${CLOUDIF_TENANT_READY_INTERVAL:-10}"
+fi
+
 "$BASE/bin/cloudif-render-router.sh"
+
+# CloudIF v162: renderiza router SSO/Basic shield após criar/atualizar tenant.
+if [ -x /srv/cloudif/bin/cloudif-render-router-sso.sh ]; then
+  /srv/cloudif/bin/cloudif-render-router-sso.sh
+fi
+
+# O tenant só é anunciado como pronto depois que o certificado e a rota HTTPS
+# pública também estiverem reconciliados.
+if [ -x /srv/cloudif/bin/cloudif-ensure-tenant-certificate.sh ]; then
+  /srv/cloudif/bin/cloudif-ensure-tenant-certificate.sh "$TENANT"
+fi
 
 echo "Tenant pronto: $TENANT"
 echo "URL: https://${TENANT}.cloudiff.duckdns.org/"
 echo "Credencial interna do dashboard está em: $TDIR/.env"
-
-# CloudIF v162: renderiza router SSO/Basic shield após criar/atualizar tenant
-if [ -x /srv/cloudif/bin/cloudif-render-router-sso.sh ]; then
-  /srv/cloudif/bin/cloudif-render-router-sso.sh || true
-fi
-
-# CloudIFF automatic tenant TLS
-if [ -x /srv/cloudif/bin/cloudif-ensure-tenant-certificate.sh ]; then
-  /srv/cloudif/bin/cloudif-ensure-tenant-certificate.sh "$TENANT" || echo "AVISO: certificado do tenant será reconciliado pelo monitor"
-fi

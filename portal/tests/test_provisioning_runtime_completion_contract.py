@@ -12,7 +12,7 @@ class ProvisioningRuntimeCompletionContractTest(unittest.TestCase):
     def test_supabase_requires_runtime_health_and_certificate(self):
         source = Path('components/control-plane/srv/cloudif/lib/cloudif_project_provision_real.py').read_text(encoding='utf-8')
         self.assertIn('cloudif-auto-ensure-supabase-tenant.sh', source)
-        self.assertIn('cloudif_supabase_tenant_basic_health', source)
+        self.assertIn('cloudif_supabase_wait_until_ready', source)
         self.assertIn('cloudif-ensure-tenant-certificate.sh', source)
         self.assertIn('tenant_runtime_error', source)
 

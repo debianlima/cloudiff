@@ -87,7 +87,7 @@ _PROJECT_DESCRIPTIONS = {
 _TAB_TITLES = {tab: label for entries in _TAB_GROUPS.values() for tab, label in entries}
 _TAB_TITLES.update({tab: label for entries in _PROJECT_NAV.values() for tab, label in entries})
 _TAB_TITLES["projetos"] = "Projetos"
-_ASSET_VERSION = "20260804-2348"
+_ASSET_VERSION = "20260805-1110"
 
 _MODULE_TO_TAB = {
     "overview": "resumo",
@@ -182,7 +182,11 @@ def _document(
         '<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">'
         '<meta name="viewport" content="width=device-width,initial-scale=1">'
         f'<meta name="cloudif-release" content="{_ASSET_VERSION}">'
-        f'<title>{escape(title)} · CloudIFF</title>{extra_head}'
+        f'<title>{escape(title)} · CloudIFF</title>'
+        '<script>(function(){try{var v=localStorage.getItem("cloudif-theme")||"system";'
+        'var d=v==="system"&&window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches?"dark":v==="system"?"light":v;'
+        'document.documentElement.dataset.theme=d;document.documentElement.dataset.themeChoice=v}catch(e){}}());</script>'
+        f'{extra_head}'
         f'<link rel="stylesheet" href="/cloudiff/portal/assets/tokens.css?v={_ASSET_VERSION}">'
         f'<link rel="stylesheet" href="/cloudiff/portal/assets/base.css?v={_ASSET_VERSION}">'
         f'<link rel="stylesheet" href="/cloudiff/portal/assets/components.css?v={_ASSET_VERSION}">'
@@ -198,6 +202,13 @@ def _document(
         '<button class="bar-toggle" id="toggle" aria-label="Abrir navegação" aria-expanded="false" aria-controls="nav">☰</button>'
         '<span class="scope"><span class="scope-dot"></span>Ambiente acadêmico</span>'
         '<a class="search" href="/cloudiff/portal/?tab=projetos">Buscar em projetos</a>'
+        '<details class="theme-menu"><summary class="theme-toggle" aria-label="Selecionar tema">'
+        '<span aria-hidden="true">◐</span><span>Tema</span></summary>'
+        '<div class="theme-picker" role="group" aria-label="Tema da aplicação">'
+        '<button type="button" data-theme-choice="light">Claro</button>'
+        '<button type="button" data-theme-choice="dark">Escuro</button>'
+        '<button type="button" data-theme-choice="system">Sistema</button>'
+        '</div></details>'
         '<details class="profile-menu"><summary aria-label="Abrir perfil">'
         f'<span class="avatar" data-primary-group="{group_id}">{icon("user-tie") or initials}</span>'
         '</summary><div class="profile-card">'
