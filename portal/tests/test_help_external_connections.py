@@ -16,9 +16,11 @@ class HelpExternalConnectionsTests(unittest.TestCase):
     def test_help_lists_supported_https_connections(self):
         for marker in (
             "guia-conexoes",
-            "Supabase para aplicações",
+            "Conectar aplicações e ferramentas",
+            "supabase-js",
             "Git CLI",
-            "Komodo",
+            "Komodo por HTTPS",
+            "MCP por HTTPS",
             "ChatGPT",
             "Claude Code",
             "verifique com a TI",
@@ -31,9 +33,10 @@ class HelpExternalConnectionsTests(unittest.TestCase):
         endpoint = "https://cloudiff.duckdns.org/cloudiff/mcp"
         self.assertIn(endpoint, self.canonical)
         self.assertIn(endpoint, self.focused)
-        self.assertIn("POST", self.canonical)
-        self.assertIn("--client-id", self.canonical)
-        self.assertIn("--client-secret", self.focused)
+        self.assertIn("MCP por HTTPS", self.canonical)
+        self.assertIn("MCP por HTTPS", self.focused)
+        self.assertNotIn("--client-id", self.canonical)
+        self.assertNotIn("--client-secret", self.focused)
         self.assertNotIn("rotas públicas <code>/mcp</code> ainda não estão publicadas", self.canonical)
 
     def test_project_connection_example_is_complete_without_secret(self):
@@ -47,10 +50,16 @@ class HelpExternalConnectionsTests(unittest.TestCase):
         self.assertNotIn("YOUR-PASSWORD", self.canonical)
         self.assertNotIn("postgres.iff1742962-laboratoriodehardware", self.canonical)
 
-    def test_oauth_loopback_is_explained(self):
-        self.assertIn("127.0.0.1:&lt;porta&gt;", self.canonical)
-        self.assertIn("não recebem redirecionamento no gateway", self.canonical)
-        self.assertIn("não exige NAT no gateway", self.focused)
+    def test_help_excludes_unlisted_connection_methods(self):
+        for marker in (
+            "127.0.0.1:&lt;porta&gt;",
+            "--client-id",
+            "--client-secret",
+            "PostgreSQL direto",
+            "Git SSH",
+        ):
+            self.assertNotIn(marker, self.canonical)
+            self.assertNotIn(marker, self.focused)
 
     def test_manual_distinguishes_get_from_post(self):
         self.assertIn("POST", self.manual)
