@@ -12,11 +12,13 @@ ROOT = Path(__file__).resolve().parents[1]
 BEGIN = '<!-- CLOUDIFF-AUTO-DOC:BEGIN -->'
 END = '<!-- CLOUDIFF-AUTO-DOC:END -->'
 SKIP_DIRS = {'.git', '__pycache__', '.pytest_cache', '.mypy_cache', 'node_modules'}
+LANDING_README_SHADOW = Path('.github/README.md')
 
 
 def tracked_paths() -> list[Path]:
     tracked = subprocess.check_output(['git', 'ls-files', '-z'], cwd=ROOT)
     paths = {ROOT / p.decode() for p in tracked.split(b'\0') if p}
+    paths.discard(ROOT / LANDING_README_SHADOW)
     # Include the new documentation sources before their first commit, but do
     # not absorb arbitrary runtime artifacts present in the working tree.
     for base in (ROOT / 'docs' / 'manual-tecnico',):
@@ -143,6 +145,12 @@ def main() -> None:
             directories.add(cur)
             cur = cur.parent
     for directory in sorted(directories, key=lambda p: (len(p.parts), p.as_posix())):
+        # A README diretamente em .github tem precedência sobre o README da
+        # raiz na página inicial do GitHub. Não o gere, para que a apresentação
+        # oficial do projeto permaneça em /README.md e seus links relativos
+        # continuem válidos. Subdiretórios, como workflows, seguem documentados.
+        if directory == ROOT / '.github':
+            continue
         immediate_files = [p for p in paths if p.parent == directory]
         immediate_dirs = sorted({p for p in directories if p.parent == directory})
         update_readme(directory, immediate_files, immediate_dirs)
