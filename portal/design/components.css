@@ -364,3 +364,165 @@ html[data-theme="dark"] .legacy-content .project-preview,
 html[data-theme="dark"] .legacy-content .project-preview iframe{
   background:var(--surface)!important;
 }
+
+/* CloudIFF dark compatibility — legacy modules must consume the active theme. */
+html[data-theme="dark"] body .legacy-content .db96-card,
+html[data-theme="dark"] body .legacy-content .db96-hero,
+html[data-theme="dark"] body .legacy-content .db96-section,
+html[data-theme="dark"] body .legacy-content .db96-details,
+html[data-theme="dark"] body .legacy-content .backup-console-card,
+html[data-theme="dark"] body .legacy-content .backup-progress-modal,
+html[data-theme="dark"] body .legacy-content .agent-hero,
+html[data-theme="dark"] body .legacy-content .agent-project-card,
+html[data-theme="dark"] body .legacy-content .agent-provider-grid>article,
+html[data-theme="dark"] body .legacy-content .agent-separation-grid>article,
+html[data-theme="dark"] body .legacy-content .agent-security-grid>article,
+html[data-theme="dark"] body .legacy-content .agent-security>details,
+html[data-theme="dark"] body .legacy-content .agent-secret-dialog,
+html[data-theme="dark"] body .legacy-content .admin-operation-center,
+html[data-theme="dark"] body .legacy-content .admin-wizard-panels,
+html[data-theme="dark"] body .legacy-content .admin-wizard-panel,
+html[data-theme="dark"] body .legacy-content .admin-action-card,
+html[data-theme="dark"] body .legacy-content .admin-action-status,
+html[data-theme="dark"] body .legacy-content .global-admin-hero,
+html[data-theme="dark"] body .legacy-content .global-admin-summary article,
+html[data-theme="dark"] body .legacy-content .global-resource,
+html[data-theme="dark"] body .legacy-content .global-tenant,
+html[data-theme="dark"] body .legacy-content .backup-remote-config-form,
+html[data-theme="dark"] body .legacy-content .admin-global-disclosure,
+html[data-theme="dark"] body .legacy-content .project-card,
+html[data-theme="dark"] body .legacy-content .project-manage-panel,
+html[data-theme="dark"] body .legacy-content main>details:not([open]),
+html[data-theme="dark"] body .legacy-content .pm-new-shell,
+html[data-theme="dark"] body .legacy-content .pm-new-section,
+html[data-theme="dark"] body .legacy-content .pm-new-summary,
+html[data-theme="dark"] body .legacy-content .pm-choice,
+html[data-theme="dark"] body .legacy-content .pm-live-step,
+html[data-theme="dark"] body .legacy-content .cloudif-wizard>.wizard-box,
+html[data-theme="dark"] body .legacy-content .cloudif-wizard>.card,
+html[data-theme="dark"] body .legacy-content .cloudif-wizard .wizard-head,
+html[data-theme="dark"] body .legacy-content .pm-new-footer{
+  background:var(--surface)!important;
+  border-color:var(--rule)!important;
+  color:var(--ink)!important;
+  box-shadow:none!important;
+  color-scheme:dark!important;
+}
+
+html[data-theme="dark"] body .legacy-content .db96-mode.inactive,
+html[data-theme="dark"] body .legacy-content .db96-runtime.stopped,
+html[data-theme="dark"] body .legacy-content .db96-readonly,
+html[data-theme="dark"] body .legacy-content .backup-overview-grid>div,
+html[data-theme="dark"] body .legacy-content .backup-console-meta>div,
+html[data-theme="dark"] body .legacy-content .backup-progress-step,
+html[data-theme="dark"] body .legacy-content .agent-project-summary>div,
+html[data-theme="dark"] body .legacy-content .agent-oauth-grid>div,
+html[data-theme="dark"] body .legacy-content .agent-code-grid>div,
+html[data-theme="dark"] body .legacy-content .agent-permission-chip,
+html[data-theme="dark"] body .legacy-content .global-tenant-body,
+html[data-theme="dark"] body .legacy-content .global-tenant-body li,
+html[data-theme="dark"] body .legacy-content .project-toolbar,
+html[data-theme="dark"] body .legacy-content .view-toggle,
+html[data-theme="dark"] body .legacy-content .ui142-empty,
+html[data-theme="dark"] body .legacy-content .pm-new-steps li,
+html[data-theme="dark"] body .legacy-content .pm-field input,
+html[data-theme="dark"] body .legacy-content .pm-field textarea,
+html[data-theme="dark"] body .legacy-content .pm-field select{
+  background:var(--paper)!important;
+  border-color:var(--rule)!important;
+  color:var(--ink)!important;
+}
+
+html[data-theme="dark"] body .legacy-content .db96-mode.active,
+html[data-theme="dark"] body .legacy-content .db96-runtime.running,
+html[data-theme="dark"] body .legacy-content .agent-hero-status,
+html[data-theme="dark"] body .legacy-content .agent-token-panel,
+html[data-theme="dark"] body .legacy-content .pm-choice:has(input:checked),
+html[data-theme="dark"] body .legacy-content .pm-tenant-preview,
+html[data-theme="dark"] body .legacy-content .pm-live-step.done,
+html[data-theme="dark"] body .legacy-content .backup-progress-step.done,
+html[data-theme="dark"] body .legacy-content .backup-progress-result{
+  background:var(--iff-wash)!important;
+  border-color:var(--iff)!important;
+  color:var(--ink)!important;
+}
+
+html[data-theme="dark"] body .legacy-content .agent-approval,
+html[data-theme="dark"] body .legacy-content .backup-progress-step.active,
+html[data-theme="dark"] body .legacy-content .admin-wizard-tabs button[aria-selected="true"],
+html[data-theme="dark"] body .legacy-content .admin-action-status.running,
+html[data-theme="dark"] body .legacy-content .admin-action-status.ok,
+html[data-theme="dark"] body .legacy-content .pm-live-status,
+html[data-theme="dark"] body .legacy-content .pm-live-step.running{
+  background:var(--drift-wash)!important;
+  border-color:var(--drift)!important;
+  color:var(--ink)!important;
+}
+
+html[data-theme="dark"] body .legacy-content .backup-progress-step.failed,
+html[data-theme="dark"] body .legacy-content .backup-progress-result.bad,
+html[data-theme="dark"] body .legacy-content .admin-action-status.bad,
+html[data-theme="dark"] body .legacy-content .pm-live-step.failed,
+html[data-theme="dark"] body .legacy-content .pm-live-terminal.bad{
+  background:var(--halt-wash)!important;
+  border-color:var(--halt)!important;
+  color:var(--halt)!important;
+}
+
+html[data-theme="dark"] body .legacy-content .admin-wizard-tabs button,
+html[data-theme="dark"] body .legacy-content .admin-action-card,
+html[data-theme="dark"] body .legacy-content .view-toggle button.active,
+html[data-theme="dark"] body .legacy-content .project-manage>summary{
+  background:var(--surface)!important;
+  border-color:var(--rule)!important;
+  color:var(--ink)!important;
+}
+
+html[data-theme="dark"] body .legacy-content .admin-operation-center,
+html[data-theme="dark"] body .legacy-content .admin-operation-center h1,
+html[data-theme="dark"] body .legacy-content .admin-operation-center h2,
+html[data-theme="dark"] body .legacy-content .admin-operation-center h3,
+html[data-theme="dark"] body .legacy-content .admin-operation-center p,
+html[data-theme="dark"] body .legacy-content .admin-operation-center small,
+html[data-theme="dark"] body .legacy-content .admin-operation-center label,
+html[data-theme="dark"] body .legacy-content .admin-operation-center span,
+html[data-theme="dark"] body .legacy-content .agent-hub,
+html[data-theme="dark"] body .legacy-content .agent-hub h1,
+html[data-theme="dark"] body .legacy-content .agent-hub h2,
+html[data-theme="dark"] body .legacy-content .agent-hub h3,
+html[data-theme="dark"] body .legacy-content .agent-hub p,
+html[data-theme="dark"] body .legacy-content .global-admin-hub,
+html[data-theme="dark"] body .legacy-content .global-admin-hub h1,
+html[data-theme="dark"] body .legacy-content .global-admin-hub h2,
+html[data-theme="dark"] body .legacy-content .global-admin-hub h3,
+html[data-theme="dark"] body .legacy-content .global-admin-hub p,
+html[data-theme="dark"] body .legacy-content .backup-console-card,
+html[data-theme="dark"] body .legacy-content .backup-console-card strong,
+html[data-theme="dark"] body .legacy-content .backup-console-card h3{
+  color:var(--ink)!important;
+}
+
+html[data-theme="dark"] body .legacy-content .admin-operation-center small,
+html[data-theme="dark"] body .legacy-content .admin-operation-center p,
+html[data-theme="dark"] body .legacy-content .agent-hub p,
+html[data-theme="dark"] body .legacy-content .agent-project-head p,
+html[data-theme="dark"] body .legacy-content .agent-token-panel p,
+html[data-theme="dark"] body .legacy-content .global-admin-hub p,
+html[data-theme="dark"] body .legacy-content .backup-overview-grid small,
+html[data-theme="dark"] body .legacy-content .backup-console-meta small,
+html[data-theme="dark"] body .legacy-content .backup-file small,
+html[data-theme="dark"] body .legacy-content .backup-progress-step small,
+html[data-theme="dark"] body .legacy-content .pm-new-summary p,
+html[data-theme="dark"] body .legacy-content .pm-new-section__head p,
+html[data-theme="dark"] body .legacy-content .pm-field small,
+html[data-theme="dark"] body .legacy-content .pm-choice small{
+  color:var(--ink-2)!important;
+}
+
+html[data-theme="dark"] body .legacy-content .backup-progress-track,
+html[data-theme="dark"] body .legacy-content .backup-progress-step .icon,
+html[data-theme="dark"] body .legacy-content .db96-mode.inactive .db96-check,
+html[data-theme="dark"] body .legacy-content .db96-mode.inactive .db96-mode-badge{
+  background:var(--rule-soft)!important;
+  color:var(--ink-2)!important;
+}

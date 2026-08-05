@@ -13,8 +13,8 @@ HOST="${TENANT}.${DOMAIN}"
 PUBLIC_URL="https://${HOST}/project/default"
 PUBLISHER_URL="${CLOUDIF_TENANT_PUBLISHER_URL:-http://10.62.91.3/tenant}"
 PUBLISHER_HOST="${CLOUDIF_TENANT_PUBLISHER_HOST:-cloudif-publisher.internal}"
-WAIT_SECONDS="${CLOUDIF_TENANT_CERTIFICATE_WAIT_SECONDS:-240}"
-[[ "$WAIT_SECONDS" =~ ^[0-9]+$ ]] || WAIT_SECONDS=240
+WAIT_SECONDS="${CLOUDIF_TENANT_CERTIFICATE_WAIT_SECONDS:-900}"
+[[ "$WAIT_SECONDS" =~ ^[0-9]+$ ]] || WAIT_SECONDS=900
 
 TOKEN="$(grep -E '^NPM_PUBLISHER_TOKEN=' "$ENV_FILE" 2>/dev/null | tail -1 | cut -d= -f2- | tr -d '"' | tr -d "'")"
 [ -n "$TOKEN" ] || {
@@ -27,13 +27,30 @@ RESPONSE_FILE="$(mktemp)"
 ERROR_FILE="$(mktemp)"
 trap 'rm -f "$RESPONSE_FILE" "$ERROR_FILE"' EXIT
 
-curl -fsS --retry 2 --retry-all-errors --connect-timeout 5 --max-time 120 \
+curl -fsS \
+  --retry 5 --retry-delay 3 --retry-all-errors \
+  --connect-timeout 8 --max-time 240 \
   -H 'Content-Type: application/json' \
   -H "Host: $PUBLISHER_HOST" \
   -H "X-CloudIF-Token: $TOKEN" \
   --data "$REQUEST_JSON" \
   --output "$RESPONSE_FILE" \
   "$PUBLISHER_URL"
+
+python3 - "$RESPONSE_FILE" <<'PY'
+import json
+import pathlib
+import sys
+
+path = pathlib.Path(sys.argv[1])
+raw = path.read_text(errors="replace").strip()
+try:
+    data = json.loads(raw)
+except json.JSONDecodeError as exc:
+    raise SystemExit(f"publisher_invalid_json:{exc}")
+if not isinstance(data, dict) or data.get("ok") is not True:
+    raise SystemExit("publisher_rejected_tenant:" + raw[:500])
+PY
 
 # A chamada interna apenas solicita/reconcilia o proxy. O sucesso real exige
 # TLS público válido e uma rota que não esteja ausente nem quebrada.
@@ -43,7 +60,7 @@ LAST_ERROR=""
 while (( SECONDS < DEADLINE )); do
   : >"$ERROR_FILE"
   if LAST_CODE="$(curl --silent --show-error --output /dev/null \
-      --write-out '%{http_code}' --connect-timeout 5 --max-time 20 \
+      --write-out '%{http_code}' --connect-timeout 8 --max-time 30 \
       "$PUBLIC_URL" 2>"$ERROR_FILE")"; then
     case "$LAST_CODE" in
       2??|3??|401|403)
@@ -53,11 +70,7 @@ import pathlib
 import sys
 
 tenant, host, url, status, response_file = sys.argv[1:]
-raw = pathlib.Path(response_file).read_text(errors="replace").strip()
-try:
-    publisher = json.loads(raw) if raw else {}
-except json.JSONDecodeError:
-    publisher = {"raw": raw[:1000]}
+publisher = json.loads(pathlib.Path(response_file).read_text(errors="replace"))
 print(json.dumps({
     "ok": True,
     "tenant": tenant,
@@ -66,7 +79,10 @@ print(json.dumps({
     "http_status": int(status),
     "tls_verified": True,
     "route_verified": True,
-    "publisher": publisher,
+    "publisher": {
+        "ok": publisher.get("ok") is True,
+        "certificate": publisher.get("certificate") or publisher.get("cert_name") or "",
+    },
 }, ensure_ascii=False))
 PY
         exit 0

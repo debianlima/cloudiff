@@ -115,44 +115,176 @@ def build(kind, slug, owner, tenant, number):
     return [('index.html', html)]
 
 
-def project_readme(slug, owner, tenant, number, runtime, php_version):
+def project_readme(
+    slug,
+    owner,
+    tenant,
+    number,
+    runtime,
+    php_version,
+    project_name='',
+    description='',
+    owner_email='',
+):
     node_version = runtime.replace('node', '') if runtime.startswith('node') else '22'
-    return f'''# {slug.replace('-', ' ').title()}
+    title = (project_name or slug.replace('-', ' ').title()).strip()
+    summary = (description or f'Aplicação {title} publicada pela CloudIFF.').strip()
+    repo = f'https://cloudiff.duckdns.org/git/{owner}/cloudif-{slug}.git'
+    forgejo = repo[:-4]
+    site = f'https://{number}.cloudiff.duckdns.org/'
+    version = f'https://{number}-d1.cloudiff.duckdns.org/'
+    portal = 'https://cloudiff.duckdns.org/cloudiff/portal/?tab=publicacao'
+    supabase = f'https://{tenant}.cloudiff.duckdns.org' if tenant else 'https://<tenant>.cloudiff.duckdns.org'
+    studio = f'{supabase}/project/default' if tenant else 'Vincule um tenant pelo Portal.'
+    git_email = owner_email or 'seu.email@iff.edu.br'
+    return f'''# {title}
 
-Código-fonte do projeto CloudIFF de **{owner}**.
+{summary}
+
+Este é o guia inicial do projeto CloudIFF de **{owner}**. Ele apresenta o mesmo fluxo da página publicada na primeira versão `d1`, com os endereços já personalizados para este projeto e sem incluir senhas, tokens ou chaves privadas.
+
+## Dados do projeto
+
+| Item | Valor |
+|---|---|
+| Projeto | `{slug}` |
+| Proprietário | `{owner}` |
+| Runtime | Apache + PHP {php_version} + Node.js {node_version} |
+| Tenant Supabase | `{tenant or 'não vinculado'}` |
+| Site ativo | {site} |
+| Publicação inicial | {version} |
+| Forgejo | {forgejo} |
+| Supabase Studio | {studio} |
 
 ## Estrutura
 
-A raiz deste repositório é a raiz da aplicação publicada. Exemplos:
+A raiz deste repositório é a raiz da aplicação. Use `index.php` ou `index.html` como página inicial. Uma API Node.js opcional fica em `api/server.js`.
 
-- `index.php` ou `index.html`: página inicial;
-- `api/server.js`: API Node.js opcional, publicada em `/api/`;
-- `api/package.json`: dependências da API;
-- demais pastas: CSS, JavaScript, imagens e código da aplicação.
+```text
+index.html ou index.php
+api/server.js
+assets/
+src/
+README.md
+```
 
-Não existe uma subpasta `site/`. O conteúdo que estiver na raiz será usado para gerar cada publicação imutável.
+## 1. Publique seu código
 
-## Infraestrutura gerenciada
+A raiz deste repositório é a raiz da aplicação. Use `index.html` ou `index.php` como página inicial e `api/` para uma API Node.js opcional.
 
-Compose, Dockerfile, Apache, Supervisor, healthcheck, imagens e metadados de runtime são gerados pela CloudIFF fora do Git. Não adicione segredos, `.env` ou arquivos de infraestrutura da plataforma ao repositório.
+Não crie uma pasta obrigatória `site/`. Dockerfile, Compose, Apache, Supervisor, healthcheck, imagens e metadados de runtime são gerados pela CloudIFF fora do Git.
 
-Runtime selecionado: Apache + PHP {php_version} + Node.js {node_version}.
+1. Clone o repositório por HTTPS.
+2. Edite o código na raiz.
+3. Faça commit e push na branch `main`.
+4. Abra [Portal → Publicações]({portal}) e selecione **Publicar nova versão**.
+5. Teste a URL imutável da nova `dN` e só então use **Ativar esta versão**.
 
-## Publicar
+Cada publicação recebe stack, imagem, container, URL e terminais próprios. A versão anterior permanece disponível para retorno.
 
-1. Clone por HTTPS no Linux ou Windows: `git clone https://cloudiff.duckdns.org/git/{owner}/cloudif-{slug}.git`.
-2. Edite o código na raiz e faça commit/push na `main`.
-3. No Portal, abra **Publicações** e crie uma nova versão.
-4. Cada `dN` recebe stack, imagem, container, URL e terminais próprios.
-5. Confira a URL imutável e ative a versão desejada.
+## 2. Forgejo por HTTPS
 
-## Aplicações desktop e Supabase
+Use seu usuário do Forgejo e um token pessoal quando o Git solicitar a senha. Não coloque o token na URL nem em arquivos versionados.
 
-Use `https://{tenant}.cloudiff.duckdns.org` com `supabase-js` ou REST HTTPS e uma chave publicável/anon. Nunca distribua `service_role`, chave secreta, senha ou token administrativo no aplicativo.
+### Linux
 
-Site: https://{number}.cloudiff.duckdns.org/
-Forgejo: https://cloudiff.duckdns.org/git/{owner}/cloudif-{slug}
-Supabase: https://{tenant}.cloudiff.duckdns.org/project/default
+```bash
+git clone {repo}
+cd cloudif-{slug}
+git config user.name "{owner}"
+git config user.email "{git_email}"
+
+# Depois de editar
+git add .
+git commit -m "Atualizar aplicação"
+git push origin main
+```
+
+### Windows PowerShell
+
+```powershell
+git config --global credential.helper manager
+git clone {repo}
+Set-Location cloudif-{slug}
+git config user.name "{owner}"
+git config user.email "{git_email}"
+
+# Depois de editar
+git add .
+git commit -m "Atualizar aplicação"
+git push origin main
+```
+
+## 3. Aplicação desktop com Supabase
+
+Use a API HTTPS do tenant e uma chave **publicável/anon**. A chave abaixo é apenas um marcador; consulte a conexão autorizada no Portal ou no Supabase Studio.
+
+```text
+SUPABASE_URL={supabase}
+SUPABASE_PUBLIC_KEY=SUA_CHAVE_PUBLICAVEL
+```
+
+Nunca distribua `service_role`, chave secreta, senha do banco, token administrativo ou chave privada dentro do aplicativo.
+
+### Electron ou JavaScript
+
+```bash
+npm install @supabase/supabase-js
+```
+
+```javascript
+import {{ createClient }} from '@supabase/supabase-js'
+
+const supabase = createClient(
+  '{supabase}',
+  'SUA_CHAVE_PUBLICAVEL'
+)
+
+const {{ data, error }} = await supabase
+  .from('sua_tabela')
+  .select('*')
+```
+
+### Python desktop
+
+```bash
+python -m pip install requests
+```
+
+```python
+import requests
+
+url = '{supabase}/rest/v1/sua_tabela'
+key = 'SUA_CHAVE_PUBLICAVEL'
+response = requests.get(
+    url,
+    params={{'select': '*'}},
+    headers={{
+        'apikey': key,
+        'Authorization': f'Bearer {{key}}',
+    }},
+    timeout=30,
+)
+response.raise_for_status()
+print(response.json())
+```
+
+Crie tabelas e políticas RLS no Supabase Studio. Métodos de conexão não apresentados aqui devem ser verificados com a TI.
+
+## Links rápidos
+
+- [Site ativo]({site})
+- [Versão imutável d1]({version})
+- [Publicações no Portal]({portal})
+- [Repositório no Forgejo]({forgejo})
+- [Supabase Studio]({studio if tenant else portal})
+
+## Segurança
+
+- Não versione `.env`, tokens ou credenciais.
+- Não use `service_role` em aplicações desktop, web ou mobile.
+- Armazene tokens Git no gerenciador de credenciais do sistema.
+- Solicite à TI qualquer método de conexão que não esteja documentado pela CloudIFF.
 '''
 
 
@@ -210,6 +342,7 @@ def merge_runtime(files, template, php_version='8.3'):
 
 def main():
     job = json.loads(Path(sys.argv[1]).read_text())
+    readme_only = '--readme-only' in sys.argv[2:]
     kind = job.get('template_kind', 'none')
     runtime = job.get('runtime_template', 'node22')
     php_version = job.get('php_version', '8.3')
@@ -223,14 +356,14 @@ def main():
     number = public_number(slug)
     state_dir = Path(f'/srv/cloudif/provisioning/projects/{slug}')
     marker = state_dir / 'template-applied.json'
-    if marker.exists():
+    if marker.exists() and not readme_only:
         try:
             old = json.loads(marker.read_text())
             if (
                 old.get('kind') == kind
                 and old.get('runtime_template') == runtime
                 and old.get('php_version', '8.3') == php_version
-                and old.get('version') == 11
+                and old.get('version') == 12
             ):
                 print(json.dumps({
                     'ok': True,
@@ -250,11 +383,22 @@ def main():
     if not token:
         raise SystemExit('missing_forja_token')
 
-    files = merge_runtime(build(kind, slug, owner, tenant, number), runtime, php_version)
-    files.append((
-        'README.md',
-        project_readme(slug, owner, tenant, number, runtime, php_version),
-    ))
+    user = job.get('user') or {}
+    readme = project_readme(
+        slug,
+        owner,
+        tenant,
+        number,
+        runtime,
+        php_version,
+        project_name=job.get('name') or '',
+        description=job.get('description') or '',
+        owner_email=user.get('email') or '',
+    )
+    files = [] if readme_only else merge_runtime(
+        build(kind, slug, owner, tenant, number), runtime, php_version
+    )
+    files.append(('README.md', readme))
     results = []
     for path, content in files:
         payload = {
@@ -265,7 +409,7 @@ def main():
             'repo_path': f'{owner}/cloudif-{slug}',
             'path': path,
             'branch': 'main',
-            'message': f'CloudIFF: adicionar código inicial ({path})',
+            'message': ('CloudIFF: atualizar guia inicial do projeto' if readme_only else f'CloudIFF: adicionar código inicial ({path})'),
             'source': 'project-template-automation',
             'content_b64': base64.b64encode(content.encode()).decode(),
         }
@@ -295,16 +439,17 @@ def main():
     (state_dir / 'managed-runtime.json').write_text(
         json.dumps(runtime_meta, ensure_ascii=False, indent=2) + '\n'
     )
-    marker.write_text(json.dumps({
-        'kind': kind,
-        'runtime_template': runtime,
-        'php_version': php_version,
-        'version': 11,
-        'project': slug,
-        'public_number': number,
-        'applied_at': runtime_meta['updated_at'],
-        'files': results,
-    }, ensure_ascii=False, indent=2) + '\n')
+    if not readme_only:
+        marker.write_text(json.dumps({
+            'kind': kind,
+            'runtime_template': runtime,
+            'php_version': php_version,
+            'version': 12,
+            'project': slug,
+            'public_number': number,
+            'applied_at': runtime_meta['updated_at'],
+            'files': results,
+        }, ensure_ascii=False, indent=2) + '\n')
     print(json.dumps({
         'ok': True,
         'kind': kind,
@@ -312,6 +457,7 @@ def main():
         'public_number': number,
         'files': results,
         'runtime': runtime_meta,
+        'readme_only': readme_only,
     }, ensure_ascii=False))
 
 

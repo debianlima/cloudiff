@@ -273,6 +273,13 @@ def upsert_project(form, user):
     if php_version not in {"8.2", "8.3", "8.4"}:
         raise ValueError("Versão do PHP não homologada.")
 
+    try:
+        tenant_keepalive_hours = int(val(form, "tenant_keepalive_hours", "6") or "6")
+    except (TypeError, ValueError):
+        raise ValueError("Tempo inicial do banco inválido.")
+    if not 1 <= tenant_keepalive_hours <= 24:
+        raise ValueError("O tempo inicial do banco deve ficar entre 1 e 24 horas.")
+
     job = {
         "action": action,
         "slug": slug,
@@ -280,6 +287,7 @@ def upsert_project(form, user):
         "description": description,
         "tenant": tenant,
         "db_mode": val(form, "db_mode", "skip"),
+        "tenant_keepalive_hours": tenant_keepalive_hours,
         "create_repo": val(form, "create_repo", "1"),
         "setup_komodo": val(form, "setup_komodo", "1"),
         "template_kind": template_kind,

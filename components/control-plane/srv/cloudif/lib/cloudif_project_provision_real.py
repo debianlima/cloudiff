@@ -1460,13 +1460,41 @@ SELECT cloudif.cloudif_register_project_event(
             "timeout_seconds": ready_timeout,
             "detail": (hout + "\n" + herr)[-1800:],
         })
-        crc, cout, cerr = run(["/srv/cloudif/bin/cloudif-ensure-tenant-certificate.sh", tenant], timeout=600) if hrc == 0 else (1, "", "tenant_not_ready")
+        certificate_timeout = int(env("CLOUDIF_TENANT_CERTIFICATE_TIMEOUT", "1500") or "1500")
+        certificate_wait = max(300, certificate_timeout - 120)
+        if hrc == 0:
+            crc, cout, cerr = run([
+                "env",
+                f"CLOUDIF_TENANT_CERTIFICATE_WAIT_SECONDS={certificate_wait}",
+                "/srv/cloudif/bin/cloudif-ensure-tenant-certificate.sh",
+                tenant,
+            ], timeout=certificate_timeout)
+        else:
+            crc, cout, cerr = 1, "", "tenant_not_ready"
+        certificate_data = {}
+        if crc == 0:
+            try:
+                certificate_data = json.loads(next(
+                    line for line in reversed(cout.splitlines()) if line.strip().startswith("{")
+                ))
+            except Exception:
+                crc = 1
+                cerr = (cerr + "\ncertificate_result_invalid").strip()
+        certificate_verified = bool(
+            crc == 0
+            and certificate_data.get("ok") is True
+            and certificate_data.get("tls_verified") is True
+            and certificate_data.get("route_verified") is True
+        )
         comp["actions"].append({
             "name": "supabase_tenant_certificate",
-            "ok": crc == 0,
-            "message": "Certificado do tenant reconciliado." if crc == 0 else "Falha ao reconciliar o certificado do tenant.",
-            "detail": (cout + "\n" + cerr)[-1000:],
+            "ok": certificate_verified,
+            "message": "Certificado e rota HTTPS do tenant validados." if certificate_verified else "Falha ao validar o certificado e a rota HTTPS do tenant.",
+            "timeout_seconds": certificate_timeout,
+            "certificate": certificate_data,
+            "detail": (cout + "\n" + cerr)[-1800:],
         })
+        crc = 0 if certificate_verified else 1
         comp["ok"] = bool(erc == 0 and hrc == 0 and crc == 0)
         comp["status"] = "done" if comp["ok"] else "tenant_runtime_error"
     else:

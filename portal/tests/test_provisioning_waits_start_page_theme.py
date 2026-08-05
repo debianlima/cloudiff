@@ -28,8 +28,8 @@ class ProvisioningWaitsStartPageThemeTest(unittest.TestCase):
 
     def test_worker_timeouts_cover_slow_tenant_and_d1(self):
         source = (ROOT / 'components/control-plane/srv/cloudif/lib/cloudif_project_provision_worker.py').read_text()
-        self.assertIn("CLOUDIF_PROJECT_PROVISION_TIMEOUT','7200'", source)
-        self.assertIn("CLOUDIF_INITIAL_PUBLICATION_TIMEOUT','9000'", source)
+        self.assertIn("CLOUDIF_PROJECT_PROVISION_TIMEOUT', '7200'", source)
+        self.assertIn("CLOUDIF_INITIAL_PUBLICATION_TIMEOUT', '9000'", source)
 
     def test_d1_requires_exact_healthy_runtime_before_promotion(self):
         source = (ROOT / 'components/control-plane/usr/local/sbin/cloudif-project-initial-publish.py').read_text()
