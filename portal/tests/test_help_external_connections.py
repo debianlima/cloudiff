@@ -13,14 +13,19 @@ class HelpExternalConnectionsTests(unittest.TestCase):
         ).read_text()
         cls.manual = Path("docs/manual-tecnico/13-ACESSO-EXTERNO.md").read_text()
 
-    def test_help_documents_network_targets(self):
+    def test_help_lists_supported_https_connections(self):
         for marker in (
             "guia-conexoes",
-            "cloudiff.duckdns.org:2222",
-            "10.62.91.2:2222",
-            "10.62.92.7:54400",
+            "Supabase para aplicações",
+            "Git CLI",
+            "Komodo",
+            "ChatGPT",
+            "Claude Code",
+            "verifique com a TI",
         ):
             self.assertIn(marker, self.canonical)
+        self.assertNotIn("cloudiff.duckdns.org:2222", self.canonical)
+        self.assertNotIn("10.62.92.7:54400", self.canonical)
 
     def test_help_uses_canonical_mcp_endpoint(self):
         endpoint = "https://cloudiff.duckdns.org/cloudiff/mcp"
@@ -34,11 +39,13 @@ class HelpExternalConnectionsTests(unittest.TestCase):
     def test_project_connection_example_is_complete_without_secret(self):
         for marker in (
             "cloudif-laboratorio-de-hardware.git",
-            "postgres.iff1742962-laboratoriodehardware",
             "iff1742962-laboratoriodehardware.cloudiff.duckdns.org",
+            "https://komodoiff.duckdns.org/",
+            "https://cloudiff.duckdns.org/cloudiff/mcp",
         ):
             self.assertIn(marker, self.canonical)
         self.assertNotIn("YOUR-PASSWORD", self.canonical)
+        self.assertNotIn("postgres.iff1742962-laboratoriodehardware", self.canonical)
 
     def test_oauth_loopback_is_explained(self):
         self.assertIn("127.0.0.1:&lt;porta&gt;", self.canonical)
