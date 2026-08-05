@@ -1,14 +1,14 @@
 [Unit]
-StartLimitIntervalSec=0
-Description=CloudIF partitioned asynchronous reconciliation worker
+Description=Recover interrupted CloudIF project provisioning jobs
 After=network-online.target docker.service
 Wants=network-online.target
+StartLimitIntervalSec=0
+
 [Service]
-TimeoutStartSec=30min
 Type=oneshot
-Environment=CLOUDIF_RECONCILE_WORKERS=4
+TimeoutStartSec=15min
 Environment=PYTHONPATH=/srv/cloudif/lib
-ExecStart=/usr/bin/python3 /srv/cloudif/app-pointers/reconcile-worker-current/cloudif-reconcile-worker.py drain
+ExecStart=/usr/bin/python3 /srv/cloudif/lib/cloudif_project_provision_recover.py
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectHome=true

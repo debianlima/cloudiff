@@ -356,6 +356,35 @@ def _latest_active_project_job(slug):
     return None, None
 
 
+def _project_provision_unit(job_id):
+    safe = re.sub(r"[^a-zA-Z0-9_.-]+", "-", str(job_id or ""))[:32].strip("-")
+    return "cloudif-project-provision-" + (safe or uuid.uuid4().hex[:16])
+
+
+def _start_project_provision_unit(job_file, lock_path, job_id):
+    unit = _project_provision_unit(job_id)
+    cmd = [
+        "/usr/bin/systemd-run",
+        "--quiet",
+        "--collect",
+        f"--unit={unit}",
+        "--property=Type=exec",
+        "--property=RuntimeMaxSec=4h",
+        "--property=NoNewPrivileges=true",
+        "--setenv=PYTHONPATH=/srv/cloudif/lib",
+        "/usr/bin/flock",
+        "-x",
+        str(lock_path),
+        "/usr/bin/python3",
+        "/srv/cloudif/lib/cloudif_project_provision_worker.py",
+        str(job_file),
+    ]
+    result = subprocess.run(cmd, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=30)
+    if result.returncode:
+        raise RuntimeError("project_provision_systemd_start_failed: " + (result.stderr or result.stdout or "")[-500:])
+    return unit + ".service"
+
+
 def queue_provision_job(job):
     JOBDIR.mkdir(parents=True, exist_ok=True)
     LOCK_ROOT.mkdir(parents=True, exist_ok=True)
@@ -371,33 +400,25 @@ def queue_provision_job(job):
             return {"job_file": str(existing_path), "deduplicated": True, "job": existing}
         raise RuntimeError("project_provision_already_running")
 
-    job_id = uuid.uuid4().hex
-    job["job_id"] = job_id
-    job["project_lock"] = str(lock_path)
-    job_file = JOBDIR / f"project-provision-{job_id}-{job['slug']}.json"
-    job_file.write_text(json.dumps(job, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-
-    worker = Path("/srv/cloudif/lib/cloudif_project_provision_worker.py")
-    if not worker.exists():
-        worker.write_text(WORKER_CODE, encoding="utf-8")
-        worker.chmod(0o755)
-
-    env = os.environ.copy()
-    env["CLOUDIF_PROJECT_LOCK_FD"] = str(lock_fd)
-    _log(f"QUEUE {job_file}")
     try:
-        subprocess.Popen(
-            ["python3", str(worker), str(job_file)],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            start_new_session=True,
-            pass_fds=(lock_fd,),
-            env=env,
-        )
-    except Exception:
+        job_id = uuid.uuid4().hex
+        job["job_id"] = job_id
+        job["project_lock"] = str(lock_path)
+        job["systemd_unit"] = _project_provision_unit(job_id) + ".service"
+        job_file = JOBDIR / f"project-provision-{job_id}-{job['slug']}.json"
+        job_file.write_text(json.dumps(job, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+        worker = Path("/srv/cloudif/lib/cloudif_project_provision_worker.py")
+        if not worker.exists():
+            raise RuntimeError("project_provision_worker_missing")
+
+        _log(f"QUEUE {job_file} unit={job['systemd_unit']}")
+        actual_unit = _start_project_provision_unit(job_file, lock_path, job_id)
+        if actual_unit != job["systemd_unit"]:
+            raise RuntimeError("project_provision_unit_mismatch")
+    finally:
         os.close(lock_fd)
-        raise
-    os.close(lock_fd)
+
     return {"job_file": str(job_file), "deduplicated": False, "job": job}
 
 WORKER_CODE = r'''#!/usr/bin/env python3

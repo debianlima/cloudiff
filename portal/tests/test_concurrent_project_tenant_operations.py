@@ -12,14 +12,17 @@ class ConcurrentProjectTenantOperationsTests(unittest.TestCase):
         cls.publish = Path('components/control-plane/usr/local/sbin/cloudif-project-initial-publish.py').read_text()
         cls.portal = Path('components/control-plane/current-apps/portal-current/cloudif-admin-portal-base.py').read_text()
 
-    def test_project_job_uses_uuid_and_exclusive_lock_handoff(self):
+    def test_project_job_uses_uuid_and_systemd_owned_lock(self):
         for marker in (
             'uuid.uuid4().hex', 'project-{job[\'slug\']}.lock',
-            'fcntl.LOCK_EX | fcntl.LOCK_NB', 'pass_fds=(lock_fd,)',
-            'CLOUDIF_PROJECT_LOCK_FD', 'DEDUP',
+            'fcntl.LOCK_EX | fcntl.LOCK_NB', '"/usr/bin/systemd-run"',
+            '"/usr/bin/flock"', '"--property=RuntimeMaxSec=4h"',
+            'job["systemd_unit"]', 'DEDUP',
         ):
             self.assertIn(marker, self.action)
-        self.assertIn("fcntl.flock(lock_fd,fcntl.LOCK_EX)", self.worker)
+        launch = self.action[self.action.index('def _start_project_provision_unit'):self.action.index('def queue_provision_job')]
+        self.assertNotIn('pass_fds=', launch)
+        self.assertNotIn('start_new_session=True', launch)
 
     def test_create_and_delete_share_same_tenant_lock_namespace(self):
         self.assertIn('/run/cloudif-operation-locks', self.create_tenant)
@@ -30,8 +33,9 @@ class ConcurrentProjectTenantOperationsTests(unittest.TestCase):
 
     def test_initial_publication_uses_single_versioned_operation_with_long_timeouts(self):
         self.assertIn("'timeout': 600", self.publish)
-        self.assertIn('timeout=900', self.publish)
-        self.assertIn("versioned_d1_deploy_failed", self.publish)
+        self.assertIn("CLOUDIF_D1_DEPLOY_REQUEST_TIMEOUT", self.publish)
+        self.assertIn("'1500'", self.publish)
+        self.assertIn("versioned_d1_not_ready", self.publish)
         self.assertIn("initial_publication_failed: ", self.worker)
         self.assertIn("a.get('name') not in {'komodo_container_terminal'}", self.portal)
         self.assertIn("data.get('last_error') or next", self.portal)

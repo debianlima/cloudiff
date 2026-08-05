@@ -2,7 +2,8 @@
 Description=CloudIF reconciliation queue watcher
 
 [Path]
-PathExistsGlob=/var/lib/cloudif/reconcile-queue/incoming/*.json
+PathChanged=/var/lib/cloudif/reconcile-queue/incoming
+MakeDirectory=true
 Unit=cloudif-reconcile-worker.service
 
 [Install]
