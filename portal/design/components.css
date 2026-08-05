@@ -560,3 +560,38 @@ html[data-theme="dark"] body .legacy-content .s98-kpi strong,
 html[data-theme="dark"] body .legacy-content .u98-kpi strong{
   color:var(--ink)!important;
 }
+
+/* Final dark guard for project, tenant and guide surfaces rendered by page-local CSS. */
+html[data-theme="dark"] body .legacy-content .project-management-final,
+html[data-theme="dark"] body .legacy-content .project-final,
+html[data-theme="dark"] body .legacy-content .project-final__grid,
+html[data-theme="dark"] body .legacy-content .project-final__section,
+html[data-theme="dark"] body .legacy-content .db96-compact,
+html[data-theme="dark"] body .legacy-content .db96-service-list,
+html[data-theme="dark"] body .legacy-content .db96-permissions-content,
+html[data-theme="dark"] body .legacy-content .db96-service-list .container-chip,
+html[data-theme="dark"] body .legacy-content .guide-connection-project,
+html[data-theme="dark"] body .legacy-content .guide-connection-url,
+html[data-theme="dark"] body .legacy-content .guide-connection-project dd code,
+html[data-theme="dark"] body .legacy-content .guide-connection-note{
+  background:var(--surface)!important;
+  border-color:var(--rule)!important;
+  color:var(--ink)!important;
+  box-shadow:none!important;
+}
+html[data-theme="dark"] body .legacy-content .project-owner-final,
+html[data-theme="dark"] body .legacy-content .project-owner-final>summary{
+  background:transparent!important;
+  color:var(--ink)!important;
+}
+html[data-theme="dark"] body .legacy-content .project-final[open]>summary,
+html[data-theme="dark"] body .legacy-content .db96-compact>summary,
+html[data-theme="dark"] body .legacy-content .guide-connection-project{
+  background:var(--paper)!important;
+}
+html[data-theme="dark"] body .legacy-content .project-final__meta,
+html[data-theme="dark"] body .legacy-content .db96-compact>summary small,
+html[data-theme="dark"] body .legacy-content .guide-connection-project dt,
+html[data-theme="dark"] body .legacy-content .guide-connection-warning{
+  color:var(--ink-2)!important;
+}

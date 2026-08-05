@@ -51,6 +51,53 @@ class DarkThemeLegacySurfacesTest(unittest.TestCase):
             )
         self.assertIn("Final dark-surface guard for page-local legacy CSS", css)
 
+    def test_final_dark_guard_covers_projects_banks_and_help(self):
+        css = (ROOT / "portal/design/components.css").read_text()
+        for selector in (
+            ".project-management-final",
+            ".project-final",
+            ".project-final__grid",
+            ".project-final__section",
+            ".db96-compact",
+            ".db96-service-list",
+            ".db96-permissions-content",
+            ".guide-connection-project",
+            ".guide-connection-url",
+            ".guide-connection-note",
+        ):
+            self.assertIn(
+                'html[data-theme="dark"] body .legacy-content ' + selector,
+                css,
+            )
+        self.assertIn(
+            "Final dark guard for project, tenant and guide surfaces",
+            css,
+        )
+
+    def test_canonical_help_uses_theme_tokens_for_connection_surfaces(self):
+        source = (
+            ROOT
+            / "components/control-plane/srv/cloudif/lib/cloudif_portal_v2_coexist.py"
+        ).read_text()
+        help_css = source[
+            source.index(".guide-connection-url") :
+            source.index("@media(max-width:1100px)", source.index(".guide-connection-url"))
+        ]
+        for marker in (
+            "background:var(--rule-soft",
+            "background:var(--paper",
+            "background:var(--surface",
+            "color:var(--ink",
+            "border:1px solid var(--rule",
+        ):
+            self.assertIn(marker, help_css)
+        for forbidden in (
+            "background:#f4f7f5",
+            "background:#f7faf8",
+            "background:#fff",
+        ):
+            self.assertNotIn(forbidden, help_css)
+
     def test_runtime_copies_match_canonical_modules(self):
         pairs = (
             ("cloudif_ai_agents_guide.py",),
