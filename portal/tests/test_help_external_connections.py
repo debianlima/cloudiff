@@ -64,6 +64,24 @@ class HelpExternalConnectionsTests(unittest.TestCase):
             self.assertNotIn(marker, self.canonical)
             self.assertNotIn(marker, self.focused)
 
+    def test_connection_layout_keeps_urls_readable(self):
+        for marker in (
+            'class="guide-connections"',
+            'class="guide-connection-layout"',
+            'class="guide-connection-url"',
+            'overflow-wrap:anywhere',
+            'word-break:break-word',
+            '#guia-conexoes,#guia-regras{grid-column:1/-1}',
+        ):
+            self.assertIn(marker, self.canonical)
+        for marker in (
+            'class="u98-connect-grid"',
+            'class="u98-connect-url"',
+            'class="u98-panel u98-project-connections"',
+            'overflow-wrap:anywhere',
+        ):
+            self.assertIn(marker, self.focused)
+
     def test_help_navigation_names_only_supported_connections(self):
         self.assertIn("Aplicações, Git, Komodo e MCP", self.navigation)
         self.assertNotIn("ChatGPT, Claude e Llama", self.navigation)
