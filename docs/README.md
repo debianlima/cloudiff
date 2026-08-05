@@ -2,6 +2,11 @@
 
 Documentação técnica, inventários e evidências.
 
+
+## Guias operacionais
+
+- [Acesso externo e conexões](manual-tecnico/13-ACESSO-EXTERNO.md)
+
 <!-- CLOUDIFF-AUTO-DOC:BEGIN -->
 
 ## Inventário automático de `docs`
