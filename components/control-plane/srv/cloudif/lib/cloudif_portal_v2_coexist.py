@@ -411,7 +411,7 @@ def _install() -> None:
     def backup_inventory(owner, user: dict) -> dict:
         active = []
         active_slugs = set()
-        is_admin = bool(user.get("admin"))
+        is_admin = bool(getattr(owner, "_pb_is_platform_admin")(user))
         is_professor = bool(getattr(owner, "_pb_is_professor")(user))
         try:
             for project in getattr(owner, "_pb_all_projects")(user):
@@ -544,7 +544,7 @@ def _install() -> None:
                     return send_json(self, 200, backup_inventory(owner, user))
                 if path in {"/cloudif/portal/download/tenant-backup", "/cloudiff/portal/download/tenant-backup"}:
                     user=self.user(); q=urllib.parse.parse_qs(parsed.query); filename=(q.get("file") or [""])[0].strip()
-                    if not user.get("admin") or filename != Path(filename).name or not filename.endswith('.tar.gz'):
+                    if not getattr(sys.modules.get(handler_class.__module__),"_pb_is_platform_admin")(user) or filename != Path(filename).name or not filename.endswith('.tar.gz'):
                         return send_json(self,403,{"ok":False,"error":"forbidden"})
                     file_path=(TENANT_BACKUP_ROOT/filename).resolve(); root_path=TENANT_BACKUP_ROOT.resolve()
                     if root_path not in file_path.parents or not file_path.is_file():
@@ -570,7 +570,7 @@ def _install() -> None:
                         return send_json(self, 404, {"ok": False, "error": "not_found"})
                     items = _backup_items(slug)
                     item = next((x for x in items if x.get("filename") == filename), None)
-                    global_access = bool(user.get("admin") or getattr(owner,"_pb_is_professor")(user))
+                    global_access = bool(getattr(owner,"_pb_is_platform_admin")(user) or getattr(owner,"_pb_is_professor")(user))
                     project_access = bool(getattr(owner,"_pb_project")(user,slug))
                     owner_access = (item.get("owner") or "").lower() == (user.get("username") or "").lower() if item else False
                     if not item or (not global_access and not project_access and not owner_access):
@@ -698,7 +698,7 @@ def _install() -> None:
                             return send_json(self,403,{"ok":False,"error":"invalid_csrf"})
                         slug=value("slug");op=value("op")
                         if op=='platform_backup':
-                            if not user.get('admin'):return send_json(self,403,{"ok":False,"error":"forbidden"})
+                            if not getattr(owner,'_pb_is_platform_admin')(user):return send_json(self,403,{"ok":False,"error":"forbidden"})
                             subprocess.Popen(['/usr/local/sbin/cloudif-config-backup.sh'],stdin=subprocess.DEVNULL,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,start_new_session=True)
                             return send_json(self,202,{"ok":True,"result":{"accepted":True}})
                         project=getattr(owner,'_pb_project')(user,slug)

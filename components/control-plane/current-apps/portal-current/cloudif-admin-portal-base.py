@@ -5003,12 +5003,17 @@ import subprocess as _pb_subprocess
 import urllib.parse as _pb_parse
 from pathlib import Path as _pb_Path
 
+def _pb_groups(user):
+    return {str(x or '').strip().lower() for x in (user.get('groups') or [])}
+
+def _pb_is_platform_admin(user):
+    return bool(_pb_groups(user).intersection({'cloudif-tenants-admin','domain admins'}))
+
 def _pb_is_professor(user):
-    groups={str(x or '').strip().lower() for x in (user.get('groups') or [])}
-    return bool(groups.intersection({'cloudif-professor','cloudif-professores'}))
+    return bool(_pb_groups(user).intersection({'cloudif-professor','cloudif-professores'}))
 
 def _pb_all_projects(user):
-    if not (user.get('admin') or _pb_is_professor(user)):
+    if not (_pb_is_platform_admin(user) or _pb_is_professor(user)):
         return _cpx_allowed_projects(user)
     con=db();rows=con.execute('select * from projects order by updated_at desc,name').fetchall();out=[]
     for row in rows:
@@ -5021,7 +5026,7 @@ def _pb_project(user,slug):
 
 def _pb_manage(user,p):
     groups={str(x or '').strip().lower() for x in (user.get('groups') or [])}
-    return bool(p and (user.get('admin') or _pb_is_professor(user) or 'cloudif-tenants-admin' in groups or p.get('owner')==user.get('username')))
+    return bool(p and (_pb_is_platform_admin(user) or _pb_is_professor(user) or p.get('owner')==user.get('username')))
 
 def _pb_call(*args,timeout=60):
     raw=_pb_subprocess.check_output(['/usr/local/sbin/cloudif-project-backup.py',*args],text=True,timeout=timeout)
@@ -5060,7 +5065,7 @@ if 'Portal' in globals() and not globals().get('_pb_consolidated_wrapped'):
             return _cpx_send_json(self,{'ok':True,'can_manage_remote':bool(user.get('admin') or 'CloudIF-Tenants-Admin' in groups or 'CloudIF-Professor' in groups),'projects':projects})
         if path in ('/cloudiff/portal/download/platform-backup','/cloudif/portal/download/platform-backup'):
             q=_pb_parse.parse_qs(parsed.query);fn=(q.get('file') or [''])[0]
-            if not user.get('admin') or fn!=_pb_Path(fn).name or not fn.endswith('.tar.gz'):return self.send_error(403)
+            if not _pb_is_platform_admin(user) or fn!=_pb_Path(fn).name or not fn.endswith('.tar.gz'):return self.send_error(403)
             root=_pb_Path('/srv/cloudif/managed-backups/config').resolve();f=(root/fn).resolve()
             if root not in f.parents or not f.is_file():return self.send_error(404)
             self.send_response(200);self.send_header('Content-Type','application/gzip');self.send_header('Content-Disposition','attachment; filename="'+fn+'"');self.send_header('Content-Length',str(f.stat().st_size));self.send_header('Cache-Control','private, no-store');self.end_headers()
@@ -5095,7 +5100,7 @@ if 'Portal' in globals() and not globals().get('_pb_consolidated_wrapped'):
         if not _prod_csrf_equal(token,_prod_csrf_token(user)):return _cpx_send_json(self,{'ok':False,'error':'csrf'},403)
         slug=(form.get('slug') or [''])[0];op=(form.get('op') or [''])[0];p=_pb_project(user,slug)
         if op=='platform_backup':
-            if not user.get('admin'):return _cpx_send_json(self,{'ok':False,'error':'forbidden'},403)
+            if not _pb_is_platform_admin(user):return _cpx_send_json(self,{'ok':False,'error':'forbidden'},403)
             _pb_subprocess.Popen(['/usr/local/sbin/cloudif-config-backup.sh'],stdin=_pb_subprocess.DEVNULL,stdout=_pb_subprocess.DEVNULL,stderr=_pb_subprocess.DEVNULL,start_new_session=True)
             return _cpx_send_json(self,{'ok':True,'result':{'accepted':True}},202)
         if not _pb_manage(user,p):return _cpx_send_json(self,{'ok':False,'error':'forbidden'},403)
