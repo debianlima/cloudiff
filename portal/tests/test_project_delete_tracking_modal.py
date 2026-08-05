@@ -17,6 +17,20 @@ class ProjectDeleteTrackingModalTests(unittest.TestCase):
     def test_modal_cannot_close_while_job_runs(self):
         self.assertIn('if(activeJob&&!terminal)return',self.source)
         self.assertIn('Exclusão em andamento…',self.source)
+    def test_modal_uses_portal_theme_tokens(self):
+        for marker in (
+            'background:var(--surface',
+            'background:var(--paper',
+            'color:var(--ink',
+            'border:1px solid var(--rule',
+            'background:var(--iff-wash',
+            'background:var(--halt-wash',
+        ):
+            self.assertIn(marker, self.source)
+        modal_css = self.source[self.source.index('body.project-delete-modal-open'):self.source.index('</style>', self.source.index('body.project-delete-modal-open'))]
+        self.assertNotIn('background:#fff', modal_css)
+        self.assertNotIn('color:#111', modal_css)
+
     def test_protected_delete_contract_remains(self):
         for marker in ('wizard_token','consume_wizard_token','EXCLUIR {h(selected)}','admin-delete-form'):
             self.assertIn(marker,self.source)

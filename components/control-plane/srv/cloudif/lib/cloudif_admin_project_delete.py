@@ -600,7 +600,41 @@ def render(csrf_token, selected='', result=None):
   </section>
 </div>
 <style>
-body.project-delete-modal-open{{overflow:hidden}}.project-delete-modal{{position:fixed;inset:0;z-index:10000;display:grid;place-items:center;padding:24px}}.project-delete-modal[hidden]{{display:none}}.project-delete-backdrop{{position:absolute;inset:0;background:rgba(15,23,42,.62);backdrop-filter:blur(2px)}}.project-delete-dialog{{position:relative;z-index:1;display:grid;grid-template-rows:auto minmax(0,1fr) auto;width:min(900px,100%);max-height:88vh;overflow:hidden;border:1px solid #cfe3f8;border-radius:18px;background:#fff;box-shadow:0 28px 90px rgba(15,23,42,.35)}}.project-delete-dialog>header{{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;padding:22px 24px;border-bottom:1px solid #dbeafe;background:#f5faff}}.project-delete-dialog h2{{margin:4px 0}}.project-delete-dialog header p{{margin:0;color:#111}}.project-delete-kicker{{font-size:.72rem;font-weight:850;letter-spacing:.08em;text-transform:uppercase;color:#111}}.project-delete-modal-body{{display:grid;gap:16px;padding:22px 24px;overflow:auto}}.project-delete-dialog>footer{{display:flex;justify-content:flex-end;gap:10px;padding:16px 24px;border-top:1px solid #dbeafe}}.project-delete-live{{display:flex;gap:10px;align-items:center;padding:12px;border:1px solid #cfe3f8;border-radius:11px;background:#edf6ff}}.project-delete-progress-wrap{{display:grid;gap:7px}}.project-delete-progress-wrap progress{{width:100%;height:12px;accent-color:#2563eb}}.project-delete-timeline{{display:grid;gap:9px;margin:0;padding:0;list-style:none}}.project-delete-step{{display:grid;grid-template-columns:26px 1fr auto;gap:12px;align-items:center;padding:12px;border:1px solid #dbeafe;border-radius:11px}}.project-delete-step.pending{{opacity:.58}}.project-delete-step.running{{background:#edf6ff;border-color:#8fb8e8}}.project-delete-step.done{{background:#f0fdf4;border-color:#bbf7d0}}.project-delete-step.failed{{background:#fef2f2;border-color:#fecaca}}.project-delete-step-icon{{width:24px;height:24px;display:grid;place-items:center;border-radius:999px;background:#e5e7eb;color:#111;font-size:.72rem;font-weight:900}}.project-delete-step.running .project-delete-step-icon{{background:#8fb8e8}}.project-delete-step.done .project-delete-step-icon{{background:#86efac}}.project-delete-step.failed .project-delete-step-icon{{background:#fca5a5}}.project-delete-step small{{display:block;color:#111;margin-top:2px}}.project-delete-dots{{display:inline-flex;gap:4px;align-items:center}}.project-delete-dots i{{width:5px;height:5px;border-radius:999px;background:#111;animation:project-delete-pulse 1.1s infinite ease-in-out}}.project-delete-dots i:nth-child(2){{animation-delay:.18s}}.project-delete-dots i:nth-child(3){{animation-delay:.36s}}@keyframes project-delete-pulse{{0%,80%,100%{{opacity:.25;transform:translateY(0)}}40%{{opacity:1;transform:translateY(-3px)}}}}.project-delete-terminal{{padding:14px;border-radius:11px}}.project-delete-terminal.ok{{background:#f0fdf4;border:1px solid #bbf7d0}}.project-delete-terminal.bad{{background:#fef2f2;border:1px solid #fecaca}}@media(max-width:700px){{.project-delete-modal{{padding:0}}.project-delete-dialog{{width:100%;height:100%;max-height:none;border-radius:0}}.project-delete-step{{grid-template-columns:26px 1fr}}.project-delete-step>.pill{{grid-column:2;justify-self:start}}}}
+body.project-delete-modal-open{{overflow:hidden}}
+.project-delete-modal{{position:fixed;inset:0;z-index:10000;display:grid;place-items:center;padding:24px;color:var(--ink,#0f1f14)}}
+.project-delete-modal[hidden]{{display:none}}
+.project-delete-backdrop{{position:absolute;inset:0;background:var(--overlay,rgba(15,23,42,.62));backdrop-filter:blur(2px)}}
+.project-delete-dialog{{position:relative;z-index:1;display:grid;grid-template-rows:auto minmax(0,1fr) auto;width:min(900px,100%);max-height:88vh;overflow:hidden;border:1px solid var(--rule,#dce3da);border-radius:18px;background:var(--surface,#fff);color:var(--ink,#0f1f14);box-shadow:0 28px 90px var(--overlay,rgba(15,23,42,.35))}}
+.project-delete-dialog>header{{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;padding:22px 24px;border-bottom:1px solid var(--rule,#dce3da);background:var(--paper,#f6f7f3)}}
+.project-delete-dialog h2{{margin:4px 0;color:var(--ink,#0f1f14)}}
+.project-delete-dialog header p{{margin:0;color:var(--ink-2,#42544a)}}
+.project-delete-kicker{{font-size:.72rem;font-weight:850;letter-spacing:.08em;text-transform:uppercase;color:var(--iff-dark,#0b6418)}}
+.project-delete-modal-body{{display:grid;gap:16px;padding:22px 24px;overflow:auto;background:var(--surface,#fff);color:var(--ink,#0f1f14)}}
+.project-delete-dialog>footer{{display:flex;justify-content:flex-end;gap:10px;padding:16px 24px;border-top:1px solid var(--rule,#dce3da);background:var(--surface,#fff)}}
+.project-delete-live{{display:flex;gap:10px;align-items:center;padding:12px;border:1px solid var(--rule,#dce3da);border-radius:11px;background:var(--rule-soft,#edf1eb);color:var(--ink,#0f1f14)}}
+.project-delete-live small{{display:block;color:var(--ink-2,#42544a)}}
+.project-delete-progress-wrap{{display:grid;gap:7px;color:var(--ink-2,#42544a)}}
+.project-delete-progress-wrap progress{{width:100%;height:12px;accent-color:var(--focus,#1b5fbf)}}
+.project-delete-timeline{{display:grid;gap:9px;margin:0;padding:0;list-style:none}}
+.project-delete-step{{display:grid;grid-template-columns:26px 1fr auto;gap:12px;align-items:center;padding:12px;border:1px solid var(--rule,#dce3da);border-radius:11px;background:var(--surface,#fff);color:var(--ink,#0f1f14)}}
+.project-delete-step.pending{{opacity:.72}}
+.project-delete-step.running{{background:var(--rule-soft,#edf1eb);border-color:var(--focus,#1b5fbf)}}
+.project-delete-step.done{{background:var(--iff-wash,#eaf4ec);border-color:var(--iff,#168821)}}
+.project-delete-step.failed{{background:var(--halt-wash,#faebec);border-color:var(--halt,#9c1c24)}}
+.project-delete-step-icon{{width:24px;height:24px;display:grid;place-items:center;border-radius:999px;background:var(--rule-soft,#edf1eb);color:var(--ink,#0f1f14);font-size:.72rem;font-weight:900}}
+.project-delete-step.running .project-delete-step-icon{{background:var(--focus,#1b5fbf);color:var(--surface,#fff)}}
+.project-delete-step.done .project-delete-step-icon{{background:var(--iff,#168821);color:var(--on-iff,#fff)}}
+.project-delete-step.failed .project-delete-step-icon{{background:var(--halt,#9c1c24);color:var(--surface,#fff)}}
+.project-delete-step small{{display:block;color:var(--ink-2,#42544a);margin-top:2px}}
+.project-delete-dots{{display:inline-flex;gap:4px;align-items:center}}
+.project-delete-dots i{{width:5px;height:5px;border-radius:999px;background:currentColor;animation:project-delete-pulse 1.1s infinite ease-in-out}}
+.project-delete-dots i:nth-child(2){{animation-delay:.18s}}
+.project-delete-dots i:nth-child(3){{animation-delay:.36s}}
+@keyframes project-delete-pulse{{0%,80%,100%{{opacity:.25;transform:translateY(0)}}40%{{opacity:1;transform:translateY(-3px)}}}}
+.project-delete-terminal{{padding:14px;border-radius:11px;color:var(--ink,#0f1f14)}}
+.project-delete-terminal.ok{{background:var(--iff-wash,#eaf4ec);border:1px solid var(--iff,#168821)}}
+.project-delete-terminal.bad{{background:var(--halt-wash,#faebec);border:1px solid var(--halt,#9c1c24)}}
+@media(max-width:700px){{.project-delete-modal{{padding:0}}.project-delete-dialog{{width:100%;height:100%;max-height:none;border-radius:0}}.project-delete-step{{grid-template-columns:26px 1fr}}.project-delete-step>.pill{{grid-column:2;justify-self:start}}}}
 </style>
 <script>
 (() => {{

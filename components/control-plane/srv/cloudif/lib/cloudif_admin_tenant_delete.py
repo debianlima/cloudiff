@@ -542,7 +542,48 @@ def render_panel(csrf_token, selected=""):
   </div>
 </section>
 <style>
-.tenant-delete-tool{{display:grid;gap:16px}}.tenant-delete-tool form{{display:grid;gap:10px;max-width:620px}}body.tenant-delete-modal-open{{overflow:hidden}}.tenant-delete-modal{{position:fixed;inset:0;z-index:10000;display:grid;place-items:center;padding:24px}}.tenant-delete-modal[hidden]{{display:none}}.tenant-delete-backdrop{{position:absolute;inset:0;background:rgba(15,23,42,.62);backdrop-filter:blur(2px)}}.tenant-delete-dialog{{position:relative;z-index:1;display:grid;grid-template-rows:auto minmax(0,1fr) auto;width:min(900px,100%);max-height:88vh;overflow:hidden;border:1px solid #cfe3f8;border-radius:18px;background:#fff;box-shadow:0 28px 90px rgba(15,23,42,.35)}}.tenant-delete-dialog>header{{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;padding:22px 24px;border-bottom:1px solid #dbeafe;background:#f5faff}}.tenant-delete-dialog h2{{margin:4px 0}}.tenant-delete-dialog header p{{margin:0;color:#111}}.tenant-delete-kicker{{font-size:.72rem;font-weight:850;letter-spacing:.08em;text-transform:uppercase;color:#111}}.tenant-delete-modal-body{{display:grid;gap:16px;padding:22px 24px;overflow:auto}}.tenant-delete-dialog>footer{{display:flex;justify-content:flex-end;gap:10px;padding:16px 24px;border-top:1px solid #dbeafe}}.tenant-delete-preview-grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px}}.tenant-delete-preview-grid>div{{padding:13px;border:1px solid #cfe3f8;border-radius:11px;background:#f5faff}}.tenant-delete-preview-grid small{{display:block;color:#111}}.tenant-delete-confirmation{{display:grid;gap:10px}}.tenant-delete-confirmation input{{font-family:ui-monospace,monospace}}.tenant-delete-timeline{{display:grid;gap:9px;margin:0;padding:0;list-style:none}}.tenant-delete-step{{display:grid;grid-template-columns:26px 1fr auto;gap:12px;align-items:center;padding:12px;border:1px solid #dbeafe;border-radius:11px}}.tenant-delete-step.pending{{opacity:.58}}.tenant-delete-step.running{{background:#edf6ff;border-color:#8fb8e8}}.tenant-delete-step.done{{background:#f0fdf4;border-color:#bbf7d0}}.tenant-delete-step.failed{{background:#fef2f2;border-color:#fecaca}}.tenant-delete-step-icon{{width:24px;height:24px;display:grid;place-items:center;border-radius:999px;background:#e5e7eb;color:#111;font-size:.72rem;font-weight:900}}.tenant-delete-step.running .tenant-delete-step-icon{{background:#8fb8e8}}.tenant-delete-step.done .tenant-delete-step-icon{{background:#86efac}}.tenant-delete-step.failed .tenant-delete-step-icon{{background:#fca5a5}}.tenant-delete-step small{{display:block;color:#111;margin-top:2px}}.tenant-delete-dots{{display:inline-flex;gap:4px;align-items:center}}.tenant-delete-dots i{{width:5px;height:5px;border-radius:999px;background:#111;animation:tenant-delete-pulse 1.1s infinite ease-in-out}}.tenant-delete-dots i:nth-child(2){{animation-delay:.18s}}.tenant-delete-dots i:nth-child(3){{animation-delay:.36s}}@keyframes tenant-delete-pulse{{0%,80%,100%{{opacity:.25;transform:translateY(0)}}40%{{opacity:1;transform:translateY(-3px)}}}}.tenant-delete-live{{display:flex;gap:10px;align-items:center;padding:12px;border:1px solid #cfe3f8;border-radius:11px;background:#edf6ff}}.tenant-delete-progress-wrap{{display:grid;gap:7px}}.tenant-delete-progress-wrap progress{{width:100%;height:12px;accent-color:#8fb8e8}}.tenant-delete-terminal{{padding:14px;border-radius:11px}}.tenant-delete-terminal.ok{{background:#f0fdf4;border:1px solid #bbf7d0}}.tenant-delete-terminal.bad{{background:#fef2f2;border:1px solid #fecaca}}@media(max-width:700px){{.tenant-delete-modal{{padding:0}}.tenant-delete-dialog{{width:100%;height:100%;max-height:none;border-radius:0}}.tenant-delete-step{{grid-template-columns:26px 1fr}}.tenant-delete-step>.pill{{grid-column:2;justify-self:start}}}}
+.tenant-delete-tool{{display:grid;gap:16px}}
+.tenant-delete-tool form{{display:grid;gap:10px;max-width:620px}}
+body.tenant-delete-modal-open{{overflow:hidden}}
+.tenant-delete-modal{{position:fixed;inset:0;z-index:10000;display:grid;place-items:center;padding:24px;color:var(--ink,#0f1f14)}}
+.tenant-delete-modal[hidden]{{display:none}}
+.tenant-delete-backdrop{{position:absolute;inset:0;background:var(--overlay,rgba(15,23,42,.62));backdrop-filter:blur(2px)}}
+.tenant-delete-dialog{{position:relative;z-index:1;display:grid;grid-template-rows:auto minmax(0,1fr) auto;width:min(900px,100%);max-height:88vh;overflow:hidden;border:1px solid var(--rule,#dce3da);border-radius:18px;background:var(--surface,#fff);color:var(--ink,#0f1f14);box-shadow:0 28px 90px var(--overlay,rgba(15,23,42,.35))}}
+.tenant-delete-dialog>header{{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;padding:22px 24px;border-bottom:1px solid var(--rule,#dce3da);background:var(--paper,#f6f7f3)}}
+.tenant-delete-dialog h2{{margin:4px 0;color:var(--ink,#0f1f14)}}
+.tenant-delete-dialog header p{{margin:0;color:var(--ink-2,#42544a)}}
+.tenant-delete-kicker{{font-size:.72rem;font-weight:850;letter-spacing:.08em;text-transform:uppercase;color:var(--iff-dark,#0b6418)}}
+.tenant-delete-modal-body{{display:grid;gap:16px;padding:22px 24px;overflow:auto;background:var(--surface,#fff);color:var(--ink,#0f1f14)}}
+.tenant-delete-dialog>footer{{display:flex;justify-content:flex-end;gap:10px;padding:16px 24px;border-top:1px solid var(--rule,#dce3da);background:var(--surface,#fff)}}
+.tenant-delete-preview-grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px}}
+.tenant-delete-preview-grid>div{{padding:13px;border:1px solid var(--rule,#dce3da);border-radius:11px;background:var(--paper,#f6f7f3)}}
+.tenant-delete-preview-grid small{{display:block;color:var(--ink-2,#42544a)}}
+.tenant-delete-confirmation{{display:grid;gap:10px}}
+.tenant-delete-confirmation input{{font-family:ui-monospace,monospace}}
+.tenant-delete-timeline{{display:grid;gap:9px;margin:0;padding:0;list-style:none}}
+.tenant-delete-step{{display:grid;grid-template-columns:26px 1fr auto;gap:12px;align-items:center;padding:12px;border:1px solid var(--rule,#dce3da);border-radius:11px;background:var(--surface,#fff);color:var(--ink,#0f1f14)}}
+.tenant-delete-step.pending{{opacity:.72}}
+.tenant-delete-step.running{{background:var(--rule-soft,#edf1eb);border-color:var(--focus,#1b5fbf)}}
+.tenant-delete-step.done{{background:var(--iff-wash,#eaf4ec);border-color:var(--iff,#168821)}}
+.tenant-delete-step.failed{{background:var(--halt-wash,#faebec);border-color:var(--halt,#9c1c24)}}
+.tenant-delete-step-icon{{width:24px;height:24px;display:grid;place-items:center;border-radius:999px;background:var(--rule-soft,#edf1eb);color:var(--ink,#0f1f14);font-size:.72rem;font-weight:900}}
+.tenant-delete-step.running .tenant-delete-step-icon{{background:var(--focus,#1b5fbf);color:var(--surface,#fff)}}
+.tenant-delete-step.done .tenant-delete-step-icon{{background:var(--iff,#168821);color:var(--on-iff,#fff)}}
+.tenant-delete-step.failed .tenant-delete-step-icon{{background:var(--halt,#9c1c24);color:var(--surface,#fff)}}
+.tenant-delete-step small{{display:block;color:var(--ink-2,#42544a);margin-top:2px}}
+.tenant-delete-dots{{display:inline-flex;gap:4px;align-items:center}}
+.tenant-delete-dots i{{width:5px;height:5px;border-radius:999px;background:currentColor;animation:tenant-delete-pulse 1.1s infinite ease-in-out}}
+.tenant-delete-dots i:nth-child(2){{animation-delay:.18s}}
+.tenant-delete-dots i:nth-child(3){{animation-delay:.36s}}
+@keyframes tenant-delete-pulse{{0%,80%,100%{{opacity:.25;transform:translateY(0)}}40%{{opacity:1;transform:translateY(-3px)}}}}
+.tenant-delete-live{{display:flex;gap:10px;align-items:center;padding:12px;border:1px solid var(--rule,#dce3da);border-radius:11px;background:var(--rule-soft,#edf1eb);color:var(--ink,#0f1f14)}}
+.tenant-delete-live small{{display:block;color:var(--ink-2,#42544a)}}
+.tenant-delete-progress-wrap{{display:grid;gap:7px;color:var(--ink-2,#42544a)}}
+.tenant-delete-progress-wrap progress{{width:100%;height:12px;accent-color:var(--focus,#1b5fbf)}}
+.tenant-delete-terminal{{padding:14px;border-radius:11px;color:var(--ink,#0f1f14)}}
+.tenant-delete-terminal.ok{{background:var(--iff-wash,#eaf4ec);border:1px solid var(--iff,#168821)}}
+.tenant-delete-terminal.bad{{background:var(--halt-wash,#faebec);border:1px solid var(--halt,#9c1c24)}}
+@media(max-width:700px){{.tenant-delete-modal{{padding:0}}.tenant-delete-dialog{{width:100%;height:100%;max-height:none;border-radius:0}}.tenant-delete-step{{grid-template-columns:26px 1fr}}.tenant-delete-step>.pill{{grid-column:2;justify-self:start}}}}
 </style>
 <script>
 (() => {{
