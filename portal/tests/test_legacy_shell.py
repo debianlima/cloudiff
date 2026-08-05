@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 import unittest
+from pathlib import Path
 
 from portal.core.auth import Identity
 from portal.core.legacy_shell import parse_legacy, scope_css, transform
@@ -37,6 +38,23 @@ class LegacyShellTest(unittest.TestCase):
         self.assertIn(".legacy-content{margin:0}", css)
         self.assertIn(".legacy-content .card,.legacy-content .box", css)
         self.assertIn(".legacy-content button", css)
+
+    def test_explicit_theme_selector_keeps_document_root(self):
+        css = scope_css(
+            'html[data-theme="dark"]{--surface:#111}'
+            'html[data-theme="dark"] body{color:#fff}'
+            'html[data-theme="dark"] .card{background:#111}'
+        )
+        self.assertIn('html[data-theme="dark"] .legacy-content{--surface:#111}', css)
+        self.assertIn('html[data-theme="dark"] .legacy-content{color:#fff}', css)
+        self.assertIn('html[data-theme="dark"] .legacy-content .card{background:#111}', css)
+        self.assertNotIn('.legacy-content[data-theme="dark"]', css)
+
+    def test_theme_bridge_covers_historical_token_families(self):
+        css = Path('portal/design/components.css').read_text()
+        for token in ('--cif-surface', '--ui141-surface', '--ui143-surface', '--c-surface'):
+            self.assertIn(f'{token}:var(--surface)', css)
+        self.assertIn('html[data-theme] .legacy-content', css)
 
     def test_student_receives_panel_and_tools_without_administration(self):
         doc = transform(LEGACY, self.student, "projetos")

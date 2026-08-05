@@ -87,7 +87,7 @@ _PROJECT_DESCRIPTIONS = {
 _TAB_TITLES = {tab: label for entries in _TAB_GROUPS.values() for tab, label in entries}
 _TAB_TITLES.update({tab: label for entries in _PROJECT_NAV.values() for tab, label in entries})
 _TAB_TITLES["projetos"] = "Projetos"
-_ASSET_VERSION = "20260805-1110"
+_ASSET_VERSION = "20260805-1455"
 
 _MODULE_TO_TAB = {
     "overview": "resumo",

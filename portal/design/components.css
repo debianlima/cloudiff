@@ -259,3 +259,108 @@
 .tenant-owner-row{background:#f0fdf4}.tenant-owner-row td{vertical-align:middle}.tenant-owner-badge{margin-left:8px}.tenant-owner-lock{display:inline-flex;padding:5px 9px;border-radius:999px;background:#edf7f0;color:#176b35;font-size:.73rem;font-weight:800}.tenant-acl-table td:nth-child(3){text-align:right}
 
 .tenant-identity-note{margin:7px 0 0;padding:9px 10px;border-radius:9px;background:#f8fafc;color:var(--muted);font-weight:650}.tenant-identity-note.is-searching{background:#f0fdf4;color:#176b35}.tenant-identity-note.is-success{background:#edf7f0;color:#176b35}.tenant-identity-note.is-error{background:#fef2f2;color:#991b1b;border:1px solid #fecaca}.tenant-acl-empty-error{color:#991b1b;background:#fef2f2}.db96-permissions input[aria-invalid="true"]{border-color:#dc2626!important;outline:2px solid rgba(220,38,38,.16)!important}
+
+/* Theme bridge for pages rendered by the legacy compatibility layer.
+   The legacy UI has several historical token families. They all resolve to the
+   canonical Portal tokens so an explicit Light/Dark/System choice affects the
+   complete page, not only the v2 shell. */
+html[data-theme] .legacy-content{
+  --bg:var(--paper);
+  --card:var(--surface);
+  --line:var(--rule);
+  --soft:var(--rule-soft);
+  --muted:var(--ink-2);
+  --border:var(--rule);
+  --text:var(--ink);
+  --accent:var(--iff);
+  --accent-soft:var(--iff-wash);
+  --cif-primary:var(--iff);
+  --cif-primary-2:var(--iff-dark);
+  --cif-accent:var(--focus);
+  --cif-surface:var(--surface);
+  --cif-bg:var(--paper);
+  --cif-border:var(--rule);
+  --cif-text:var(--ink);
+  --cif-muted:var(--ink-2);
+  --cif-shadow:none;
+  --ui141-bg:var(--paper);
+  --ui141-surface:var(--surface);
+  --ui141-surface-soft:var(--paper);
+  --ui141-border:var(--rule);
+  --ui141-text:var(--ink);
+  --ui141-muted:var(--ink-2);
+  --ui141-primary:var(--iff);
+  --ui141-primary-strong:var(--iff-dark);
+  --ui141-shadow:none;
+  --ui143-bg:var(--paper);
+  --ui143-surface:var(--surface);
+  --ui143-surface-soft:var(--paper);
+  --ui143-border:var(--rule);
+  --ui143-text:var(--ink);
+  --ui143-muted:var(--ink-2);
+  --ui143-primary:var(--iff);
+  --ui143-primary-hover:var(--iff-dark);
+  --ui143-shadow:none;
+  --c-bg:var(--paper);
+  --c-surface:var(--surface);
+  --c-surface-2:var(--paper);
+  --c-surface-3:var(--rule-soft);
+  --c-text:var(--ink);
+  --c-text-strong:var(--ink);
+  --c-muted:var(--ink-2);
+  --c-faint:var(--ink-3);
+  --c-border:var(--rule);
+  --c-border-strong:var(--rule);
+  --c-primary:var(--iff);
+  --c-primary-hover:var(--iff-dark);
+  --c-primary-soft:var(--iff-wash);
+  --c-primary-border:var(--rule);
+  --c-accent:var(--focus);
+  --c-accent-soft:var(--rule-soft);
+  --c-success:var(--iff-dark);
+  --c-success-soft:var(--iff-wash);
+  --c-success-border:var(--rule);
+  --c-warning:var(--drift);
+  --c-warning-soft:var(--drift-wash);
+  --c-warning-border:var(--rule);
+  --c-danger:var(--halt);
+  --c-danger-soft:var(--halt-wash);
+  --c-danger-border:var(--rule);
+  --c-info:var(--focus);
+  --c-info-soft:var(--rule-soft);
+  --c-info-border:var(--rule);
+  --c-shadow-sm:none;
+  --c-shadow:none;
+}
+
+html[data-theme="dark"] .legacy-content .project-options-hint,
+html[data-theme="dark"] .legacy-content .project-entry[open]>.project-entry-summary,
+html[data-theme="dark"] .legacy-content .project-toolbar,
+html[data-theme="dark"] .legacy-content .view-toggle,
+html[data-theme="dark"] .legacy-content .ui142-empty,
+html[data-theme="dark"] .legacy-content .db96-hero,
+html[data-theme="dark"] .legacy-content .db96-mode.inactive,
+html[data-theme="dark"] .legacy-content .db96-readonly,
+html[data-theme="dark"] .legacy-content .technology-wizard-steps li,
+html[data-theme="dark"] .legacy-content .rd-pill{
+  background:var(--paper)!important;
+  border-color:var(--rule)!important;
+  color:var(--ink)!important;
+}
+html[data-theme="dark"] .legacy-content .db97-legend,
+html[data-theme="dark"] .legacy-content .security-note,
+html[data-theme="dark"] .legacy-content .help{
+  background:var(--rule-soft)!important;
+  border-color:var(--focus)!important;
+  color:var(--ink)!important;
+}
+html[data-theme="dark"] .legacy-content .infra-note,
+html[data-theme="dark"] .legacy-content .ai-disclaimer{
+  background:var(--drift-wash)!important;
+  border-color:var(--drift)!important;
+  color:var(--drift)!important;
+}
+html[data-theme="dark"] .legacy-content .project-preview,
+html[data-theme="dark"] .legacy-content .project-preview iframe{
+  background:var(--surface)!important;
+}

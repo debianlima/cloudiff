@@ -76,6 +76,17 @@ def _scope_selector(selector: str) -> str:
     selector = selector.strip()
     if not selector:
         return selector
+
+    # Theme state lives on the real document root. Keep that root selector and
+    # insert the compatibility container after it. Replacing ``html`` outright
+    # would produce ``.legacy-content[data-theme=dark]`` even though the
+    # attribute is never placed on the compatibility container.
+    themed_root = re.match(r"^(html(?:\[[^\]]+\])+)(.*)$", selector, re.I | re.S)
+    if themed_root:
+        root, remainder = themed_root.groups()
+        remainder = re.sub(r"^\s*body\b", "", remainder, count=1, flags=re.I)
+        return f"{root} .legacy-content{remainder}"
+
     selector = re.sub(r"^:root\b", ".legacy-content", selector)
     selector = re.sub(r"^(?:html|body)\b", ".legacy-content", selector)
     if selector.startswith(".legacy-content"):
