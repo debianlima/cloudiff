@@ -3677,13 +3677,39 @@ def cloudif_project_runtime_info(handler):
         return send(handler,403,{"ok":False,"error":"forbidden"})
     payload=_cloudif_pub_json(handler)
     project=safe_slug(payload.get("project") or ""); kind=str(payload.get("kind") or "").strip().lower()
-    stack_id=str(payload.get("stack_id") or ""); service=str(payload.get("service") or "web")
+    stack_id=normalize_resource_id(payload.get("stack_id") or ""); service=str(payload.get("service") or "web")
     if not project or kind not in {"php","node"}:
         return send(handler,400,{"ok":False,"error":"invalid_request"})
-    audit=_cloudif_project_audit_data({"project":project,"stack_id":stack_id,"service":service,"terminal":"cloudif-"+project,"shell":"sh"})
-    container=str(audit.get("container_name") or "")
-    if not audit.get("healthy") or not container:
-        return send(handler,422,{"ok":False,"error":"container_not_running","audit":audit})
+
+    # O diagnóstico pertence à publicação ativa, não à stack-base usada como
+    # checkout. Terminal, ACL de terminal e metadados do Komodo não devem
+    # bloquear uma consulta somente-leitura executada diretamente no container.
+    integration=find_integration(project) or {}
+    base_stack_id=normalize_resource_id(integration.get("stack_id") or stack_id)
+    active=_cloudif_active_publication_stack(project,base_stack_id)
+    resolved_stack_id=normalize_resource_id(active.get("stack_id") if active.get("ok") else base_stack_id)
+    audit=_cloudif_project_audit_data({"project":project,"stack_id":resolved_stack_id,"service":service,"terminal":"cloudif-"+project,"shell":"sh"})
+
+    candidates=[]
+    for value in (active.get("container"),audit.get("container_name")):
+        value=str(value or "").strip()
+        if value and value not in candidates and re.fullmatch(r"[A-Za-z0-9_.-]+",value):
+            candidates.append(value)
+    container="";container_state={}
+    for candidate in candidates:
+        try:
+            inspected=subprocess.run(
+                ["docker","inspect",candidate],text=True,stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,timeout=12,check=False,
+            )
+            rows=json.loads(inspected.stdout or "[]") if inspected.returncode==0 else []
+            state=(rows[0].get("State") or {}) if rows else {}
+            if bool(state.get("Running")):
+                container=candidate;container_state=state;break
+        except Exception:
+            continue
+    if not container:
+        return send(handler,422,{"ok":False,"error":"active_container_not_running","active_publication":active,"audit":audit,"candidates":candidates})
     if kind=="php":
         script="""php -v
 printf '\n---INI---\n'
