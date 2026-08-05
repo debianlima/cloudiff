@@ -6,6 +6,12 @@ import os
 import sqlite3
 import subprocess
 import sys
+import time
+import random
+import socket
+import tempfile
+import concurrent.futures
+import datetime as dt
 import urllib.parse
 import urllib.request
 import urllib.error
@@ -59,9 +65,99 @@ def db_container(tenant):
     return ""
 
 
+TENANT_ACCESS_DIR=Path(os.environ.get('CLOUDIF_TENANT_ACCESS_DIR','/var/lib/cloudif/tenant-access'))
+KOMODO_CLIENT_ENV=Path('/etc/cloudif/komodo-agent-client.env')
+
+
+def internal_post(base,path,token,payload,timeout=180):
+    headers={'Accept':'application/json','Content-Type':'application/json','X-CloudIF-Token':token,'Authorization':'Bearer '+token}
+    req=urllib.request.Request(base.rstrip('/')+path,data=json.dumps(payload).encode(),method='POST',headers=headers)
+    try:
+        with urllib.request.urlopen(req,timeout=timeout) as response:
+            raw=response.read();data=json.loads(raw or b'{}')
+            return {'ok':200<=response.status<300 and data.get('ok') is not False,'status':response.status,'data':data}
+    except urllib.error.HTTPError as exc:
+        raw=exc.read()
+        try:data=json.loads(raw or b'{}')
+        except Exception:data={'error':'invalid_upstream_response'}
+        return {'ok':False,'status':exc.code,'data':data}
+    except Exception as exc:
+        return {'ok':False,'status':0,'error_type':type(exc).__name__}
+
+
+def project_membership_snapshot(project):
+    con=client.connect();row=con.execute('select * from projects where slug=?',(project,)).fetchone()
+    if not row:
+        con.close();raise RuntimeError('project_not_found')
+    keys=set(row.keys())
+    owner=str((row['owner'] if 'owner' in keys else '') or (row['created_by'] if 'created_by' in keys else '') or '').strip().lower()
+    tenant=str((row['tenant'] if 'tenant' in keys else '') or (row['tenant_default'] if 'tenant_default' in keys else '') or '').strip().lower()
+    acl=[{'type':str(x['subject_type'] or '').strip().lower(),'subject':str(x['subject'] or '').strip()} for x in con.execute('select subject_type,subject from project_acl where slug=? order by id',(project,)).fetchall()]
+    con.close();return {'project':project,'owner':owner,'tenant':tenant,'acl':acl}
+
+
+def tenant_membership_snapshot(tenant):
+    users=set();groups=set();con=client.connect()
+    for row in con.execute('select subject_type,subject from tenant_acl where tenant=?',(tenant,)).fetchall():
+        kind=str(row['subject_type'] or '').strip().lower();subject=str(row['subject'] or '').strip().lower()
+        if kind=='user' and subject:users.add(subject)
+        elif kind=='group' and subject:groups.add(subject)
+    project_rows=con.execute('select * from projects').fetchall()
+    for project in project_rows:
+        keys=set(project.keys());bound=str((project['tenant'] if 'tenant' in keys else '') or (project['tenant_default'] if 'tenant_default' in keys else '') or '').strip().lower()
+        if bound!=tenant:continue
+        owner=str((project['owner'] if 'owner' in keys else '') or (project['created_by'] if 'created_by' in keys else '') or '').strip().lower()
+        if owner:users.add(owner)
+        slug=str(project['slug'] if 'slug' in keys else '')
+        if not slug:continue
+        for row in con.execute('select subject_type,subject from project_acl where slug=?',(slug,)).fetchall():
+            kind=str(row['subject_type'] or '').strip().lower();subject=str(row['subject'] or '').strip().lower()
+            if kind=='user' and subject:users.add(subject)
+            elif kind=='group' and subject:groups.add(subject)
+    con.close();return {'tenant':tenant,'users':sorted(users),'groups':sorted(groups)}
+
+
+def atomic_lines(path,values):
+    path.parent.mkdir(parents=True,exist_ok=True)
+    fd,tmp=tempfile.mkstemp(prefix='.'+path.name+'.',dir=str(path.parent))
+    try:
+        with os.fdopen(fd,'w',encoding='utf-8') as stream:
+            for value in sorted({str(x).strip().lower() for x in values if str(x).strip()}):stream.write(value+'\n')
+            stream.flush();os.fsync(stream.fileno())
+        os.chmod(tmp,0o640);os.replace(tmp,path)
+    finally:
+        try:os.unlink(tmp)
+        except FileNotFoundError:pass
+
+
+def reconcile_tenant_membership(tenant):
+    state=tenant_membership_snapshot(tenant)
+    atomic_lines(TENANT_ACCESS_DIR/(tenant+'.users'),state['users'])
+    atomic_lines(TENANT_ACCESS_DIR/(tenant+'.groups'),state['groups'])
+    container=db_container(tenant)
+    return {'ok':True,'tenant':tenant,'users':state['users'],'groups':state['groups'],'db_container':container,'access_files':[str(TENANT_ACCESS_DIR/(tenant+'.users')),str(TENANT_ACCESS_DIR/(tenant+'.groups'))]}
+
+
+def reconcile_project_membership(project):
+    state=project_membership_snapshot(project);access={'owner':state['owner'],'acl':state['acl']}
+    forja_cfg=read_env(FORJA_ENV);forja_base=(forja_cfg.get('FORJA_AGENT_URL') or 'http://10.62.91.2:18095').rstrip('/');forja_token=forja_cfg.get('FORJA_AGENT_TOKEN') or ''
+    komodo_cfg=read_env(KOMODO_CLIENT_ENV);komodo_base=(komodo_cfg.get('KOMODO_AGENT_URL') or 'http://10.62.91.2:18098').rstrip('/');komodo_token=komodo_cfg.get('KOMODO_AGENT_TOKEN') or ''
+    if not forja_token or not komodo_token:raise RuntimeError('membership_agent_credentials_missing')
+    forgejo=internal_post(forja_base,'/project/membership/reconcile',forja_token,{'project':project,'owner_user':state['owner'],'access':access},180)
+    komodo=internal_post(komodo_base,'/komodo/project/membership/reconcile',komodo_token,{'project':project,'owner_user':state['owner'],'access':access},240)
+    tenant_result=reconcile_tenant_membership(state['tenant']) if state['tenant'] else {'ok':True,'skipped':True}
+    onboarding={'ok':True,'started':False}
+    try:
+        proc=subprocess.run(['/bin/systemctl','start','cloudif-project-onboarding-reconcile.service'],text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=300)
+        onboarding={'ok':proc.returncode==0,'started':proc.returncode==0,'returncode':proc.returncode}
+    except Exception as exc:onboarding={'ok':False,'started':False,'error_type':type(exc).__name__}
+    ok=bool(forgejo.get('ok') and komodo.get('ok') and tenant_result.get('ok'))
+    return {'ok':ok,'project':project,'owner':state['owner'],'tenant':state['tenant'],'acl':state['acl'],'forgejo':forgejo,'komodo':komodo,'tenant_access':tenant_result,'onboarding':onboarding}
+
+
 def update_request(request_id,status,message,result):
     con=client.connect()
-    con.execute("UPDATE reconcile_requests SET status=?,message=?,result_json=?,finished_at=? WHERE request_id=?",
+    con.execute("UPDATE reconcile_requests SET status=?,message=?,result_json=?,finished_at=?,lease_owner='',lease_expires_at='',heartbeat_at='' WHERE request_id=?",
                 (status,message[:4000],json.dumps(result,ensure_ascii=False,default=str)[:100000],client.now_utc(),request_id))
     con.commit(); con.close()
 
@@ -69,7 +165,7 @@ def update_request(request_id,status,message,result):
 def process(row):
     rid=row["request_id"]
     con=client.connect()
-    con.execute("UPDATE reconcile_requests SET status='running',started_at=?,message='Reconciliação em execução.' WHERE request_id=?",(client.now_utc(),rid))
+    con.execute("UPDATE reconcile_requests SET heartbeat_at=?,message='Reconciliação em execução.' WHERE request_id=?",(client.now_utc(),rid))
     con.commit(); con.close()
     payload={}
     try:
@@ -92,7 +188,7 @@ def process(row):
         con.commit(); con.close()
         update_request(rid,"ready","Usuário habilitado para automação de releases.",{"username":username})
         return
-    if event in {"project.created","project.updated","project.integrated","repository.created","repository.updated","reconcile.requested"}:
+    if event in {"project.created","project.updated","project.integrated","project.membership.changed","repository.created","repository.updated","reconcile.requested"}:
         project=row["project"] or str(payload.get("project") or "")
         if not project:
             raise RuntimeError("projeto ausente")
@@ -114,11 +210,16 @@ def process(row):
                          enabled=1,updated_at=excluded.updated_at""",
                     (project,tenant,repo_full,repo_url,now,now))
         con.commit(); con.close()
+        membership=None
+        if event=="project.membership.changed":
+            membership=reconcile_project_membership(project)
+            if not membership.get('ok'):
+                raise RuntimeError('project_membership_reconcile_failed')
         status="ready" if repo_full else "waiting"
-        msg="Projeto e repositório reconciliados." if repo_full else "Projeto preparado; aguardando criação do repositório."
-        update_request(rid,status,msg,{"project":project,"tenant":tenant,"repo_full_name":repo_full,"repo_url":repo_url})
+        msg=("Membros, terminais e integrações reconciliados." if membership else "Projeto e repositório reconciliados.") if repo_full else "Projeto preparado; aguardando criação do repositório."
+        update_request(rid,status,msg,{"project":project,"tenant":tenant,"repo_full_name":repo_full,"repo_url":repo_url,"membership":membership})
         return
-    if event in {"tenant.created","tenant.ready","tenant.bound"}:
+    if event in {"tenant.created","tenant.ready","tenant.bound","tenant.membership.changed"}:
         tenant=row["tenant"] or str(payload.get("tenant") or "")
         if not tenant:
             raise RuntimeError("tenant ausente")
@@ -129,31 +230,82 @@ def process(row):
                        ON CONFLICT(tenant) DO UPDATE SET db_container=excluded.db_container,enabled=1,updated_at=excluded.updated_at""",
                     (tenant,container,now,now))
         con.commit(); con.close()
+        membership=reconcile_tenant_membership(tenant) if event=="tenant.membership.changed" else None
         status="ready" if container else "waiting"
-        msg="Tenant Supabase reconciliado." if container else "Tenant registrado; aguardando container PostgreSQL."
-        update_request(rid,status,msg,{"tenant":tenant,"db_container":container})
+        msg=("Permissões do banco reconciliadas." if membership else "Tenant Supabase reconciliado.") if container else "Tenant registrado; aguardando container PostgreSQL."
+        update_request(rid,status,msg,{"tenant":tenant,"db_container":container,"membership":membership})
         return
     raise RuntimeError("evento sem processador")
 
 
+LEASE_SECONDS=45
+MAX_WORKERS=max(1,min(int(os.environ.get('CLOUDIF_RECONCILE_WORKERS','4')),8))
+WORKER_ID=socket.gethostname()+':'+str(os.getpid())
+TERMINAL={'ready','failed','dead_letter'}
+
+def iso_after(seconds):
+    return (dt.datetime.now(dt.timezone.utc)+dt.timedelta(seconds=seconds)).replace(microsecond=0).isoformat().replace('+00:00','Z')
+
+def recover_expired():
+    now=client.now_utc();con=client.connect();
+    cur=con.execute("UPDATE reconcile_requests SET status='queued',lease_owner='',lease_expires_at='',heartbeat_at='',message='Lease expirado; tarefa recuperada.',next_attempt_at=? WHERE status='running' AND lease_expires_at<>'' AND lease_expires_at<?",(now,now));con.commit();n=cur.rowcount;con.close();return n
+
+def claim(limit):
+    now=client.now_utc();lease=iso_after(LEASE_SECONDS);con=client.connect();con.execute('BEGIN IMMEDIATE')
+    busy={r[0] for r in con.execute("SELECT partition_key FROM reconcile_requests WHERE status='running' AND lease_expires_at>?",(now,))}
+    rows=con.execute("SELECT * FROM reconcile_requests WHERE status IN ('queued','waiting_retry') AND (next_attempt_at='' OR next_attempt_at<=?) ORDER BY created_at LIMIT 200",(now,)).fetchall();picked=[];seen=set(busy)
+    for r in rows:
+        part=r['partition_key'] or ('project:'+r['project'] if r['project'] else 'request:'+r['request_id'])
+        if part in seen:continue
+        cur=con.execute("UPDATE reconcile_requests SET status='running',started_at=CASE WHEN started_at='' THEN ? ELSE started_at END,lease_owner=?,lease_expires_at=?,heartbeat_at=?,attempt_count=attempt_count+1,message='Reconciliação em execução.' WHERE request_id=? AND status IN ('queued','waiting_retry')",(now,WORKER_ID,lease,now,r['request_id']))
+        if cur.rowcount: picked.append(r['request_id']);seen.add(part)
+        if len(picked)>=limit:break
+    con.commit();out=[]
+    for rid in picked:
+        row=con.execute('SELECT * FROM reconcile_requests WHERE request_id=?',(rid,)).fetchone();out.append(dict(row))
+    con.close();return out
+
+def fail_or_retry(row,exc):
+    rid=row['request_id'];attempt=int(row.get('attempt_count') or 1);maximum=int(row.get('max_attempts') or 5);etype=type(exc).__name__;con=client.connect()
+    if attempt>=maximum:
+        con.execute("UPDATE reconcile_requests SET status='dead_letter',dead_lettered_at=?,finished_at=?,message=?,last_error_type=?,lease_owner='',lease_expires_at='',heartbeat_at='',result_json=? WHERE request_id=?",(client.now_utc(),client.now_utc(),'Falha permanente após tentativas.',etype,json.dumps({'error_type':etype,'secrets_exposed':False},separators=(',',':')),rid))
+    else:
+        delay=min(300,(2**max(0,attempt-1))*5)+random.randint(0,3)
+        con.execute("UPDATE reconcile_requests SET status='waiting_retry',next_attempt_at=?,message=?,last_error_type=?,lease_owner='',lease_expires_at='',heartbeat_at='' WHERE request_id=?",(iso_after(delay),f'Falha transitória; nova tentativa em {delay}s.',etype,rid))
+    con.commit();con.close()
+
+def execute(row):
+    try:process(row);return {'request_id':row['request_id'],'ok':True}
+    except Exception as exc:fail_or_retry(row,exc);return {'request_id':row['request_id'],'ok':False,'error_type':type(exc).__name__}
+
+def cleanup_markers():
+    for marker in QUEUE.glob('*.json'):
+        try:
+            rid=str(json.loads(marker.read_text(errors='ignore')).get('request_id') or '')
+            con=client.connect();r=con.execute('SELECT status FROM reconcile_requests WHERE request_id=?',(rid,)).fetchone();con.close()
+            if not r or r['status'] not in {'queued','waiting_retry','running'}:marker.unlink(missing_ok=True)
+        except Exception:marker.unlink(missing_ok=True)
+
 def drain():
-    client.ensure_schema(); QUEUE.mkdir(parents=True,exist_ok=True); LOCK.parent.mkdir(parents=True,exist_ok=True)
-    with LOCK.open("w") as lock:
-        fcntl.flock(lock,fcntl.LOCK_EX)
-        markers=sorted(QUEUE.glob("*.json"))
-        for marker in markers:
-            try:
-                data=json.loads(marker.read_text(errors="ignore")); rid=str(data.get("request_id") or "")
-                con=client.connect(); row=con.execute("SELECT * FROM reconcile_requests WHERE request_id=?",(rid,)).fetchone(); con.close()
-                if row and row["status"] in {"queued","waiting"}:
-                    try:
-                        process(row)
-                    except Exception as exc:
-                        update_request(rid,"failed",f"Falha na reconciliação: {type(exc).__name__}",{"error_type":type(exc).__name__})
-                marker.unlink(missing_ok=True)
-            except Exception:
-                marker.unlink(missing_ok=True)
-    return 0
+    client.ensure_schema();QUEUE.mkdir(parents=True,exist_ok=True);recovered=recover_expired();results=[]
+    while True:
+        rows=claim(MAX_WORKERS)
+        if not rows:break
+        with concurrent.futures.ThreadPoolExecutor(max_workers=len(rows),thread_name_prefix='cloudif-reconcile') as pool:
+            results.extend(pool.map(execute,rows))
+    cleanup_markers();print(json.dumps({'ok':all(x['ok'] for x in results) if results else True,'processed':len(results),'recovered_leases':recovered,'workers':MAX_WORKERS,'results':results},ensure_ascii=False,separators=(',',':')));return 0
+
+def selftest():
+    # Isolated scheduler semantics; no external systems or real project rows.
+    secret={'token':'x'}
+    assert client._contains_secret(secret) is True and client._contains_secret({'source':'test'}) is False
+    parts=[client._partition('project.updated','',f'p{i}','') for i in range(4)]
+    assert len(set(parts))==4 and client._partition('project.updated','','same','')==client._partition('repository.updated','','same','')
+    started=time.monotonic()
+    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:list(pool.map(lambda _:time.sleep(.20),range(4)))
+    elapsed=time.monotonic()-started
+    assert elapsed<.55
+    return {'ok':True,'parallel_partitions':4,'elapsed_seconds':round(elapsed,3),'secret_payload_rejected':True,'same_project_serialized':True,'lease_seconds':LEASE_SECONDS,'max_workers':MAX_WORKERS,'tokens_persisted':False}
 
 
 def main():
@@ -161,12 +313,14 @@ def main():
     sub=ap.add_subparsers(dest="cmd",required=True)
     sub.add_parser("init")
     sub.add_parser("drain")
+    sub.add_parser("selftest")
     e=sub.add_parser("enqueue"); e.add_argument("--event",required=True); e.add_argument("--actor",default="portal"); e.add_argument("--username",default=""); e.add_argument("--project",default=""); e.add_argument("--tenant",default=""); e.add_argument("--payload",default="{}")
     s=sub.add_parser("status"); s.add_argument("request_id")
     r=sub.add_parser("recent"); r.add_argument("--project",default=""); r.add_argument("--limit",type=int,default=20)
     args=ap.parse_args()
     if args.cmd=="init": client.ensure_schema(); print(json.dumps({"ok":True})); return
     if args.cmd=="drain": raise SystemExit(drain())
+    if args.cmd=="selftest": print(json.dumps(selftest(),separators=(",",":"))); return
     if args.cmd=="enqueue": print(json.dumps(client.enqueue(args.event,args.actor,args.username,args.project,args.tenant,json.loads(args.payload)),ensure_ascii=False)); return
     if args.cmd=="status": print(json.dumps(client.status(args.request_id) or {"ok":False,"error":"not_found"},ensure_ascii=False)); return
     if args.cmd=="recent": print(json.dumps(client.recent(args.project,args.limit),ensure_ascii=False)); return

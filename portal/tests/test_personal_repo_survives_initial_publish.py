@@ -6,9 +6,9 @@ class PersonalRepoSurvivesInitialPublishTests(unittest.TestCase):
   cls.initial=Path('components/control-plane/usr/local/sbin/cloudif-project-initial-publish.py').read_text()
   cls.onboarding=Path('components/control-plane/current-apps/project-onboarding-current/cloudif-project-onboarding.py').read_text()
   cls.portal=Path('components/control-plane/current-apps/portal-current/cloudif-admin-portal-base.py').read_text()
- def test_initial_publish_uses_confirmed_integration_url(self):
-  self.assertIn('def canonical_repo_url',self.initial)
-  self.assertIn('select forgejo_repo_url,repo_url from project_integrations',self.initial)
+ def test_initial_publish_uses_existing_project_checkout_without_changing_owner(self):
+  self.assertIn("'project': slug",self.initial)
+  self.assertIn("deployment.get('commit')",self.initial)
   self.assertNotIn("git/cloudif/cloudif-{slug}",self.initial)
  def test_onboarding_uses_actual_owner(self):
   self.assertIn("'forgejo_owner':owner",self.onboarding)

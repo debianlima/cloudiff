@@ -1,17 +1,15 @@
 from pathlib import Path
 import unittest
 
-class InitialPublicationLocalHealthFastPathTests(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        cls.source=Path('components/control-plane/usr/local/sbin/cloudif-project-initial-publish.py').read_text()
-    def test_successful_local_health_skips_legacy_polling(self):
-        for marker in ("deploy_confirmed=False","local.get('ok') is True","local_reconciled=True","while not deploy_confirmed"):
-            self.assertIn(marker,self.source)
-    def test_error_keeps_fuller_deploy_detail(self):
-        self.assertIn("str(deploy_result)[:700]",self.source)
-    def test_fast_path_synthesizes_runtime_state(self):
-        self.assertIn("'runtime':{'running':True",self.source)
-        self.assertIn("'deploy_status':'completed'",self.source)
-
-if __name__=='__main__':unittest.main()
+class InitialPublicationVersionedRuntimeTests(unittest.TestCase):
+ @classmethod
+ def setUpClass(cls):cls.source=Path("components/control-plane/usr/local/sbin/cloudif-project-initial-publish.py").read_text()
+ def test_initial_publication_calls_versioned_deploy(self):
+  for marker in ("/komodo/publication/deploy","'deploy_number': 1","timeout=900","versioned_d1_deploy_failed"):
+   self.assertIn(marker,self.source)
+ def test_health_is_checked_after_promotion(self):
+  self.assertIn("wait_public(publisher['version_url'])",self.source)
+  self.assertIn("wait_public(publisher['stable_url'])",self.source)
+ def test_full_deploy_error_is_preserved(self):
+  self.assertIn("json.dumps(deployment, ensure_ascii=False)[:900]",self.source)
+if __name__=="__main__":unittest.main()

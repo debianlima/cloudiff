@@ -2718,6 +2718,10 @@ class Handler(BaseHTTPRequestHandler):
             code, result = finalize_project_release(data)
             return json_response(self, code, result)
 
+        if path == "/project/membership/reconcile":
+            result=reconcile_project_membership(data)
+            return json_response(self, 200 if result.get("ok") else 422, result)
+
         if path == "/project/ensure":
             return json_response(self, 200, ensure_project(data))
 
@@ -2746,6 +2750,50 @@ class Handler(BaseHTTPRequestHandler):
 
     def log_message(self, fmt, *args):
         print(f"[{now()}] {self.client_address[0]} {fmt % args}", flush=True)
+
+# CloudIFF v143 — colaboradores do Forgejo reconciliados pela ACL central
+
+def reconcile_project_membership(payload):
+    slug=safe_slug(payload.get('project') or payload.get('project_slug') or payload.get('slug') or '')
+    if not slug:return {'ok':False,'error':'invalid_project'}
+    project=load_project(slug) or {}
+    access=payload.get('access') if isinstance(payload.get('access'),dict) else {}
+    owner=str(access.get('owner') or payload.get('owner_user') or project.get('owner_user') or project.get('forgejo_owner') or ((project.get('forgejo') or {}).get('owner') if isinstance(project.get('forgejo'),dict) else '') or '').strip().lower()
+    repo=str(payload.get('repo') or ((project.get('forgejo') or {}).get('repo') if isinstance(project.get('forgejo'),dict) else '') or forgejo_repo_name(slug)).strip()
+    if '/' in repo:
+        repo_owner,repo_name=repo.split('/',1);owner=owner or repo_owner;repo=repo_name
+    if not owner:return {'ok':False,'error':'repo_owner_missing'}
+    acl=access.get('acl') if isinstance(access.get('acl'),list) else []
+    desired=set()
+    ignored_groups=[]
+    for item in acl:
+        kind=str(item.get('type') or '').strip().lower();subject=str(item.get('subject') or '').strip().lower()
+        if kind=='user' and subject and subject!=owner:desired.add(subject)
+        elif kind=='group' and subject:ignored_groups.append(subject)
+    previous={str(x).strip().lower() for x in (project.get('managed_collaborators') or []) if str(x).strip()}
+    base=forgejo_api_base();token=CFG.get('FORGEJO_TOKEN','')
+    if not base or not token:return {'ok':False,'error':'forgejo_credentials_missing'}
+    qowner=urllib.parse.quote(owner,safe='');qrepo=urllib.parse.quote(repo,safe='')
+    added=[];existing=[];removed=[];errors=[]
+    for username in sorted(desired):
+        quser=urllib.parse.quote(username,safe='')
+        check=http_json('GET',f'{base}/repos/{qowner}/{qrepo}/collaborators/{quser}',token=token,timeout=15)
+        if check.get('ok'):
+            existing.append(username);continue
+        result=http_json('PUT',f'{base}/repos/{qowner}/{qrepo}/collaborators/{quser}',token=token,payload={'permission':'write'},timeout=20)
+        if result.get('ok'):added.append(username)
+        else:errors.append({'username':username,'operation':'add','status':result.get('status'),'detail':result.get('data') or result.get('error')})
+    for username in sorted(previous-desired):
+        quser=urllib.parse.quote(username,safe='')
+        result=http_json('DELETE',f'{base}/repos/{qowner}/{qrepo}/collaborators/{quser}',token=token,timeout=20)
+        if result.get('ok') or result.get('status')==404:removed.append(username)
+        else:errors.append({'username':username,'operation':'remove','status':result.get('status'),'detail':result.get('data') or result.get('error')})
+    if not errors:
+        project.update({'project_slug':slug,'owner_user':owner,'forgejo_owner':owner,'managed_collaborators':sorted(desired),'membership_reconciled_at':now()})
+        save_project(project)
+    return {'ok':not errors,'project':slug,'repo':owner+'/'+repo,'owner':owner,'desired_users':sorted(desired),'added':added,'existing':existing,'removed':removed,'ignored_groups':ignored_groups,'errors':errors}
+# CloudIFF v143 END
+
 
 if __name__ == "__main__":
     print(f"[{now()}] CloudIF Forja Agent v4 ouvindo em {HOST}:{PORT}", flush=True)

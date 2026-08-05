@@ -1,19 +1,9 @@
 from pathlib import Path
 import unittest
-
-
-SCRIPT = Path('components/control-plane/usr/local/sbin/cloudif-project-initial-publish.py')
-
-
+SCRIPT=Path("components/control-plane/usr/local/sbin/cloudif-project-initial-publish.py")
 class InitialPublicationReadinessContractTest(unittest.TestCase):
-    def test_requires_completed_idle_stack_with_running_runtime(self):
-        source = SCRIPT.read_text(encoding='utf-8')
-        self.assertIn("completed=final.get('ok') is True and final.get('deploy_status')=='completed'", source)
-        self.assertIn("runtime=final.get('runtime') or {}", source)
-        self.assertIn("runtime_confirmed=runtime.get('running') is True", source)
-        self.assertIn("not remote_errors", source)
-        self.assertIn("public_health_status_", source)
-
-
-if __name__ == '__main__':
-    unittest.main()
+ def test_requires_healthy_versioned_runtime_and_public_urls(self):
+  source=SCRIPT.read_text()
+  for marker in ("not deployment.get('ok')","not promotion.get('ok')","wait_public(publisher['version_url'])","wait_public(publisher['stable_url'])","public_health_status_"):
+   self.assertIn(marker,source)
+if __name__=="__main__":unittest.main()

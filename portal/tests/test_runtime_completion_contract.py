@@ -10,10 +10,11 @@ class RuntimeCompletionContractTest(unittest.TestCase):
         self.assertIn('"running": runtime_running', source)
         self.assertIn('ListStackServices', source)
 
-    def test_initial_publish_requires_runtime_running(self):
+    def test_initial_publish_requires_versioned_agent_success(self):
         source = Path('components/control-plane/usr/local/sbin/cloudif-project-initial-publish.py').read_text(encoding='utf-8')
-        self.assertIn("runtime=final.get('runtime') or {}", source)
-        self.assertIn("runtime_confirmed=runtime.get('running') is True", source)
+        self.assertIn("not deployment.get('ok')", source)
+        self.assertIn("versioned_d1_deploy_failed", source)
+        self.assertIn("not promotion.get('ok')", source)
 
 
 if __name__ == '__main__':

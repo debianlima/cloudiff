@@ -16,16 +16,16 @@ class UnifiedRuntimeDocumentationTests(unittest.TestCase):
             self.assertIn(marker,self.guide)
 
     def test_help_explains_unified_runtime(self):
-        for marker in ('Ambiente do projeto','container isolado com Apache, PHP e Node.js','<code>site/</code>','<code>.cloudif/</code>','portas públicas 80 e 443'):
+        for marker in ('Ambiente do projeto','Apache, PHP e Node.js','raiz do repositório','gerados fora do Git','portas públicas 80 e 443'):
             self.assertIn(marker,self.guide)
 
     def test_project_base_readme_explains_editable_and_managed_paths(self):
         text=self.tpl.project_readme('demo','user','tenant-demo',1001,'node22','8.3')
-        for marker in ('## Estrutura do repositório','`site/`','`site/index.php`','`site/api/server.js`','`.cloudif/`','O usuário deve editar?','Não normalmente'):
+        for marker in ('## Estrutura','raiz deste repositório','`index.php` ou `index.html`','`api/server.js`','gerados pela CloudIFF fora do Git'):
             self.assertIn(marker,text)
 
     def test_github_manual_documents_runtime_and_diagrams(self):
-        for marker in ('# Runtime unificado de projetos','container isolado','imagem-base','```mermaid','cloudif/runtime-apache-php8.3-node22:v1','TLS terminado no proxy'):
+        for marker in ('# Runtime gerenciado de projetos','código-fonte separado da infraestrutura','imagem-base','```mermaid','cloudif/runtime-apache-php8.3-node22:v2','TLS é terminado no proxy'):
             self.assertIn(marker,self.manual)
         self.assertIn('Runtime unificado de projetos',self.root)
 

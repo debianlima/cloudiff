@@ -1,104 +1,72 @@
-# Runtime unificado de projetos
+# Runtime gerenciado de projetos
 
-## Objetivo
-
-Cada projeto novo executa em um **container isolado**, enquanto imagens-base são compartilhadas por combinação de versões. Isso preserva isolamento entre usuários e reaproveita as camadas pesadas de Apache, PHP, Node.js e extensões.
-
-## Composição
+A CloudIFF mantém o código-fonte separado da infraestrutura. O repositório do usuário contém apenas a aplicação; Dockerfile, Compose, Apache, Supervisor, healthcheck, imagens e metadados são gerados pela plataforma fora do Git.
 
 ```mermaid
 flowchart LR
-  N[Nginx Proxy Manager
-80 e 443] --> G[Publication Gateway]
-  G --> A[Container exclusivo do projeto
-Apache :80]
-  A --> P[PHP em site/]
-  A --> J[Proxy /api/]
-  J --> NODE[Node.js
-127.0.0.1:3000]
-  B[Imagem-base por combinação
-Apache + PHP + Node] --> A
+  G[Forgejo: código na raiz] --> S[Snapshot imutável do commit]
+  S --> R[Runtime Apache + PHP + Node.js]
+  R --> D1[d1: stack, imagem e container]
+  R --> D2[d2: stack, imagem e container]
+  D1 --> A[Alias estável]
+  D2 --> A
+  A --> P[Proxy HTTPS]
 ```
 
-## Superfície do repositório
+## Estrutura do repositório
 
 ```text
+index.php ou index.html
+api/
+  server.js
+  package.json
+assets/
+src/
 README.md
-site/
-  index.php
-  api/
-    server.js
-    package.json
-.cloudif/
-  Dockerfile
-  Dockerfile.base
-  docker-compose.yml
-  apache-vhost.conf
-  supervisor.conf
-  node-runner.sh
-  health.php
-  runtime.json
-  .env
 ```
 
-O usuário trabalha normalmente em `site/`. A pasta `.cloudif/` é versionada, porém gerenciada pela plataforma.
+A raiz do repositório é a raiz da aplicação. Não existe uma pasta obrigatória `site/`. APIs Node opcionais ficam em `api/` e são expostas em `/api/`.
 
-## Versionamento
+Os seguintes arquivos não pertencem ao repositório do projeto:
 
-Combinações homologadas atuais:
+- `.cloudif/`;
+- `docker-compose.yml`, `compose.yaml` ou equivalentes da plataforma;
+- Dockerfiles gerados pela CloudIFF;
+- `.env`, tokens e segredos;
+- configuração de Apache, Supervisor ou healthcheck da plataforma.
 
-| Componente | Versões |
-|---|---|
-| Node.js | 20, 22 e 24 |
-| PHP | 8.2, 8.3 e 8.4 |
-| Apache | 2.4 da imagem oficial PHP selecionada |
+## Runtime externo ao Git
 
-A imagem-base segue o padrão:
+A plataforma registra as versões de PHP e Node selecionadas no estado interno do projeto. Para cada publicação, ela:
 
-```text
-cloudif/runtime-apache-php<versão>-node<versão>:v1
-```
+1. resolve o commit imutável no Forgejo;
+2. cria um snapshot em `/srv/cloudif/publications/p<numero>/d<versao>/source`;
+3. gera o Dockerfile e o Compose fora do Git;
+4. cria uma imagem `cloudif/publication-p<numero>-d<versao>:php<php>-node<node>`;
+5. cria a stack `cloudif-p<numero>-d<versao>`;
+6. cria o container `cloudif-p<numero>-d<versao>-web`;
+7. valida o healthcheck antes de permitir a ativação.
 
-Exemplo:
+A imagem-base compartilhada segue o padrão `cloudif/runtime-apache-php8.3-node22:v2`, ajustado às versões escolhidas.
 
-```text
-cloudif/runtime-apache-php8.3-node22:v1
-```
+## Publicações independentes
 
-## Publicação
+Cada `dN` possui recursos próprios. Ativar uma versão move somente o alias interno `cloudif-p<numero>-active-web`; os containers das demais versões não são reutilizados como se fossem a mesma publicação.
 
-```mermaid
-sequenceDiagram
-  actor U as Usuário
-  participant F as Forgejo
-  participant K as Komodo Agent
-  participant D as Docker
-  participant P as Proxy
+Quando um container antigo estiver ausente, a ativação reconstrói o commit registrado daquela versão, valida a saúde e só então move o alias.
 
-  U->>F: push na main
-  F->>K: webhook de deploy
-  K->>D: verificar imagem-base
-  alt base ausente
-    K->>D: construir Dockerfile.base
-  end
-  K->>D: construir imagem exclusiva do projeto
-  K->>D: up --force-recreate
-  D-->>K: healthcheck saudável
-  K->>P: manter aliases e publicação
-  P-->>U: HTTPS disponível
-```
+## Membros e permissões
 
-## Contrato obrigatório
+Inclusões e remoções em projeto ou banco geram eventos de reconciliação. O estado completo atual é reaplicado em:
 
-- serviço público chamado `web`;
-- Apache interno na porta 80;
-- endpoint `/.cloudif-health` saudável;
-- rede externa `cloudif-publications`;
-- aliases estável e versionado;
-- PHP servido a partir de `site/`;
-- Node opcional em `site/api/server.js`;
-- TLS terminado no proxy, não dentro do container.
+- colaboradores do Forgejo;
+- permissões do Komodo;
+- terminais individuais no container ativo;
+- listas de acesso do tenant Supabase;
+- integrações e identidade MCP do projeto.
 
-## Exclusão
+A remoção elimina apenas recursos que a CloudIFF gerenciou para aquele vínculo. O proprietário do projeto ou tenant continua protegido.
 
-A exclusão de projeto remove publicação, stack, container, imagem do projeto, repositório e metadados, mas preserva o tenant. A exclusão de tenant é um fluxo independente, com lock, backup final e verificação de resíduos.
+## Rede e HTTPS
+
+Os containers atendem internamente na porta 80 e participam da rede `cloudif-publications`. O TLS é terminado no proxy público, que encaminha o endereço estável para o alias da versão ativa.

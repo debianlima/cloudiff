@@ -6,7 +6,7 @@ class TemplateFileOpsPersonalOwnerTests(unittest.TestCase):
   cls.template=Path('components/control-plane/usr/local/sbin/cloudif-project-template-apply.py').read_text()
   cls.agent=Path('components/runtime/current-apps/forja-agent-current/cloudif-forja-agent.py').read_text()
  def test_template_sends_explicit_owner(self):
-  for marker in ("'owner':owner","'repo_owner':owner","'repo_path':f'{owner}/cloudif-{slug}'"):
+  for marker in ("'owner': owner","'repo_owner': owner","'repo_path': f'{owner}/cloudif-{slug}'"):
    self.assertIn(marker,self.template)
  def test_template_urls_use_personal_owner(self):
   self.assertIn("git/{owner}/cloudif-{slug}",self.template)

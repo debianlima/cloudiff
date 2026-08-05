@@ -65,6 +65,96 @@ def db_container(tenant):
     return ""
 
 
+TENANT_ACCESS_DIR=Path(os.environ.get('CLOUDIF_TENANT_ACCESS_DIR','/var/lib/cloudif/tenant-access'))
+KOMODO_CLIENT_ENV=Path('/etc/cloudif/komodo-agent-client.env')
+
+
+def internal_post(base,path,token,payload,timeout=180):
+    headers={'Accept':'application/json','Content-Type':'application/json','X-CloudIF-Token':token,'Authorization':'Bearer '+token}
+    req=urllib.request.Request(base.rstrip('/')+path,data=json.dumps(payload).encode(),method='POST',headers=headers)
+    try:
+        with urllib.request.urlopen(req,timeout=timeout) as response:
+            raw=response.read();data=json.loads(raw or b'{}')
+            return {'ok':200<=response.status<300 and data.get('ok') is not False,'status':response.status,'data':data}
+    except urllib.error.HTTPError as exc:
+        raw=exc.read()
+        try:data=json.loads(raw or b'{}')
+        except Exception:data={'error':'invalid_upstream_response'}
+        return {'ok':False,'status':exc.code,'data':data}
+    except Exception as exc:
+        return {'ok':False,'status':0,'error_type':type(exc).__name__}
+
+
+def project_membership_snapshot(project):
+    con=client.connect();row=con.execute('select * from projects where slug=?',(project,)).fetchone()
+    if not row:
+        con.close();raise RuntimeError('project_not_found')
+    keys=set(row.keys())
+    owner=str((row['owner'] if 'owner' in keys else '') or (row['created_by'] if 'created_by' in keys else '') or '').strip().lower()
+    tenant=str((row['tenant'] if 'tenant' in keys else '') or (row['tenant_default'] if 'tenant_default' in keys else '') or '').strip().lower()
+    acl=[{'type':str(x['subject_type'] or '').strip().lower(),'subject':str(x['subject'] or '').strip()} for x in con.execute('select subject_type,subject from project_acl where slug=? order by id',(project,)).fetchall()]
+    con.close();return {'project':project,'owner':owner,'tenant':tenant,'acl':acl}
+
+
+def tenant_membership_snapshot(tenant):
+    users=set();groups=set();con=client.connect()
+    for row in con.execute('select subject_type,subject from tenant_acl where tenant=?',(tenant,)).fetchall():
+        kind=str(row['subject_type'] or '').strip().lower();subject=str(row['subject'] or '').strip().lower()
+        if kind=='user' and subject:users.add(subject)
+        elif kind=='group' and subject:groups.add(subject)
+    project_rows=con.execute('select * from projects').fetchall()
+    for project in project_rows:
+        keys=set(project.keys());bound=str((project['tenant'] if 'tenant' in keys else '') or (project['tenant_default'] if 'tenant_default' in keys else '') or '').strip().lower()
+        if bound!=tenant:continue
+        owner=str((project['owner'] if 'owner' in keys else '') or (project['created_by'] if 'created_by' in keys else '') or '').strip().lower()
+        if owner:users.add(owner)
+        slug=str(project['slug'] if 'slug' in keys else '')
+        if not slug:continue
+        for row in con.execute('select subject_type,subject from project_acl where slug=?',(slug,)).fetchall():
+            kind=str(row['subject_type'] or '').strip().lower();subject=str(row['subject'] or '').strip().lower()
+            if kind=='user' and subject:users.add(subject)
+            elif kind=='group' and subject:groups.add(subject)
+    con.close();return {'tenant':tenant,'users':sorted(users),'groups':sorted(groups)}
+
+
+def atomic_lines(path,values):
+    path.parent.mkdir(parents=True,exist_ok=True)
+    fd,tmp=tempfile.mkstemp(prefix='.'+path.name+'.',dir=str(path.parent))
+    try:
+        with os.fdopen(fd,'w',encoding='utf-8') as stream:
+            for value in sorted({str(x).strip().lower() for x in values if str(x).strip()}):stream.write(value+'\n')
+            stream.flush();os.fsync(stream.fileno())
+        os.chmod(tmp,0o640);os.replace(tmp,path)
+    finally:
+        try:os.unlink(tmp)
+        except FileNotFoundError:pass
+
+
+def reconcile_tenant_membership(tenant):
+    state=tenant_membership_snapshot(tenant)
+    atomic_lines(TENANT_ACCESS_DIR/(tenant+'.users'),state['users'])
+    atomic_lines(TENANT_ACCESS_DIR/(tenant+'.groups'),state['groups'])
+    container=db_container(tenant)
+    return {'ok':True,'tenant':tenant,'users':state['users'],'groups':state['groups'],'db_container':container,'access_files':[str(TENANT_ACCESS_DIR/(tenant+'.users')),str(TENANT_ACCESS_DIR/(tenant+'.groups'))]}
+
+
+def reconcile_project_membership(project):
+    state=project_membership_snapshot(project);access={'owner':state['owner'],'acl':state['acl']}
+    forja_cfg=read_env(FORJA_ENV);forja_base=(forja_cfg.get('FORJA_AGENT_URL') or 'http://10.62.91.2:18095').rstrip('/');forja_token=forja_cfg.get('FORJA_AGENT_TOKEN') or ''
+    komodo_cfg=read_env(KOMODO_CLIENT_ENV);komodo_base=(komodo_cfg.get('KOMODO_AGENT_URL') or 'http://10.62.91.2:18098').rstrip('/');komodo_token=komodo_cfg.get('KOMODO_AGENT_TOKEN') or ''
+    if not forja_token or not komodo_token:raise RuntimeError('membership_agent_credentials_missing')
+    forgejo=internal_post(forja_base,'/project/membership/reconcile',forja_token,{'project':project,'owner_user':state['owner'],'access':access},180)
+    komodo=internal_post(komodo_base,'/komodo/project/membership/reconcile',komodo_token,{'project':project,'owner_user':state['owner'],'access':access},240)
+    tenant_result=reconcile_tenant_membership(state['tenant']) if state['tenant'] else {'ok':True,'skipped':True}
+    onboarding={'ok':True,'started':False}
+    try:
+        proc=subprocess.run(['/bin/systemctl','start','cloudif-project-onboarding-reconcile.service'],text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=300)
+        onboarding={'ok':proc.returncode==0,'started':proc.returncode==0,'returncode':proc.returncode}
+    except Exception as exc:onboarding={'ok':False,'started':False,'error_type':type(exc).__name__}
+    ok=bool(forgejo.get('ok') and komodo.get('ok') and tenant_result.get('ok'))
+    return {'ok':ok,'project':project,'owner':state['owner'],'tenant':state['tenant'],'acl':state['acl'],'forgejo':forgejo,'komodo':komodo,'tenant_access':tenant_result,'onboarding':onboarding}
+
+
 def update_request(request_id,status,message,result):
     con=client.connect()
     con.execute("UPDATE reconcile_requests SET status=?,message=?,result_json=?,finished_at=?,lease_owner='',lease_expires_at='',heartbeat_at='' WHERE request_id=?",
@@ -98,7 +188,7 @@ def process(row):
         con.commit(); con.close()
         update_request(rid,"ready","Usuário habilitado para automação de releases.",{"username":username})
         return
-    if event in {"project.created","project.updated","project.integrated","repository.created","repository.updated","reconcile.requested"}:
+    if event in {"project.created","project.updated","project.integrated","project.membership.changed","repository.created","repository.updated","reconcile.requested"}:
         project=row["project"] or str(payload.get("project") or "")
         if not project:
             raise RuntimeError("projeto ausente")
@@ -120,11 +210,16 @@ def process(row):
                          enabled=1,updated_at=excluded.updated_at""",
                     (project,tenant,repo_full,repo_url,now,now))
         con.commit(); con.close()
+        membership=None
+        if event=="project.membership.changed":
+            membership=reconcile_project_membership(project)
+            if not membership.get('ok'):
+                raise RuntimeError('project_membership_reconcile_failed')
         status="ready" if repo_full else "waiting"
-        msg="Projeto e repositório reconciliados." if repo_full else "Projeto preparado; aguardando criação do repositório."
-        update_request(rid,status,msg,{"project":project,"tenant":tenant,"repo_full_name":repo_full,"repo_url":repo_url})
+        msg=("Membros, terminais e integrações reconciliados." if membership else "Projeto e repositório reconciliados.") if repo_full else "Projeto preparado; aguardando criação do repositório."
+        update_request(rid,status,msg,{"project":project,"tenant":tenant,"repo_full_name":repo_full,"repo_url":repo_url,"membership":membership})
         return
-    if event in {"tenant.created","tenant.ready","tenant.bound"}:
+    if event in {"tenant.created","tenant.ready","tenant.bound","tenant.membership.changed"}:
         tenant=row["tenant"] or str(payload.get("tenant") or "")
         if not tenant:
             raise RuntimeError("tenant ausente")
@@ -135,9 +230,10 @@ def process(row):
                        ON CONFLICT(tenant) DO UPDATE SET db_container=excluded.db_container,enabled=1,updated_at=excluded.updated_at""",
                     (tenant,container,now,now))
         con.commit(); con.close()
+        membership=reconcile_tenant_membership(tenant) if event=="tenant.membership.changed" else None
         status="ready" if container else "waiting"
-        msg="Tenant Supabase reconciliado." if container else "Tenant registrado; aguardando container PostgreSQL."
-        update_request(rid,status,msg,{"tenant":tenant,"db_container":container})
+        msg=("Permissões do banco reconciliadas." if membership else "Tenant Supabase reconciliado.") if container else "Tenant registrado; aguardando container PostgreSQL."
+        update_request(rid,status,msg,{"tenant":tenant,"db_container":container,"membership":membership})
         return
     raise RuntimeError("evento sem processador")
 

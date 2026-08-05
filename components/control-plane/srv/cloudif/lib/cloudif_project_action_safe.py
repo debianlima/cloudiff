@@ -284,7 +284,7 @@ def upsert_project(form, user):
         "setup_komodo": val(form, "setup_komodo", "1"),
         "template_kind": template_kind,
         "runtime_template": runtime_template,
-        "runtime_layout": "unified-v1",
+        "runtime_layout": "managed-root-v1",
         "php_version": php_version,
         "role_profile": "project-admin",
         "environment": "project",

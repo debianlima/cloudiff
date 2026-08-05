@@ -13,9 +13,9 @@ DB = Path(os.environ.get("CLOUDIF_PORTAL_DB", "/var/lib/cloudif/portal/cloudif-p
 QUEUE = Path(os.environ.get("CLOUDIF_RECONCILE_QUEUE", "/var/lib/cloudif/reconcile-queue/incoming"))
 ALLOWED_EVENTS = {
     "user.created", "user.seen",
-    "project.created", "project.updated", "project.integrated",
+    "project.created", "project.updated", "project.integrated", "project.membership.changed",
     "repository.created", "repository.updated",
-    "tenant.created", "tenant.ready", "tenant.bound",
+    "tenant.created", "tenant.ready", "tenant.bound", "tenant.membership.changed",
     "reconcile.requested",
 }
 SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{0,62}$")

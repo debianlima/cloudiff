@@ -4,23 +4,30 @@ import unittest
 class VersionedUnifiedRuntimePublicationTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.source=Path('components/runtime/current-apps/komodo-agent-current/cloudif-komodo-agent.py').read_text()
-    def test_runtime_manifest_selects_unified_runtime(self):
-        for marker in ('git_file(".cloudif/runtime.json")','unified_runtime=bool','runtime_manifest.get("php")','runtime_manifest.get("node")'):
-            self.assertIn(marker,self.source)
-    def test_versioned_image_reuses_project_runtime(self):
-        for marker in ('FROM cloudif/project-{public_number}:php{php}-node{node}','Dockerfile.runtime','cloudif/publication-p{public_number}-d{deploy_number}'):
-            self.assertIn(marker,self.source)
-    def test_php_node_compose_uses_apache_health(self):
-        self.assertIn('curl -fsS http://127.0.0.1/.cloudif-health',self.source)
-        self.assertIn('runtime\"]=\"unified-php-node',self.source)
-        self.assertIn('\"run_build\": bool(unified_runtime)',self.source)
-        self.assertIn('actual_image==expected_image',self.source)
-        self.assertIn('\"auto_pull\": not bool(unified_runtime)',self.source)
-        self.assertIn('context: .',self.source)
-        self.assertIn('version_runtime_stage_failed',self.source)
-        self.assertIn('shutil.copytree(snap_dir / "site",staged_site)',self.source)
-    def test_static_nginx_fallback_remains_for_static_sites(self):
-        self.assertIn('nginxinc/nginx-unprivileged:1.27-alpine',self.source)
+        cls.agent=Path('components/runtime/current-apps/komodo-agent-current/cloudif-komodo-agent.py').read_text()
+        cls.portal=Path('components/control-plane/srv/cloudif/lib/cloudif_portal_publications.py').read_text()
+        cls.initial=Path('components/control-plane/usr/local/sbin/cloudif-project-initial-publish.py').read_text()
+    def test_each_deploy_has_unique_runtime_resources(self):
+        for marker in (
+            "name=f'cloudif-p{public_number}-d{deploy_number}'",
+            "image=f'cloudif/publication-p{public_number}-d{deploy_number}:php{php}-node{node}'",
+            "container=name+'-web'",
+            'create table if not exists publication_runtimes',
+        ):
+            self.assertIn(marker,self.agent)
+    def test_initial_publication_uses_versioned_deploy(self):
+        self.assertIn("komodo_base + '/komodo/publication/deploy'",self.initial)
+        self.assertIn("'deploy_number': 1",self.initial)
+        self.assertIn('Publicação inicial em container versionado próprio',self.initial)
+        self.assertNotIn('deployment_ready()',self.initial)
+    def test_activation_rebuilds_missing_exact_version(self):
+        self.assertIn("reason!='target_not_healthy'",self.portal)
+        self.assertIn("'commit':commit",self.portal)
+        self.assertIn("ku+'/komodo/publication/deploy'",self.portal)
+        self.assertIn("'project':slug,'public_number':num,'deploy_number':dep",self.portal)
+    def test_runtime_and_compose_are_generated_outside_git(self):
+        for marker in ('def _cloudif_v143_base_files','Dockerfile.runtime',"snap/'source'",'infrastructure_in_git'):
+            self.assertIn(marker,self.agent)
+        self.assertIn('curl -fsS http://127.0.0.1/.cloudif-health',self.agent)
 
-if __name__=='__main__': unittest.main()
+if __name__=='__main__':unittest.main()

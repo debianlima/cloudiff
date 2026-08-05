@@ -143,7 +143,7 @@ def publish_now(slug,user,progress=None):
     if not _external_ok(version_host):
         con.close(); raise RuntimeError('Validação HTTPS externa falhou para '+version_host)
     notify('promoting','Ativando a nova versão com rollback disponível.')
-    status,pres=_post(ku+'/komodo/publication/promote',{'public_number':num,'deploy_number':dep},kt,timeout=120)
+    status,pres=_post(ku+'/komodo/publication/promote',{'project':slug,'public_number':num,'deploy_number':dep},kt,timeout=120)
     if status//100!=2 or not pres.get('ok'):
         con.close(); raise RuntimeError('Falha ao promover a publicação: '+json.dumps(pres,ensure_ascii=False)[:500])
     notify('validating','Validando o endereço público.')
@@ -159,8 +159,12 @@ def publish_now(slug,user,progress=None):
     cols=[x[1] for x in con.execute('pragma table_info(projects)')]
     updates={k:v for k,v in {'status':'published','komodo_status':'running','updated_at':now}.items() if k in cols}
     if updates: con.execute('update projects set '+','.join(k+'=?' for k in updates)+' where slug=?',list(updates.values())+[slug])
+    access=_project_access_snapshot(con,slug)
+    project_tenant=str(project['tenant'] if 'tenant' in project.keys() else '')
     con.commit(); con.close()
-    return {'ok':True,'slug':slug,'public_number':num,'deploy_number':dep,'stable_url':'https://'+stable_host+'/','version_url':'https://'+version_host+'/','alias':alias,'alias_url':('https://'+alias+'.cloudiff.duckdns.org/' if alias else ''),'commit':commit,'republished':republished,'republished_from':republished_from,'message':publication_message}
+    membership=_reconcile_publication_members(ku,kt,slug,access)
+    queued=_enqueue_membership_reconcile(slug,actor,project_tenant)
+    return {'ok':True,'slug':slug,'public_number':num,'deploy_number':dep,'stable_url':'https://'+stable_host+'/','version_url':'https://'+version_host+'/','alias':alias,'alias_url':('https://'+alias+'.cloudiff.duckdns.org/' if alias else ''),'commit':commit,'republished':republished,'republished_from':republished_from,'message':publication_message,'membership':membership,'reconcile':queued}
 
 def _now():
     return time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime())
@@ -251,23 +255,64 @@ def set_alias(slug,alias,user):
     if pub:result.update(data)
     return result
 
+def _project_access_snapshot(con,slug):
+    row=con.execute('select * from projects where slug=?',(slug,)).fetchone()
+    owner=''
+    if row:
+        keys=set(row.keys())
+        owner=str((row['owner'] if 'owner' in keys else '') or (row['created_by'] if 'created_by' in keys else '') or '').strip().lower()
+    acl=[{'type':str(x['subject_type']),'subject':str(x['subject'])} for x in con.execute('select subject_type,subject from project_acl where slug=? order by id',(slug,)).fetchall()]
+    return {'owner':owner,'acl':acl}
+
+def _reconcile_publication_members(ku,kt,slug,access):
+    status,data=_post(ku+'/komodo/project/membership/reconcile',{'project':slug,'access':access},kt,timeout=180)
+    return {'ok':status//100==2 and data.get('ok') is not False,'status':status,'result':data}
+
+def _enqueue_membership_reconcile(slug,actor,tenant=''):
+    try:
+        from cloudif_reconcile_client import enqueue
+        return enqueue('project.membership.changed',actor=actor or 'portal',username=actor or '',project=slug,tenant=tenant or '',payload={'source':'publication_activation','operation':'reconcile'},dedupe_seconds=0)
+    except Exception as exc:
+        return {'ok':False,'error':type(exc).__name__}
+
 def activate(slug,deploy_number,user):
     if slug==TARGET_SLUG:raise RuntimeError('Use o rollback blue/green da produção real.')
-    con=sqlite3.connect(DB); con.row_factory=sqlite3.Row; _ensure_schema(con)
+    con=sqlite3.connect(DB);con.row_factory=sqlite3.Row;_ensure_schema(con)
     project=_project_allowed(con,slug,user)
-    if not project: con.close(); raise PermissionError('Projeto não encontrado ou sem permissão.')
+    if not project:con.close();raise PermissionError('Projeto não encontrado ou sem permissão.')
     row=con.execute('select * from project_publications where project_slug=? and deploy_number=? and status=?',(slug,int(deploy_number),'published')).fetchone()
-    if not row: con.close(); raise RuntimeError('Publicação não encontrada ou não está válida.')
-    num=int(row['public_number']); ku,kt,nt=_clients()
-    status,pres=_post(ku+'/komodo/publication/promote',{'public_number':num,'deploy_number':int(deploy_number)},kt,timeout=120)
+    if not row:con.close();raise RuntimeError('Publicação não encontrada ou não está válida.')
+    num=int(row['public_number']);dep=int(deploy_number);commit=str(row['commit_sha'] or '').strip();ku,kt,nt=_clients()
+    promote_payload={'project':slug,'public_number':num,'deploy_number':dep}
+    status,pres=_post(ku+'/komodo/publication/promote',promote_payload,kt,timeout=120)
+    rebuilt=None
     if status//100!=2 or not pres.get('ok'):
-        con.close(); raise RuntimeError('Falha ao ativar versão: '+json.dumps(pres,ensure_ascii=False)[:500])
-    alias_row=con.execute('select alias from project_publication_aliases where project_slug=?',(slug,)).fetchone()
-    alias=str(alias_row[0]) if alias_row else ''
-    _post('http://10.62.91.3/publish',{'public_number':num,'deploy_number':int(deploy_number),'alias':alias},nt,host='cloudif-publisher.internal',timeout=300)
+        reason=str(pres.get('error') or '')
+        if reason!='target_not_healthy':
+            con.close();raise RuntimeError('Falha ao ativar versão: '+json.dumps(pres,ensure_ascii=False)[:500])
+        if len(commit)!=40:
+            con.close();raise RuntimeError('A versão não possui commit imutável registrado e não pode ser reconstruída automaticamente.')
+        deploy_status,rebuilt=_post(ku+'/komodo/publication/deploy',{'project':slug,'public_number':num,'deploy_number':dep,'commit':commit,'timeout':600},kt,timeout=900)
+        if deploy_status//100!=2 or not rebuilt.get('ok'):
+            con.close();raise RuntimeError('Falha ao reconstruir a versão: '+json.dumps(rebuilt,ensure_ascii=False)[:700])
+        status,pres=_post(ku+'/komodo/publication/promote',promote_payload,kt,timeout=180)
+        if status//100!=2 or not pres.get('ok'):
+            con.close();raise RuntimeError('Versão reconstruída, mas a promoção falhou: '+json.dumps(pres,ensure_ascii=False)[:500])
+    alias_row=con.execute('select alias from project_publication_aliases where project_slug=?',(slug,)).fetchone();alias=str(alias_row[0]) if alias_row else ''
+    pstatus,publisher=_post('http://10.62.91.3/publish',{'public_number':num,'deploy_number':dep,'alias':alias},nt,host='cloudif-publisher.internal',timeout=300)
+    if pstatus//100!=2 or not publisher.get('ok'):
+        con.close();raise RuntimeError('Falha ao atualizar o endereço HTTPS: '+json.dumps(publisher,ensure_ascii=False)[:500])
     if not _external_ok(f'{num}.cloudiff.duckdns.org'):
-        con.close(); raise RuntimeError('URL estável falhou após ativação.')
+        con.close();raise RuntimeError('URL estável falhou após ativação.')
+    access=_project_access_snapshot(con,slug)
+    tenant=str(project['tenant'] if 'tenant' in project.keys() else '')
     con.execute('update project_publications set is_active=0 where project_slug=?',(slug,))
-    con.execute('update project_publications set is_active=1,message=? where project_slug=? and deploy_number=?',('Ativada manualmente pelo Portal',slug,int(deploy_number)))
-    con.commit(); con.close()
-    return {'ok':True,'slug':slug,'public_number':num,'deploy_number':int(deploy_number),'stable_url':f'https://{num}.cloudiff.duckdns.org/'}
+    detail={}
+    try:detail=json.loads(row['detail_json'] or '{}')
+    except Exception:detail={}
+    detail['last_activation']={'at':_now(),'actor':user.get('username') or 'portal','promotion':pres,'publisher':publisher,'rebuilt':rebuilt}
+    con.execute('update project_publications set is_active=1,message=?,detail_json=? where project_slug=? and deploy_number=?',('Ativada manualmente pelo Portal',json.dumps(detail,ensure_ascii=False),slug,dep))
+    con.commit();con.close()
+    membership=_reconcile_publication_members(ku,kt,slug,access)
+    queued=_enqueue_membership_reconcile(slug,user.get('username') or 'portal',tenant)
+    return {'ok':True,'slug':slug,'public_number':num,'deploy_number':dep,'stable_url':f'https://{num}.cloudiff.duckdns.org/','rebuilt':rebuilt is not None,'runtime':rebuilt,'membership':membership,'reconcile':queued}

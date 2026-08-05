@@ -28,14 +28,14 @@ class ConcurrentProjectTenantOperationsTests(unittest.TestCase):
         self.assertIn('tenant-{tenant}.lock', self.delete_tenant)
         self.assertIn('fcntl.flock(tenant_lock_fd, fcntl.LOCK_EX)', self.delete_tenant)
 
-    def test_initial_publication_retries_runtime_without_false_terminal_error(self):
-        self.assertIn("'wait_timeout':1200", self.publish)
-        self.assertIn('deadline=time.monotonic()+1200', self.publish)
-        self.assertIn('deploy_retries < 8', self.publish)
-        self.assertIn('deadline=time.monotonic()+600', self.publish)
+    def test_initial_publication_uses_single_versioned_operation_with_long_timeouts(self):
+        self.assertIn("'timeout': 600", self.publish)
+        self.assertIn('timeout=900', self.publish)
+        self.assertIn("versioned_d1_deploy_failed", self.publish)
         self.assertIn("initial_publication_failed: ", self.worker)
         self.assertIn("a.get('name') not in {'komodo_container_terminal'}", self.portal)
         self.assertIn("data.get('last_error') or next", self.portal)
+
 
 
 if __name__ == '__main__':
