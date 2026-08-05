@@ -526,3 +526,37 @@ html[data-theme="dark"] body .legacy-content .db96-mode.inactive .db96-mode-badg
   background:var(--rule-soft)!important;
   color:var(--ink-2)!important;
 }
+
+
+/* Final dark-surface guard for page-local legacy CSS. */
+html[data-theme="dark"] body .legacy-content .agent-detail,
+html[data-theme="dark"] body .legacy-content .agent-provider-grid details,
+html[data-theme="dark"] body .legacy-content .s98-hero,
+html[data-theme="dark"] body .legacy-content .s98-kpi,
+html[data-theme="dark"] body .legacy-content .s98-item,
+html[data-theme="dark"] body .legacy-content .u98-kpi,
+html[data-theme="dark"] body .legacy-content .u98-panel,
+html[data-theme="dark"] body .legacy-content .u98-row{
+  background:var(--surface)!important;
+  border-color:var(--rule)!important;
+  color:var(--ink)!important;
+  box-shadow:none!important;
+}
+html[data-theme="dark"] body .legacy-content .s98-note,
+html[data-theme="dark"] body .legacy-content .u98-note{
+  background:var(--rule-soft)!important;
+  color:var(--ink)!important;
+}
+html[data-theme="dark"] body .legacy-content .u98-warn{
+  background:var(--drift-wash)!important;
+  color:var(--ink)!important;
+}
+html[data-theme="dark"] body .legacy-content .agent-detail summary,
+html[data-theme="dark"] body .legacy-content .agent-detail h1,
+html[data-theme="dark"] body .legacy-content .agent-detail h2,
+html[data-theme="dark"] body .legacy-content .agent-detail h3,
+html[data-theme="dark"] body .legacy-content .agent-detail h4,
+html[data-theme="dark"] body .legacy-content .s98-kpi strong,
+html[data-theme="dark"] body .legacy-content .u98-kpi strong{
+  color:var(--ink)!important;
+}
