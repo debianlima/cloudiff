@@ -504,15 +504,15 @@ def _install() -> None:
             query_api = (route_query.get("api") or [""])[0].strip()
             try:
                 if path in {"/cloudif/portal/api/admin-delete-project-status", "/cloudiff/portal/api/admin-delete-project-status"}:
-                    owner = sys.modules.get(handler_class.__module__)
-                    user = self.user()
-                    allowed = bool(getattr(owner, "_admin_project_delete_global")(user))
+                    owner = sys.modules.get(handler_class.__module__);user = self.user()
+                    from cloudif_admin_project_delete import can_read_job
+                    query = urllib.parse.parse_qs(parsed.query);job_id=(query.get("job_id") or [""])[0]
+                    allowed,payload=can_read_job(job_id,user.get("username") or "",bool(getattr(owner,"_admin_project_delete_global")(user)))
+                    if not payload.get("ok"):
+                        return send_json(self, 404, payload)
                     if not allowed:
                         return send_json(self, 403, {"ok": False, "error": "forbidden"})
-                    from cloudif_admin_project_delete import job_status
-                    query = urllib.parse.parse_qs(parsed.query)
-                    payload = job_status((query.get("job_id") or [""])[0])
-                    return send_json(self, 200 if payload.get("ok") else 404, payload)
+                    return send_json(self, 200, payload)
                 if path in {"/cloudif/portal/api/admin-ad-search", "/cloudiff/portal/api/admin-ad-search"}:
                     if not tenant_admin_allowed(self):
                         return send_json(self, 403, {"ok": False, "error": "forbidden", "items": []})
@@ -798,18 +798,19 @@ def _install() -> None:
                         return send_json(self, 500, {"ok": False, "error": type(exc).__name__, "detail": str(exc)[:300]})
                 if value("async") == "1":
                     try:
-                        owner = sys.modules.get(handler_class.__module__)
-                        user = self.user()
-                        if not getattr(owner, "_admin_project_delete_global")(user):
-                            return send_json(self, 403, {"ok": False, "error": "forbidden"})
+                        owner = sys.modules.get(handler_class.__module__);user = self.user();slug=value("slug")
                         token_ok = getattr(owner, "_prod_csrf_equal")(
                             value("csrf_token"), getattr(owner, "_prod_csrf_token")(user)
                         )
                         if not token_ok:
                             return send_json(self, 403, {"ok": False, "error": "invalid_csrf"})
-                        from cloudif_admin_project_delete import start_job
-                        job = start_job(value("slug"), value("confirm_text"), user.get("username") or "admin")
-                        return send_json(self, 202, job)
+                        if not getattr(owner,"_admin_project_delete_allowed")(user,slug):
+                            return send_json(self, 403, {"ok": False, "error": "forbidden"})
+                        from cloudif_admin_project_delete import consume_wizard_token,start_job
+                        if not consume_wizard_token(slug,value("wizard_token")):
+                            return send_json(self, 409, {"ok": False, "error": "wizard_required"})
+                        job = start_job(slug, value("confirm_text"), user.get("username") or "admin")
+                        return send_json(self, 202 if job.get("ok") else 409, job)
                     except Exception as exc:
                         return send_json(self, 500, {"ok": False, "error": type(exc).__name__, "detail": str(exc)[:300]})
                 self.rfile = BytesIO(raw)

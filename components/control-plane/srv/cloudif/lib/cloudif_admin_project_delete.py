@@ -184,6 +184,49 @@ def _rows(db, table, key, slug):
         con.close()
 
 
+def project_owner(slug):
+    slug=str(slug or '').strip()
+    if not slug:
+        return ''
+    con=sqlite3.connect(DB)
+    try:
+        row=con.execute('SELECT owner FROM projects WHERE slug=?',(slug,)).fetchone()
+        return str((row or [''])[0] or '').strip()
+    finally:
+        con.close()
+
+
+def project_slugs_for_owner(username):
+    username=str(username or '').strip().casefold()
+    if not username:
+        return set()
+    con=sqlite3.connect(DB)
+    try:
+        return {
+            str(row[0]) for row in con.execute(
+                'SELECT slug FROM projects WHERE lower(trim(owner))=? ORDER BY slug',
+                (username,),
+            ).fetchall()
+        }
+    finally:
+        con.close()
+
+
+def can_delete_project(slug, username, global_admin=False):
+    if global_admin:
+        return True
+    owner=project_owner(slug)
+    return bool(owner and str(username or '').strip().casefold()==owner.casefold())
+
+
+def can_read_job(job_id, username, global_admin=False):
+    state=job_status(job_id)
+    if not state.get('ok'):
+        return False, state
+    allowed=bool(global_admin or str(state.get('actor') or '').strip().casefold()==str(username or '').strip().casefold())
+    return allowed, state
+
+
 def projects():
     con = sqlite3.connect(DB)
     con.row_factory = sqlite3.Row
@@ -565,8 +608,13 @@ def _result_stages(result):
     ]
     return '<ol class="admin-delete-steps">'+''.join(items)+'</ol>'
 
-def render(csrf_token, selected='', result=None):
+def render(csrf_token, selected='', result=None, allowed_slugs=None):
     rows = projects()
+    if allowed_slugs is not None:
+        allowed_slugs={str(item) for item in allowed_slugs}
+        rows=[row for row in rows if row.get('slug') in allowed_slugs]
+        if selected and selected not in allowed_slugs:
+            selected=''
     options = ''.join(
         f'<option value="{h(p["slug"])}"{" selected" if p["slug"] == selected else ""}>{h(p.get("name") or p["slug"])} — {h(p["slug"])}</option>'
         for p in rows
@@ -669,8 +717,8 @@ body.project-delete-modal-open{{overflow:hidden}}
  function preparing(){{title.textContent='Exclusão iniciada';subtitle.textContent='Criando o job e preservando o tenant.';body.innerHTML=`<div class="project-delete-live">${{dots()}}<div><strong>Preparando exclusão</strong><small>Não feche esta janela.</small></div></div><div class="project-delete-progress-wrap"><progress max="100" value="2"></progress><small>O servidor está preparando a operação.</small></div><ol class="project-delete-timeline">${{timeline({{steps:[{{label:'Validação',status:'running',detail:'Conferindo projeto e confirmação'}}]}})}}</ol>`;footer.innerHTML='<button class="btn light" type="button" disabled>Aguarde…</button>'}}
  function drawJob(job){{lastJob=job;activeJob=['queued','running'].includes(job.status)?job.job_id||activeJob:'';terminal=!activeJob;const progress=Number(job.progress||0),failed=job.status==='failed',done=job.status==='succeeded';title.textContent=done?'Projeto removido':failed?'A exclusão falhou':'Exclusão em andamento';subtitle.textContent=done?'Projeto removido e tenant preservado.':failed?'O processo foi interrompido com segurança.':job.current_step||'Preparando próxima etapa.';const live=!failed&&!done?`<div class="project-delete-live">${{dots()}}<div><strong>${{esc(job.current_step||'Executando')}}</strong><small>O servidor continua trabalhando. Não feche esta janela.</small></div></div>`:'';const terminalBox=done?'<div class="project-delete-terminal ok"><strong>Exclusão concluída.</strong><p>O projeto foi removido e o tenant foi preservado.</p></div>':failed?`<div class="project-delete-terminal bad"><strong>Não foi possível concluir.</strong><p>${{esc(job.error||job.detail||job.result?.error||'Falha não identificada.')}}</p></div>`:'';body.innerHTML=`${{live}}<div class="project-delete-progress-wrap"><progress max="100" value="${{progress}}"></progress><small>${{progress}}% concluído</small></div><ol class="project-delete-timeline">${{timeline(job)}}</ol>${{terminalBox}}`;footer.innerHTML=terminal?'<button class="btn" type="button" data-project-finish>Fechar e atualizar</button>':'<button class="btn light" type="button" disabled>Exclusão em andamento…</button>';footer.querySelector('[data-project-finish]')?.addEventListener('click',()=>location.reload())}}
  function showReconnect(attempt){{title.textContent='Confirmando conclusão';subtitle.textContent='Recuperando o resultado final do processo…';const banner=`<div class="project-delete-live" data-project-reconnect>${{dots()}}<div><strong>Reconectando ao processo</strong><small>Tentativa ${{attempt+1}} de 75. As etapas concluídas foram preservadas.</small></div></div>`;const previous=body.querySelector('[data-project-reconnect]');if(previous)previous.outerHTML=banner;else body.insertAdjacentHTML('afterbegin',banner);footer.innerHTML='<button class="btn light" type="button" disabled>Confirmando resultado…</button>'}}
- async function poll(id,attempt=0){{try{{const response=await fetch(`/cloudiff/portal/api/admin-delete-project-status?job_id=${{encodeURIComponent(id)}}`,{{headers:{{Accept:'application/json','Cache-Control':'no-store'}},credentials:'same-origin'}});const type=(response.headers.get('content-type')||'').toLowerCase(),text=await response.text();if(!type.includes('application/json')){{const error=new Error(`Resposta inválida do servidor (HTTP ${{response.status}})`);error.status=response.status;throw error}}const job=JSON.parse(text);if(!response.ok){{const error=new Error(job.error||`HTTP ${{response.status}}`);error.status=response.status;throw error}}drawJob(job);if(['queued','running'].includes(job.status))setTimeout(()=>poll(id,0),1000)}}catch(error){{const transient=[0,404,408,425,429,500,502,503,504].includes(Number(error.status||0));if(transient&&attempt<75){{showReconnect(attempt);setTimeout(()=>poll(id,attempt+1),1200);return}}activeJob='';terminal=true;if(lastJob){{drawJob(lastJob);title.textContent='Resultado ainda não confirmado';subtitle.textContent='A operação pode ter terminado no servidor.';body.insertAdjacentHTML('beforeend',`<div class="project-delete-terminal bad"><strong>Não foi possível confirmar o resultado.</strong><p>${{esc(error.message)}}</p></div>`);footer.innerHTML='<button class="btn" type="button" data-project-finish>Fechar e atualizar</button>';footer.querySelector('[data-project-finish]').onclick=()=>location.reload();return}}drawJob({{status:'failed',progress:0,error:error.message,steps:[{{label:'Validação',status:'failed',detail:error.message}}]}})}}}}
- form.addEventListener('submit',async event=>{{event.preventDefault();if(!confirm('Confirma a exclusão definitiva? O banco será preservado.'))return;button.disabled=true;button.textContent='Iniciando…';activeJob='';terminal=false;openModal();preparing();const formData=new FormData(form);formData.set('async','1');const csrf=String(formData.get('csrf_token')||''),data=new URLSearchParams();for(const [key,value] of formData.entries())data.append(key,String(value));try{{const response=await fetch(form.action,{{method:'POST',body:data,credentials:'same-origin',headers:{{Accept:'application/json','Content-Type':'application/x-www-form-urlencoded;charset=UTF-8','X-CSRF-Token':csrf}}}}),type=(response.headers.get('content-type')||'').toLowerCase(),text=await response.text();let job;try{{job=type.includes('application/json')?JSON.parse(text):{{error:text.replace(/<[^>]+>/g,' ').replace(/\\s+/g,' ').trim().slice(0,240)||`HTTP ${{response.status}}`}}}}catch(_e){{job={{error:`Resposta inválida do servidor (HTTP ${{response.status}})`}}}}if(!response.ok)throw new Error(job.error||job.detail||`HTTP ${{response.status}}`);activeJob=job.job_id;drawJob(job);poll(job.job_id)}}catch(error){{activeJob='';terminal=true;drawJob({{status:'failed',progress:100,error:error.message,steps:[{{label:'Validação',status:'failed',detail:error.message}}]}});button.disabled=false;button.textContent='Tentar novamente'}}}});
+ async function poll(id,attempt=0){{id=String(id||'').trim();if(!id||id==='undefined'){{activeJob='';terminal=true;return drawJob({{status:'failed',progress:100,error:'Identificador da exclusão ausente.',steps:[{{label:'Validação',status:'failed',detail:'O servidor não retornou o job.'}}]}})}}try{{const response=await fetch(`/cloudiff/portal/api/admin-delete-project-status?job_id=${{encodeURIComponent(id)}}`,{{headers:{{Accept:'application/json','Cache-Control':'no-store'}},credentials:'same-origin'}});const type=(response.headers.get('content-type')||'').toLowerCase(),text=await response.text();if(!type.includes('application/json')){{const error=new Error(`Resposta inválida do servidor (HTTP ${{response.status}})`);error.status=response.status;throw error}}const job=JSON.parse(text);if(!response.ok){{const error=new Error(job.error||`HTTP ${{response.status}}`);error.status=response.status;throw error}}drawJob(job);if(['queued','running'].includes(job.status))setTimeout(()=>poll(id,0),1000)}}catch(error){{const transient=[0,404,408,425,429,500,502,503,504].includes(Number(error.status||0));if(transient&&attempt<75){{showReconnect(attempt);setTimeout(()=>poll(id,attempt+1),1200);return}}activeJob='';terminal=true;if(lastJob){{drawJob(lastJob);title.textContent='Resultado ainda não confirmado';subtitle.textContent='A operação pode ter terminado no servidor.';body.insertAdjacentHTML('beforeend',`<div class="project-delete-terminal bad"><strong>Não foi possível confirmar o resultado.</strong><p>${{esc(error.message)}}</p></div>`);footer.innerHTML='<button class="btn" type="button" data-project-finish>Fechar e atualizar</button>';footer.querySelector('[data-project-finish]').onclick=()=>location.reload();return}}drawJob({{status:'failed',progress:0,error:error.message,steps:[{{label:'Validação',status:'failed',detail:error.message}}]}})}}}}
+ form.addEventListener('submit',async event=>{{event.preventDefault();if(form.dataset.deleteSubmitting==='1')return;if(!confirm('Confirma a exclusão definitiva? O banco será preservado.'))return;form.dataset.deleteSubmitting='1';button.disabled=true;button.textContent='Iniciando…';activeJob='';terminal=false;openModal();preparing();const formData=new FormData(form);formData.set('async','1');const csrf=String(formData.get('csrf_token')||''),data=new URLSearchParams();for(const [key,value] of formData.entries())data.append(key,String(value));try{{const response=await fetch(form.action,{{method:'POST',body:data,credentials:'same-origin',headers:{{Accept:'application/json','Content-Type':'application/x-www-form-urlencoded;charset=UTF-8','X-CSRF-Token':csrf}}}}),type=(response.headers.get('content-type')||'').toLowerCase(),text=await response.text();let payload;try{{payload=type.includes('application/json')?JSON.parse(text):{{error:text.replace(/<[^>]+>/g,' ').replace(/\\s+/g,' ').trim().slice(0,240)||`HTTP ${{response.status}}`}}}}catch(_e){{payload={{error:`Resposta inválida do servidor (HTTP ${{response.status}})`}}}}const job=payload&&payload.result&&typeof payload.result==='object'?payload.result:payload;if(!response.ok)throw new Error(job.error||job.detail||payload.error||`HTTP ${{response.status}}`);const jobId=String(job.job_id||payload.job_id||'').trim();if(!jobId||jobId==='undefined')throw new Error('O servidor não retornou o identificador da exclusão.');activeJob=jobId;drawJob({{...job,job_id:jobId}});poll(jobId)}}catch(error){{form.dataset.deleteSubmitting='';activeJob='';terminal=true;drawJob({{status:'failed',progress:100,error:error.message,steps:[{{label:'Validação',status:'failed',detail:error.message}}]}});button.disabled=false;button.textContent='Tentar novamente'}}}});
 }})();
 </script>
 '''

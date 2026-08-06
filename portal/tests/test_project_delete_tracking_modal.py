@@ -31,6 +31,18 @@ class ProjectDeleteTrackingModalTests(unittest.TestCase):
         self.assertNotIn('background:#fff', modal_css)
         self.assertNotIn('color:#111', modal_css)
 
+    def test_modal_never_polls_an_undefined_job(self):
+        for marker in (
+            "form.dataset.deleteSubmitting==='1'",
+            "const job=payload&&payload.result",
+            "const jobId=String(job.job_id||payload.job_id||'').trim()",
+            "if(!jobId||jobId==='undefined')",
+            "poll(jobId)",
+            "if(!id||id==='undefined')",
+        ):
+            self.assertIn(marker,self.source)
+        self.assertNotIn('poll(job.job_id)',self.source)
+
     def test_protected_delete_contract_remains(self):
         for marker in ('wizard_token','consume_wizard_token','EXCLUIR {h(selected)}','admin-delete-form'):
             self.assertIn(marker,self.source)

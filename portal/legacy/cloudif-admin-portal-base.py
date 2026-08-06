@@ -6260,7 +6260,7 @@ def _pm197_render(user):
         terminal_target=url('/action/open-project-terminal')+'?slug='+urllib.parse.quote(slug,safe='') if runtime_project.get('stack_id') else ''
         studio=supabase_studio_url(p['tenant']) if p['tenant'] else ''
         acl_id='wiz_acl_'+safe
-        delete_allowed=bool(user.get('admin') or {str(x).strip().lower() for x in (user.get('groups') or [])}.intersection({'cloudif-tenants-admin','domain admins'}))
+        delete_allowed=_admin_project_delete_allowed(user,slug) if '_admin_project_delete_allowed' in globals() else bool(user.get('admin') or {str(x).strip().lower() for x in (user.get('groups') or [])}.intersection({'cloudif-tenants-admin','domain admins'}))
         delete_action=f'<a class="btn red" href="/cloudiff/portal/?tab=admin-excluir-projeto&amp;slug={h(slug)}">Excluir projeto</a>' if delete_allowed else ''
         bank_action=f'<a class="btn light" href="{h(studio)}" target="_blank" rel="noopener">Abrir Studio</a>' if studio else '<span class="project-final__meta">Sem Studio vinculado</span>'
         repo_action=f'<a class="btn light" href="{h(forge_target)}" target="_blank" rel="noopener">Abrir repositório</a>' if forge_target else '<span class="project-final__meta">Nenhum repositório vinculado</span>'
@@ -6375,31 +6375,39 @@ if 'Portal' in globals() and not globals().get('_admin_project_delete_wrapped'):
     def _admin_project_delete_global(user):
         groups={str(x).strip().lower() for x in (user.get('groups') or [])}
         return bool(user.get('admin') or groups.intersection({'cloudif-tenants-admin','domain admins'}))
+    def _admin_project_delete_allowed(user,slug):
+        return _admin_project_delete.can_delete_project(
+            slug,
+            user.get('username') or '',
+            _admin_project_delete_global(user),
+        )
+    def _admin_project_delete_scope(user):
+        return None if _admin_project_delete_global(user) else _admin_project_delete.project_slugs_for_owner(user.get('username') or '')
     def _admin_project_delete_get(self):
         parsed=urllib.parse.urlparse(self.path);path=parsed.path.rstrip('/');q=urllib.parse.parse_qs(parsed.query);tab=(q.get('tab') or [''])[0]
         if path in ('','/cloudiff/portal','/cloudif/portal') and tab=='admin-excluir-projeto':
-            user=self.user()
-            if not _admin_project_delete_global(user):return self.send_html(page(user,tab,'<section class="card"><h1>Acesso negado</h1><p>Área restrita à administração global.</p></section>'),403)
-            slug=(q.get('slug') or [''])[0].strip()
-            return self.send_html(page(user,tab,_admin_project_delete.render(_prod_csrf_token(user),selected=slug)))
+            user=self.user();slug=(q.get('slug') or [''])[0].strip();scope=_admin_project_delete_scope(user)
+            if slug and not _admin_project_delete_allowed(user,slug):return self.send_html(page(user,tab,'<section class="card"><h1>Acesso negado</h1><p>Somente o proprietário do projeto ou um administrador global pode excluí-lo.</p></section>'),403)
+            if scope is not None and not scope:return self.send_html(page(user,tab,'<section class="card"><h1>Nenhum projeto autorizado</h1><p>Você não possui projeto próprio disponível para exclusão.</p></section>'),403)
+            return self.send_html(page(user,tab,_admin_project_delete.render(_prod_csrf_token(user),selected=slug,allowed_slugs=scope)))
         return _admin_project_delete_prev_get(self)
     def _admin_project_delete_post(self):
         parsed=urllib.parse.urlparse(self.path);path=parsed.path.rstrip('/')
         if path in ('/cloudiff/portal/action/admin-delete-project','/cloudif/portal/action/admin-delete-project'):
             user=self.user()
-            if not _admin_project_delete_global(user):return _cloudif_security_reject(self,'Acesso restrito à administração global.',403)
             n=int(self.headers.get('Content-Length','0') or 0);form=urllib.parse.parse_qs(self.rfile.read(n).decode('utf-8','ignore'))
             val=lambda k:(form.get(k) or [''])[0].strip()
             if not _prod_csrf_equal(val('csrf_token'),_prod_csrf_token(user)):return _cloudif_security_reject(self,'Token CSRF inválido ou ausente.',403)
             slug=val('slug')
+            if not _admin_project_delete_allowed(user,slug):return _cloudif_security_reject(self,'Somente o proprietário do projeto ou um administrador global pode excluí-lo.',403)
             if not _admin_project_delete.consume_wizard_token(slug,val('wizard_token')):
                 if 'application/json' in (self.headers.get('Accept') or '').lower():
                     raw=json.dumps({'ok':False,'error':'wizard_required'},ensure_ascii=False).encode();self.send_response(409);self.send_header('Content-Type','application/json');self.send_header('Content-Length',str(len(raw)));self.end_headers();self.wfile.write(raw);return
-                return self.send_html(page(user,'admin-excluir-projeto',_admin_project_delete.render(_prod_csrf_token(user),selected=slug,result={'ok':False,'error':'wizard_required'})),409)
+                return self.send_html(page(user,'admin-excluir-projeto',_admin_project_delete.render(_prod_csrf_token(user),selected=slug,result={'ok':False,'error':'wizard_required'},allowed_slugs=_admin_project_delete_scope(user))),409)
             result=_admin_project_delete.start_job(slug,val('confirm_text'),user.get('username') or 'admin')
             if 'application/json' in (self.headers.get('Accept') or '').lower():
                 raw=json.dumps(result,ensure_ascii=False).encode();self.send_response(202 if result.get('ok') else 409);self.send_header('Content-Type','application/json');self.send_header('Cache-Control','no-store');self.send_header('Content-Length',str(len(raw)));self.end_headers();self.wfile.write(raw);return
-            return self.send_html(page(user,'admin-excluir-projeto',_admin_project_delete.render(_prod_csrf_token(user),selected=slug,result=result)),202 if result.get('ok') else 409)
+            return self.send_html(page(user,'admin-excluir-projeto',_admin_project_delete.render(_prod_csrf_token(user),selected=slug,result=result,allowed_slugs=_admin_project_delete_scope(user))),202 if result.get('ok') else 409)
         return _admin_project_delete_prev_post(self)
     Portal.do_GET=_admin_project_delete_get
     Portal.do_POST=_admin_project_delete_post
