@@ -16,6 +16,7 @@ import urllib.parse
 import urllib.request
 import uuid
 import yaml
+from cloudif_multitech_detector import detect_components
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse
 
@@ -291,6 +292,26 @@ def prepare_workspace(slug: str, ref: str, trace: str) -> tuple[dict, str, str]:
     finally:
         if created:
             subprocess.run(['/usr/bin/docker', 'rm', '-f', name], capture_output=True, timeout=5)
+        shutil.rmtree(run_dir, ignore_errors=True)
+
+
+def detect_multiservice_workspace(slug: str, ref: str, trace: str) -> tuple[dict, str]:
+    os.makedirs(WORKROOT, exist_ok=True)
+    run_dir = tempfile.mkdtemp(prefix='detect-', dir=WORKROOT)
+    try:
+        raw, archive_digest = fetch_archive(slug, ref)
+        files, total = safe_extract(raw, run_dir)
+        detection = detect_components(run_dir, files)
+        detection.update({
+            'archiveSha256': archive_digest,
+            'archiveBytes': len(raw),
+            'unpackedBytes': total,
+            'sourceRef': ref,
+            'projectSlug': slug,
+            'traceId': trace,
+        })
+        return detection, run_dir
+    finally:
         shutil.rmtree(run_dir, ignore_errors=True)
 
 
@@ -883,7 +904,7 @@ class H(BaseHTTPRequestHandler):
         if urlparse(self.path).path == '/health':
             try:
                 docker('version', '--format', '{{.Server.Version}}', timeout=4)
-                self.sendj(200, {'ok': True, 'service': 'cloudif-workspace-broker', 'profiles': ['probe', 'prepare', 'validate', 'test-static', 'preview-static', 'edit-preview']})
+                self.sendj(200, {'ok': True, 'service': 'cloudif-workspace-broker', 'profiles': ['probe', 'prepare', 'detect-multiservice', 'validate', 'test-static', 'preview-static', 'edit-preview']})
             except Exception:
                 self.sendj(503, {'ok': False, 'error': 'docker_unavailable'})
         else:
@@ -891,7 +912,7 @@ class H(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:
         path = urlparse(self.path).path
-        if path not in {'/v1/probe', '/v1/prepare', '/v1/validate', '/v1/test-static', '/v1/preview-static', '/v1/edit-preview'}:
+        if path not in {'/v1/probe', '/v1/prepare', '/v1/detect-multiservice', '/v1/validate', '/v1/test-static', '/v1/preview-static', '/v1/edit-preview'}:
             self.sendj(404, {'ok': False, 'error': 'not_found'})
             return
         if not self.auth():
@@ -916,7 +937,7 @@ class H(BaseHTTPRequestHandler):
             self.sendj(400, {'ok': False, 'error': 'invalid_request'})
             return
         started = time.monotonic()
-        event = 'workspace.probe' if path == '/v1/probe' else ('workspace.prepare' if path == '/v1/prepare' else ('workspace.validate' if path == '/v1/validate' else ('workspace.test-static' if path == '/v1/test-static' else ('workspace.preview-static' if path == '/v1/preview-static' else 'workspace.edit-preview'))))
+        event = 'workspace.probe' if path == '/v1/probe' else ('workspace.prepare' if path == '/v1/prepare' else ('workspace.detect-multiservice' if path == '/v1/detect-multiservice' else ('workspace.validate' if path == '/v1/validate' else ('workspace.test-static' if path == '/v1/test-static' else ('workspace.preview-static' if path == '/v1/preview-static' else 'workspace.edit-preview')))))
         try:
             if path == '/v1/probe':
                 result, name = probe(slug, trace)
@@ -925,6 +946,10 @@ class H(BaseHTTPRequestHandler):
             elif path == '/v1/prepare':
                 result, name, run_dir = prepare_workspace(slug, ref, trace)
                 removed = subprocess.run(['/usr/bin/docker', 'inspect', name], capture_output=True).returncode != 0
+            elif path == '/v1/detect-multiservice':
+                result, run_dir = detect_multiservice_workspace(slug, ref, trace)
+                name = ''
+                removed = True
             elif path == '/v1/validate':
                 result, run_dir = validate_workspace(slug, ref)
                 name = ''

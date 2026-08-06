@@ -23,6 +23,8 @@ PREVIEW_URL=os.environ.get('CLOUDIF_PREVIEW_URL','http://127.0.0.1:18214').rstri
 PREVIEW_TOKEN=os.environ.get('CLOUDIF_PREVIEW_TOKEN','')
 SUPABASE_MCP_URL=os.environ.get('CLOUDIF_SUPABASE_MCP_BROKER_URL','http://127.0.0.1:18218').rstrip('/')
 SUPABASE_MCP_TOKEN=os.environ.get('CLOUDIF_SUPABASE_MCP_BROKER_TOKEN','')
+PROJECT_CONFIG_URL=os.environ.get('CLOUDIF_PROJECT_CONFIG_URL','http://127.0.0.1:18219').rstrip('/')
+PROJECT_CONFIG_TOKEN=os.environ.get('CLOUDIF_PROJECT_CONFIG_TOKEN','')
 PUBLIC_ORIGIN=os.environ.get('CLOUDIF_MCP_PUBLIC_ORIGIN','https://cloudiff.duckdns.org').rstrip('/')
 MCP_RESOURCE=PUBLIC_ORIGIN+'/cloudiff/mcp'
 OAUTH_ISSUER=PUBLIC_ORIGIN
@@ -109,6 +111,9 @@ TOOLS=[
  {'name':'project.list','description':'Lista projetos registrados na CloudIFF','inputSchema':{'type':'object','properties':{},'additionalProperties':False}},
  {'name':'project.get','description':'Obtém projeto pelo slug','inputSchema':{'type':'object','properties':{'slug':{'type':'string','minLength':1}},'required':['slug'],'additionalProperties':False}},
  {'name':'project.connectors','description':'Lista conectores e ACL do projeto','inputSchema':{'type':'object','properties':{'slug':{'type':'string','minLength':1}},'required':['slug'],'additionalProperties':False}},
+ {'name':'project.technologies.detect','description':'Detecta recursivamente todos os componentes e serviços do repositório autorizado sem alterar arquivos','inputSchema':{'type':'object','properties':{'slug':{'type':'string','minLength':1,'maxLength':63,'pattern':'^[a-z0-9][a-z0-9-]*$'},'ref':{'type':'string','minLength':1,'maxLength':128,'pattern':'^[A-Za-z0-9._/-]+$'}},'required':['slug'],'additionalProperties':False}},
+ {'name':'project.manifest.validate','description':'Valida cloudiff.yaml, normaliza serviços e retorna erros acionáveis sem efeitos persistentes','inputSchema':{'type':'object','properties':{'slug':{'type':'string','minLength':1,'maxLength':63,'pattern':'^[a-z0-9][a-z0-9-]*$'},'manifest':{'oneOf':[{'type':'string','minLength':1,'maxLength':1048576},{'type':'object','properties':{},'additionalProperties':True}]},'overrides':{'type':'object','properties':{},'additionalProperties':True}},'required':['slug','manifest'],'additionalProperties':False}},
+ {'name':'project.configuration.get','description':'Consulta a revisão e a configuração efetiva do projeto sem expor valores secretos','inputSchema':{'type':'object','properties':{'slug':{'type':'string','minLength':1,'maxLength':63,'pattern':'^[a-z0-9][a-z0-9-]*$'}},'required':['slug'],'additionalProperties':False}},
  {'name':'runtime.catalog','description':'Lista política homologada de runtimes e frameworks sem efeitos','inputSchema':{'type':'object','properties':{},'additionalProperties':False}},
  {'name':'runtime.detect','description':'Detecta framework a partir de evidências sanitizadas do workspace autorizado','inputSchema':{'type':'object','properties':{'slug':{'type':'string','minLength':1,'maxLength':63,'pattern':'^[a-z0-9][a-z0-9-]*$'},'ref':{'type':'string','minLength':1,'maxLength':128,'pattern':'^[A-Za-z0-9._/-]+$'}},'required':['slug'],'additionalProperties':False}},
  {'name':'runtime.plan','description':'Gera plano declarativo usando somente templates homologados','inputSchema':{'type':'object','properties':{'framework':{'type':'string','enum':['static','react','vite','nextjs','vue','nuxt','angular','svelte','sveltekit','astro','express','nestjs','node']},'runtime_version':{'type':'string','enum':['20','22','24']},'package_manager':{'type':'string','enum':['npm','pnpm','yarn']}},'required':['framework'],'additionalProperties':False}},
@@ -179,7 +184,7 @@ TOOLS=[
  {'name':'deployment.rollback-test','description':'Executa rollback manual aprovado para release histórica do ambiente isolado','inputSchema':{'type':'object','properties':{'slug':{'type':'string','enum':['sistema-de-biblioteca-teste']},'target_job_id':{'type':'integer','minimum':1,'maximum':2147483647},'expected_current_job_id':{'type':'integer','minimum':1,'maximum':2147483647},'expected_current_commit':{'type':'string','pattern':'^[a-f0-9]{40}$'},'target_commit':{'type':'string','pattern':'^[a-f0-9]{40}$'},'approval_id':{'type':'string','pattern':'^apr_[a-f0-9]{20}$'}},'required':['slug','target_job_id','expected_current_job_id','expected_current_commit','target_commit','approval_id'],'additionalProperties':False}},
  ]
 READ_ONLY_TOOLS={
- 'project.list','project.get','project.connectors','runtime.catalog','runtime.detect','runtime.plan','runtime.validate',
+ 'project.list','project.get','project.connectors','project.technologies.detect','project.manifest.validate','project.configuration.get','runtime.catalog','runtime.detect','runtime.plan','runtime.validate',
  'build.plan','build.status','build.logs.read','build.artifact.get','deployment.preview.plan','deployment.preview.status',
  'approval.get','forgejo.proposal.list','forgejo.proposal.merge.plan','supabase.migrations.inspect','supabase.migrations.plan',
  'deployment.production.activation.plan','deployment.production.readiness','deployment.production.homologation.plan',
@@ -321,6 +326,19 @@ def workspace_prepare(slug,ref,trace_id):
     payload=json.dumps({'project_slug':slug,'ref':ref,'trace_id':trace_id},separators=(',',':')).encode()
     r=urllib.request.Request(WORKSPACE_URL+'/v1/prepare',data=payload,method='POST',headers={'Authorization':'Bearer '+WORKSPACE_TOKEN,'Content-Type':'application/json','Accept':'application/json'})
     with urllib.request.urlopen(r,timeout=45) as x:return json.loads(x.read().decode())
+def workspace_detect_multiservice(slug,ref,trace_id):
+    payload=json.dumps({'project_slug':slug,'ref':ref,'trace_id':trace_id},separators=(',',':')).encode()
+    r=urllib.request.Request(WORKSPACE_URL+'/v1/detect-multiservice',data=payload,method='POST',headers={'Authorization':'Bearer '+WORKSPACE_TOKEN,'Content-Type':'application/json','Accept':'application/json'})
+    with urllib.request.urlopen(r,timeout=60) as x:return json.loads(x.read().decode())
+def project_config_call(method,path,payload=None,timeout=45):
+    raw=json.dumps(payload,separators=(',',':')).encode() if payload is not None else None
+    r=urllib.request.Request(PROJECT_CONFIG_URL+path,data=raw,method=method,headers={'Authorization':'Bearer '+PROJECT_CONFIG_TOKEN,'Content-Type':'application/json','Accept':'application/json'})
+    try:
+        with urllib.request.urlopen(r,timeout=timeout) as x:return x.status,json.load(x)
+    except urllib.error.HTTPError as e:
+        try:data=json.load(e)
+        except Exception:data={'ok':False,'error':{'code':'project_config_error','message':'Falha ao consultar a configuração do projeto.'}}
+        return e.code,data
 def workspace_validate(slug,ref,trace_id):
     payload=json.dumps({'project_slug':slug,'ref':ref,'trace_id':trace_id},separators=(',',':')).encode()
     r=urllib.request.Request(WORKSPACE_URL+'/v1/validate',data=payload,method='POST',headers={'Authorization':'Bearer '+WORKSPACE_TOKEN,'Content-Type':'application/json','Accept':'application/json'})
@@ -598,7 +616,7 @@ def homologation_call(path,payload,timeout=300):
   return e.code,b
 
 SCOPE_BY_TOOL={
- 'runtime.catalog':'project:read','runtime.detect':'project:read','runtime.plan':'project:read','runtime.validate':'project:read','build.plan':'project:read','build.request':'workspace:test-static','build.status':'project:read','build.logs.read':'project:read','build.artifact.get':'project:read','deployment.preview.plan':'project:read','deployment.preview.status':'project:read','approval.request-preview':'approval:request-preview','deployment.preview':'deployment:preview',
+ 'runtime.catalog':'project:read','runtime.detect':'project:read','runtime.plan':'project:read','runtime.validate':'project:read','project.technologies.detect':'workspace:detect-multiservice','project.manifest.validate':'project:configuration-read','project.configuration.get':'project:configuration-read','build.plan':'project:read','build.request':'workspace:test-static','build.status':'project:read','build.logs.read':'project:read','build.artifact.get':'project:read','deployment.preview.plan':'project:read','deployment.preview.status':'project:read','approval.request-preview':'approval:request-preview','deployment.preview':'deployment:preview',
  'workspace.probe':'workspace:probe','workspace.prepare':'workspace:prepare','workspace.validate':'workspace:validate','workspace.test-static':'workspace:test-static','workspace.preview-static':'workspace:preview-static','workspace.edit-preview':'workspace:edit-preview',
  'forgejo.propose-edit':'forgejo:propose-edit','forgejo.propose-edit.plan':'forgejo:plan-edit','approval.request-proposal':'approval:request-proposal','approval.get':'approval:read-own','forgejo.proposal.list':'forgejo:proposal-read','forgejo.proposal.close':'forgejo:proposal-close','forgejo.proposal.delete-branch':'forgejo:proposal-delete-branch','forgejo.proposal.merge.plan':'forgejo:proposal-merge-plan','approval.request-merge':'approval:request-merge','forgejo.proposal.merge':'forgejo:proposal-merge',
  'deployment.production.homologation.plan':'deployment:production-plan','approval.request-production-homologation':'approval:request-deploy','deployment.production.homologation.deploy':'deployment:production-plan','deployment.production.homologation.rollback':'deployment:production-plan','deployment.production.activation.plan':'deployment:production-plan','approval.request-production-activation':'approval:request-deploy','deployment.production.readiness':'project:read','deployment.production.plan':'deployment:production-plan','supabase.migrations.inspect':'supabase:migration-inspect','supabase.migrations.plan':'supabase:migration-plan','deployment.plan':'deployment:plan','approval.request-deploy':'approval:request-deploy','deployment.validate':'deployment:validate','deployment.promote-test.plan':'deployment:promote-test-plan','approval.request-promote-test':'approval:request-promote-test','deployment.promote-test':'deployment:promote-test','deployment.promote-test.status':'deployment:promote-test-status','deployment.rollback-test.plan':'deployment:rollback-test-plan','approval.request-rollback-test':'approval:request-rollback-test','deployment.rollback-test':'deployment:rollback-test',
@@ -854,10 +872,17 @@ class H(BaseHTTPRequestHandler):
             elif method=='tools/call':
                 name=params.get('name');args=params.get('arguments') or {}
                 if name=='project.list': data=control('/v1/projects');allowed=set(authz.get('project_slugs') or []);content=[x for x in data.get('projects',[]) if not allowed or x.get('slug') in allowed]
-                elif name in {'project.get','project.connectors'}:
+                elif name in {'project.get','project.connectors','project.configuration.get'}:
+                    if set(args)!={'slug'}:raise ValueError('O campo slug é obrigatório. Exemplo: {"slug":"meu-projeto"}')
                     slug=str(args.get('slug') or '').strip()
-                    if not slug:raise ValueError('slug obrigatório')
-                    data=control('/v1/projects/'+urllib.parse.quote(slug,safe=''));content=data.get('project') if name=='project.get' else {'connectors':data.get('connectors',[]),'acl':data.get('acl',[])}
+                    if not slug:raise ValueError('O campo slug é obrigatório. Exemplo: {"slug":"meu-projeto"}')
+                    data=control('/v1/projects/'+urllib.parse.quote(slug,safe=''))
+                    if name=='project.get':content=data.get('project')
+                    elif name=='project.connectors':content={'connectors':data.get('connectors',[]),'acl':data.get('acl',[])}
+                    else:
+                        code,configured=project_config_call('GET','/v1/projects/'+urllib.parse.quote(slug,safe='')+'/configuration')
+                        if code not in {200,404}:raise ValueError('Falha ao consultar a configuração efetiva do projeto.')
+                        content=configured
                 elif name=='runtime.catalog':
                     if args:raise ValueError('argumentos inválidos')
                     content=runtime_call('/v1/catalog')
@@ -935,6 +960,23 @@ class H(BaseHTTPRequestHandler):
                     data=workspace_probe(slug,trace_id)
                     if not data.get('ok'):raise ValueError('workspace indisponível')
                     content=data
+                elif name=='project.technologies.detect':
+                    if not set(args).issubset({'slug','ref'}) or 'slug' not in args:raise ValueError('O campo slug é obrigatório. Exemplo: {"slug":"meu-projeto","ref":"main"}')
+                    slug=str(args.get('slug') or '').strip();ref=str(args.get('ref') or 'main').strip()
+                    if not slug:raise ValueError('O campo slug é obrigatório. Exemplo: {"slug":"meu-projeto","ref":"main"}')
+                    if not ref or '..' in ref or ref.startswith('/') or ref.endswith('/'):raise ValueError('O campo ref é incompatível. Use uma referência como main ou feature/minha-branch.')
+                    control('/v1/projects/'+urllib.parse.quote(slug,safe=''))
+                    data=workspace_detect_multiservice(slug,ref,trace_id)
+                    if not data.get('ok'):raise ValueError(str(data.get('error') or 'Falha na detecção multitecnologia.'))
+                    content=data
+                elif name=='project.manifest.validate':
+                    if not set(args).issubset({'slug','manifest','overrides'}) or not {'slug','manifest'}.issubset(args):raise ValueError('Os campos slug e manifest são obrigatórios. Exemplo: {"slug":"meu-projeto","manifest":{"version":1,"runtime":"static"}}')
+                    slug=str(args.get('slug') or '').strip()
+                    if not slug:raise ValueError('O campo slug é obrigatório.')
+                    control('/v1/projects/'+urllib.parse.quote(slug,safe=''))
+                    code,validated=project_config_call('POST','/v1/manifest/validate',{'manifest':args.get('manifest'),'overrides':args.get('overrides') or {}})
+                    if code not in {200,422}:raise ValueError('Falha ao validar o manifesto do projeto.')
+                    content=validated
                 elif name=='workspace.prepare':
                     if not set(args).issubset({'slug','ref'}) or 'slug' not in args:raise ValueError('argumentos inválidos')
                     slug=str(args.get('slug') or '').strip();ref=str(args.get('ref') or 'main').strip()
