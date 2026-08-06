@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 import hashlib
 import os
+import re
 import sys
 import time
 import threading
 import urllib.request
 import urllib.error
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 
 DOMAIN = os.environ.get("CLOUDIF_DOMAIN", "cloudiff.duckdns.org").lower()
 OUTPOST_URL = os.environ.get("CLOUDIF_AUTHENTIK_OUTPOST", "http://10.62.91.2:9000/outpost.goauthentik.io/auth/nginx")
@@ -16,6 +18,10 @@ LISTEN_PORT = int(os.environ.get("CLOUDIF_AUTHZ_LISTEN_PORT", "18092"))
 CACHE_ALLOW_TTL = int(os.environ.get("CLOUDIF_AUTHZ_CACHE_ALLOW_TTL", "15"))
 CACHE_DENY_TTL = int(os.environ.get("CLOUDIF_AUTHZ_CACHE_DENY_TTL", "5"))
 LOG_204 = os.environ.get("CLOUDIF_AUTHZ_LOG_204", "false").lower() in {"1", "true", "yes", "on"}
+
+ACCESS_DIR = Path(os.environ.get("CLOUDIF_TENANT_ACCESS_DIR", "/var/lib/cloudif/tenant-access"))
+TENANT_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,126}$")
+SUBJECT_RE = re.compile(r"^[^\s\x00]{1,256}$")
 
 ADMIN_USERS = {
     x.strip().lower()
@@ -53,19 +59,59 @@ def tenant_from_request(host: str, uri: str) -> str:
     suffix = "." + DOMAIN
     if host.endswith(suffix):
         tenant = host[:-len(suffix)].strip(".")
-        if tenant and tenant not in {"www", "authiff", "cloudiff"}:
+        if TENANT_RE.fullmatch(tenant) and tenant not in {"www", "authiff", "cloudiff"}:
             return tenant
 
     parts = uri.split("/")
     if len(parts) >= 3 and parts[1] == "supabase" and parts[2]:
-        return parts[2].lower()
+        tenant = parts[2].lower()
+        if TENANT_RE.fullmatch(tenant):
+            return tenant
 
     return ""
 
 def groups_to_set(groups_header: str):
     raw = groups_header or ""
-    raw = raw.replace(";", ",")
+    for separator in (";", "|"):
+        raw = raw.replace(separator, ",")
     return {x.strip().lower() for x in raw.split(",") if x.strip()}
+
+
+def load_tenant_access(tenant: str):
+    users = set()
+    groups = set()
+    tenant = (tenant or "").strip().lower()
+    if not TENANT_RE.fullmatch(tenant):
+        return users, groups
+    for suffix, target in (("users", users), ("groups", groups)):
+        path = ACCESS_DIR / f"{tenant}.{suffix}"
+        try:
+            for raw in path.read_text(encoding="utf-8", errors="strict").splitlines():
+                value = raw.strip().lower()
+                if not value or value.startswith("#") or not SUBJECT_RE.fullmatch(value):
+                    continue
+                target.add(value)
+        except (FileNotFoundError, PermissionError, UnicodeError, OSError):
+            continue
+    return users, groups
+
+
+def authorize_tenant(username: str, groups, tenant: str):
+    username = (username or "").strip().lower()
+    tenant = (tenant or "").strip().lower()
+    normalized_groups = {str(value).strip().lower() for value in (groups or set()) if str(value).strip()}
+    if username == tenant:
+        return True, "user-matches-tenant"
+    if username in ADMIN_USERS:
+        return True, "admin-user"
+    if normalized_groups.intersection(ADMIN_GROUPS):
+        return True, "admin-group"
+    allow_users, allow_groups = load_tenant_access(tenant)
+    if username in allow_users:
+        return True, "tenant-user-allowlist"
+    if normalized_groups.intersection(allow_groups):
+        return True, "tenant-group-allowlist"
+    return False, f"user-{username}-cannot-access-tenant-{tenant}"
 
 def cache_key(cookie: str, host: str, tenant: str) -> str:
     # A chave usa cookie + host + tenant. Não usa URI para o Studio não consultar o
@@ -102,7 +148,7 @@ def maybe_cleanup_cache():
             CACHE.pop(k, None)
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "CloudIFAuthZ/238"
+    server_version = "CloudIFAuthZ/239"
 
     def log_message(self, fmt, *args):
         sys.stderr.write("[%s] %s\n" % (self.log_date_time_string(), fmt % args))
@@ -230,18 +276,7 @@ class Handler(BaseHTTPRequestHandler):
         groups_header = resp_headers.get("X-authentik-groups") or ""
         groups = groups_to_set(groups_header)
 
-        if username == tenant:
-            allowed = True
-            reason = "user-matches-tenant"
-        elif username in ADMIN_USERS:
-            allowed = True
-            reason = "admin-user"
-        elif groups.intersection(ADMIN_GROUPS):
-            allowed = True
-            reason = "admin-group"
-        else:
-            allowed = False
-            reason = f"user-{username}-cannot-access-tenant-{tenant}"
+        allowed, reason = authorize_tenant(username, groups, tenant)
 
         if not allowed:
             final_headers = {
@@ -279,13 +314,14 @@ class Handler(BaseHTTPRequestHandler):
 
 def main():
     server = ThreadingHTTPServer((LISTEN_HOST, LISTEN_PORT), Handler)
-    print(f"CloudIF AuthZ Gate v238 ouvindo em {LISTEN_HOST}:{LISTEN_PORT}", flush=True)
+    print(f"CloudIF AuthZ Gate v239 ouvindo em {LISTEN_HOST}:{LISTEN_PORT}", flush=True)
     print(f"DOMAIN={DOMAIN}", flush=True)
     print(f"OUTPOST={OUTPOST_URL}", flush=True)
     print(f"CACHE_ALLOW_TTL={CACHE_ALLOW_TTL}", flush=True)
     print(f"CACHE_DENY_TTL={CACHE_DENY_TTL}", flush=True)
     print(f"ADMIN_USERS={sorted(ADMIN_USERS)}", flush=True)
     print(f"ADMIN_GROUPS={sorted(ADMIN_GROUPS)}", flush=True)
+    print(f"ACCESS_DIR={ACCESS_DIR}", flush=True)
     server.serve_forever()
 
 if __name__ == "__main__":
