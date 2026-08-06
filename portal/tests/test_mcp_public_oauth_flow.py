@@ -207,10 +207,18 @@ class MCPPublicOAuthFlowTest(unittest.TestCase):
         oauth = schema['components']['securitySchemes']['cloudiffOAuth']['flows']['authorizationCode']
         self.assertEqual(oauth['authorizationUrl'], 'https://cloudiff.duckdns.org/cloudiff/mcp/oauth/authorize')
         self.assertEqual(oauth['tokenUrl'], 'https://cloudiff.duckdns.org/cloudiff/mcp/oauth/token')
+        status, headers, raw = self.request('HEAD', f'/cloudiff/mcp/openapi/{CLIENT_ID}.json')
+        self.assertEqual(status, 200)
+        self.assertIn('application/json', headers.get('Content-Type', ''))
+        self.assertEqual(raw, b'')
         status, headers, raw = self.request('GET', '/cloudiff/mcp/privacy')
         self.assertEqual(status, 200)
         self.assertIn('text/html', headers.get('Content-Type', ''))
         self.assertIn('Privacidade do conector CloudIFF', raw.decode())
+        status, headers, raw = self.request('HEAD', '/cloudiff/mcp/privacy')
+        self.assertEqual(status, 200)
+        self.assertIn('text/html', headers.get('Content-Type', ''))
+        self.assertEqual(raw, b'')
 
     def test_actions_rest_bridge_is_bound_to_project(self):
         token = self.oauth_token()

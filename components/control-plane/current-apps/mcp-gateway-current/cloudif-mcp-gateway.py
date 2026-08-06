@@ -573,6 +573,18 @@ class H(BaseHTTPRequestHandler):
         req=urllib.request.Request(AGENT_URL+path,data=payload,method='POST',headers={'Content-Type':'application/json','Authorization':'Bearer '+AGENT_ADMIN_TOKEN})
         with urllib.request.urlopen(req,timeout=5) as x:return json.load(x)
     def redirect(self,url):self.send_response(302);self.send_header('Location',url);self.send_header('Cache-Control','no-store');self.end_headers()
+    def do_HEAD(self):
+        path=urlparse(self.path).path
+        content_type='';length=0
+        if path=='/cloudiff/mcp/privacy':
+            raw=_privacy_html().encode();content_type='text/html; charset=utf-8';length=len(raw)
+        else:
+            match=re.fullmatch(r'/cloudiff/mcp/openapi/([A-Za-z0-9._-]{3,160})[.]json',path)
+            schema=_action_schema(match.group(1)) if match else None
+            if schema:
+                raw=json.dumps(schema,ensure_ascii=False,separators=(',',':')).encode();content_type='application/json';length=len(raw)
+        if not content_type:self.send_response(404);self.send_header('Cache-Control','no-store');self.end_headers();return
+        self.send_response(200);self.send_header('Content-Type',content_type);self.send_header('Content-Length',str(length));self.send_header('Cache-Control','public, max-age=300');self.send_header('X-Content-Type-Options','nosniff');self.end_headers()
     def do_GET(self):
         parsed=urlparse(self.path);path=parsed.path
         if path in {'/.well-known/oauth-authorization-server','/cloudiff/mcp/.well-known/oauth-authorization-server','/oauth/.well-known/oauth-authorization-server'}:return self.sendj(200,_oauth_metadata())
