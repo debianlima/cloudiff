@@ -198,17 +198,91 @@ def _action_schema(client_id):
     read_tools=[x for x in available if x in READ_ONLY_TOOLS]
     write_tools=[x for x in available if x not in READ_ONLY_TOOLS]
     base='/cloudiff/mcp/actions/v1';security=[{'cloudiffOAuth':['mcp']}]
-    responses={'200':{'description':'Resposta do conector CloudIFF','content':{'application/json':{'schema':{'type':'object','additionalProperties':True}}}},'401':{'description':'Autenticação necessária'},'403':{'description':'Projeto ou ferramenta não autorizado'},'422':{'description':'Parâmetros inválidos'}}
+    responses={
+      '200':{'description':'Resposta do conector CloudIFF','content':{'application/json':{'schema':{'$ref':'#/components/schemas/ActionResponse'}}}},
+      '401':{'description':'Autenticação necessária'},
+      '403':{'description':'Projeto ou ferramenta não autorizado'},
+      '422':{'description':'Parâmetros inválidos'},
+    }
     paths={
       base+'/project':{'get':{'operationId':'getCloudIFFProject','summary':'Consultar o projeto CloudIFF vinculado','description':'Retorna somente o projeto associado ao Client ID autenticado.','security':security,'x-openai-isConsequential':False,'responses':responses}},
       base+'/connectors':{'get':{'operationId':'getCloudIFFProjectConnectors','summary':'Consultar conectores do projeto','description':'Retorna Forgejo, Supabase, Komodo, MCP e ACL sanitizada do projeto vinculado.','security':security,'x-openai-isConsequential':False,'responses':responses}},
       base+'/tools':{'get':{'operationId':'listCloudIFFProjectTools','summary':'Listar ferramentas autorizadas','description':'Lista as ferramentas realmente liberadas para a identidade deste projeto.','security':security,'x-openai-isConsequential':False,'responses':responses}},
     }
     if read_tools:
-        paths[base+'/read']={'post':{'operationId':'callCloudIFFReadTool','summary':'Executar ferramenta de consulta','description':'Executa somente ferramentas classificadas pelo servidor como leitura, plano ou inspeção sem efeito persistente. O projeto é imposto pelo token OAuth.','security':security,'x-openai-isConsequential':False,'requestBody':{'required':True,'content':{'application/json':{'schema':{'type':'object','properties':{'tool':{'type':'string','enum':read_tools},'arguments':{'type':'object','additionalProperties':True}},'required':['tool'],'additionalProperties':False}}}},'responses':responses}}
+        paths[base+'/read']={'post':{'operationId':'callCloudIFFReadTool','summary':'Executar ferramenta de consulta','description':'Executa somente ferramentas classificadas pelo servidor como leitura, plano ou inspeção sem efeito persistente. O projeto é imposto pelo token OAuth.','security':security,'x-openai-isConsequential':False,'requestBody':{'required':True,'content':{'application/json':{'schema':{'$ref':'#/components/schemas/ReadToolRequest'}}}},'responses':responses}}
     if write_tools:
-        paths[base+'/write']={'post':{'operationId':'callCloudIFFProjectTool','summary':'Executar operação controlada do projeto','description':'Executa uma ferramenta com efeito ou solicitação de aprovação. Aprovações humanas e políticas da CloudIFF continuam obrigatórias.','security':security,'x-openai-isConsequential':True,'requestBody':{'required':True,'content':{'application/json':{'schema':{'type':'object','properties':{'tool':{'type':'string','enum':write_tools},'arguments':{'type':'object','additionalProperties':True}},'required':['tool'],'additionalProperties':False}}}},'responses':responses}}
-    return {'openapi':'3.1.0','info':{'title':'CloudIFF Actions — '+slug,'version':'1.0.0','description':'Ações do projeto '+slug+' com OAuth público, PKCE, ACL por projeto e aprovações humanas server-side.','termsOfService':PUBLIC_ORIGIN+'/cloudiff/mcp/privacy','x-privacy-policy-url':PUBLIC_ORIGIN+'/cloudiff/mcp/privacy'},'servers':[{'url':PUBLIC_ORIGIN}],'externalDocs':{'description':'Política de privacidade do conector CloudIFF','url':PUBLIC_ORIGIN+'/cloudiff/mcp/privacy'},'components':{'securitySchemes':{'cloudiffOAuth':{'type':'oauth2','flows':{'authorizationCode':{'authorizationUrl':PUBLIC_ORIGIN+'/cloudiff/mcp/oauth/authorize','tokenUrl':PUBLIC_ORIGIN+'/cloudiff/mcp/oauth/token','scopes':{'mcp':'Acesso às ferramentas MCP autorizadas do projeto','offline_access':'Renovação da sessão OAuth'}}}}}},'paths':paths,'x-cloudiff-project':slug,'x-cloudiff-client-id':client_id}
+        paths[base+'/write']={'post':{'operationId':'callCloudIFFProjectTool','summary':'Executar operação controlada do projeto','description':'Executa uma ferramenta com efeito ou solicitação de aprovação. Aprovações humanas e políticas da CloudIFF continuam obrigatórias.','security':security,'x-openai-isConsequential':True,'requestBody':{'required':True,'content':{'application/json':{'schema':{'$ref':'#/components/schemas/WriteToolRequest'}}}},'responses':responses}}
+    schemas={
+      'ActionArguments':{
+        'type':'object',
+        'description':'Parâmetros da ferramenta. O slug do projeto é sempre imposto pelo servidor.',
+        'properties':{},
+        'additionalProperties':True,
+      },
+      'ActionResponse':{
+        'type':'object',
+        'properties':{
+          'ok':{'type':'boolean','description':'Indica se a operação foi concluída.'},
+          'project_slug':{'type':'string','description':'Projeto vinculado à identidade OAuth.'},
+          'tool':{'type':'string','description':'Ferramenta executada, quando aplicável.'},
+          'result':{'description':'Resultado sanitizado retornado pela ferramenta.'},
+          'error':{'type':'string','description':'Código de erro, quando aplicável.'},
+        },
+        'additionalProperties':True,
+      },
+      'ReadToolRequest':{
+        'type':'object',
+        'properties':{
+          'tool':{'type':'string','enum':read_tools,'description':'Ferramenta autorizada de leitura, plano ou inspeção.'},
+          'arguments':{'$ref':'#/components/schemas/ActionArguments'},
+        },
+        'required':['tool'],
+        'additionalProperties':False,
+      },
+      'WriteToolRequest':{
+        'type':'object',
+        'properties':{
+          'tool':{'type':'string','enum':write_tools,'description':'Ferramenta controlada com possível efeito persistente.'},
+          'arguments':{'$ref':'#/components/schemas/ActionArguments'},
+        },
+        'required':['tool'],
+        'additionalProperties':False,
+      },
+    }
+    return {
+      'openapi':'3.1.0',
+      'info':{
+        'title':'CloudIFF Actions — '+slug,
+        'version':'1.0.1',
+        'description':'Ações do projeto '+slug+' com OAuth público, PKCE, ACL por projeto e aprovações humanas server-side.',
+        'termsOfService':PUBLIC_ORIGIN+'/cloudiff/mcp/privacy',
+        'x-privacy-policy-url':PUBLIC_ORIGIN+'/cloudiff/mcp/privacy',
+      },
+      'servers':[{'url':PUBLIC_ORIGIN}],
+      'externalDocs':{'description':'Política de privacidade do conector CloudIFF','url':PUBLIC_ORIGIN+'/cloudiff/mcp/privacy'},
+      'components':{
+        'schemas':schemas,
+        'securitySchemes':{
+          'cloudiffOAuth':{
+            'type':'oauth2',
+            'flows':{
+              'authorizationCode':{
+                'authorizationUrl':PUBLIC_ORIGIN+'/cloudiff/mcp/oauth/authorize',
+                'tokenUrl':PUBLIC_ORIGIN+'/cloudiff/mcp/oauth/token',
+                'scopes':{
+                  'mcp':'Acesso às ferramentas MCP autorizadas do projeto',
+                  'offline_access':'Renovação da sessão OAuth',
+                },
+              },
+            },
+          },
+        },
+      },
+      'paths':paths,
+      'x-cloudiff-project':slug,
+      'x-cloudiff-client-id':client_id,
+    }
 def _privacy_html():
     return '<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Privacidade do conector CloudIFF</title><style>body{font-family:Inter,Arial,sans-serif;max-width:760px;margin:0 auto;padding:48px 24px;line-height:1.65;color:#122018}h1{font-size:2rem}h2{margin-top:2rem}code{background:#eef3ee;padding:.15rem .35rem;border-radius:.35rem}</style></head><body><h1>Privacidade do conector CloudIFF</h1><p>O conector usa OAuth com PKCE e vincula cada sessão aos projetos autorizados para o usuário autenticado. O Client Secret não é necessário.</p><h2>Dados processados</h2><p>Identidade institucional, Client ID do projeto, ferramentas chamadas, projeto vinculado, resultado sanitizado e registros técnicos de auditoria.</p><h2>Limites</h2><p>O conector não entrega chaves privadas, senhas de banco ou tokens internos. Operações sensíveis continuam sujeitas às permissões e aprovações do Portal CloudIFF.</p><h2>Revogação</h2><p>A sessão pode ser revogada no endpoint <code>/cloudiff/mcp/oauth/revoke</code> ou pela remoção do usuário/projeto no Portal.</p></body></html>'
 def workspace_probe(slug,trace_id):

@@ -78,6 +78,15 @@ class MCPOAuthContractTests(unittest.TestCase):
         self.assertIn("write_tools=[x for x in available if x not in READ_ONLY_TOOLS]", schema_block)
         self.assertNotIn("'x-openai-isConsequential':False", schema_block[schema_block.index("base+'/write'"):])
 
+    def test_actions_components_define_object_properties(self):
+        block = self.gateway[self.gateway.index('def _action_schema'):self.gateway.index('def _privacy_html')]
+        self.assertIn("'schemas':schemas", block)
+        self.assertIn("'properties':{}", block)
+        self.assertIn("'properties':{", block)
+        self.assertIn("'#/components/schemas/ActionResponse'", block)
+        self.assertIn("'#/components/schemas/ReadToolRequest'", block)
+        self.assertIn("'#/components/schemas/WriteToolRequest'", block)
+
     def test_actions_bridge_forces_project_slug_and_separates_read_from_write(self):
         for marker in (
             "if 'slug' in props:clean['slug']=identity['project_slug']",

@@ -199,11 +199,22 @@ class MCPPublicOAuthFlowTest(unittest.TestCase):
         self.assertFalse(paths['/cloudiff/mcp/actions/v1/project']['get']['x-openai-isConsequential'])
         self.assertFalse(paths['/cloudiff/mcp/actions/v1/read']['post']['x-openai-isConsequential'])
         self.assertTrue(paths['/cloudiff/mcp/actions/v1/write']['post']['x-openai-isConsequential'])
-        read_enum = paths['/cloudiff/mcp/actions/v1/read']['post']['requestBody']['content']['application/json']['schema']['properties']['tool']['enum']
-        write_enum = paths['/cloudiff/mcp/actions/v1/write']['post']['requestBody']['content']['application/json']['schema']['properties']['tool']['enum']
+        schemas = schema['components']['schemas']
+        self.assertIsInstance(schemas, dict)
+        read_ref = paths['/cloudiff/mcp/actions/v1/read']['post']['requestBody']['content']['application/json']['schema']['$ref']
+        write_ref = paths['/cloudiff/mcp/actions/v1/write']['post']['requestBody']['content']['application/json']['schema']['$ref']
+        read_schema = schemas[read_ref.rsplit('/', 1)[-1]]
+        write_schema = schemas[write_ref.rsplit('/', 1)[-1]]
+        read_enum = read_schema['properties']['tool']['enum']
+        write_enum = write_schema['properties']['tool']['enum']
         self.assertIn('project.get', read_enum)
         self.assertNotIn('workspace.prepare', read_enum)
         self.assertIn('workspace.prepare', write_enum)
+        for name, item in schemas.items():
+            if item.get('type') == 'object':
+                self.assertIn('properties', item, name)
+        response_ref = paths['/cloudiff/mcp/actions/v1/project']['get']['responses']['200']['content']['application/json']['schema']['$ref']
+        self.assertEqual(response_ref, '#/components/schemas/ActionResponse')
         oauth = schema['components']['securitySchemes']['cloudiffOAuth']['flows']['authorizationCode']
         self.assertEqual(oauth['authorizationUrl'], 'https://cloudiff.duckdns.org/cloudiff/mcp/oauth/authorize')
         self.assertEqual(oauth['tokenUrl'], 'https://cloudiff.duckdns.org/cloudiff/mcp/oauth/token')
