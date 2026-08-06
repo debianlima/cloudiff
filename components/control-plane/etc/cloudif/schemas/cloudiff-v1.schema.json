@@ -1,0 +1,522 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cloudiff.duckdns.org/schemas/cloudiff-v1.schema.json",
+  "title": "CloudIFF Project Manifest",
+  "type": "object",
+  "required": [
+    "version"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "const": 1
+    },
+    "project": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "single-service",
+            "multi-service"
+          ]
+        },
+        "primaryService": {
+          "$ref": "#/$defs/serviceName"
+        }
+      }
+    },
+    "toolchain": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "runtimes": {
+          "type": "object",
+          "propertyNames": {
+            "pattern": "^[a-z][a-z0-9-]{0,31}$"
+          },
+          "additionalProperties": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 32
+          },
+          "maxProperties": 16
+        },
+        "systemPackages": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9+._-]{0,79}$"
+          },
+          "maxItems": 64,
+          "uniqueItems": true
+        },
+        "rebuildOnChange": {
+          "type": "boolean"
+        }
+      }
+    },
+    "environment": {
+      "$ref": "#/$defs/environment"
+    },
+    "hooks": {
+      "$ref": "#/$defs/hooks"
+    },
+    "services": {
+      "type": "object",
+      "propertyNames": {
+        "$ref": "#/$defs/serviceName"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/service"
+      },
+      "minProperties": 1,
+      "maxProperties": 32
+    },
+    "runtime": {
+      "type": "string",
+      "enum": [
+        "static",
+        "node",
+        "php",
+        "docker",
+        "compose"
+      ]
+    },
+    "path": {
+      "$ref": "#/$defs/relativePath"
+    },
+    "publish": {
+      "$ref": "#/$defs/relativePath"
+    },
+    "dockerfile": {
+      "$ref": "#/$defs/relativePath"
+    },
+    "compose": {
+      "$ref": "#/$defs/relativePath"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "required": [
+          "services"
+        ]
+      },
+      "then": {
+        "not": {
+          "anyOf": [
+            {
+              "required": [
+                "runtime"
+              ]
+            },
+            {
+              "required": [
+                "dockerfile"
+              ]
+            },
+            {
+              "required": [
+                "compose"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "if": {
+        "not": {
+          "required": [
+            "services"
+          ]
+        }
+      },
+      "then": {
+        "anyOf": [
+          {
+            "required": [
+              "runtime"
+            ]
+          },
+          {
+            "required": [
+              "dockerfile"
+            ]
+          },
+          {
+            "required": [
+              "compose"
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "$defs": {
+    "serviceName": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]{0,31}$"
+    },
+    "relativePath": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512,
+      "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*\\u0000).+$"
+    },
+    "command": {
+      "oneOf": [
+        {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2048
+        },
+        {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512
+          },
+          "minItems": 1,
+          "maxItems": 64
+        }
+      ]
+    },
+    "environment": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "variables": {
+          "type": "object",
+          "propertyNames": {
+            "pattern": "^[A-Z_][A-Z0-9_]{0,127}$"
+          },
+          "additionalProperties": {
+            "type": [
+              "string",
+              "number",
+              "boolean",
+              "null"
+            ]
+          },
+          "maxProperties": 256
+        },
+        "required": {
+          "type": "object",
+          "propertyNames": {
+            "pattern": "^[A-Z_][A-Z0-9_]{0,127}$"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "services": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/serviceName"
+                },
+                "maxItems": 32,
+                "uniqueItems": true
+              },
+              "secretRef": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_.-]{2,255}$"
+              },
+              "configRef": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_.-]{2,255}$"
+              },
+              "required": {
+                "type": "boolean"
+              }
+            },
+            "oneOf": [
+              {
+                "required": [
+                  "secretRef"
+                ]
+              },
+              {
+                "required": [
+                  "configRef"
+                ]
+              }
+            ]
+          },
+          "maxProperties": 256
+        }
+      }
+    },
+    "hook": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "service": {
+          "$ref": "#/$defs/serviceName"
+        },
+        "run": {
+          "$ref": "#/$defs/command"
+        },
+        "script": {
+          "$ref": "#/$defs/relativePath"
+        },
+        "shell": {
+          "type": "string",
+          "enum": [
+            "bash",
+            "sh",
+            "php",
+            "node"
+          ]
+        },
+        "timeoutSeconds": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1800
+        },
+        "network": {
+          "type": "string",
+          "enum": [
+            "none",
+            "restricted",
+            "project"
+          ]
+        },
+        "continueOnError": {
+          "type": "boolean"
+        }
+      },
+      "oneOf": [
+        {
+          "required": [
+            "run"
+          ]
+        },
+        {
+          "required": [
+            "script"
+          ]
+        }
+      ]
+    },
+    "hooks": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "preBuild": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/hook"
+          },
+          "maxItems": 32
+        },
+        "postBuild": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/hook"
+          },
+          "maxItems": 32
+        },
+        "preDeploy": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/hook"
+          },
+          "maxItems": 32
+        },
+        "postDeploy": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/hook"
+          },
+          "maxItems": 32
+        }
+      }
+    },
+    "healthcheck": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "type": "string",
+          "pattern": "^/",
+          "maxLength": 512
+        },
+        "command": {
+          "$ref": "#/$defs/command"
+        },
+        "intervalSeconds": {
+          "type": "integer",
+          "minimum": 2,
+          "maximum": 300
+        },
+        "timeoutSeconds": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 60
+        },
+        "retries": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 20
+        },
+        "startPeriodSeconds": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 600
+        }
+      },
+      "oneOf": [
+        {
+          "required": [
+            "path"
+          ]
+        },
+        {
+          "required": [
+            "command"
+          ]
+        }
+      ]
+    },
+    "route": {
+      "type": "object",
+      "required": [
+        "path"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "type": "string",
+          "pattern": "^/",
+          "maxLength": 512
+        },
+        "stripPrefix": {
+          "type": "boolean"
+        }
+      }
+    },
+    "service": {
+      "type": "object",
+      "required": [
+        "runtime"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "$ref": "#/$defs/relativePath"
+        },
+        "runtime": {
+          "type": "string",
+          "enum": [
+            "static",
+            "node",
+            "php",
+            "docker",
+            "compose"
+          ]
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 32
+        },
+        "install": {
+          "$ref": "#/$defs/command"
+        },
+        "build": {
+          "$ref": "#/$defs/command"
+        },
+        "start": {
+          "$ref": "#/$defs/command"
+        },
+        "publish": {
+          "$ref": "#/$defs/relativePath"
+        },
+        "dockerfile": {
+          "$ref": "#/$defs/relativePath"
+        },
+        "compose": {
+          "$ref": "#/$defs/relativePath"
+        },
+        "port": {
+          "type": "integer",
+          "minimum": 1024,
+          "maximum": 65535
+        },
+        "healthcheck": {
+          "$ref": "#/$defs/healthcheck"
+        },
+        "dependsOn": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/serviceName"
+          },
+          "maxItems": 31,
+          "uniqueItems": true
+        },
+        "routes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/route"
+          },
+          "maxItems": 32
+        },
+        "environment": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "required": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^[A-Z_][A-Z0-9_]{0,127}$"
+              },
+              "maxItems": 256,
+              "uniqueItems": true
+            },
+            "variables": {
+              "type": "object",
+              "propertyNames": {
+                "pattern": "^[A-Z_][A-Z0-9_]{0,127}$"
+              },
+              "additionalProperties": {
+                "type": [
+                  "string",
+                  "number",
+                  "boolean",
+                  "null"
+                ]
+              },
+              "maxProperties": 256
+            }
+          }
+        },
+        "resources": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "cpu": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "maximum": 8
+            },
+            "memoryMB": {
+              "type": "integer",
+              "minimum": 64,
+              "maximum": 16384
+            },
+            "timeoutSeconds": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 3600
+            }
+          }
+        }
+      }
+    }
+  }
+}

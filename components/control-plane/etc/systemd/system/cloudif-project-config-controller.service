@@ -1,0 +1,48 @@
+[Unit]
+Description=CloudIFF project configuration and manifest controller
+After=network.target cloudif-control-plane-api.service
+Requires=cloudif-control-plane-api.service
+
+[Service]
+Type=simple
+User=cloudif-control
+Group=cloudif-control
+EnvironmentFile=/etc/cloudif/project-config-controller.env
+Environment=CLOUDIF_PROJECT_CONFIG_HOST=127.0.0.1
+Environment=CLOUDIF_PROJECT_CONFIG_PORT=18219
+Environment=CLOUDIF_PROJECT_CONFIG_DB=/var/lib/cloudif/project-config/config.db
+Environment=CLOUDIF_PROJECT_SNAPSHOT_DB=/var/lib/cloudif/control-plane/control-plane.db
+Environment=CLOUDIF_PROJECT_MANIFEST_SCHEMA=/etc/cloudif/schemas/cloudiff-v1.schema.json
+ExecStart=/usr/bin/python3 /srv/cloudif/app-pointers/project-config-controller-current/cloudif-project-config-controller.py
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/cloudif/project-config
+ReadOnlyPaths=/var/lib/cloudif/control-plane /etc/cloudif/schemas /etc/cloudif/project-config-controller.env /srv/cloudif/app-releases/project-config-controller /srv/cloudif/app-pointers
+PrivateDevices=true
+ProtectClock=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+ProtectHostname=true
+ProtectProc=invisible
+ProcSubset=pid
+RestrictNamespaces=true
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+RestrictRealtime=true
+RestrictAddressFamilies=AF_INET AF_UNIX
+CapabilityBoundingSet=
+AmbientCapabilities=
+RemoveIPC=true
+UMask=0077
+IPAddressAllow=127.0.0.0/8
+IPAddressDeny=any
+
+[Install]
+WantedBy=multi-user.target
