@@ -86,6 +86,11 @@ class SupabaseMCPDatabaseConnectorContractTest(unittest.TestCase):
         self.assertIn("'authorized_groups'", authz)
         self.assertIn("'project_role'", authz)
 
+    def test_oauth_and_legacy_bearer_reuse_existing_project_identity(self):
+        self.assertIn("def supabase_actor_user(authz):return str(authz.get('authorized_user') or authz.get('owner_user') or '')", self.gateway)
+        self.assertIn("'actor_user':supabase_actor_user(authz)", self.gateway)
+        self.assertNotIn('CLOUDIF_SUPABASE_MCP_USER_TOKEN', self.gateway + self.broker)
+
     def test_broker_is_internal_only_and_has_no_second_user_auth(self):
         unit = BROKER_UNIT.read_text()
         gateway_unit = GATEWAY_UNIT.read_text()

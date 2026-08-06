@@ -363,8 +363,9 @@ def approval_transition(approval_id,operation,payload):
         try:data=json.load(e)
         except Exception:data={}
         return e.code,data
+def supabase_actor_user(authz):return str(authz.get('authorized_user') or authz.get('owner_user') or '')
 def supabase_broker_call(path,slug,authz,payload=None,action='',operation='',plan_digest='',execution_id='',timeout=60):
-    body={'project_slug':slug,'actor_user':str(authz.get('authorized_user') or ''),'actor_groups':list(authz.get('authorized_groups') or []),'payload':payload or {}}
+    body={'project_slug':slug,'actor_user':supabase_actor_user(authz),'actor_groups':list(authz.get('authorized_groups') or []),'payload':payload or {}}
     if action:body['action']=action
     if operation:body['operation']=operation
     if plan_digest:body['plan_digest']=plan_digest
@@ -383,7 +384,7 @@ def supabase_operation_action(operation):
     return 'supabase.operation.'+operation
 def supabase_approval_create(slug,client_id,authz,operation,digest,summary,reason,ttl,trace_id):
     action=supabase_operation_action(operation)
-    payload={'project_slug':slug,'action':action,'requested_by':client_id,'requester_role':str(authz.get('project_role') or 'agent'),'ttl_seconds':ttl,'reason':reason,'trace_id':trace_id,'metadata':{'supabase_operation':operation,'supabase_plan_digest':digest,'summary':summary,'actor_user':str(authz.get('authorized_user') or ''),'secret_values_in_metadata':False}}
+    payload={'project_slug':slug,'action':action,'requested_by':client_id,'requester_role':str(authz.get('project_role') or 'agent'),'ttl_seconds':ttl,'reason':reason,'trace_id':trace_id,'metadata':{'supabase_operation':operation,'supabase_plan_digest':digest,'summary':summary,'actor_user':supabase_actor_user(authz),'secret_values_in_metadata':False}}
     req=urllib.request.Request(APPROVAL_URL+'/v1/approvals',data=json.dumps(payload,ensure_ascii=False,separators=(',',':')).encode(),method='POST',headers={'Authorization':'Bearer '+APPROVAL_TOKEN,'Content-Type':'application/json','Accept':'application/json'})
     try:
         with urllib.request.urlopen(req,timeout=10) as x:return json.load(x)
@@ -1206,7 +1207,7 @@ class H(BaseHTTPRequestHandler):
                     row=approval_get(approval_id)
                     try:meta=json.loads(row.get('metadata_json') or '{}') if row else {}
                     except Exception:meta={}
-                    action=supabase_operation_action(operation);actor_user=str(authz.get('authorized_user') or '')
+                    action=supabase_operation_action(operation);actor_user=supabase_actor_user(authz)
                     reservation_id,execution_id=transaction_ids(action,approval_id,client_id,digest)
                     valid_status=bool(row and (row.get('status')=='approved' or (row.get('status') in {'reserved','consumed'} and row.get('reservation_id')==reservation_id)))
                     valid=bool(row and valid_status and row.get('project_slug')==slug and row.get('action')==action and row.get('requested_by')==client_id and row.get('approved_by') and meta.get('supabase_operation')==operation and hmac.compare_digest(str(meta.get('supabase_plan_digest') or ''),digest) and str(meta.get('actor_user') or '')==actor_user)
