@@ -14,11 +14,23 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
+def _env_file_value(path:str,key:str)->str:
+    try:
+        for raw in Path(path).read_text(encoding='utf-8',errors='strict').splitlines():
+            line=raw.strip()
+            if not line or line.startswith('#') or '=' not in line:continue
+            name,value=line.split('=',1)
+            if name.strip()==key:return value.strip().strip('"').strip("'")
+    except (OSError,UnicodeError):
+        pass
+    return ''
+
+
 CONTROL_DB=Path(os.environ.get('CLOUDIF_PROJECT_SNAPSHOT_DB','/var/lib/cloudif/control-plane/control-plane.db'))
 CONFIG_URL=os.environ.get('CLOUDIF_PROJECT_CONFIG_URL','http://127.0.0.1:18219').rstrip('/')
-CONFIG_TOKEN=os.environ.get('CLOUDIF_PROJECT_CONFIG_TOKEN','')
+CONFIG_TOKEN=os.environ.get('CLOUDIF_PROJECT_CONFIG_TOKEN','') or _env_file_value('/etc/cloudif/project-config-controller.env','CLOUDIF_PROJECT_CONFIG_TOKEN')
 APPROVAL_URL=os.environ.get('CLOUDIF_APPROVAL_URL','http://127.0.0.1:18204').rstrip('/')
-APPROVAL_TOKEN=os.environ.get('CLOUDIF_APPROVAL_TOKEN','')
+APPROVAL_TOKEN=os.environ.get('CLOUDIF_APPROVAL_TOKEN','') or _env_file_value('/etc/cloudif/approval-service.env','CLOUDIF_APPROVAL_TOKEN')
 ROLE_RANK={'none':0,'viewer':10,'member':40,'developer':60,'editor':65,'maintainer':80,'admin':90,'administrator':90,'owner':100}
 GLOBAL_GROUPS={'cloudif-tenants-admin','cloudif-professor'}
 
