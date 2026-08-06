@@ -16,7 +16,7 @@ class MCPOAuthContractTests(unittest.TestCase):
             self.assertIn(value, self.gateway)
 
     def test_public_client_pkce_and_confidential_compatibility(self):
-        for value in ("'none'", "client_secret_post", "client_secret_basic", "code_challenge_methods_supported", "method!='S256'", "_pkce_ok", "refresh_token"):
+        for value in ("'none'", "client_secret_post", "client_secret_basic", "code_challenge_methods_supported", "pkce_valid=flow=='pkce'", "_pkce_ok", "refresh_token"):
             self.assertIn(value, self.gateway)
         self.assertIn("row if row.get('public_client')", self.gateway)
         self.assertIn("saved) if saved and saved.get('client_id')", self.gateway)
@@ -38,8 +38,20 @@ class MCPOAuthContractTests(unittest.TestCase):
         self.assertIn("project_slugs", public_block)
 
     def test_callback_allowlist(self):
-        for value in ("claude.ai", "chatgpt.com", "127.0.0.1", "localhost"):
+        for value in ("claude.ai", "chatgpt.com", "chat.openai.com", "127.0.0.1", "localhost"):
             self.assertIn(value, self.gateway)
+
+    def test_chatgpt_actions_callback_has_isolated_non_pkce_flow(self):
+        for marker in (
+            "return 'chatgpt_actions'",
+            "flow=='chatgpt_actions' and not challenge and not method",
+            "ttl=180 if flow=='chatgpt_actions' else 300",
+            "_callback_mode(redirect)!='chatgpt_actions'",
+        ):
+            self.assertIn(marker, self.gateway)
+        callback_block = self.gateway[self.gateway.index('def _callback_mode'):self.gateway.index('def _validate_client_secret')]
+        self.assertIn("u.netloc in {'chat.openai.com','chatgpt.com'}", callback_block)
+        self.assertIn("/aip/g-", callback_block)
 
     def test_tools_have_conservative_mcp_annotations(self):
         tree = ast.parse(self.gateway)

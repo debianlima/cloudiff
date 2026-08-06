@@ -263,6 +263,50 @@ class MCPPublicOAuthFlowTest(unittest.TestCase):
         self.assertEqual(status, 403, raw)
         self.assertEqual(json.loads(raw)['error'], 'read_tool_not_allowed_on_write_endpoint')
 
+    def test_chatgpt_actions_callback_works_without_pkce_or_client_secret(self):
+        callback = 'https://chat.openai.com/aip/g-0cb65526ddbc077875f764dc4f38a73fc1f6edc6/oauth/callback'
+        query = urlencode({
+            'response_type': 'code', 'client_id': CLIENT_ID, 'redirect_uri': callback,
+            'state': 'actions-state', 'scope': 'mcp offline_access',
+        })
+        status, headers, raw = self.request('GET', '/cloudiff/mcp/oauth/authorize?' + query, headers={
+            'X-authentik-username': 'iff1742962', 'X-authentik-groups': 'CloudIF-Lab-Hardware|Domain Users',
+        })
+        self.assertEqual(status, 302, raw)
+        location = headers['Location']
+        self.assertTrue(location.startswith(callback + '?'))
+        parsed = parse_qs(urlparse(location).query)
+        self.assertEqual(parsed['state'], ['actions-state'])
+        code = parsed['code'][0]
+        form = urlencode({
+            'grant_type': 'authorization_code', 'client_id': CLIENT_ID,
+            'code': code, 'redirect_uri': callback,
+        })
+        status, _, raw = self.request('POST', '/cloudiff/mcp/oauth/token', form, {
+            'Content-Type': 'application/x-www-form-urlencoded', 'Content-Length': str(len(form)),
+        })
+        self.assertEqual(status, 200, raw)
+        token = json.loads(raw)['access_token']
+        project = self.rpc(token, 'tools/call', {'name': 'project.get', 'arguments': {'slug': SLUG}}, 21)
+        self.assertNotIn('error', project)
+
+    def test_non_pkce_flow_is_rejected_for_untrusted_callbacks(self):
+        callbacks = (
+            'https://example.org/oauth/callback',
+            'https://chat.openai.com/not-a-gpt/oauth/callback',
+            'https://claude.ai/api/mcp/auth_callback',
+            'http://127.0.0.1:53682/callback',
+        )
+        for callback in callbacks:
+            query = urlencode({
+                'response_type': 'code', 'client_id': CLIENT_ID,
+                'redirect_uri': callback, 'state': 'reject-state',
+            })
+            status, _, _ = self.request('GET', '/cloudiff/mcp/oauth/authorize?' + query, headers={
+                'X-authentik-username': 'iff1742962', 'X-authentik-groups': 'CloudIF-Lab-Hardware',
+            })
+            self.assertEqual(status, 400, callback)
+
     def test_authorize_requires_authenticated_user_and_s256(self):
         callback = 'http://127.0.0.1:53682/callback'
         base = {'response_type':'code','client_id':CLIENT_ID,'redirect_uri':callback,'code_challenge':'abc'}

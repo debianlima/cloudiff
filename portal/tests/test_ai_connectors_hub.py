@@ -67,6 +67,7 @@ class AIConnectorsHubTests(unittest.TestCase):
             'GPT personalizado — Actions', 'Schema OpenAPI:', 'Copiar URL do schema', 'Abrir schema',
             'https://cloudiff.duckdns.org/cloudiff/mcp/openapi/client-projeto-teste.json',
             'https://cloudiff.duckdns.org/cloudiff/mcp/privacy', 'ChatGPT — MCP',
+            'GPT Actions sem PKCE', 'Callback: use exatamente a URL fornecida pelo editor do GPT',
         ):
             self.assertIn(marker, html)
         guide = self.module.guide_data([row])

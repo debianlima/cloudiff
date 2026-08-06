@@ -54,13 +54,15 @@ def _public_oauth_client(client_id,username,groups_header):
         if kind=='group' and subject in groups:allowed=True
     if not allowed:return None
     return {'client_id':client_id,'project_slug':slug,'authorized_user':str(username).strip(),'public_client':True,'owner_user':str(row.get('owner_user') or '')}
-def _callback_allowed(uri):
+def _callback_mode(uri):
     try:u=urlparse(uri)
-    except Exception:return False
-    if u.scheme=='https' and u.netloc=='claude.ai' and u.path=='/api/mcp/auth_callback':return True
-    if u.scheme=='https' and u.netloc=='chatgpt.com' and u.path.startswith('/connector/oauth/') and len(u.path)>len('/connector/oauth/'):return True
-    if u.scheme=='http' and u.hostname in {'127.0.0.1','localhost','::1'} and u.port:return True
-    return False
+    except Exception:return ''
+    if u.scheme=='https' and u.netloc=='claude.ai' and u.path=='/api/mcp/auth_callback':return 'pkce'
+    if u.scheme=='https' and u.netloc=='chatgpt.com' and u.path.startswith('/connector/oauth/') and len(u.path)>len('/connector/oauth/'):return 'pkce'
+    if u.scheme=='http' and u.hostname in {'127.0.0.1','localhost','::1'} and u.port:return 'pkce'
+    if u.scheme=='https' and u.netloc in {'chat.openai.com','chatgpt.com'} and re.fullmatch(r'/aip/g-[A-Za-z0-9_-]{16,160}/oauth/callback',u.path):return 'chatgpt_actions'
+    return ''
+def _callback_allowed(uri):return bool(_callback_mode(uri))
 def _validate_client_secret(client_id,secret):
     row=_oauth_client(client_id)
     if not row or not secret:return None
@@ -680,9 +682,12 @@ class H(BaseHTTPRequestHandler):
         if path in {'/authorize','/oauth/authorize','/cloudiff/mcp/oauth/authorize'}:
             q=parse_qs(parsed.query);client_id=(q.get('client_id') or [''])[0];redirect_uri=(q.get('redirect_uri') or [''])[0];state=(q.get('state') or [''])[0];challenge=(q.get('code_challenge') or [''])[0];method=(q.get('code_challenge_method') or [''])[0]
             username=self.headers.get('X-authentik-username','').strip();groups=self.headers.get('X-authentik-groups','')
-            client=_public_oauth_client(client_id,username,groups)
-            if (q.get('response_type') or [''])[0]!='code' or not client or not _callback_allowed(redirect_uri) or method!='S256' or not challenge:return self.sendj(400,{'error':'invalid_request'})
-            code=secrets.token_urlsafe(32);OAUTH_CODES[code]={**client,'redirect_uri':redirect_uri,'code_challenge':challenge,'expires_at':time.time()+300}
+            client=_public_oauth_client(client_id,username,groups);flow=_callback_mode(redirect_uri)
+            pkce_valid=flow=='pkce' and method=='S256' and bool(challenge)
+            actions_valid=flow=='chatgpt_actions' and not challenge and not method
+            if (q.get('response_type') or [''])[0]!='code' or not client or not (pkce_valid or actions_valid):return self.sendj(400,{'error':'invalid_request'})
+            ttl=180 if flow=='chatgpt_actions' else 300
+            code=secrets.token_urlsafe(32);OAUTH_CODES[code]={**client,'redirect_uri':redirect_uri,'code_challenge':challenge,'oauth_flow':flow,'expires_at':time.time()+ttl}
             return self.redirect(redirect_uri+('&' if '?' in redirect_uri else '?')+urlencode({'code':code,**({'state':state} if state else {})}))
         if path=='/health':
             try: h=control('/health');self.sendj(200,{'ok':True,'service':'cloudif-mcp-gateway','control_plane':bool(h.get('ok')),'oauth':True})
@@ -711,8 +716,11 @@ class H(BaseHTTPRequestHandler):
                 except Exception:return self.sendj(401,{'error':'invalid_client'})
             grant=(form.get('grant_type') or [''])[0]
             if grant=='authorization_code':
-                code=(form.get('code') or [''])[0];row=OAUTH_CODES.pop(code,None)
-                if not row or row['client_id']!=client_id or row['redirect_uri']!=(form.get('redirect_uri') or [''])[0] or not _pkce_ok((form.get('code_verifier') or [''])[0],row.get('code_challenge')):return self.sendj(400,{'error':'invalid_grant'})
+                code=(form.get('code') or [''])[0];row=OAUTH_CODES.pop(code,None);redirect=(form.get('redirect_uri') or [''])[0]
+                if not row or row['client_id']!=client_id or row['redirect_uri']!=redirect:return self.sendj(400,{'error':'invalid_grant'})
+                flow=row.get('oauth_flow') or 'pkce'
+                if flow=='pkce' and not _pkce_ok((form.get('code_verifier') or [''])[0],row.get('code_challenge')):return self.sendj(400,{'error':'invalid_grant'})
+                if flow=='chatgpt_actions' and _callback_mode(redirect)!='chatgpt_actions':return self.sendj(400,{'error':'invalid_grant'})
                 client=_validate_client_secret(client_id,secret) if secret else (row if row.get('public_client') else None)
             elif grant=='refresh_token':
                 ref=(form.get('refresh_token') or [''])[0];saved=OAUTH_REFRESH.pop(ref,None)
