@@ -50,9 +50,10 @@ def _load_patched_portal():
         raise RuntimeError('Arquivo-base do Portal CloudIFF não encontrado.')
 
     source = source_path.read_text(encoding='utf-8')
-    if source.count(_POLICY_OLD) != 1:
+    if _POLICY_OLD in source:
+        source = source.replace(_POLICY_OLD, _POLICY_NEW, 1)
+    elif _POLICY_NEW not in source:
         raise RuntimeError('Contrato de autorização da exclusão divergiu do esperado.')
-    source = source.replace(_POLICY_OLD, _POLICY_NEW, 1)
     for old, new in _MESSAGE_REPLACEMENTS:
         if old in source:
             source = source.replace(old, new)

@@ -488,9 +488,8 @@ def setting_list(key, default=""):
     return [x.strip() for x in raw.split(",") if x.strip()]
 
 def is_admin(groups):
-    admin_groups = {x.lower() for x in setting_list("CLOUDIF_ADMIN_GROUP", "CloudIF-Tenants-Admin")}
-    current = {x.lower() for x in groups}
-    return bool(admin_groups & current) or "domain admins" in current
+    current = {str(x).strip().lower() for x in groups if str(x).strip()}
+    return "cloudif-tenants-admin" in current
 
 def can_create_tenant(groups):
     if is_admin(groups):
@@ -6403,7 +6402,7 @@ if 'Portal' in globals() and not globals().get('_admin_project_delete_wrapped'):
     _admin_project_delete_prev_post=Portal.do_POST
     def _admin_project_delete_global(user):
         groups={str(x).strip().lower() for x in (user.get('groups') or [])}
-        return bool(user.get('admin') or groups.intersection({'cloudif-tenants-admin','domain admins'}))
+        return bool(groups.intersection({'cloudif-tenants-admin','cloudif-professor'}))
     def _admin_project_delete_allowed(user,slug):
         return _admin_project_delete.can_delete_project(
             slug,
@@ -6416,7 +6415,7 @@ if 'Portal' in globals() and not globals().get('_admin_project_delete_wrapped'):
         parsed=urllib.parse.urlparse(self.path);path=parsed.path.rstrip('/');q=urllib.parse.parse_qs(parsed.query);tab=(q.get('tab') or [''])[0]
         if path in ('','/cloudiff/portal','/cloudif/portal') and tab=='admin-excluir-projeto':
             user=self.user();slug=(q.get('slug') or [''])[0].strip();scope=_admin_project_delete_scope(user)
-            if slug and not _admin_project_delete_allowed(user,slug):return self.send_html(page(user,tab,'<section class="card"><h1>Acesso negado</h1><p>Somente o proprietário do projeto ou um administrador global pode excluí-lo.</p></section>'),403)
+            if slug and not _admin_project_delete_allowed(user,slug):return self.send_html(page(user,tab,'<section class="card"><h1>Acesso negado</h1><p>Somente o proprietário, CloudIF-Professor ou CloudIF-Tenants-Admin pode excluir este projeto.</p></section>'),403)
             if scope is not None and not scope:return self.send_html(page(user,tab,'<section class="card"><h1>Nenhum projeto autorizado</h1><p>Você não possui projeto próprio disponível para exclusão.</p></section>'),403)
             return self.send_html(page(user,tab,_admin_project_delete.render(_prod_csrf_token(user),selected=slug,allowed_slugs=scope)))
         return _admin_project_delete_prev_get(self)
@@ -6428,7 +6427,7 @@ if 'Portal' in globals() and not globals().get('_admin_project_delete_wrapped'):
             val=lambda k:(form.get(k) or [''])[0].strip()
             if not _prod_csrf_equal(val('csrf_token'),_prod_csrf_token(user)):return _cloudif_security_reject(self,'Token CSRF inválido ou ausente.',403)
             slug=val('slug')
-            if not _admin_project_delete_allowed(user,slug):return _cloudif_security_reject(self,'Somente o proprietário do projeto ou um administrador global pode excluí-lo.',403)
+            if not _admin_project_delete_allowed(user,slug):return _cloudif_security_reject(self,'Somente o proprietário, CloudIF-Professor ou CloudIF-Tenants-Admin pode excluir este projeto.',403)
             if not _admin_project_delete.consume_wizard_token(slug,val('wizard_token')):
                 if 'application/json' in (self.headers.get('Accept') or '').lower():
                     raw=json.dumps({'ok':False,'error':'wizard_required'},ensure_ascii=False).encode();self.send_response(409);self.send_header('Content-Type','application/json');self.send_header('Content-Length',str(len(raw)));self.end_headers();self.wfile.write(raw);return

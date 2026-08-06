@@ -504,15 +504,20 @@ def _install() -> None:
             query_api = (route_query.get("api") or [""])[0].strip()
             try:
                 if path in {"/cloudif/portal/api/admin-delete-project-status", "/cloudiff/portal/api/admin-delete-project-status"}:
-                    owner = sys.modules.get(handler_class.__module__);user = self.user()
-                    from cloudif_admin_project_delete import can_read_job
-                    query = urllib.parse.parse_qs(parsed.query);job_id=(query.get("job_id") or [""])[0]
-                    allowed,payload=can_read_job(job_id,user.get("username") or "",bool(getattr(owner,"_admin_project_delete_global")(user)))
-                    if not payload.get("ok"):
-                        return send_json(self, 404, payload)
-                    if not allowed:
-                        return send_json(self, 403, {"ok": False, "error": "forbidden"})
-                    return send_json(self, 200, payload)
+                    try:
+                        actor = identity(self.headers)
+                        groups = {str(group).strip().lower() for group in actor.groups if str(group).strip()}
+                        global_access = bool(groups.intersection({"cloudif-tenants-admin", "cloudif-professor"}))
+                        from cloudif_admin_project_delete import can_read_job
+                        query = urllib.parse.parse_qs(parsed.query);job_id=(query.get("job_id") or [""])[0]
+                        allowed,payload=can_read_job(job_id,actor.username,global_access)
+                        if not payload.get("ok"):
+                            return send_json(self, 404, payload)
+                        if not allowed:
+                            return send_json(self, 403, {"ok": False, "error": "forbidden"})
+                        return send_json(self, 200, payload)
+                    except Exception as exc:
+                        return send_json(self, 503, {"ok": False, "error": "delete_status_unavailable", "detail": type(exc).__name__})
                 if path in {"/cloudif/portal/api/admin-ad-search", "/cloudiff/portal/api/admin-ad-search"}:
                     if not tenant_admin_allowed(self):
                         return send_json(self, 403, {"ok": False, "error": "forbidden", "items": []})
@@ -798,7 +803,15 @@ def _install() -> None:
                         return send_json(self, 500, {"ok": False, "error": type(exc).__name__, "detail": str(exc)[:300]})
                 if value("async") == "1":
                     try:
-                        owner = sys.modules.get(handler_class.__module__);user = self.user();slug=value("slug")
+                        owner = sys.modules.get(handler_class.__module__);actor = identity(self.headers);slug=value("slug")
+                        groups = [str(group).strip() for group in actor.groups if str(group).strip()]
+                        normalized_groups = {group.lower() for group in groups}
+                        user = {
+                            "username": actor.username,
+                            "email": actor.email,
+                            "groups": groups,
+                            "admin": "cloudif-tenants-admin" in normalized_groups,
+                        }
                         token_ok = getattr(owner, "_prod_csrf_equal")(
                             value("csrf_token"), getattr(owner, "_prod_csrf_token")(user)
                         )
@@ -809,7 +822,7 @@ def _install() -> None:
                         from cloudif_admin_project_delete import consume_wizard_token,start_job
                         if not consume_wizard_token(slug,value("wizard_token")):
                             return send_json(self, 409, {"ok": False, "error": "wizard_required"})
-                        job = start_job(slug, value("confirm_text"), user.get("username") or "admin")
+                        job = start_job(slug, value("confirm_text"), actor.username or "admin")
                         return send_json(self, 202 if job.get("ok") else 409, job)
                     except Exception as exc:
                         return send_json(self, 500, {"ok": False, "error": type(exc).__name__, "detail": str(exc)[:300]})

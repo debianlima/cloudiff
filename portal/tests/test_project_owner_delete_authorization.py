@@ -82,7 +82,7 @@ class ProjectOwnerDeleteRouteContractTests(unittest.TestCase):
             self.assertIn('def _admin_project_delete_allowed(user,slug):',source)
             self.assertIn('_admin_project_delete.can_delete_project(',source)
             self.assertIn('_admin_project_delete_scope(user)',source)
-            self.assertIn('Somente o proprietário do projeto ou um administrador global pode excluí-lo.',source)
+            self.assertIn('Somente o proprietário, CloudIF-Professor ou CloudIF-Tenants-Admin pode excluir este projeto.',source)
             self.assertIn('allowed_slugs=_admin_project_delete_scope(user)',source)
         self.assertEqual(
             active.count('def _admin_project_delete_allowed(user,slug):'),
@@ -104,7 +104,7 @@ class ProjectOwnerDeleteRouteContractTests(unittest.TestCase):
         end=source.index('if path in {"/cloudif/portal/api/admin-ad-search"',start)
         block=source[start:end]
         self.assertIn('can_read_job',block)
-        self.assertIn('user.get("username")',block)
+        self.assertIn('actor.username',block)
         self.assertIn('403',block)
 
 

@@ -18,15 +18,17 @@ class PortalLauncherBaseCompatibilityTests(unittest.TestCase):
 
     def test_authorization_policy_contract_remains_required(self):
         launcher=LAUNCHER.read_text();base=BASE.read_text()
-        self.assertIn("if source.count(_POLICY_OLD) != 1:",launcher)
-        self.assertEqual(base.count("return bool(user.get('admin') or groups.intersection({'cloudif-tenants-admin','domain admins'}))"),1)
+        self.assertIn('if _POLICY_OLD in source:',launcher)
+        self.assertIn('elif _POLICY_NEW not in source:',launcher)
+        self.assertEqual(base.count("return bool(groups.intersection({'cloudif-tenants-admin','cloudif-professor'}))"),1)
+        self.assertNotIn("return bool(user.get('admin') or groups.intersection({'cloudif-tenants-admin','domain admins'}))",base)
         self.assertIn('def _admin_project_delete_allowed(user,slug):',base)
 
     def test_updated_base_no_longer_contains_legacy_global_only_messages(self):
         base=BASE.read_text()
         self.assertNotIn('Área restrita à administração global.',base)
         self.assertNotIn('Acesso restrito à administração global.',base)
-        self.assertIn('Somente o proprietário do projeto ou um administrador global pode excluí-lo.',base)
+        self.assertIn('Somente o proprietário, CloudIF-Professor ou CloudIF-Tenants-Admin pode excluir este projeto.',base)
 
 
 if __name__=='__main__':unittest.main()
