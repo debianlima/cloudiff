@@ -46,14 +46,68 @@
         "systemPackages": {
           "type": "array",
           "items": {
-            "type": "string",
-            "pattern": "^[A-Za-z0-9][A-Za-z0-9+._-]{0,79}$"
+            "oneOf": [
+              {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9+._-]{0,79}$"
+              },
+              {
+                "$ref": "#/$defs/systemPackage"
+              }
+            ]
           },
           "maxItems": 64,
           "uniqueItems": true
         },
         "rebuildOnChange": {
           "type": "boolean"
+        },
+        "base": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "runtime": {
+              "type": "string",
+              "enum": [
+                "static",
+                "node",
+                "php",
+                "python",
+                "java",
+                "go",
+                "rust",
+                "ruby"
+              ]
+            },
+            "version": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 32
+            },
+            "image": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 512,
+              "pattern": "^[A-Za-z0-9._/:@-]+$"
+            }
+          }
+        },
+        "architecture": {
+          "type": "string",
+          "enum": [
+            "amd64",
+            "arm64"
+          ]
+        },
+        "tools": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/tool"
+          },
+          "maxItems": 64
+        },
+        "provision": {
+          "$ref": "#/$defs/provision"
         }
       }
     },
@@ -95,6 +149,16 @@
     },
     "compose": {
       "$ref": "#/$defs/relativePath"
+    },
+    "environments": {
+      "type": "object",
+      "propertyNames": {
+        "$ref": "#/$defs/environmentName"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/environmentOverlay"
+      },
+      "maxProperties": 4
     }
   },
   "allOf": [
@@ -186,69 +250,14 @@
       ]
     },
     "environment": {
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "variables": {
-          "type": "object",
-          "propertyNames": {
-            "pattern": "^[A-Z_][A-Z0-9_]{0,127}$"
-          },
-          "additionalProperties": {
-            "type": [
-              "string",
-              "number",
-              "boolean",
-              "null"
-            ]
-          },
-          "maxProperties": 256
+      "oneOf": [
+        {
+          "$ref": "#/$defs/legacyProjectEnvironment"
         },
-        "required": {
-          "type": "object",
-          "propertyNames": {
-            "pattern": "^[A-Z_][A-Z0-9_]{0,127}$"
-          },
-          "additionalProperties": {
-            "type": "object",
-            "additionalProperties": false,
-            "properties": {
-              "services": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/$defs/serviceName"
-                },
-                "maxItems": 32,
-                "uniqueItems": true
-              },
-              "secretRef": {
-                "type": "string",
-                "pattern": "^[a-z][a-z0-9_.-]{2,255}$"
-              },
-              "configRef": {
-                "type": "string",
-                "pattern": "^[a-z][a-z0-9_.-]{2,255}$"
-              },
-              "required": {
-                "type": "boolean"
-              }
-            },
-            "oneOf": [
-              {
-                "required": [
-                  "secretRef"
-                ]
-              },
-              {
-                "required": [
-                  "configRef"
-                ]
-              }
-            ]
-          },
-          "maxProperties": 256
+        {
+          "$ref": "#/$defs/declarativeEnvironment"
         }
-      }
+      ]
     },
     "hook": {
       "type": "object",
@@ -466,34 +475,14 @@
           "maxItems": 32
         },
         "environment": {
-          "type": "object",
-          "additionalProperties": false,
-          "properties": {
-            "required": {
-              "type": "array",
-              "items": {
-                "type": "string",
-                "pattern": "^[A-Z_][A-Z0-9_]{0,127}$"
-              },
-              "maxItems": 256,
-              "uniqueItems": true
+          "oneOf": [
+            {
+              "$ref": "#/$defs/legacyServiceEnvironment"
             },
-            "variables": {
-              "type": "object",
-              "propertyNames": {
-                "pattern": "^[A-Z_][A-Z0-9_]{0,127}$"
-              },
-              "additionalProperties": {
-                "type": [
-                  "string",
-                  "number",
-                  "boolean",
-                  "null"
-                ]
-              },
-              "maxProperties": 256
+            {
+              "$ref": "#/$defs/declarativeEnvironment"
             }
-          }
+          ]
         },
         "resources": {
           "type": "object",
@@ -515,6 +504,383 @@
               "maximum": 3600
             }
           }
+        }
+      }
+    },
+    "environmentName": {
+      "type": "string",
+      "enum": [
+        "development",
+        "preview",
+        "homologation",
+        "production"
+      ]
+    },
+    "environmentVariable": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "value": {
+          "type": [
+            "string",
+            "number",
+            "boolean",
+            "null"
+          ]
+        },
+        "default": {
+          "type": [
+            "string",
+            "number",
+            "boolean",
+            "null"
+          ]
+        },
+        "required": {
+          "type": "boolean"
+        },
+        "secret": {
+          "type": "boolean"
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "scope": {
+          "type": "string",
+          "enum": [
+            "project",
+            "environment",
+            "service"
+          ]
+        },
+        "environments": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/environmentName"
+          },
+          "minItems": 1,
+          "maxItems": 4,
+          "uniqueItems": true
+        },
+        "exposeToClient": {
+          "type": "boolean"
+        },
+        "immutable": {
+          "type": "boolean"
+        },
+        "restartRequired": {
+          "type": "boolean"
+        },
+        "buildTime": {
+          "type": "boolean"
+        },
+        "runtime": {
+          "type": "boolean"
+        },
+        "validation": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "type": "string",
+              "enum": [
+                "string",
+                "number",
+                "integer",
+                "boolean",
+                "url",
+                "email"
+              ]
+            },
+            "minLength": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 65536
+            },
+            "maxLength": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1048576
+            },
+            "minimum": {
+              "type": "number"
+            },
+            "maximum": {
+              "type": "number"
+            }
+          }
+        },
+        "allowedValues": {
+          "type": "array",
+          "items": {
+            "type": [
+              "string",
+              "number",
+              "boolean",
+              "null"
+            ]
+          },
+          "maxItems": 256,
+          "uniqueItems": true
+        },
+        "pattern": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        }
+      }
+    },
+    "legacyProjectEnvironment": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "variables": {
+          "type": "object",
+          "propertyNames": {
+            "pattern": "^[A-Z_][A-Z0-9_]{0,127}$"
+          },
+          "additionalProperties": {
+            "type": [
+              "string",
+              "number",
+              "boolean",
+              "null"
+            ]
+          },
+          "maxProperties": 256
+        },
+        "required": {
+          "type": "object",
+          "propertyNames": {
+            "pattern": "^[A-Z_][A-Z0-9_]{0,127}$"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "services": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/serviceName"
+                },
+                "maxItems": 32,
+                "uniqueItems": true
+              },
+              "secretRef": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_.-]{2,255}$"
+              },
+              "configRef": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_.-]{2,255}$"
+              },
+              "required": {
+                "type": "boolean"
+              }
+            },
+            "oneOf": [
+              {
+                "required": [
+                  "secretRef"
+                ]
+              },
+              {
+                "required": [
+                  "configRef"
+                ]
+              }
+            ]
+          },
+          "maxProperties": 256
+        }
+      }
+    },
+    "legacyServiceEnvironment": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "required": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Z_][A-Z0-9_]{0,127}$"
+          },
+          "maxItems": 256,
+          "uniqueItems": true
+        },
+        "variables": {
+          "type": "object",
+          "propertyNames": {
+            "pattern": "^[A-Z_][A-Z0-9_]{0,127}$"
+          },
+          "additionalProperties": {
+            "type": [
+              "string",
+              "number",
+              "boolean",
+              "null"
+            ]
+          },
+          "maxProperties": 256
+        }
+      }
+    },
+    "declarativeEnvironment": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^[A-Z_][A-Z0-9_]{0,127}$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/environmentVariable"
+      },
+      "maxProperties": 256
+    },
+    "environmentOverlay": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "environment": {
+          "$ref": "#/$defs/environment"
+        },
+        "services": {
+          "type": "object",
+          "propertyNames": {
+            "$ref": "#/$defs/serviceName"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "environment": {
+                "$ref": "#/$defs/environment"
+              }
+            }
+          },
+          "maxProperties": 32
+        }
+      }
+    },
+    "systemPackage": {
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9+._-]{0,79}$"
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "source": {
+          "type": "string",
+          "enum": [
+            "catalog",
+            "distribution"
+          ]
+        },
+        "checksum": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        }
+      }
+    },
+    "tool": {
+      "type": "object",
+      "required": [
+        "name",
+        "version"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9+._-]{0,63}$"
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "source": {
+          "type": "string",
+          "enum": [
+            "catalog",
+            "corepack",
+            "distribution"
+          ]
+        },
+        "installMethod": {
+          "type": "string",
+          "enum": [
+            "catalog",
+            "corepack",
+            "distribution"
+          ]
+        },
+        "checksum": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        }
+      }
+    },
+    "provision": {
+      "type": "object",
+      "required": [
+        "script"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "script": {
+          "$ref": "#/$defs/relativePath"
+        },
+        "timeoutSeconds": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1800
+        },
+        "network": {
+          "oneOf": [
+            {
+              "type": "string",
+              "enum": [
+                "none",
+                "restricted",
+                "approved-domains"
+              ]
+            },
+            {
+              "type": "object",
+              "required": [
+                "mode"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "mode": {
+                  "type": "string",
+                  "enum": [
+                    "none",
+                    "restricted",
+                    "approved-domains"
+                  ]
+                },
+                "domains": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "pattern": "^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z]{2,63}$"
+                  },
+                  "maxItems": 64,
+                  "uniqueItems": true
+                }
+              }
+            }
+          ]
         }
       }
     }

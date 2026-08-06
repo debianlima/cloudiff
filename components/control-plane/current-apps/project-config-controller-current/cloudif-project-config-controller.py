@@ -222,29 +222,60 @@ def parse_manifest(value: Any) -> tuple[dict[str, Any] | None, list[dict[str, An
 def schema_errors(document: dict[str, Any]) -> list[dict[str, Any]]:
     validator = jsonschema.Draft202012Validator(load_schema())
     errors: list[dict[str, Any]] = []
-    for issue in sorted(validator.iter_errors(document), key=lambda item: list(item.absolute_path)):
+    suggestions = {
+        'env': ('environment', {'environment': {'APP_NAME': {'value': 'meu-projeto', 'secret': False}}}),
+        'systemPackages': ('toolchain.systemPackages', {'toolchain': {'systemPackages': ['git', 'curl']}}),
+        'provision': ('toolchain.provision', {'toolchain': {'provision': {'script': 'scripts/cloudiff-provision.sh', 'network': 'none'}}}),
+    }
+    for issue in sorted(validator.iter_errors(document), key=lambda item: (list(item.absolute_path), str(item.message))):
         path = '.'.join(str(part) for part in issue.absolute_path)
         code = 'schema_validation_failed'
         expected = ''
         allowed: list[Any] = []
         example: Any = None
+        message = issue.message
         if issue.validator == 'required':
             missing = next((name for name in issue.validator_value if name not in issue.instance), '')
             path = '.'.join(filter(None, [path, missing]))
             code = 'required_field_missing'
             expected = 'required field'
+            message = f'O campo {path or missing} é obrigatório.'
         elif issue.validator == 'type':
             code = 'invalid_field_type'
             expected = '|'.join(issue.validator_value) if isinstance(issue.validator_value, list) else str(issue.validator_value)
+            message = f'O campo {path or "manifest"} deve ser do tipo {expected}.'
         elif issue.validator == 'enum':
             code = 'invalid_field_value'
             allowed = list(issue.validator_value)
+            message = f'O valor de {path or "manifest"} não é permitido.'
         elif issue.validator == 'additionalProperties':
             code = 'unknown_field'
+            extras = []
+            if isinstance(issue.instance, dict) and isinstance(issue.schema, dict):
+                known = set((issue.schema.get('properties') or {}).keys())
+                extras = sorted(set(issue.instance) - known)
+            extra = extras[0] if extras else ''
+            path = '.'.join(filter(None, [path, extra]))
+            if not issue.absolute_path and extra in suggestions:
+                replacement, example = suggestions[extra]
+                message = f'O campo {extra} não é aceito neste nível. Use {replacement}.'
+            else:
+                message = f'O campo {path or extra or "informado"} não é reconhecido.'
         elif issue.validator == 'pattern':
             code = 'invalid_field_format'
             expected = str(issue.validator_value)
-        errors.append(structured_error(code, issue.message, path, expected, allowed, example))
+            message = f'O campo {path or "manifest"} possui formato inválido.'
+        errors.append(structured_error(code, message, path, expected, allowed, example))
+    # oneOf may emit a generic parent plus actionable child violations. Keep the actionable set.
+    actionable = [item for item in errors if item['code'] != 'schema_validation_failed']
+    if actionable:
+        deduplicated = []
+        seen = set()
+        for item in actionable:
+            key = (item['code'], item['field'], item['message'])
+            if key not in seen:
+                seen.add(key); deduplicated.append(item)
+        return deduplicated
     return errors
 
 
@@ -309,6 +340,173 @@ def normalize_hook(hook: dict[str, Any], field: str, errors: list[dict[str, Any]
     return result
 
 
+ENVIRONMENT_NAMES = ('development', 'preview', 'homologation', 'production')
+
+
+def _legacy_environment(value: Any) -> bool:
+    return isinstance(value, dict) and (not value or bool(set(value).intersection({'variables', 'required'})))
+
+
+def normalize_variable_definition(name: str, raw: Any, field: str, errors: list[dict[str, Any]], scope: str, value_field_suffix: bool = True) -> dict[str, Any]:
+    if not isinstance(raw, dict):
+        errors.append(structured_error('invalid_field_type', f'A variável {name} deve usar um objeto declarativo.', field, 'object', example={name: {'required': True, 'secret': False}}))
+        return {}
+    result = copy.deepcopy(raw)
+    result.setdefault('required', False)
+    result.setdefault('secret', False)
+    result.setdefault('scope', scope)
+    result.setdefault('exposeToClient', False)
+    result.setdefault('immutable', False)
+    result.setdefault('restartRequired', True)
+    result.setdefault('buildTime', False)
+    result.setdefault('runtime', True)
+    result.setdefault('description', '')
+    result.setdefault('environments', [])
+    result.setdefault('allowedValues', [])
+    if 'value' in result and 'default' in result:
+        errors.append(structured_error('mutually_exclusive_fields', f'A variável {name} não pode declarar value e default ao mesmo tempo.', field, 'value|default', example={name: {'default': 'valor'}}))
+    if result.get('secret') and ('value' in result or 'default' in result):
+        errors.append(structured_error('secret_value_not_allowed', f'A variável secreta {name} não pode conter value ou default no manifesto.', field, 'secret metadata', example={name: {'required': True, 'secret': True}}, documentation='manifest-v1#secrets'))
+    if result.get('secret') and result.get('exposeToClient'):
+        errors.append(structured_error('secret_client_exposure_forbidden', f'A variável {name} não pode ser secreta e exposta ao cliente.', field + '.exposeToClient', 'false', example=False, documentation='manifest-v1#secrets'))
+    if result.get('buildTime') is False and result.get('runtime') is False:
+        errors.append(structured_error('environment_variable_unused', f'A variável {name} deve ser usada no build, no runtime ou em ambos.', field, 'buildTime|runtime'))
+    for key in ('value', 'default'):
+        if key in result and looks_sensitive_value(name, result[key]):
+            value_field = field + '.' + key if value_field_suffix else field
+            errors.append(structured_error('secret_value_not_allowed', f'O valor de {name} parece sensível. Remova o valor do manifesto e vincule um segredo pela plataforma.', value_field, 'non-secret value', example={name: {'required': True, 'secret': True}}, documentation='manifest-v1#secrets'))
+    if result.get('pattern'):
+        try:
+            re.compile(str(result['pattern']))
+        except re.error:
+            errors.append(structured_error('invalid_validation_pattern', f'O pattern de {name} não é uma expressão regular válida.', field + '.pattern', 'regular expression'))
+    selected = result.get('value', result.get('default'))
+    if result.get('allowedValues') and selected is not None and selected not in result['allowedValues']:
+        errors.append(structured_error('environment_value_not_allowed', f'O valor declarado para {name} não pertence a allowedValues.', field, 'allowed value', result['allowedValues']))
+    return result
+
+
+def normalize_environment_block(value: Any, field: str, errors: list[dict[str, Any]], scope: str, service_mode: bool = False) -> dict[str, Any]:
+    value = copy.deepcopy(value or {})
+    definitions: dict[str, dict[str, Any]] = {}
+    variables: dict[str, Any] = {}
+    required_service: list[str] = []
+    required_project: dict[str, dict[str, Any]] = {}
+    source_format = 'legacy' if _legacy_environment(value) else 'declarative'
+    if source_format == 'legacy':
+        legacy_variables = value.get('variables') or {}
+        legacy_required = value.get('required') or ([] if service_mode else {})
+        for name, raw_value in legacy_variables.items():
+            definitions[str(name)] = normalize_variable_definition(str(name), {'value': raw_value}, f'{field}.variables.{name}', errors, scope, False)
+            variables[str(name)] = raw_value
+        if service_mode:
+            for name in legacy_required:
+                key = str(name)
+                required_service.append(key)
+                definitions.setdefault(key, normalize_variable_definition(key, {'required': True}, f'{field}.required', errors, scope))
+        else:
+            for name, raw_spec in legacy_required.items():
+                key = str(name); spec = copy.deepcopy(raw_spec or {}) if isinstance(raw_spec, dict) else {}
+                definition = {
+                    'required': bool(spec.get('required', True)),
+                    'secret': bool(spec.get('secretRef')),
+                    'scope': scope,
+                    'description': '',
+                    'exposeToClient': False,
+                    'immutable': False,
+                    'restartRequired': True,
+                    'buildTime': False,
+                    'runtime': True,
+                    'environments': [],
+                    'allowedValues': [],
+                }
+                if spec.get('services') is not None:
+                    definition['services'] = list(spec.get('services') or [])
+                if spec.get('secretRef'):
+                    definition['bindingType'] = 'secret'; definition['bindingRef'] = str(spec['secretRef'])
+                elif spec.get('configRef'):
+                    definition['bindingType'] = 'config'; definition['bindingRef'] = str(spec['configRef'])
+                definitions.setdefault(key, definition)
+                required_project[key] = spec
+    else:
+        for name, raw_spec in value.items():
+            key = str(name)
+            definition = normalize_variable_definition(key, raw_spec, f'{field}.{key}', errors, scope)
+            definitions[key] = definition
+            if not definition.get('secret') and ('value' in definition or 'default' in definition):
+                variables[key] = definition.get('value', definition.get('default'))
+            unresolved = bool(definition.get('secret') or (definition.get('required') and key not in variables))
+            if unresolved:
+                if service_mode:
+                    required_service.append(key)
+                else:
+                    required_project[key] = {
+                        'required': bool(definition.get('required', True)),
+                        'services': [],
+                        'secret': bool(definition.get('secret')),
+                    }
+    result: dict[str, Any] = {
+        'sourceFormat': source_format,
+        'definitions': {name: definitions[name] for name in sorted(definitions)},
+        'variables': {name: variables[name] for name in sorted(variables)},
+        'required': sorted(set(required_service)) if service_mode else {name: required_project[name] for name in sorted(required_project)},
+    }
+    return result
+
+
+def normalize_toolchain(value: Any, errors: list[dict[str, Any]], warnings: list[dict[str, Any]]) -> dict[str, Any]:
+    result = copy.deepcopy(value or {})
+    result.setdefault('runtimes', {})
+    result.setdefault('systemPackages', [])
+    result.setdefault('tools', [])
+    result.setdefault('architecture', 'amd64')
+    result.setdefault('base', {})
+    result.setdefault('rebuildOnChange', True)
+    packages = []
+    seen_packages = set()
+    for index, item in enumerate(result['systemPackages']):
+        spec = {'name': item, 'source': 'catalog'} if isinstance(item, str) else copy.deepcopy(item)
+        spec.setdefault('source', 'catalog')
+        key = (str(spec.get('name') or '').lower(), str(spec.get('version') or ''))
+        if key in seen_packages:
+            errors.append(structured_error('duplicate_system_package', f'O pacote {spec.get("name")} foi declarado mais de uma vez.', f'toolchain.systemPackages.{index}'))
+        seen_packages.add(key); packages.append(spec)
+    result['systemPackages'] = sorted(packages, key=lambda item: (str(item.get('name') or '').lower(), str(item.get('version') or '')))
+    tools = []
+    seen_tools = set()
+    for index, raw in enumerate(result['tools']):
+        spec = copy.deepcopy(raw)
+        spec.setdefault('installMethod', spec.get('source') or 'catalog')
+        spec.setdefault('source', spec.get('installMethod') or 'catalog')
+        key = (str(spec.get('name') or '').lower(), str(spec.get('version') or ''))
+        if key in seen_tools:
+            errors.append(structured_error('duplicate_tool', f'A ferramenta {spec.get("name")} foi declarada mais de uma vez.', f'toolchain.tools.{index}'))
+        seen_tools.add(key); tools.append(spec)
+    result['tools'] = sorted(tools, key=lambda item: (str(item.get('name') or '').lower(), str(item.get('version') or '')))
+    provision = result.get('provision')
+    if provision:
+        provision = copy.deepcopy(provision)
+        provision['script'] = safe_relative_path(provision.get('script'), 'toolchain.provision.script', errors)
+        provision.setdefault('timeoutSeconds', 600)
+        network = provision.get('network', 'none')
+        if isinstance(network, str):
+            network = {'mode': network, 'domains': []}
+        else:
+            network = copy.deepcopy(network); network.setdefault('domains', [])
+        if network.get('mode') == 'approved-domains' and not network.get('domains'):
+            errors.append(structured_error('required_field_missing', 'O campo domains é obrigatório quando network.mode é approved-domains.', 'toolchain.provision.network.domains', 'array', example=['registry.npmjs.org']))
+        if network.get('mode') != 'approved-domains' and network.get('domains'):
+            errors.append(structured_error('incompatible_field', 'O campo domains só pode ser usado com network.mode approved-domains.', 'toolchain.provision.network.domains', 'empty array'))
+        provision['network'] = network
+        if not provision['script'].endswith(('.sh', '.bash')):
+            warnings.append(structured_error('provision_script_extension_unusual', 'O script de provisionamento normalmente deve usar extensão .sh.', 'toolchain.provision.script', 'shell script', example='scripts/cloudiff-provision.sh', documentation='manifest-v1#provision'))
+        result['provision'] = provision
+    base = result.get('base') or {}
+    if base.get('image') and '@sha256:' not in str(base['image']):
+        warnings.append(structured_error('base_image_not_digest_pinned', 'A imagem-base não está fixada por digest; o build deverá resolvê-la antes da aprovação.', 'toolchain.base.image', 'immutable image reference', example='registry.example/base@sha256:' + '0' * 64, documentation='manifest-v1#toolchain'))
+    return result
+
+
 def shorthand_to_services(document: dict[str, Any]) -> dict[str, Any]:
     if 'services' in document:
         return copy.deepcopy(document)
@@ -363,13 +561,9 @@ def normalize_manifest(document: dict[str, Any]) -> ManifestResult:
     services: dict[str, dict[str, Any]] = normalized['services']
     project.setdefault('type', 'multi-service' if len(services) > 1 else 'single-service')
     project.setdefault('primaryService', next(iter(services)))
-    normalized.setdefault('toolchain', {})
-    normalized['toolchain'].setdefault('runtimes', {})
-    normalized['toolchain'].setdefault('systemPackages', [])
-    normalized['toolchain'].setdefault('rebuildOnChange', True)
-    normalized.setdefault('environment', {'variables': {}, 'required': {}})
-    normalized['environment'].setdefault('variables', {})
-    normalized['environment'].setdefault('required', {})
+    normalized['toolchain'] = normalize_toolchain(normalized.get('toolchain'), errors, warnings)
+    normalized['environment'] = normalize_environment_block(normalized.get('environment'), 'environment', errors, 'project', False)
+    normalized.setdefault('environments', {})
     normalized.setdefault('hooks', {})
     for phase in ('preBuild', 'postBuild', 'preDeploy', 'postDeploy'):
         normalized['hooks'].setdefault(phase, [])
@@ -384,11 +578,7 @@ def normalize_manifest(document: dict[str, Any]) -> ManifestResult:
         runtime = service['runtime']
         service.setdefault('version', RUNTIME_DEFAULTS.get(runtime))
         if runtime in RUNTIME_ALLOWED_VERSIONS and service.get('version') not in RUNTIME_ALLOWED_VERSIONS[runtime]:
-            errors.append(structured_error(
-                'runtime_version_not_allowed',
-                f'A versão {service.get("version")} não é permitida para {runtime}.',
-                f'services.{name}.version', 'string', sorted(RUNTIME_ALLOWED_VERSIONS[runtime]),
-            ))
+            errors.append(structured_error('runtime_version_not_allowed', f'A versão {service.get("version")} não é permitida para {runtime}.', f'services.{name}.version', 'string', sorted(RUNTIME_ALLOWED_VERSIONS[runtime])))
         for command in ('install', 'build', 'start'):
             if command in service:
                 service[command] = normalize_command(service[command], f'services.{name}.{command}', errors, warnings)
@@ -428,76 +618,57 @@ def normalize_manifest(document: dict[str, Any]) -> ManifestResult:
                 routes[route_path] = name
         service.setdefault('dependsOn', [])
         service.setdefault('routes', [])
-        service.setdefault('environment', {'required': [], 'variables': {}})
-        service['environment'].setdefault('required', [])
-        service['environment'].setdefault('variables', {})
-        for variable, value in service['environment']['variables'].items():
-            if looks_sensitive_value(variable, value):
-                errors.append(structured_error(
-                    'secret_value_not_allowed',
-                    f'A variável {variable} do serviço {name} parece conter um segredo. Use secretRef em environment.required.',
-                    f'services.{name}.environment.variables.{variable}', 'secret reference',
-                    example={variable: {'secretRef': 'provider.secret_name'}},
-                    documentation='manifest-v1#secrets',
-                ))
+        service['environment'] = normalize_environment_block(service.get('environment'), f'services.{name}.environment', errors, 'service', True)
         for variable in service['environment']['required']:
-            if variable not in all_required and variable not in service['environment']['variables'] and variable not in normalized['environment']['variables']:
-                errors.append(structured_error('required_variable_not_declared', f'A variável {variable} não possui valor nem referência declarada.', f'services.{name}.environment.required'))
+            if service['environment'].get('sourceFormat') == 'legacy' and variable not in all_required and variable not in service['environment']['variables'] and variable not in normalized['environment']['variables']:
+                errors.append(structured_error('required_variable_not_declared', f'A variável {variable} não possui valor nem definição global.', f'services.{name}.environment.required', 'environment definition', example={variable: {'required': True, 'secret': True}}, documentation='manifest-v1#environment'))
     if project['primaryService'] not in services:
         errors.append(structured_error('primary_service_not_found', 'O serviço principal não existe.', 'project.primaryService', 'service name', sorted(services)))
     cycle = find_cycle(graph)
     if cycle:
         errors.append(structured_error('service_dependency_cycle', 'O grafo de serviços contém um ciclo: ' + ' → '.join(cycle), 'services.*.dependsOn'))
-    for variable, value in normalized['environment']['variables'].items():
-        if looks_sensitive_value(variable, value):
-            errors.append(structured_error(
-                'secret_value_not_allowed',
-                f'A variável {variable} parece conter um segredo. Use secretRef em environment.required.',
-                f'environment.variables.{variable}', 'secret reference',
-                example={variable: {'secretRef': 'provider.secret_name'}},
-                documentation='manifest-v1#secrets',
-            ))
     for variable, spec in normalized['environment']['required'].items():
         for service_name in spec.get('services') or []:
             if service_name not in services:
-                errors.append(structured_error('unknown_service_reference', f'O serviço {service_name} não existe.', f'environment.required.{variable}.services', 'service name', sorted(services)))
+                errors.append(structured_error('unknown_service_reference', f'O serviço {service_name} não existe.', f'environment.{variable}.services', 'service name', sorted(services)))
         spec.setdefault('required', True)
         spec.setdefault('services', list(services))
+    overlays = {}
+    for environment_name, raw_overlay in (normalized.get('environments') or {}).items():
+        overlay = copy.deepcopy(raw_overlay or {})
+        result_overlay = {
+            'environment': normalize_environment_block(overlay.get('environment'), f'environments.{environment_name}.environment', errors, 'environment', False),
+            'services': {},
+        }
+        for service_name, service_overlay in (overlay.get('services') or {}).items():
+            if service_name not in services:
+                errors.append(structured_error('unknown_service_reference', f'O serviço {service_name} não existe.', f'environments.{environment_name}.services.{service_name}', 'service name', sorted(services)))
+                continue
+            result_overlay['services'][service_name] = {
+                'environment': normalize_environment_block((service_overlay or {}).get('environment'), f'environments.{environment_name}.services.{service_name}.environment', errors, 'service', True)
+            }
+        overlays[environment_name] = result_overlay
+    normalized['environments'] = {name: overlays[name] for name in sorted(overlays)}
     if errors:
         return ManifestResult(False, normalized, errors, warnings, None, None, None, None)
     toolchain_material = {
-        'runtimes': {
-            name: {'runtime': service['runtime'], 'version': service.get('version')}
-            for name, service in sorted(services.items())
-        },
+        'runtimes': {name: {'runtime': service['runtime'], 'version': service.get('version')} for name, service in sorted(services.items())},
         'declaredRuntimes': normalized['toolchain']['runtimes'],
-        'systemPackages': sorted(normalized['toolchain']['systemPackages']),
+        'base': normalized['toolchain'].get('base') or {},
+        'architecture': normalized['toolchain'].get('architecture'),
+        'systemPackages': normalized['toolchain']['systemPackages'],
+        'tools': normalized['toolchain'].get('tools') or [],
+        'provision': normalized['toolchain'].get('provision') or {},
         'buildHooks': {phase: normalized['hooks'][phase] for phase in sorted(TOOLCHAIN_HOOKS)},
     }
     graph_summary = {
         'primaryService': project['primaryService'],
         'serviceCount': len(services),
-        'services': [
-            {
-                'name': name,
-                'path': service['path'],
-                'runtime': service['runtime'],
-                'version': service.get('version'),
-                'port': service.get('port'),
-                'publish': service.get('publish'),
-                'healthcheck': service.get('healthcheck'),
-                'dependsOn': service['dependsOn'],
-            }
-            for name, service in sorted(services.items())
-        ],
-        'edges': [
-            {'from': name, 'to': dependency}
-            for name, dependencies in sorted(graph.items())
-            for dependency in dependencies
-        ],
+        'services': [{'name': name, 'path': service['path'], 'runtime': service['runtime'], 'version': service.get('version'), 'port': service.get('port'), 'publish': service.get('publish'), 'healthcheck': service.get('healthcheck'), 'dependsOn': service['dependsOn']} for name, service in sorted(services.items())],
+        'edges': [{'from': name, 'to': dependency} for name, dependencies in sorted(graph.items()) for dependency in dependencies],
     }
     manifest_digest = digest(normalized)
-    config_digest = digest({'manifest': normalized, 'variables': normalized['environment']})
+    config_digest = digest({'manifest': normalized, 'environment': normalized['environment'], 'environments': normalized['environments']})
     toolchain_digest = digest(toolchain_material)
     return ManifestResult(True, normalized, [], warnings, manifest_digest, config_digest, toolchain_digest, graph_summary)
 

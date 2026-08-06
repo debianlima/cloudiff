@@ -101,6 +101,76 @@ def _oauth_metadata(resource=False):
     if resource:return {'resource':MCP_RESOURCE,'authorization_servers':[OAUTH_ISSUER],'bearer_methods_supported':['header'],'scopes_supported':['mcp','offline_access']}
     return {'issuer':OAUTH_ISSUER,'authorization_endpoint':OAUTH_ISSUER+'/cloudiff/mcp/oauth/authorize','token_endpoint':OAUTH_ISSUER+'/cloudiff/mcp/oauth/token','revocation_endpoint':OAUTH_ISSUER+'/cloudiff/mcp/oauth/revoke','response_types_supported':['code'],'grant_types_supported':['authorization_code','refresh_token'],'code_challenge_methods_supported':['S256'],'token_endpoint_auth_methods_supported':['none','client_secret_post','client_secret_basic'],'scopes_supported':['mcp','offline_access'],'resource':MCP_RESOURCE}
 
+class ToolInputError(ValueError):
+    def __init__(self, payload):
+        self.payload = payload
+        super().__init__(str(payload.get('message') or payload.get('code') or 'invalid_arguments'))
+
+
+def _unwrap_tool_arguments(raw):
+    if not isinstance(raw, dict):
+        return {}, []
+    current = raw
+    wrappers = []
+    wrapper_names = ('arguments', 'input', 'payload', 'request', 'data')
+    for _ in range(3):
+        selected = next((name for name in wrapper_names if isinstance(current.get(name), dict)), None)
+        if not selected:
+            break
+        business = set(current) - {selected, 'tool', 'name', 'metadata'}
+        if business:
+            break
+        wrappers.append(selected)
+        current = current[selected]
+    return dict(current), wrappers
+
+
+def _tool_input_error(code, field, message, received, example, documentation, **extra):
+    payload = {
+        'code': code,
+        'field': field,
+        'path': '$.' + field if field else '$',
+        'message': message,
+        'receivedFields': sorted(str(key) for key in received),
+        'example': example,
+        'documentation': documentation,
+    }
+    payload.update(extra)
+    raise ToolInputError(payload)
+
+
+def canonical_tool_arguments(raw, required, allowed, example, documentation, aliases=None):
+    args, wrappers = _unwrap_tool_arguments(raw)
+    aliases = aliases or {}
+    used_aliases = {}
+    for alias, canonical_name in aliases.items():
+        if canonical_name not in args and alias in args:
+            args[canonical_name] = args.pop(alias)
+            used_aliases[alias] = canonical_name
+    missing = sorted(set(required) - set(args))
+    if missing:
+        field = missing[0]
+        _tool_input_error(
+            'missing_field', field, f'O campo {field} é obrigatório.', args, example, documentation,
+            missingFields=missing, wrappersRemoved=wrappers, aliasesApplied=used_aliases,
+        )
+    unknown = sorted(set(args) - set(allowed))
+    if unknown:
+        field = unknown[0]
+        _tool_input_error(
+            'unknown_field', field, f'O campo {field} não é aceito por esta ferramenta.', args, example, documentation,
+            unknownFields=unknown, allowedFields=sorted(allowed), wrappersRemoved=wrappers, aliasesApplied=used_aliases,
+        )
+    return args, {'wrappersRemoved': wrappers, 'aliasesApplied': used_aliases}
+
+
+def require_tool_pattern(args, field, pattern, example, documentation, message):
+    value = str(args.get(field) or '').strip()
+    if not re.fullmatch(pattern, value):
+        _tool_input_error('invalid_field_format', field, message, args, example, documentation, expectedPattern=pattern)
+    return value
+
+
 def audit_async(event):
     if not AUDIT_TOKEN:return
     def run():
@@ -151,7 +221,7 @@ TOOLS=[
  {'name':'workspace.edit-preview','description':'Aplica substituição textual única em HTML temporário, valida e executa preview sem persistir','inputSchema':{'type':'object','properties':{'slug':{'type':'string','minLength':1,'maxLength':63,'pattern':'^[a-z0-9][a-z0-9-]*$'},'ref':{'type':'string','minLength':1,'maxLength':128,'pattern':'^[A-Za-z0-9._/-]+$'},'path':{'type':'string','minLength':10,'maxLength':240,'pattern':'^site/(?:[A-Za-z0-9_.-]+/)*[A-Za-z0-9_.-]+[.]html$'},'expected_sha256':{'type':'string','pattern':'^[a-f0-9]{64}$'},'find':{'type':'string','minLength':1,'maxLength':512},'replace':{'type':'string','maxLength':1024}},'required':['slug','path','expected_sha256','find','replace'],'additionalProperties':False}},
  {'name':'workspace.normalize.plan','description':'Analisa o snapshot e propõe cloudiff.yaml como change set revisável, sem alterar o repositório','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'ref':{'type':'string','pattern':'^[A-Za-z0-9._/-]+$'},'title':{'type':'string','minLength':4,'maxLength':160},'description':{'type':'string','maxLength':4000},'ttl_seconds':{'type':'integer','minimum':300,'maximum':86400}},'required':['slug'],'additionalProperties':False}},
  {'name':'workspace.change-set.validate','description':'Aplica temporariamente create, update, delete e mkdir, valida o resultado e sela o conjunto completo por digest','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'ref':{'type':'string','pattern':'^[A-Za-z0-9._/-]+$'},'title':{'type':'string','minLength':4,'maxLength':160},'description':{'type':'string','maxLength':4000},'ttl_seconds':{'type':'integer','minimum':300,'maximum':86400},'changes':{'type':'array','minItems':1,'maxItems':100,'items':{'type':'object','properties':{'operation':{'type':'string','enum':['create','update','delete','mkdir']},'path':{'type':'string','minLength':1,'maxLength':240},'content_base64':{'type':'string','maxLength':349528},'expected_sha256':{'type':'string','pattern':'^[a-f0-9]{64}$'}},'required':['operation','path'],'additionalProperties':False}}},'required':['slug','title','description','changes'],'additionalProperties':False}},
- {'name':'forgejo.proposal.change-set.plan','description':'Confirma o snapshot selado e apresenta o plano completo sem criar aprovação, branch ou PR','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'workspace_id':{'type':'string','pattern':'^ws_[a-f0-9]{24}$'},'change_set_digest':{'type':'string','pattern':'^[a-f0-9]{64}$'}},'required':['slug','workspace_id','change_set_digest'],'additionalProperties':False}},
+ {'name':'forgejo.proposal.change-set.plan','description':'Confirma o snapshot selado e apresenta o plano completo sem criar aprovação, branch ou PR','inputSchema':{'type':'object','properties':{'slug':{'type':'string','description':'Slug do projeto autorizado','pattern':'^[a-z0-9][a-z0-9-]*$'},'workspace_id':{'type':'string','description':'Workspace selado retornado pela validação','pattern':'^ws_[a-f0-9]{24}$'},'change_set_digest':{'type':'string','description':'Digest SHA-256 canônico do change set','pattern':'^[a-f0-9]{64}$'}},'required':['slug','workspace_id','change_set_digest'],'additionalProperties':False,'examples':[{'slug':'meu-projeto','workspace_id':'ws_0123456789abcdef01234567','change_set_digest':'0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'}]}},
  {'name':'approval.request-change-set-proposal','description':'Cria aprovação humana vinculada ao workspace e digest completos, sem armazenar conteúdos nos metadados','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'workspace_id':{'type':'string','pattern':'^ws_[a-f0-9]{24}$'},'change_set_digest':{'type':'string','pattern':'^[a-f0-9]{64}$'},'reason':{'type':'string','minLength':4,'maxLength':500},'ttl_seconds':{'type':'integer','minimum':60,'maximum':86400}},'required':['slug','workspace_id','change_set_digest','reason'],'additionalProperties':False}},
  {'name':'forgejo.proposal.change-set.create','description':'Cria branch e PR rascunho com o change set aprovado usando reserve-effect-finalize','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'workspace_id':{'type':'string','pattern':'^ws_[a-f0-9]{24}$'},'change_set_digest':{'type':'string','pattern':'^[a-f0-9]{64}$'},'approval_id':{'type':'string','pattern':'^apr_[a-f0-9]{20}$'}},'required':['slug','workspace_id','change_set_digest','approval_id'],'additionalProperties':False}},
  {'name':'forgejo.propose-edit','description':'Cria branch isolada e pull request rascunho após preview e aprovação vinculada de uso único','inputSchema':{'type':'object','properties':{'slug':{'type':'string','minLength':1,'maxLength':63,'pattern':'^[a-z0-9][a-z0-9-]*$'},'approval_id':{'type':'string','pattern':'^apr_[a-f0-9]{20}$'},'path':{'type':'string','minLength':10,'maxLength':240,'pattern':'^site/(?:[A-Za-z0-9_.-]+/)*[A-Za-z0-9_.-]+[.]html$'},'expected_sha256':{'type':'string','pattern':'^[a-f0-9]{64}$'},'find':{'type':'string','minLength':1,'maxLength':512},'replace':{'type':'string','maxLength':1024},'title':{'type':'string','minLength':4,'maxLength':160},'body':{'type':'string','maxLength':4000}},'required':['slug','approval_id','path','expected_sha256','find','replace','title','body'],'additionalProperties':False}},
@@ -1010,7 +1080,8 @@ class H(BaseHTTPRequestHandler):
             n=int(self.headers.get('Content-Length','0')); raw=self.rfile.read(min(n,1048576)); req=json.loads(raw or b'{}')
             rid=req.get('id'); method=req.get('method'); params=req.get('params') or {}
             args=params.get('arguments') or {};tool=params.get('name') if method=='tools/call' else method
-            slug=str(args.get('slug') or '')
+            auth_args,_auth_wrappers=_unwrap_tool_arguments(args)
+            slug=str(auth_args.get('slug') or auth_args.get('project_slug') or '')
             if method=='resources/read':
                 resource_uri=str(params.get('uri') or '')
                 if resource_uri.startswith('cloudiff://guide/project/'):slug=resource_uri.rsplit('/',1)[-1].strip()
@@ -1824,19 +1895,22 @@ class H(BaseHTTPRequestHandler):
                         error=data.get('error') or {};raise ValueError(str(error.get('message') if isinstance(error,dict) else error or 'change_set_validation_failed'))
                     content=data.get('result') or data
                 elif name in {'forgejo.proposal.change-set.plan','approval.request-change-set-proposal'}:
-                    required={'slug','workspace_id','change_set_digest'}
-                    allowed=required|({'reason','ttl_seconds'} if name=='approval.request-change-set-proposal' else set())
-                    if not required.issubset(args) or not set(args).issubset(allowed):raise ValueError('Os campos slug, workspace_id e change_set_digest são obrigatórios.')
+                    required={'slug','workspace_id','change_set_digest'}|({'reason'} if name=='approval.request-change-set-proposal' else set())
+                    allowed={'slug','workspace_id','change_set_digest'}|({'reason','ttl_seconds'} if name=='approval.request-change-set-proposal' else set())
+                    example={'slug':'meu-projeto','workspace_id':'ws_'+'1'*24,'change_set_digest':'a'*64}
+                    if name=='approval.request-change-set-proposal':example['reason']='Publicar a proposta validada'
+                    args,input_normalization=canonical_tool_arguments(args,required,allowed,example,'mcp#forgejo-change-set',aliases={'project_slug':'slug'})
                     client_id=self.headers.get('X-CloudIF-Client','').strip()
                     if not client_id:raise ValueError('identified_client_required')
-                    slug=str(args.get('slug') or '').strip();workspace_id=str(args.get('workspace_id') or '').strip();digest_value=str(args.get('change_set_digest') or '').strip().lower()
-                    if not slug or not re.fullmatch(r'ws_[a-f0-9]{24}',workspace_id) or not re.fullmatch(r'[a-f0-9]{64}',digest_value):raise ValueError('workspace_id ou change_set_digest incompatível.')
+                    slug=require_tool_pattern(args,'slug',r'[a-z0-9][a-z0-9-]*',example,'mcp#forgejo-change-set','O campo slug deve usar letras minúsculas, números e hífens.')
+                    workspace_id=require_tool_pattern(args,'workspace_id',r'ws_[a-f0-9]{24}',example,'mcp#forgejo-change-set','O workspace_id deve usar o formato ws_ seguido de 24 caracteres hexadecimais.')
+                    digest_value=require_tool_pattern(args,'change_set_digest',r'[a-f0-9]{64}',example,'mcp#forgejo-change-set','O change_set_digest deve conter 64 caracteres hexadecimais.').lower()
                     control('/v1/projects/'+urllib.parse.quote(slug,safe=''))
                     sealed=change_set_resolve(slug,workspace_id,digest_value,trace_id)
                     if sealed.get('ref')!='main':raise ValueError('Propostas controladas só podem ser criadas a partir da referência main.')
                     operation={'action':'forgejo.propose-change-set','project_slug':slug,'base_branch':'main','workspace_id':workspace_id,'change_set_digest':digest_value,'archive_sha256':sealed.get('archive_sha256'),'summary':sealed.get('summary') or {}}
                     if name=='forgejo.proposal.change-set.plan':
-                        content={'ok':True,'side_effect_free':True,'client_id':client_id,'operation':operation,'approval_requirements':{'action':'forgejo.propose-change-set','project_slug':slug,'requested_by':client_id,'metadata':{'workspace_id':workspace_id,'change_set_digest':digest_value,'archive_sha256':sealed.get('archive_sha256'),'summary':sealed.get('summary') or {},'content_stored':False,'secret_values_in_metadata':False}},'branch_created':False,'pull_request_created':False}
+                        content={'ok':True,'side_effect_free':True,'client_id':client_id,'operation':operation,'approval_requirements':{'action':'forgejo.propose-change-set','project_slug':slug,'requested_by':client_id,'metadata':{'workspace_id':workspace_id,'change_set_digest':digest_value,'archive_sha256':sealed.get('archive_sha256'),'summary':sealed.get('summary') or {},'content_stored':False,'secret_values_in_metadata':False}},'branch_created':False,'pull_request_created':False,'input_normalization':input_normalization}
                     else:
                         reason=str(args.get('reason') or '').strip();ttl=int(args.get('ttl_seconds') or 900)
                         if not (4<=len(reason)<=500) or not (60<=ttl<=86400):raise ValueError('reason deve ter 4 a 500 caracteres e ttl_seconds deve estar entre 60 e 86400.')
@@ -1845,11 +1919,14 @@ class H(BaseHTTPRequestHandler):
                         content={'ok':True,'approval_id':created['approval_id'],'status':'pending','expires_at':created['expires_at'],'project_slug':slug,'workspace_id':workspace_id,'change_set_digest':digest_value,'action':'forgejo.propose-change-set','side_effects':{'forgejo':False,'branch_created':False,'pull_request_created':False},'content_stored_in_approval':False}
                 elif name=='forgejo.proposal.change-set.create':
                     required={'slug','workspace_id','change_set_digest','approval_id'}
-                    if set(args)!=required:raise ValueError('Os campos slug, workspace_id, change_set_digest e approval_id são obrigatórios.')
+                    example={'slug':'meu-projeto','workspace_id':'ws_'+'1'*24,'change_set_digest':'a'*64,'approval_id':'apr_'+'1'*20}
+                    args,input_normalization=canonical_tool_arguments(args,required,required,example,'mcp#forgejo-change-set',aliases={'project_slug':'slug'})
                     client_id=self.headers.get('X-CloudIF-Client','').strip()
                     if not client_id:raise ValueError('identified_client_required')
-                    slug=str(args.get('slug') or '').strip();workspace_id=str(args.get('workspace_id') or '').strip();digest_value=str(args.get('change_set_digest') or '').strip().lower();approval_id=str(args.get('approval_id') or '').strip()
-                    if not slug or not re.fullmatch(r'ws_[a-f0-9]{24}',workspace_id) or not re.fullmatch(r'[a-f0-9]{64}',digest_value) or not re.fullmatch(r'apr_[a-f0-9]{20}',approval_id):raise ValueError('workspace_id, change_set_digest ou approval_id incompatível.')
+                    slug=require_tool_pattern(args,'slug',r'[a-z0-9][a-z0-9-]*',example,'mcp#forgejo-change-set','O campo slug deve usar letras minúsculas, números e hífens.')
+                    workspace_id=require_tool_pattern(args,'workspace_id',r'ws_[a-f0-9]{24}',example,'mcp#forgejo-change-set','O workspace_id deve usar o formato ws_ seguido de 24 caracteres hexadecimais.')
+                    digest_value=require_tool_pattern(args,'change_set_digest',r'[a-f0-9]{64}',example,'mcp#forgejo-change-set','O change_set_digest deve conter 64 caracteres hexadecimais.').lower()
+                    approval_id=require_tool_pattern(args,'approval_id',r'apr_[a-f0-9]{20}',example,'mcp#forgejo-change-set','O approval_id deve usar o formato apr_ seguido de 20 caracteres hexadecimais.')
                     control('/v1/projects/'+urllib.parse.quote(slug,safe=''))
                     sealed=change_set_resolve(slug,workspace_id,digest_value,trace_id)
                     if sealed.get('ref')!='main':raise ValueError('Propostas controladas só podem ser criadas a partir da referência main.')
@@ -1930,6 +2007,8 @@ class H(BaseHTTPRequestHandler):
                 result={'content':[{'type':'text','text':json.dumps(content,ensure_ascii=False,separators=(',',':'))}],'isError':False}
             else:self.sendj(200,{'jsonrpc':'2.0','id':rid,'error':{'code':-32601,'message':'Method not found'}});return
             self.sendj(200,{'jsonrpc':'2.0','id':rid,'result':result})
+        except ToolInputError as e:self.sendj(200,{'jsonrpc':'2.0','id':req.get('id') if 'req' in locals() else None,'error':{'code':-32602,'message':e.payload.get('message','Parâmetros inválidos.'),'data':e.payload}})
         except urllib.error.HTTPError as e:self.sendj(200,{'jsonrpc':'2.0','id':req.get('id') if 'req' in locals() else None,'error':{'code':-32004,'message':'Recurso não encontrado' if e.code==404 else 'Falha no plano de controle'}})
         except Exception as e:self.sendj(200,{'jsonrpc':'2.0','id':req.get('id') if 'req' in locals() else None,'error':{'code':-32602,'message':str(e)[:160]}})
-ThreadingHTTPServer((HOST,PORT),H).serve_forever()
+if __name__ == '__main__':
+    ThreadingHTTPServer((HOST,PORT),H).serve_forever()
