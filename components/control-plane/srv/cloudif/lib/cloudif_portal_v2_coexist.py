@@ -15,6 +15,7 @@ import urllib.parse
 import json
 import html
 import re
+import sqlite3
 import subprocess
 import datetime as dt
 from pathlib import Path
@@ -664,8 +665,19 @@ def _install() -> None:
                             # Auto-recovery: return byte-identical legacy output.
                             return send(self, status, content_type, body, captured_headers)
                     return send(self, status, content_type, body, captured_headers)
+            except sqlite3.Error:
+                body = (
+                    '<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">'
+                    '<meta name="viewport" content="width=device-width,initial-scale=1">'
+                    '<title>Portal temporariamente ocupado · CloudIFF</title></head>'
+                    '<body style="font-family:Arial,sans-serif;margin:0;padding:48px;background:#f7f7f5;color:#17201a">'
+                    '<main style="max-width:640px;margin:auto"><h1>Portal temporariamente ocupado</h1>'
+                    '<p>Uma atualização de projeto está sendo finalizada. Tente novamente em alguns segundos.</p>'
+                    '</main></body></html>'
+                ).encode('utf-8')
+                return send(self, 503, 'text/html; charset=utf-8', body, [('Retry-After', '3')])
             except Exception:
-                # Fail-open before capture: the original handler still owns the request.
+                # Non-database adapter failures may still use the legacy renderer.
                 return previous_get(self)
             return previous_get(self)
 

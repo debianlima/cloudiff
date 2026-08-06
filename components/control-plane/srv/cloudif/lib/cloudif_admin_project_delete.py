@@ -336,10 +336,23 @@ def _unpublish(public_number):
     return _post_json('http://10.62.91.3/unpublish',cfg.get('NPM_PUBLISHER_TOKEN',''),{'public_number':int(public_number)},host='cloudif-publisher.internal')
 
 def _backup_if_exists(source, destination):
-    source=Path(source)
-    if source.exists():
+    source=Path(source);destination=Path(destination)
+    if not source.exists():
+        return
+    if source.suffix.lower() in {'.db','.sqlite','.sqlite3'}:
+        source_connection=sqlite3.connect(f'file:{source}?mode=ro',uri=True,timeout=30)
+        destination_connection=sqlite3.connect(destination,timeout=30)
+        try:
+            source_connection.execute('PRAGMA busy_timeout=30000')
+            destination_connection.execute('PRAGMA busy_timeout=30000')
+            source_connection.backup(destination_connection,pages=256,sleep=0.01)
+            destination_connection.commit()
+        finally:
+            destination_connection.close()
+            source_connection.close()
+    else:
         shutil.copy2(source,destination)
-        os.chmod(destination,0o600)
+    os.chmod(destination,0o600)
 
 
 def _delete_agent_identity(slug):

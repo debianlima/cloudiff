@@ -6,6 +6,7 @@ if "/srv/cloudif/lib" not in _cloudif_mod_sys.path:
 # CloudIF v61 modular lib path END
 
 #!/usr/bin/env python3
+import atexit
 import csv
 import datetime
 import html
@@ -14,6 +15,7 @@ import os
 import re
 import sqlite3
 import subprocess
+import threading
 import time
 import urllib.parse
 import urllib.request
@@ -378,10 +380,47 @@ def parse_groups(raw):
         raw = raw.replace(sep, ",")
     return [x.strip() for x in raw.split(",") if x.strip()]
 
+_DB_ANCHOR = None
+_DB_ANCHOR_LOCK = threading.Lock()
+
+
+def _ensure_db_anchor():
+    global _DB_ANCHOR
+    if _DB_ANCHOR is not None:
+        return _DB_ANCHOR
+    with _DB_ANCHOR_LOCK:
+        if _DB_ANCHOR is None:
+            connection = sqlite3.connect(DB, timeout=30, check_same_thread=False)
+            connection.execute('PRAGMA busy_timeout=30000')
+            connection.execute('PRAGMA journal_mode=WAL')
+            connection.execute('SELECT 1')
+            _DB_ANCHOR = connection
+    return _DB_ANCHOR
+
+
+def _close_db_anchor():
+    global _DB_ANCHOR
+    with _DB_ANCHOR_LOCK:
+        connection, _DB_ANCHOR = _DB_ANCHOR, None
+    if connection is not None:
+        try:
+            connection.close()
+        except sqlite3.Error:
+            pass
+
+
+atexit.register(_close_db_anchor)
+
+
 def db():
-    con = sqlite3.connect(DB)
+    _ensure_db_anchor()
+    con = sqlite3.connect(DB, timeout=30)
     con.row_factory = sqlite3.Row
+    con.execute('PRAGMA busy_timeout=30000')
     return con
+
+_ensure_db_anchor()
+
 
 def init_db():
     con = db()
