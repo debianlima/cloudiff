@@ -1,12 +1,16 @@
 [Unit]
 Description=CloudIF Deployment Broker dry-run only
-After=network-online.target
+After=network-online.target cloudif-project-config-controller.service cloudif-project-config-reconciler.service cloudif-build-broker.service
 Wants=network-online.target
+Requires=cloudif-project-config-controller.service cloudif-project-config-reconciler.service cloudif-build-broker.service
 [Service]
 Type=simple
 User=root
 Group=root
 EnvironmentFile=/etc/cloudif/deployment-broker.env
+EnvironmentFile=/etc/cloudif/build-broker.env
+EnvironmentFile=/etc/cloudif/project-config-reconciler.env
+EnvironmentFile=/etc/cloudif/project-config-controller.env
 ExecStart=/usr/bin/python3 /srv/cloudif/app-pointers/deployment-broker-current/cloudif-deployment-broker.py
 Restart=always
 RestartSec=2
