@@ -1,12 +1,13 @@
 [Unit]
 Description=CloudIF restricted ephemeral workspace broker
-After=docker.service network.target
-Requires=docker.service
+After=docker.service network.target cloudif-project-config-controller.service
+Requires=docker.service cloudif-project-config-controller.service
 [Service]
 Type=simple
 User=root
 Group=root
 EnvironmentFile=/etc/cloudif/workspace-broker.env
+EnvironmentFile=/etc/cloudif/project-config-controller.env
 ExecStart=/usr/bin/python3 /srv/cloudif/app-pointers/workspace-broker-current/cloudif-workspace-broker.py
 Restart=on-failure
 RestartSec=3

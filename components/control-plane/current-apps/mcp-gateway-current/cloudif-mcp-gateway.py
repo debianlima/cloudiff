@@ -133,6 +133,11 @@ TOOLS=[
  {'name':'workspace.test-static','description':'Executa validação Nginx de projeto estático em container efêmero sem rede','inputSchema':{'type':'object','properties':{'slug':{'type':'string','minLength':1,'maxLength':63,'pattern':'^[a-z0-9][a-z0-9-]*$'},'ref':{'type':'string','minLength':1,'maxLength':128,'pattern':'^[A-Za-z0-9._/-]+$'}},'required':['slug'],'additionalProperties':False}},
  {'name':'workspace.preview-static','description':'Executa preview HTTP descartável dentro de container isolado, sem publicar porta ou URL','inputSchema':{'type':'object','properties':{'slug':{'type':'string','minLength':1,'maxLength':63,'pattern':'^[a-z0-9][a-z0-9-]*$'},'ref':{'type':'string','minLength':1,'maxLength':128,'pattern':'^[A-Za-z0-9._/-]+$'}},'required':['slug'],'additionalProperties':False}},
  {'name':'workspace.edit-preview','description':'Aplica substituição textual única em HTML temporário, valida e executa preview sem persistir','inputSchema':{'type':'object','properties':{'slug':{'type':'string','minLength':1,'maxLength':63,'pattern':'^[a-z0-9][a-z0-9-]*$'},'ref':{'type':'string','minLength':1,'maxLength':128,'pattern':'^[A-Za-z0-9._/-]+$'},'path':{'type':'string','minLength':10,'maxLength':240,'pattern':'^site/(?:[A-Za-z0-9_.-]+/)*[A-Za-z0-9_.-]+[.]html$'},'expected_sha256':{'type':'string','pattern':'^[a-f0-9]{64}$'},'find':{'type':'string','minLength':1,'maxLength':512},'replace':{'type':'string','maxLength':1024}},'required':['slug','path','expected_sha256','find','replace'],'additionalProperties':False}},
+ {'name':'workspace.normalize.plan','description':'Analisa o snapshot e propõe cloudiff.yaml como change set revisável, sem alterar o repositório','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'ref':{'type':'string','pattern':'^[A-Za-z0-9._/-]+$'},'title':{'type':'string','minLength':4,'maxLength':160},'description':{'type':'string','maxLength':4000},'ttl_seconds':{'type':'integer','minimum':300,'maximum':86400}},'required':['slug'],'additionalProperties':False}},
+ {'name':'workspace.change-set.validate','description':'Aplica temporariamente create, update, delete e mkdir, valida o resultado e sela o conjunto completo por digest','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'ref':{'type':'string','pattern':'^[A-Za-z0-9._/-]+$'},'title':{'type':'string','minLength':4,'maxLength':160},'description':{'type':'string','maxLength':4000},'ttl_seconds':{'type':'integer','minimum':300,'maximum':86400},'changes':{'type':'array','minItems':1,'maxItems':100,'items':{'type':'object','properties':{'operation':{'type':'string','enum':['create','update','delete','mkdir']},'path':{'type':'string','minLength':1,'maxLength':240},'content_base64':{'type':'string','maxLength':349528},'expected_sha256':{'type':'string','pattern':'^[a-f0-9]{64}$'}},'required':['operation','path'],'additionalProperties':False}}},'required':['slug','title','description','changes'],'additionalProperties':False}},
+ {'name':'forgejo.proposal.change-set.plan','description':'Confirma o snapshot selado e apresenta o plano completo sem criar aprovação, branch ou PR','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'workspace_id':{'type':'string','pattern':'^ws_[a-f0-9]{24}$'},'change_set_digest':{'type':'string','pattern':'^[a-f0-9]{64}$'}},'required':['slug','workspace_id','change_set_digest'],'additionalProperties':False}},
+ {'name':'approval.request-change-set-proposal','description':'Cria aprovação humana vinculada ao workspace e digest completos, sem armazenar conteúdos nos metadados','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'workspace_id':{'type':'string','pattern':'^ws_[a-f0-9]{24}$'},'change_set_digest':{'type':'string','pattern':'^[a-f0-9]{64}$'},'reason':{'type':'string','minLength':4,'maxLength':500},'ttl_seconds':{'type':'integer','minimum':60,'maximum':86400}},'required':['slug','workspace_id','change_set_digest','reason'],'additionalProperties':False}},
+ {'name':'forgejo.proposal.change-set.create','description':'Cria branch e PR rascunho com o change set aprovado usando reserve-effect-finalize','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'workspace_id':{'type':'string','pattern':'^ws_[a-f0-9]{24}$'},'change_set_digest':{'type':'string','pattern':'^[a-f0-9]{64}$'},'approval_id':{'type':'string','pattern':'^apr_[a-f0-9]{20}$'}},'required':['slug','workspace_id','change_set_digest','approval_id'],'additionalProperties':False}},
  {'name':'forgejo.propose-edit','description':'Cria branch isolada e pull request rascunho após preview e aprovação vinculada de uso único','inputSchema':{'type':'object','properties':{'slug':{'type':'string','minLength':1,'maxLength':63,'pattern':'^[a-z0-9][a-z0-9-]*$'},'approval_id':{'type':'string','pattern':'^apr_[a-f0-9]{20}$'},'path':{'type':'string','minLength':10,'maxLength':240,'pattern':'^site/(?:[A-Za-z0-9_.-]+/)*[A-Za-z0-9_.-]+[.]html$'},'expected_sha256':{'type':'string','pattern':'^[a-f0-9]{64}$'},'find':{'type':'string','minLength':1,'maxLength':512},'replace':{'type':'string','maxLength':1024},'title':{'type':'string','minLength':4,'maxLength':160},'body':{'type':'string','maxLength':4000}},'required':['slug','approval_id','path','expected_sha256','find','replace','title','body'],'additionalProperties':False}},
  {'name':'forgejo.propose-edit.plan','description':'Calcula o digest canônico e o plano de uma proposta sem criar aprovação, branch ou pull request','inputSchema':{'type':'object','properties':{'slug':{'type':'string','minLength':1,'maxLength':63,'pattern':'^[a-z0-9][a-z0-9-]*$'},'path':{'type':'string','minLength':10,'maxLength':240,'pattern':'^site/(?:[A-Za-z0-9_.-]+/)*[A-Za-z0-9_.-]+[.]html$'},'expected_sha256':{'type':'string','pattern':'^[a-f0-9]{64}$'},'find':{'type':'string','minLength':1,'maxLength':512},'replace':{'type':'string','maxLength':1024},'title':{'type':'string','minLength':4,'maxLength':160},'body':{'type':'string','maxLength':4000}},'required':['slug','path','expected_sha256','find','replace','title','body'],'additionalProperties':False}},
  {'name':'approval.request-proposal','description':'Cria uma aprovação pendente vinculada ao digest canônico de uma proposta Forgejo','inputSchema':{'type':'object','properties':{'slug':{'type':'string','minLength':1,'maxLength':63,'pattern':'^[a-z0-9][a-z0-9-]*$'},'path':{'type':'string','minLength':10,'maxLength':240,'pattern':'^site/(?:[A-Za-z0-9_.-]+/)*[A-Za-z0-9_.-]+[.]html$'},'expected_sha256':{'type':'string','pattern':'^[a-f0-9]{64}$'},'find':{'type':'string','minLength':1,'maxLength':512},'replace':{'type':'string','maxLength':1024},'title':{'type':'string','minLength':4,'maxLength':160},'body':{'type':'string','maxLength':4000},'reason':{'type':'string','minLength':4,'maxLength':500},'ttl_seconds':{'type':'integer','minimum':60,'maximum':86400}},'required':['slug','path','expected_sha256','find','replace','title','body','reason'],'additionalProperties':False}},
@@ -184,7 +189,7 @@ TOOLS=[
  {'name':'deployment.rollback-test','description':'Executa rollback manual aprovado para release histórica do ambiente isolado','inputSchema':{'type':'object','properties':{'slug':{'type':'string','enum':['sistema-de-biblioteca-teste']},'target_job_id':{'type':'integer','minimum':1,'maximum':2147483647},'expected_current_job_id':{'type':'integer','minimum':1,'maximum':2147483647},'expected_current_commit':{'type':'string','pattern':'^[a-f0-9]{40}$'},'target_commit':{'type':'string','pattern':'^[a-f0-9]{40}$'},'approval_id':{'type':'string','pattern':'^apr_[a-f0-9]{20}$'}},'required':['slug','target_job_id','expected_current_job_id','expected_current_commit','target_commit','approval_id'],'additionalProperties':False}},
  ]
 READ_ONLY_TOOLS={
- 'project.list','project.get','project.connectors','project.technologies.detect','project.manifest.validate','project.configuration.get','runtime.catalog','runtime.detect','runtime.plan','runtime.validate',
+ 'project.list','project.get','project.connectors','project.technologies.detect','project.manifest.validate','project.configuration.get','workspace.normalize.plan','workspace.change-set.validate','forgejo.proposal.change-set.plan','runtime.catalog','runtime.detect','runtime.plan','runtime.validate',
  'build.plan','build.status','build.logs.read','build.artifact.get','deployment.preview.plan','deployment.preview.status',
  'approval.get','forgejo.proposal.list','forgejo.proposal.merge.plan','supabase.migrations.inspect','supabase.migrations.plan',
  'deployment.production.activation.plan','deployment.production.readiness','deployment.production.homologation.plan',
@@ -196,7 +201,7 @@ READ_ONLY_TOOLS={
 }
 DESTRUCTIVE_TOOLS={
  'forgejo.proposal.delete-branch','forgejo.proposal.merge','deployment.production.homologation.deploy',
- 'deployment.production.homologation.rollback','deployment.promote-test','deployment.rollback-test','supabase.operation.execute'
+ 'deployment.production.homologation.rollback','deployment.promote-test','deployment.rollback-test','supabase.operation.execute','forgejo.proposal.change-set.create'
 }
 OPEN_WORLD_PREFIXES=('forgejo.','supabase.','deployment.','approval.','build.')
 for _tool in TOOLS:
@@ -339,6 +344,46 @@ def project_config_call(method,path,payload=None,timeout=45):
         try:data=json.load(e)
         except Exception:data={'ok':False,'error':{'code':'project_config_error','message':'Falha ao consultar a configuração do projeto.'}}
         return e.code,data
+def workspace_broker_post(path,payload,timeout=120):
+    raw=json.dumps(payload,ensure_ascii=False,separators=(',',':')).encode()
+    req=urllib.request.Request(WORKSPACE_URL+path,data=raw,method='POST',headers={'Authorization':'Bearer '+WORKSPACE_TOKEN,'Content-Type':'application/json','Accept':'application/json'})
+    try:
+        with urllib.request.urlopen(req,timeout=timeout) as response:return response.status,json.load(response)
+    except urllib.error.HTTPError as error:
+        try:data=json.load(error)
+        except Exception:data={'ok':False,'error':{'code':'workspace_broker_error','message':'Falha no Workspace Broker.'}}
+        return error.code,data
+
+def change_set_resolve(slug,workspace_id,digest_value,trace_id):
+    code,data=workspace_broker_post('/v1/change-set/resolve',{'project_slug':slug,'trace_id':trace_id,'workspace_id':workspace_id,'change_set_digest':digest_value},timeout=90)
+    if code!=200 or not data.get('ok'):
+        error=data.get('error') or {}
+        raise ValueError(str(error.get('message') if isinstance(error,dict) else error or 'workspace_resolve_failed'))
+    result=data.get('result') or {}
+    if not result.get('sealed') or not result.get('sourceUnchanged'):raise ValueError('workspace_not_sealed_or_source_changed')
+    return result
+
+def approval_create_change_set(slug,client_id,authz,workspace_id,digest_value,archive_sha,summary,reason,ttl,trace_id):
+    payload={'project_slug':slug,'action':'forgejo.propose-change-set','requested_by':client_id,'requester_role':str(authz.get('project_role') or 'agent'),'ttl_seconds':ttl,'reason':reason,'trace_id':trace_id,'metadata':{'workspace_id':workspace_id,'change_set_digest':digest_value,'archive_sha256':archive_sha,'summary':summary,'secret_values_in_metadata':False,'content_stored':False}}
+    req=urllib.request.Request(APPROVAL_URL+'/v1/approvals',data=json.dumps(payload,ensure_ascii=False,separators=(',',':')).encode(),method='POST',headers={'Authorization':'Bearer '+APPROVAL_TOKEN,'Content-Type':'application/json','Accept':'application/json'})
+    try:
+        with urllib.request.urlopen(req,timeout=10) as response:return json.load(response)
+    except urllib.error.HTTPError as error:
+        try:data=json.load(error)
+        except Exception:data={}
+        raise ValueError(str(data.get('error') or 'approval_create_failed')) from error
+
+def forgejo_change_set_create(payload):
+    req=urllib.request.Request(FORJA_URL+'/project/proposal/change-set/create',data=json.dumps(payload,ensure_ascii=False,separators=(',',':')).encode(),method='POST',headers={'X-CloudIF-Token':FORJA_TOKEN,'Authorization':'Bearer '+FORJA_TOKEN,'Content-Type':'application/json','Accept':'application/json'})
+    try:
+        with urllib.request.urlopen(req,timeout=180) as response:return response.status,json.load(response)
+    except urllib.error.HTTPError as error:
+        try:data=json.load(error)
+        except Exception:data={}
+        return error.code,data
+    except Exception:
+        return 599,{'ok':False,'error':'forgejo_response_unknown'}
+
 def workspace_validate(slug,ref,trace_id):
     payload=json.dumps({'project_slug':slug,'ref':ref,'trace_id':trace_id},separators=(',',':')).encode()
     r=urllib.request.Request(WORKSPACE_URL+'/v1/validate',data=payload,method='POST',headers={'Authorization':'Bearer '+WORKSPACE_TOKEN,'Content-Type':'application/json','Accept':'application/json'})
@@ -618,7 +663,7 @@ def homologation_call(path,payload,timeout=300):
 SCOPE_BY_TOOL={
  'runtime.catalog':'project:read','runtime.detect':'project:read','runtime.plan':'project:read','runtime.validate':'project:read','project.technologies.detect':'workspace:detect-multiservice','project.manifest.validate':'project:configuration-read','project.configuration.get':'project:configuration-read','build.plan':'project:read','build.request':'workspace:test-static','build.status':'project:read','build.logs.read':'project:read','build.artifact.get':'project:read','deployment.preview.plan':'project:read','deployment.preview.status':'project:read','approval.request-preview':'approval:request-preview','deployment.preview':'deployment:preview',
  'workspace.probe':'workspace:probe','workspace.prepare':'workspace:prepare','workspace.validate':'workspace:validate','workspace.test-static':'workspace:test-static','workspace.preview-static':'workspace:preview-static','workspace.edit-preview':'workspace:edit-preview',
- 'forgejo.propose-edit':'forgejo:propose-edit','forgejo.propose-edit.plan':'forgejo:plan-edit','approval.request-proposal':'approval:request-proposal','approval.get':'approval:read-own','forgejo.proposal.list':'forgejo:proposal-read','forgejo.proposal.close':'forgejo:proposal-close','forgejo.proposal.delete-branch':'forgejo:proposal-delete-branch','forgejo.proposal.merge.plan':'forgejo:proposal-merge-plan','approval.request-merge':'approval:request-merge','forgejo.proposal.merge':'forgejo:proposal-merge',
+ 'forgejo.propose-edit':'forgejo:propose-edit','forgejo.propose-edit.plan':'forgejo:plan-edit','approval.request-proposal':'approval:request-proposal','workspace.normalize.plan':'workspace:change-set-plan','workspace.change-set.validate':'workspace:change-set-plan','forgejo.proposal.change-set.plan':'workspace:change-set-plan','approval.request-change-set-proposal':'approval:request-change-set','forgejo.proposal.change-set.create':'forgejo:propose-change-set','approval.get':'approval:read-own','forgejo.proposal.list':'forgejo:proposal-read','forgejo.proposal.close':'forgejo:proposal-close','forgejo.proposal.delete-branch':'forgejo:proposal-delete-branch','forgejo.proposal.merge.plan':'forgejo:proposal-merge-plan','approval.request-merge':'approval:request-merge','forgejo.proposal.merge':'forgejo:proposal-merge',
  'deployment.production.homologation.plan':'deployment:production-plan','approval.request-production-homologation':'approval:request-deploy','deployment.production.homologation.deploy':'deployment:production-plan','deployment.production.homologation.rollback':'deployment:production-plan','deployment.production.activation.plan':'deployment:production-plan','approval.request-production-activation':'approval:request-deploy','deployment.production.readiness':'project:read','deployment.production.plan':'deployment:production-plan','supabase.migrations.inspect':'supabase:migration-inspect','supabase.migrations.plan':'supabase:migration-plan','deployment.plan':'deployment:plan','approval.request-deploy':'approval:request-deploy','deployment.validate':'deployment:validate','deployment.promote-test.plan':'deployment:promote-test-plan','approval.request-promote-test':'approval:request-promote-test','deployment.promote-test':'deployment:promote-test','deployment.promote-test.status':'deployment:promote-test-status','deployment.rollback-test.plan':'deployment:rollback-test-plan','approval.request-rollback-test':'approval:request-rollback-test','deployment.rollback-test':'deployment:rollback-test',
  'supabase.tables.list':'supabase:database-read','supabase.records.select':'supabase:database-read','supabase.sql.query':'supabase:database-read','supabase.rls.inspect':'supabase:database-read','supabase.schema.inspect':'supabase:database-read',
  'supabase.auth.users.list':'supabase:auth-read','supabase.storage.buckets.list':'supabase:storage-read','supabase.storage.objects.list':'supabase:storage-read','supabase.storage.object.read':'supabase:storage-read',
@@ -1413,6 +1458,84 @@ class H(BaseHTTPRequestHandler):
                     data=forgejo_proposal_list(slug,state,limit)
                     if not data.get('ok') or data.get('read_only') is not True:raise ValueError('forgejo_proposal_list_failed')
                     content=data
+                elif name=='workspace.normalize.plan':
+                    allowed={'slug','ref','title','description','ttl_seconds'}
+                    if 'slug' not in args or not set(args).issubset(allowed):raise ValueError('O campo slug é obrigatório. Campos permitidos: slug, ref, title, description e ttl_seconds.')
+                    slug=str(args.get('slug') or '').strip();ref=str(args.get('ref') or 'main').strip();title=str(args.get('title') or 'Adicionar manifesto CloudIFF').strip();description=str(args.get('description') or 'Adiciona a configuração versionada detectada pela plataforma.');ttl=int(args.get('ttl_seconds') or 3600)
+                    if not slug:raise ValueError('O campo slug é obrigatório.')
+                    if not ref or '..' in ref or ref.startswith('/') or ref.endswith('/'):raise ValueError('O campo ref deve ser uma referência relativa como main.')
+                    if not (4<=len(title)<=160) or len(description)>4000 or not (300<=ttl<=86400):raise ValueError('title, description ou ttl_seconds incompatível.')
+                    control('/v1/projects/'+urllib.parse.quote(slug,safe=''))
+                    code,data=workspace_broker_post('/v1/normalize-plan',{'project_slug':slug,'ref':ref,'trace_id':trace_id,'title':title,'description':description,'ttl_seconds':ttl},timeout=150)
+                    if code not in {200,422} or not data.get('ok'):
+                        error=data.get('error') or {};raise ValueError(str(error.get('message') if isinstance(error,dict) else error or 'normalization_plan_failed'))
+                    content=data.get('result') or data
+                elif name=='workspace.change-set.validate':
+                    required={'slug','title','description','changes'};allowed=required|{'ref','ttl_seconds'}
+                    if not required.issubset(args) or not set(args).issubset(allowed):raise ValueError('Os campos slug, title, description e changes são obrigatórios.')
+                    slug=str(args.get('slug') or '').strip();ref=str(args.get('ref') or 'main').strip();title=str(args.get('title') or '').strip();description=str(args.get('description') or '');changes=args.get('changes');ttl=int(args.get('ttl_seconds') or 3600)
+                    if not slug or not isinstance(changes,list):raise ValueError('slug deve ser texto e changes deve ser uma lista.')
+                    if not ref or '..' in ref or ref.startswith('/') or ref.endswith('/'):raise ValueError('O campo ref deve ser uma referência relativa como main.')
+                    if not (4<=len(title)<=160) or len(description)>4000 or not (300<=ttl<=86400):raise ValueError('title, description ou ttl_seconds incompatível.')
+                    control('/v1/projects/'+urllib.parse.quote(slug,safe=''))
+                    code,data=workspace_broker_post('/v1/change-set/validate',{'project_slug':slug,'ref':ref,'trace_id':trace_id,'title':title,'description':description,'changes':changes,'ttl_seconds':ttl},timeout=180)
+                    if code not in {200,422} or not data.get('ok'):
+                        error=data.get('error') or {};raise ValueError(str(error.get('message') if isinstance(error,dict) else error or 'change_set_validation_failed'))
+                    content=data.get('result') or data
+                elif name in {'forgejo.proposal.change-set.plan','approval.request-change-set-proposal'}:
+                    required={'slug','workspace_id','change_set_digest'}
+                    allowed=required|({'reason','ttl_seconds'} if name=='approval.request-change-set-proposal' else set())
+                    if not required.issubset(args) or not set(args).issubset(allowed):raise ValueError('Os campos slug, workspace_id e change_set_digest são obrigatórios.')
+                    client_id=self.headers.get('X-CloudIF-Client','').strip()
+                    if not client_id:raise ValueError('identified_client_required')
+                    slug=str(args.get('slug') or '').strip();workspace_id=str(args.get('workspace_id') or '').strip();digest_value=str(args.get('change_set_digest') or '').strip().lower()
+                    if not slug or not re.fullmatch(r'ws_[a-f0-9]{24}',workspace_id) or not re.fullmatch(r'[a-f0-9]{64}',digest_value):raise ValueError('workspace_id ou change_set_digest incompatível.')
+                    control('/v1/projects/'+urllib.parse.quote(slug,safe=''))
+                    sealed=change_set_resolve(slug,workspace_id,digest_value,trace_id)
+                    if sealed.get('ref')!='main':raise ValueError('Propostas controladas só podem ser criadas a partir da referência main.')
+                    operation={'action':'forgejo.propose-change-set','project_slug':slug,'base_branch':'main','workspace_id':workspace_id,'change_set_digest':digest_value,'archive_sha256':sealed.get('archive_sha256'),'summary':sealed.get('summary') or {}}
+                    if name=='forgejo.proposal.change-set.plan':
+                        content={'ok':True,'side_effect_free':True,'client_id':client_id,'operation':operation,'approval_requirements':{'action':'forgejo.propose-change-set','project_slug':slug,'requested_by':client_id,'metadata':{'workspace_id':workspace_id,'change_set_digest':digest_value,'archive_sha256':sealed.get('archive_sha256'),'summary':sealed.get('summary') or {},'content_stored':False,'secret_values_in_metadata':False}},'branch_created':False,'pull_request_created':False}
+                    else:
+                        reason=str(args.get('reason') or '').strip();ttl=int(args.get('ttl_seconds') or 900)
+                        if not (4<=len(reason)<=500) or not (60<=ttl<=86400):raise ValueError('reason deve ter 4 a 500 caracteres e ttl_seconds deve estar entre 60 e 86400.')
+                        created=approval_create_change_set(slug,client_id,authz,workspace_id,digest_value,str(sealed.get('archive_sha256') or ''),sealed.get('summary') or {},reason,ttl,trace_id)
+                        if not created.get('ok') or created.get('status')!='pending':raise ValueError('approval_create_failed')
+                        content={'ok':True,'approval_id':created['approval_id'],'status':'pending','expires_at':created['expires_at'],'project_slug':slug,'workspace_id':workspace_id,'change_set_digest':digest_value,'action':'forgejo.propose-change-set','side_effects':{'forgejo':False,'branch_created':False,'pull_request_created':False},'content_stored_in_approval':False}
+                elif name=='forgejo.proposal.change-set.create':
+                    required={'slug','workspace_id','change_set_digest','approval_id'}
+                    if set(args)!=required:raise ValueError('Os campos slug, workspace_id, change_set_digest e approval_id são obrigatórios.')
+                    client_id=self.headers.get('X-CloudIF-Client','').strip()
+                    if not client_id:raise ValueError('identified_client_required')
+                    slug=str(args.get('slug') or '').strip();workspace_id=str(args.get('workspace_id') or '').strip();digest_value=str(args.get('change_set_digest') or '').strip().lower();approval_id=str(args.get('approval_id') or '').strip()
+                    if not slug or not re.fullmatch(r'ws_[a-f0-9]{24}',workspace_id) or not re.fullmatch(r'[a-f0-9]{64}',digest_value) or not re.fullmatch(r'apr_[a-f0-9]{20}',approval_id):raise ValueError('workspace_id, change_set_digest ou approval_id incompatível.')
+                    control('/v1/projects/'+urllib.parse.quote(slug,safe=''))
+                    sealed=change_set_resolve(slug,workspace_id,digest_value,trace_id)
+                    if sealed.get('ref')!='main':raise ValueError('Propostas controladas só podem ser criadas a partir da referência main.')
+                    approval=approval_get(approval_id)
+                    if not approval:raise ValueError('approval_not_found')
+                    try:metadata=json.loads(approval.get('metadata_json') or '{}')
+                    except Exception:raise ValueError('approval_metadata_invalid')
+                    reservation_id,execution_id=transaction_ids('forgejo.propose-change-set',approval_id,client_id,digest_value)
+                    valid_status=bool(approval.get('status')=='approved' or (approval.get('status') in {'reserved','consumed'} and approval.get('reservation_id')==reservation_id))
+                    valid=bool(valid_status and approval.get('project_slug')==slug and approval.get('action')=='forgejo.propose-change-set' and approval.get('requested_by')==client_id and metadata.get('workspace_id')==workspace_id and hmac.compare_digest(str(metadata.get('change_set_digest') or ''),digest_value) and hmac.compare_digest(str(metadata.get('archive_sha256') or ''),str(sealed.get('archive_sha256') or '')) and metadata.get('content_stored') is False)
+                    if not valid:raise ValueError('approval_binding_mismatch')
+                    if approval.get('status')=='approved':
+                        reserve_code,reserved=approval_transition(approval_id,'reserve',{'reservation_id':reservation_id,'reserved_by':client_id,'ttl_seconds':900})
+                        if reserve_code!=200 or reserved.get('status')!='reserved':raise ValueError('approval_reserve_failed')
+                    payload={'project_slug':slug,'base_branch':'main','workspace_id':workspace_id,'change_set_digest':digest_value,'archive_sha256':sealed.get('archive_sha256'),'ref':sealed.get('ref'),'title':sealed.get('title'),'description':sealed.get('description'),'changes':sealed.get('changes'),'trace_id':'txn-'+reservation_id,'approval_id':approval_id,'requested_by':client_id}
+                    effect_code,effect=forgejo_change_set_create(payload)
+                    current=approval_get(approval_id)
+                    if effect_code in {200,201} and effect.get('ok'):
+                        if current and current.get('status')!='consumed':
+                            final_code,finalized=approval_transition(approval_id,'finalize',{'reservation_id':reservation_id,'result':'success'})
+                            if final_code!=200 or finalized.get('status')!='consumed':raise ValueError('approval_finalize_failed')
+                        effect['transaction']={'approval_id':approval_id,'reservation_id':reservation_id,'execution_id':execution_id,'approval_status':'consumed'}
+                        effect['workspace_validated']=True;effect['source_unchanged']=True;content=effect
+                    else:
+                        if current and current.get('status')=='reserved' and effect_code in {400,403,404,409,422}:
+                            approval_transition(approval_id,'release',{'reservation_id':reservation_id})
+                        raise ValueError(str(effect.get('error') or 'forgejo_change_set_failed'))
                 elif name in {'forgejo.propose-edit.plan','approval.request-proposal'}:
                     required={'slug','path','expected_sha256','find','replace','title','body'}
                     allowed=required|({'reason','ttl_seconds'} if name=='approval.request-proposal' else set())

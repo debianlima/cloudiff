@@ -17,6 +17,7 @@ import urllib.request
 import uuid
 import yaml
 from cloudif_multitech_detector import detect_components
+from cloudif_change_set import (ChangeSetError, apply_changes, change_set_digest, clean_expired, load_sealed, normalize_changes, seal_change_set)
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse
 
@@ -27,6 +28,8 @@ IMAGE = os.environ.get('CLOUDIF_WORKSPACE_IMAGE', 'nginx@sha256:5f979dcfed4ce646
 FORJA_URL = os.environ.get('CLOUDIF_FORJA_AGENT_URL', 'http://10.62.91.2:18095').rstrip('/')
 FORJA_TOKEN = os.environ.get('CLOUDIF_FORJA_AGENT_TOKEN', '')
 WORKROOT = os.environ.get('CLOUDIF_WORKSPACE_ROOT', '/var/lib/cloudif/workspaces')
+PROJECT_CONFIG_URL = os.environ.get('CLOUDIF_PROJECT_CONFIG_URL', 'http://127.0.0.1:18219').rstrip('/')
+PROJECT_CONFIG_TOKEN = os.environ.get('CLOUDIF_PROJECT_CONFIG_TOKEN', '')
 SLUG = re.compile(r'^[a-z0-9][a-z0-9-]{0,62}$')
 TRACE = re.compile(r'^[A-Za-z0-9._:-]{1,128}$')
 REF = re.compile(r'^[A-Za-z0-9._/-]{1,128}$')
@@ -293,6 +296,146 @@ def prepare_workspace(slug: str, ref: str, trace: str) -> tuple[dict, str, str]:
         if created:
             subprocess.run(['/usr/bin/docker', 'rm', '-f', name], capture_output=True, timeout=5)
         shutil.rmtree(run_dir, ignore_errors=True)
+
+
+def project_config_validate(manifest_text: str) -> tuple[int, dict]:
+    raw = json.dumps({'manifest': manifest_text}, ensure_ascii=False, separators=(',', ':')).encode()
+    request = urllib.request.Request(
+        PROJECT_CONFIG_URL + '/v1/manifest/validate', data=raw, method='POST',
+        headers={'Authorization': 'Bearer ' + PROJECT_CONFIG_TOKEN, 'Content-Type': 'application/json', 'Accept': 'application/json'},
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            return response.status, json.load(response)
+    except urllib.error.HTTPError as error:
+        try:
+            return error.code, json.load(error)
+        except Exception:
+            return error.code, {'ok': False, 'error': {'code': 'manifest_validation_unavailable'}}
+
+
+def workspace_files(root: str) -> list[str]:
+    files = []
+    for current, dirs, names in os.walk(root, topdown=True, followlinks=False):
+        dirs[:] = [name for name in dirs if not os.path.islink(os.path.join(current, name))]
+        for name in names:
+            path = os.path.join(current, name)
+            if os.path.islink(path) or not os.path.isfile(path):
+                continue
+            files.append(os.path.relpath(path, root).replace(os.sep, '/'))
+    return sorted(files)
+
+
+def validate_result_manifest(run_dir: str, files: list[str]) -> dict:
+    manifest_path = 'cloudiff.yaml' if 'cloudiff.yaml' in files else 'cloudiff.yml' if 'cloudiff.yml' in files else ''
+    if not manifest_path:
+        return {'present': False, 'valid': None, 'requiredBeforeMultiserviceBuild': True}
+    text = open(os.path.join(run_dir, manifest_path), encoding='utf-8').read()
+    status, result = project_config_validate(text)
+    if status == 422:
+        raise ChangeSetError('manifest_validation_failed', 'O cloudiff.yaml resultante é inválido.', manifest_path, result.get('error'))
+    if status != 200 or not result.get('valid'):
+        raise RuntimeError('manifest_validator_unavailable')
+    return {
+        'present': True, 'path': manifest_path, 'valid': True,
+        'manifestDigest': result.get('manifestDigest'), 'configDigest': result.get('configDigest'),
+        'toolchainDigest': result.get('toolchainDigest'), 'serviceGraph': result.get('serviceGraph'),
+        'warnings': result.get('warnings') or [], 'secretValuesIncluded': False,
+    }
+
+
+def validate_change_set_workspace(slug: str, ref: str, trace: str, title: str, description: str, changes, ttl_seconds: int = 3600) -> tuple[dict, str]:
+    os.makedirs(WORKROOT, exist_ok=True)
+    clean_expired(WORKROOT)
+    run_dir = tempfile.mkdtemp(prefix='change-set-', dir=WORKROOT)
+    try:
+        raw, archive_digest = fetch_archive(slug, ref)
+        files, total = safe_extract(raw, run_dir)
+        normalized, content_bytes = normalize_changes(changes)
+        applied, diff_lines = apply_changes(run_dir, normalized)
+        after_files = workspace_files(run_dir)
+        detection = detect_components(run_dir, after_files)
+        manifest_validation = validate_result_manifest(run_dir, after_files)
+        inspection = {'technologies': detect_technologies(after_files), 'compose': validate_compose(run_dir, after_files), 'static': validate_static(run_dir, after_files)}
+        title = str(title or '').strip()
+        description = str(description or '').strip()
+        if not (4 <= len(title) <= 160):
+            raise ChangeSetError('invalid_title', 'O título deve ter entre 4 e 160 caracteres.', 'title', 'Normalizar estrutura do projeto')
+        if len(description) > 4000:
+            raise ChangeSetError('description_too_large', 'A descrição pode ter no máximo 4000 caracteres.', 'description')
+        digest_value = change_set_digest(slug, ref, archive_digest, title, description, normalized)
+        summary = {
+            'operationCount': len(normalized),
+            'createCount': sum(x['operation'] in {'create', 'mkdir'} for x in normalized),
+            'updateCount': sum(x['operation'] == 'update' for x in normalized),
+            'deleteCount': sum(x['operation'] == 'delete' for x in normalized),
+            'contentBytes': content_bytes,
+            'filesAfter': len(after_files),
+            'projectType': detection.get('projectType'),
+            'componentCount': detection.get('componentCount'),
+            'manifestValid': manifest_validation.get('valid'),
+            'secretValuesIncluded': False,
+        }
+        sealed = seal_change_set(WORKROOT, {
+            'version': 1, 'project_slug': slug, 'ref': ref, 'trace_id': trace,
+            'archive_sha256': archive_digest, 'title': title, 'description': description,
+            'changes': normalized, 'change_set_digest': digest_value,
+            'summary': summary, 'applied': applied,
+            'detection': detection, 'manifest_validation': manifest_validation,
+        }, ttl_seconds)
+        public_changes = [{key: value for key, value in item.items() if key != 'content_base64'} for item in normalized]
+        return {
+            'workspace_id': sealed['workspace_id'], 'change_set_digest': digest_value,
+            'expires_at': sealed['expires_at'], 'archive_sha256': archive_digest,
+            'summary': summary, 'changes': public_changes, 'applied': applied,
+            'diff': '\n'.join(diff_lines), 'diffTruncated': len(diff_lines) >= 4000,
+            'detection': detection, 'manifestValidation': manifest_validation,
+            'inspection': inspection, 'sideEffectFree': True, 'repositoryModified': False,
+            'branchCreated': False, 'pullRequestCreated': False, 'secretValuesIncluded': False,
+        }, run_dir
+    finally:
+        shutil.rmtree(run_dir, ignore_errors=True)
+
+
+def normalize_plan_workspace(slug: str, ref: str, trace: str, title: str, description: str, ttl_seconds: int = 3600) -> tuple[dict, str]:
+    os.makedirs(WORKROOT, exist_ok=True)
+    run_dir = tempfile.mkdtemp(prefix='normalize-', dir=WORKROOT)
+    try:
+        raw, archive_digest = fetch_archive(slug, ref)
+        files, _ = safe_extract(raw, run_dir)
+        detection = detect_components(run_dir, files)
+        if detection.get('manifestPath'):
+            return {
+                'workspace_id': None, 'change_set_digest': None, 'archive_sha256': archive_digest,
+                'summary': {'operationCount': 0, 'reason': 'manifest_already_present'},
+                'detection': detection, 'manifestPath': detection['manifestPath'],
+                'suggestionRequired': False, 'sideEffectFree': True, 'repositoryModified': False,
+            }, run_dir
+        proposal = detection.get('manifestProposal')
+        if not proposal:
+            raise ChangeSetError('manifest_proposal_unavailable', 'Não foi possível propor um manifesto para os componentes detectados.', 'repository')
+        manifest = yaml.safe_dump(proposal, sort_keys=False, allow_unicode=True)
+        change = {'operation': 'create', 'path': 'cloudiff.yaml', 'content_base64': __import__('base64').b64encode(manifest.encode()).decode()}
+    finally:
+        shutil.rmtree(run_dir, ignore_errors=True)
+    result, result_dir = validate_change_set_workspace(slug, ref, trace, title or 'Adicionar manifesto CloudIFF', description or 'Adiciona a configuração versionada detectada pela plataforma.', [change], ttl_seconds)
+    result['suggestionRequired'] = True
+    result['generatedFiles'] = ['cloudiff.yaml']
+    return result, result_dir
+
+
+def resolve_change_set_workspace(slug: str, workspace_id: str, expected_digest: str) -> dict:
+    sealed = load_sealed(WORKROOT, workspace_id, expected_digest, slug)
+    raw, current_archive = fetch_archive(slug, sealed['ref'])
+    if current_archive != sealed['archive_sha256']:
+        raise ChangeSetError('source_changed', 'A referência Forgejo mudou após a validação. Gere um novo workspace.', 'workspace_id', {'validated': sealed['archive_sha256'], 'current': current_archive})
+    return {
+        'workspace_id': workspace_id, 'project_slug': slug, 'ref': sealed['ref'],
+        'archive_sha256': sealed['archive_sha256'], 'change_set_digest': sealed['change_set_digest'],
+        'title': sealed['title'], 'description': sealed['description'], 'changes': sealed['changes'],
+        'summary': sealed['summary'], 'expires_at': sealed['expires_at'],
+        'sealed': True, 'sourceUnchanged': True, 'secretValuesIncluded': False,
+    }
 
 
 def detect_multiservice_workspace(slug: str, ref: str, trace: str) -> tuple[dict, str]:
@@ -904,7 +1047,7 @@ class H(BaseHTTPRequestHandler):
         if urlparse(self.path).path == '/health':
             try:
                 docker('version', '--format', '{{.Server.Version}}', timeout=4)
-                self.sendj(200, {'ok': True, 'service': 'cloudif-workspace-broker', 'profiles': ['probe', 'prepare', 'detect-multiservice', 'validate', 'test-static', 'preview-static', 'edit-preview']})
+                self.sendj(200, {'ok': True, 'service': 'cloudif-workspace-broker', 'profiles': ['probe', 'prepare', 'detect-multiservice', 'normalize-plan', 'change-set-validate', 'change-set-resolve', 'validate', 'test-static', 'preview-static', 'edit-preview']})
             except Exception:
                 self.sendj(503, {'ok': False, 'error': 'docker_unavailable'})
         else:
@@ -912,7 +1055,7 @@ class H(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:
         path = urlparse(self.path).path
-        if path not in {'/v1/probe', '/v1/prepare', '/v1/detect-multiservice', '/v1/validate', '/v1/test-static', '/v1/preview-static', '/v1/edit-preview'}:
+        if path not in {'/v1/probe', '/v1/prepare', '/v1/detect-multiservice', '/v1/normalize-plan', '/v1/change-set/validate', '/v1/change-set/resolve', '/v1/validate', '/v1/test-static', '/v1/preview-static', '/v1/edit-preview'}:
             self.sendj(404, {'ok': False, 'error': 'not_found'})
             return
         if not self.auth():
@@ -920,10 +1063,25 @@ class H(BaseHTTPRequestHandler):
             return
         try:
             n = int(self.headers.get('Content-Length', '0'))
-            assert 0 < n <= 4096
+            maximum = 3 * 1024 * 1024 if path == '/v1/change-set/validate' else 256 * 1024
+            assert 0 < n <= maximum
             data = json.loads(self.rfile.read(n))
-            expected = {'project_slug', 'trace_id'} if path == '/v1/probe' else ({'project_slug','ref','trace_id','path','expected_sha256','find','replace'} if path == '/v1/edit-preview' else {'project_slug', 'ref', 'trace_id'})
-            assert set(data) == expected
+            if not isinstance(data, dict):
+                raise ValueError('invalid_request')
+            if path == '/v1/probe':
+                required = {'project_slug', 'trace_id'}; allowed = required
+            elif path == '/v1/edit-preview':
+                required = {'project_slug','ref','trace_id','path','expected_sha256','find','replace'}; allowed = required
+            elif path == '/v1/normalize-plan':
+                required = {'project_slug','ref','trace_id'}; allowed = required | {'title','description','ttl_seconds'}
+            elif path == '/v1/change-set/validate':
+                required = {'project_slug','ref','trace_id','title','description','changes'}; allowed = required | {'ttl_seconds'}
+            elif path == '/v1/change-set/resolve':
+                required = {'project_slug','trace_id','workspace_id','change_set_digest'}; allowed = required
+            else:
+                required = {'project_slug', 'ref', 'trace_id'}; allowed = required
+            if not required.issubset(data) or not set(data).issubset(allowed):
+                raise ValueError('invalid_request_fields')
             slug = str(data['project_slug'])
             trace = str(data['trace_id'])
             assert SLUG.fullmatch(slug) and TRACE.fullmatch(trace)
@@ -932,12 +1090,27 @@ class H(BaseHTTPRequestHandler):
             expected_sha256 = str(data.get('expected_sha256') or '')
             find_text = str(data.get('find') or '')
             replace_text = str(data.get('replace') or '')
-            assert REF.fullmatch(ref) and '..' not in ref and not ref.startswith('/') and not ref.endswith('/')
+            title = str(data.get('title') or '')
+            description = str(data.get('description') or '')
+            changes = data.get('changes')
+            ttl_seconds = int(data.get('ttl_seconds') or 3600)
+            workspace_id = str(data.get('workspace_id') or '')
+            expected_digest = str(data.get('change_set_digest') or '')
+            if path != '/v1/change-set/resolve':
+                assert REF.fullmatch(ref) and '..' not in ref and not ref.startswith('/') and not ref.endswith('/')
+            assert 300 <= ttl_seconds <= 86400
         except Exception:
-            self.sendj(400, {'ok': False, 'error': 'invalid_request'})
+            self.sendj(400, {'ok': False, 'error': {'code': 'invalid_request', 'message': 'A solicitação contém campos ausentes ou incompatíveis.'}})
             return
         started = time.monotonic()
-        event = 'workspace.probe' if path == '/v1/probe' else ('workspace.prepare' if path == '/v1/prepare' else ('workspace.detect-multiservice' if path == '/v1/detect-multiservice' else ('workspace.validate' if path == '/v1/validate' else ('workspace.test-static' if path == '/v1/test-static' else ('workspace.preview-static' if path == '/v1/preview-static' else 'workspace.edit-preview')))))
+        event_map = {
+            '/v1/probe':'workspace.probe','/v1/prepare':'workspace.prepare',
+            '/v1/detect-multiservice':'workspace.detect-multiservice','/v1/normalize-plan':'workspace.normalize-plan',
+            '/v1/change-set/validate':'workspace.change-set.validate','/v1/change-set/resolve':'workspace.change-set.resolve',
+            '/v1/validate':'workspace.validate','/v1/test-static':'workspace.test-static',
+            '/v1/preview-static':'workspace.preview-static','/v1/edit-preview':'workspace.edit-preview',
+        }
+        event = event_map[path]
         try:
             if path == '/v1/probe':
                 result, name = probe(slug, trace)
@@ -950,6 +1123,17 @@ class H(BaseHTTPRequestHandler):
                 result, run_dir = detect_multiservice_workspace(slug, ref, trace)
                 name = ''
                 removed = True
+            elif path == '/v1/normalize-plan':
+                result, run_dir = normalize_plan_workspace(slug, ref, trace, title, description, ttl_seconds)
+                name = ''
+                removed = True
+            elif path == '/v1/change-set/validate':
+                result, run_dir = validate_change_set_workspace(slug, ref, trace, title, description, changes, ttl_seconds)
+                name = ''
+                removed = True
+            elif path == '/v1/change-set/resolve':
+                result = resolve_change_set_workspace(slug, workspace_id, expected_digest)
+                run_dir = ''; name = ''; removed = True
             elif path == '/v1/validate':
                 result, run_dir = validate_workspace(slug, ref)
                 name = ''
@@ -967,9 +1151,11 @@ class H(BaseHTTPRequestHandler):
             print(json.dumps({'event': event, 'project_slug': slug, 'trace_id': trace, 'result': 'success', 'duration_ms': round((time.monotonic() - started) * 1000, 2)}, separators=(',', ':')), flush=True)
             self.sendj(200, {'ok': True, 'result': result, 'container_removed': removed, 'temp_removed': temp_removed})
         except FileNotFoundError:
-            self.sendj(404, {'ok': False, 'error': 'project_or_ref_not_found'})
+            self.sendj(404, {'ok': False, 'error': {'code': 'project_or_ref_not_found', 'message': 'O projeto ou a referência não foi encontrado.'}})
+        except ChangeSetError as e:
+            self.sendj(422, {'ok': False, 'error': e.as_dict()})
         except ValueError as e:
-            self.sendj(422, {'ok': False, 'error': str(e)[:160]})
+            self.sendj(422, {'ok': False, 'error': {'code': str(e)[:160], 'message': 'A validação do workspace falhou.'}})
         except Exception as e:
             print(json.dumps({'event': event, 'project_slug': slug, 'trace_id': trace, 'result': 'error', 'error': type(e).__name__}, separators=(',', ':')), flush=True)
             self.sendj(503, {'ok': False, 'error': str(e)[:160]})

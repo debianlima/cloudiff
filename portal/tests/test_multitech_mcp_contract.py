@@ -105,7 +105,7 @@ class MultitechMCPContractTests(unittest.TestCase):
         self.assertIn('Detectar tecnologias e serviços', self.guide)
         self.assertIn('Validar manifesto CloudIFF', self.guide)
         self.assertIn('Consultar configuração efetiva', self.guide)
-        self.assertIn("'documentation_version':'129A'", self.guide)
+        self.assertIn("'documentation_version':'130A'", self.guide)
         self.assertEqual(GUIDE.read_bytes(), GUIDE_LEGACY.read_bytes())
 
 

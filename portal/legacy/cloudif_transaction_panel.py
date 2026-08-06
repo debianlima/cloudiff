@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import html,json,time,urllib.parse,urllib.request,urllib.error
 LABELS={'pending':'Pendente','approved':'Aprovada','reserved':'Reservada','consumed':'Concluída','rejected':'Rejeitada','expired':'Expirada'}
-ACTIONS={'forgejo.propose-edit':'Criar proposta','forgejo.proposal.merge':'Mesclar PR','deployment.validate':'Validar deploy','deployment.promote-test':'Promover ambiente de teste'}
+ACTIONS={'forgejo.propose-edit':'Criar proposta','forgejo.propose-change-set':'Criar proposta multifarquivo','forgejo.proposal.merge':'Mesclar PR','deployment.validate':'Validar deploy','deployment.promote-test':'Promover ambiente de teste'}
 def fetch(base,token,slug):
  q=urllib.request.Request(base.rstrip('/')+'/v1/transactions?project='+urllib.parse.quote(slug,safe=''),headers={'Authorization':'Bearer '+token,'Accept':'application/json'})
  with urllib.request.urlopen(q,timeout=15) as r:return json.load(r)

@@ -2558,6 +2558,203 @@ def cloudif_proposal_create(handler, data):
         return json_response(handler,502,{'ok':False,'error':str(e)[:120],'branch_cleaned':created and not pr})
 
 
+_CHANGESET_WORKSPACE_RE = re.compile(r'^ws_[a-f0-9]{24}$')
+_CHANGESET_DIGEST_RE = re.compile(r'^[a-f0-9]{64}$')
+_CHANGESET_PATH_RE = re.compile(r'^(?!/)(?!.*(?:^|/)\.\.(?:/|$))(?!\.git(?:/|$))[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)*$')
+_CHANGESET_MAX_FILES = 100
+_CHANGESET_MAX_FILE_BYTES = 256 * 1024
+_CHANGESET_MAX_TOTAL_BYTES = 2 * 1024 * 1024
+
+
+def _change_set_canonical_digest(slug, ref, archive_sha256, title, description, changes):
+    value = {
+        'version': 1, 'project_slug': slug, 'ref': ref,
+        'archive_sha256': archive_sha256, 'title': title,
+        'description': description, 'changes': changes,
+    }
+    return hashlib.sha256(json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
+
+
+def _change_set_validate_payload(data):
+    required = {
+        'project_slug','base_branch','workspace_id','change_set_digest','archive_sha256',
+        'ref','title','description','changes','trace_id','approval_id','requested_by',
+    }
+    if set(data) != required:
+        raise ValueError('invalid_request_fields')
+    slug = str(data.get('project_slug') or '').strip()
+    base = str(data.get('base_branch') or '').strip()
+    workspace_id = str(data.get('workspace_id') or '').strip()
+    change_digest = str(data.get('change_set_digest') or '').strip().lower()
+    archive_sha = str(data.get('archive_sha256') or '').strip().lower()
+    ref = str(data.get('ref') or '').strip()
+    title = str(data.get('title') or '').strip()
+    description = str(data.get('description') or '')
+    trace = str(data.get('trace_id') or '').strip()
+    approval_id = str(data.get('approval_id') or '').strip()
+    requested_by = str(data.get('requested_by') or '').strip()
+    changes = data.get('changes')
+    if not SLUG_RE.fullmatch(slug) or base != 'main' or ref != 'main':
+        raise ValueError('invalid_project_or_base')
+    if not _CHANGESET_WORKSPACE_RE.fullmatch(workspace_id) or not _CHANGESET_DIGEST_RE.fullmatch(change_digest) or not _CHANGESET_DIGEST_RE.fullmatch(archive_sha):
+        raise ValueError('invalid_workspace_or_digest')
+    if not _PROPOSAL_APPROVAL_RE.fullmatch(approval_id) or not trace or not requested_by:
+        raise ValueError('invalid_approval_identity')
+    if not (4 <= len(title) <= 160) or len(description) > 4000:
+        raise ValueError('invalid_title_or_description')
+    if not isinstance(changes, list) or not (1 <= len(changes) <= _CHANGESET_MAX_FILES):
+        raise ValueError('invalid_changes')
+    seen = set(); total = 0; normalized = []
+    for index, item in enumerate(changes):
+        if not isinstance(item, dict):
+            raise ValueError('invalid_change')
+        operation = str(item.get('operation') or '')
+        path = str(item.get('path') or '')
+        effective_path = str(item.get('effective_path') or path)
+        if operation not in {'create','update','delete','mkdir'} or not _CHANGESET_PATH_RE.fullmatch(path) or not _CHANGESET_PATH_RE.fullmatch(effective_path):
+            raise ValueError('invalid_change_path_or_operation')
+        if effective_path in seen:
+            raise ValueError('duplicate_change_path')
+        seen.add(effective_path)
+        expected = str(item.get('expected_sha256') or '')
+        if operation in {'update','delete'} and not _CHANGESET_DIGEST_RE.fullmatch(expected):
+            raise ValueError('expected_sha256_required')
+        clean = {'operation':operation,'path':path}
+        if effective_path != path:
+            clean['effective_path'] = effective_path
+        if operation in {'create','update','mkdir'}:
+            encoded = item.get('content_base64')
+            if not isinstance(encoded,str):raise ValueError('content_base64_required')
+            try:raw = base64.b64decode(encoded,validate=True)
+            except Exception:raise ValueError('invalid_content_base64')
+            if len(raw) > _CHANGESET_MAX_FILE_BYTES or b'\x00' in raw:
+                raise ValueError('invalid_content')
+            try:raw.decode('utf-8')
+            except UnicodeDecodeError:raise ValueError('invalid_content_utf8')
+            total += len(raw)
+            if total > _CHANGESET_MAX_TOTAL_BYTES:raise ValueError('change_set_too_large')
+            content_sha = hashlib.sha256(raw).hexdigest()
+            if str(item.get('content_sha256') or '') != content_sha or int(item.get('size') or 0) != len(raw):
+                raise ValueError('content_metadata_mismatch')
+            clean.update({'content_base64':base64.b64encode(raw).decode(),'content_sha256':content_sha,'size':len(raw)})
+        if operation in {'update','delete'}:
+            clean['expected_sha256'] = expected
+        normalized.append(clean)
+    computed = _change_set_canonical_digest(slug, ref, archive_sha, title, description, normalized)
+    if not hmac.compare_digest(computed, change_digest):
+        raise ValueError('change_set_digest_mismatch')
+    return {
+        'slug':slug,'base':base,'workspace_id':workspace_id,'change_set_digest':change_digest,
+        'archive_sha256':archive_sha,'ref':ref,'title':title,'description':description,
+        'changes':normalized,'trace':trace,'approval_id':approval_id,'requested_by':requested_by,
+    }
+
+
+def _change_set_existing_pr(owner, repo, branch):
+    qo=urllib.parse.quote(owner,safe='');qr=urllib.parse.quote(repo,safe='')
+    query=urllib.parse.urlencode({'state':'all','limit':50,'page':1})
+    result=_proposal_api('GET',f'/repos/{qo}/{qr}/pulls?{query}')
+    if not result.get('ok') or not isinstance(result.get('data'),list):return None
+    for pr in result['data']:
+        head=str((pr.get('head') or {}).get('ref') or '')
+        if head==branch:return pr
+    return None
+
+
+def cloudif_proposal_change_set_create(handler, data):
+    try:
+        request = _change_set_validate_payload(data)
+    except ValueError as error:
+        return json_response(handler,400,{'ok':False,'error':str(error)})
+    slug=request['slug'];base=request['base'];changes=request['changes']
+    project=load_project(slug)
+    if not project:return json_response(handler,404,{'ok':False,'error':'project_not_found'})
+    owner,repo=_proposal_repo(project,slug)
+    branch='cloudif-proposal-'+request['change_set_digest'][:20]
+    qo=urllib.parse.quote(owner,safe='');qr=urllib.parse.quote(repo,safe='');qb=urllib.parse.quote(branch,safe='')
+    existing_branch=_proposal_api('GET',f'/repos/{qo}/{qr}/branches/{qb}')
+    if existing_branch.get('ok'):
+        pr=_change_set_existing_pr(owner,repo,branch)
+        if pr:
+            return json_response(handler,200,{
+                'ok':True,'idempotent':True,'project_slug':slug,'repo':f'{owner}/{repo}',
+                'base_branch':base,'branch':branch,'workspace_id':request['workspace_id'],
+                'change_set_digest':request['change_set_digest'],'file_count':len(changes),
+                'pull_request':{'number':pr.get('number'),'title':pr.get('title'),'draft':bool(pr.get('draft')),'state':pr.get('state'),'html_url':pr.get('html_url')},
+                'approval_id':request['approval_id'],'requested_by':request['requested_by'],
+                'trace_id':request['trace'],'main_modified':False,
+            })
+        return json_response(handler,409,{'ok':False,'error':'proposal_branch_exists_without_pr'})
+    if existing_branch.get('status') not in {404}:
+        return json_response(handler,502,{'ok':False,'error':'branch_lookup_failed','upstream_status':existing_branch.get('status')})
+    preflight=[]
+    for item in changes:
+        path=item.get('effective_path') or item['path']
+        current=_v118_get_file(owner,repo,path,base)
+        if current.get('error'):
+            return json_response(handler,502,{'ok':False,'error':'file_lookup_failed','path':path})
+        operation=item['operation']
+        if operation in {'create','mkdir'} and current.get('exists'):
+            return json_response(handler,409,{'ok':False,'error':'path_already_exists','path':path})
+        if operation in {'update','delete'}:
+            if not current.get('exists'):
+                return json_response(handler,404,{'ok':False,'error':'file_not_found','path':path})
+            actual=hashlib.sha256(str(current.get('content') or '').encode()).hexdigest()
+            if not hmac.compare_digest(actual,item['expected_sha256']):
+                return json_response(handler,409,{'ok':False,'error':'hash_mismatch','path':path,'actual_sha256':actual})
+        preflight.append({'path':path,'operation':operation,'exists':bool(current.get('exists'))})
+    created=False;pr=None;commits=[]
+    try:
+        branch_result=_proposal_api('POST',f'/repos/{qo}/{qr}/branches',{'new_branch_name':branch,'old_branch_name':base})
+        if not branch_result.get('ok'):
+            return json_response(handler,502,{'ok':False,'error':'branch_create_failed','upstream_status':branch_result.get('status')})
+        created=True
+        for index,item in enumerate(changes,1):
+            path=item.get('effective_path') or item['path'];operation=item['operation']
+            current=_v118_get_file(owner,repo,path,branch)
+            if current.get('error'):raise RuntimeError('branch_file_lookup_failed')
+            message=f'CloudIF change set {index}/{len(changes)}: {operation} {path}'
+            if operation=='delete':
+                if not current.get('exists'):raise RuntimeError('branch_file_not_found')
+                status,response=_v118_delete_file(owner,repo,path,branch,message,current.get('sha') or '')
+            else:
+                content=base64.b64decode(item.get('content_base64') or '').decode('utf-8')
+                status,response=_v118_put_file(owner,repo,path,branch,content,message,sha=(current.get('sha') or ''))
+            if status not in (200,201,204):raise RuntimeError('change_commit_failed')
+            commit_sha=((response.get('commit') or {}).get('sha') if isinstance(response,dict) else '') or ''
+            commits.append({'path':path,'operation':operation,'commit_sha':commit_sha})
+        draft_title=request['title'] if request['title'].startswith('WIP: ') else 'WIP: '+request['title']
+        body=request['description']+'\n\nCloudIFF-Change-Set: '+request['change_set_digest']+'\nCloudIFF-Workspace: '+request['workspace_id']
+        prr=_proposal_api('POST',f'/repos/{qo}/{qr}/pulls',{'base':base,'head':branch,'title':draft_title,'body':body,'draft':True})
+        if not prr.get('ok'):raise RuntimeError('pull_request_failed')
+        pr=prr.get('data') or {}
+        if not bool(pr.get('draft')):raise RuntimeError('draft_not_confirmed')
+        result={
+            'ok':True,'idempotent':False,'project_slug':slug,'repo':f'{owner}/{repo}',
+            'base_branch':base,'branch':branch,'workspace_id':request['workspace_id'],
+            'change_set_digest':request['change_set_digest'],'archive_sha256':request['archive_sha256'],
+            'file_count':len(changes),'files':[{'path':x['path'],'operation':x['operation']} for x in commits],
+            'commits':commits,
+            'pull_request':{'number':pr.get('number'),'title':pr.get('title'),'draft':bool(pr.get('draft')),'state':pr.get('state'),'html_url':pr.get('html_url')},
+            'approval_id':request['approval_id'],'requested_by':request['requested_by'],
+            'trace_id':request['trace'],'main_modified':False,'secret_values_in_event':False,
+        }
+        save_event('proposal-change-set',slug,{
+            'project_slug':slug,'repo':result['repo'],'branch':branch,
+            'workspace_id':request['workspace_id'],'change_set_digest':request['change_set_digest'],
+            'file_count':len(changes),'files':result['files'],'pull_request':result['pull_request'],
+            'approval_id':request['approval_id'],'requested_by':request['requested_by'],
+            'trace_id':request['trace'],'time':now(),'content_stored':False,
+        })
+        return json_response(handler,201,result)
+    except Exception as error:
+        cleaned=False
+        if created and not pr:
+            deleted=_proposal_api('DELETE',f'/repos/{qo}/{qr}/branches/{qb}')
+            cleaned=bool(deleted.get('ok') or deleted.get('status') in {200,204,404})
+        return json_response(handler,502,{'ok':False,'error':str(error)[:120],'branch_cleaned':cleaned,'main_modified':False})
+
+
 class Handler(BaseHTTPRequestHandler):
 
     def authorized(self):
@@ -2706,6 +2903,8 @@ class Handler(BaseHTTPRequestHandler):
             return cloudif_proposal_delete_branch(self, data)
         if path == "/project/proposal/create":
             return cloudif_proposal_create(self, data)
+        if path == "/project/proposal/change-set/create":
+            return cloudif_proposal_change_set_create(self, data)
 
         if path == "/project/proposal/action":
             return cloudif_proposal_action(self, data)
