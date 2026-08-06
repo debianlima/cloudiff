@@ -127,11 +127,45 @@ def persist_forgejo_result(slug,job):
                 iparams.append(val)
         if iupdates:
             con.execute('update project_integrations set ' + ','.join(iupdates) + ' where project=?', iparams + [slug])
+    tables={row[0] for row in con.execute("select name from sqlite_master where type='table'")}
+    if 'release_settings' in tables:
+        tenant=str(job.get('tenant') or '')
+        repo_full_name=repo_path
+        now=time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime())
+        con.execute("""insert into release_settings(project,tenant,repo_full_name,repo_url,enabled,default_channel,version_policy,auto_discovered,discovered_at,updated_at)
+                     values(?,?,?,?,1,'stable','patch',1,?,?)
+                     on conflict(project) do update set tenant=excluded.tenant,repo_full_name=excluded.repo_full_name,repo_url=excluded.repo_url,enabled=1,updated_at=excluded.updated_at""",
+                    (slug,tenant,repo_full_name,repo_url,now,now))
     con.commit()
     con.close()
     job['repo_url']=repo_url
     job['repo_clone_url'] = clone_url
     job['repo_path'] = repo_path
+
+
+def enqueue_post_provision(slug,job,event='project.updated'):
+    try:
+        import cloudif_reconcile_client as client
+        user=job.get('user') or {}
+        result=client.enqueue(
+            event,
+            actor=str(user.get('username') or 'project-provision-worker'),
+            username=str(user.get('username') or ''),
+            project=slug,
+            tenant=str(job.get('tenant') or ''),
+            payload={
+                'source':'project_provision_completed',
+                'operation':'reconcile',
+                'runtime_template':str(job.get('runtime_template') or ''),
+                'runtime_layout':str(job.get('runtime_layout') or ''),
+            },
+            dedupe_seconds=0,
+        )
+        subprocess.run(['/bin/systemctl','start','--no-block','cloudif-reconcile-worker.service'],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=20)
+        return result
+    except Exception as exc:
+        log('RECONCILE_ENQUEUE_WARNING '+type(exc).__name__+': '+str(exc)[:240])
+        return {'ok':False,'error':type(exc).__name__}
 
 
 def verify_onboarding(slug):
@@ -217,6 +251,20 @@ def main():
         'provisioned': False,
     }
     try:
+        if str(job.get('action') or '')=='resume_initial_publication':
+            set_state(path,job,'running','initial-publication')
+            publication_timeout=int(os.environ.get('CLOUDIF_INITIAL_PUBLICATION_TIMEOUT','9000'))
+            process=run(['/usr/local/sbin/cloudif-project-initial-publish.py',str(path)],publication_timeout)
+            if process.returncode:
+                raise RuntimeError('initial_publication_failed: '+(process.stderr or process.stdout or '')[-700:])
+            result['initial_publication']=json_output(process,'initial_publication')
+            result['provisioned']=True
+            result['resume_only']=True
+            result['reconciliation']=enqueue_post_provision(slug,job,'project.membership.changed')
+            set_state(path,job,'succeeded','complete',result=result)
+            log('SUCCEEDED resume-only slug='+slug)
+            return
+
         candidates = [
             '/usr/local/sbin/cloudif-project-provision.sh',
             '/usr/local/sbin/cloudif-provision-project.sh',
@@ -276,6 +324,9 @@ def main():
             result['initial_publication'] = json_output(p, 'initial_publication')
 
         result['provisioned'] = True
+        result['reconciliation'] = enqueue_post_provision(
+            slug,job,'project.membership.changed' if result.get('initial_publication') else 'project.updated'
+        )
         set_state(path, job, 'succeeded', 'complete', result=result)
         log('SUCCEEDED slug=' + slug)
     except Exception as exc:

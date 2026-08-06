@@ -511,6 +511,21 @@ def check_project(form, headers):
     finally:
         con.close()
 
+def resume_initial_publication(form, user):
+    from cloudif_project_provision_status import resume_material
+    slug=val(form,'slug','').strip()
+    groups={str(item).strip().lower() for item in (user.get('groups') or [])}
+    global_admin=bool(groups.intersection({'cloudif-tenants-admin','cloudif-professor','domain admins'}))
+    job=resume_material(slug,user,global_admin=global_admin)
+    queued=queue_provision_job(job)
+    return {
+        'slug':slug,'tenant':job.get('tenant') or '',
+        'job_file':queued.get('job_file'),'deduplicated':bool(queued.get('deduplicated')),
+        'message':('A retomada já estava em andamento.' if queued.get('deduplicated') else 'Publicação inicial enfileirada para retomada.'),
+        'resume_only':True,'secrets_exposed':False,
+    }
+
+
 def handle_project_action(form, headers):
 
     # CloudIF v135b4 delete_git_komodo via project_action
@@ -536,4 +551,6 @@ def handle_project_action(form, headers):
     if action == "check":
         return check_project(form, headers)
     user = user_from_headers(headers)
+    if action == 'resume_initial_publication':
+        return resume_initial_publication(form,user)
     return upsert_project(form, user)

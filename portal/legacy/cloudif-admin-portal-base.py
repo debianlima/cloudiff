@@ -6201,13 +6201,22 @@ def _pm197_owner(project):
 
 def _pm197_job_state(slug):
     try:
-        import pathlib,json
-        jobs=sorted(pathlib.Path('/srv/cloudif/jobs').glob('project-provision-*-'+slug+'.json'),key=lambda x:x.stat().st_mtime,reverse=True)
-        if not jobs:return {'status':'not_started','step':'','error':'','updated_at':''}
-        data=json.loads(jobs[0].read_text(encoding='utf-8'))
-        return {'status':str(data.get('status') or 'unknown'),'step':str(data.get('current_step') or ''),'error':str(data.get('last_error') or ''),'updated_at':str(data.get('updated_at') or '')}
+        from cloudif_project_provision_status import status as provision_status
+        data=provision_status(slug)
+        if not data.get('ok'):
+            return {'status':'not_started','step':'','error':'','updated_at':'','recoverable':False}
+        return {
+            'status':str(data.get('status') or 'unknown'),
+            'step':str(data.get('current_step') or ''),
+            'error':str(data.get('last_error') or ''),
+            'updated_at':str(data.get('updated_at') or ''),
+            'recoverable':bool(data.get('recoverable')),
+            'recovery_action':str(data.get('recovery_action') or ''),
+            'source':str(data.get('source') or ''),
+        }
     except Exception:
-        return {'status':'unknown','step':'','error':'','updated_at':''}
+        return {'status':'unknown','step':'','error':'','updated_at':'','recoverable':False}
+
 
 def _pm197_runtime_state(slug, runtime_project=None):
     info={'label':'Não identificado','service':'web','status':'Não verificado','healthy':False}
@@ -6228,17 +6237,12 @@ def _pm197_runtime_state(slug, runtime_project=None):
     return info
 
 def _pm197_provision_status(slug):
-    import pathlib,json
-    jobs=sorted(pathlib.Path('/srv/cloudif/jobs').glob('project-provision-*-'+slug+'.json'),key=lambda x:x.stat().st_mtime,reverse=True)
-    if not jobs:return {'ok':False,'error':'job_not_found','slug':slug}
-    data=json.loads(jobs[0].read_text(encoding='utf-8'))
-    report={}
-    report_path=pathlib.Path('/srv/cloudif/provisioning/projects')/slug/'provision-report.json'
-    if report_path.is_file():
-        try:report=json.loads(report_path.read_text(encoding='utf-8'))
-        except Exception:report={}
-    components=report.get('components') or {}
-    return {'ok':True,'slug':slug,'status':str(data.get('status') or 'unknown'),'current_step':str(data.get('current_step') or ''),'last_error':str(data.get('last_error') or next((a.get('message') or a.get('detail') for c in (report.get('components') or {}).values() for a in (c.get('actions') or []) if a.get('ok') is False and a.get('name') not in {'komodo_container_terminal'}),'')),'updated_at':str(data.get('updated_at') or ''),'tenant':str(data.get('tenant') or ''),'runtime_template':str(data.get('runtime_template') or ''),'components':{k:{'ok':bool((components.get(k) or {}).get('ok')),'status':str((components.get(k) or {}).get('status') or 'pending')} for k in ('forgejo','komodo','supabase')},'result':data.get('result') or {},'secrets_exposed':False}
+    try:
+        from cloudif_project_provision_status import status as provision_status
+        return provision_status(slug)
+    except Exception as exc:
+        return {'ok':False,'error':'provision_status_unavailable','detail':type(exc).__name__,'slug':slug,'secrets_exposed':False}
+
 
 def _pm197_render(user):
     rows=user_visible_projects(user['username'],user['groups']);tenants=visible_tenants(user['username'],user['groups'])
@@ -6262,6 +6266,7 @@ def _pm197_render(user):
         acl_id='wiz_acl_'+safe
         delete_allowed=_admin_project_delete_allowed(user,slug) if '_admin_project_delete_allowed' in globals() else bool(user.get('admin') or {str(x).strip().lower() for x in (user.get('groups') or [])}.intersection({'cloudif-tenants-admin','domain admins'}))
         delete_action=f'<a class="btn red" href="/cloudiff/portal/?tab=admin-excluir-projeto&amp;slug={h(slug)}">Excluir projeto</a>' if delete_allowed else ''
+        resume_action=(f'<form method="post" action="{url('/action/project_action')}" onsubmit="return confirm(\'Retomar somente a publicação inicial deste projeto?\')"><input type="hidden" name="csrf_token" value="{h(csrf_token)}"><input type="hidden" name="slug" value="{h(slug)}"><button class="btn blue" name="action" value="resume_initial_publication">Retomar publicação</button></form>' if provision_state.get('recoverable') else '')
         bank_action=f'<a class="btn light" href="{h(studio)}" target="_blank" rel="noopener">Abrir Studio</a>' if studio else '<span class="project-final__meta">Sem Studio vinculado</span>'
         repo_action=f'<a class="btn light" href="{h(forge_target)}" target="_blank" rel="noopener">Abrir repositório</a>' if forge_target else '<span class="project-final__meta">Nenhum repositório vinculado</span>'
         terminal_action=f'<a class="btn light" href="{h(terminal_target)}" target="_blank" rel="noopener">Abrir terminal</a>' if terminal_target else '<span class="project-final__meta">Terminal indisponível: projeto sem stack vinculado</span>'
@@ -6272,8 +6277,8 @@ def _pm197_render(user):
 <section class="project-final__section"><h3>Terminal no Komodo</h3><p><strong>{'Stack '+h(runtime_project.get('stack_id')) if runtime_project.get('stack_id') else 'Container não vinculado'}</strong></p><p class="project-final__meta">Serviço: {h(runtime_project.get('service') or 'web')} · Status: {h(p['komodo_status'] or 'não configurado')}</p><div class="project-final__actions">{terminal_action}</div></section>
 <section class="project-final__section"><h3>Publicação</h3><p><strong>Serviço web: {h(runtime_state['status'])}</strong></p><p class="project-final__meta">Framework: {h(runtime_state['label'])}</p><div class="project-final__status"><span class="pill {'ok' if runtime_state['healthy'] else 'warn'}">{h(runtime_state['service'])}</span><span class="pill info">{h(runtime_state['label'])}</span></div></section>
 <section class="project-final__section"><h3>Estado técnico</h3><div class="project-final__status"><span class="pill {'ok' if p['tenant'] else 'muted'}">{'Banco vinculado' if p['tenant'] else 'Sem banco'}</span><span class="pill {'ok' if p['repo_url'] else 'muted'}">{'Repositório vinculado' if p['repo_url'] else 'Sem repositório'}</span></div><p class="project-final__meta">Use “Checar” para atualizar o estado real sem alterar a configuração.</p></section>
-<section class="project-final__section" data-provision-status="{h(provision_state['status'])}"><h3>Provisionamento</h3><p><strong>{h({'queued':'Na fila','running':'Em execução','succeeded':'Concluído','failed':'Falhou','not_started':'Não iniciado'}.get(provision_state['status'],provision_state['status']))}</strong></p><p class="project-final__meta">Etapa: {h(provision_state['step'] or '—')} · Atualizado: {h(provision_state['updated_at'] or '—')}</p>{('<p class="project-final__meta">'+h(provision_state['error'])+'</p>') if provision_state['error'] else ''}</section>
-<section class="project-final__section"><h3>Ações do projeto</h3><p class="project-final__meta"><strong>Checar projeto</strong> verifica repositório, banco e vínculo do container sem alterar a configuração. <strong>Permissões</strong> controla quem pode acessar este projeto.</p><div class="project-final__actions"><form method="post" action="{url('/action/project_action')}"><input type="hidden" name="csrf_token" value="{h(csrf_token)}"><input type="hidden" name="slug" value="{h(slug)}"><button class="btn gray" name="op" value="check">Checar projeto</button></form><button class="btn light" type="button" onclick="cloudifShowWizard('{acl_id}')">Gerenciar permissões</button>{delete_action}</div></section>
+<section class="project-final__section" data-provision-status="{h(provision_state['status'])}" data-provision-recoverable="{'1' if provision_state.get('recoverable') else '0'}"><h3>Provisionamento</h3><p><strong>{h({'queued':'Na fila','running':'Em execução','succeeded':'Concluído','failed':'Requer atenção','not_started':'Não iniciado'}.get(provision_state['status'],provision_state['status']))}</strong></p><p class="project-final__meta">Etapa: {h(provision_state['step'] or '—')} · Atualizado: {h(provision_state['updated_at'] or '—')}</p>{('<p class="project-final__meta">'+h(provision_state['error'])+'</p>') if provision_state['error'] else ''}{('<p class="project-final__meta"><strong>A infraestrutura está pronta.</strong> A retomada executará somente a publicação inicial.</p>') if provision_state.get('recoverable') else ''}</section>
+<section class="project-final__section"><h3>Ações do projeto</h3><p class="project-final__meta"><strong>Checar projeto</strong> verifica repositório, banco e vínculo do container sem alterar a configuração. <strong>Permissões</strong> controla quem pode acessar este projeto.</p><div class="project-final__actions"><form method="post" action="{url('/action/project_action')}"><input type="hidden" name="csrf_token" value="{h(csrf_token)}"><input type="hidden" name="slug" value="{h(slug)}"><button class="btn gray" name="op" value="check">Checar projeto</button></form>{resume_action}<button class="btn light" type="button" onclick="cloudifShowWizard('{acl_id}')">Gerenciar permissões</button>{delete_action}</div></section>
 </div></details>'''
         groups.setdefault(owner,[]).append(markup)
         acl_modal=project_acl_module.render_acl_modal(slug,user)

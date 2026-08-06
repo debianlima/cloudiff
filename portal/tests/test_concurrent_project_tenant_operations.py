@@ -11,6 +11,7 @@ class ConcurrentProjectTenantOperationsTests(unittest.TestCase):
         cls.delete_tenant = Path('components/control-plane/srv/cloudif/lib/cloudif_admin_tenant_delete.py').read_text()
         cls.publish = Path('components/control-plane/usr/local/sbin/cloudif-project-initial-publish.py').read_text()
         cls.portal = Path('components/control-plane/current-apps/portal-current/cloudif-admin-portal-base.py').read_text()
+        cls.status = Path('components/control-plane/srv/cloudif/lib/cloudif_project_provision_status.py').read_text()
 
     def test_project_job_uses_uuid_and_systemd_owned_lock(self):
         for marker in (
@@ -37,8 +38,10 @@ class ConcurrentProjectTenantOperationsTests(unittest.TestCase):
         self.assertIn("'1500'", self.publish)
         self.assertIn("versioned_deploy_not_ready", self.publish)
         self.assertIn("initial_publication_failed: ", self.worker)
-        self.assertIn("a.get('name') not in {'komodo_container_terminal'}", self.portal)
-        self.assertIn("data.get('last_error') or next", self.portal)
+        self.assertIn('cloudif_project_provision_status', self.portal)
+        self.assertIn("current_step='initial-publication'", self.status)
+        self.assertIn("recovery_action':'resume_initial_publication'", self.status)
+        self.assertIn("'recoverable':recoverable", self.status)
 
 
 
