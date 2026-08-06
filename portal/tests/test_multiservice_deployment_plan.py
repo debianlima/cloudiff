@@ -59,9 +59,18 @@ class MultiserviceDeploymentPlanTests(unittest.TestCase):
         }
 
     def plan(self,configuration=None,state=None,build=None,environment='homologation'):
+        tenant_env={
+            'POSTGRES_PASSWORD':'database-password-for-test',
+            'POSTGRES_PORT':'54400',
+            'SUPABASE_PUBLIC_URL':'https://tenant-demo.cloudiff.duckdns.org',
+            'ANON_KEY':'anon-test',
+            'SERVICE_ROLE_KEY':'service-role-test',
+            'JWT_SECRET':'jwt-test',
+        }
         with patch.object(self.module,'_multiservice_configuration',return_value=configuration or self.configuration()),\
              patch.object(self.module,'_multiservice_reconciliation',return_value=state or self.state()),\
              patch.object(self.module,'_multiservice_build',return_value=build or self.build()),\
+             patch.object(self.module,'_tenant_env',return_value=('tenant-demo',tenant_env)),\
              patch.object(self.module,'_production_config',return_value={}):
             return self.module._multiservice_deployment_plan({
                 'project_slug':'demo','build_job_id':'build_'+'b'*24,
@@ -86,6 +95,23 @@ class MultiserviceDeploymentPlanTests(unittest.TestCase):
         rendered=str(plan)
         self.assertNotIn('school',rendered)
         self.assertFalse(plan['secret_values_included'])
+
+    def test_secret_rotation_changes_digest_without_exposing_value(self):
+        configuration=self.configuration()
+        with patch.object(self.module,'_multiservice_configuration',return_value=configuration),\
+             patch.object(self.module,'_multiservice_reconciliation',return_value=self.state()),\
+             patch.object(self.module,'_multiservice_build',return_value=self.build()),\
+             patch.object(self.module,'_production_config',return_value={}):
+            with patch.object(self.module,'_tenant_env',return_value=('tenant-demo',{'POSTGRES_PASSWORD':'first-secret','POSTGRES_PORT':'54400'})):
+                first=self.module._multiservice_deployment_plan({'project_slug':'demo','build_job_id':'build_'+'b'*24,'environment':'homologation','trace_id':'one'})
+            with patch.object(self.module,'_tenant_env',return_value=('tenant-demo',{'POSTGRES_PASSWORD':'second-secret','POSTGRES_PORT':'54400'})):
+                second=self.module._multiservice_deployment_plan({'project_slug':'demo','build_job_id':'build_'+'b'*24,'environment':'homologation','trace_id':'two'})
+        self.assertNotEqual(first['variables_digest'],second['variables_digest'])
+        self.assertNotEqual(first['deployment_plan_digest'],second['deployment_plan_digest'])
+        rendered=str(first)+str(second)
+        self.assertNotIn('first-secret',rendered)
+        self.assertNotIn('second-secret',rendered)
+        self.assertFalse(first['secret_values_included'])
 
     def test_reconciliation_and_build_mismatch_block_execution(self):
         plan=self.plan(state=self.state('toolchain_build_required'),build=self.build(config_revision=1,config_digest='d'*64))

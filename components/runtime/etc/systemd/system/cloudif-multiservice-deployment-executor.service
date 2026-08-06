@@ -1,0 +1,52 @@
+[Unit]
+Description=CloudIFF persistent multiservice deployment executor
+After=network-online.target docker.service cloudif-artifact-executor.service
+Requires=docker.service cloudif-artifact-executor.service
+Wants=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+User=root
+Group=root
+EnvironmentFile=/etc/cloudif/multiservice-deployment-executor.env
+Environment=CLOUDIF_MULTISERVICE_DEPLOYMENT_EXECUTOR_HOST=10.62.91.2
+Environment=CLOUDIF_MULTISERVICE_DEPLOYMENT_EXECUTOR_PORT=18230
+Environment=CLOUDIF_MULTISERVICE_DEPLOYMENT_EXECUTOR_DB=/var/lib/cloudif/multiservice-deployment-executor/deployments.db
+Environment=CLOUDIF_MULTISERVICE_DEPLOYMENT_RUN_DIR=/run/cloudif-multiservice-deployment
+ExecStart=/usr/bin/python3 /srv/cloudif/app-pointers/multiservice-deployment-executor-current/cloudif-multiservice-deployment-executor.py
+Restart=on-failure
+RestartSec=3
+TimeoutStartSec=30s
+TimeoutStopSec=30s
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/cloudif/multiservice-deployment-executor /run/cloudif-multiservice-deployment /var/run/docker.sock
+ReadOnlyPaths=/srv/cloudif/app-releases/multiservice-deployment-executor /srv/cloudif/app-pointers /etc/cloudif/multiservice-deployment-executor.env
+PrivateDevices=false
+ProtectClock=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+ProtectHostname=true
+ProtectProc=invisible
+ProcSubset=pid
+RestrictNamespaces=true
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+RestrictRealtime=true
+RestrictAddressFamilies=AF_INET AF_UNIX
+CapabilityBoundingSet=
+AmbientCapabilities=
+RemoveIPC=true
+UMask=0077
+IPAddressAllow=10.62.92.7/32
+IPAddressAllow=127.0.0.0/8
+IPAddressDeny=any
+
+[Install]
+WantedBy=multi-user.target

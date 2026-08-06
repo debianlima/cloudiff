@@ -531,13 +531,13 @@ def build_application(request: dict[str, Any], service: dict[str, Any], source: 
         for hook in service.get('hookSteps') or []:
             hook_path=site/hook['path']
             if hook_path.is_file(): hook_path.unlink()
-        dockerfile = f'''FROM {toolchain['image']['image']}\nLABEL org.cloudiff.kind="application" org.cloudiff.project="{request['project_slug']}" org.cloudiff.service="{service['name']}" org.cloudiff.config-revision="{request['config_revision']}" org.cloudiff.config-digest="{request['config_digest']}" org.cloudiff.archive-sha256="{request['archive_sha256']}" org.cloudiff.application-digest="{app_digest}"\nCOPY site/ /usr/share/nginx/html/\nUSER 65532:65532\nEXPOSE 8080\n'''
+        dockerfile = f'''FROM {toolchain['image']['image']}\nLABEL org.cloudiff.kind="application" org.cloudiff.project="{request['project_slug']}" org.cloudiff.service="{service['name']}" org.cloudiff.config-revision="{request['config_revision']}" org.cloudiff.config-digest="{request['config_digest']}" org.cloudiff.toolchain-digest="{request['toolchain_digest']}" org.cloudiff.archive-sha256="{request['archive_sha256']}" org.cloudiff.application-digest="{app_digest}"\nCOPY site/ /usr/share/nginx/html/\nUSER 65532:65532\nEXPOSE 8080\n'''
     elif service['runtime'] == 'node':
         install = dockerfile_run(service.get('install'))
         build = dockerfile_run(service.get('build'))
         publish = service.get('publish')
         if publish and not service.get('start'):
-            dockerfile = f'''FROM {toolchain['image']['image']} AS build\nUSER node\nWORKDIR /workspace\nCOPY --chown=node:node source/ ./\n{pre_hooks}{install}{build}{post_hooks}FROM {STATIC_BASE}\nLABEL org.cloudiff.kind="application" org.cloudiff.project="{request['project_slug']}" org.cloudiff.service="{service['name']}" org.cloudiff.config-revision="{request['config_revision']}" org.cloudiff.config-digest="{request['config_digest']}" org.cloudiff.archive-sha256="{request['archive_sha256']}" org.cloudiff.application-digest="{app_digest}"\nCOPY --from=build /workspace/{publish} /usr/share/nginx/html/\nUSER 65532:65532\nEXPOSE 8080\n'''
+            dockerfile = f'''FROM {toolchain['image']['image']} AS build\nUSER node\nWORKDIR /workspace\nCOPY --chown=node:node source/ ./\n{pre_hooks}{install}{build}{post_hooks}FROM {STATIC_BASE}\nLABEL org.cloudiff.kind="application" org.cloudiff.project="{request['project_slug']}" org.cloudiff.service="{service['name']}" org.cloudiff.config-revision="{request['config_revision']}" org.cloudiff.config-digest="{request['config_digest']}" org.cloudiff.toolchain-digest="{request['toolchain_digest']}" org.cloudiff.archive-sha256="{request['archive_sha256']}" org.cloudiff.application-digest="{app_digest}"\nCOPY --from=build /workspace/{publish} /usr/share/nginx/html/\nUSER 65532:65532\nEXPOSE 8080\n'''
         else:
             if not service.get('start') or not service.get('port'):
                 raise ArtifactError('node_start_configuration_required', 'Serviços Node sem artefato estático exigem start e port.', f'services.{service["name"]}')
@@ -553,7 +553,7 @@ COPY --chown=node:node source/ ./
 {install}{build}FROM {service['policy']['runtimeImage']}
 WORKDIR /app
 COPY --from=build /workspace /app
-LABEL org.cloudiff.kind="application" org.cloudiff.project="{request['project_slug']}" org.cloudiff.service="{service['name']}" org.cloudiff.config-revision="{request['config_revision']}" org.cloudiff.config-digest="{request['config_digest']}" org.cloudiff.archive-sha256="{request['archive_sha256']}" org.cloudiff.application-digest="{app_digest}"
+LABEL org.cloudiff.kind="application" org.cloudiff.project="{request['project_slug']}" org.cloudiff.service="{service['name']}" org.cloudiff.config-revision="{request['config_revision']}" org.cloudiff.config-digest="{request['config_digest']}" org.cloudiff.toolchain-digest="{request['toolchain_digest']}" org.cloudiff.archive-sha256="{request['archive_sha256']}" org.cloudiff.application-digest="{app_digest}"
 USER 65532:65532
 EXPOSE {service['port']}
 CMD {json.dumps(runtime_args, ensure_ascii=False)}

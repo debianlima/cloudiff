@@ -1,5 +1,5 @@
 [Unit]
-Description=CloudIF Deployment Broker dry-run only
+Description=CloudIF approved deployment broker
 After=network-online.target cloudif-project-config-controller.service cloudif-project-config-reconciler.service cloudif-build-broker.service
 Wants=network-online.target
 Requires=cloudif-project-config-controller.service cloudif-project-config-reconciler.service cloudif-build-broker.service
@@ -11,6 +11,7 @@ EnvironmentFile=/etc/cloudif/deployment-broker.env
 EnvironmentFile=/etc/cloudif/build-broker.env
 EnvironmentFile=/etc/cloudif/project-config-reconciler.env
 EnvironmentFile=/etc/cloudif/project-config-controller.env
+EnvironmentFile=/etc/cloudif/multiservice-deployment-executor.env
 ExecStart=/usr/bin/python3 /srv/cloudif/app-pointers/deployment-broker-current/cloudif-deployment-broker.py
 Restart=always
 RestartSec=2
@@ -19,7 +20,7 @@ PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=true
 ReadWritePaths=/var/lib/cloudif/deployment-broker /var/lib/cloudif/portal
-ReadOnlyPaths=/srv/cloudif/lib /etc/cloudif
+ReadOnlyPaths=/srv/cloudif/lib /srv/cloudif/tenants /etc/cloudif
 ProtectKernelTunables=true
 ProtectKernelModules=true
 ProtectControlGroups=true

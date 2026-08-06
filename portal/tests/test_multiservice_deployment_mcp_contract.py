@@ -36,7 +36,7 @@ class MultiserviceDeploymentMCPContractTests(unittest.TestCase):
         legacy=(ROOT/'portal/legacy/cloudif_ai_agents_guide.py').read_text()
         self.assertEqual(guide,legacy)
         self.assertIn("'deployment.multiservice.plan':",guide)
-        self.assertIn("'deployment:multiservice-plan':['deployment.multiservice.plan']",guide)
+        self.assertIn("'deployment:multiservice-plan':['deployment.multiservice.plan','deployment.multiservice.status']",guide)
 
 
 if __name__=='__main__':unittest.main()

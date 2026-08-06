@@ -136,6 +136,9 @@ TOOLS=[
  {'name':'preview.multiservice.status','description':'Consulta estado, URL autenticada, serviços e expiração do preview multissserviço','inputSchema':{'type':'object','properties':{'preview_id':{'type':'string','pattern':'^pv_[a-f0-9]{24}$'}},'required':['preview_id'],'additionalProperties':False}},
  {'name':'preview.multiservice.delete','description':'Remove antecipadamente um preview multissserviço autorizado','inputSchema':{'type':'object','properties':{'preview_id':{'type':'string','pattern':'^pv_[a-f0-9]{24}$'}},'required':['preview_id'],'additionalProperties':False}},
  {'name':'deployment.multiservice.plan','description':'Gera resumo único e plano de deploy multissserviço vinculado ao build, revisão, variáveis, rotas e reconciliação, sem criar containers','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'build_job_id':{'type':'string','pattern':'^build_[a-f0-9]{24}$'},'environment':{'type':'string','enum':['homologation','production']},'routes':{'type':'array','items':{'type':'object','properties':{'pathPrefix':{'type':'string','pattern':'^/'},'service':{'type':'string','pattern':'^[a-z][a-z0-9-]*$'},'stripPrefix':{'type':'boolean'}},'required':['pathPrefix','service'],'additionalProperties':False}}},'required':['slug','environment'],'additionalProperties':False}},
+ {'name':'approval.request-multiservice-deployment','description':'Cria aprovação humana vinculada ao plano, build, revisão, ACL, variáveis por digest, rotas e ambiente do deploy','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'build_job_id':{'type':'string','pattern':'^build_[a-f0-9]{24}$'},'environment':{'type':'string','enum':['homologation','production']},'routes':{'type':'array','items':{'type':'object','properties':{'pathPrefix':{'type':'string','pattern':'^/'},'service':{'type':'string','pattern':'^[a-z][a-z0-9-]*$'},'stripPrefix':{'type':'boolean'}},'required':['pathPrefix','service'],'additionalProperties':False}},'deployment_plan_digest':{'type':'string','pattern':'^[a-f0-9]{64}$'},'reason':{'type':'string','minLength':4,'maxLength':500},'ttl_seconds':{'type':'integer','minimum':60,'maximum':86400}},'required':['slug','environment','deployment_plan_digest','reason'],'additionalProperties':False}},
+ {'name':'deployment.multiservice.execute','description':'Executa deploy multissserviço aprovado usando reserve-effect-finalize; valores protegidos são resolvidos somente durante o efeito','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'build_job_id':{'type':'string','pattern':'^build_[a-f0-9]{24}$'},'environment':{'type':'string','enum':['homologation','production']},'routes':{'type':'array','items':{'type':'object','properties':{'pathPrefix':{'type':'string','pattern':'^/'},'service':{'type':'string','pattern':'^[a-z][a-z0-9-]*$'},'stripPrefix':{'type':'boolean'}},'required':['pathPrefix','service'],'additionalProperties':False}},'deployment_plan_digest':{'type':'string','pattern':'^[a-f0-9]{64}$'},'approval_id':{'type':'string','pattern':'^apr_[a-f0-9]{20}$'}},'required':['slug','environment','deployment_plan_digest','approval_id'],'additionalProperties':False}},
+ {'name':'deployment.multiservice.status','description':'Consulta estado sanitizado do deploy sem retornar valores de variáveis ou portas internas do host','inputSchema':{'type':'object','properties':{'deployment_id':{'type':'string','pattern':'^dep_[a-f0-9]{24}$'}},'required':['deployment_id'],'additionalProperties':False}},
  {'name':'deployment.preview.plan','description':'Planeja preview temporário por build sem criar URL ou efeito','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'build_id':{'type':'string','pattern':'^[0-9a-f-]+$'},'commit_ref':{'type':'string','pattern':'^[A-Za-z0-9._/-]+$'},'ttl_seconds':{'type':'integer','minimum':300,'maximum':86400}},'required':['slug','build_id','commit_ref'],'additionalProperties':False}},
  {'name':'deployment.preview.status','description':'Consulta estado sanitizado de preview temporário vinculado ao projeto autorizado','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'preview_id':{'type':'string','pattern':'^prv_[0-9a-f]{20}$'}},'required':['slug','preview_id'],'additionalProperties':False}},
  {'name':'approval.request-preview','description':'Cria aprovação pendente vinculada ao digest canônico do preview','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'build_id':{'type':'string','pattern':'^[0-9a-f-]+$'},'commit_ref':{'type':'string','pattern':'^[A-Za-z0-9._/-]+$'},'ttl_seconds':{'type':'integer','minimum':300,'maximum':86400},'reason':{'type':'string','minLength':4,'maxLength':500}},'required':['slug','build_id','commit_ref','reason'],'additionalProperties':False}},
@@ -206,7 +209,7 @@ READ_ONLY_TOOLS={
  'build.plan','build.status','build.logs.read','build.artifact.get','deployment.preview.plan','deployment.preview.status',
  'approval.get','forgejo.proposal.list','forgejo.proposal.merge.plan','supabase.migrations.inspect','supabase.migrations.plan',
  'deployment.production.activation.plan','deployment.production.readiness','deployment.production.homologation.plan',
- 'deployment.multiservice.plan','deployment.production.plan','deployment.plan','deployment.promote-test.plan','deployment.promote-test.status','deployment.rollback-test.plan',
+ 'deployment.multiservice.plan','deployment.multiservice.status','deployment.production.plan','deployment.plan','deployment.promote-test.plan','deployment.promote-test.status','deployment.rollback-test.plan',
  'supabase.tables.list','supabase.records.select','supabase.sql.query','supabase.auth.users.list',
  'supabase.storage.buckets.list','supabase.storage.objects.list','supabase.storage.object.read','supabase.secrets.list',
  'supabase.rls.inspect','supabase.schema.inspect','supabase.logs.read','supabase.admin.config.read',
@@ -215,7 +218,7 @@ READ_ONLY_TOOLS={
 DESTRUCTIVE_TOOLS={
  'forgejo.proposal.delete-branch','forgejo.proposal.merge','deployment.production.homologation.deploy',
  'deployment.production.homologation.rollback','deployment.promote-test','deployment.rollback-test','supabase.operation.execute','forgejo.proposal.change-set.create'
-,'build.multiservice.execute','preview.multiservice.create','preview.multiservice.delete'}
+,'build.multiservice.execute','deployment.multiservice.execute','preview.multiservice.create','preview.multiservice.delete'}
 OPEN_WORLD_PREFIXES=('forgejo.','supabase.','deployment.','approval.','build.')
 for _tool in TOOLS:
     _name=str(_tool.get('name') or '')
@@ -627,6 +630,45 @@ def deployment_multiservice_plan_call(payload,timeout=120):
         except Exception:data={'ok':False,'error':{'code':'deployment_plan_failed','message':'Falha ao planejar o deploy.'}}
         return error.code,data
 
+def deployment_multiservice_status_call(deployment_id,timeout=60):
+    query=urllib.parse.urlencode({'deployment_id':deployment_id})
+    request=urllib.request.Request(DEPLOYMENT_URL+'/v1/multiservice-status?'+query,headers={'Authorization':'Bearer '+DEPLOYMENT_TOKEN,'Accept':'application/json'})
+    try:
+        with urllib.request.urlopen(request,timeout=timeout) as response:return response.status,json.load(response)
+    except urllib.error.HTTPError as error:
+        try:data=json.load(error)
+        except Exception:data={'ok':False,'error':{'code':'deployment_status_failed','message':'Falha ao consultar o deploy.'}}
+        return error.code,data
+
+def deployment_multiservice_execute_call(payload,timeout=660):
+    request=urllib.request.Request(DEPLOYMENT_URL+'/v1/multiservice-deploy',data=json.dumps(payload,ensure_ascii=False,separators=(',',':')).encode(),method='POST',headers={'Authorization':'Bearer '+DEPLOYMENT_TOKEN,'Content-Type':'application/json','Accept':'application/json'})
+    try:
+        with urllib.request.urlopen(request,timeout=timeout) as response:return response.status,json.load(response)
+    except urllib.error.HTTPError as error:
+        try:data=json.load(error)
+        except Exception:data={'ok':False,'error':{'code':'deployment_execute_failed','message':'Falha ao executar o deploy.'}}
+        return error.code,data
+
+def approval_create_multiservice_deployment(slug,client_id,authz,plan,reason,ttl,trace_id):
+    operation=plan.get('operation') or {};reconciliation=plan.get('reconciliation') or {}
+    metadata={
+        'deployment_plan_digest':plan.get('deployment_plan_digest'),'environment':plan.get('environment'),
+        'build_job_id':operation.get('build_job_id'),'build_plan_digest':operation.get('build_plan_digest'),
+        'config_revision':operation.get('config_revision'),'config_digest':operation.get('config_digest'),
+        'toolchain_digest':operation.get('toolchain_digest'),'archive_sha256':operation.get('archive_sha256'),
+        'variables_digest':plan.get('variables_digest'),'routes':operation.get('routes') or [],
+        'membership_revision':reconciliation.get('membershipRevision'),'acl_digest':reconciliation.get('aclDigest'),
+        'summary':plan.get('summary') or {},'content_stored':False,'secret_values_in_metadata':False,
+    }
+    payload={'project_slug':slug,'action':'deployment.multiservice','requested_by':client_id,'requester_role':str(authz.get('project_role') or 'agent'),'ttl_seconds':ttl,'reason':reason,'trace_id':trace_id,'metadata':metadata}
+    request=urllib.request.Request(APPROVAL_URL+'/v1/approvals',data=json.dumps(payload,ensure_ascii=False,separators=(',',':')).encode(),method='POST',headers={'Authorization':'Bearer '+APPROVAL_TOKEN,'Content-Type':'application/json','Accept':'application/json'})
+    try:
+        with urllib.request.urlopen(request,timeout=10) as response:return json.load(response)
+    except urllib.error.HTTPError as error:
+        try:data=json.load(error)
+        except Exception:data={}
+        raise ValueError(str(data.get('error') or 'approval_create_failed')) from error
+
 def deployment_call(path,slug,commit_sha,version,trace_id,timeout=180):
     payload={'project_slug':slug,'commit_sha':commit_sha,'version':version,'trace_id':trace_id}
     req=urllib.request.Request(DEPLOYMENT_URL+path,data=json.dumps(payload,separators=(',',':')).encode(),method='POST',headers={'Authorization':'Bearer '+DEPLOYMENT_TOKEN,'Content-Type':'application/json'})
@@ -750,7 +792,7 @@ def homologation_call(path,payload,timeout=300):
   return e.code,b
 
 SCOPE_BY_TOOL={
- 'runtime.catalog':'project:read','runtime.detect':'project:read','runtime.plan':'project:read','runtime.validate':'project:read','project.technologies.detect':'workspace:detect-multiservice','project.manifest.validate':'project:configuration-read','project.configuration.get':'project:configuration-read','build.plan':'project:read','project.toolchain.plan':'build:multiservice-plan','build.multiservice.plan':'build:multiservice-plan','build.multiservice.status':'build:multiservice-plan','approval.request-multiservice-build':'approval:request-multiservice-build','build.multiservice.execute':'build:multiservice-execute','preview.multiservice.plan':'preview:multiservice-plan','preview.multiservice.status':'preview:multiservice-plan','approval.request-multiservice-preview':'approval:request-multiservice-preview','preview.multiservice.create':'preview:multiservice-execute','preview.multiservice.delete':'preview:multiservice-delete','build.request':'workspace:test-static','build.status':'project:read','build.logs.read':'project:read','build.artifact.get':'project:read','deployment.multiservice.plan':'deployment:multiservice-plan','deployment.preview.plan':'project:read','deployment.preview.status':'project:read','approval.request-preview':'approval:request-preview','deployment.preview':'deployment:preview',
+ 'runtime.catalog':'project:read','runtime.detect':'project:read','runtime.plan':'project:read','runtime.validate':'project:read','project.technologies.detect':'workspace:detect-multiservice','project.manifest.validate':'project:configuration-read','project.configuration.get':'project:configuration-read','build.plan':'project:read','project.toolchain.plan':'build:multiservice-plan','build.multiservice.plan':'build:multiservice-plan','build.multiservice.status':'build:multiservice-plan','approval.request-multiservice-build':'approval:request-multiservice-build','build.multiservice.execute':'build:multiservice-execute','preview.multiservice.plan':'preview:multiservice-plan','preview.multiservice.status':'preview:multiservice-plan','approval.request-multiservice-preview':'approval:request-multiservice-preview','preview.multiservice.create':'preview:multiservice-execute','preview.multiservice.delete':'preview:multiservice-delete','build.request':'workspace:test-static','build.status':'project:read','build.logs.read':'project:read','build.artifact.get':'project:read','deployment.multiservice.plan':'deployment:multiservice-plan','deployment.multiservice.status':'deployment:multiservice-plan','approval.request-multiservice-deployment':'approval:request-multiservice-deployment','deployment.multiservice.execute':'deployment:multiservice-execute','deployment.preview.plan':'project:read','deployment.preview.status':'project:read','approval.request-preview':'approval:request-preview','deployment.preview':'deployment:preview',
  'workspace.probe':'workspace:probe','workspace.prepare':'workspace:prepare','workspace.validate':'workspace:validate','workspace.test-static':'workspace:test-static','workspace.preview-static':'workspace:preview-static','workspace.edit-preview':'workspace:edit-preview',
  'forgejo.propose-edit':'forgejo:propose-edit','forgejo.propose-edit.plan':'forgejo:plan-edit','approval.request-proposal':'approval:request-proposal','workspace.normalize.plan':'workspace:change-set-plan','workspace.change-set.validate':'workspace:change-set-plan','forgejo.proposal.change-set.plan':'workspace:change-set-plan','approval.request-change-set-proposal':'approval:request-change-set','forgejo.proposal.change-set.create':'forgejo:propose-change-set','approval.get':'approval:read-own','forgejo.proposal.list':'forgejo:proposal-read','forgejo.proposal.close':'forgejo:proposal-close','forgejo.proposal.delete-branch':'forgejo:proposal-delete-branch','forgejo.proposal.merge.plan':'forgejo:proposal-merge-plan','approval.request-merge':'approval:request-merge','forgejo.proposal.merge':'forgejo:proposal-merge',
  'deployment.production.homologation.plan':'deployment:production-plan','approval.request-production-homologation':'approval:request-deploy','deployment.production.homologation.deploy':'deployment:production-plan','deployment.production.homologation.rollback':'deployment:production-plan','deployment.production.activation.plan':'deployment:production-plan','approval.request-production-activation':'approval:request-deploy','deployment.production.readiness':'project:read','deployment.production.plan':'deployment:production-plan','supabase.migrations.inspect':'supabase:migration-inspect','supabase.migrations.plan':'supabase:migration-plan','deployment.plan':'deployment:plan','approval.request-deploy':'approval:request-deploy','deployment.validate':'deployment:validate','deployment.promote-test.plan':'deployment:promote-test-plan','approval.request-promote-test':'approval:request-promote-test','deployment.promote-test':'deployment:promote-test','deployment.promote-test.status':'deployment:promote-test-status','deployment.rollback-test.plan':'deployment:rollback-test-plan','approval.request-rollback-test':'approval:request-rollback-test','deployment.rollback-test':'deployment:rollback-test',
@@ -1186,6 +1228,67 @@ class H(BaseHTTPRequestHandler):
                     if code!=200 or not data.get('ok'):
                         error=data.get('error') or {};raise ValueError(str(error.get('message') if isinstance(error,dict) else error or 'deployment_plan_failed'))
                     content=data
+                elif name=='approval.request-multiservice-deployment':
+                    required={'slug','environment','deployment_plan_digest','reason'};allowed=required|{'build_job_id','routes','ttl_seconds'}
+                    if not required.issubset(args) or not set(args).issubset(allowed):raise ValueError('slug, environment, deployment_plan_digest e reason são obrigatórios.')
+                    client_id=self.headers.get('X-CloudIF-Client','').strip()
+                    if not client_id:raise ValueError('identified_client_required')
+                    slug=str(args['slug']).strip();environment=str(args['environment']).strip();digest=str(args['deployment_plan_digest']).lower();reason=str(args['reason']).strip();ttl=int(args.get('ttl_seconds') or 900)
+                    if not re.fullmatch(r'[a-f0-9]{64}',digest) or not 4<=len(reason)<=500 or not 60<=ttl<=86400:raise ValueError('digest, reason ou ttl_seconds incompatível.')
+                    control('/v1/projects/'+urllib.parse.quote(slug,safe=''))
+                    payload={'project_slug':slug,'environment':environment,'trace_id':trace_id}
+                    if args.get('build_job_id'):payload['build_job_id']=str(args['build_job_id'])
+                    if args.get('routes') is not None:payload['routes']=args['routes']
+                    code,plan=deployment_multiservice_plan_call(payload)
+                    if code!=200 or not plan.get('ok'):raise ValueError('deployment_plan_failed')
+                    if not hmac.compare_digest(str(plan.get('deployment_plan_digest') or ''),digest):raise ValueError('O plano do deploy mudou.')
+                    if not plan.get('execution_allowed'):raise ValueError('Deploy bloqueado: '+', '.join(plan.get('blockers') or []))
+                    created=approval_create_multiservice_deployment(slug,client_id,authz,plan,reason,ttl,trace_id)
+                    if not created.get('ok') or created.get('status')!='pending':raise ValueError('approval_create_failed')
+                    content={'ok':True,'approval_id':created['approval_id'],'status':'pending','expires_at':created['expires_at'],'project_slug':slug,'environment':environment,'deployment_plan_digest':digest,'side_effects':False,'content_stored_in_approval':False,'secret_values_in_metadata':False}
+                elif name=='deployment.multiservice.execute':
+                    required={'slug','environment','deployment_plan_digest','approval_id'};allowed=required|{'build_job_id','routes'}
+                    if not required.issubset(args) or not set(args).issubset(allowed):raise ValueError('slug, environment, deployment_plan_digest e approval_id são obrigatórios.')
+                    client_id=self.headers.get('X-CloudIF-Client','').strip()
+                    if not client_id:raise ValueError('identified_client_required')
+                    slug=str(args['slug']).strip();environment=str(args['environment']).strip();digest=str(args['deployment_plan_digest']).lower();approval_id=str(args['approval_id'])
+                    control('/v1/projects/'+urllib.parse.quote(slug,safe=''))
+                    payload={'project_slug':slug,'environment':environment,'trace_id':trace_id}
+                    if args.get('build_job_id'):payload['build_job_id']=str(args['build_job_id'])
+                    if args.get('routes') is not None:payload['routes']=args['routes']
+                    code,plan=deployment_multiservice_plan_call(payload)
+                    if code!=200 or not plan.get('ok') or not plan.get('execution_allowed'):raise ValueError('deployment_plan_blocked')
+                    if not hmac.compare_digest(str(plan.get('deployment_plan_digest') or ''),digest):raise ValueError('deployment_plan_digest_mismatch')
+                    approval=approval_get(approval_id)
+                    if not approval:raise ValueError('approval_not_found')
+                    try:metadata=json.loads(approval.get('metadata_json') or '{}')
+                    except Exception:raise ValueError('approval_metadata_invalid')
+                    operation=plan.get('operation') or {};reconciliation=plan.get('reconciliation') or {}
+                    reservation_id,execution_id=transaction_ids('deployment.multiservice',approval_id,client_id,digest)
+                    valid_status=bool(approval.get('status')=='approved' or (approval.get('status') in {'reserved','consumed'} and approval.get('reservation_id')==reservation_id))
+                    valid=bool(valid_status and approval.get('project_slug')==slug and approval.get('action')=='deployment.multiservice' and approval.get('requested_by')==client_id and approval.get('approved_by') and hmac.compare_digest(str(metadata.get('deployment_plan_digest') or ''),digest) and metadata.get('environment')==environment and metadata.get('build_job_id')==operation.get('build_job_id') and hmac.compare_digest(str(metadata.get('build_plan_digest') or ''),str(operation.get('build_plan_digest') or '')) and int(metadata.get('config_revision') or 0)==int(operation.get('config_revision') or 0) and hmac.compare_digest(str(metadata.get('config_digest') or ''),str(operation.get('config_digest') or '')) and hmac.compare_digest(str(metadata.get('toolchain_digest') or ''),str(operation.get('toolchain_digest') or '')) and hmac.compare_digest(str(metadata.get('archive_sha256') or ''),str(operation.get('archive_sha256') or '')) and hmac.compare_digest(str(metadata.get('variables_digest') or ''),str(plan.get('variables_digest') or '')) and metadata.get('routes')==(operation.get('routes') or []) and int(metadata.get('membership_revision') or 0)==int(reconciliation.get('membershipRevision') or 0) and hmac.compare_digest(str(metadata.get('acl_digest') or ''),str(reconciliation.get('aclDigest') or '')) and metadata.get('content_stored') is False and metadata.get('secret_values_in_metadata') is False)
+                    if not valid:raise ValueError('approval_binding_mismatch')
+                    if approval.get('status')=='approved':
+                        reserve_code,reserved=approval_transition(approval_id,'reserve',{'reservation_id':reservation_id,'reserved_by':client_id,'ttl_seconds':900})
+                        if reserve_code!=200 or reserved.get('status')!='reserved':raise ValueError('approval_reserve_failed')
+                    effect={**payload,'deployment_plan_digest':digest,'execution_id':execution_id}
+                    code,result=deployment_multiservice_execute_call(effect)
+                    current=approval_get(approval_id)
+                    if code in {200,201} and result.get('ok'):
+                        if current and current.get('status')!='consumed':
+                            final_code,finalized=approval_transition(approval_id,'finalize',{'reservation_id':reservation_id,'result':'success'})
+                            if final_code!=200 or finalized.get('status')!='consumed':raise ValueError('approval_finalize_failed')
+                        result['transaction']={'approval_id':approval_id,'reservation_id':reservation_id,'execution_id':execution_id,'approval_status':'consumed'};result['variable_values_returned']=False;content=result
+                    else:
+                        if current and current.get('status')=='reserved':approval_transition(approval_id,'release',{'reservation_id':reservation_id})
+                        error=result.get('error') or {};raise ValueError(str(error.get('message') if isinstance(error,dict) else error or 'deployment_execute_failed'))
+                elif name=='deployment.multiservice.status':
+                    if set(args)!={'deployment_id'}:raise ValueError('O campo deployment_id é obrigatório.')
+                    deployment_id=str(args.get('deployment_id') or '')
+                    if not re.fullmatch(r'dep_[a-f0-9]{24}',deployment_id):raise ValueError('deployment_id incompatível.')
+                    code,data=deployment_multiservice_status_call(deployment_id)
+                    if code!=200 or not data.get('ok'):raise ValueError('Deploy não encontrado.')
+                    data.pop('variables',None);data['variable_values_returned']=False;content=data
                 elif name=='deployment.preview.plan':
                     if not {'slug','build_id','commit_ref'}<=set(args) or not set(args).issubset({'slug','build_id','commit_ref','ttl_seconds'}):raise ValueError('argumentos inválidos')
                     control('/v1/projects/'+urllib.parse.quote(str(args['slug']),safe=''))
