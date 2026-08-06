@@ -261,6 +261,46 @@ def recover_multiservice_jobs():
 
 toolchain_lifecycle.configure(sys.modules[__name__])
 
+def multiservice_runtime_config(job_id):
+ if not re.fullmatch(r'build_[a-f0-9]{24}',str(job_id or '')):raise ValueError('invalid_build_job_id')
+ c=db();row=c.execute('select * from multiservice_jobs where job_id=?',(job_id,)).fetchone();c.close()
+ if not row:raise LookupError('multiservice_job_not_found')
+ if row['status']!='succeeded':raise ValueError('multiservice_build_not_ready')
+ payload=json.loads(row['payload_json'] or '{}');result=json.loads(row['result_json'] or '{}')
+ effective=payload.get('effectiveEnvironment') or {}
+ if not isinstance(effective,dict) or effective.get('secretValuesIncluded') is not False:
+  raise ValueError('effective_environment_secret_contract_invalid')
+ public_runtime=effective.get('publicRuntimeEnvironment') or {};secret_runtime=effective.get('secretRuntimeReferences') or {}
+ if not isinstance(public_runtime,dict) or not isinstance(secret_runtime,dict):raise ValueError('effective_environment_runtime_contract_invalid')
+ services={item.get('name') for item in payload.get('services') or [] if isinstance(item,dict)}
+ for mapping in (public_runtime,secret_runtime):
+  if set(mapping)-services:raise ValueError('effective_environment_unknown_service')
+ for service,values in public_runtime.items():
+  if not isinstance(values,dict):raise ValueError('public_runtime_environment_invalid')
+  for name,value in values.items():
+   if not re.fullmatch(r'[A-Z][A-Z0-9_]{0,127}',str(name)) or (not isinstance(value,(str,int,float,bool)) and value is not None):raise ValueError('public_runtime_environment_invalid')
+ for service,values in secret_runtime.items():
+  if not isinstance(values,dict):raise ValueError('secret_runtime_references_invalid')
+  for name,reference in values.items():
+   if not re.fullmatch(r'[A-Z][A-Z0-9_]{0,127}',str(name)) or not re.fullmatch(r'[a-z][a-z0-9_.+:-]{1,31}://[^\s\x00]{3,240}',str(reference or '')):raise ValueError('secret_runtime_references_invalid')
+ service_artifacts=[]
+ for item in result.get('services') or result.get('artifacts') or []:
+  if not isinstance(item,dict):continue
+  image=item.get('image') or item.get('applicationImage') or {}
+  service=str(item.get('service') or item.get('name') or '')
+  image_ref=str(image.get('image') or image.get('imageRef') or item.get('imageRef') or '')
+  image_id=str(image.get('imageId') or item.get('imageId') or '')
+  if service and image_ref and re.fullmatch(r'sha256:[a-f0-9]{64}',image_id):service_artifacts.append({'service':service,'imageRef':image_ref,'imageId':image_id})
+ return {
+  'ok':True,'internal':True,'job_id':job_id,'project_slug':row['project_slug'],'environment':str(payload.get('environment') or 'development'),
+  'config_revision':row['config_revision'],'config_digest':row['config_digest'],'toolchain_digest':row['toolchain_digest'],'archive_sha256':row['archive_sha256'],'plan_digest':row['plan_digest'],
+  'publicRuntimeEnvironment':public_runtime,'secretRuntimeReferences':secret_runtime,
+  'buildEnvironmentDigest':effective.get('buildEnvironmentDigest'),'runtimeEnvironmentDigest':effective.get('runtimeEnvironmentDigest'),'environmentDigest':effective.get('environmentDigest'),
+  'activeToolchainImages':payload.get('activeToolchainImages') or {},'serviceArtifacts':service_artifacts,
+  'secretValuesIncluded':False,'secretReferencesIncluded':bool(any(secret_runtime.values())),'containersChanged':False,
+ }
+
+
 class H(BaseHTTPRequestHandler):
  def log_message(self,*a):pass
  def sendj(self,n,x):
@@ -286,6 +326,11 @@ class H(BaseHTTPRequestHandler):
   if toolchain_get_match:
    try:return self.sendj(200,toolchain_lifecycle.get(toolchain_get_match.group(1),(query.get('ref') or ['main'])[0]))
    except ValueError as error:return self.sendj(422,{'ok':False,'error':{'code':str(error),'message':'Configuração da toolchain inválida.'}})
+  runtime_config_match=re.fullmatch(r'/v1/multiservice/jobs/(build_[a-f0-9]{24})/runtime-config',parsed.path)
+  if runtime_config_match:
+   try:return self.sendj(200,multiservice_runtime_config(runtime_config_match.group(1)))
+   except LookupError:return self.sendj(404,{'ok':False,'error':{'code':'multiservice_job_not_found'}})
+   except ValueError as error:return self.sendj(409,{'ok':False,'error':{'code':str(error),'message':'O runtime do build não está disponível.'}})
   mm=re.fullmatch(r'/v1/multiservice/jobs/(build_[a-f0-9]{24})',parsed.path)
   if mm:
    try:return self.sendj(200,multiservice_status(mm.group(1)))

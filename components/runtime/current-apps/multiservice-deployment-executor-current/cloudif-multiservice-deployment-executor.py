@@ -219,7 +219,90 @@ def env_file(deployment_id:str,service:str,variables:dict[str,str])->Path:
         raise
 
 
+
+def _runtime_scalar(value):
+    if value is None:
+        return ''
+    if isinstance(value,bool):
+        return 'true' if value else 'false'
+    if isinstance(value,(str,int,float)):
+        return str(value)
+    raise ValueError('runtime_environment_value_not_scalar')
+
+
+def _validated_runtime_configuration(payload):
+    configuration=payload.get('runtimeConfiguration') or {}
+    if not isinstance(configuration,dict):
+        raise ValueError('invalid_runtime_configuration')
+    if configuration.get('secretValuesIncluded') is not False:
+        raise ValueError('runtime_secret_contract_invalid')
+    project=str(payload.get('project_slug') or payload.get('projectSlug') or '')
+    environment=str(payload.get('environment') or '')
+    if str(configuration.get('project_slug') or configuration.get('projectSlug') or '')!=project:
+        raise ValueError('runtime_project_binding_mismatch')
+    if str(configuration.get('environment') or '')!=environment:
+        raise ValueError('runtime_environment_binding_mismatch')
+    public=configuration.get('publicRuntimeEnvironment') or {}
+    secret=configuration.get('secretRuntimeReferences') or {}
+    if not isinstance(public,dict) or not isinstance(secret,dict):
+        raise ValueError('invalid_runtime_environment_contract')
+    if any(bool(values) for values in secret.values()):
+        raise ValueError('secret_resolution_unavailable')
+    normalized={}
+    for service,values in public.items():
+        if not isinstance(values,dict):
+            raise ValueError('invalid_public_runtime_environment')
+        normalized[str(service)]={}
+        for name,value in values.items():
+            if not re.fullmatch(r'[A-Z][A-Z0-9_]{0,127}',str(name)):
+                raise ValueError('invalid_runtime_environment_name')
+            normalized[str(service)][str(name)]=_runtime_scalar(value)
+    return {
+        'publicRuntimeEnvironment':normalized,
+        'runtimeEnvironmentDigest':str(configuration.get('runtimeEnvironmentDigest') or ''),
+        'environmentDigest':str(configuration.get('environmentDigest') or ''),
+        'buildJobId':str(configuration.get('job_id') or configuration.get('buildJobId') or ''),
+        'secretValuesIncluded':False,
+    }
+
+
+def _apply_runtime_configuration(payload,configuration):
+    services=payload.get('services') or []
+    if not isinstance(services,list):
+        raise ValueError('invalid_deployment_services')
+    names=set()
+    for service in services:
+        if not isinstance(service,dict):
+            raise ValueError('invalid_deployment_service')
+        name=str(service.get('name') or service.get('service') or '')
+        if not name:
+            raise ValueError('deployment_service_name_missing')
+        names.add(name)
+        existing=service.get('environment') or {}
+        if not isinstance(existing,dict):
+            raise ValueError('deployment_service_environment_must_be_object')
+        merged={str(key):_runtime_scalar(value) for key,value in existing.items()}
+        merged.update(configuration['publicRuntimeEnvironment'].get(name) or {})
+        service['environment']=merged
+        labels=service.get('labels') or {}
+        if not isinstance(labels,dict):
+            raise ValueError('deployment_service_labels_must_be_object')
+        labels.update({
+            'cloudiff.environment':str(payload.get('environment') or ''),
+            'cloudiff.environment.digest':configuration['environmentDigest'],
+            'cloudiff.runtime-environment.digest':configuration['runtimeEnvironmentDigest'],
+            'cloudiff.build.job':configuration['buildJobId'],
+        })
+        service['labels']=labels
+    unknown=sorted(set(configuration['publicRuntimeEnvironment'])-names)
+    if unknown:
+        raise ValueError('runtime_environment_unknown_service')
+    return payload
+
+
 def create_deployment(payload:Any)->dict:
+    runtime_configuration=_validated_runtime_configuration(payload)
+    _apply_runtime_configuration(payload,runtime_configuration)
     request=normalize_payload(payload);deployment_id=request['deployment_id'];now=int(time.time())
     conn=db();row=conn.execute('select * from deployments where deployment_id=?',(deployment_id,)).fetchone();conn.close()
     if row:
