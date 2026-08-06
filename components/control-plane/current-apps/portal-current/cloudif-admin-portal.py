@@ -54,7 +54,8 @@ def _load_patched_portal():
         raise RuntimeError('Contrato de autorização da exclusão divergiu do esperado.')
     source = source.replace(_POLICY_OLD, _POLICY_NEW, 1)
     for old, new in _MESSAGE_REPLACEMENTS:
-        source = _replace_all(source, old, new, old)
+        if old in source:
+            source = source.replace(old, new)
     source = _replace_all(source, _ADMIN_LOOKUP_BOX, '', 'atalho de administração do AD no banco')
     source, removed_ad_boxes = re.subn(
         r'  <div class="box">\s*<h3>Busca AD</h3>.*?</div>\n?',
