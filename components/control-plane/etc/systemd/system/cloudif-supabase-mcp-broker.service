@@ -9,6 +9,7 @@ StartLimitIntervalSec=0
 Type=simple
 User=root
 Group=root
+SupplementaryGroups=cloudif-control docker
 EnvironmentFile=/etc/cloudif/supabase-mcp-broker.env
 Environment=CLOUDIF_SUPABASE_MCP_BROKER_HOST=127.0.0.1
 Environment=CLOUDIF_SUPABASE_MCP_BROKER_PORT=18218

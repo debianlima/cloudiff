@@ -96,6 +96,7 @@ class SupabaseMCPDatabaseConnectorContractTest(unittest.TestCase):
         gateway_unit = GATEWAY_UNIT.read_text()
         self.assertIn('CLOUDIF_SUPABASE_MCP_BROKER_HOST=127.0.0.1', unit)
         self.assertIn('CLOUDIF_SUPABASE_MCP_BROKER_PORT=18218', unit)
+        self.assertIn('SupplementaryGroups=cloudif-control docker', unit)
         self.assertIn('IPAddressDeny=any', unit)
         self.assertIn('EnvironmentFile=/etc/cloudif/supabase-mcp-broker.env', gateway_unit)
         self.assertIn('cloudif-supabase-mcp-broker.service', gateway_unit)
