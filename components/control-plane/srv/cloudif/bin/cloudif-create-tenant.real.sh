@@ -25,7 +25,7 @@ flock -x 8
 
 mkdir -p "$(dirname "$REGISTRY")"
 if [ ! -s "$REGISTRY" ]; then
-  printf '%s\n' 'tenant,kong_http_port,studio_port,postgres_port,kong_https_port,pooler_transaction_port,pooler_session_port,inbucket_port,created_at' > "$REGISTRY"
+  printf '%s\n' 'tenant,kong_http_port,studio_port,postgres_host_port,kong_https_port,pooler_transaction_port,pooler_session_port,inbucket_port,created_at' > "$REGISTRY"
 fi
 
 tenant_registered() {

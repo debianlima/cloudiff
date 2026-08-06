@@ -9,11 +9,31 @@ TEST_ONLY={'supabase.migrations.plan','deployment.promote-test.plan','approval.r
 CONNECTOR={
  'workspace.':'workspace','forgejo.':'forgejo','supabase.':'supabase',
 }
+def assignment_nodes(tree):
+ out={}
+ for node in tree.body:
+  if isinstance(node,ast.Assign):
+   for target in node.targets:
+    if isinstance(target,ast.Name):out[target.id]=node.value
+ return out
+def safe_value(node,assignments,stack=()):
+ try:return ast.literal_eval(node)
+ except (ValueError,TypeError):pass
+ if isinstance(node,ast.Name):
+  name=node.id
+  if name in stack:raise ValueError('catalog_assignment_cycle:'+name)
+  if name not in assignments:raise ValueError('catalog_name_not_assigned:'+name)
+  return safe_value(assignments[name],assignments,stack+(name,))
+ if isinstance(node,ast.BinOp) and isinstance(node.op,ast.Add):
+  left=safe_value(node.left,assignments,stack);right=safe_value(node.right,assignments,stack)
+  if isinstance(left,list) and isinstance(right,list):return left+right
+  if isinstance(left,tuple) and isinstance(right,tuple):return left+right
+  raise ValueError('catalog_add_requires_same_sequence_type')
+ raise ValueError('catalog_expression_not_allowed:'+type(node).__name__)
 def assigned(tree,name):
- for n in ast.walk(tree):
-  if isinstance(n,ast.Assign) and any(isinstance(x,ast.Name) and x.id==name for x in n.targets):
-   return ast.literal_eval(n.value)
- raise KeyError(name)
+ assignments=assignment_nodes(tree)
+ if name not in assignments:raise KeyError(name)
+ return safe_value(assignments[name],assignments,(name,))
 def load_catalog():
  mt=ast.parse(open(MCP).read());rt=ast.parse(open(REG).read())
  tools=assigned(mt,'TOOLS');scope=assigned(mt,'SCOPE_BY_TOOL');admin=assigned(rt,'PROJECT_ADMIN_SCOPES')
