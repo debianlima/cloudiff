@@ -38,7 +38,7 @@ class ProvisioningRuntimeCompletionContractTest(unittest.TestCase):
 
     def test_initial_publication_retries_transient_deploys(self):
         source = Path('components/control-plane/usr/local/sbin/cloudif-project-initial-publish.py').read_text(encoding='utf-8')
-        self.assertIn('deploy_retries=0', source)
+        self.assertIn('deploy_retries = 0', source)
         self.assertIn('Repetindo o deploy após falha transitória do registry.', source)
         self.assertIn('deploy_retries < 2', source)
 

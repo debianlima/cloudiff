@@ -54,23 +54,29 @@ def public_number(slug):
         'project_slug TEXT PRIMARY KEY,public_number INTEGER NOT NULL UNIQUE,'
         'created_at TEXT NOT NULL,updated_at TEXT NOT NULL)'
     )
-    row = con.execute(
-        'select public_number from project_public_ids where project_slug=?',
-        (slug,),
-    ).fetchone()
-    if row:
-        number = int(row[0])
-    else:
-        number = int(con.execute(
-            'select coalesce(max(public_number),1000)+1 from project_public_ids'
-        ).fetchone()[0])
-        con.execute(
-            'insert into project_public_ids values(?,?,?,?)',
-            (slug, number, now, now),
-        )
+    try:
+        con.execute('BEGIN IMMEDIATE')
+        row = con.execute(
+            'select public_number from project_public_ids where project_slug=?',
+            (slug,),
+        ).fetchone()
+        if row:
+            number = int(row[0])
+        else:
+            number = int(con.execute(
+                'select coalesce(max(public_number),1000)+1 from project_public_ids'
+            ).fetchone()[0])
+            con.execute(
+                'insert into project_public_ids values(?,?,?,?)',
+                (slug, number, now, now),
+            )
         con.commit()
-    con.close()
-    return number
+        return number
+    except Exception:
+        con.rollback()
+        raise
+    finally:
+        con.close()
 
 
 def build(kind, slug, owner, tenant, number):

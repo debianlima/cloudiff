@@ -16,8 +16,10 @@ class VersionedUnifiedRuntimePublicationTests(unittest.TestCase):
         ):
             self.assertIn(marker,self.agent)
     def test_initial_publication_uses_versioned_deploy(self):
-        self.assertIn("komodo_base + '/komodo/publication/deploy'",self.initial)
-        self.assertIn("'deploy_number': 1",self.initial)
+        self.assertIn("base + '/komodo/publication/deploy'",self.initial)
+        self.assertIn('next_recorded_deploy_number(slug)',self.initial)
+        self.assertIn("result['deploy_number'] = deploy_number",self.initial)
+        self.assertIn('immutable_conflicts_skipped',self.initial)
         self.assertIn('Publicação inicial em container versionado próprio',self.initial)
         self.assertNotIn('deployment_ready()',self.initial)
     def test_activation_rebuilds_missing_exact_version(self):

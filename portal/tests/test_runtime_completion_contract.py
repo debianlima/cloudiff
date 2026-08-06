@@ -12,9 +12,13 @@ class RuntimeCompletionContractTest(unittest.TestCase):
 
     def test_initial_publish_requires_versioned_agent_success(self):
         source = Path('components/control-plane/usr/local/sbin/cloudif-project-initial-publish.py').read_text(encoding='utf-8')
-        self.assertIn("not deployment.get('ok')", source)
-        self.assertIn("versioned_d1_deploy_failed", source)
-        self.assertIn("not promotion.get('ok')", source)
+        for marker in (
+            "last.get('ok')", "last.get('healthy') is True",
+            "str(last.get('container') or '') == expected",
+            "str(last.get('stack_id') or '')", "terminal.get('ok')",
+            "versioned_deploy_not_ready", "versioned_promotion_failed",
+        ):
+            self.assertIn(marker, source)
 
 
 if __name__ == '__main__':

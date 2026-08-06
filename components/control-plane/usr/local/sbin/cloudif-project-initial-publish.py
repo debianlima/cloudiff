@@ -55,6 +55,28 @@ def public_number(slug):
     return int(row[0])
 
 
+def next_recorded_deploy_number(slug):
+    con = sqlite3.connect(DB)
+    try:
+        row = con.execute(
+            'select coalesce(max(deploy_number),0)+1 from project_publications where project_slug=?',
+            (slug,),
+        ).fetchone()
+        return max(1, int((row or [1])[0] or 1))
+    except sqlite3.DatabaseError:
+        return 1
+    finally:
+        con.close()
+
+
+def immutable_deploy_conflict(status, response):
+    return bool(
+        status == 409
+        and isinstance(response, dict)
+        and response.get('error') == 'immutable_deploy_conflict'
+    )
+
+
 def project_access(slug):
     con = sqlite3.connect(DB)
     con.row_factory = sqlite3.Row
@@ -124,52 +146,84 @@ def wait_public(url, timeout=600):
 
 
 def deploy_initial_runtime(base, headers, payload):
-    expected = f"cloudif-p{int(payload['public_number'])}-d{int(payload['deploy_number'])}-web"
-    deploy_retries=0
-    last_status = 0
-    last = {}
-    request_timeout = int(os.environ.get('CLOUDIF_D1_DEPLOY_REQUEST_TIMEOUT', '1500'))
+    request_payload = dict(payload)
+    conflict_limit = max(1, int(os.environ.get('CLOUDIF_IMMUTABLE_DEPLOY_SKIP_LIMIT', '64')))
+    conflicts = []
+    request_timeout = int(os.environ.get('CLOUDIF_INITIAL_DEPLOY_REQUEST_TIMEOUT', os.environ.get('CLOUDIF_D1_DEPLOY_REQUEST_TIMEOUT', '1500')))
 
     while True:
-        last_status, last = request(
-            base + '/komodo/publication/deploy',
-            'POST',
-            payload,
-            headers,
-            timeout=request_timeout,
-        )
-        terminal = last.get('terminal') if isinstance(last.get('terminal'), dict) else {}
-        ready = bool(
-            last_status // 100 == 2
-            and last.get('ok')
-            and last.get('healthy') is True
-            and str(last.get('container') or '') == expected
-            and str(last.get('stack_id') or '')
-            and terminal.get('ok')
-        )
-        if ready:
-            return last
+        deploy_number = int(request_payload['deploy_number'])
+        expected = f"cloudif-p{int(request_payload['public_number'])}-d{deploy_number}-web"
+        deploy_retries = 0
 
-        transient = last_status in (0, 408, 409, 422, 425, 429, 500, 502, 503, 504)
-        if transient and deploy_retries < 2:
-            deploy_retries += 1
-            print('Repetindo o deploy após falha transitória do registry.', flush=True)
-            time.sleep(min(20 * deploy_retries, 40))
-            continue
+        while True:
+            last_status, last = request(
+                base + '/komodo/publication/deploy',
+                'POST',
+                request_payload,
+                headers,
+                timeout=request_timeout,
+            )
+            terminal = last.get('terminal') if isinstance(last.get('terminal'), dict) else {}
+            ready = bool(
+                last_status // 100 == 2
+                and last.get('ok')
+                and last.get('healthy') is True
+                and str(last.get('container') or '') == expected
+                and int(last.get('deploy_number') or deploy_number) == deploy_number
+                and str(last.get('stack_id') or '')
+                and terminal.get('ok')
+            )
+            if ready:
+                result = dict(last)
+                result['deploy_number'] = deploy_number
+                if conflicts:
+                    result['immutable_conflicts_skipped'] = conflicts
+                return result
 
-        raise RuntimeError(
-            'versioned_d1_not_ready:'
-            + json.dumps({
-                'http': last_status,
-                'expected_container': expected,
-                'response': last,
-            }, ensure_ascii=False)[:1400]
-        )
+            if immutable_deploy_conflict(last_status, last):
+                conflicts.append({
+                    'deploy_number': deploy_number,
+                    'existing_commit': str(last.get('existing_commit') or ''),
+                    'requested_commit': str(last.get('requested_commit') or ''),
+                })
+                if len(conflicts) >= conflict_limit:
+                    raise RuntimeError(
+                        'immutable_deploy_slots_exhausted:'
+                        + json.dumps({
+                            'public_number': int(request_payload['public_number']),
+                            'last_deploy_number': deploy_number,
+                            'conflicts': conflicts[-5:],
+                        }, ensure_ascii=False)[:1400]
+                    )
+                request_payload['deploy_number'] = deploy_number + 1
+                print(
+                    f'Versão d{deploy_number} preservada; tentando d{deploy_number + 1}.',
+                    flush=True,
+                )
+                break
+
+            transient = last_status in (0, 408, 409, 422, 425, 429, 500, 502, 503, 504)
+            if transient and deploy_retries < 2:
+                deploy_retries += 1
+                print('Repetindo o deploy após falha transitória do registry.', flush=True)
+                time.sleep(min(20 * deploy_retries, 40))
+                continue
+
+            raise RuntimeError(
+                'versioned_deploy_not_ready:'
+                + json.dumps({
+                    'http': last_status,
+                    'expected_container': expected,
+                    'deploy_number': deploy_number,
+                    'response': last,
+                }, ensure_ascii=False)[:1400]
+            )
 
 
-def promote_initial_runtime(base, headers, project, number):
-    payload = {'project': project, 'public_number': number, 'deploy_number': 1}
-    deadline = time.monotonic() + int(os.environ.get('CLOUDIF_D1_PROMOTION_TIMEOUT', '300'))
+def promote_initial_runtime(base, headers, project, number, deploy_number):
+    payload = {'project': project, 'public_number': number, 'deploy_number': int(deploy_number)}
+    deadline = time.monotonic() + int(os.environ.get('CLOUDIF_INITIAL_PROMOTION_TIMEOUT', os.environ.get('CLOUDIF_D1_PROMOTION_TIMEOUT', '300')))
     last_status = 0
     last = {}
     while time.monotonic() < deadline:
@@ -182,10 +236,10 @@ def promote_initial_runtime(base, headers, project, number):
         if last_status not in (0, 409, 422, 425, 429, 500, 502, 503, 504):
             break
         time.sleep(5)
-    raise RuntimeError('d1_promotion_failed:' + json.dumps(last, ensure_ascii=False)[:800])
+    raise RuntimeError('versioned_promotion_failed:' + json.dumps(last, ensure_ascii=False)[:800])
 
 
-def update_db(slug, tenant, owner, number, deployment, publisher, promotion):
+def update_db(slug, tenant, owner, number, deploy_number, deployment, publisher, promotion):
     con = sqlite3.connect(DB)
     con.row_factory = sqlite3.Row
     now = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
@@ -207,8 +261,8 @@ def update_db(slug, tenant, owner, number, deployment, publisher, promotion):
         commit_sha=excluded.commit_sha,status='published',is_active=1,
         published_at=excluded.published_at,message=excluded.message,detail_json=excluded.detail_json
     ''', (
-        slug, number, 1, 'd1', commit,
-        f'{number}.cloudiff.duckdns.org', f'{number}-d1.cloudiff.duckdns.org',
+        slug, number, int(deploy_number), f'd{int(deploy_number)}', commit,
+        f'{number}.cloudiff.duckdns.org', f'{number}-d{int(deploy_number)}.cloudiff.duckdns.org',
         'published', 1, owner, now, now,
         'Publicação inicial em container versionado próprio', detail,
     ))
@@ -217,7 +271,7 @@ def update_db(slug, tenant, owner, number, deployment, publisher, promotion):
     params = []
     for column, value in (
         ('status', 'ready'),
-        ('message', 'Publicação d1 criada em runtime versionado sem alterar a stack-base de checkout.'),
+        ('message', f'Publicação d{int(deploy_number)} criada em runtime versionado sem alterar a stack-base de checkout.'),
         ('updated_at', now),
     ):
         if column in integration_cols and value:
@@ -264,10 +318,11 @@ def main():
         'X-CloudIF-Token': komodo_token,
         'Authorization': 'Bearer ' + komodo_token,
     }
+    deploy_number = next_recorded_deploy_number(slug)
     deploy_payload = {
         'project': slug,
         'public_number': number,
-        'deploy_number': 1,
+        'deploy_number': deploy_number,
         'timeout': 600,
     }
     deployment = deploy_initial_runtime(
@@ -275,13 +330,14 @@ def main():
         komodo_headers,
         deploy_payload,
     )
+    deploy_number = int(deployment.get('deploy_number') or deploy_number)
 
     publisher_cfg = envfile('/etc/cloudif/npm-publisher-client.env')
     publisher_token = publisher_cfg.get('NPM_PUBLISHER_TOKEN', '')
     status, publisher = request(
         'http://10.62.91.3/publish',
         'POST',
-        {'public_number': number, 'deploy_number': 1},
+        {'public_number': number, 'deploy_number': deploy_number},
         {'Host': 'cloudif-publisher.internal', 'X-CloudIF-Token': publisher_token},
         timeout=300,
     )
@@ -293,15 +349,16 @@ def main():
         komodo_headers,
         slug,
         number,
+        deploy_number,
     )
 
-    public_timeout = int(os.environ.get('CLOUDIF_D1_PUBLIC_READY_TIMEOUT', '1200'))
+    public_timeout = int(os.environ.get('CLOUDIF_INITIAL_PUBLIC_READY_TIMEOUT', os.environ.get('CLOUDIF_D1_PUBLIC_READY_TIMEOUT', '1200')))
     wait_public(publisher['version_url'], timeout=public_timeout)
     wait_public(publisher['stable_url'], timeout=public_timeout)
     if kind == 'onboarding' and tenant:
         seed_db(tenant)
 
-    update_db(slug, tenant, owner, number, deployment, publisher, promotion)
+    update_db(slug, tenant, owner, number, deploy_number, deployment, publisher, promotion)
     access = project_access(slug)
     _, membership = request(
         komodo_base + '/komodo/project/membership/reconcile',
@@ -330,7 +387,7 @@ def main():
         'project': slug,
         'template_kind': kind,
         'public_number': number,
-        'deploy_number': 1,
+        'deploy_number': deploy_number,
         'container': deployment.get('container'),
         'stack_id': deployment.get('stack_id'),
         'commit': deployment.get('commit'),

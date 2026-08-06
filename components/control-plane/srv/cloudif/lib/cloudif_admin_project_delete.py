@@ -238,7 +238,8 @@ def _delete_rows(con, slug):
     removed = {}
     tables = [row[0] for row in con.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")]
     # Dependents first; projects last.
-    tables = [t for t in tables if t != 'projects'] + (['projects'] if 'projects' in tables else [])
+    preserved = {'project_public_ids'}
+    tables = [t for t in tables if t not in preserved and t != 'projects'] + (['projects'] if 'projects' in tables else [])
     for table in tables:
         cols = {row[1] for row in con.execute(f'PRAGMA table_info({table})')}
         key = next((candidate for candidate in ('slug', 'project_slug', 'project') if candidate in cols), None)
@@ -412,9 +413,14 @@ def _recover_tenant(slug):
 
 def _cleanup_already_deleted(slug, actor, progress):
     tenant=_recover_tenant(slug)
+    public_rows=_rows(DB,'project_public_ids','project_slug',slug)
+    public_number=int(public_rows[0].get('public_number')) if public_rows else 0
     progress('Validação','done','Projeto já removido do Portal; verificando resíduos')
+    progress('Publicação e aliases','running','Verificando aliases órfãos sem liberar o número público')
+    publication=_unpublish(public_number)
+    progress('Publicação e aliases','done' if publication.get('ok') else 'failed',f"HTTP {publication.get('status') or '-'}")
     progress('Stack e runtime','running','Verificando containers e stack órfãos')
-    runtime=_destroy_runtime(slug,tenant,0)
+    runtime=_destroy_runtime(slug,tenant,public_number)
     progress('Stack e runtime','done' if runtime.get('ok') else 'failed','Resíduos removidos' if runtime.get('ok') else 'Ainda há resíduos')
     remote=forja_rollback(slug,execute=True)
     agent_identity=_delete_agent_identity(slug); onboarding_state=_delete_onboarding_state(slug); observability=_delete_observability(slug); backup_state=_delete_backup_state(slug)
@@ -424,8 +430,8 @@ def _cleanup_already_deleted(slug, actor, progress):
         except FileNotFoundError: pass
     provision_dir=PROVISIONING/slug
     if provision_dir.exists(): shutil.rmtree(provision_dir);removed_paths.append(str(provision_dir))
-    ok=bool(runtime.get('ok') and remote.get('ok'))
-    return {'ok':ok,'already_deleted':True,'slug':slug,'actor':actor,'tenant_preserved':tenant,'runtime_destroy':runtime,'remote':remote,'agent_identity':agent_identity,'onboarding_state':onboarding_state,'observability':observability,'backup_state':backup_state,'removed_paths':removed_paths,'message':'Projeto já excluído; resíduos verificados e removidos.' if ok else 'Projeto já excluído do Portal, mas ainda há resíduos a verificar.','finished_at':time.strftime('%Y-%m-%dT%H:%M:%S%z')}
+    ok=bool(publication.get('ok') and runtime.get('ok') and remote.get('ok'))
+    return {'ok':ok,'already_deleted':True,'slug':slug,'actor':actor,'tenant_preserved':tenant,'public_number_reserved':public_number,'publication':publication,'runtime_destroy':runtime,'remote':remote,'agent_identity':agent_identity,'onboarding_state':onboarding_state,'observability':observability,'backup_state':backup_state,'removed_paths':removed_paths,'message':'Projeto já excluído; resíduos verificados e removidos.' if ok else 'Projeto já excluído do Portal, mas ainda há resíduos a verificar.','finished_at':time.strftime('%Y-%m-%dT%H:%M:%S%z')}
 
 
 def execute(slug, confirmation, actor, progress=None):
@@ -515,6 +521,7 @@ def execute(slug, confirmation, actor, progress=None):
         'slug': slug,
         'actor': actor,
         'tenant_preserved': plan.get('tenant_preserved') or '',
+        'public_number_reserved': public_number,
         'publication': publication,
         'runtime_destroy': runtime,
         'remote': remote,

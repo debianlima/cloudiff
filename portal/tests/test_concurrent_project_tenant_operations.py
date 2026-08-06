@@ -35,7 +35,7 @@ class ConcurrentProjectTenantOperationsTests(unittest.TestCase):
         self.assertIn("'timeout': 600", self.publish)
         self.assertIn("CLOUDIF_D1_DEPLOY_REQUEST_TIMEOUT", self.publish)
         self.assertIn("'1500'", self.publish)
-        self.assertIn("versioned_d1_not_ready", self.publish)
+        self.assertIn("versioned_deploy_not_ready", self.publish)
         self.assertIn("initial_publication_failed: ", self.worker)
         self.assertIn("a.get('name') not in {'komodo_container_terminal'}", self.portal)
         self.assertIn("data.get('last_error') or next", self.portal)
