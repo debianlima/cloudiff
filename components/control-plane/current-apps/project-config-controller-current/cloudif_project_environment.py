@@ -393,3 +393,289 @@ def get_plan(slug:str,plan_digest_value:str)->dict[str,Any]:
       'createdBy':row['created_by'],'createdAt':int(row['created_at']),'expiresAt':int(row['expires_at']),
       'consumed':bool(row['consumed_at']),'secretValuesIncluded':False,
     }
+
+
+def _json_object(value: Any) -> dict[str, Any]:
+    if isinstance(value, dict):
+        return dict(value)
+    if isinstance(value, str):
+        try:
+            parsed = json.loads(value)
+            return dict(parsed) if isinstance(parsed, dict) else {}
+        except Exception:
+            return {}
+    return {}
+
+
+def _json_value(value: Any) -> Any:
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        return value
+    try:
+        return json.loads(value)
+    except Exception:
+        return value
+
+
+def _current_effective_configuration(slug: str) -> tuple[int, dict[str, Any]]:
+    connection = db()
+    row = connection.execute(
+        'select current_revision from projects where project_slug=?', (slug,)
+    ).fetchone()
+    if not row:
+        connection.close()
+        raise LookupError('project_not_found')
+    revision = int(row['current_revision'] if hasattr(row, 'keys') else row[0])
+    current = connection.execute(
+        'select effective_json from revisions where project_slug=? and revision=?',
+        (slug, revision),
+    ).fetchone()
+    connection.close()
+    if not current:
+        raise LookupError('project_configuration_not_found')
+    raw = current['effective_json'] if hasattr(current, 'keys') else current[0]
+    configuration = json.loads(raw or '{}')
+    if not isinstance(configuration, dict):
+        raise ValueError('invalid_project_configuration')
+    return revision, configuration
+
+
+def _environment_spec_layers(configuration: dict[str, Any], environment: str, service: str) -> list[tuple[str, dict[str, Any]]]:
+    layers: list[tuple[str, dict[str, Any]]] = []
+    root_environment = configuration.get('environment') or {}
+    if isinstance(root_environment, dict):
+        layers.append(('project', root_environment))
+    environment_overlay = ((configuration.get('environments') or {}).get(environment) or {})
+    if isinstance(environment_overlay, dict):
+        overlay_environment = environment_overlay.get('environment') or {}
+        if isinstance(overlay_environment, dict):
+            layers.append(('environment:' + environment, overlay_environment))
+    service_configuration = ((configuration.get('services') or {}).get(service) or {})
+    if isinstance(service_configuration, dict):
+        service_environment = service_configuration.get('environment') or {}
+        if isinstance(service_environment, dict):
+            layers.append(('service:' + service, service_environment))
+    if isinstance(environment_overlay, dict):
+        overlay_service = (((environment_overlay.get('services') or {}).get(service) or {}).get('environment') or {})
+        if isinstance(overlay_service, dict):
+            layers.append(('environment-service:' + environment + ':' + service, overlay_service))
+    return layers
+
+
+def _definition_from_spec(spec: dict[str, Any], name: str) -> dict[str, Any]:
+    definitions = spec.get('definitions') or {}
+    definition = definitions.get(name) if isinstance(definitions, dict) else None
+    return dict(definition) if isinstance(definition, dict) else {}
+
+
+def _declared_value(spec: dict[str, Any], name: str, definition: dict[str, Any]) -> tuple[bool, Any, str]:
+    variables = spec.get('variables') or {}
+    if isinstance(variables, dict) and name in variables:
+        raw = variables[name]
+        if isinstance(raw, dict) and 'value' in raw:
+            return True, raw.get('value'), 'value'
+        return True, raw, 'variables'
+    if 'value' in definition:
+        return True, definition.get('value'), 'value'
+    if 'default' in definition:
+        return True, definition.get('default'), 'default'
+    return False, None, ''
+
+
+def _required_names(spec: dict[str, Any]) -> set[str]:
+    required = spec.get('required') or []
+    if isinstance(required, dict):
+        return {str(name).strip().upper() for name, enabled in required.items() if enabled}
+    if isinstance(required, list):
+        return {str(name).strip().upper() for name in required if str(name).strip()}
+    return set()
+
+
+def _persisted_environment_entries(slug: str, environment: str) -> list[dict[str, Any]]:
+    connection = db()
+    rows = connection.execute(
+        'select * from environment_entries where project_slug=? and environment=? order by service,name',
+        (slug, environment),
+    ).fetchall()
+    connection.close()
+    return [dict(row) for row in rows]
+
+
+def effective_internal(slug: str, environment: str, service: str = '') -> dict[str, Any]:
+    slug = str(slug or '').strip()
+    environment = normalize_environment(environment)
+    service = str(service or '').strip().lower()
+    revision, configuration = _current_effective_configuration(slug)
+    services_configuration = configuration.get('services') or {}
+    if not isinstance(services_configuration, dict):
+        services_configuration = {}
+    service_names = [service] if service else sorted(str(name) for name in services_configuration)
+    if service and service not in services_configuration:
+        raise LookupError('service_not_found')
+    if not service_names:
+        service_names = ['']
+
+    persisted = _persisted_environment_entries(slug, environment)
+    persisted_by_scope: dict[tuple[str, str], dict[str, Any]] = {}
+    for row in persisted:
+        row_service = str(row.get('service') or '').strip().lower()
+        name = str(row.get('name') or '').strip().upper()
+        if not name:
+            continue
+        persisted_by_scope[(row_service, name)] = row
+
+    public_build: dict[str, dict[str, Any]] = {}
+    public_runtime: dict[str, dict[str, Any]] = {}
+    secret_build: dict[str, dict[str, str]] = {}
+    secret_runtime: dict[str, dict[str, str]] = {}
+    summaries: list[dict[str, Any]] = []
+    missing: list[dict[str, Any]] = []
+
+    for service_name in service_names:
+        layers = _environment_spec_layers(configuration, environment, service_name)
+        names: set[str] = set()
+        definitions_by_name: dict[str, dict[str, Any]] = {}
+        origins_by_name: dict[str, str] = {}
+        declared_values: dict[str, tuple[Any, str]] = {}
+        required_names: set[str] = set()
+        for origin, spec in layers:
+            definitions = spec.get('definitions') or {}
+            if isinstance(definitions, dict):
+                for raw_name, raw_definition in definitions.items():
+                    name = str(raw_name).strip().upper()
+                    if not name:
+                        continue
+                    names.add(name)
+                    definition = dict(raw_definition) if isinstance(raw_definition, dict) else {}
+                    definitions_by_name[name] = {**definitions_by_name.get(name, {}), **definition}
+                    origins_by_name[name] = origin
+                    configured, value, value_kind = _declared_value(spec, name, definition)
+                    if configured:
+                        declared_values[name] = (value, origin + ':' + value_kind)
+            variables = spec.get('variables') or {}
+            if isinstance(variables, dict):
+                names.update(str(name).strip().upper() for name in variables if str(name).strip())
+            required_names.update(_required_names(spec))
+        for row_service, name in persisted_by_scope:
+            if row_service in {'', service_name}:
+                names.add(name)
+
+        for name in sorted(names | required_names):
+            definition = dict(definitions_by_name.get(name) or {})
+            required = bool(definition.get('required')) or name in required_names
+            secret = bool(definition.get('secret'))
+            expose = bool(definition.get('exposeToClient'))
+            immutable = bool(definition.get('immutable'))
+            build_time = bool(definition.get('buildTime'))
+            runtime = bool(definition.get('runtime', not build_time))
+            restart_required = bool(definition.get('restartRequired', runtime))
+            if secret and expose:
+                raise ValueError('secret_cannot_be_exposed_to_client:' + name)
+            if not build_time and not runtime:
+                runtime = True
+
+            chosen = persisted_by_scope.get((service_name, name)) or persisted_by_scope.get(('', name))
+            configured = False
+            value: Any = None
+            secret_reference = ''
+            source = origins_by_name.get(name, 'declaration')
+            kind = 'secret' if secret else 'public'
+            if chosen:
+                metadata = _json_object(chosen.get('metadata_json'))
+                if metadata:
+                    definition = {**definition, **metadata}
+                    required = bool(definition.get('required')) or required
+                    secret = bool(definition.get('secret')) or str(chosen.get('kind') or '') == 'secret'
+                    expose = bool(definition.get('exposeToClient'))
+                    immutable = bool(definition.get('immutable'))
+                    build_time = bool(definition.get('buildTime'))
+                    runtime = bool(definition.get('runtime', not build_time))
+                    restart_required = bool(definition.get('restartRequired', runtime))
+                kind = str(chosen.get('kind') or ('secret' if secret else 'public'))
+                if kind == 'secret' or secret:
+                    secret = True
+                    secret_reference = str(chosen.get('secret_reference') or '').strip()
+                    configured = bool(secret_reference)
+                else:
+                    value = _json_value(chosen.get('value_json'))
+                    configured = chosen.get('value_json') is not None
+                source = ('service-binding:' if str(chosen.get('service') or '') else 'project-binding:') + environment
+            elif name in declared_values and not secret:
+                value, source = declared_values[name]
+                configured = value is not None
+            elif 'default' in definition and not secret:
+                value = definition.get('default')
+                configured = value is not None
+                source = origins_by_name.get(name, 'declaration') + ':default'
+
+            if required and not configured:
+                missing.append({'service': service_name, 'name': name, 'secret': secret, 'environment': environment, 'source': source})
+
+            public_target_build = public_build.setdefault(service_name, {})
+            public_target_runtime = public_runtime.setdefault(service_name, {})
+            secret_target_build = secret_build.setdefault(service_name, {})
+            secret_target_runtime = secret_runtime.setdefault(service_name, {})
+            if configured:
+                if secret:
+                    if build_time:
+                        secret_target_build[name] = secret_reference
+                    if runtime:
+                        secret_target_runtime[name] = secret_reference
+                else:
+                    if build_time:
+                        public_target_build[name] = value
+                    if runtime:
+                        public_target_runtime[name] = value
+
+            summaries.append({
+                'service': service_name, 'name': name, 'environment': environment,
+                'source': source, 'configured': configured, 'secret': secret,
+                'required': required, 'buildTime': build_time, 'runtime': runtime,
+                'restartRequired': restart_required, 'exposeToClient': expose,
+                'immutable': immutable, 'valueIncluded': False,
+            })
+
+    build_material = {
+        'projectSlug': slug, 'environment': environment, 'revision': revision,
+        'public': public_build, 'secretReferences': secret_build,
+    }
+    runtime_material = {
+        'projectSlug': slug, 'environment': environment, 'revision': revision,
+        'public': public_runtime, 'secretReferences': secret_runtime,
+    }
+    environment_material = {
+        'buildDigest': digest(build_material), 'runtimeDigest': digest(runtime_material),
+        'entries': summaries, 'missing': missing,
+    }
+    return {
+        'ok': True, 'projectSlug': slug, 'environment': environment, 'service': service,
+        'revision': revision,
+        'publicBuildEnvironment': public_build,
+        'publicRuntimeEnvironment': public_runtime,
+        'secretBuildReferences': secret_build,
+        'secretRuntimeReferences': secret_runtime,
+        'entries': summaries, 'missingRequired': missing, 'valid': not missing,
+        'buildEnvironmentDigest': digest(build_material),
+        'runtimeEnvironmentDigest': digest(runtime_material),
+        'environmentDigest': digest(environment_material),
+        'secretValuesIncluded': False,
+    }
+
+
+def effective_summary(slug: str, environment: str, service: str = '') -> dict[str, Any]:
+    internal = effective_internal(slug, environment, service)
+    return {
+        'ok': True, 'projectSlug': internal['projectSlug'], 'environment': internal['environment'],
+        'service': internal['service'], 'revision': internal['revision'],
+        'entries': internal['entries'], 'missingRequired': internal['missingRequired'],
+        'valid': internal['valid'],
+        'buildEnvironmentDigest': internal['buildEnvironmentDigest'],
+        'runtimeEnvironmentDigest': internal['runtimeEnvironmentDigest'],
+        'environmentDigest': internal['environmentDigest'],
+        'publicBuildNames': {name: sorted(values) for name, values in internal['publicBuildEnvironment'].items()},
+        'publicRuntimeNames': {name: sorted(values) for name, values in internal['publicRuntimeEnvironment'].items()},
+        'secretBuildNames': {name: sorted(values) for name, values in internal['secretBuildReferences'].items()},
+        'secretRuntimeNames': {name: sorted(values) for name, values in internal['secretRuntimeReferences'].items()},
+        'secretValuesIncluded': False, 'secretReferencesIncluded': False,
+    }

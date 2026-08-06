@@ -151,6 +151,7 @@ def handle_get(slug:str,operation:str,query:dict[str,str],username:str,groups:li
     suffix='';params={}
     if operation=='history':suffix='/history';params={'limit':query.get('limit','100')}
     elif operation=='missing':suffix='/missing';params={'environment':query.get('environment','')}
+    elif operation=='effective':suffix='/effective';params={'environment':query.get('environment','development')}
     else:
         params={key:query[key] for key in ('environment','service') if query.get(key)}
         if query.get('includePublicValues','').lower() in {'1','true','yes','on'}:params['includeValues']='true'

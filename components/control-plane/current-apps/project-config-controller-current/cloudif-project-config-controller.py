@@ -974,7 +974,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json(404, {'ok': False, 'error': {'code': str(exc), 'message': 'Plano de ambiente não encontrado.'}})
             except ValueError as exc:
                 return self.send_json(400, {'ok': False, 'error': {'code': str(exc), 'message': 'Digest de plano inválido.'}})
-        environment_match = re.fullmatch(r'/v1/projects/([a-z0-9][a-z0-9-]{0,62})/environment(?:/(history|missing))?', parsed.path)
+        environment_match = re.fullmatch(r'/v1/projects/([a-z0-9][a-z0-9-]{0,62})/environment(?:/(history|missing|effective|effective-internal))?', parsed.path)
         if environment_match:
             slug, operation = environment_match.groups(); query = urllib.parse.parse_qs(parsed.query)
             try:
@@ -982,6 +982,10 @@ class Handler(BaseHTTPRequestHandler):
                     return self.send_json(200, project_environment.history(slug, int((query.get('limit') or ['100'])[0])))
                 if operation == 'missing':
                     return self.send_json(200, project_environment.missing_variables(slug, (query.get('environment') or [''])[0]))
+                if operation == 'effective':
+                    return self.send_json(200, project_environment.effective_summary(slug, (query.get('environment') or ['development'])[0], (query.get('service') or [''])[0]))
+                if operation == 'effective-internal':
+                    return self.send_json(200, project_environment.effective_internal(slug, (query.get('environment') or ['development'])[0], (query.get('service') or [''])[0]))
                 include_values = str((query.get('includeValues') or ['false'])[0]).lower() in {'1','true','yes','on'}
                 return self.send_json(200, project_environment.list_environment(slug, (query.get('environment') or [''])[0], (query.get('service') or [''])[0], include_values))
             except LookupError as exc:

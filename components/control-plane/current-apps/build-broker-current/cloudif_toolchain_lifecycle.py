@@ -77,6 +77,7 @@ def plan(payload: dict[str, Any]) -> dict[str, Any]:
     plan_digest = hashlib.sha256(B.canonical(material)).hexdigest()
     reusable_images = reusable(base['project_slug'], validations)
     all_reusable = bool(validations) and len(reusable_images) == len(validations)
+    lifecycle_blocked = [item for item in (base.get('blocked') or []) if item.get('code') != 'image-outdated']
     warnings = [
         {'service': item['service'], **warning}
         for item in validations
@@ -94,12 +95,12 @@ def plan(payload: dict[str, Any]) -> dict[str, Any]:
         'plan_digest': plan_digest,
         'services': validations,
         'toolchain': base.get('toolchain') or {},
-        'blocked': base.get('blocked') or [],
+        'blocked': lifecycle_blocked,
         'warnings': warnings,
         'source_validation_required': any(item.get('script', {}).get('ok') is None for item in validations),
         'reusable_images': reusable_images,
         'build_required': not all_reusable,
-        'approval_required': not (base.get('blocked') or []) and not all_reusable,
+        'approval_required': not lifecycle_blocked and not all_reusable,
         'summary': {
             'serviceCount': len(validations),
             'catalogVersion': int(B.load_catalog(B.TOOLCHAIN_CATALOG).get('version') or 0),
@@ -538,3 +539,51 @@ def recover_jobs() -> None:
     connection.commit(); connection.close()
     for row in rows:
         threading.Thread(target=_run_job, args=(row['job_id'],), daemon=True).start()
+
+
+def compatible_activations(project_slug:str,environment:str,validations:list[dict[str,Any]],archive_sha256:str,config_digest:str)->dict[str,Any]:
+    _require_configured()
+    if environment not in ENVIRONMENTS:
+        raise ValueError('invalid_environment')
+    connection=B.db()
+    rows=connection.execute(
+        '''select a.service,a.image_record_id,a.toolchain_digest,a.activation_revision,
+                  i.image_ref,i.image_id,i.config_digest,i.archive_sha256,i.status,i.result_json
+           from toolchain_activations a
+           join toolchain_images i on i.image_record_id=a.image_record_id
+           where a.project_slug=? and a.environment=?''',
+        (project_slug,environment),
+    ).fetchall()
+    connection.close()
+    activated={row['service']:row for row in rows}
+    active_images={};states=[];blocked=[]
+    for validation in validations:
+        service=validation['service'];row=activated.get(service)
+        if not row:
+            states.append({'service':service,'status':'not-activated','fallback':'default-build'})
+            continue
+        details=json.loads(row['result_json'] or '{}')
+        source_bound=bool((details.get('script') or {}).get('path') or details.get('hooks'))
+        reasons=[]
+        if row['status'] not in {'ready','active'}:reasons.append('image-not-ready')
+        if str(row['config_digest'])!=str(config_digest):reasons.append('config-digest-mismatch')
+        if str(details.get('validatedToolchainDigest') or '')!=str(validation.get('toolchainDigest') or ''):reasons.append('toolchain-digest-mismatch')
+        if source_bound and str(row['archive_sha256'])!=str(archive_sha256):reasons.append('source-archive-mismatch')
+        if not bool(details.get('signatureVerified')):reasons.append('signature-not-verified')
+        if bool(details.get('scannerBlocked')):reasons.append('scanner-blocked')
+        if reasons:
+            issue={'service':service,'code':'image-outdated','field':'toolchain.activation','environment':environment,'image_record_id':row['image_record_id'],'reasons':reasons}
+            blocked.append(issue);states.append({'service':service,'status':'image-outdated','image_record_id':row['image_record_id'],'reasons':reasons})
+            continue
+        active_images[service]={
+            'imageRecordId':row['image_record_id'],'imageRef':row['image_ref'],'imageId':row['image_id'],
+            'effectiveToolchainDigest':row['toolchain_digest'],'validatedToolchainDigest':details.get('validatedToolchainDigest'),
+            'configDigest':row['config_digest'],'archiveSha256':row['archive_sha256'],
+            'activationRevision':int(row['activation_revision']),'environment':environment,
+            'hooks':details.get('hooks') or [],'script':details.get('script') or {},
+            'sbomReady':bool(details.get('sbomReady')),'sbomSha256':details.get('sbomSha256'),
+            'scannerBlocked':False,'scannerCounts':details.get('scannerCounts') or {},
+            'signatureVerified':True,'sourceArchiveBound':source_bound,'secretValuesIncluded':False,
+        }
+        states.append({'service':service,'status':'synchronized','image_record_id':row['image_record_id'],'activation_revision':int(row['activation_revision'])})
+    return {'environment':environment,'images':active_images,'states':states,'blocked':blocked,'activeCount':len(active_images),'secretValuesIncluded':False}

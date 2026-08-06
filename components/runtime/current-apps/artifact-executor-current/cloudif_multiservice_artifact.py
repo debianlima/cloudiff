@@ -226,6 +226,16 @@ def validate_request(payload: Any) -> dict[str, Any]:
     toolchain = payload.get('toolchain') or {}
     if not isinstance(toolchain, dict):
         raise ArtifactError('invalid_toolchain', 'toolchain deve ser um objeto.', 'toolchain', http_status=400)
+    environment = str(payload.get('environment') or 'development').strip().lower()
+    if environment not in {'development','preview','homologation','production'}:
+        raise ArtifactError('invalid_environment','environment deve ser development, preview, homologation ou production.','environment',http_status=400)
+    active_toolchain_images = payload.get('activeToolchainImages') or {}
+    if not isinstance(active_toolchain_images, dict):
+        raise ArtifactError('invalid_active_toolchain_images','activeToolchainImages deve ser um objeto.','activeToolchainImages',http_status=400)
+    service_names={item['name'] for item in services}
+    unknown=sorted(set(active_toolchain_images)-service_names)
+    if unknown:
+        raise ArtifactError('unknown_active_toolchain_service','A ativação contém serviço inexistente no plano.','activeToolchainImages',unknown,http_status=400)
     blocked = [{'service': item['name'], **item['policy']} for item in services if item['policy']['status'] != 'ready']
     validations = []
     for item in services:
@@ -239,7 +249,8 @@ def validate_request(payload: Any) -> dict[str, Any]:
         'job_id': job_id, 'project_slug': slug, 'ref': ref, 'archive_sha256': archive_sha,
         'config_revision': revision, 'config_digest': config_digest,
         'toolchain_digest': toolchain_digest, 'plan_digest': plan_digest,
-        'services': services, 'toolchain': toolchain, 'toolchainValidations': validations, 'trace_id': trace_id,
+        'services': services, 'toolchain': toolchain, 'toolchainValidations': validations,
+        'environment': environment, 'activeToolchainImages': active_toolchain_images, 'trace_id': trace_id,
     }
 
 
@@ -697,7 +708,11 @@ def build_toolchain_bundle(payload: Any) -> dict[str, Any]:
         blockers = [{'service': item['service'], **issue} for item in validations for issue in item.get('blockers') or []]
         if blockers:
             raise ArtifactError('toolchain_policy_blocked', 'A toolchain não passou pela validação do archive.', 'toolchain', blockers)
-        toolchains = [build_toolchain(request, service, source, job_dir) for service in request['services']]
+        active_images=request.get('activeToolchainImages') or {}
+        toolchains=[]
+        for service in request['services']:
+            active=active_images.get(service['name'])
+            toolchains.append(reuse_active_toolchain(request,service,source,active) if active else build_toolchain(request,service,source,job_dir))
     set_material = {
         'projectSlug': request['project_slug'], 'ref': request['ref'],
         'archiveSha256': request['archive_sha256'], 'configRevision': request['config_revision'],
@@ -710,6 +725,7 @@ def build_toolchain_bundle(payload: Any) -> dict[str, Any]:
         'archiveSha256': request['archive_sha256'], 'configRevision': request['config_revision'],
         'configDigest': request['config_digest'], 'requestedToolchainDigest': request['toolchain_digest'],
         'planDigest': request['plan_digest'], 'toolchainSetDigest': sha256(canonical(set_material)),
+        'environment':request['environment'],'activeToolchainImagesUsed':sum(1 for item in toolchains if item.get('active')),
         'toolchains': toolchains, 'imageCount': len(toolchains),
         'activationRequired': True, 'containersChanged': False,
         'buildsCreated': 0, 'previewsCreated': 0, 'deploymentsCreated': 0,
@@ -718,6 +734,44 @@ def build_toolchain_bundle(payload: Any) -> dict[str, Any]:
     (job_dir / 'toolchain-result.json').write_text(json.dumps(result, ensure_ascii=False, indent=2) + '\n')
     os.chmod(job_dir / 'toolchain-result.json', 0o600)
     return result
+
+
+def reuse_active_toolchain(request:dict[str,Any],service:dict[str,Any],source:Path,active:dict[str,Any])->dict[str,Any]:
+    validation=validate_toolchain(request.get('toolchain') or {},service['runtime'],service.get('version'),source,TOOLCHAIN_CATALOG)
+    if not validation.get('ok') or not validation.get('buildable'):
+        raise ArtifactError('active_toolchain_policy_blocked','A configuração atual não passou pela validação exigida para reutilizar a imagem ativa.','activeToolchainImages',{'service':service['name'],'blockers':validation.get('blockers') or []})
+    image_ref=str(active.get('imageRef') or '');expected_id=str(active.get('imageId') or '')
+    if not image_ref or not re.fullmatch(r'sha256:[a-f0-9]{64}',expected_id):
+        raise ArtifactError('active_toolchain_identity_invalid','A imagem ativa não possui referência e ID imutáveis.','activeToolchainImages',{'service':service['name']})
+    inspected=inspect_image(image_ref);labels=inspected.get('labels') or {}
+    reasons=[]
+    if inspected.get('imageId')!=expected_id:reasons.append('image-id-mismatch')
+    if labels.get('org.cloudiff.kind')!='toolchain':reasons.append('kind-label-mismatch')
+    if labels.get('org.cloudiff.project')!=request['project_slug']:reasons.append('project-label-mismatch')
+    if labels.get('org.cloudiff.service')!=service['name']:reasons.append('service-label-mismatch')
+    if labels.get('org.cloudiff.toolchain-digest')!=str(active.get('effectiveToolchainDigest') or ''):reasons.append('effective-digest-mismatch')
+    if labels.get('org.cloudiff.validated-toolchain-digest')!=validation['toolchainDigest']:reasons.append('validated-digest-mismatch')
+    if labels.get('org.cloudiff.config-digest')!=request['config_digest']:reasons.append('config-digest-mismatch')
+    if str(active.get('validatedToolchainDigest') or '')!=validation['toolchainDigest']:reasons.append('activation-digest-mismatch')
+    if bool(active.get('sourceArchiveBound')) and str(active.get('archiveSha256') or '')!=request['archive_sha256']:reasons.append('source-archive-mismatch')
+    if bool(active.get('scannerBlocked')):reasons.append('scanner-blocked')
+    if not bool(active.get('signatureVerified')):reasons.append('signature-not-verified')
+    if reasons:
+        raise ArtifactError('active_toolchain_verification_failed','A imagem ativa diverge do plano ou das políticas atuais.','activeToolchainImages',{'service':service['name'],'imageRecordId':active.get('imageRecordId'),'reasons':reasons})
+    return {
+        'service':service['name'],'runtime':service['runtime'],'version':service.get('version'),
+        'effectiveToolchainDigest':str(active.get('effectiveToolchainDigest')),
+        'validatedToolchainDigest':validation['toolchainDigest'],'catalogVersion':validation['catalogVersion'],
+        'architecture':validation['architecture'],'base':validation['base'],
+        'systemPackages':validation.get('systemPackages') or [],'tools':validation.get('tools') or [],
+        'script':active.get('script') or validation.get('script') or {},'verification':[],
+        'built':False,'reused':True,'active':True,'activationEnvironment':request['environment'],
+        'activationRevision':int(active.get('activationRevision') or 0),'imageRecordId':active.get('imageRecordId'),
+        'image':inspected,'hooks':active.get('hooks') or [],'runtimeProof':'active-image-verified',
+        'sbomReady':bool(active.get('sbomReady')),'sbomSha256':active.get('sbomSha256'),
+        'scannerBlocked':False,'scannerCounts':active.get('scannerCounts') or {},
+        'signatureVerified':True,'secretsIncluded':False,
+    }
 
 
 def build_multiservice(payload: Any) -> dict[str, Any]:

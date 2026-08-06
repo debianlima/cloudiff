@@ -35,6 +35,7 @@ class ToolchainLifecycleBrokerTests(unittest.TestCase):
             },
           },
         }
+        self.module.project_effective_environment=lambda slug,environment:{'ok':True,'projectSlug':slug,'environment':environment,'revision':4,'publicBuildEnvironment':{},'publicRuntimeEnvironment':{},'secretBuildReferences':{},'secretRuntimeReferences':{},'missingRequired':[],'buildEnvironmentDigest':'4'*64,'runtimeEnvironmentDigest':'5'*64,'environmentDigest':'6'*64,'secretValuesIncluded':False}
         self.module.source_detection=lambda slug,ref,trace:{'archiveSha256':'a'*64,'projectType':'multi-service','componentCount':2}
         self.original_artifact=self.lifecycle._artifact
 
