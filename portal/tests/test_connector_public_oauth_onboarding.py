@@ -12,6 +12,8 @@ class ConnectorPublicOAuthOnboardingTest(unittest.TestCase):
             "'code_challenge_method':'S256'",
             "'scopes':['mcp','offline_access']",
             "'legacy_bearer'",
+            "'openapi_schema_url':'https://cloudiff.duckdns.org/cloudiff/mcp/openapi/'",
+            "'privacy_policy_url':'https://cloudiff.duckdns.org/cloudiff/mcp/privacy'",
         ):
             self.assertIn(marker, source)
         primary = source[source.index('def instructions'):source.index('def write_secret')]

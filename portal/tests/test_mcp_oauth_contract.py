@@ -61,6 +61,33 @@ class MCPOAuthContractTests(unittest.TestCase):
         self.assertIn("elif method=='prompts/get'", self.gateway)
         self.assertIn("slug=str((params.get('arguments') or {}).get('slug') or '')", self.gateway)
 
+    def test_actions_schema_is_project_specific_and_conservative(self):
+        for marker in (
+            "def _action_schema(client_id):",
+            "'/cloudiff/mcp/actions/v1/project'",
+            "'/cloudiff/mcp/actions/v1/read'",
+            "'/cloudiff/mcp/actions/v1/write'",
+            "'x-openai-isConsequential':False",
+            "'x-openai-isConsequential':True",
+            "'/cloudiff/mcp/privacy'",
+            "openapi':'3.1.0",
+        ):
+            self.assertIn(marker, self.gateway)
+        schema_block = self.gateway[self.gateway.index('def _action_schema'):self.gateway.index('def _privacy_html')]
+        self.assertIn("read_tools=[x for x in available if x in READ_ONLY_TOOLS]", schema_block)
+        self.assertIn("write_tools=[x for x in available if x not in READ_ONLY_TOOLS]", schema_block)
+        self.assertNotIn("'x-openai-isConsequential':False", schema_block[schema_block.index("base+'/write'"):])
+
+    def test_actions_bridge_forces_project_slug_and_separates_read_from_write(self):
+        for marker in (
+            "if 'slug' in props:clean['slug']=identity['project_slug']",
+            "write_tool_not_allowed_on_read_endpoint",
+            "read_tool_not_allowed_on_write_endpoint",
+            "project_identity_invalid",
+            "tool_denied",
+        ):
+            self.assertIn(marker, self.gateway)
+
     def test_project_list_is_filtered_by_agent_projects(self):
         self.assertIn("allowed=set(authz.get('project_slugs') or [])", self.gateway)
         self.assertIn("x.get('slug') in allowed", self.gateway)

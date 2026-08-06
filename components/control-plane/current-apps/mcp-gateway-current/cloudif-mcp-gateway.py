@@ -179,6 +179,38 @@ for _tool in TOOLS:
 def control(path):
     r=urllib.request.Request(CONTROL+path,headers={'Authorization':'Bearer '+CONTROL_TOKEN,'Accept':'application/json'})
     with urllib.request.urlopen(r,timeout=8) as x:return json.loads(x.read().decode())
+def _tool_row(name):return next((x for x in TOOLS if x.get('name')==name),None)
+def _client_scopes(row):
+    if not row:return []
+    raw=row.get('scopes_json')
+    try:return json.loads(raw or '[]') if isinstance(raw,str) else list(row.get('scopes') or [])
+    except Exception:return []
+def _client_tool_names(row):
+    scopes=set(_client_scopes(row));out=[]
+    for tool in TOOLS:
+        name=str(tool.get('name') or '');scope=SCOPE_BY_TOOL.get(name,'project:read')
+        if '*' in scopes or scope in scopes:out.append(name)
+    return out
+def _action_schema(client_id):
+    row=_oauth_client(client_id);projects=_client_projects(row)
+    if not row or len(projects)!=1:return None
+    slug=projects[0];available=_client_tool_names(row)
+    read_tools=[x for x in available if x in READ_ONLY_TOOLS]
+    write_tools=[x for x in available if x not in READ_ONLY_TOOLS]
+    base='/cloudiff/mcp/actions/v1';security=[{'cloudiffOAuth':['mcp']}]
+    responses={'200':{'description':'Resposta do conector CloudIFF','content':{'application/json':{'schema':{'type':'object','additionalProperties':True}}}},'401':{'description':'Autenticação necessária'},'403':{'description':'Projeto ou ferramenta não autorizado'},'422':{'description':'Parâmetros inválidos'}}
+    paths={
+      base+'/project':{'get':{'operationId':'getCloudIFFProject','summary':'Consultar o projeto CloudIFF vinculado','description':'Retorna somente o projeto associado ao Client ID autenticado.','security':security,'x-openai-isConsequential':False,'responses':responses}},
+      base+'/connectors':{'get':{'operationId':'getCloudIFFProjectConnectors','summary':'Consultar conectores do projeto','description':'Retorna Forgejo, Supabase, Komodo, MCP e ACL sanitizada do projeto vinculado.','security':security,'x-openai-isConsequential':False,'responses':responses}},
+      base+'/tools':{'get':{'operationId':'listCloudIFFProjectTools','summary':'Listar ferramentas autorizadas','description':'Lista as ferramentas realmente liberadas para a identidade deste projeto.','security':security,'x-openai-isConsequential':False,'responses':responses}},
+    }
+    if read_tools:
+        paths[base+'/read']={'post':{'operationId':'callCloudIFFReadTool','summary':'Executar ferramenta de consulta','description':'Executa somente ferramentas classificadas pelo servidor como leitura, plano ou inspeção sem efeito persistente. O projeto é imposto pelo token OAuth.','security':security,'x-openai-isConsequential':False,'requestBody':{'required':True,'content':{'application/json':{'schema':{'type':'object','properties':{'tool':{'type':'string','enum':read_tools},'arguments':{'type':'object','additionalProperties':True}},'required':['tool'],'additionalProperties':False}}}},'responses':responses}}
+    if write_tools:
+        paths[base+'/write']={'post':{'operationId':'callCloudIFFProjectTool','summary':'Executar operação controlada do projeto','description':'Executa uma ferramenta com efeito ou solicitação de aprovação. Aprovações humanas e políticas da CloudIFF continuam obrigatórias.','security':security,'x-openai-isConsequential':True,'requestBody':{'required':True,'content':{'application/json':{'schema':{'type':'object','properties':{'tool':{'type':'string','enum':write_tools},'arguments':{'type':'object','additionalProperties':True}},'required':['tool'],'additionalProperties':False}}}},'responses':responses}}
+    return {'openapi':'3.1.0','info':{'title':'CloudIFF Actions — '+slug,'version':'1.0.0','description':'Ações do projeto '+slug+' com OAuth público, PKCE, ACL por projeto e aprovações humanas server-side.','termsOfService':PUBLIC_ORIGIN+'/cloudiff/mcp/privacy','x-privacy-policy-url':PUBLIC_ORIGIN+'/cloudiff/mcp/privacy'},'servers':[{'url':PUBLIC_ORIGIN}],'externalDocs':{'description':'Política de privacidade do conector CloudIFF','url':PUBLIC_ORIGIN+'/cloudiff/mcp/privacy'},'components':{'securitySchemes':{'cloudiffOAuth':{'type':'oauth2','flows':{'authorizationCode':{'authorizationUrl':PUBLIC_ORIGIN+'/cloudiff/mcp/oauth/authorize','tokenUrl':PUBLIC_ORIGIN+'/cloudiff/mcp/oauth/token','scopes':{'mcp':'Acesso às ferramentas MCP autorizadas do projeto','offline_access':'Renovação da sessão OAuth'}}}}}},'paths':paths,'x-cloudiff-project':slug,'x-cloudiff-client-id':client_id}
+def _privacy_html():
+    return '<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Privacidade do conector CloudIFF</title><style>body{font-family:Inter,Arial,sans-serif;max-width:760px;margin:0 auto;padding:48px 24px;line-height:1.65;color:#122018}h1{font-size:2rem}h2{margin-top:2rem}code{background:#eef3ee;padding:.15rem .35rem;border-radius:.35rem}</style></head><body><h1>Privacidade do conector CloudIFF</h1><p>O conector usa OAuth com PKCE e vincula cada sessão aos projetos autorizados para o usuário autenticado. O Client Secret não é necessário.</p><h2>Dados processados</h2><p>Identidade institucional, Client ID do projeto, ferramentas chamadas, projeto vinculado, resultado sanitizado e registros técnicos de auditoria.</p><h2>Limites</h2><p>O conector não entrega chaves privadas, senhas de banco ou tokens internos. Operações sensíveis continuam sujeitas às permissões e aprovações do Portal CloudIFF.</p><h2>Revogação</h2><p>A sessão pode ser revogada no endpoint <code>/cloudiff/mcp/oauth/revoke</code> ou pela remoção do usuário/projeto no Portal.</p></body></html>'
 def workspace_probe(slug,trace_id):
     payload=json.dumps({'project_slug':slug,'trace_id':trace_id},separators=(',',':')).encode()
     r=urllib.request.Request(WORKSPACE_URL+'/v1/probe',data=payload,method='POST',headers={'Authorization':'Bearer '+WORKSPACE_TOKEN,'Content-Type':'application/json','Accept':'application/json'})
@@ -483,6 +515,36 @@ class H(BaseHTTPRequestHandler):
             event=dict(ctx);event['result']='error' if code>=400 or (isinstance(data,dict) and data.get('error')) else 'success';event['duration_ms']=int((time.monotonic()-event.pop('_start'))*1000)
             audit_async(event)
         raw=json.dumps(data,ensure_ascii=False,separators=(',',':')).encode();self.send_response(code);self.send_header('Content-Type','application/json');self.send_header('Cache-Control','no-store');self.send_header('X-Content-Type-Options','nosniff');self.send_header('Content-Length',str(len(raw)));self.end_headers();self.wfile.write(raw)
+    def sendhtml(self,code,text):
+        raw=str(text).encode();self.send_response(code);self.send_header('Content-Type','text/html; charset=utf-8');self.send_header('Cache-Control','public, max-age=300');self.send_header('X-Content-Type-Options','nosniff');self.send_header('Content-Security-Policy',"default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; frame-ancestors 'none'");self.send_header('Content-Length',str(len(raw)));self.end_headers();self.wfile.write(raw)
+    def _action_identity(self):
+        if not self.auth():self.sendj(401,{'ok':False,'error':'unauthorized'});return None
+        client_id=self.headers.get('X-CloudIF-Client','').strip();row=_oauth_client(client_id);projects=_client_projects(row)
+        if not row or len(projects)!=1:self.sendj(403,{'ok':False,'error':'project_identity_invalid'});return None
+        oauth=getattr(self,'_oauth',None) or {};slug=str(oauth.get('project_slug') or projects[0])
+        if slug!=projects[0]:self.sendj(403,{'ok':False,'error':'project_denied'});return None
+        return {'client_id':client_id,'project_slug':slug,'row':row,'tools':_client_tool_names(row)}
+    def _action_rpc(self,identity,tool,args):
+        toolrow=_tool_row(tool)
+        if not toolrow or tool not in identity['tools']:raise PermissionError('tool_denied')
+        clean=dict(args or {});props=(toolrow.get('inputSchema') or {}).get('properties') or {}
+        if 'slug' in props:clean['slug']=identity['project_slug']
+        body=json.dumps({'jsonrpc':'2.0','id':'action-'+uuid.uuid4().hex,'method':'tools/call','params':{'name':tool,'arguments':clean}},ensure_ascii=False,separators=(',',':')).encode()
+        headers={'Content-Type':'application/json','Authorization':self.headers.get('Authorization',''),'X-CloudIF-Client':identity['client_id'],'X-CloudIF-Trace-Id':self.headers.get('X-CloudIF-Trace-Id') or uuid.uuid4().hex}
+        req=urllib.request.Request(f'http://127.0.0.1:{PORT}/mcp',data=body,method='POST',headers=headers)
+        try:
+            with urllib.request.urlopen(req,timeout=180) as x:data=json.load(x)
+        except urllib.error.HTTPError as e:
+            try:data=json.load(e)
+            except Exception:data={'error':{'message':'connector_request_failed'}}
+            raise ValueError(str((data.get('error') or {}).get('message') or 'connector_request_failed')) from e
+        if data.get('error'):raise ValueError(str((data.get('error') or {}).get('message') or 'tool_failed'))
+        result=data.get('result') or {};items=result.get('content') or []
+        text=items[0].get('text') if items and isinstance(items[0],dict) else None
+        if isinstance(text,str):
+            try:return json.loads(text)
+            except Exception:return text
+        return result
     def auth(self):
         got=self.headers.get('Authorization','');raw=got[7:] if got.startswith('Bearer ') else ''
         _oauth_cleanup();oauth=OAUTH_ACCESS.get(raw)
@@ -515,6 +577,20 @@ class H(BaseHTTPRequestHandler):
         parsed=urlparse(self.path);path=parsed.path
         if path in {'/.well-known/oauth-authorization-server','/cloudiff/mcp/.well-known/oauth-authorization-server','/oauth/.well-known/oauth-authorization-server'}:return self.sendj(200,_oauth_metadata())
         if path in {'/.well-known/oauth-protected-resource','/.well-known/oauth-protected-resource/cloudiff/mcp','/cloudiff/mcp/.well-known/oauth-protected-resource'}:return self.sendj(200,_oauth_metadata(True))
+        if path=='/cloudiff/mcp/privacy':return self.sendhtml(200,_privacy_html())
+        match=re.fullmatch(r'/cloudiff/mcp/openapi/([A-Za-z0-9._-]{3,160})[.]json',path)
+        if match:
+            schema=_action_schema(match.group(1));return self.sendj(200,schema) if schema else self.sendj(404,{'ok':False,'error':'schema_not_found'})
+        if path in {'/cloudiff/mcp/actions/v1/project','/cloudiff/mcp/actions/v1/connectors','/cloudiff/mcp/actions/v1/tools'}:
+            identity=self._action_identity()
+            if not identity:return
+            try:
+                if path.endswith('/project'):result=self._action_rpc(identity,'project.get',{})
+                elif path.endswith('/connectors'):result=self._action_rpc(identity,'project.connectors',{})
+                else:result=[{'name':name,'description':(_tool_row(name) or {}).get('description',''),'annotations':(_tool_row(name) or {}).get('annotations',{})} for name in identity['tools']]
+                return self.sendj(200,{'ok':True,'project_slug':identity['project_slug'],'result':result})
+            except PermissionError as e:return self.sendj(403,{'ok':False,'error':str(e)})
+            except Exception as e:return self.sendj(422,{'ok':False,'error':str(e)})
         if path in {'/authorize','/oauth/authorize','/cloudiff/mcp/oauth/authorize'}:
             q=parse_qs(parsed.query);client_id=(q.get('client_id') or [''])[0];redirect_uri=(q.get('redirect_uri') or [''])[0];state=(q.get('state') or [''])[0];challenge=(q.get('code_challenge') or [''])[0];method=(q.get('code_challenge_method') or [''])[0]
             username=self.headers.get('X-authentik-username','').strip();groups=self.headers.get('X-authentik-groups','')
@@ -528,6 +604,19 @@ class H(BaseHTTPRequestHandler):
         else:self.sendj(404,{'ok':False,'error':'not_found'})
     def do_POST(self):
         path=urlparse(self.path).path
+        if path in {'/cloudiff/mcp/actions/v1/read','/cloudiff/mcp/actions/v1/write'}:
+            identity=self._action_identity()
+            if not identity:return
+            try:
+                n=int(self.headers.get('Content-Length','0'));payload=json.loads(self.rfile.read(min(n,1048576)) or b'{}');tool=str(payload.get('tool') or '');args=payload.get('arguments') or {}
+                if not isinstance(args,dict) or not tool:raise ValueError('invalid_request')
+                readonly=tool in READ_ONLY_TOOLS
+                if path.endswith('/read') and not readonly:raise PermissionError('write_tool_not_allowed_on_read_endpoint')
+                if path.endswith('/write') and readonly:raise PermissionError('read_tool_not_allowed_on_write_endpoint')
+                result=self._action_rpc(identity,tool,args)
+                return self.sendj(200,{'ok':True,'project_slug':identity['project_slug'],'tool':tool,'result':result})
+            except PermissionError as e:return self.sendj(403,{'ok':False,'error':str(e)})
+            except Exception as e:return self.sendj(422,{'ok':False,'error':str(e)})
         if path in {'/token','/oauth/token','/cloudiff/mcp/oauth/token'}:
             n=int(self.headers.get('Content-Length','0'));form=parse_qs(self.rfile.read(min(n,65536)).decode());client_id=(form.get('client_id') or [''])[0];secret=(form.get('client_secret') or [''])[0]
             basic=self.headers.get('Authorization','')

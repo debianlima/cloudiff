@@ -55,6 +55,24 @@ class AIConnectorsHubTests(unittest.TestCase):
         self.assertNotIn('Use a chave gerada no Portal', html)
         self.assertNotIn('Client Secret OAuth', html)
 
+    def test_chatgpt_actions_card_exposes_schema_and_privacy(self):
+        row = {
+            'project_slug': 'projeto-teste', 'client_id': 'client-projeto-teste',
+            'owner_user': 'iff0001', 'tenant': 'iff0001-projeto-teste',
+            'role_profile': 'developer', 'environment': 'project',
+            'scopes': ['project:read'], 'instructions': {'mcp_endpoint': 'https://cloudiff.duckdns.org/cloudiff/mcp'},
+        }
+        html = self.module.render([row], 'csrf-test')
+        for marker in (
+            'GPT personalizado — Actions', 'Schema OpenAPI:', 'Copiar URL do schema', 'Abrir schema',
+            'https://cloudiff.duckdns.org/cloudiff/mcp/openapi/client-projeto-teste.json',
+            'https://cloudiff.duckdns.org/cloudiff/mcp/privacy', 'ChatGPT — MCP',
+        ):
+            self.assertIn(marker, html)
+        guide = self.module.guide_data([row])
+        self.assertEqual(guide['projects'][0]['openapi_schema_url'], 'https://cloudiff.duckdns.org/cloudiff/mcp/openapi/client-projeto-teste.json')
+        self.assertEqual(guide['projects'][0]['privacy_policy_url'], 'https://cloudiff.duckdns.org/cloudiff/mcp/privacy')
+
     def test_generic_config_uses_public_oauth_without_token_headers(self):
         config = self.module.config_json('https://cloudiff.example/mcp', 'client-project', 'project')
         for marker in ('"token_endpoint_auth_method": "none"', '"code_challenge_method": "S256"', '"client_secret": ""'):

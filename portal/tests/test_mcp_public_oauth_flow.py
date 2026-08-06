@@ -73,6 +73,7 @@ class FakeAgent(BaseHTTPRequestHandler):
             return self.reply(200, {'ok': True, 'clients': [{
                 'client_id': CLIENT_ID, 'status': 'active', 'owner_user': 'iff1742962',
                 'project_slugs_json': json.dumps([SLUG]),
+                'scopes_json': json.dumps(['project:read', 'workspace:prepare']),
             }]})
         return self.reply(404, {'ok': False})
 
@@ -184,6 +185,64 @@ class MCPPublicOAuthFlowTest(unittest.TestCase):
         listed = self.rpc(token, 'tools/call', {'name': 'project.list', 'arguments': {}}, 5)
         content = json.loads(listed['result']['content'][0]['text'])
         self.assertEqual([row['slug'] for row in content], [SLUG])
+
+    def test_project_specific_openapi_schema_and_privacy(self):
+        status, headers, raw = self.request('GET', f'/cloudiff/mcp/openapi/{CLIENT_ID}.json')
+        self.assertEqual(status, 200, raw)
+        schema = json.loads(raw)
+        self.assertEqual(schema['openapi'], '3.1.0')
+        self.assertEqual(schema['x-cloudiff-project'], SLUG)
+        self.assertEqual(schema['x-cloudiff-client-id'], CLIENT_ID)
+        self.assertEqual(schema['servers'], [{'url': 'https://cloudiff.duckdns.org'}])
+        self.assertEqual(schema['info']['x-privacy-policy-url'], 'https://cloudiff.duckdns.org/cloudiff/mcp/privacy')
+        paths = schema['paths']
+        self.assertFalse(paths['/cloudiff/mcp/actions/v1/project']['get']['x-openai-isConsequential'])
+        self.assertFalse(paths['/cloudiff/mcp/actions/v1/read']['post']['x-openai-isConsequential'])
+        self.assertTrue(paths['/cloudiff/mcp/actions/v1/write']['post']['x-openai-isConsequential'])
+        read_enum = paths['/cloudiff/mcp/actions/v1/read']['post']['requestBody']['content']['application/json']['schema']['properties']['tool']['enum']
+        write_enum = paths['/cloudiff/mcp/actions/v1/write']['post']['requestBody']['content']['application/json']['schema']['properties']['tool']['enum']
+        self.assertIn('project.get', read_enum)
+        self.assertNotIn('workspace.prepare', read_enum)
+        self.assertIn('workspace.prepare', write_enum)
+        oauth = schema['components']['securitySchemes']['cloudiffOAuth']['flows']['authorizationCode']
+        self.assertEqual(oauth['authorizationUrl'], 'https://cloudiff.duckdns.org/cloudiff/mcp/oauth/authorize')
+        self.assertEqual(oauth['tokenUrl'], 'https://cloudiff.duckdns.org/cloudiff/mcp/oauth/token')
+        status, headers, raw = self.request('GET', '/cloudiff/mcp/privacy')
+        self.assertEqual(status, 200)
+        self.assertIn('text/html', headers.get('Content-Type', ''))
+        self.assertIn('Privacidade do conector CloudIFF', raw.decode())
+
+    def test_actions_rest_bridge_is_bound_to_project(self):
+        token = self.oauth_token()
+        auth = {'Authorization': 'Bearer ' + token}
+        status, _, raw = self.request('GET', '/cloudiff/mcp/actions/v1/project', headers=auth)
+        self.assertEqual(status, 200, raw)
+        data = json.loads(raw)
+        self.assertEqual(data['project_slug'], SLUG)
+        self.assertEqual(data['result']['slug'], SLUG)
+        status, _, raw = self.request('GET', '/cloudiff/mcp/actions/v1/tools', headers=auth)
+        self.assertEqual(status, 200, raw)
+        names = [item['name'] for item in json.loads(raw)['result']]
+        self.assertIn('project.get', names)
+        self.assertIn('workspace.prepare', names)
+        payload = json.dumps({'tool': 'project.get', 'arguments': {'slug': 'outro-projeto'}})
+        status, _, raw = self.request('POST', '/cloudiff/mcp/actions/v1/read', payload, {
+            **auth, 'Content-Type': 'application/json', 'Content-Length': str(len(payload)),
+        })
+        self.assertEqual(status, 200, raw)
+        self.assertEqual(json.loads(raw)['result']['slug'], SLUG)
+        payload = json.dumps({'tool': 'workspace.prepare', 'arguments': {}})
+        status, _, raw = self.request('POST', '/cloudiff/mcp/actions/v1/read', payload, {
+            **auth, 'Content-Type': 'application/json', 'Content-Length': str(len(payload)),
+        })
+        self.assertEqual(status, 403, raw)
+        self.assertEqual(json.loads(raw)['error'], 'write_tool_not_allowed_on_read_endpoint')
+        payload = json.dumps({'tool': 'project.get', 'arguments': {}})
+        status, _, raw = self.request('POST', '/cloudiff/mcp/actions/v1/write', payload, {
+            **auth, 'Content-Type': 'application/json', 'Content-Length': str(len(payload)),
+        })
+        self.assertEqual(status, 403, raw)
+        self.assertEqual(json.loads(raw)['error'], 'read_tool_not_allowed_on_write_endpoint')
 
     def test_authorize_requires_authenticated_user_and_s256(self):
         callback = 'http://127.0.0.1:53682/callback'
