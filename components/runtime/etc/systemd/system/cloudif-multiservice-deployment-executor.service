@@ -45,6 +45,7 @@ AmbientCapabilities=
 RemoveIPC=true
 UMask=0077
 IPAddressAllow=10.62.92.7/32
+IPAddressAllow=10.62.91.2/32
 IPAddressAllow=127.0.0.0/8
 IPAddressDeny=any
 

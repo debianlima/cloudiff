@@ -125,7 +125,7 @@ class MultiserviceDeploymentExecutorTests(unittest.TestCase):
 
     def test_service_unit_is_local_restricted_and_docker_hardened(self):
         unit=UNIT.read_text()
-        for marker in ('CLOUDIF_MULTISERVICE_DEPLOYMENT_EXECUTOR_HOST=10.62.91.2','CLOUDIF_MULTISERVICE_DEPLOYMENT_EXECUTOR_PORT=18230','ReadWritePaths=/var/lib/cloudif/multiservice-deployment-executor /run/cloudif-multiservice-deployment /var/run/docker.sock','IPAddressAllow=10.62.92.7/32','IPAddressDeny=any','NoNewPrivileges=true','CapabilityBoundingSet='):
+        for marker in ('CLOUDIF_MULTISERVICE_DEPLOYMENT_EXECUTOR_HOST=10.62.91.2','CLOUDIF_MULTISERVICE_DEPLOYMENT_EXECUTOR_PORT=18230','ReadWritePaths=/var/lib/cloudif/multiservice-deployment-executor /run/cloudif-multiservice-deployment /var/run/docker.sock','IPAddressAllow=10.62.92.7/32','IPAddressAllow=10.62.91.2/32','IPAddressDeny=any','NoNewPrivileges=true','CapabilityBoundingSet='):
             self.assertIn(marker,unit)
 
 
