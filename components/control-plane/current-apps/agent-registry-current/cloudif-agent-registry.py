@@ -2,17 +2,20 @@
 import os,sqlite3,json,hmac,time,secrets,hashlib,uuid
 from http.server import BaseHTTPRequestHandler,ThreadingHTTPServer
 from urllib.parse import urlparse
-PROJECT_ADMIN_SCOPES=['project:read','deployment:production-plan','supabase:migration-inspect','workspace:probe','workspace:prepare','workspace:validate','workspace:test-static','workspace:preview-static','workspace:edit-preview','forgejo:plan-edit','approval:request-proposal','approval:read-own','forgejo:propose-edit','forgejo:proposal-read','forgejo:proposal-close','forgejo:proposal-delete-branch','forgejo:proposal-merge-plan','approval:request-merge','forgejo:proposal-merge','deployment:plan','approval:request-deploy','deployment:validate','approval:request-preview','deployment:preview']
+SUPABASE_BASIC_SCOPES=['supabase:database-read','supabase:auth-read','supabase:storage-read']
+SUPABASE_ADMIN_SCOPES=['supabase:admin-read','supabase:change-plan','approval:request-supabase','supabase:change-execute']
+SUPABASE_ALL_SCOPES=SUPABASE_BASIC_SCOPES+SUPABASE_ADMIN_SCOPES
+PROJECT_ADMIN_SCOPES=['project:read','deployment:production-plan','supabase:migration-inspect','workspace:probe','workspace:prepare','workspace:validate','workspace:test-static','workspace:preview-static','workspace:edit-preview','forgejo:plan-edit','approval:request-proposal','approval:read-own','forgejo:propose-edit','forgejo:proposal-read','forgejo:proposal-close','forgejo:proposal-delete-branch','forgejo:proposal-merge-plan','approval:request-merge','forgejo:proposal-merge','deployment:plan','approval:request-deploy','deployment:validate','approval:request-preview','deployment:preview']+SUPABASE_ALL_SCOPES
 ROLE_SCOPES={
- 'viewer':['project:read','workspace:probe','approval:read-own','forgejo:proposal-read'],
- 'developer':['project:read','workspace:probe','workspace:prepare','workspace:validate','workspace:test-static','workspace:preview-static','workspace:edit-preview','forgejo:plan-edit','approval:request-proposal','approval:read-own','forgejo:propose-edit','forgejo:proposal-read'],
- 'maintainer':['project:read','workspace:probe','workspace:prepare','workspace:validate','workspace:test-static','workspace:preview-static','workspace:edit-preview','forgejo:plan-edit','approval:request-proposal','approval:read-own','forgejo:propose-edit','forgejo:proposal-read','forgejo:proposal-close','forgejo:proposal-delete-branch','forgejo:proposal-merge-plan','approval:request-merge','forgejo:proposal-merge'],
- 'release-manager':['project:read','approval:read-own','deployment:production-plan','deployment:plan','approval:request-deploy','deployment:validate'],
+ 'viewer':['project:read','workspace:probe','approval:read-own','forgejo:proposal-read']+SUPABASE_BASIC_SCOPES,
+ 'developer':['project:read','workspace:probe','workspace:prepare','workspace:validate','workspace:test-static','workspace:preview-static','workspace:edit-preview','forgejo:plan-edit','approval:request-proposal','approval:read-own','forgejo:propose-edit','forgejo:proposal-read']+SUPABASE_ALL_SCOPES,
+ 'maintainer':['project:read','workspace:probe','workspace:prepare','workspace:validate','workspace:test-static','workspace:preview-static','workspace:edit-preview','forgejo:plan-edit','approval:request-proposal','approval:read-own','forgejo:propose-edit','forgejo:proposal-read','forgejo:proposal-close','forgejo:proposal-delete-branch','forgejo:proposal-merge-plan','approval:request-merge','forgejo:proposal-merge']+SUPABASE_ALL_SCOPES,
+ 'release-manager':['project:read','approval:read-own','deployment:production-plan','deployment:plan','approval:request-deploy','deployment:validate']+SUPABASE_BASIC_SCOPES,
  'project-admin':PROJECT_ADMIN_SCOPES,
  'test-operator':PROJECT_ADMIN_SCOPES+['supabase:migration-plan','deployment:promote-test-plan','approval:request-promote-test','deployment:promote-test','deployment:promote-test-status','deployment:rollback-test-plan','approval:request-rollback-test','deployment:rollback-test'],
 }
 ROLE_ENVIRONMENTS={'viewer':'project','developer':'project','maintainer':'project','release-manager':'project','project-admin':'project','test-operator':'isolated-test'}
-ROLE_DESCRIPTIONS={'viewer':'Consulta projeto, propostas e estado básico.','developer':'Prepara workspace, testa, edita preview e cria propostas.','maintainer':'Inclui gestão e merge controlado de propostas.','release-manager':'Planeja e valida deploy dry-run; não promove produção.','project-admin':'Conjunto atual completo do projeto, sem promoção de produção.','test-operator':'Inclui promoção somente no ambiente isolado de teste.'}
+ROLE_DESCRIPTIONS={'viewer':'Consulta projeto, propostas e estado básico.','developer':'Prepara workspace, testa, edita preview, cria propostas e usa o Supabase conforme a ACL do projeto.','maintainer':'Inclui gestão e merge controlado de propostas.','release-manager':'Planeja e valida deploy dry-run; não promove produção.','project-admin':'Conjunto completo do projeto, incluindo operações Supabase aprovadas, sem promoção de produção.','test-operator':'Inclui promoção somente no ambiente isolado de teste.'}
 DB=os.environ.get('CLOUDIF_AGENT_DB','/var/lib/cloudif/agents/agents.db');TOKEN=os.environ.get('CLOUDIF_AGENT_ADMIN_TOKEN','');HOST=os.environ.get('CLOUDIF_AGENT_HOST','127.0.0.1');PORT=int(os.environ.get('CLOUDIF_AGENT_PORT','18203'))
 def c():
  x=sqlite3.connect(DB,timeout=20);x.row_factory=sqlite3.Row;x.execute('pragma busy_timeout=20000');return x
@@ -23,8 +26,8 @@ def init():
  if 'environment' not in cols:x.execute("alter table clients add column environment text not null default 'project'")
  target=json.dumps(PROJECT_ADMIN_SCOPES,separators=(',',':'))
  x.execute("update clients set role_profile='project-admin',environment='project' where client_id like 'project-%' and scopes_json=? and role_profile='custom'",(target,))
- x.execute("update clients set scopes_json=?,environment='project' where role_profile='project-admin'",(json.dumps(ROLE_SCOPES['project-admin'],separators=(',',':')),))
- x.execute("update clients set scopes_json=?,environment='isolated-test' where role_profile='test-operator'",(json.dumps(ROLE_SCOPES['test-operator'],separators=(',',':')),))
+ for role,scopes in ROLE_SCOPES.items():
+  x.execute('update clients set scopes_json=?,environment=? where role_profile=?',(json.dumps(scopes,separators=(',',':')),ROLE_ENVIRONMENTS[role],role))
  x.commit();x.close()
 def hash_token(v):return hashlib.sha256(v.encode()).hexdigest()
 def role_coherent(row,scopes,projects):

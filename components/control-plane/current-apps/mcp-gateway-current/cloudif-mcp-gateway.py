@@ -21,6 +21,8 @@ BUILD_URL=os.environ.get('CLOUDIF_BUILD_URL','http://127.0.0.1:18213').rstrip('/
 BUILD_TOKEN=os.environ.get('CLOUDIF_BUILD_TOKEN','')
 PREVIEW_URL=os.environ.get('CLOUDIF_PREVIEW_URL','http://127.0.0.1:18214').rstrip('/')
 PREVIEW_TOKEN=os.environ.get('CLOUDIF_PREVIEW_TOKEN','')
+SUPABASE_MCP_URL=os.environ.get('CLOUDIF_SUPABASE_MCP_BROKER_URL','http://127.0.0.1:18218').rstrip('/')
+SUPABASE_MCP_TOKEN=os.environ.get('CLOUDIF_SUPABASE_MCP_BROKER_TOKEN','')
 PUBLIC_ORIGIN=os.environ.get('CLOUDIF_MCP_PUBLIC_ORIGIN','https://cloudiff.duckdns.org').rstrip('/')
 MCP_RESOURCE=PUBLIC_ORIGIN+'/cloudiff/mcp'
 OAUTH_ISSUER=PUBLIC_ORIGIN
@@ -39,6 +41,7 @@ def _client_projects(row):
     return [str(x).strip() for x in projects if str(x).strip()]
 def _header_groups(value):
     return {x.strip().casefold() for x in re.split(r'[|,;]',str(value or '')) if x.strip()}
+PROJECT_ROLE_RANK={'none':0,'viewer':10,'member':50,'developer':60,'editor':65,'maintainer':80,'admin':90,'administrator':90,'owner':100}
 def _public_oauth_client(client_id,username,groups_header):
     row=_oauth_client(client_id);projects=_client_projects(row)
     if not row or len(projects)!=1 or not username:return None
@@ -46,14 +49,14 @@ def _public_oauth_client(client_id,username,groups_header):
     try:data=control('/v1/projects/'+urllib.parse.quote(slug,safe=''))
     except Exception:return None
     project=data.get('project') or {};acl=data.get('acl') or []
-    user=str(username).strip().casefold();groups=_header_groups(groups_header)
-    allowed=user==str(project.get('owner') or row.get('owner_user') or '').strip().casefold()
+    user=str(username).strip().casefold();groups=_header_groups(groups_header);role='none'
+    if user==str(project.get('owner') or row.get('owner_user') or '').strip().casefold():role='owner'
     for item in acl:
-        kind=str(item.get('subject_type') or '').strip().casefold();subject=str(item.get('subject') or '').strip().casefold()
-        if kind=='user' and subject==user:allowed=True
-        if kind=='group' and subject in groups:allowed=True
-    if not allowed:return None
-    return {'client_id':client_id,'project_slug':slug,'authorized_user':str(username).strip(),'public_client':True,'owner_user':str(row.get('owner_user') or '')}
+        kind=str(item.get('subject_type') or '').strip().casefold();subject=str(item.get('subject') or '').strip().casefold();candidate=str(item.get('role') or 'viewer').strip().casefold()
+        matched=(kind=='user' and subject==user) or (kind=='group' and subject in groups)
+        if matched and PROJECT_ROLE_RANK.get(candidate,0)>PROJECT_ROLE_RANK.get(role,0):role=candidate
+    if PROJECT_ROLE_RANK.get(role,0)<=0:return None
+    return {'client_id':client_id,'project_slug':slug,'authorized_user':str(username).strip(),'authorized_groups':sorted(groups),'project_role':role,'public_client':True,'owner_user':str(row.get('owner_user') or '')}
 def _callback_mode(uri):
     try:u=urlparse(uri)
     except Exception:return ''
@@ -135,6 +138,25 @@ TOOLS=[
  {'name':'forgejo.proposal.merge.plan','description':'Calcula o digest canônico para merge aprovado de um PR CloudIFF','inputSchema':{'type':'object','properties':{'slug':{'type':'string','minLength':1,'maxLength':63,'pattern':'^[a-z0-9][a-z0-9-]*$'},'number':{'type':'integer','minimum':1,'maximum':2147483647},'expected_head_sha':{'type':'string','pattern':'^[a-f0-9]{40}$'}},'required':['slug','number','expected_head_sha'],'additionalProperties':False}},
  {'name':'approval.request-merge','description':'Cria aprovação pendente vinculada ao merge de um PR e SHA específicos','inputSchema':{'type':'object','properties':{'slug':{'type':'string','minLength':1,'maxLength':63,'pattern':'^[a-z0-9][a-z0-9-]*$'},'number':{'type':'integer','minimum':1,'maximum':2147483647},'expected_head_sha':{'type':'string','pattern':'^[a-f0-9]{40}$'},'reason':{'type':'string','minLength':4,'maxLength':500},'ttl_seconds':{'type':'integer','minimum':60,'maximum':86400}},'required':['slug','number','expected_head_sha','reason'],'additionalProperties':False}},
  {'name':'forgejo.proposal.merge','description':'Mescla PR CloudIFF após aprovação humana persistente de uso único','inputSchema':{'type':'object','properties':{'slug':{'type':'string','minLength':1,'maxLength':63,'pattern':'^[a-z0-9][a-z0-9-]*$'},'number':{'type':'integer','minimum':1,'maximum':2147483647},'expected_head_sha':{'type':'string','pattern':'^[a-f0-9]{40}$'},'approval_id':{'type':'string','pattern':'^apr_[a-f0-9]{20}$'}},'required':['slug','number','expected_head_sha','approval_id'],'additionalProperties':False}},
+ {'name':'supabase.tables.list','description':'Lista tabelas e views do banco Supabase vinculado ao projeto','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'schemas':{'type':'array','items':{'type':'string','pattern':'^[A-Za-z_][A-Za-z0-9_$]*$'},'maxItems':20},'include_system':{'type':'boolean'}},'required':['slug'],'additionalProperties':False}},
+ {'name':'supabase.records.select','description':'Consulta registros de uma tabela com colunas, filtros, ordenação e limite estruturados','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'schema':{'type':'string','default':'public','pattern':'^[A-Za-z_][A-Za-z0-9_$]*$'},'table':{'type':'string','pattern':'^[A-Za-z_][A-Za-z0-9_$]*$'},'columns':{'type':'array','items':{'type':'string'},'maxItems':64},'filters':{'type':'object','properties':{},'additionalProperties':True},'order_by':{'type':'array','items':{'type':'string'},'maxItems':8},'limit':{'type':'integer','minimum':1,'maximum':500},'offset':{'type':'integer','minimum':0,'maximum':100000},'timeout_ms':{'type':'integer','minimum':500,'maximum':30000}},'required':['slug','table'],'additionalProperties':False}},
+ {'name':'supabase.sql.query','description':'Executa SQL somente leitura em transação read-only com timeout e limite de linhas','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'sql':{'type':'string','minLength':1,'maxLength':65536},'max_rows':{'type':'integer','minimum':1,'maximum':500},'timeout_ms':{'type':'integer','minimum':500,'maximum':30000}},'required':['slug','sql'],'additionalProperties':False}},
+ {'name':'supabase.auth.users.list','description':'Lista usuários do Supabase Auth sem tokens, senhas ou fatores secretos','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'page':{'type':'integer','minimum':1},'per_page':{'type':'integer','minimum':1,'maximum':100},'email':{'type':'string','maxLength':320}},'required':['slug'],'additionalProperties':False}},
+ {'name':'supabase.storage.buckets.list','description':'Lista buckets do Supabase Storage do projeto','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'}},'required':['slug'],'additionalProperties':False}},
+ {'name':'supabase.storage.objects.list','description':'Lista objetos de um bucket do Supabase Storage','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'bucket':{'type':'string','minLength':1,'maxLength':100},'prefix':{'type':'string','maxLength':512},'limit':{'type':'integer','minimum':1,'maximum':1000},'offset':{'type':'integer','minimum':0,'maximum':100000},'sort_column':{'type':'string','enum':['name','created_at','updated_at','last_accessed_at']},'order':{'type':'string','enum':['asc','desc']}},'required':['slug','bucket'],'additionalProperties':False}},
+ {'name':'supabase.storage.object.read','description':'Lê um arquivo do Supabase Storage com limite de tamanho e retorno UTF-8 ou base64','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'bucket':{'type':'string','minLength':1,'maxLength':100},'path':{'type':'string','minLength':1,'maxLength':1024},'max_bytes':{'type':'integer','minimum':1,'maximum':1048576}},'required':['slug','bucket','path'],'additionalProperties':False}},
+ {'name':'supabase.secrets.list','description':'Lista nomes, estado e valores mascarados das variáveis protegidas do tenant','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'}},'required':['slug'],'additionalProperties':False}},
+ {'name':'supabase.rls.inspect','description':'Consulta ativação de RLS e políticas existentes sem alterar o banco','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'schema':{'type':'string','default':'public','pattern':'^[A-Za-z_][A-Za-z0-9_$]*$'},'table':{'type':'string','pattern':'^[A-Za-z_][A-Za-z0-9_$]*$'}},'required':['slug'],'additionalProperties':False}},
+ {'name':'supabase.schema.inspect','description':'Inspeciona tabelas, views, funções, triggers, índices e tipos do schema','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'schema':{'type':'string','default':'public','pattern':'^[A-Za-z_][A-Za-z0-9_$]*$'},'object_type':{'type':'string','enum':['all','table','view','function','trigger','index','type']},'name':{'type':'string','pattern':'^[A-Za-z_][A-Za-z0-9_$]*$'}},'required':['slug'],'additionalProperties':False}},
+ {'name':'supabase.logs.read','description':'Lê logs sanitizados dos serviços Supabase sem expor tokens e senhas','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'service':{'type':'string','enum':['db','auth','rest','storage','realtime','kong','studio','functions','meta','supavisor']},'lines':{'type':'integer','minimum':1,'maximum':1000},'since_seconds':{'type':'integer','minimum':1,'maximum':604800}},'required':['slug'],'additionalProperties':False}},
+ {'name':'supabase.admin.config.read','description':'Consulta configuração administrativa sanitizada e saúde dos serviços do tenant','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'}},'required':['slug'],'additionalProperties':False}},
+ {'name':'supabase.records.change.plan','description':'Planeja insert, update ou delete estruturado e calcula o digest sem alterar registros','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'schema':{'type':'string','default':'public','pattern':'^[A-Za-z_][A-Za-z0-9_$]*$'},'table':{'type':'string','pattern':'^[A-Za-z_][A-Za-z0-9_$]*$'},'action':{'type':'string','enum':['insert','update','delete']},'values':{'type':'object','properties':{},'additionalProperties':True},'filters':{'type':'object','properties':{},'additionalProperties':True},'timeout_ms':{'type':'integer','minimum':500,'maximum':30000}},'required':['slug','table','action'],'additionalProperties':False}},
+ {'name':'supabase.sql.change.plan','description':'Valida e planeja SQL com efeito, bloqueando capacidades de servidor e credenciais','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'sql':{'type':'string','minLength':1,'maxLength':65536},'timeout_ms':{'type':'integer','minimum':500,'maximum':30000}},'required':['slug','sql'],'additionalProperties':False}},
+ {'name':'supabase.rls.change.plan','description':'Planeja CREATE, ALTER ou DROP POLICY e mudanças de ROW LEVEL SECURITY','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'sql':{'type':'string','minLength':1,'maxLength':65536},'timeout_ms':{'type':'integer','minimum':500,'maximum':30000}},'required':['slug','sql'],'additionalProperties':False}},
+ {'name':'supabase.schema.change.plan','description':'Planeja criação ou alteração de tabelas, funções, triggers, índices, views, tipos ou sequências','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'sql':{'type':'string','minLength':1,'maxLength':65536},'timeout_ms':{'type':'integer','minimum':500,'maximum':30000}},'required':['slug','sql'],'additionalProperties':False}},
+ {'name':'supabase.secrets.read.plan','description':'Planeja a exibição única de segredos selecionados sem retornar os valores','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'names':{'type':'array','items':{'type':'string','pattern':'^[A-Z_][A-Z0-9_]*$'},'minItems':1,'maxItems':20}},'required':['slug','names'],'additionalProperties':False}},
+ {'name':'approval.request-supabase-operation','description':'Cria aprovação humana vinculada ao digest e ao payload exato de uma operação Supabase','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'operation':{'type':'string','enum':['records.change','sql.change','rls.change','schema.change','secrets.read']},'payload':{'type':'object','properties':{},'additionalProperties':True},'plan_digest':{'type':'string','pattern':'^[a-f0-9]{64}$'},'reason':{'type':'string','minLength':4,'maxLength':500},'ttl_seconds':{'type':'integer','minimum':60,'maximum':86400}},'required':['slug','operation','payload','plan_digest','reason'],'additionalProperties':False}},
+ {'name':'supabase.operation.execute','description':'Executa a operação Supabase aprovada com reserve-effect-finalize e vínculo ao digest','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'operation':{'type':'string','enum':['records.change','sql.change','rls.change','schema.change','secrets.read']},'payload':{'type':'object','properties':{},'additionalProperties':True},'plan_digest':{'type':'string','pattern':'^[a-f0-9]{64}$'},'approval_id':{'type':'string','pattern':'^apr_[a-f0-9]{20}$'}},'required':['slug','operation','payload','plan_digest','approval_id'],'additionalProperties':False}},
  {'name':'supabase.migrations.inspect','description':'Inspeciona migrações SQL versionadas em um commit sem expor conteúdo e sem alterar o banco','inputSchema':{'type':'object','properties':{'slug':{'type':'string','minLength':1,'maxLength':63,'pattern':'^[a-z0-9][a-z0-9-]*$'},'commit_sha':{'type':'string','pattern':'^[a-f0-9]{40}$'},'version':{'type':'string','minLength':5,'maxLength':120}},'required':['slug','commit_sha','version'],'additionalProperties':False}},
  {'name':'supabase.migrations.plan','description':'Gera plano sem efeitos para migrações versionadas apenas no ambiente isolated-test','inputSchema':{'type':'object','properties':{'slug':{'type':'string','enum':['sistema-de-biblioteca-teste']},'commit_sha':{'type':'string','pattern':'^[a-f0-9]{40}$'},'version':{'type':'string','minLength':5,'maxLength':120}},'required':['slug','commit_sha','version'],'additionalProperties':False}},
  {'name':'deployment.production.homologation.plan','description':'Planeja publicação blue/green somente no alvo descartável de homologação','inputSchema':{'type':'object','properties':{'slug':{'type':'string','enum':['atalhos-cloudif-iff1860746']},'build_id':{'type':'string','pattern':'^[0-9a-f-]{36}$'}},'required':['slug','build_id'],'additionalProperties':False}},
@@ -161,11 +183,15 @@ READ_ONLY_TOOLS={
  'build.plan','build.status','build.logs.read','build.artifact.get','deployment.preview.plan','deployment.preview.status',
  'approval.get','forgejo.proposal.list','forgejo.proposal.merge.plan','supabase.migrations.inspect','supabase.migrations.plan',
  'deployment.production.activation.plan','deployment.production.readiness','deployment.production.homologation.plan',
- 'deployment.production.plan','deployment.plan','deployment.promote-test.plan','deployment.promote-test.status','deployment.rollback-test.plan'
+ 'deployment.production.plan','deployment.plan','deployment.promote-test.plan','deployment.promote-test.status','deployment.rollback-test.plan',
+ 'supabase.tables.list','supabase.records.select','supabase.sql.query','supabase.auth.users.list',
+ 'supabase.storage.buckets.list','supabase.storage.objects.list','supabase.storage.object.read','supabase.secrets.list',
+ 'supabase.rls.inspect','supabase.schema.inspect','supabase.logs.read','supabase.admin.config.read',
+ 'supabase.records.change.plan','supabase.sql.change.plan','supabase.rls.change.plan','supabase.schema.change.plan','supabase.secrets.read.plan'
 }
 DESTRUCTIVE_TOOLS={
  'forgejo.proposal.delete-branch','forgejo.proposal.merge','deployment.production.homologation.deploy',
- 'deployment.production.homologation.rollback','deployment.promote-test','deployment.rollback-test'
+ 'deployment.production.homologation.rollback','deployment.promote-test','deployment.rollback-test','supabase.operation.execute'
 }
 OPEN_WORLD_PREFIXES=('forgejo.','supabase.','deployment.','approval.','build.')
 for _tool in TOOLS:
@@ -337,6 +363,38 @@ def approval_transition(approval_id,operation,payload):
         try:data=json.load(e)
         except Exception:data={}
         return e.code,data
+def supabase_broker_call(path,slug,authz,payload=None,action='',operation='',plan_digest='',execution_id='',timeout=60):
+    body={'project_slug':slug,'actor_user':str(authz.get('authorized_user') or ''),'actor_groups':list(authz.get('authorized_groups') or []),'payload':payload or {}}
+    if action:body['action']=action
+    if operation:body['operation']=operation
+    if plan_digest:body['plan_digest']=plan_digest
+    if execution_id:body['execution_id']=execution_id
+    req=urllib.request.Request(SUPABASE_MCP_URL+path,data=json.dumps(body,ensure_ascii=False,separators=(',',':')).encode(),method='POST',headers={'Authorization':'Bearer '+SUPABASE_MCP_TOKEN,'Content-Type':'application/json','Accept':'application/json'})
+    try:
+        with urllib.request.urlopen(req,timeout=timeout) as x:return x.status,json.load(x)
+    except urllib.error.HTTPError as e:
+        try:data=json.load(e)
+        except Exception:data={}
+        return e.code,data
+    except Exception:
+        return 599,{'ok':False,'error':'supabase_mcp_broker_unavailable'}
+def supabase_operation_action(operation):
+    if operation not in {'records.change','sql.change','rls.change','schema.change','secrets.read'}:raise ValueError('invalid_supabase_operation')
+    return 'supabase.operation.'+operation
+def supabase_approval_create(slug,client_id,authz,operation,digest,summary,reason,ttl,trace_id):
+    action=supabase_operation_action(operation)
+    payload={'project_slug':slug,'action':action,'requested_by':client_id,'requester_role':str(authz.get('project_role') or 'agent'),'ttl_seconds':ttl,'reason':reason,'trace_id':trace_id,'metadata':{'supabase_operation':operation,'supabase_plan_digest':digest,'summary':summary,'actor_user':str(authz.get('authorized_user') or ''),'secret_values_in_metadata':False}}
+    req=urllib.request.Request(APPROVAL_URL+'/v1/approvals',data=json.dumps(payload,ensure_ascii=False,separators=(',',':')).encode(),method='POST',headers={'Authorization':'Bearer '+APPROVAL_TOKEN,'Content-Type':'application/json','Accept':'application/json'})
+    try:
+        with urllib.request.urlopen(req,timeout=10) as x:return json.load(x)
+    except urllib.error.HTTPError as e:
+        try:data=json.load(e)
+        except Exception:data={}
+        raise ValueError(str(data.get('error') or 'approval_create_failed')) from e
+def supabase_plan(slug,authz,operation,payload):
+    code,data=supabase_broker_call('/v1/plan',slug,authz,payload=payload,operation=operation,timeout=45)
+    if code!=200 or not data.get('ok') or data.get('side_effect_free') is not True:raise ValueError(str(data.get('error') or 'supabase_plan_failed'))
+    return data
 def deployment_effect_call(path,slug,commit_sha,version,trace_id,execution_id,timeout=300):
     payload={'project_slug':slug,'commit_sha':commit_sha,'version':version,'trace_id':trace_id,'execution_id':execution_id}
     req=urllib.request.Request(DEPLOYMENT_URL+path,data=json.dumps(payload,separators=(',',':')).encode(),method='POST',headers={'Authorization':'Bearer '+DEPLOYMENT_TOKEN,'Content-Type':'application/json','Accept':'application/json'})
@@ -542,7 +600,24 @@ SCOPE_BY_TOOL={
  'runtime.catalog':'project:read','runtime.detect':'project:read','runtime.plan':'project:read','runtime.validate':'project:read','build.plan':'project:read','build.request':'workspace:test-static','build.status':'project:read','build.logs.read':'project:read','build.artifact.get':'project:read','deployment.preview.plan':'project:read','deployment.preview.status':'project:read','approval.request-preview':'approval:request-preview','deployment.preview':'deployment:preview',
  'workspace.probe':'workspace:probe','workspace.prepare':'workspace:prepare','workspace.validate':'workspace:validate','workspace.test-static':'workspace:test-static','workspace.preview-static':'workspace:preview-static','workspace.edit-preview':'workspace:edit-preview',
  'forgejo.propose-edit':'forgejo:propose-edit','forgejo.propose-edit.plan':'forgejo:plan-edit','approval.request-proposal':'approval:request-proposal','approval.get':'approval:read-own','forgejo.proposal.list':'forgejo:proposal-read','forgejo.proposal.close':'forgejo:proposal-close','forgejo.proposal.delete-branch':'forgejo:proposal-delete-branch','forgejo.proposal.merge.plan':'forgejo:proposal-merge-plan','approval.request-merge':'approval:request-merge','forgejo.proposal.merge':'forgejo:proposal-merge',
- 'deployment.production.homologation.plan':'deployment:production-plan','approval.request-production-homologation':'approval:request-deploy','deployment.production.homologation.deploy':'deployment:production-plan','deployment.production.homologation.rollback':'deployment:production-plan','deployment.production.activation.plan':'deployment:production-plan','approval.request-production-activation':'approval:request-deploy','deployment.production.readiness':'project:read','deployment.production.plan':'deployment:production-plan','supabase.migrations.inspect':'supabase:migration-inspect','supabase.migrations.plan':'supabase:migration-plan','deployment.plan':'deployment:plan','approval.request-deploy':'approval:request-deploy','deployment.validate':'deployment:validate','deployment.promote-test.plan':'deployment:promote-test-plan','approval.request-promote-test':'approval:request-promote-test','deployment.promote-test':'deployment:promote-test','deployment.promote-test.status':'deployment:promote-test-status','deployment.rollback-test.plan':'deployment:rollback-test-plan','approval.request-rollback-test':'approval:request-rollback-test','deployment.rollback-test':'deployment:rollback-test'
+ 'deployment.production.homologation.plan':'deployment:production-plan','approval.request-production-homologation':'approval:request-deploy','deployment.production.homologation.deploy':'deployment:production-plan','deployment.production.homologation.rollback':'deployment:production-plan','deployment.production.activation.plan':'deployment:production-plan','approval.request-production-activation':'approval:request-deploy','deployment.production.readiness':'project:read','deployment.production.plan':'deployment:production-plan','supabase.migrations.inspect':'supabase:migration-inspect','supabase.migrations.plan':'supabase:migration-plan','deployment.plan':'deployment:plan','approval.request-deploy':'approval:request-deploy','deployment.validate':'deployment:validate','deployment.promote-test.plan':'deployment:promote-test-plan','approval.request-promote-test':'approval:request-promote-test','deployment.promote-test':'deployment:promote-test','deployment.promote-test.status':'deployment:promote-test-status','deployment.rollback-test.plan':'deployment:rollback-test-plan','approval.request-rollback-test':'approval:request-rollback-test','deployment.rollback-test':'deployment:rollback-test',
+ 'supabase.tables.list':'supabase:database-read','supabase.records.select':'supabase:database-read','supabase.sql.query':'supabase:database-read','supabase.rls.inspect':'supabase:database-read','supabase.schema.inspect':'supabase:database-read',
+ 'supabase.auth.users.list':'supabase:auth-read','supabase.storage.buckets.list':'supabase:storage-read','supabase.storage.objects.list':'supabase:storage-read','supabase.storage.object.read':'supabase:storage-read',
+ 'supabase.secrets.list':'supabase:admin-read','supabase.logs.read':'supabase:admin-read','supabase.admin.config.read':'supabase:admin-read',
+ 'supabase.records.change.plan':'supabase:change-plan','supabase.sql.change.plan':'supabase:change-plan','supabase.rls.change.plan':'supabase:change-plan','supabase.schema.change.plan':'supabase:change-plan','supabase.secrets.read.plan':'supabase:change-plan',
+ 'approval.request-supabase-operation':'approval:request-supabase','supabase.operation.execute':'supabase:change-execute'
+}
+SUPABASE_READ_TOOL_ACTIONS={
+ 'supabase.tables.list':'tables.list','supabase.records.select':'records.select','supabase.sql.query':'sql.query',
+ 'supabase.auth.users.list':'auth.users.list','supabase.storage.buckets.list':'storage.buckets.list',
+ 'supabase.storage.objects.list':'storage.objects.list','supabase.storage.object.read':'storage.object.read',
+ 'supabase.secrets.list':'secrets.list','supabase.rls.inspect':'rls.inspect','supabase.schema.inspect':'schema.inspect',
+ 'supabase.logs.read':'logs.read','supabase.admin.config.read':'admin.config.read'
+}
+SUPABASE_PLAN_TOOL_OPERATIONS={
+ 'supabase.records.change.plan':'records.change','supabase.sql.change.plan':'sql.change',
+ 'supabase.rls.change.plan':'rls.change','supabase.schema.change.plan':'schema.change',
+ 'supabase.secrets.read.plan':'secrets.read'
 }
 def forgejo_proposal_action(action,slug,number,requested_by,trace_id):
     if action not in {'close','delete-branch'}:raise ValueError('invalid_proposal_action')
@@ -647,7 +722,11 @@ class H(BaseHTTPRequestHandler):
             payload=json.dumps({'client_id':client,'token':raw,'scope':scope,'project_slug':slug},separators=(',',':')).encode()
             path='/v1/authorize'
         req=urllib.request.Request(AGENT_URL+path,data=payload,method='POST',headers={'Content-Type':'application/json','Authorization':'Bearer '+AGENT_ADMIN_TOKEN})
-        with urllib.request.urlopen(req,timeout=5) as x:return json.load(x)
+        with urllib.request.urlopen(req,timeout=5) as x:data=json.load(x)
+        if oauth.get('public_client'):
+            data.update({'authorized_user':oauth.get('authorized_user',''),'authorized_groups':oauth.get('authorized_groups',[]),'project_role':oauth.get('project_role','viewer')})
+        else:data.setdefault('project_role','service')
+        return data
     def redirect(self,url):self.send_response(302);self.send_header('Location',url);self.send_header('Cache-Control','no-store');self.end_headers()
     def do_HEAD(self):
         path=urlparse(self.path).path
@@ -1086,6 +1165,67 @@ class H(BaseHTTPRequestHandler):
                     code,data=production_info_call('/v1/production-plan',{'project_slug':slug,'commit_sha':commit,'version':version,'trace_id':trace_id})
                     if code!=200 or not data.get('ok'):raise ValueError(str(data.get('error') or 'production_plan_failed'))
                     content=data
+                elif name in SUPABASE_READ_TOOL_ACTIONS:
+                    if 'slug' not in args:raise ValueError('slug obrigatório')
+                    slug=str(args.get('slug') or '').strip()
+                    if not slug:raise ValueError('slug obrigatório')
+                    control('/v1/projects/'+urllib.parse.quote(slug,safe=''))
+                    payload={k:v for k,v in args.items() if k!='slug'}
+                    code,data=supabase_broker_call('/v1/read',slug,authz,payload=payload,action=SUPABASE_READ_TOOL_ACTIONS[name],timeout=75)
+                    if code!=200 or not data.get('ok'):raise ValueError(str(data.get('error') or 'supabase_read_failed'))
+                    content=data
+                elif name in SUPABASE_PLAN_TOOL_OPERATIONS:
+                    if 'slug' not in args:raise ValueError('slug obrigatório')
+                    slug=str(args.get('slug') or '').strip()
+                    if not slug:raise ValueError('slug obrigatório')
+                    control('/v1/projects/'+urllib.parse.quote(slug,safe=''))
+                    payload={k:v for k,v in args.items() if k!='slug'}
+                    content=supabase_plan(slug,authz,SUPABASE_PLAN_TOOL_OPERATIONS[name],payload)
+                elif name=='approval.request-supabase-operation':
+                    required={'slug','operation','payload','plan_digest','reason'}
+                    if not required.issubset(args) or not set(args).issubset(required|{'ttl_seconds'}):raise ValueError('argumentos inválidos')
+                    client_id=self.headers.get('X-CloudIF-Client','').strip()
+                    if not client_id:raise ValueError('identified_client_required')
+                    slug=str(args['slug']).strip();operation=str(args['operation']).strip();payload=args['payload'];digest=str(args['plan_digest']).strip().lower();reason=str(args['reason']).strip();ttl=int(args.get('ttl_seconds') or 900)
+                    if not isinstance(payload,dict) or len(digest)!=64 or any(c not in '0123456789abcdef' for c in digest) or not (4<=len(reason)<=500) or not (60<=ttl<=86400):raise ValueError('argumentos inválidos')
+                    control('/v1/projects/'+urllib.parse.quote(slug,safe=''))
+                    plan=supabase_plan(slug,authz,operation,payload)
+                    if not hmac.compare_digest(str(plan.get('plan_digest') or ''),digest):raise ValueError('plan_digest_mismatch')
+                    created=supabase_approval_create(slug,client_id,authz,operation,digest,plan.get('summary') or {},reason,ttl,trace_id)
+                    if not created.get('ok') or created.get('status')!='pending':raise ValueError('approval_create_failed')
+                    content={'ok':True,'approval_id':created['approval_id'],'status':'pending','expires_at':created['expires_at'],'project_slug':slug,'operation':operation,'plan_digest':digest,'summary':plan.get('summary') or {},'secret_values_exposed':False,'side_effects':False}
+                elif name=='supabase.operation.execute':
+                    if set(args)!={'slug','operation','payload','plan_digest','approval_id'}:raise ValueError('argumentos inválidos')
+                    client_id=self.headers.get('X-CloudIF-Client','').strip()
+                    if not client_id:raise ValueError('identified_client_required')
+                    slug=str(args['slug']).strip();operation=str(args['operation']).strip();payload=args['payload'];digest=str(args['plan_digest']).strip().lower();approval_id=str(args['approval_id']).strip()
+                    if not isinstance(payload,dict) or len(digest)!=64 or any(c not in '0123456789abcdef' for c in digest) or not re.fullmatch(r'apr_[a-f0-9]{20}',approval_id):raise ValueError('argumentos inválidos')
+                    control('/v1/projects/'+urllib.parse.quote(slug,safe=''))
+                    plan=supabase_plan(slug,authz,operation,payload)
+                    if not hmac.compare_digest(str(plan.get('plan_digest') or ''),digest):raise ValueError('plan_digest_mismatch')
+                    row=approval_get(approval_id)
+                    try:meta=json.loads(row.get('metadata_json') or '{}') if row else {}
+                    except Exception:meta={}
+                    action=supabase_operation_action(operation);actor_user=str(authz.get('authorized_user') or '')
+                    reservation_id,execution_id=transaction_ids(action,approval_id,client_id,digest)
+                    valid_status=bool(row and (row.get('status')=='approved' or (row.get('status') in {'reserved','consumed'} and row.get('reservation_id')==reservation_id)))
+                    valid=bool(row and valid_status and row.get('project_slug')==slug and row.get('action')==action and row.get('requested_by')==client_id and row.get('approved_by') and meta.get('supabase_operation')==operation and hmac.compare_digest(str(meta.get('supabase_plan_digest') or ''),digest) and str(meta.get('actor_user') or '')==actor_user)
+                    if not valid:raise ValueError('approval_mismatch')
+                    if row.get('status')=='approved':
+                        rc,reserved=approval_transition(approval_id,'reserve',{'reservation_id':reservation_id,'reserved_by':client_id,'ttl_seconds':900})
+                        if rc!=200 or reserved.get('status')!='reserved':raise ValueError('approval_reserve_failed')
+                    code,data=supabase_broker_call('/v1/effect',slug,authz,payload=payload,operation=operation,plan_digest=digest,execution_id=execution_id,timeout=240)
+                    current=approval_get(approval_id)
+                    if code==200 and data.get('ok'):
+                        if current and current.get('status')!='consumed':
+                            fc,finalized=approval_transition(approval_id,'finalize',{'reservation_id':reservation_id,'result':'success'})
+                            if fc!=200 or finalized.get('status')!='consumed':raise ValueError('approval_finalize_failed')
+                        data['transaction']={'approval_id':approval_id,'reservation_id':reservation_id,'execution_id':execution_id,'approval_status':'consumed'}
+                        content=data
+                    else:
+                        if current and current.get('status')=='reserved' and code in {400,403,404}:
+                            approval_transition(approval_id,'release',{'reservation_id':reservation_id})
+                        raise ValueError(str(data.get('error') or 'supabase_effect_failed'))
                 elif name in {'supabase.migrations.inspect','supabase.migrations.plan'}:
                     if set(args)!={'slug','commit_sha','version'}:raise ValueError('argumentos inválidos')
                     slug=str(args['slug']).strip();commit=str(args['commit_sha']).strip().lower();version=str(args['version']).strip()

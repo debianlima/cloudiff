@@ -1,0 +1,57 @@
+[Unit]
+Description=CloudIFF internal Supabase MCP broker
+After=network-online.target docker.service cloudif-control-plane-api.service
+Wants=network-online.target
+Requires=docker.service cloudif-control-plane-api.service
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+User=root
+Group=root
+EnvironmentFile=/etc/cloudif/supabase-mcp-broker.env
+Environment=CLOUDIF_SUPABASE_MCP_BROKER_HOST=127.0.0.1
+Environment=CLOUDIF_SUPABASE_MCP_BROKER_PORT=18218
+Environment=CLOUDIF_PROJECT_SNAPSHOT_DB=/var/lib/cloudif/control-plane/control-plane.db
+Environment=CLOUDIF_TENANT_ROOT=/srv/cloudif/tenants
+Environment=CLOUDIF_SUPABASE_MCP_STATE_DB=/var/lib/cloudif/supabase-mcp-broker/executions.db
+ExecStart=/usr/bin/python3 /srv/cloudif/app-pointers/supabase-mcp-broker-current/cloudif-supabase-mcp-broker.py
+Restart=on-failure
+RestartSec=3
+TimeoutStartSec=30s
+TimeoutStopSec=15s
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadOnlyPaths=/srv/cloudif/tenants /var/lib/cloudif/control-plane /srv/cloudif/app-releases/supabase-mcp-broker /srv/cloudif/app-pointers
+ReadWritePaths=/var/lib/cloudif/supabase-mcp-broker
+PrivateDevices=true
+ProtectClock=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+ProtectHostname=true
+ProtectProc=invisible
+ProcSubset=pid
+RestrictNamespaces=true
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+RestrictRealtime=true
+SystemCallArchitectures=native
+RestrictAddressFamilies=AF_INET AF_UNIX
+CapabilityBoundingSet=
+AmbientCapabilities=
+RemoveIPC=true
+UMask=0077
+IPAddressAllow=127.0.0.0/8
+IPAddressAllow=::1/128
+IPAddressAllow=10.0.0.0/8
+IPAddressAllow=172.16.0.0/12
+IPAddressAllow=192.168.0.0/16
+IPAddressDeny=any
+
+[Install]
+WantedBy=multi-user.target

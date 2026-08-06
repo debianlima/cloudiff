@@ -1,12 +1,13 @@
 [Unit]
 Description=CloudIF internal read-only MCP gateway
-After=network.target cloudif-control-plane-api.service
-Requires=cloudif-control-plane-api.service
+After=network.target cloudif-control-plane-api.service cloudif-supabase-mcp-broker.service
+Requires=cloudif-control-plane-api.service cloudif-supabase-mcp-broker.service
 [Service]
 Type=simple
 User=cloudif-control
 Group=cloudif-control
 EnvironmentFile=/etc/cloudif/mcp-gateway.env
+EnvironmentFile=/etc/cloudif/supabase-mcp-broker.env
 ExecStart=/usr/bin/python3 /srv/cloudif/app-pointers/mcp-gateway-current/cloudif-mcp-gateway.py
 Restart=on-failure
 RestartSec=3

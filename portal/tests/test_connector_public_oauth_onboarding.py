@@ -17,6 +17,10 @@ class ConnectorPublicOAuthOnboardingTest(unittest.TestCase):
             "'chatgpt_actions_oauth':{'client_secret':'','pkce':False",
             "'callback_policy':'official_chat_openai_aip_callback'",
             "'authorization_code_ttl_seconds':180",
+            "'database_connector':{'same_mcp_endpoint':True",
+            "'additional_authentication':False",
+            "'changes_require_plan_and_approval':True",
+            "'secret_values_require_owner_and_approval':True",
         ):
             self.assertIn(marker, source)
         primary = source[source.index('def instructions'):source.index('def write_secret')]
