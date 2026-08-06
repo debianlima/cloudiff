@@ -38,9 +38,11 @@ class ProjectProvisionResumeContractTests(unittest.TestCase):
             self.assertIn('data-provision-recoverable=',source)
 
     def test_project_state_reconciler_can_read_portal_database(self):
-        self.assertIn('/var/lib/cloudif/portal',UNIT)
+        self.assertIn('ReadWritePaths=/run /var/lib/cloudif/health /var/lib/cloudif/portal /srv/cloudif/jobs',UNIT)
         self.assertIn('ProtectSystem=strict',UNIT)
-        self.assertIn('ReadWritePaths=/run /var/lib/cloudif/health /srv/cloudif/jobs',UNIT)
+        reconciler=(ROOT/'components/control-plane/current-apps/project-state-reconcile-current/cloudif-project-state-reconcile.py').read_text()
+        self.assertIn("sqlite3.connect(f'file:{PORTAL_DB}?mode=ro'",reconciler)
+        self.assertNotIn('sqlite3.connect(PORTAL_DB)',reconciler)
 
 
 if __name__=='__main__':unittest.main()
