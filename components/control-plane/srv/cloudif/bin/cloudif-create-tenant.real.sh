@@ -19,31 +19,111 @@ LOCK="$LOCK_ROOT/tenant-${TENANT}.lock"
 exec 9>"$LOCK"
 flock -x 9
 
-if grep -q "^${TENANT}," "$REGISTRY" 2>/dev/null; then
-  echo "Tenant já registrado: $TENANT"
-else
-  max_kong="$(awk -F, 'NR>1 && $2 ~ /^[0-9]+$/ {if($2>m)m=$2} END{print m+0}' "$REGISTRY")"
-  max_studio="$(awk -F, 'NR>1 && $3 ~ /^[0-9]+$/ {if($3>m)m=$3} END{print m+0}' "$REGISTRY")"
-  max_db="$(awk -F, 'NR>1 && $4 ~ /^[0-9]+$/ {if($4>m)m=$4} END{print m+0}' "$REGISTRY")"
+REGISTRY_LOCK="$LOCK_ROOT/tenant-registry.lock"
+exec 8>"$REGISTRY_LOCK"
+flock -x 8
 
-  if [ "$TENANT" = "akadmin" ]; then
-    KONG=8102; STUDIO=30010; DB=54330; KONG_SSL=8444; POOL_TX=65430; POOL_SESS=54320; INBUCKET=54325
-  elif [ "$TENANT" = "iff1742962" ]; then
-    KONG=8101; STUDIO=30011; DB=54331; KONG_SSL=8445; POOL_TX=65431; POOL_SESS=54321; INBUCKET=54326
-  else
-    KONG=$(( max_kong > 8110 ? max_kong + 1 : 8110 ))
-    STUDIO=$(( max_studio > 30100 ? max_studio + 1 : 30100 ))
-    DB=$(( max_db > 54400 ? max_db + 1 : 54400 ))
-    KONG_SSL=$(( KONG + 1000 ))
-    POOL_TX=$(( 65400 + KONG - 8100 ))
-    POOL_SESS=$(( 54300 + KONG - 8100 ))
-    INBUCKET=$(( 54320 + KONG - 8100 ))
-  fi
-
-  echo "${TENANT},${KONG},${STUDIO},${DB},${KONG_SSL},${POOL_TX},${POOL_SESS},${INBUCKET},$(date -Is)" >> "$REGISTRY"
+mkdir -p "$(dirname "$REGISTRY")"
+if [ ! -s "$REGISTRY" ]; then
+  printf '%s\n' 'tenant,kong_http_port,studio_port,postgres_port,kong_https_port,pooler_transaction_port,pooler_session_port,inbucket_port,created_at' > "$REGISTRY"
 fi
 
-IFS=, read -r TENANT KONG STUDIO DB KONG_SSL POOL_TX POOL_SESS INBUCKET CREATED < <(grep "^${TENANT}," "$REGISTRY" | tail -1)
+tenant_registered() {
+  awk -F, -v tenant="$TENANT" 'NR>1 && $1==tenant {found=1} END{exit found?0:1}' "$REGISTRY"
+}
+
+tenant_row() {
+  awk -F, -v tenant="$TENANT" 'NR>1 && $1==tenant {line=$0} END{print line}' "$REGISTRY"
+}
+
+port_registered() {
+  local port="$1"
+  awk -F, -v port="$port" 'NR>1 {for(i=2;i<=8;i++) if($i==port) found=1} END{exit found?0:1}' "$REGISTRY"
+}
+
+port_listening() {
+  local port="$1"
+  command -v ss >/dev/null 2>&1 || return 1
+  ss -H -ltn 2>/dev/null | awk -v port="$port" '
+    {
+      address=$4
+      sub(/^.*:/,"",address)
+      gsub(/[^0-9]/,"",address)
+      if(address==port) found=1
+    }
+    END{exit found?0:1}
+  '
+}
+
+port_unavailable() {
+  port_registered "$1" || port_listening "$1"
+}
+
+next_free_port() {
+  local candidate="$1"
+  while port_unavailable "$candidate"; do
+    candidate=$((candidate + 1))
+  done
+  printf '%s\n' "$candidate"
+}
+
+bundle_available() {
+  local port
+  for port in "$@"; do
+    if port_unavailable "$port"; then
+      return 1
+    fi
+  done
+  return 0
+}
+
+if tenant_registered; then
+  echo "Tenant já registrado: $TENANT"
+else
+  if [ "$TENANT" = "akadmin" ]; then
+    KONG=8102; STUDIO=30010; DB=54330; KONG_SSL=8444; POOL_TX=65430; POOL_SESS=54320; INBUCKET=54325
+    bundle_available "$KONG" "$STUDIO" "$DB" "$KONG_SSL" "$POOL_TX" "$POOL_SESS" "$INBUCKET" || {
+      echo "tenant_fixed_port_conflict:$TENANT" >&2
+      exit 3
+    }
+  elif [ "$TENANT" = "iff1742962" ]; then
+    KONG=8101; STUDIO=30011; DB=54331; KONG_SSL=8445; POOL_TX=65431; POOL_SESS=54321; INBUCKET=54326
+    bundle_available "$KONG" "$STUDIO" "$DB" "$KONG_SSL" "$POOL_TX" "$POOL_SESS" "$INBUCKET" || {
+      echo "tenant_fixed_port_conflict:$TENANT" >&2
+      exit 3
+    }
+  else
+    KONG=8110
+    while true; do
+      KONG_SSL=$((KONG + 1000))
+      POOL_TX=$((65400 + KONG - 8100))
+      POOL_SESS=$((54300 + KONG - 8100))
+      INBUCKET=$((54320 + KONG - 8100))
+      bundle_available "$KONG" "$KONG_SSL" "$POOL_TX" "$POOL_SESS" "$INBUCKET" && break
+      KONG=$((KONG + 1))
+    done
+    STUDIO="$(next_free_port 30100)"
+    DB="$(next_free_port 54400)"
+  fi
+
+  printf '%s,%s,%s,%s,%s,%s,%s,%s,%s\n' \
+    "$TENANT" "$KONG" "$STUDIO" "$DB" "$KONG_SSL" "$POOL_TX" "$POOL_SESS" "$INBUCKET" "$(date -Is)" >> "$REGISTRY"
+fi
+
+ROW="$(tenant_row)"
+[ -n "$ROW" ] || { echo "tenant_registry_row_missing:$TENANT" >&2; exit 4; }
+IFS=, read -r _TENANT _KONG _STUDIO _DB _KONG_SSL _POOL_TX _POOL_SESS _INBUCKET _CREATED <<< "$ROW"
+for port in "$_KONG" "$_STUDIO" "$_DB" "$_KONG_SSL" "$_POOL_TX" "$_POOL_SESS" "$_INBUCKET"; do
+  duplicates="$(awk -F, -v port="$port" 'NR>1 {for(i=2;i<=8;i++) if($i==port) count++} END{print count+0}' "$REGISTRY")"
+  if [ "$duplicates" -ne 1 ]; then
+    echo "tenant_port_assignment_conflict:$TENANT:$port" >&2
+    exit 5
+  fi
+done
+
+flock -u 8
+
+TENANT="$_TENANT"; KONG="$_KONG"; STUDIO="$_STUDIO"; DB="$_DB"; KONG_SSL="$_KONG_SSL"; POOL_TX="$_POOL_TX"; POOL_SESS="$_POOL_SESS"; INBUCKET="$_INBUCKET"; CREATED="$_CREATED"
 
 if [ ! -f "$SRC/docker-compose.yml" ]; then
   echo "Template Supabase não encontrado: $SRC" >&2

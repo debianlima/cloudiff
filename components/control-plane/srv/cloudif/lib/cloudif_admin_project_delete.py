@@ -52,6 +52,12 @@ def consume_wizard_token(slug, token):
     return payload.get('slug')==slug and float(payload.get('expires_at') or 0)>=time.time()
 
 
+def _confirmation_matches(slug, confirmation):
+    expected = f'EXCLUIR {slug}'
+    normalized = ' '.join(str(confirmation or '').split())
+    return normalized.casefold() == expected.casefold()
+
+
 def _job_write(job_id, data):
     JOB_ROOT.mkdir(parents=True, exist_ok=True)
     target = JOB_ROOT / f'{job_id}.json'
@@ -81,6 +87,9 @@ def job_status(job_id):
 
 
 def start_job(slug, confirmation, actor):
+    expected = f'EXCLUIR {slug}'
+    if not _confirmation_matches(slug, confirmation):
+        return {'ok': False, 'error': 'invalid_confirmation', 'expected': expected}
     JOB_ROOT.mkdir(parents=True, exist_ok=True)
     lock_path = JOB_ROOT / f'.{slug}.lock'
     lock_fd = None
@@ -423,7 +432,7 @@ def execute(slug, confirmation, actor, progress=None):
     progress = progress or (lambda *args, **kwargs: None)
     progress('Validação', 'running', 'Conferindo confirmação e projeto')
     expected = f'EXCLUIR {slug}'
-    if confirmation != expected:
+    if not _confirmation_matches(slug, confirmation):
         return {'ok': False, 'error': 'invalid_confirmation', 'expected': expected}
     plan = preview(slug)
     if not plan.get('ok') and plan.get('error')=='project_not_found':

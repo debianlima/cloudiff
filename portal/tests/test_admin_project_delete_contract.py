@@ -37,6 +37,8 @@ class AdminProjectDeleteContractTest(unittest.TestCase):
     def test_delete_module_preserves_tenant_and_requires_confirmation(self):
         source = Path('components/control-plane/srv/cloudif/lib/cloudif_admin_project_delete.py').read_text(encoding='utf-8')
         self.assertIn("expected = f'EXCLUIR {slug}'", source)
+        self.assertIn("normalized.casefold() == expected.casefold()", source)
+        self.assertIn("if not _confirmation_matches(slug, confirmation)", source)
         self.assertIn('tenant_preserved', source)
         self.assertIn('forja_rollback(slug, execute=True)', source)
         self.assertIn('BEGIN IMMEDIATE', source)
