@@ -3815,7 +3815,7 @@ if "Portal" in globals():
                 try:
                     from cloudif_reconcile_client import enqueue as _acl_enqueue
                     _acl_enqueue(
-                        "project.updated",
+                        "project.membership.changed",
                         actor=user.get("username") or "portal",
                         username=user.get("username") or "",
                         project=slug,

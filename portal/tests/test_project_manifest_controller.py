@@ -31,6 +31,7 @@ class ProjectManifestControllerTests(unittest.TestCase):
             [
                 ('p1', 'frontend-api', 'Frontend API', 'alice', 'tenant-frontend-api', 'active'),
                 ('p2', 'simple-site', 'Simple Site', 'alice', 'tenant-simple-site', 'active'),
+                ('p3', 'stale-site', 'Stale Site', 'alice', 'tenant-stale-site', 'active'),
             ],
         )
         conn.commit(); conn.close()
@@ -257,18 +258,22 @@ services:
         self.assertFalse(plan['secretValuesIncluded'])
         applied = self.module.apply_configuration('simple-site', plan['planDigest'], 0, 'alice')
         self.assertEqual(applied['revision'], 1)
-        self.assertTrue(applied['observationMode'])
+        self.assertFalse(applied['observationMode'])
+        self.assertTrue(applied['reconciliationPending'])
         self.assertFalse(applied['runtimeChanged'])
         again = self.module.apply_configuration('simple-site', plan['planDigest'], 0, 'alice')
         self.assertTrue(again['idempotent'])
         self.assertEqual(again['revision'], 1)
         current = self.module.current_project('simple-site')
         self.assertEqual(current['currentRevision'], 1)
-        self.assertEqual(current['observationStatus'], 'observed')
+        self.assertEqual(current['observationStatus'], 'reconcile_pending')
 
     def test_stale_revision_is_rejected(self):
+        manifest = {'version': 1, 'runtime': 'static', 'publish': '.'}
+        plan = self.module.plan_configuration('stale-site', manifest, {}, 0, 'alice', 'portal')
+        self.module.apply_configuration('stale-site', plan['planDigest'], 0, 'alice')
         with self.assertRaisesRegex(RuntimeError, 'revision_conflict:1'):
-            self.module.plan_configuration('simple-site', {'version': 1, 'runtime': 'static'}, {}, 0, 'alice', 'portal')
+            self.module.plan_configuration('stale-site', manifest, {}, 0, 'alice', 'portal')
 
     def test_membership_events_do_not_change_runtime_or_configuration(self):
         before = self.module.current_project('frontend-api')

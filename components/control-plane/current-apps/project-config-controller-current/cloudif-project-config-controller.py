@@ -552,6 +552,11 @@ def current_project(slug: str) -> dict[str, Any]:
     if row and int(row['current_revision']) > 0:
         revision = conn.execute('select * from revisions where project_slug=? and revision=?', (slug, row['current_revision'])).fetchone()
     events = conn.execute('select * from reconciliation_events where project_slug=? order by created_at desc limit 20', (slug,)).fetchall()
+    state_row = None
+    try:
+        state_row = conn.execute('select * from reconciliation_state where project_slug=?', (slug,)).fetchone()
+    except sqlite3.Error:
+        state_row = None
     conn.close()
     if not row:
         return {
@@ -586,6 +591,16 @@ def current_project(slug: str) -> dict[str, Any]:
         ],
         'secretsExposed': False,
     }
+    if state_row:
+        data['reconciliation'] = {
+            'status': state_row['status'], 'configRevision': int(state_row['config_revision']),
+            'membershipRevision': int(state_row['membership_revision']), 'configDigest': state_row['config_digest'],
+            'toolchainDigest': state_row['toolchain_digest'], 'aclDigest': state_row['acl_digest'],
+            'latestBuildJobId': state_row['latest_build_job_id'], 'latestBuildStatus': state_row['latest_build_status'],
+            'requiredActions': json.loads(state_row['required_actions_json'] or '[]'),
+            'checks': json.loads(state_row['checks_json'] or '{}'), 'updatedAt': int(state_row['updated_at']),
+            'secretsExposed': False,
+        }
     if revision:
         effective = json.loads(revision['effective_json'])
         data['configuration'] = effective
@@ -682,15 +697,15 @@ def apply_configuration(slug: str, plan_digest: str, expected_revision: int, act
         row['manifest_digest'], row['config_digest'], row['toolchain_digest'], actor, created,
     ))
     conn.execute('''insert into projects(project_slug,current_revision,manifest_digest,config_digest,toolchain_digest,membership_revision,observation_status,updated_at)
-                    values(?,?,?,?,?,0,'observed',?)
-                    on conflict(project_slug) do update set current_revision=excluded.current_revision,manifest_digest=excluded.manifest_digest,config_digest=excluded.config_digest,toolchain_digest=excluded.toolchain_digest,observation_status='observed',updated_at=excluded.updated_at''', (
+                    values(?,?,?,?,?,0,'reconcile_pending',?)
+                    on conflict(project_slug) do update set current_revision=excluded.current_revision,manifest_digest=excluded.manifest_digest,config_digest=excluded.config_digest,toolchain_digest=excluded.toolchain_digest,observation_status='reconcile_pending',updated_at=excluded.updated_at''', (
         slug, revision, row['manifest_digest'], row['config_digest'], row['toolchain_digest'], created,
     ))
     event_id = 'evt_' + uuid.uuid4().hex
-    details = {'mode': 'observation', 'configurationApplied': True, 'runtimeChanged': False, 'containersChanged': False, 'secretValuesIncluded': False}
+    details = {'mode': 'active-verification', 'configurationApplied': True, 'runtimeChanged': False, 'containersChanged': False, 'secretValuesIncluded': False, 'requiredAction': 'reconcile_configuration'}
     conn.execute('''insert into reconciliation_events(event_id,project_slug,event_type,config_revision,membership_revision,status,details_json,created_at,finished_at)
-                    values(?,?,?, ?,0,'observed',?,?,?)''', (
-        event_id, slug, 'configuration.applied', revision, json.dumps(details, separators=(',', ':')), created, created,
+                    values(?,?,?, ?,0,'pending',?,?,null)''', (
+        event_id, slug, 'configuration.applied', revision, json.dumps(details, separators=(',', ':')), created,
     ))
     conn.execute('update plans set consumed_at=? where plan_digest=?', (created, plan_digest))
     conn.commit(); conn.close()
@@ -698,14 +713,14 @@ def apply_configuration(slug: str, plan_digest: str, expected_revision: int, act
         'ok': True, 'idempotent': False, 'projectSlug': slug, 'revision': revision,
         'manifestDigest': row['manifest_digest'], 'configDigest': row['config_digest'],
         'toolchainDigest': row['toolchain_digest'], 'eventId': event_id,
-        'observationMode': True, 'runtimeChanged': False, 'containersChanged': False,
+        'observationMode': False, 'reconciliationPending': True, 'runtimeChanged': False, 'containersChanged': False,
         'secretValuesIncluded': False,
     }
 
 
 def record_event(slug: str, event_type: str, details: dict[str, Any]) -> dict[str, Any]:
     project_exists(slug)
-    if event_type not in {'project.created', 'project.updated', 'project.member.added', 'project.member.removed', 'publication.created', 'publication.updated', 'manifest.changed', 'configuration.changed'}:
+    if event_type not in {'project.created', 'project.updated', 'project.member.added', 'project.member.removed', 'project.membership.reconciled', 'publication.created', 'publication.updated', 'manifest.changed', 'configuration.changed'}:
         raise ValueError('invalid_event_type')
     conn = db_conn(); conn.execute('begin immediate')
     row = conn.execute('select * from projects where project_slug=?', (slug,)).fetchone()
@@ -715,19 +730,19 @@ def record_event(slug: str, event_type: str, details: dict[str, Any]) -> dict[st
         membership += 1
     event_id = 'evt_' + uuid.uuid4().hex
     safe_details = sanitize_details(details)
-    safe_details.update({'mode': 'observation', 'runtimeChanged': False, 'containersChanged': False, 'secretValuesIncluded': False})
+    safe_details.update({'mode': 'active-verification', 'runtimeChanged': False, 'containersChanged': False, 'secretValuesIncluded': False, 'requiredAction': 'reconcile_configuration'})
     if not row:
         conn.execute('insert into projects(project_slug,current_revision,membership_revision,observation_status,updated_at) values(?,0,? ,?,?)', (slug, membership, 'unconfigured', now()))
     else:
-        conn.execute('update projects set membership_revision=?,updated_at=? where project_slug=?', (membership, now(), slug))
+        conn.execute("update projects set membership_revision=?,observation_status='reconcile_pending',updated_at=? where project_slug=?", (membership, now(), slug))
     created = now()
     conn.execute('''insert into reconciliation_events(event_id,project_slug,event_type,config_revision,membership_revision,status,details_json,created_at,finished_at)
-                    values(?,?,?,?,?,'observed',?,?,?)''', (
+                    values(?,?,?,?,?,'pending',?,?,null)''', (
         event_id, slug, event_type, revision, membership,
-        json.dumps(safe_details, ensure_ascii=False, separators=(',', ':')), created, created,
+        json.dumps(safe_details, ensure_ascii=False, separators=(',', ':')), created,
     ))
     conn.commit(); conn.close()
-    return {'ok': True, 'eventId': event_id, 'projectSlug': slug, 'eventType': event_type, 'configRevision': revision, 'membershipRevision': membership, 'observationMode': True, 'runtimeChanged': False, 'containersChanged': False}
+    return {'ok': True, 'eventId': event_id, 'projectSlug': slug, 'eventType': event_type, 'configRevision': revision, 'membershipRevision': membership, 'observationMode': False, 'reconciliationPending': True, 'runtimeChanged': False, 'containersChanged': False}
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -760,7 +775,7 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == '/health':
             try:
                 conn = db_conn(); revisions = conn.execute('select count(*) from revisions').fetchone()[0]; conn.close()
-                return self.send_json(200, {'ok': True, 'service': 'cloudif-project-config-controller', 'schemaVersion': 1, 'mode': 'observation', 'revisions': revisions, 'secretsExposed': False})
+                return self.send_json(200, {'ok': True, 'service': 'cloudif-project-config-controller', 'schemaVersion': 1, 'mode': 'active-verification', 'revisions': revisions, 'secretsExposed': False})
             except Exception:
                 return self.send_json(503, {'ok': False, 'error': {'code': 'service_unavailable'}})
         if not self.authenticated():

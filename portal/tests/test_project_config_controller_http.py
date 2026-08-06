@@ -74,11 +74,11 @@ class ProjectConfigControllerHTTPTests(unittest.TestCase):
         except urllib.error.HTTPError as error:
             return error.code, json.load(error)
 
-    def test_health_is_public_and_reports_observation_mode(self):
+    def test_health_is_public_and_reports_active_verification_mode(self):
         status, body = self.request('GET', '/health', authenticated=False)
         self.assertEqual(status, 200)
         self.assertTrue(body['ok'])
-        self.assertEqual(body['mode'], 'observation')
+        self.assertEqual(body['mode'], 'active-verification')
         self.assertFalse(body['secretsExposed'])
 
     def test_internal_routes_require_bearer_authentication(self):
@@ -120,7 +120,8 @@ class ProjectConfigControllerHTTPTests(unittest.TestCase):
         })
         self.assertEqual(status, 200)
         self.assertEqual(applied['revision'], 1)
-        self.assertTrue(applied['observationMode'])
+        self.assertFalse(applied['observationMode'])
+        self.assertTrue(applied['reconciliationPending'])
         status, repeated = self.request('POST', '/v1/projects/http-project/configuration/apply', {
             'planDigest': plan['planDigest'], 'expectedRevision': 0, 'actor': 'alice', 'approved': True,
         })

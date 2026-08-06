@@ -19,6 +19,7 @@ from pathlib import Path
 
 sys.path.insert(0, "/srv/cloudif/lib")
 import cloudif_reconcile_client as client
+import cloudif_project_config_events as config_events
 
 LOCK = Path("/run/cloudif-reconcile-worker.lock")
 QUEUE = client.QUEUE
@@ -217,7 +218,8 @@ def process(row):
                 raise RuntimeError('project_membership_reconcile_failed')
         status="ready" if repo_full else "waiting"
         msg=("Membros, terminais e integrações reconciliados." if membership else "Projeto e repositório reconciliados.") if repo_full else "Projeto preparado; aguardando criação do repositório."
-        update_request(rid,status,msg,{"project":project,"tenant":tenant,"repo_full_name":repo_full,"repo_url":repo_url,"membership":membership})
+        configuration_event=config_events.notify(project,event,payload)
+        update_request(rid,status,msg,{"project":project,"tenant":tenant,"repo_full_name":repo_full,"repo_url":repo_url,"membership":membership,"configuration_event":configuration_event})
         return
     if event in {"tenant.created","tenant.ready","tenant.bound","tenant.membership.changed"}:
         tenant=row["tenant"] or str(payload.get("tenant") or "")

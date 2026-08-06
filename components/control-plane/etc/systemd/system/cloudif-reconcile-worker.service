@@ -1,12 +1,14 @@
 [Unit]
 StartLimitIntervalSec=0
 Description=CloudIF partitioned asynchronous reconciliation worker
-After=network-online.target docker.service
+After=network-online.target docker.service cloudif-project-config-controller.service
 Wants=network-online.target
+Requires=cloudif-project-config-controller.service
 [Service]
 TimeoutStartSec=30min
 Type=oneshot
 Environment=CLOUDIF_RECONCILE_WORKERS=4
+EnvironmentFile=/etc/cloudif/project-config-controller.env
 Environment=PYTHONPATH=/srv/cloudif/lib
 ExecStart=/usr/bin/python3 /srv/cloudif/app-pointers/reconcile-worker-current/cloudif-reconcile-worker.py drain
 NoNewPrivileges=true

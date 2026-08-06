@@ -1,0 +1,52 @@
+[Unit]
+Description=CloudIFF active project configuration reconciler
+After=network-online.target cloudif-project-config-controller.service cloudif-build-broker.service
+Requires=cloudif-project-config-controller.service cloudif-build-broker.service
+Wants=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+User=cloudif-control
+Group=cloudif-control
+EnvironmentFile=/etc/cloudif/project-config-reconciler.env
+Environment=CLOUDIF_PROJECT_CONFIG_RECONCILER_HOST=127.0.0.1
+Environment=CLOUDIF_PROJECT_CONFIG_RECONCILER_PORT=18229
+Environment=CLOUDIF_PROJECT_CONFIG_DB=/var/lib/cloudif/project-config/config.db
+Environment=CLOUDIF_PROJECT_SNAPSHOT_DB=/var/lib/cloudif/control-plane/control-plane.db
+Environment=CLOUDIF_BUILD_DB=/var/lib/cloudif/build-broker/builds.sqlite3
+ExecStart=/usr/bin/python3 /srv/cloudif/app-pointers/project-config-reconciler-current/cloudif-project-config-reconciler.py
+Restart=on-failure
+RestartSec=3
+TimeoutStartSec=30s
+TimeoutStopSec=15s
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/cloudif/project-config
+ReadOnlyPaths=/var/lib/cloudif/control-plane /var/lib/cloudif/build-broker /srv/cloudif/app-releases/project-config-reconciler /srv/cloudif/app-pointers /etc/cloudif/project-config-reconciler.env
+PrivateDevices=true
+ProtectClock=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+ProtectHostname=true
+ProtectProc=invisible
+ProcSubset=pid
+RestrictNamespaces=true
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+RestrictRealtime=true
+RestrictAddressFamilies=AF_INET AF_UNIX
+CapabilityBoundingSet=
+AmbientCapabilities=
+RemoveIPC=true
+UMask=0077
+IPAddressAllow=127.0.0.0/8
+IPAddressDeny=any
+
+[Install]
+WantedBy=multi-user.target
