@@ -1,0 +1,293 @@
+{
+  "version": 1,
+  "architectures": [
+    "amd64",
+    "arm64"
+  ],
+  "networkPolicies": {
+    "none": {
+      "supported": true,
+      "description": "Sem acesso de rede durante o build."
+    },
+    "restricted": {
+      "supported": false,
+      "requires": "internal-dependency-proxy"
+    },
+    "approved-domains": {
+      "supported": false,
+      "requires": "egress-domain-enforcement"
+    }
+  },
+  "baseImages": {
+    "static": {
+      "versions": {
+        "default": {
+          "image": "nginx:1.27-alpine",
+          "architectures": [
+            "amd64"
+          ],
+          "user": "101:101",
+          "imageId": "sha256:0a399eb167a751f1c6dba815ec9e8309072d7a854c78a8d1162a1f7e0a89aa9c"
+        }
+      }
+    },
+    "node": {
+      "versions": {
+        "24": {
+          "image": "node:24-bookworm",
+          "runtimeImage": "gcr.io/distroless/nodejs24-debian12:nonroot",
+          "architectures": [
+            "amd64"
+          ],
+          "user": "node",
+          "imageId": "sha256:40e164e7b8eaa1d3b33216aedc2a09439616784ccf07589051719a768fa7ac74",
+          "runtimeImageId": "sha256:58de884b14e6c2533913730a40a2b5fb64f7b9b53ff6bdbf79728bc4dc316e8a"
+        }
+      }
+    }
+  },
+  "systemPackages": {
+    "git": {
+      "versions": [
+        "system"
+      ],
+      "source": "base-image",
+      "verify": [
+        "git",
+        "--version"
+      ],
+      "license": "GPL-2.0-only",
+      "architectures": [
+        "amd64"
+      ],
+      "networkRequired": false
+    },
+    "curl": {
+      "versions": [
+        "system"
+      ],
+      "source": "base-image",
+      "verify": [
+        "curl",
+        "--version"
+      ],
+      "license": "curl",
+      "architectures": [
+        "amd64"
+      ],
+      "networkRequired": false
+    },
+    "python3": {
+      "versions": [
+        "system"
+      ],
+      "source": "base-image",
+      "verify": [
+        "python3",
+        "--version"
+      ],
+      "license": "PSF-2.0",
+      "architectures": [
+        "amd64"
+      ],
+      "networkRequired": false
+    },
+    "imagemagick": {
+      "versions": [
+        "6.9"
+      ],
+      "source": "dependency-proxy",
+      "verify": [
+        "convert",
+        "--version"
+      ],
+      "license": "ImageMagick",
+      "architectures": [
+        "amd64"
+      ],
+      "networkRequired": true
+    },
+    "ffmpeg": {
+      "versions": [
+        "6"
+      ],
+      "source": "dependency-proxy",
+      "verify": [
+        "ffmpeg",
+        "-version"
+      ],
+      "license": "LGPL-2.1-or-later",
+      "architectures": [
+        "amd64"
+      ],
+      "networkRequired": true
+    },
+    "chromium": {
+      "versions": [
+        "system"
+      ],
+      "source": "dependency-proxy",
+      "verify": [
+        "chromium",
+        "--version"
+      ],
+      "license": "BSD-3-Clause",
+      "architectures": [
+        "amd64"
+      ],
+      "networkRequired": true
+    }
+  },
+  "tools": {
+    "node": {
+      "versions": [
+        "24"
+      ],
+      "source": "base-image",
+      "installMethods": [
+        "catalog"
+      ],
+      "verify": [
+        "node",
+        "--version"
+      ],
+      "license": "MIT",
+      "architectures": [
+        "amd64"
+      ],
+      "networkRequired": false
+    },
+    "npm": {
+      "versions": [
+        "system"
+      ],
+      "source": "base-image",
+      "installMethods": [
+        "catalog"
+      ],
+      "verify": [
+        "npm",
+        "--version"
+      ],
+      "license": "Artistic-2.0",
+      "architectures": [
+        "amd64"
+      ],
+      "networkRequired": false
+    },
+    "corepack": {
+      "versions": [
+        "system"
+      ],
+      "source": "base-image",
+      "installMethods": [
+        "corepack"
+      ],
+      "verify": [
+        "corepack",
+        "--version"
+      ],
+      "license": "MIT",
+      "architectures": [
+        "amd64"
+      ],
+      "networkRequired": false
+    },
+    "pnpm": {
+      "versions": [
+        "10"
+      ],
+      "source": "dependency-proxy",
+      "installMethods": [
+        "corepack"
+      ],
+      "verify": [
+        "pnpm",
+        "--version"
+      ],
+      "license": "MIT",
+      "architectures": [
+        "amd64"
+      ],
+      "networkRequired": true
+    },
+    "yarn": {
+      "versions": [
+        "4"
+      ],
+      "source": "dependency-proxy",
+      "installMethods": [
+        "corepack"
+      ],
+      "verify": [
+        "yarn",
+        "--version"
+      ],
+      "license": "BSD-2-Clause",
+      "architectures": [
+        "amd64"
+      ],
+      "networkRequired": true
+    },
+    "composer": {
+      "versions": [
+        "2"
+      ],
+      "source": "dependency-proxy",
+      "installMethods": [
+        "catalog"
+      ],
+      "verify": [
+        "composer",
+        "--version"
+      ],
+      "license": "MIT",
+      "architectures": [
+        "amd64"
+      ],
+      "networkRequired": true
+    },
+    "playwright": {
+      "versions": [
+        "1.54"
+      ],
+      "source": "dependency-proxy",
+      "installMethods": [
+        "catalog"
+      ],
+      "verify": [
+        "playwright",
+        "--version"
+      ],
+      "license": "Apache-2.0",
+      "architectures": [
+        "amd64"
+      ],
+      "networkRequired": true
+    }
+  },
+  "provisionPolicy": {
+    "maxBytes": 262144,
+    "maxTimeoutSeconds": 1800,
+    "requiredShebangs": [
+      "#!/usr/bin/env bash",
+      "#!/bin/bash"
+    ],
+    "forbiddenPatterns": [
+      "(?:^|\\s)sudo(?:\\s|$)",
+      "(?:^|\\s)(?:mount|umount|nsenter|chroot|pivot_root)(?:\\s|$)",
+      "(?:^|\\s)systemctl(?:\\s|$)",
+      "/var/run/docker\\.sock",
+      "--privileged",
+      "(?:^|\\s)docker(?:\\s|$)",
+      "(?:^|\\s)podman(?:\\s|$)",
+      "(?:curl|wget)[^\\n|]*\\|\\s*(?:sh|bash)",
+      "(?:^|\\s)iptables(?:\\s|$)",
+      "(?:^|\\s)modprobe(?:\\s|$)",
+      "(?:^|\\s)dd\\s+.*(?:/dev/|of=/)",
+      "(?:^|\\s)mkfs(?:\\.|\\s)",
+      "(?:^|\\s)reboot(?:\\s|$)",
+      "(?:^|\\s)shutdown(?:\\s|$)"
+    ]
+  }
+}

@@ -4,6 +4,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import hmac
+import importlib.util
 import json
 import os
 import re
@@ -17,6 +18,15 @@ import urllib.parse
 import urllib.request
 from pathlib import Path, PurePosixPath
 from typing import Any
+try:
+    from cloudif_toolchain_policy import validate_toolchain
+except ModuleNotFoundError:
+    _policy_path = Path(__file__).with_name('cloudif_toolchain_policy.py')
+    _policy_spec = importlib.util.spec_from_file_location('cloudif_toolchain_policy', _policy_path)
+    _policy_module = importlib.util.module_from_spec(_policy_spec)
+    assert _policy_spec.loader
+    _policy_spec.loader.exec_module(_policy_module)
+    validate_toolchain = _policy_module.validate_toolchain
 
 STATIC_BASE = os.environ.get(
     'CLOUDIF_STATIC_BASE_IMAGE',
@@ -37,6 +47,7 @@ TRIVY_CACHE = Path(os.environ.get('CLOUDIF_TRIVY_CACHE', '/srv/cloudif/scanners/
 SCANNER_ENV = Path(os.environ.get('CLOUDIF_SCANNER_ENV', '/srv/cloudif/scanners/images.env'))
 SIGNING_KEY = Path(os.environ.get('CLOUDIF_ARTIFACT_SIGNING_KEY', '/etc/cloudif/artifact-signing.key'))
 SIGNING_PUBLIC_KEY = Path(os.environ.get('CLOUDIF_ARTIFACT_SIGNING_PUBLIC_KEY', '/etc/cloudif/artifact-signing.pub'))
+TOOLCHAIN_CATALOG = Path(os.environ.get('CLOUDIF_TOOLCHAIN_CATALOG', '/etc/cloudif/toolchain-catalog-v1.json'))
 MAX_ARCHIVE = 64 * 1024 * 1024
 MAX_UNPACKED = 256 * 1024 * 1024
 MAX_FILES = 25000
@@ -206,20 +217,29 @@ def validate_request(payload: Any) -> dict[str, Any]:
     for field, value in (('archive_sha256', archive_sha), ('config_digest', config_digest), ('toolchain_digest', toolchain_digest), ('plan_digest', plan_digest)):
         if not SHA_RE.fullmatch(value):
             raise ArtifactError('invalid_digest', f'{field} deve ter 64 caracteres hexadecimais.', field, http_status=400)
-    if not re.fullmatch(r'build_[a-f0-9]{24}', job_id) or not trace_id or len(trace_id) > 128:
+    if not re.fullmatch(r'(?:build|toolchain)_[a-f0-9]{24}', job_id) or not trace_id or len(trace_id) > 128:
         raise ArtifactError('invalid_job_identity', 'job_id ou trace_id é inválido.', http_status=400)
     revision = int(payload.get('config_revision') or 0)
     if revision < 1:
         raise ArtifactError('configuration_required', 'O projeto precisa de uma configuração aprovada antes do build.', 'config_revision')
     services = normalize_services(payload.get('services'))
+    toolchain = payload.get('toolchain') or {}
+    if not isinstance(toolchain, dict):
+        raise ArtifactError('invalid_toolchain', 'toolchain deve ser um objeto.', 'toolchain', http_status=400)
     blocked = [{'service': item['name'], **item['policy']} for item in services if item['policy']['status'] != 'ready']
+    validations = []
+    for item in services:
+        validation = validate_toolchain(toolchain, item['runtime'], item.get('version'), catalog_path=TOOLCHAIN_CATALOG)
+        validations.append({'service': item['name'], **validation})
+        for issue in validation.get('blockers') or []:
+            blocked.append({'service': item['name'], **issue})
     if blocked:
-        raise ArtifactError('runtime_policy_blocked', 'Um ou mais serviços não possuem base homologada.', 'services', blocked)
+        raise ArtifactError('runtime_policy_blocked', 'Um ou mais serviços ou itens da toolchain não possuem política homologada.', 'services', blocked)
     return {
         'job_id': job_id, 'project_slug': slug, 'ref': ref, 'archive_sha256': archive_sha,
         'config_revision': revision, 'config_digest': config_digest,
         'toolchain_digest': toolchain_digest, 'plan_digest': plan_digest,
-        'services': services, 'trace_id': trace_id,
+        'services': services, 'toolchain': toolchain, 'toolchainValidations': validations, 'trace_id': trace_id,
     }
 
 
@@ -394,6 +414,13 @@ def inspect_image(image: str) -> dict[str, Any]:
 
 
 def build_toolchain(request: dict[str, Any], service: dict[str, Any], source: Path, output_dir: Path) -> dict[str, Any]:
+    validation = validate_toolchain(request.get('toolchain') or {}, service['runtime'], service.get('version'), source, TOOLCHAIN_CATALOG)
+    if not validation.get('ok') or not validation.get('buildable'):
+        raise ArtifactError('toolchain_policy_blocked', 'A toolchain não passou pela validação de catálogo, script ou rede.', 'toolchain', {'service': service['name'], 'blockers': validation.get('blockers') or [], 'warnings': validation.get('warnings') or []})
+    base_inspection=inspect_image(str(validation.get('base',{}).get('image') or ''))
+    expected_base_id=str(validation.get('base',{}).get('imageId') or '')
+    if not expected_base_id or base_inspection.get('imageId')!=expected_base_id:
+        raise ArtifactError('base_image_identity_mismatch','A imagem-base local não corresponde ao ID homologado no catálogo.','toolchain.base',{'image':validation.get('base',{}).get('image'),'expectedImageId':expected_base_id,'actualImageId':base_inspection.get('imageId')})
     hook_material=[]
     for item in service.get('hookSteps') or []:
         script=source/item['path']
@@ -407,9 +434,11 @@ def build_toolchain(request: dict[str, Any], service: dict[str, Any], source: Pa
         'project':request['project_slug'],'service':service['name'],
         'configRevision':request['config_revision'],'configDigest':request['config_digest'],
         'requestedToolchainDigest':request['toolchain_digest'],
+        'validatedToolchainDigest':validation['toolchainDigest'],
+        'toolchainMaterial':validation['toolchainMaterial'],
         'runtime':service['runtime'],'version':service.get('version'),
         'hooks':[{'phase':item['phase'],'path':item['path'],'sha256':item['sha256']} for item in hook_material],
-        'policy':service['policy'],'sourceArchiveBound':False,
+        'policy':service['policy'],'sourceArchiveBound':bool(validation.get('script',{}).get('path')),
     }
     effective=sha256(canonical(material))
     image = f"cloudif-toolchain/{request['project_slug']}-{service['name']}:{effective[:16]}"
@@ -418,7 +447,8 @@ def build_toolchain(request: dict[str, Any], service: dict[str, Any], source: Pa
     if subprocess.run(['docker', 'image', 'inspect', image], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0:
         built = False
         inspected_existing=inspect_image(image)
-        if (inspected_existing.get('labels') or {}).get('org.cloudiff.toolchain-digest')!=effective:
+        labels=inspected_existing.get('labels') or {}
+        if labels.get('org.cloudiff.toolchain-digest')!=effective or labels.get('org.cloudiff.validated-toolchain-digest')!=validation['toolchainDigest']:
             raise ArtifactError('immutable_image_conflict','A tag imutável da toolchain já existe com outro digest.',detail={'image':image})
         hooks=[{'phase':item['phase'],'path':item['path'],'sha256':item['sha256'],'imagePath':'/opt/cloudiff/hooks/'+f'{index:02d}-{Path(item["path"]).name}'} for index,item in enumerate(hook_material)]
     else:
@@ -429,46 +459,75 @@ def build_toolchain(request: dict[str, Any], service: dict[str, Any], source: Pa
             record['phase']=item['phase']
         if service['runtime']=='static' and hooks:
             raise ArtifactError('static_hook_runtime_required','Hooks em serviço estático exigem uma toolchain com runtime de scripts.')
-        base = service['policy']['builder']
+        base = validation['base']['image']
         dockerfile = [f'FROM {base}']
         dockerfile.append('LABEL ' + ' '.join([
             f'org.cloudiff.kind="toolchain"', f'org.cloudiff.project="{request["project_slug"]}"',
             f'org.cloudiff.service="{service["name"]}"', f'org.cloudiff.config-revision="{request["config_revision"]}"',
             f'org.cloudiff.config-digest="{request["config_digest"]}"', f'org.cloudiff.toolchain-digest="{effective}"',
+            f'org.cloudiff.validated-toolchain-digest="{validation["toolchainDigest"]}"',
+            f'org.cloudiff.catalog-version="{validation["catalogVersion"]}"',
+            f'org.cloudiff.provision-digest="{validation.get("script",{}).get("digest") or sha256(b"")}"',
+            f'org.cloudiff.architecture="{validation["architecture"]}"',
         ]))
-        if hooks:
+        custom = bool(hooks or validation.get('systemPackages') or validation.get('tools') or validation.get('script',{}).get('path'))
+        if custom:
             dockerfile.append('USER 0')
-            dockerfile.append('COPY hooks/ /opt/cloudiff/hooks/')
+        if hooks:
+            dockerfile.append('COPY --chmod=0755 hooks/ /opt/cloudiff/hooks/')
+        provision_path = validation.get('script',{}).get('path') or ''
+        if provision_path:
+            source_script=source/provision_path
+            provision_target=context/'provision'/'provision.sh'
+            provision_target.parent.mkdir(parents=True,exist_ok=True)
+            provision_target.write_bytes(source_script.read_bytes());os.chmod(provision_target,0o755)
+            dockerfile.append('COPY --chmod=0755 provision/provision.sh /opt/cloudiff/provision/provision.sh')
+        for item in validation.get('systemPackages') or []:
+            dockerfile.append('RUN '+json.dumps(item['verify'],ensure_ascii=False))
+        for item in validation.get('tools') or []:
+            dockerfile.append('RUN '+json.dumps(item['verify'],ensure_ascii=False))
+        if provision_path:
+            dockerfile.append('RUN '+json.dumps(['/bin/bash','/opt/cloudiff/provision/provision.sh'],ensure_ascii=False))
         dockerfile.append('WORKDIR /workspace')
         pre=hook_dockerfile_runs(hooks,'preBuild').strip()
         post=hook_dockerfile_runs(hooks,'postBuild').strip()
         if pre: dockerfile.extend(pre.splitlines())
         if post: dockerfile.extend(post.splitlines())
-        dockerfile.append('USER 65532:65532' if service['runtime'] == 'static' else 'USER node')
+        final_user=str(validation.get('base',{}).get('user') or ('65532:65532' if service['runtime']=='static' else 'node'))
+        dockerfile.append('USER '+final_user)
         (context / 'Dockerfile').write_text('\n'.join(dockerfile) + '\n')
-        run(['docker', 'build', '--pull=false', '--network', 'none', '--no-cache=false', '-t', image, str(context)], timeout=900)
+        run(['docker', 'build', '--pull=false', '--network', 'none', '--no-cache=false', '-t', image, str(context)], timeout=max(900,int((validation.get('provision') or {}).get('timeoutSeconds') or 0)+600))
         built = True
     proof_command = ['docker', 'run', '--rm', '--network', 'none', '--read-only', '--tmpfs', '/tmp:rw,noexec,nosuid,size=16m', '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges', image]
     if service['runtime'] == 'node':
-        proof_command += ['node', '--version']
-        proof = run(proof_command, timeout=60).stdout.strip()
+        proof = run(proof_command + ['node', '--version'], timeout=60).stdout.strip()
         if not proof.startswith('v24.'):
             raise ArtifactError('toolchain_runtime_proof_failed', 'A toolchain Node não executou Node 24.', detail=proof)
     else:
         proof = 'static-image-inspection-only'
+    verification=[]
+    for item in (validation.get('systemPackages') or [])+(validation.get('tools') or []):
+        output_text=run(proof_command+list(item['verify']),timeout=60).stdout.strip()[-1000:]
+        verification.append({'name':item['name'],'version':item['version'],'verified':True,'output':output_text})
     scan = scan_image(image, output, 'toolchain')
     if scan['scannerBlocked']:
         raise ArtifactError('toolchain_scanner_blocked', 'A toolchain contém vulnerabilidades HIGH ou CRITICAL.', detail=scan['scannerCounts'])
     inspected = inspect_image(image)
     provenance = {
-        'kind': 'cloudiff-toolchain-v1', 'effectiveToolchainDigest': effective,
-        'material': material, 'image': inspected, 'scan': {key: value for key, value in scan.items() if not key.endswith('Path')},
-        'hooks': hooks, 'builtAt': int(time.time()), 'secretsIncluded': False,
+        'kind': 'cloudiff-toolchain-v2', 'effectiveToolchainDigest': effective,
+        'validatedToolchainDigest':validation['toolchainDigest'],'material': material,
+        'image': inspected, 'scan': {key: value for key, value in scan.items() if not key.endswith('Path')},
+        'script':validation.get('script') or {},'verification':verification,
+        'builtAt': int(time.time()), 'secretsIncluded': False,
     }
     signature = sign_provenance(output, provenance, 'toolchain')
     return {
         'service': service['name'], 'runtime': service['runtime'], 'version': service.get('version'),
-        'effectiveToolchainDigest': effective, 'built': built, 'reused': not built,
+        'effectiveToolchainDigest': effective, 'validatedToolchainDigest':validation['toolchainDigest'],
+        'catalogVersion':validation['catalogVersion'],'architecture':validation['architecture'],
+        'base':validation['base'],'systemPackages':validation.get('systemPackages') or [],
+        'tools':validation.get('tools') or [],'script':validation.get('script') or {},
+        'verification':verification,'built': built, 'reused': not built,
         'image': inspected, 'hooks': hooks, 'runtimeProof': proof,
         **scan, **signature, 'secretsIncluded': False,
     }
@@ -583,6 +642,82 @@ CMD {json.dumps(runtime_args, ensure_ascii=False)}
         'applicationDigest': app_digest, 'image': inspected, **scan, **signature,
         'runtimeProof': 'deferred-to-isolated-preview', 'secretsIncluded': False,
     }
+
+
+def validate_toolchain_archive(payload: Any) -> dict[str, Any]:
+    request = validate_request(payload)
+    raw = fetch_archive(request['project_slug'], request['ref'], request['archive_sha256'])
+    with tempfile.TemporaryDirectory(prefix='cloudif-toolchain-validate-') as temporary:
+        root = Path(temporary)
+        archive = root / 'source.tar'
+        archive.write_bytes(raw)
+        source = root / 'source'
+        safe_extract(archive, source)
+        results = []
+        blockers = []
+        warnings = []
+        for service in request['services']:
+            validation = validate_toolchain(request.get('toolchain') or {}, service['runtime'], service.get('version'), source, TOOLCHAIN_CATALOG)
+            item = {'service': service['name'], **validation}
+            results.append(item)
+            blockers.extend({'service': service['name'], **issue} for issue in validation.get('blockers') or [])
+            warnings.extend({'service': service['name'], **issue} for issue in validation.get('warnings') or [])
+        set_material = {
+            'projectSlug': request['project_slug'], 'ref': request['ref'],
+            'archiveSha256': request['archive_sha256'], 'configRevision': request['config_revision'],
+            'configDigest': request['config_digest'], 'requestedToolchainDigest': request['toolchain_digest'],
+            'services': [{'service': item['service'], 'validatedToolchainDigest': item['toolchainDigest']} for item in results],
+        }
+        return {
+            'ok': not blockers, 'valid': not blockers, 'sideEffectFree': True,
+            'projectSlug': request['project_slug'], 'ref': request['ref'],
+            'archiveSha256': request['archive_sha256'], 'configRevision': request['config_revision'],
+            'configDigest': request['config_digest'], 'requestedToolchainDigest': request['toolchain_digest'],
+            'toolchainSetDigest': sha256(canonical(set_material)),
+            'services': results, 'blockers': blockers, 'warnings': warnings,
+            'imagesCreated': 0, 'containersChanged': False, 'secretValuesIncluded': False,
+        }
+
+
+def build_toolchain_bundle(payload: Any) -> dict[str, Any]:
+    request = validate_request(payload)
+    raw = fetch_archive(request['project_slug'], request['ref'], request['archive_sha256'])
+    job_dir = ARTIFACT_ROOT / request['job_id']
+    job_dir.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix='cloudif-toolchain-build-') as temporary:
+        root = Path(temporary)
+        archive = root / 'source.tar'
+        archive.write_bytes(raw)
+        source = root / 'source'
+        safe_extract(archive, source)
+        validations = []
+        for service in request['services']:
+            validation = validate_toolchain(request.get('toolchain') or {}, service['runtime'], service.get('version'), source, TOOLCHAIN_CATALOG)
+            validations.append({'service': service['name'], **validation})
+        blockers = [{'service': item['service'], **issue} for item in validations for issue in item.get('blockers') or []]
+        if blockers:
+            raise ArtifactError('toolchain_policy_blocked', 'A toolchain não passou pela validação do archive.', 'toolchain', blockers)
+        toolchains = [build_toolchain(request, service, source, job_dir) for service in request['services']]
+    set_material = {
+        'projectSlug': request['project_slug'], 'ref': request['ref'],
+        'archiveSha256': request['archive_sha256'], 'configRevision': request['config_revision'],
+        'configDigest': request['config_digest'], 'requestedToolchainDigest': request['toolchain_digest'],
+        'services': [{'service': item['service'], 'effectiveToolchainDigest': item['effectiveToolchainDigest'], 'imageId': item['image']['imageId']} for item in toolchains],
+    }
+    result = {
+        'ok': True, 'status': 'ready', 'jobId': request['job_id'],
+        'projectSlug': request['project_slug'], 'ref': request['ref'],
+        'archiveSha256': request['archive_sha256'], 'configRevision': request['config_revision'],
+        'configDigest': request['config_digest'], 'requestedToolchainDigest': request['toolchain_digest'],
+        'planDigest': request['plan_digest'], 'toolchainSetDigest': sha256(canonical(set_material)),
+        'toolchains': toolchains, 'imageCount': len(toolchains),
+        'activationRequired': True, 'containersChanged': False,
+        'buildsCreated': 0, 'previewsCreated': 0, 'deploymentsCreated': 0,
+        'secretValuesIncluded': False,
+    }
+    (job_dir / 'toolchain-result.json').write_text(json.dumps(result, ensure_ascii=False, indent=2) + '\n')
+    os.chmod(job_dir / 'toolchain-result.json', 0o600)
+    return result
 
 
 def build_multiservice(payload: Any) -> dict[str, Any]:

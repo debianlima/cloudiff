@@ -1,6 +1,16 @@
 #!/usr/bin/env python3
-import hashlib,json,os,re,sqlite3,sys,time,urllib.request,urllib.error,urllib.parse,uuid,hmac,secrets,threading
+import hashlib,json,os,re,sqlite3,sys,time,urllib.request,urllib.error,urllib.parse,uuid,hmac,secrets,threading,importlib.util
 from http.server import BaseHTTPRequestHandler,ThreadingHTTPServer
+from pathlib import Path
+try:
+ from cloudif_toolchain_policy import validate_toolchain,load_catalog,digest as toolchain_policy_digest
+except ModuleNotFoundError:
+ _policy_path=Path(__file__).with_name('cloudif_toolchain_policy.py');_policy_spec=importlib.util.spec_from_file_location('cloudif_toolchain_policy',_policy_path);_policy_module=importlib.util.module_from_spec(_policy_spec);assert _policy_spec.loader;_policy_spec.loader.exec_module(_policy_module)
+ validate_toolchain=_policy_module.validate_toolchain;load_catalog=_policy_module.load_catalog;toolchain_policy_digest=_policy_module.digest
+try:
+ import cloudif_toolchain_lifecycle as toolchain_lifecycle
+except ModuleNotFoundError:
+ _lifecycle_path=Path(__file__).with_name('cloudif_toolchain_lifecycle.py');_lifecycle_spec=importlib.util.spec_from_file_location('cloudif_toolchain_lifecycle',_lifecycle_path);toolchain_lifecycle=importlib.util.module_from_spec(_lifecycle_spec);assert _lifecycle_spec.loader;_lifecycle_spec.loader.exec_module(toolchain_lifecycle)
 DB=os.environ.get('CLOUDIF_BUILD_DB','/var/lib/cloudif/build-broker/builds.sqlite3')
 TOKEN=os.environ.get('CLOUDIF_BUILD_TOKEN','')
 WORKER_TOKEN=os.environ.get('CLOUDIF_BUILD_WORKER_TOKEN','')
@@ -16,6 +26,7 @@ NODE24_BUILDER='node@sha256:a0b9bf06e4e6193cf7a0f58816cc935ff8c2a908f81e6f1a9543
 NODE24_RUNTIME='gcr.io/distroless/nodejs24-debian12@sha256:6afed2f0373317ea4c66843fc7f1d4b4c88ef3e97254b2c5925793c2beb72809'
 ARTIFACT_URL=os.environ.get('CLOUDIF_ARTIFACT_EXECUTOR_URL','http://10.62.91.3').rstrip('/')
 ARTIFACT_TOKEN=os.environ.get('CLOUDIF_ARTIFACT_EXECUTOR_TOKEN','')
+TOOLCHAIN_CATALOG=Path(os.environ.get('CLOUDIF_TOOLCHAIN_CATALOG','/etc/cloudif/toolchain-catalog-v1.json'))
 HOST=os.environ.get('CLOUDIF_BUILD_HOST','127.0.0.1'); PORT=int(os.environ.get('CLOUDIF_BUILD_PORT','18213'))
 SLUG=re.compile(r'^[a-z0-9][a-z0-9-]{0,62}$'); REF=re.compile(r'^[A-Za-z0-9._/-]{1,128}$')
 def now(): return int(time.time())
@@ -30,6 +41,13 @@ def db():
  c.execute('CREATE INDEX IF NOT EXISTS idx_build_project_active ON builds(project_slug,status)')
  c.execute('''CREATE TABLE IF NOT EXISTS multiservice_jobs(job_id TEXT PRIMARY KEY,idempotency_key TEXT UNIQUE,project_slug TEXT NOT NULL,ref TEXT NOT NULL,config_revision INTEGER NOT NULL,config_digest TEXT NOT NULL,toolchain_digest TEXT NOT NULL,archive_sha256 TEXT NOT NULL,plan_digest TEXT NOT NULL,status TEXT NOT NULL,payload_json TEXT NOT NULL,result_json TEXT NOT NULL DEFAULT '{}',created_at INTEGER NOT NULL,updated_at INTEGER NOT NULL,attempts INTEGER NOT NULL DEFAULT 0,last_error TEXT NOT NULL DEFAULT '')''')
  c.execute('CREATE INDEX IF NOT EXISTS idx_multiservice_jobs_due ON multiservice_jobs(status,created_at)')
+ c.execute('''CREATE TABLE IF NOT EXISTS toolchain_jobs(job_id TEXT PRIMARY KEY,idempotency_key TEXT UNIQUE,project_slug TEXT NOT NULL,ref TEXT NOT NULL,config_revision INTEGER NOT NULL,config_digest TEXT NOT NULL,toolchain_digest TEXT NOT NULL,archive_sha256 TEXT NOT NULL,plan_digest TEXT NOT NULL,status TEXT NOT NULL,payload_json TEXT NOT NULL,result_json TEXT NOT NULL DEFAULT '{}',log_text TEXT NOT NULL DEFAULT '',created_at INTEGER NOT NULL,updated_at INTEGER NOT NULL,attempts INTEGER NOT NULL DEFAULT 0,last_error TEXT NOT NULL DEFAULT '')''')
+ c.execute('CREATE INDEX IF NOT EXISTS idx_toolchain_jobs_project ON toolchain_jobs(project_slug,status,created_at)')
+ c.execute('''CREATE TABLE IF NOT EXISTS toolchain_images(image_record_id TEXT PRIMARY KEY,project_slug TEXT NOT NULL,service TEXT NOT NULL,toolchain_digest TEXT NOT NULL,image_ref TEXT NOT NULL,image_id TEXT NOT NULL,config_revision INTEGER NOT NULL,config_digest TEXT NOT NULL,archive_sha256 TEXT NOT NULL,plan_digest TEXT NOT NULL,status TEXT NOT NULL,result_json TEXT NOT NULL,created_at INTEGER NOT NULL,updated_at INTEGER NOT NULL,UNIQUE(project_slug,service,toolchain_digest,image_id))''')
+ c.execute('CREATE INDEX IF NOT EXISTS idx_toolchain_images_project ON toolchain_images(project_slug,service,status,created_at DESC)')
+ c.execute('''CREATE TABLE IF NOT EXISTS toolchain_activations(project_slug TEXT NOT NULL,environment TEXT NOT NULL,service TEXT NOT NULL,image_record_id TEXT NOT NULL,toolchain_digest TEXT NOT NULL,activation_revision INTEGER NOT NULL,approval_id TEXT NOT NULL,activated_by TEXT NOT NULL,activated_at INTEGER NOT NULL,PRIMARY KEY(project_slug,environment,service))''')
+ c.execute('''CREATE TABLE IF NOT EXISTS toolchain_activation_history(event_id TEXT PRIMARY KEY,project_slug TEXT NOT NULL,environment TEXT NOT NULL,service TEXT NOT NULL,before_image_record_id TEXT,after_image_record_id TEXT NOT NULL,activation_revision INTEGER NOT NULL,approval_id TEXT NOT NULL,actor TEXT NOT NULL,created_at INTEGER NOT NULL)''')
+ c.execute('''CREATE TABLE IF NOT EXISTS toolchain_activation_state(project_slug TEXT NOT NULL,environment TEXT NOT NULL,revision INTEGER NOT NULL,activation_digest TEXT NOT NULL,updated_by TEXT NOT NULL,updated_at INTEGER NOT NULL,PRIMARY KEY(project_slug,environment))''')
  c.commit()
  return c
 def init_db():
@@ -188,12 +206,20 @@ def multiservice_plan(payload):
  if expected and expected!=actual:raise ValueError('configuration_revision_mismatch')
  detection=source_detection(slug,ref,trace);archive=str(detection.get('archiveSha256') or '').lower()
  if not re.fullmatch(r'[a-f0-9]{64}',archive):raise ValueError('archive_digest_missing')
- services=normalized_multiservice_services(config.get('configuration') or {})
+ configuration=config.get('configuration') or {}
+ services=normalized_multiservice_services(configuration)
+ toolchain=configuration.get('toolchain') or {}
+ toolchain_validations=[]
+ for item in services:
+  validation=validate_toolchain(toolchain,item['runtime'],item.get('version'),catalog_path=TOOLCHAIN_CATALOG)
+  toolchain_validations.append({'service':item['name'],**validation})
  blocked=[{'service':item['name'],**item['policy']} for item in services if item['policy']['status']!='ready']
- material={'project_slug':slug,'ref':ref,'config_revision':actual,'config_digest':config.get('configDigest'),'toolchain_digest':config.get('toolchainDigest'),'archive_sha256':archive,'services':services}
+ for validation in toolchain_validations:
+  for issue in validation.get('blockers') or []:blocked.append({'service':validation['service'],**issue})
+ material={'project_slug':slug,'ref':ref,'config_revision':actual,'config_digest':config.get('configDigest'),'toolchain_digest':config.get('toolchainDigest'),'archive_sha256':archive,'services':services,'toolchain':toolchain,'toolchain_validations':[{key:value for key,value in item.items() if key not in {'warnings'}} for item in toolchain_validations]}
  plan_digest=hashlib.sha256(canonical(material)).hexdigest();reusable=reusable_multiservice(plan_digest)
- summary={'projectType':(config.get('configuration') or {}).get('project',{}).get('type') or detection.get('projectType'),'serviceCount':len(services),'componentCount':detection.get('componentCount'),'networkPolicy':'none','scannerPolicy':'block-high-critical','signatureAlgorithm':'Ed25519','secretsIncluded':False}
- return {'ok':True,'side_effect_free':True,'project_slug':slug,'ref':ref,'config_revision':actual,'config_digest':config.get('configDigest'),'toolchain_digest':config.get('toolchainDigest'),'archive_sha256':archive,'plan_digest':plan_digest,'services':services,'blocked':blocked,'policies':[item['policy'] for item in services],'summary':summary,'approval_required':not blocked and reusable is None,'build_required':reusable is None,'reusable_build':bool(reusable),'reusable':reusable,'secret_values_included':False}
+ summary={'projectType':configuration.get('project',{}).get('type') or detection.get('projectType'),'serviceCount':len(services),'componentCount':detection.get('componentCount'),'networkPolicy':str((((toolchain.get('provision') or {}).get('network') or {'mode':'none'}).get('mode') if isinstance((toolchain.get('provision') or {}).get('network'),dict) else (toolchain.get('provision') or {}).get('network') or 'none')),'scannerPolicy':'block-high-critical','signatureAlgorithm':'Ed25519','secretsIncluded':False,'toolchainCatalogVersion':int(load_catalog(TOOLCHAIN_CATALOG).get('version') or 0),'sourceValidationRequired':any(item.get('script',{}).get('ok') is None for item in toolchain_validations)}
+ return {'ok':True,'side_effect_free':True,'project_slug':slug,'ref':ref,'config_revision':actual,'config_digest':config.get('configDigest'),'toolchain_digest':config.get('toolchainDigest'),'archive_sha256':archive,'plan_digest':plan_digest,'services':services,'toolchain':toolchain,'toolchain_validations':toolchain_validations,'blocked':blocked,'policies':[item['policy'] for item in services],'summary':summary,'approval_required':not blocked and reusable is None,'build_required':reusable is None,'reusable_build':bool(reusable),'reusable':reusable,'secret_values_included':False}
 def artifact_multiservice_build(request):
  payload={**request,'profile':'multiservice-v1'}
  code,data=internal_json('POST',ARTIFACT_URL+'/v1/multiservice/build',ARTIFACT_TOKEN,payload,timeout=3600)
@@ -219,7 +245,7 @@ def queue_multiservice(payload):
  if plan['blocked']:raise ValueError('runtime_policy_blocked')
  key=hashlib.sha256((plan['project_slug']+'|'+plan['ref']+'|'+provided).encode()).hexdigest();c=db();row=c.execute('select * from multiservice_jobs where idempotency_key=?',(key,)).fetchone()
  if row:c.close();return {'ok':True,'job_id':row['job_id'],'status':row['status'],'idempotent':True,'plan_digest':provided}
- job_id='build_'+secrets.token_hex(12);t=now();request={'job_id':job_id,'project_slug':plan['project_slug'],'ref':plan['ref'],'archive_sha256':plan['archive_sha256'],'config_revision':plan['config_revision'],'config_digest':plan['config_digest'],'toolchain_digest':plan['toolchain_digest'],'plan_digest':provided,'services':plan['services'],'trace_id':str(payload.get('trace_id') or job_id)}
+ job_id='build_'+secrets.token_hex(12);t=now();request={'job_id':job_id,'project_slug':plan['project_slug'],'ref':plan['ref'],'archive_sha256':plan['archive_sha256'],'config_revision':plan['config_revision'],'config_digest':plan['config_digest'],'toolchain_digest':plan['toolchain_digest'],'plan_digest':provided,'services':plan['services'],'toolchain':plan.get('toolchain') or {},'trace_id':str(payload.get('trace_id') or job_id)}
  c.execute('insert into multiservice_jobs(job_id,idempotency_key,project_slug,ref,config_revision,config_digest,toolchain_digest,archive_sha256,plan_digest,status,payload_json,result_json,created_at,updated_at) values(?,?,?,?,?,?,?,?,?,?,?,?,?,?)',(job_id,key,plan['project_slug'],plan['ref'],plan['config_revision'],plan['config_digest'],plan['toolchain_digest'],plan['archive_sha256'],provided,'queued',json.dumps(request,ensure_ascii=False,separators=(',',':')),'{}',t,t));c.commit();c.close()
  threading.Thread(target=run_multiservice_job,args=(job_id,),daemon=True).start()
  return {'ok':True,'job_id':job_id,'status':'queued','idempotent':False,'plan_digest':provided,'config_revision':plan['config_revision'],'archive_sha256':plan['archive_sha256']}
@@ -233,6 +259,8 @@ def recover_multiservice_jobs():
  c=db();rows=c.execute("select job_id from multiservice_jobs where status in ('queued','running') order by created_at").fetchall();c.execute("update multiservice_jobs set status='queued' where status='running'");c.commit();c.close()
  for row in rows:threading.Thread(target=run_multiservice_job,args=(row['job_id'],),daemon=True).start()
 
+toolchain_lifecycle.configure(sys.modules[__name__])
+
 class H(BaseHTTPRequestHandler):
  def log_message(self,*a):pass
  def sendj(self,n,x):
@@ -240,7 +268,25 @@ class H(BaseHTTPRequestHandler):
  def do_GET(self):
   if self.path=='/health': return self.sendj(200,{'ok':True,'service':'build-broker','queue':'sqlite-wal','production_ready':False,'secrets_exposed':False})
   if not auth(self.headers): return self.sendj(401,{'ok':False,'error':'unauthorized'})
-  mm=re.fullmatch(r'/v1/multiservice/jobs/(build_[a-f0-9]{24})',self.path)
+  parsed=urllib.parse.urlparse(self.path);query=urllib.parse.parse_qs(parsed.query)
+  mm=re.fullmatch(r'/v1/toolchain/jobs/(toolchain_[a-f0-9]{24})(/logs)?',parsed.path)
+  if mm:
+   try:return self.sendj(200,toolchain_lifecycle.logs(mm.group(1)) if mm.group(2) else toolchain_lifecycle.status(mm.group(1)))
+   except LookupError:return self.sendj(404,{'ok':False,'error':{'code':'toolchain_job_not_found','message':'Job de toolchain não encontrado.'}})
+   except ValueError as error:return self.sendj(400,{'ok':False,'error':{'code':str(error),'message':'job_id inválido.'}})
+  image_list=re.fullmatch(r'/v1/projects/([a-z0-9][a-z0-9-]{0,62})/toolchain/images',parsed.path)
+  if image_list:
+   try:return self.sendj(200,toolchain_lifecycle.images(image_list.group(1),(query.get('service') or [''])[0]))
+   except ValueError as error:return self.sendj(400,{'ok':False,'error':{'code':str(error)}})
+  image_get=re.fullmatch(r'/v1/projects/([a-z0-9][a-z0-9-]{0,62})/toolchain/images/(img_[a-f0-9]{24})',parsed.path)
+  if image_get:
+   try:return self.sendj(200,toolchain_lifecycle.image_get(*image_get.groups()))
+   except LookupError:return self.sendj(404,{'ok':False,'error':{'code':'toolchain_image_not_found'}})
+  toolchain_get_match=re.fullmatch(r'/v1/projects/([a-z0-9][a-z0-9-]{0,62})/toolchain',parsed.path)
+  if toolchain_get_match:
+   try:return self.sendj(200,toolchain_lifecycle.get(toolchain_get_match.group(1),(query.get('ref') or ['main'])[0]))
+   except ValueError as error:return self.sendj(422,{'ok':False,'error':{'code':str(error),'message':'Configuração da toolchain inválida.'}})
+  mm=re.fullmatch(r'/v1/multiservice/jobs/(build_[a-f0-9]{24})',parsed.path)
   if mm:
    try:return self.sendj(200,multiservice_status(mm.group(1)))
    except LookupError:return self.sendj(404,{'ok':False,'error':{'code':'build_not_found','message':'Build não encontrado.'}})
@@ -269,6 +315,11 @@ class H(BaseHTTPRequestHandler):
     r=reserve(a);return self.sendj(202,{'ok':True,'phase':'reserve','build_id':r['id'],'status':r['status'],'idempotent':True,'secrets_exposed':False})
    if self.path=='/v1/builds':
     r=reserve(a); return self.sendj(202,{'ok':True,'phase':'reserve','build_id':r['id'],'status':r['status'],'idempotent':True,'secrets_exposed':False})
+   if self.path=='/v1/toolchain/plan':return self.sendj(200,toolchain_lifecycle.plan(a))
+   if self.path=='/v1/toolchain/validate':return self.sendj(200,toolchain_lifecycle.validate(a))
+   if self.path=='/v1/toolchain/build':return self.sendj(202,toolchain_lifecycle.queue(a))
+   if self.path=='/v1/toolchain/activation/plan':return self.sendj(200,toolchain_lifecycle.activation_plan(a))
+   if self.path=='/v1/toolchain/activation/apply':return self.sendj(200,toolchain_lifecycle.activation_apply(a))
    if self.path=='/v1/multiservice/plan':return self.sendj(200,multiservice_plan(a))
    if self.path=='/v1/multiservice/execute':return self.sendj(202,queue_multiservice(a))
    return self.sendj(404,{'ok':False,'error':'not_found'})
@@ -276,6 +327,6 @@ class H(BaseHTTPRequestHandler):
   except LookupError as e:return self.sendj(404,{'ok':False,'error':{'code':str(e),'message':'Recurso não encontrado.'}})
   except ValueError as e:return self.sendj(422,{'ok':False,'error':{'code':str(e),'message':'A solicitação contém campos ausentes ou incompatíveis.'}})
 if __name__=='__main__':
- init_db();recover_multiservice_jobs()
+ init_db();recover_multiservice_jobs();toolchain_lifecycle.recover_jobs()
  if len(sys.argv)>1 and sys.argv[1]=='drain': print(json.dumps(drain_one()))
  else: ThreadingHTTPServer((HOST,PORT),H).serve_forever()

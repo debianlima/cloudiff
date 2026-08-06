@@ -102,7 +102,10 @@ class MultiserviceArtifactPolicyTests(unittest.TestCase):
         self.assertIn("'requestedToolchainDigest':request['toolchain_digest']", block)
         self.assertIn("'sha256':item['sha256']", block)
         self.assertNotIn("'archiveSha256':request['archive_sha256']", block)
-        self.assertIn("'sourceArchiveBound':False", block)
+        self.assertIn("'sourceArchiveBound':bool(validation.get('script',{}).get('path'))", block)
+        self.assertIn('base_image_identity_mismatch', block)
+        self.assertIn("base_inspection.get('imageId')!=expected_base_id", block)
+        self.assertIn("'validatedToolchainDigest': validation['toolchainDigest']", block)
 
     def test_hooks_are_phase_bound_json_run_and_static_hooks_are_blocked(self):
         source = MODULE_PATH.read_text()

@@ -228,7 +228,19 @@ TOOLS=[
  {'name':'runtime.detect','description':'Detecta framework a partir de evidências sanitizadas do workspace autorizado','inputSchema':{'type':'object','properties':{'slug':{'type':'string','minLength':1,'maxLength':63,'pattern':'^[a-z0-9][a-z0-9-]*$'},'ref':{'type':'string','minLength':1,'maxLength':128,'pattern':'^[A-Za-z0-9._/-]+$'}},'required':['slug'],'additionalProperties':False}},
  {'name':'runtime.plan','description':'Gera plano declarativo usando somente templates homologados','inputSchema':{'type':'object','properties':{'framework':{'type':'string','enum':['static','react','vite','nextjs','vue','nuxt','angular','svelte','sveltekit','astro','express','nestjs','node']},'runtime_version':{'type':'string','enum':['20','22','24']},'package_manager':{'type':'string','enum':['npm','pnpm','yarn']}},'required':['framework'],'additionalProperties':False}},
  {'name':'runtime.validate','description':'Valida plano declarativo contra a política server-side','inputSchema':{'type':'object','properties':{'framework':{'type':'string','enum':['static','react','vite','nextjs','vue','nuxt','angular','svelte','sveltekit','astro','express','nestjs','node']},'runtime_version':{'type':'string','enum':['20','22','24']},'package_manager':{'type':'string','enum':['npm','pnpm','yarn']}},'required':['framework'],'additionalProperties':False}},
- {'name':'project.toolchain.plan','description':'Planeja as imagens-base imutáveis por serviço, valida runtimes homologados e informa bloqueios de segurança sem construir imagens','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'ref':{'type':'string','pattern':'^[A-Za-z0-9._/-]+$'},'expected_revision':{'type':'integer','minimum':1}},'required':['slug'],'additionalProperties':False}},
+ {'name':'project.toolchain.get','description':'Consulta configuração, imagens reutilizáveis e ativações da toolchain sem executar build','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'ref':{'type':'string','pattern':'^[A-Za-z0-9._/-]+$'}},'required':['slug'],'additionalProperties':False}},
+ {'name':'project.toolchain.validate','description':'Valida catálogo, archive e script de provisionamento em modo side-effect-free','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'ref':{'type':'string','pattern':'^[A-Za-z0-9._/-]+$'},'expected_revision':{'type':'integer','minimum':1}},'required':['slug'],'additionalProperties':False}},
+ {'name':'project.toolchain.plan','description':'Planeja imagens imutáveis por serviço, digests, catálogo, scanner e reutilização sem construir imagens','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'ref':{'type':'string','pattern':'^[A-Za-z0-9._/-]+$'},'expected_revision':{'type':'integer','minimum':1}},'required':['slug'],'additionalProperties':False}},
+ {'name':'project.toolchain.build.plan','description':'Alias explícito do plano de construção da toolchain; não cria imagem','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'ref':{'type':'string','pattern':'^[A-Za-z0-9._/-]+$'},'expected_revision':{'type':'integer','minimum':1}},'required':['slug'],'additionalProperties':False}},
+ {'name':'approval.request-toolchain-build','description':'Solicita aprovação humana vinculada ao plano, revisão, archive e digests da toolchain','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'ref':{'type':'string','pattern':'^[A-Za-z0-9._/-]+$'},'expected_revision':{'type':'integer','minimum':1},'plan_digest':{'type':'string','pattern':'^[a-f0-9]{64}$'},'reason':{'type':'string','minLength':4,'maxLength':500},'ttl_seconds':{'type':'integer','minimum':60,'maximum':86400}},'required':['slug','expected_revision','plan_digest','reason'],'additionalProperties':False}},
+ {'name':'project.toolchain.build.execute','description':'Enfileira build aprovado da toolchain usando reserve-effect-finalize; não ativa imagens','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'ref':{'type':'string','pattern':'^[A-Za-z0-9._/-]+$'},'expected_revision':{'type':'integer','minimum':1},'plan_digest':{'type':'string','pattern':'^[a-f0-9]{64}$'},'approval_id':{'type':'string','pattern':'^apr_[a-f0-9]{20}$'}},'required':['slug','expected_revision','plan_digest','approval_id'],'additionalProperties':False}},
+ {'name':'project.toolchain.build.status','description':'Consulta estado e resultado sanitizado de um build de toolchain','inputSchema':{'type':'object','properties':{'job_id':{'type':'string','pattern':'^toolchain_[a-f0-9]{24}$'}},'required':['job_id'],'additionalProperties':False}},
+ {'name':'project.toolchain.logs.read','description':'Lê log sanitizado do broker da toolchain sem retornar segredos','inputSchema':{'type':'object','properties':{'job_id':{'type':'string','pattern':'^toolchain_[a-f0-9]{24}$'}},'required':['job_id'],'additionalProperties':False}},
+ {'name':'project.toolchain.image.list','description':'Lista imagens imutáveis, SBOM, scanner, assinatura e ambientes ativos','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'service':{'type':'string','pattern':'^[a-z][a-z0-9-]*$'}},'required':['slug'],'additionalProperties':False}},
+ {'name':'project.toolchain.image.get','description':'Consulta metadados sanitizados de uma imagem de toolchain','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'image_record_id':{'type':'string','pattern':'^img_[a-f0-9]{24}$'}},'required':['slug','image_record_id'],'additionalProperties':False}},
+ {'name':'project.toolchain.image.activate.plan','description':'Planeja ativação ou rollback de um conjunto de imagens por ambiente sem alterar containers','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'environment':ENVIRONMENT_NAME_SCHEMA,'job_id':{'type':'string','pattern':'^toolchain_[a-f0-9]{24}$'},'expected_revision':{'type':'integer','minimum':0}},'required':['slug','environment','job_id','expected_revision'],'additionalProperties':False}},
+ {'name':'approval.request-toolchain-activation','description':'Solicita aprovação humana vinculada ao conjunto exato de imagens e ambiente','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'environment':ENVIRONMENT_NAME_SCHEMA,'job_id':{'type':'string','pattern':'^toolchain_[a-f0-9]{24}$'},'expected_revision':{'type':'integer','minimum':0},'plan_digest':{'type':'string','pattern':'^[a-f0-9]{64}$'},'reason':{'type':'string','minLength':4,'maxLength':500},'ttl_seconds':{'type':'integer','minimum':60,'maximum':86400}},'required':['slug','environment','job_id','expected_revision','plan_digest','reason'],'additionalProperties':False}},
+ {'name':'project.toolchain.image.activate','description':'Ativa ou restaura imagens aprovadas; registra ponteiro e deixa rebuild pendente sem alterar containers','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'environment':ENVIRONMENT_NAME_SCHEMA,'job_id':{'type':'string','pattern':'^toolchain_[a-f0-9]{24}$'},'expected_revision':{'type':'integer','minimum':0},'plan_digest':{'type':'string','pattern':'^[a-f0-9]{64}$'},'approval_id':{'type':'string','pattern':'^apr_[a-f0-9]{20}$'}},'required':['slug','environment','job_id','expected_revision','plan_digest','approval_id'],'additionalProperties':False}},
  {'name':'build.multiservice.plan','description':'Gera o plano único de build multissserviço vinculado à configuração, toolchain, archive, SBOM, scanner e assinatura','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'ref':{'type':'string','pattern':'^[A-Za-z0-9._/-]+$'},'expected_revision':{'type':'integer','minimum':1}},'required':['slug'],'additionalProperties':False}},
  {'name':'build.multiservice.status','description':'Consulta o estado e os artefatos de um build multissserviço sem revelar o payload interno','inputSchema':{'type':'object','properties':{'job_id':{'type':'string','pattern':'^build_[a-f0-9]{24}$'}},'required':['job_id'],'additionalProperties':False}},
  {'name':'approval.request-multiservice-build','description':'Cria aprovação humana vinculada ao plano, revisão, archive e digests exatos do build','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'ref':{'type':'string','pattern':'^[A-Za-z0-9._/-]+$'},'expected_revision':{'type':'integer','minimum':1},'plan_digest':{'type':'string','pattern':'^[a-f0-9]{64}$'},'reason':{'type':'string','minLength':4,'maxLength':500},'ttl_seconds':{'type':'integer','minimum':60,'maximum':86400}},'required':['slug','expected_revision','plan_digest','reason'],'additionalProperties':False}},
@@ -322,11 +334,11 @@ READ_ONLY_TOOLS={
  'supabase.storage.buckets.list','supabase.storage.objects.list','supabase.storage.object.read','supabase.secrets.list',
  'supabase.rls.inspect','supabase.schema.inspect','supabase.logs.read','supabase.admin.config.read',
  'supabase.records.change.plan','supabase.sql.change.plan','supabase.rls.change.plan','supabase.schema.change.plan','supabase.secrets.read.plan'
-,'project.toolchain.plan','build.multiservice.plan','build.multiservice.status','preview.multiservice.plan','preview.multiservice.status'}
+,'project.toolchain.get','project.toolchain.validate','project.toolchain.plan','project.toolchain.build.plan','project.toolchain.build.status','project.toolchain.logs.read','project.toolchain.image.list','project.toolchain.image.get','project.toolchain.image.activate.plan','build.multiservice.plan','build.multiservice.status','preview.multiservice.plan','preview.multiservice.status'}
 DESTRUCTIVE_TOOLS={
  'forgejo.proposal.delete-branch','forgejo.proposal.merge','deployment.production.homologation.deploy',
  'deployment.production.homologation.rollback','deployment.promote-test','deployment.rollback-test','supabase.operation.execute','forgejo.proposal.change-set.create'
-,'build.multiservice.execute','deployment.multiservice.execute','preview.multiservice.create','preview.multiservice.delete','project.environment.change.execute','project.environment.promote.execute'}
+,'build.multiservice.execute','deployment.multiservice.execute','preview.multiservice.create','preview.multiservice.delete','project.environment.change.execute','project.environment.promote.execute','project.toolchain.build.execute','project.toolchain.image.activate'}
 OPEN_WORLD_PREFIXES=('forgejo.','supabase.','deployment.','approval.','build.')
 for _tool in TOOLS:
     _name=str(_tool.get('name') or '')
@@ -517,6 +529,48 @@ def approval_create_multiservice_build(slug,client_id,authz,plan,reason,ttl,trac
         try:data=json.load(error)
         except Exception:data={}
         raise ValueError(str(data.get('error') or 'approval_create_failed')) from error
+
+def toolchain_broker_plan(slug,ref,expected_revision,trace_id,validate=False):
+    path='/v1/toolchain/validate' if validate else '/v1/toolchain/plan'
+    code,data=build_broker_call('POST',path,{'project_slug':slug,'ref':ref,'expected_revision':expected_revision,'trace_id':trace_id},timeout=900 if validate else 180)
+    if code!=200 or not data.get('ok'):
+        error=data.get('error') or {};message=error.get('message') if isinstance(error,dict) else str(error)
+        raise ValueError(message or 'toolchain_plan_failed')
+    return data
+
+
+def approval_create_toolchain(slug,client_id,authz,action,plan,reason,ttl,trace_id):
+    if action=='project.toolchain.build':
+        metadata={
+            'toolchain_plan_digest':plan.get('plan_digest'),'config_revision':plan.get('config_revision'),
+            'config_digest':plan.get('config_digest'),'requested_toolchain_digest':plan.get('requested_toolchain_digest'),
+            'archive_sha256':plan.get('archive_sha256'),'ref':plan.get('ref'),
+            'services':[{'service':item.get('service'),'toolchainDigest':item.get('toolchainDigest')} for item in plan.get('services') or []],
+            'summary':plan.get('summary') or {},'content_stored':False,'secret_values_in_metadata':False,
+        }
+    else:
+        metadata={
+            'activation_plan_digest':plan.get('plan_digest'),'environment':plan.get('environment'),
+            'job_id':plan.get('job_id'),'expected_revision':plan.get('expected_revision'),
+            'after':plan.get('after') or [],'content_stored':False,'secret_values_in_metadata':False,
+        }
+    payload={'project_slug':slug,'action':action,'requested_by':client_id,'requester_role':str(authz.get('project_role') or 'agent'),'ttl_seconds':ttl,'reason':reason,'trace_id':trace_id,'metadata':metadata}
+    request=urllib.request.Request(APPROVAL_URL+'/v1/approvals',data=json.dumps(payload,ensure_ascii=False,separators=(',',':')).encode(),method='POST',headers={'Authorization':'Bearer '+APPROVAL_TOKEN,'Content-Type':'application/json','Accept':'application/json'})
+    try:
+        with urllib.request.urlopen(request,timeout=10) as response:return json.load(response)
+    except urllib.error.HTTPError as error:
+        try:data=json.load(error)
+        except Exception:data={}
+        raise ValueError(str(data.get('error') or 'approval_create_failed')) from error
+
+
+def toolchain_activation_plan(slug,environment,job_id,expected_revision,trace_id):
+    code,data=build_broker_call('POST','/v1/toolchain/activation/plan',{'project_slug':slug,'environment':environment,'job_id':job_id,'expected_revision':expected_revision,'trace_id':trace_id},timeout=90)
+    if code!=200 or not data.get('ok'):
+        error=data.get('error') or {};message=error.get('message') if isinstance(error,dict) else str(error)
+        raise ValueError(message or 'toolchain_activation_plan_failed')
+    return data
+
 
 def workspace_prepare(slug,ref,trace_id):
     payload=json.dumps({'project_slug':slug,'ref':ref,'trace_id':trace_id},separators=(',',':')).encode()
@@ -929,7 +983,8 @@ def homologation_call(path,payload,timeout=300):
 
 SCOPE_BY_TOOL={
  'project.environment.list':'project:environment-read','project.environment.get':'project:environment-read','project.environment.validate':'project:environment-plan','project.environment.change.plan':'project:environment-plan','approval.request-environment-change':'approval:request-environment-change','project.environment.change.execute':'project:environment-execute','project.environment.promote.plan':'project:environment-plan','approval.request-environment-promotion':'approval:request-environment-promotion','project.environment.promote.execute':'project:environment-promote','project.environment.history':'project:environment-read',
- 'runtime.catalog':'project:read','runtime.detect':'project:read','runtime.plan':'project:read','runtime.validate':'project:read','project.technologies.detect':'workspace:detect-multiservice','project.manifest.validate':'project:configuration-read','project.configuration.get':'project:configuration-read','build.plan':'project:read','project.toolchain.plan':'build:multiservice-plan','build.multiservice.plan':'build:multiservice-plan','build.multiservice.status':'build:multiservice-plan','approval.request-multiservice-build':'approval:request-multiservice-build','build.multiservice.execute':'build:multiservice-execute','preview.multiservice.plan':'preview:multiservice-plan','preview.multiservice.status':'preview:multiservice-plan','approval.request-multiservice-preview':'approval:request-multiservice-preview','preview.multiservice.create':'preview:multiservice-execute','preview.multiservice.delete':'preview:multiservice-delete','build.request':'workspace:test-static','build.status':'project:read','build.logs.read':'project:read','build.artifact.get':'project:read','deployment.multiservice.plan':'deployment:multiservice-plan','deployment.multiservice.status':'deployment:multiservice-plan','approval.request-multiservice-deployment':'approval:request-multiservice-deployment','deployment.multiservice.execute':'deployment:multiservice-execute','deployment.preview.plan':'project:read','deployment.preview.status':'project:read','approval.request-preview':'approval:request-preview','deployment.preview':'deployment:preview',
+ 'project.toolchain.get':'project:toolchain-read','project.toolchain.validate':'project:toolchain-plan','project.toolchain.plan':'project:toolchain-plan','project.toolchain.build.plan':'project:toolchain-plan','approval.request-toolchain-build':'approval:request-toolchain-build','project.toolchain.build.execute':'project:toolchain-build-execute','project.toolchain.build.status':'project:toolchain-read','project.toolchain.logs.read':'project:toolchain-read','project.toolchain.image.list':'project:toolchain-read','project.toolchain.image.get':'project:toolchain-read','project.toolchain.image.activate.plan':'project:toolchain-activate-plan','approval.request-toolchain-activation':'approval:request-toolchain-activation','project.toolchain.image.activate':'project:toolchain-activate-execute',
+ 'runtime.catalog':'project:read','runtime.detect':'project:read','runtime.plan':'project:read','runtime.validate':'project:read','project.technologies.detect':'workspace:detect-multiservice','project.manifest.validate':'project:configuration-read','project.configuration.get':'project:configuration-read','build.plan':'project:read','build.multiservice.plan':'build:multiservice-plan','build.multiservice.status':'build:multiservice-plan','approval.request-multiservice-build':'approval:request-multiservice-build','build.multiservice.execute':'build:multiservice-execute','preview.multiservice.plan':'preview:multiservice-plan','preview.multiservice.status':'preview:multiservice-plan','approval.request-multiservice-preview':'approval:request-multiservice-preview','preview.multiservice.create':'preview:multiservice-execute','preview.multiservice.delete':'preview:multiservice-delete','build.request':'workspace:test-static','build.status':'project:read','build.logs.read':'project:read','build.artifact.get':'project:read','deployment.multiservice.plan':'deployment:multiservice-plan','deployment.multiservice.status':'deployment:multiservice-plan','approval.request-multiservice-deployment':'approval:request-multiservice-deployment','deployment.multiservice.execute':'deployment:multiservice-execute','deployment.preview.plan':'project:read','deployment.preview.status':'project:read','approval.request-preview':'approval:request-preview','deployment.preview':'deployment:preview',
  'workspace.probe':'workspace:probe','workspace.prepare':'workspace:prepare','workspace.validate':'workspace:validate','workspace.test-static':'workspace:test-static','workspace.preview-static':'workspace:preview-static','workspace.edit-preview':'workspace:edit-preview',
  'forgejo.propose-edit':'forgejo:propose-edit','forgejo.propose-edit.plan':'forgejo:plan-edit','approval.request-proposal':'approval:request-proposal','workspace.normalize.plan':'workspace:change-set-plan','workspace.change-set.validate':'workspace:change-set-plan','forgejo.proposal.change-set.plan':'workspace:change-set-plan','approval.request-change-set-proposal':'approval:request-change-set','forgejo.proposal.change-set.create':'forgejo:propose-change-set','approval.get':'approval:read-own','forgejo.proposal.list':'forgejo:proposal-read','forgejo.proposal.close':'forgejo:proposal-close','forgejo.proposal.delete-branch':'forgejo:proposal-delete-branch','forgejo.proposal.merge.plan':'forgejo:proposal-merge-plan','approval.request-merge':'approval:request-merge','forgejo.proposal.merge':'forgejo:proposal-merge',
  'deployment.production.homologation.plan':'deployment:production-plan','approval.request-production-homologation':'approval:request-deploy','deployment.production.homologation.deploy':'deployment:production-plan','deployment.production.homologation.rollback':'deployment:production-plan','deployment.production.activation.plan':'deployment:production-plan','approval.request-production-activation':'approval:request-deploy','deployment.production.readiness':'project:read','deployment.production.plan':'deployment:production-plan','supabase.migrations.inspect':'supabase:migration-inspect','supabase.migrations.plan':'supabase:migration-plan','deployment.plan':'deployment:plan','approval.request-deploy':'approval:request-deploy','deployment.validate':'deployment:validate','deployment.promote-test.plan':'deployment:promote-test-plan','approval.request-promote-test':'approval:request-promote-test','deployment.promote-test':'deployment:promote-test','deployment.promote-test.status':'deployment:promote-test-status','deployment.rollback-test.plan':'deployment:rollback-test-plan','approval.request-rollback-test':'approval:request-rollback-test','deployment.rollback-test':'deployment:rollback-test',
@@ -1298,6 +1353,143 @@ class H(BaseHTTPRequestHandler):
                     else:
                         if current and current.get('status')=='reserved':approval_transition(approval_id,'release',{'reservation_id':reservation_id})
                         error=data.get('error') or {};raise ValueError(str(error.get('message') if isinstance(error,dict) else error or 'environment_apply_failed'))
+                elif name in {'project.toolchain.get','project.toolchain.validate','project.toolchain.plan','project.toolchain.build.plan','project.toolchain.build.status','project.toolchain.logs.read','project.toolchain.image.list','project.toolchain.image.get','project.toolchain.image.activate.plan'}:
+                    args,_wrappers=_unwrap_tool_arguments(args)
+                    if name in {'project.toolchain.build.status','project.toolchain.logs.read'}:
+                        if set(args)!={'job_id'}:raise ValueError('O campo job_id é obrigatório.')
+                        job_id=str(args.get('job_id') or '').strip()
+                        if not re.fullmatch(r'toolchain_[a-f0-9]{24}',job_id):raise ValueError('job_id incompatível.')
+                        suffix='/logs' if name=='project.toolchain.logs.read' else ''
+                        code,data=build_broker_call('GET','/v1/toolchain/jobs/'+urllib.parse.quote(job_id,safe='')+suffix,timeout=90)
+                        if code==404:raise ValueError('Job de toolchain não encontrado.')
+                        if code!=200 or not data.get('ok'):raise ValueError('Falha ao consultar o job da toolchain.')
+                        data['secret_values_included']=False;content=data
+                    elif name in {'project.toolchain.image.list','project.toolchain.image.get'}:
+                        required={'slug'}|({'image_record_id'} if name.endswith('.get') else set());allowed=required|({'service'} if name.endswith('.list') else set())
+                        if not required.issubset(args) or not set(args).issubset(allowed):raise ValueError('Campos da consulta de imagem incompatíveis.')
+                        slug=str(args.get('slug') or '').strip();control('/v1/projects/'+urllib.parse.quote(slug,safe=''))
+                        if name.endswith('.list'):
+                            query='';service=str(args.get('service') or '').strip()
+                            if service:query='?'+urllib.parse.urlencode({'service':service})
+                            path='/v1/projects/'+urllib.parse.quote(slug,safe='')+'/toolchain/images'+query
+                        else:
+                            image_record_id=str(args.get('image_record_id') or '').strip()
+                            if not re.fullmatch(r'img_[a-f0-9]{24}',image_record_id):raise ValueError('image_record_id incompatível.')
+                            path='/v1/projects/'+urllib.parse.quote(slug,safe='')+'/toolchain/images/'+urllib.parse.quote(image_record_id,safe='')
+                        code,data=build_broker_call('GET',path,timeout=90)
+                        if code==404:raise ValueError('Imagem de toolchain não encontrada.')
+                        if code!=200 or not data.get('ok'):raise ValueError('Falha ao consultar imagens da toolchain.')
+                        data['secret_values_included']=False;content=data
+                    elif name=='project.toolchain.image.activate.plan':
+                        required={'slug','environment','job_id','expected_revision'}
+                        if set(args)!=required:raise ValueError('slug, environment, job_id e expected_revision são obrigatórios.')
+                        slug=str(args['slug']).strip();environment=str(args['environment']).strip();job_id=str(args['job_id']).strip();expected=int(args['expected_revision'])
+                        control('/v1/projects/'+urllib.parse.quote(slug,safe=''))
+                        content=toolchain_activation_plan(slug,environment,job_id,expected,trace_id)
+                    elif name=='project.toolchain.get':
+                        required={'slug'};allowed=required|{'ref'}
+                        if not required.issubset(args) or not set(args).issubset(allowed):raise ValueError('slug é obrigatório; ref é opcional.')
+                        slug=str(args['slug']).strip();ref=str(args.get('ref') or 'main').strip();control('/v1/projects/'+urllib.parse.quote(slug,safe=''))
+                        code,data=build_broker_call('GET','/v1/projects/'+urllib.parse.quote(slug,safe='')+'/toolchain?'+urllib.parse.urlencode({'ref':ref}),timeout=180)
+                        if code!=200 or not data.get('ok'):raise ValueError('Falha ao consultar a toolchain.')
+                        data['secret_values_included']=False;content=data
+                    else:
+                        required={'slug'};allowed=required|{'ref','expected_revision'}
+                        if not required.issubset(args) or not set(args).issubset(allowed):raise ValueError('slug é obrigatório; ref e expected_revision são opcionais.')
+                        slug=str(args['slug']).strip();ref=str(args.get('ref') or 'main').strip();expected=int(args.get('expected_revision') or 0)
+                        control('/v1/projects/'+urllib.parse.quote(slug,safe=''))
+                        if expected<1:
+                            code,current=project_config_call('GET','/v1/projects/'+urllib.parse.quote(slug,safe='')+'/configuration')
+                            if code!=200 or int(current.get('currentRevision') or 0)<1:raise ValueError('O projeto precisa de configuração aprovada antes da toolchain.')
+                            expected=int(current['currentRevision'])
+                        content=toolchain_broker_plan(slug,ref,expected,trace_id,validate=name=='project.toolchain.validate')
+                elif name=='approval.request-toolchain-build':
+                    required={'slug','expected_revision','plan_digest','reason'};allowed=required|{'ref','ttl_seconds'}
+                    if not required.issubset(args) or not set(args).issubset(allowed):raise ValueError('slug, expected_revision, plan_digest e reason são obrigatórios.')
+                    client_id=self.headers.get('X-CloudIF-Client','').strip()
+                    if not client_id:raise ValueError('identified_client_required')
+                    slug=str(args['slug']).strip();ref=str(args.get('ref') or 'main').strip();expected=int(args['expected_revision']);digest_value=str(args['plan_digest']).strip().lower();reason=str(args['reason']).strip();ttl=int(args.get('ttl_seconds') or 900)
+                    if expected<1 or not re.fullmatch(r'[a-f0-9]{64}',digest_value) or not 4<=len(reason)<=500 or not 60<=ttl<=86400:raise ValueError('Parâmetros da aprovação da toolchain são incompatíveis.')
+                    control('/v1/projects/'+urllib.parse.quote(slug,safe=''))
+                    plan=toolchain_broker_plan(slug,ref,expected,trace_id,validate=True)
+                    if plan.get('blocked') or not plan.get('valid'):raise ValueError('A toolchain está bloqueada pela política ou pelo script.')
+                    if not hmac.compare_digest(str(plan.get('plan_digest') or ''),digest_value):raise ValueError('O plano da toolchain mudou.')
+                    created=approval_create_toolchain(slug,client_id,authz,'project.toolchain.build',plan,reason,ttl,trace_id)
+                    if not created.get('ok') or created.get('status')!='pending':raise ValueError('approval_create_failed')
+                    content={'ok':True,'approval_id':created['approval_id'],'status':'pending','expires_at':created['expires_at'],'project_slug':slug,'plan_digest':digest_value,'action':'project.toolchain.build','images_created':False,'images_activated':False,'content_stored_in_approval':False,'secret_values_in_metadata':False}
+                elif name=='project.toolchain.build.execute':
+                    required={'slug','expected_revision','plan_digest','approval_id'};allowed=required|{'ref'}
+                    if not required.issubset(args) or not set(args).issubset(allowed):raise ValueError('slug, expected_revision, plan_digest e approval_id são obrigatórios.')
+                    client_id=self.headers.get('X-CloudIF-Client','').strip()
+                    if not client_id:raise ValueError('identified_client_required')
+                    slug=str(args['slug']).strip();ref=str(args.get('ref') or 'main').strip();expected=int(args['expected_revision']);digest_value=str(args['plan_digest']).strip().lower();approval_id=str(args['approval_id']).strip()
+                    control('/v1/projects/'+urllib.parse.quote(slug,safe=''))
+                    plan=toolchain_broker_plan(slug,ref,expected,trace_id,validate=True)
+                    if plan.get('blocked') or not plan.get('valid') or not hmac.compare_digest(str(plan.get('plan_digest') or ''),digest_value):raise ValueError('toolchain_plan_mismatch_or_blocked')
+                    approval=approval_get(approval_id)
+                    if not approval:raise ValueError('approval_not_found')
+                    try:metadata=json.loads(approval.get('metadata_json') or '{}')
+                    except Exception:raise ValueError('approval_metadata_invalid')
+                    reservation_id,execution_id=transaction_ids('project.toolchain.build',approval_id,client_id,digest_value)
+                    valid_status=approval.get('status')=='approved' or (approval.get('status') in {'reserved','consumed'} and approval.get('reservation_id')==reservation_id)
+                    expected_services=[{'service':item.get('service'),'toolchainDigest':item.get('toolchainDigest')} for item in plan.get('services') or []]
+                    valid=bool(valid_status and approval.get('project_slug')==slug and approval.get('action')=='project.toolchain.build' and approval.get('requested_by')==client_id and approval.get('approved_by') and hmac.compare_digest(str(metadata.get('toolchain_plan_digest') or ''),digest_value) and int(metadata.get('config_revision') or 0)==expected and hmac.compare_digest(str(metadata.get('config_digest') or ''),str(plan.get('config_digest') or '')) and hmac.compare_digest(str(metadata.get('requested_toolchain_digest') or ''),str(plan.get('requested_toolchain_digest') or '')) and hmac.compare_digest(str(metadata.get('archive_sha256') or ''),str(plan.get('archive_sha256') or '')) and metadata.get('ref')==ref and metadata.get('services')==expected_services and metadata.get('content_stored') is False and metadata.get('secret_values_in_metadata') is False)
+                    if not valid:raise ValueError('approval_binding_mismatch')
+                    if approval.get('status')=='approved':
+                        reserve_code,reserved=approval_transition(approval_id,'reserve',{'reservation_id':reservation_id,'reserved_by':client_id,'ttl_seconds':900})
+                        if reserve_code!=200 or reserved.get('status')!='reserved':raise ValueError('approval_reserve_failed')
+                    code,queued=build_broker_call('POST','/v1/toolchain/build',{'project_slug':slug,'ref':ref,'expected_revision':expected,'plan_digest':digest_value,'approved':True,'trace_id':'txn-'+reservation_id},timeout=900)
+                    current=approval_get(approval_id)
+                    if code in {200,202} and (queued.get('ok') or queued.get('status') in {'queued','running','succeeded'}):
+                        if current and current.get('status')!='consumed':
+                            final_code,finalized=approval_transition(approval_id,'finalize',{'reservation_id':reservation_id,'result':'success'})
+                            if final_code!=200 or finalized.get('status')!='consumed':raise ValueError('approval_finalize_failed')
+                        queued['transaction']={'approval_id':approval_id,'reservation_id':reservation_id,'execution_id':execution_id,'approval_status':'consumed'};queued['images_activated']=False;queued['containers_changed']=False;content=queued
+                    else:
+                        if current and current.get('status')=='reserved':approval_transition(approval_id,'release',{'reservation_id':reservation_id})
+                        error=queued.get('error') or {};raise ValueError(str(error.get('message') if isinstance(error,dict) else error or 'toolchain_build_queue_failed'))
+                elif name=='approval.request-toolchain-activation':
+                    required={'slug','environment','job_id','expected_revision','plan_digest','reason'};allowed=required|{'ttl_seconds'}
+                    if not required.issubset(args) or not set(args).issubset(allowed):raise ValueError('Parâmetros da aprovação de ativação estão incompletos.')
+                    client_id=self.headers.get('X-CloudIF-Client','').strip()
+                    if not client_id:raise ValueError('identified_client_required')
+                    slug=str(args['slug']).strip();environment=str(args['environment']).strip();job_id=str(args['job_id']).strip();expected=int(args['expected_revision']);digest_value=str(args['plan_digest']).strip().lower();reason=str(args['reason']).strip();ttl=int(args.get('ttl_seconds') or 900)
+                    control('/v1/projects/'+urllib.parse.quote(slug,safe=''))
+                    plan=toolchain_activation_plan(slug,environment,job_id,expected,trace_id)
+                    if not hmac.compare_digest(str(plan.get('plan_digest') or ''),digest_value) or not 4<=len(reason)<=500 or not 60<=ttl<=86400:raise ValueError('O plano de ativação mudou ou a solicitação é inválida.')
+                    created=approval_create_toolchain(slug,client_id,authz,'project.toolchain.activation',plan,reason,ttl,trace_id)
+                    if not created.get('ok') or created.get('status')!='pending':raise ValueError('approval_create_failed')
+                    content={'ok':True,'approval_id':created['approval_id'],'status':'pending','expires_at':created['expires_at'],'project_slug':slug,'environment':environment,'plan_digest':digest_value,'action':'project.toolchain.activation','containers_changed':False,'content_stored_in_approval':False,'secret_values_in_metadata':False}
+                elif name=='project.toolchain.image.activate':
+                    required={'slug','environment','job_id','expected_revision','plan_digest','approval_id'}
+                    if set(args)!=required:raise ValueError('Parâmetros da ativação estão incompletos.')
+                    client_id=self.headers.get('X-CloudIF-Client','').strip()
+                    if not client_id:raise ValueError('identified_client_required')
+                    slug=str(args['slug']).strip();environment=str(args['environment']).strip();job_id=str(args['job_id']).strip();expected=int(args['expected_revision']);digest_value=str(args['plan_digest']).strip().lower();approval_id=str(args['approval_id']).strip()
+                    control('/v1/projects/'+urllib.parse.quote(slug,safe=''))
+                    plan=toolchain_activation_plan(slug,environment,job_id,expected,trace_id)
+                    if not hmac.compare_digest(str(plan.get('plan_digest') or ''),digest_value):raise ValueError('activation_plan_digest_mismatch')
+                    approval=approval_get(approval_id)
+                    if not approval:raise ValueError('approval_not_found')
+                    try:metadata=json.loads(approval.get('metadata_json') or '{}')
+                    except Exception:raise ValueError('approval_metadata_invalid')
+                    reservation_id,execution_id=transaction_ids('project.toolchain.activation',approval_id,client_id,digest_value)
+                    valid_status=approval.get('status')=='approved' or (approval.get('status') in {'reserved','consumed'} and approval.get('reservation_id')==reservation_id)
+                    valid=bool(valid_status and approval.get('project_slug')==slug and approval.get('action')=='project.toolchain.activation' and approval.get('requested_by')==client_id and approval.get('approved_by') and hmac.compare_digest(str(metadata.get('activation_plan_digest') or ''),digest_value) and metadata.get('environment')==environment and metadata.get('job_id')==job_id and int(metadata.get('expected_revision') or 0)==expected and metadata.get('after')==(plan.get('after') or []) and metadata.get('content_stored') is False and metadata.get('secret_values_in_metadata') is False)
+                    if not valid:raise ValueError('approval_binding_mismatch')
+                    if approval.get('status')=='approved':
+                        reserve_code,reserved=approval_transition(approval_id,'reserve',{'reservation_id':reservation_id,'reserved_by':client_id,'ttl_seconds':900})
+                        if reserve_code!=200 or reserved.get('status')!='reserved':raise ValueError('approval_reserve_failed')
+                    code,result=build_broker_call('POST','/v1/toolchain/activation/apply',{'project_slug':slug,'environment':environment,'job_id':job_id,'expected_revision':expected,'plan_digest':digest_value,'approval_id':approval_id,'approved':True,'actor':supabase_actor_user(authz) or client_id},timeout=180)
+                    current=approval_get(approval_id)
+                    if code==200 and result.get('ok'):
+                        if current and current.get('status')!='consumed':
+                            final_code,finalized=approval_transition(approval_id,'finalize',{'reservation_id':reservation_id,'result':'success'})
+                            if final_code!=200 or finalized.get('status')!='consumed':raise ValueError('approval_finalize_failed')
+                        result['transaction']={'approval_id':approval_id,'reservation_id':reservation_id,'execution_id':execution_id,'approval_status':'consumed'};result['containers_changed']=False;content=result
+                    else:
+                        if current and current.get('status')=='reserved':approval_transition(approval_id,'release',{'reservation_id':reservation_id})
+                        error=result.get('error') or {};raise ValueError(str(error.get('message') if isinstance(error,dict) else error or 'toolchain_activation_failed'))
                 elif name=='runtime.catalog':
                     if args:raise ValueError('argumentos inválidos')
                     content=runtime_call('/v1/catalog')
@@ -1306,7 +1498,7 @@ class H(BaseHTTPRequestHandler):
                     slug=str(args['slug']).strip();ref=str(args.get('ref') or 'main').strip();control('/v1/projects/'+urllib.parse.quote(slug,safe=''))
                     evidence=workspace_validate(slug,ref,trace_id).get('result') or {}
                     safe={k:evidence.get(k) for k in ('technologies','compose','static')};content=runtime_call('/v1/detect',safe);content['project_slug']=slug;content['ref']=ref
-                elif name in {'project.toolchain.plan','build.multiservice.plan'}:
+                elif name=='build.multiservice.plan':
                     allowed={'slug','ref','expected_revision'}
                     if 'slug' not in args or not set(args).issubset(allowed):raise ValueError('O campo slug é obrigatório. Campos permitidos: slug, ref e expected_revision.')
                     slug=str(args.get('slug') or '').strip();ref=str(args.get('ref') or 'main').strip();expected=int(args.get('expected_revision') or 0)
@@ -1318,9 +1510,7 @@ class H(BaseHTTPRequestHandler):
                         if code!=200 or int(current.get('currentRevision') or 0)<1:raise ValueError('O projeto precisa de cloudiff.yaml ou configuração aprovada antes do build.')
                         expected=int(current['currentRevision'])
                     plan=multiservice_build_plan(slug,ref,expected,trace_id)
-                    if name=='project.toolchain.plan':
-                        content={'ok':True,'side_effect_free':True,'project_slug':slug,'ref':ref,'config_revision':plan.get('config_revision'),'config_digest':plan.get('config_digest'),'toolchain_digest':plan.get('toolchain_digest'),'archive_sha256':plan.get('archive_sha256'),'policies':plan.get('policies') or [],'blocked':plan.get('blocked') or [],'services':plan.get('services') or [],'approval_required':bool(plan.get('approval_required')),'build_required':bool(plan.get('build_required')),'reusable_build':bool(plan.get('reusable_build')),'network_policy':'none','scanner_policy':'block-high-critical','signature_algorithm':'Ed25519','secrets_included':False}
-                    else:content=plan
+                    content=plan
                 elif name=='build.multiservice.status':
                     if set(args)!={'job_id'}:raise ValueError('O campo job_id é obrigatório. Exemplo: {"job_id":"build_0123456789abcdef01234567"}')
                     job_id=str(args.get('job_id') or '').strip()
