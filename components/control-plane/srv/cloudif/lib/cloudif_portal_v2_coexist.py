@@ -504,6 +504,21 @@ def _install() -> None:
             route_query = urllib.parse.parse_qs(parsed.query)
             query_api = (route_query.get("api") or [""])[0].strip()
             try:
+                environment_match = re.fullmatch(r'/cloudiff?/portal/api/projects/([a-z0-9][a-z0-9-]{0,62})/environment(?:/(history|missing))?', path)
+                if environment_match:
+                    try:
+                        from cloudif_project_environment_web import handle_get
+                        actor=identity(self.headers);query={key:(values or [''])[0] for key,values in route_query.items()}
+                        status,payload=handle_get(environment_match.group(1),environment_match.group(2) or '',query,actor.username,list(actor.groups))
+                        return send_json(self,status,payload)
+                    except LookupError as exc:
+                        return send_json(self,404,{"ok":False,"error":{"code":str(exc),"message":"Projeto ou recurso não encontrado."}})
+                    except PermissionError as exc:
+                        return send_json(self,403,{"ok":False,"error":{"code":str(exc),"message":"Acesso negado."}})
+                    except ValueError as exc:
+                        return send_json(self,400,{"ok":False,"error":{"code":str(exc),"message":"Parâmetros inválidos."}})
+                    except Exception as exc:
+                        return send_json(self,503,{"ok":False,"error":{"code":"environment_api_unavailable","message":"A API de ambiente está temporariamente indisponível.","detail":type(exc).__name__}})
                 if path in {"/cloudif/portal/api/admin-delete-project-status", "/cloudiff/portal/api/admin-delete-project-status"}:
                     try:
                         actor = identity(self.headers)
@@ -689,6 +704,39 @@ def _install() -> None:
                 if handle_preview_request(self):
                     return
                 parsed = urllib.parse.urlparse(self.path)
+                environment_match = re.fullmatch(r'/cloudiff?/portal/api/projects/([a-z0-9][a-z0-9-]{0,62})/environment/(validate|change/plan|promote/plan|approval/request|change/execute|promote/execute)', parsed.path)
+                if environment_match:
+                    try:
+                        content_length=int(self.headers.get('Content-Length','0') or 0)
+                        if content_length<0 or content_length>2_097_152:
+                            return send_json(self,413,{"ok":False,"error":{"code":"payload_too_large"}})
+                        raw=self.rfile.read(content_length)
+                        if 'application/json' not in (self.headers.get('Content-Type') or '').lower():
+                            return send_json(self,415,{"ok":False,"error":{"code":"json_required","message":"Use Content-Type application/json."}})
+                        payload=json.loads(raw or b'{}')
+                        if not isinstance(payload,dict):
+                            return send_json(self,400,{"ok":False,"error":{"code":"invalid_json_object"}})
+                        actor=identity(self.headers);groups=[str(group) for group in actor.groups]
+                        user={"username":actor.username,"email":actor.email,"groups":groups,"admin":"cloudif-tenants-admin" in {group.lower() for group in groups}}
+                        owner=sys.modules.get(handler_class.__module__)
+                        provided=str(self.headers.get('X-CSRF-Token') or payload.pop('csrfToken',payload.pop('csrf_token','')))
+                        if not getattr(owner,'_prod_csrf_equal')(provided,getattr(owner,'_prod_csrf_token')(user)):
+                            return send_json(self,403,{"ok":False,"error":{"code":"invalid_csrf","message":"Token CSRF inválido ou ausente."}})
+                        from cloudif_project_environment_web import handle_post
+                        status,response=handle_post(environment_match.group(1),environment_match.group(2),payload,actor.username,groups)
+                        return send_json(self,status,response)
+                    except json.JSONDecodeError:
+                        return send_json(self,400,{"ok":False,"error":{"code":"invalid_json","message":"O corpo JSON é inválido."}})
+                    except LookupError as exc:
+                        return send_json(self,404,{"ok":False,"error":{"code":str(exc),"message":"Projeto, plano ou aprovação não encontrado."}})
+                    except PermissionError as exc:
+                        return send_json(self,403,{"ok":False,"error":{"code":str(exc),"message":"Acesso negado."}})
+                    except ValueError as exc:
+                        return send_json(self,400,{"ok":False,"error":{"code":str(exc),"message":"Parâmetros inválidos."}})
+                    except RuntimeError as exc:
+                        return send_json(self,409,{"ok":False,"error":{"code":str(exc),"message":"A operação não pode ser concluída neste estado."}})
+                    except Exception as exc:
+                        return send_json(self,503,{"ok":False,"error":{"code":"environment_api_unavailable","message":"A API de ambiente está temporariamente indisponível.","detail":type(exc).__name__}})
                 query_action = (self.headers.get("X-CloudIF-Action") or (urllib.parse.parse_qs(parsed.query).get("action") or [""])[0]).strip()
                 query_routed = parsed.path in PORTAL_PATHS and query_action in {
                     "admin-delete-project", "admin-delete-tenant", "admin-tenant-advanced", "backup-remote-config", "project-backup"

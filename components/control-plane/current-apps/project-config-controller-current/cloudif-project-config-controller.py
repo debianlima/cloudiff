@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import copy
+import importlib.util
 import hashlib
 import hmac
 import json
@@ -46,6 +47,16 @@ RUNTIME_ALLOWED_VERSIONS = {
     'php': {'8.2', '8.3', '8.4'},
 }
 DOC_BASE = 'manifest-v1'
+
+
+_ENVIRONMENT_MODULE_PATH = Path(__file__).with_name('cloudif_project_environment.py')
+try:
+    import cloudif_project_environment as project_environment
+except ModuleNotFoundError:
+    _environment_spec = importlib.util.spec_from_file_location('cloudif_project_environment', _ENVIRONMENT_MODULE_PATH)
+    project_environment = importlib.util.module_from_spec(_environment_spec)
+    assert _environment_spec.loader
+    _environment_spec.loader.exec_module(project_environment)
 
 
 @dataclass
@@ -146,6 +157,7 @@ def init_db() -> None:
     conn.commit()
     conn.close()
     os.chmod(STATE_DB, 0o600)
+    project_environment.init_db()
 
 
 def project_exists(slug: str) -> dict[str, Any]:
@@ -953,7 +965,30 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(401, {'ok': False, 'error': {'code': 'unauthorized', 'message': 'Autenticação interna obrigatória.'}})
         if self.path == '/v1/schema':
             return self.send_json(200, {'ok': True, 'schema': load_schema(), 'schemaVersion': 1, 'readOnly': True})
-        match = re.fullmatch(r'/v1/projects/([a-z0-9][a-z0-9-]{0,62})/configuration', urllib.parse.urlparse(self.path).path)
+        parsed = urllib.parse.urlparse(self.path)
+        environment_plan_match = re.fullmatch(r'/v1/projects/([a-z0-9][a-z0-9-]{0,62})/environment/plans/([a-f0-9]{64})', parsed.path)
+        if environment_plan_match:
+            try:
+                return self.send_json(200, project_environment.get_plan(*environment_plan_match.groups()))
+            except LookupError as exc:
+                return self.send_json(404, {'ok': False, 'error': {'code': str(exc), 'message': 'Plano de ambiente não encontrado.'}})
+            except ValueError as exc:
+                return self.send_json(400, {'ok': False, 'error': {'code': str(exc), 'message': 'Digest de plano inválido.'}})
+        environment_match = re.fullmatch(r'/v1/projects/([a-z0-9][a-z0-9-]{0,62})/environment(?:/(history|missing))?', parsed.path)
+        if environment_match:
+            slug, operation = environment_match.groups(); query = urllib.parse.parse_qs(parsed.query)
+            try:
+                if operation == 'history':
+                    return self.send_json(200, project_environment.history(slug, int((query.get('limit') or ['100'])[0])))
+                if operation == 'missing':
+                    return self.send_json(200, project_environment.missing_variables(slug, (query.get('environment') or [''])[0]))
+                include_values = str((query.get('includeValues') or ['false'])[0]).lower() in {'1','true','yes','on'}
+                return self.send_json(200, project_environment.list_environment(slug, (query.get('environment') or [''])[0], (query.get('service') or [''])[0], include_values))
+            except LookupError as exc:
+                return self.send_json(404, {'ok': False, 'error': {'code': str(exc), 'message': 'Recurso de ambiente não encontrado.'}})
+            except ValueError as exc:
+                return self.send_json(400, {'ok': False, 'error': {'code': str(exc), 'message': 'Os filtros de ambiente são inválidos.'}})
+        match = re.fullmatch(r'/v1/projects/([a-z0-9][a-z0-9-]{0,62})/configuration', parsed.path)
         if match:
             try:
                 return self.send_json(200, current_project(match.group(1)))
@@ -979,7 +1014,25 @@ class Handler(BaseHTTPRequestHandler):
                     'warnings': result.warnings, 'schemaVersion': 1, 'readOnly': True,
                     'secretValuesIncluded': False,
                 })
-            match = re.fullmatch(r'/v1/projects/([a-z0-9][a-z0-9-]{0,62})/(configuration/plan|configuration/apply|events)', urllib.parse.urlparse(self.path).path)
+            parsed_path = urllib.parse.urlparse(self.path).path
+            environment_match = re.fullmatch(r'/v1/projects/([a-z0-9][a-z0-9-]{0,62})/environment/(validate|change/plan|change/apply|promote/plan|promote/apply)', parsed_path)
+            if environment_match:
+                slug, operation = environment_match.groups(); actor = str(body.get('actor') or 'internal').strip()[:128]
+                expected = int(body.get('expectedRevision', body.get('expected_revision', 0)) or 0)
+                if operation == 'validate':
+                    result = project_environment.validate_changes(slug, str(body.get('environment') or ''), body.get('changes'))
+                    return self.send_json(200, result)
+                if operation == 'change/plan':
+                    result = project_environment.plan_change(slug, str(body.get('environment') or ''), body.get('changes'), expected, actor, int(body.get('ttlSeconds', body.get('ttl_seconds', 900)) or 900))
+                    return self.send_json(200, result)
+                if operation == 'promote/plan':
+                    result = project_environment.plan_promotion(slug, str(body.get('sourceEnvironment', body.get('source_environment', ''))), str(body.get('targetEnvironment', body.get('target_environment', ''))), str(body.get('service') or ''), expected, actor, int(body.get('ttlSeconds', body.get('ttl_seconds', 900)) or 900))
+                    return self.send_json(200, result)
+                if not body.get('approved'):
+                    return self.send_json(403, {'ok': False, 'error': {'code': 'approval_required', 'message': 'A alteração de ambiente exige aprovação humana.'}})
+                result = project_environment.apply_plan(slug, str(body.get('planDigest', body.get('plan_digest', ''))), expected, actor)
+                return self.send_json(200, result)
+            match = re.fullmatch(r'/v1/projects/([a-z0-9][a-z0-9-]{0,62})/(configuration/plan|configuration/apply|events)', parsed_path)
             if not match:
                 return self.send_json(404, {'ok': False, 'error': {'code': 'not_found'}})
             slug, operation = match.groups()
@@ -1002,7 +1055,7 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(404, {'ok': False, 'error': {'code': str(exc)}})
         except RuntimeError as exc:
             code = str(exc)
-            status = 409 if code.startswith('revision_conflict') or code in {'plan_already_consumed'} else 410 if code == 'plan_expired' else 409
+            status = 409 if code.startswith(('revision_conflict','environment_revision_conflict')) or code in {'plan_already_consumed'} else 410 if code in {'plan_expired','environment_plan_expired'} else 409
             return self.send_json(status, {'ok': False, 'error': {'code': code.split(':', 1)[0], 'message': code, 'currentRevision': int(code.split(':', 1)[1]) if code.startswith('revision_conflict:') else None}})
         except ValueError as exc:
             return self.send_json(400, {'ok': False, 'error': {'code': str(exc), 'message': 'A solicitação é inválida.'}})

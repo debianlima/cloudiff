@@ -75,3 +75,25 @@ Campos antigos no nível raiz retornam erro acionável:
 - `env` → `environment`;
 - `systemPackages` → `toolchain.systemPackages`;
 - `provision` → `toolchain.provision`.
+
+
+## API de ambiente
+
+Leitura:
+
+- `GET /v1/projects/<slug>/environment`
+- `GET /v1/projects/<slug>/environment/history`
+- `GET /v1/projects/<slug>/environment/missing`
+- `GET /v1/projects/<slug>/environment/plans/<digest>`
+
+Planejamento e execução:
+
+- `POST /v1/projects/<slug>/environment/validate`
+- `POST /v1/projects/<slug>/environment/change/plan`
+- `POST /v1/projects/<slug>/environment/change/apply`
+- `POST /v1/projects/<slug>/environment/promote/plan`
+- `POST /v1/projects/<slug>/environment/promote/apply`
+
+A API persiste valores públicos, metadados e referências opacas de segredo. Valores secretos diretos são rejeitados. A aplicação registra revisão e histórico, mas não reinicia containers nesta fase; a resposta informa `requiredAction`, `affectedServices` e `reconciliationPending`.
+
+A API Web do Portal usa as rotas equivalentes sob `/cloudiff/portal/api/projects/<slug>/environment`. Planejamento, aprovação e execução aplicam a mesma ACL e o mesmo vínculo de aprovação utilizado pelas ferramentas MCP.

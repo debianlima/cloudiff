@@ -179,6 +179,34 @@ def audit_async(event):
             urllib.request.urlopen(req,timeout=2).read()
         except Exception:pass
     threading.Thread(target=run,daemon=True).start()
+ENVIRONMENT_NAME_SCHEMA={'type':'string','enum':['development','preview','homologation','production']}
+ENVIRONMENT_SERVICE_SCHEMA={'type':'string','pattern':'^[a-z][a-z0-9-]{0,31}$'}
+ENVIRONMENT_VARIABLE_SCHEMA={'type':'string','pattern':'^[A-Z_][A-Z0-9_]{0,127}$'}
+ENVIRONMENT_CHANGE_SCHEMA={
+ 'type':'array','minItems':1,'maxItems':256,
+ 'items':{
+  'type':'object','additionalProperties':False,
+  'properties':{
+   'operation':{'type':'string','enum':['upsert','delete']},
+   'name':ENVIRONMENT_VARIABLE_SCHEMA,
+   'service':ENVIRONMENT_SERVICE_SCHEMA,
+   'value':{},
+   'secret_reference':{'type':'string','pattern':'^[a-z][a-z0-9_.:/-]{2,255}$'},
+   'definition':{
+    'type':'object','additionalProperties':False,
+    'properties':{
+     'required':{'type':'boolean'},'secret':{'type':'boolean'},'description':{'type':'string','maxLength':1000},
+     'scope':{'type':'string','enum':['project','environment','service']},'exposeToClient':{'type':'boolean'},
+     'immutable':{'type':'boolean'},'restartRequired':{'type':'boolean'},'buildTime':{'type':'boolean'},'runtime':{'type':'boolean'},
+     'allowedValues':{'type':'array','maxItems':256},'pattern':{'type':'string','maxLength':512},
+     'validation':{'type':'object','additionalProperties':True}
+    }
+   }
+  },
+  'required':['name']
+ }
+}
+
 TOOLS=[
  {'name':'project.list','description':'Lista projetos registrados na CloudIFF','inputSchema':{'type':'object','properties':{},'additionalProperties':False}},
  {'name':'project.get','description':'Obtém projeto pelo slug','inputSchema':{'type':'object','properties':{'slug':{'type':'string','minLength':1}},'required':['slug'],'additionalProperties':False}},
@@ -186,6 +214,16 @@ TOOLS=[
  {'name':'project.technologies.detect','description':'Detecta recursivamente todos os componentes e serviços do repositório autorizado sem alterar arquivos','inputSchema':{'type':'object','properties':{'slug':{'type':'string','minLength':1,'maxLength':63,'pattern':'^[a-z0-9][a-z0-9-]*$'},'ref':{'type':'string','minLength':1,'maxLength':128,'pattern':'^[A-Za-z0-9._/-]+$'}},'required':['slug'],'additionalProperties':False}},
  {'name':'project.manifest.validate','description':'Valida cloudiff.yaml, normaliza serviços e retorna erros acionáveis sem efeitos persistentes','inputSchema':{'type':'object','properties':{'slug':{'type':'string','minLength':1,'maxLength':63,'pattern':'^[a-z0-9][a-z0-9-]*$'},'manifest':{'oneOf':[{'type':'string','minLength':1,'maxLength':1048576},{'type':'object','properties':{},'additionalProperties':True}]},'overrides':{'type':'object','properties':{},'additionalProperties':True}},'required':['slug','manifest'],'additionalProperties':False}},
  {'name':'project.configuration.get','description':'Consulta a revisão e a configuração efetiva do projeto sem expor valores secretos','inputSchema':{'type':'object','properties':{'slug':{'type':'string','minLength':1,'maxLength':63,'pattern':'^[a-z0-9][a-z0-9-]*$'}},'required':['slug'],'additionalProperties':False}},
+ {'name':'project.environment.list','description':'Lista metadados e configuração de variáveis por ambiente e serviço sem revelar segredos','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'environment':ENVIRONMENT_NAME_SCHEMA,'service':ENVIRONMENT_SERVICE_SCHEMA,'include_public_values':{'type':'boolean'}},'required':['slug'],'additionalProperties':False}},
+ {'name':'project.environment.get','description':'Consulta uma variável específica; valores secretos nunca são retornados','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'environment':ENVIRONMENT_NAME_SCHEMA,'service':ENVIRONMENT_SERVICE_SCHEMA,'name':ENVIRONMENT_VARIABLE_SCHEMA,'include_public_value':{'type':'boolean'}},'required':['slug','environment','name'],'additionalProperties':False}},
+ {'name':'project.environment.validate','description':'Valida alterações de ambiente e calcula serviços afetados sem persistir valores','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'environment':ENVIRONMENT_NAME_SCHEMA,'changes':ENVIRONMENT_CHANGE_SCHEMA},'required':['slug','environment','changes'],'additionalProperties':False}},
+ {'name':'project.environment.change.plan','description':'Cria plano versionado de alteração de variáveis sem reiniciar ou reconstruir serviços','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'environment':ENVIRONMENT_NAME_SCHEMA,'changes':ENVIRONMENT_CHANGE_SCHEMA,'expected_revision':{'type':'integer','minimum':0},'ttl_seconds':{'type':'integer','minimum':60,'maximum':86400}},'required':['slug','environment','changes','expected_revision'],'additionalProperties':False}},
+ {'name':'approval.request-environment-change','description':'Solicita aprovação humana vinculada ao digest e revisão exatos da alteração de ambiente','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'plan_digest':{'type':'string','pattern':'^[a-f0-9]{64}$'},'reason':{'type':'string','minLength':4,'maxLength':500},'ttl_seconds':{'type':'integer','minimum':60,'maximum':86400}},'required':['slug','plan_digest','reason'],'additionalProperties':False}},
+ {'name':'project.environment.change.execute','description':'Aplica alteração de ambiente aprovada usando reserve-effect-finalize; containers não são alterados nesta fase','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'plan_digest':{'type':'string','pattern':'^[a-f0-9]{64}$'},'approval_id':{'type':'string','pattern':'^apr_[a-f0-9]{20}$'}},'required':['slug','plan_digest','approval_id'],'additionalProperties':False}},
+ {'name':'project.environment.promote.plan','description':'Planeja cópia explícita de variáveis entre ambientes sem modificar a origem','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'source_environment':ENVIRONMENT_NAME_SCHEMA,'target_environment':ENVIRONMENT_NAME_SCHEMA,'service':ENVIRONMENT_SERVICE_SCHEMA,'expected_revision':{'type':'integer','minimum':0},'ttl_seconds':{'type':'integer','minimum':60,'maximum':86400}},'required':['slug','source_environment','target_environment','expected_revision'],'additionalProperties':False}},
+ {'name':'approval.request-environment-promotion','description':'Solicita aprovação humana vinculada à promoção de ambiente planejada','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'plan_digest':{'type':'string','pattern':'^[a-f0-9]{64}$'},'reason':{'type':'string','minLength':4,'maxLength':500},'ttl_seconds':{'type':'integer','minimum':60,'maximum':86400}},'required':['slug','plan_digest','reason'],'additionalProperties':False}},
+ {'name':'project.environment.promote.execute','description':'Executa promoção aprovada usando reserve-effect-finalize sem reiniciar containers','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'plan_digest':{'type':'string','pattern':'^[a-f0-9]{64}$'},'approval_id':{'type':'string','pattern':'^apr_[a-f0-9]{20}$'}},'required':['slug','plan_digest','approval_id'],'additionalProperties':False}},
+ {'name':'project.environment.history','description':'Consulta histórico sanitizado de alterações de ambiente','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'limit':{'type':'integer','minimum':1,'maximum':500}},'required':['slug'],'additionalProperties':False}},
  {'name':'runtime.catalog','description':'Lista política homologada de runtimes e frameworks sem efeitos','inputSchema':{'type':'object','properties':{},'additionalProperties':False}},
  {'name':'runtime.detect','description':'Detecta framework a partir de evidências sanitizadas do workspace autorizado','inputSchema':{'type':'object','properties':{'slug':{'type':'string','minLength':1,'maxLength':63,'pattern':'^[a-z0-9][a-z0-9-]*$'},'ref':{'type':'string','minLength':1,'maxLength':128,'pattern':'^[A-Za-z0-9._/-]+$'}},'required':['slug'],'additionalProperties':False}},
  {'name':'runtime.plan','description':'Gera plano declarativo usando somente templates homologados','inputSchema':{'type':'object','properties':{'framework':{'type':'string','enum':['static','react','vite','nextjs','vue','nuxt','angular','svelte','sveltekit','astro','express','nestjs','node']},'runtime_version':{'type':'string','enum':['20','22','24']},'package_manager':{'type':'string','enum':['npm','pnpm','yarn']}},'required':['framework'],'additionalProperties':False}},
@@ -275,7 +313,7 @@ TOOLS=[
  {'name':'deployment.rollback-test','description':'Executa rollback manual aprovado para release histórica do ambiente isolado','inputSchema':{'type':'object','properties':{'slug':{'type':'string','enum':['sistema-de-biblioteca-teste']},'target_job_id':{'type':'integer','minimum':1,'maximum':2147483647},'expected_current_job_id':{'type':'integer','minimum':1,'maximum':2147483647},'expected_current_commit':{'type':'string','pattern':'^[a-f0-9]{40}$'},'target_commit':{'type':'string','pattern':'^[a-f0-9]{40}$'},'approval_id':{'type':'string','pattern':'^apr_[a-f0-9]{20}$'}},'required':['slug','target_job_id','expected_current_job_id','expected_current_commit','target_commit','approval_id'],'additionalProperties':False}},
  ]
 READ_ONLY_TOOLS={
- 'project.list','project.get','project.connectors','project.technologies.detect','project.manifest.validate','project.configuration.get','workspace.normalize.plan','workspace.change-set.validate','forgejo.proposal.change-set.plan','runtime.catalog','runtime.detect','runtime.plan','runtime.validate',
+ 'project.list','project.get','project.connectors','project.technologies.detect','project.manifest.validate','project.configuration.get','project.environment.list','project.environment.get','project.environment.validate','project.environment.change.plan','project.environment.promote.plan','project.environment.history','workspace.normalize.plan','workspace.change-set.validate','forgejo.proposal.change-set.plan','runtime.catalog','runtime.detect','runtime.plan','runtime.validate',
  'build.plan','build.status','build.logs.read','build.artifact.get','deployment.preview.plan','deployment.preview.status',
  'approval.get','forgejo.proposal.list','forgejo.proposal.merge.plan','supabase.migrations.inspect','supabase.migrations.plan',
  'deployment.production.activation.plan','deployment.production.readiness','deployment.production.homologation.plan',
@@ -288,7 +326,7 @@ READ_ONLY_TOOLS={
 DESTRUCTIVE_TOOLS={
  'forgejo.proposal.delete-branch','forgejo.proposal.merge','deployment.production.homologation.deploy',
  'deployment.production.homologation.rollback','deployment.promote-test','deployment.rollback-test','supabase.operation.execute','forgejo.proposal.change-set.create'
-,'build.multiservice.execute','deployment.multiservice.execute','preview.multiservice.create','preview.multiservice.delete'}
+,'build.multiservice.execute','deployment.multiservice.execute','preview.multiservice.create','preview.multiservice.delete','project.environment.change.execute','project.environment.promote.execute'}
 OPEN_WORLD_PREFIXES=('forgejo.','supabase.','deployment.','approval.','build.')
 for _tool in TOOLS:
     _name=str(_tool.get('name') or '')
@@ -497,6 +535,34 @@ def project_config_call(method,path,payload=None,timeout=45):
         try:data=json.load(e)
         except Exception:data={'ok':False,'error':{'code':'project_config_error','message':'Falha ao consultar a configuração do projeto.'}}
         return e.code,data
+def project_environment_call(method,slug,path='',payload=None,query=None,timeout=45):
+    suffix='/v1/projects/'+urllib.parse.quote(slug,safe='')+'/environment'+path
+    if query:suffix+='?'+urllib.parse.urlencode(query)
+    return project_config_call(method,suffix,payload,timeout)
+
+def environment_plan_get(slug,plan_digest):
+    code,data=project_environment_call('GET',slug,'/plans/'+urllib.parse.quote(plan_digest,safe=''))
+    if code!=200 or not data.get('ok'):
+        error=data.get('error') or {};raise ValueError(str(error.get('message') if isinstance(error,dict) else error or 'environment_plan_not_found'))
+    return data
+
+def environment_approval_create(slug,client_id,authz,plan,reason,ttl,trace_id):
+    action='project.environment.promotion' if plan.get('action')=='promotion' else 'project.environment.change'
+    metadata={
+      'environment_plan_digest':plan.get('planDigest'),'environment_action':plan.get('action'),
+      'source_environment':plan.get('sourceEnvironment'),'target_environment':plan.get('targetEnvironment'),
+      'expected_revision':plan.get('expectedRevision'),'summary':plan.get('summary') or {},
+      'content_stored':False,'secret_values_in_metadata':False,
+    }
+    payload={'project_slug':slug,'action':action,'requested_by':client_id,'requester_role':str(authz.get('project_role') or 'agent'),'ttl_seconds':ttl,'reason':reason,'trace_id':trace_id,'metadata':metadata}
+    request=urllib.request.Request(APPROVAL_URL+'/v1/approvals',data=json.dumps(payload,ensure_ascii=False,separators=(',',':')).encode(),method='POST',headers={'Authorization':'Bearer '+APPROVAL_TOKEN,'Content-Type':'application/json','Accept':'application/json'})
+    try:
+        with urllib.request.urlopen(request,timeout=10) as response:return json.load(response)
+    except urllib.error.HTTPError as error:
+        try:data=json.load(error)
+        except Exception:data={}
+        raise ValueError(str(data.get('error') or 'approval_create_failed')) from error
+
 def workspace_broker_post(path,payload,timeout=120):
     raw=json.dumps(payload,ensure_ascii=False,separators=(',',':')).encode()
     req=urllib.request.Request(WORKSPACE_URL+path,data=raw,method='POST',headers={'Authorization':'Bearer '+WORKSPACE_TOKEN,'Content-Type':'application/json','Accept':'application/json'})
@@ -862,6 +928,7 @@ def homologation_call(path,payload,timeout=300):
   return e.code,b
 
 SCOPE_BY_TOOL={
+ 'project.environment.list':'project:environment-read','project.environment.get':'project:environment-read','project.environment.validate':'project:environment-plan','project.environment.change.plan':'project:environment-plan','approval.request-environment-change':'approval:request-environment-change','project.environment.change.execute':'project:environment-execute','project.environment.promote.plan':'project:environment-plan','approval.request-environment-promotion':'approval:request-environment-promotion','project.environment.promote.execute':'project:environment-promote','project.environment.history':'project:environment-read',
  'runtime.catalog':'project:read','runtime.detect':'project:read','runtime.plan':'project:read','runtime.validate':'project:read','project.technologies.detect':'workspace:detect-multiservice','project.manifest.validate':'project:configuration-read','project.configuration.get':'project:configuration-read','build.plan':'project:read','project.toolchain.plan':'build:multiservice-plan','build.multiservice.plan':'build:multiservice-plan','build.multiservice.status':'build:multiservice-plan','approval.request-multiservice-build':'approval:request-multiservice-build','build.multiservice.execute':'build:multiservice-execute','preview.multiservice.plan':'preview:multiservice-plan','preview.multiservice.status':'preview:multiservice-plan','approval.request-multiservice-preview':'approval:request-multiservice-preview','preview.multiservice.create':'preview:multiservice-execute','preview.multiservice.delete':'preview:multiservice-delete','build.request':'workspace:test-static','build.status':'project:read','build.logs.read':'project:read','build.artifact.get':'project:read','deployment.multiservice.plan':'deployment:multiservice-plan','deployment.multiservice.status':'deployment:multiservice-plan','approval.request-multiservice-deployment':'approval:request-multiservice-deployment','deployment.multiservice.execute':'deployment:multiservice-execute','deployment.preview.plan':'project:read','deployment.preview.status':'project:read','approval.request-preview':'approval:request-preview','deployment.preview':'deployment:preview',
  'workspace.probe':'workspace:probe','workspace.prepare':'workspace:prepare','workspace.validate':'workspace:validate','workspace.test-static':'workspace:test-static','workspace.preview-static':'workspace:preview-static','workspace.edit-preview':'workspace:edit-preview',
  'forgejo.propose-edit':'forgejo:propose-edit','forgejo.propose-edit.plan':'forgejo:plan-edit','approval.request-proposal':'approval:request-proposal','workspace.normalize.plan':'workspace:change-set-plan','workspace.change-set.validate':'workspace:change-set-plan','forgejo.proposal.change-set.plan':'workspace:change-set-plan','approval.request-change-set-proposal':'approval:request-change-set','forgejo.proposal.change-set.create':'forgejo:propose-change-set','approval.get':'approval:read-own','forgejo.proposal.list':'forgejo:proposal-read','forgejo.proposal.close':'forgejo:proposal-close','forgejo.proposal.delete-branch':'forgejo:proposal-delete-branch','forgejo.proposal.merge.plan':'forgejo:proposal-merge-plan','approval.request-merge':'approval:request-merge','forgejo.proposal.merge':'forgejo:proposal-merge',
@@ -1090,6 +1157,7 @@ class H(BaseHTTPRequestHandler):
             scope=SCOPE_BY_TOOL.get(tool,'project:read')
             trace_id=self.headers.get('X-CloudIF-Trace-Id') or uuid.uuid4().hex
             authz=self.authorize_client(scope,slug)
+            client_id=self.headers.get('X-CloudIF-Client','').strip() or 'internal'
             if not authz.get('ok'):
                 reason=authz.get('reason','denied');self.sendj(429 if reason in {'rate_limit','daily_quota'} else 403,{'jsonrpc':'2.0','id':rid,'error':{'code':-32029 if reason in {'rate_limit','daily_quota'} else -32003,'message':reason}});return
             self._audit_ctx={'event_id':uuid.uuid4().hex,'source':'mcp','action':str(tool or method or 'unknown'),'actor_type':'agent' if self.headers.get('X-CloudIF-Client') else 'api_client','actor_id':self.headers.get('X-CloudIF-User','') or authz.get('owner_user',''),'delegated_user_id':self.headers.get('X-CloudIF-Delegated-User',''),'client_id':self.headers.get('X-CloudIF-Client','internal'),'project_slug':slug,'trace_id':trace_id,'attrs':{'rpc_method':method,'quota':{'minute_calls':authz.get('minute_calls'),'daily_calls':authz.get('daily_calls')}},'_start':time.monotonic()}
@@ -1130,6 +1198,106 @@ class H(BaseHTTPRequestHandler):
                         code,configured=project_config_call('GET','/v1/projects/'+urllib.parse.quote(slug,safe='')+'/configuration')
                         if code not in {200,404}:raise ValueError('Falha ao consultar a configuração efetiva do projeto.')
                         content=configured
+                elif name in {'project.environment.list','project.environment.get','project.environment.validate','project.environment.change.plan','project.environment.promote.plan','project.environment.history'}:
+                    args,input_normalization=_unwrap_tool_arguments(args)
+                    slug=str(args.get('slug') or '').strip();control('/v1/projects/'+urllib.parse.quote(slug,safe=''))
+                    if not slug:raise ValueError('O campo slug é obrigatório.')
+                    if name=='project.environment.list':
+                        allowed={'slug','environment','service','include_public_values'}
+                        if not set(args).issubset(allowed):raise ValueError('Campos permitidos: slug, environment, service e include_public_values.')
+                        query={}
+                        if args.get('environment'):query['environment']=str(args['environment'])
+                        if args.get('service'):query['service']=str(args['service'])
+                        if args.get('include_public_values'):query['includeValues']='true'
+                        code,data=project_environment_call('GET',slug,query=query)
+                        if code!=200 or not data.get('ok'):raise ValueError(str((data.get('error') or {}).get('message') or 'Falha ao listar variáveis.'))
+                        data['input_normalization']={'wrappersRemoved':input_normalization};content=data
+                    elif name=='project.environment.get':
+                        required={'slug','environment','name'};allowed=required|{'service','include_public_value'}
+                        if not required.issubset(args) or not set(args).issubset(allowed):raise ValueError('slug, environment e name são obrigatórios.')
+                        query={'environment':str(args['environment'])}
+                        if args.get('service'):query['service']=str(args['service'])
+                        if args.get('include_public_value'):query['includeValues']='true'
+                        code,data=project_environment_call('GET',slug,query=query)
+                        if code!=200 or not data.get('ok'):raise ValueError(str((data.get('error') or {}).get('message') or 'Falha ao consultar variável.'))
+                        target=next((item for item in data.get('entries') or [] if item.get('name')==str(args['name']).strip().upper() and item.get('service','')==str(args.get('service') or '')),None)
+                        if not target:raise ValueError('Variável não encontrada no escopo informado.')
+                        content={'ok':True,'projectSlug':slug,'entry':target,'revision':data.get('revision'),'environmentDigest':data.get('environmentDigest'),'secretValuesIncluded':False}
+                    elif name=='project.environment.history':
+                        if not set(args).issubset({'slug','limit'}):raise ValueError('Campos permitidos: slug e limit.')
+                        code,data=project_environment_call('GET',slug,'/history',query={'limit':int(args.get('limit') or 100)})
+                        if code!=200 or not data.get('ok'):raise ValueError('Falha ao consultar histórico de ambiente.')
+                        content=data
+                    elif name=='project.environment.validate':
+                        required={'slug','environment','changes'}
+                        if set(args)!=required:raise ValueError('slug, environment e changes são obrigatórios.')
+                        payload={'environment':args['environment'],'changes':args['changes'],'actor':supabase_actor_user(authz) or client_id}
+                        code,data=project_environment_call('POST',slug,'/validate',payload)
+                        if code!=200 or not data.get('ok'):raise ValueError(str((data.get('error') or {}).get('message') or (data.get('error') or {}).get('code') or 'Validação de ambiente falhou.'))
+                        content=data
+                    elif name=='project.environment.change.plan':
+                        required={'slug','environment','changes','expected_revision'};allowed=required|{'ttl_seconds'}
+                        if not required.issubset(args) or not set(args).issubset(allowed):raise ValueError('slug, environment, changes e expected_revision são obrigatórios.')
+                        payload={'environment':args['environment'],'changes':args['changes'],'expectedRevision':int(args['expected_revision']),'ttlSeconds':int(args.get('ttl_seconds') or 900),'actor':supabase_actor_user(authz) or client_id}
+                        code,data=project_environment_call('POST',slug,'/change/plan',payload)
+                        if code!=200 or not data.get('ok'):raise ValueError(str((data.get('error') or {}).get('message') or (data.get('error') or {}).get('code') or 'Plano de ambiente falhou.'))
+                        content=data
+                    else:
+                        required={'slug','source_environment','target_environment','expected_revision'};allowed=required|{'service','ttl_seconds'}
+                        if not required.issubset(args) or not set(args).issubset(allowed):raise ValueError('slug, source_environment, target_environment e expected_revision são obrigatórios.')
+                        payload={'sourceEnvironment':args['source_environment'],'targetEnvironment':args['target_environment'],'service':str(args.get('service') or ''),'expectedRevision':int(args['expected_revision']),'ttlSeconds':int(args.get('ttl_seconds') or 900),'actor':supabase_actor_user(authz) or client_id}
+                        code,data=project_environment_call('POST',slug,'/promote/plan',payload)
+                        if code!=200 or not data.get('ok'):raise ValueError(str((data.get('error') or {}).get('message') or (data.get('error') or {}).get('code') or 'Plano de promoção falhou.'))
+                        content=data
+                elif name in {'approval.request-environment-change','approval.request-environment-promotion'}:
+                    args,_wrappers=_unwrap_tool_arguments(args);required={'slug','plan_digest','reason'};allowed=required|{'ttl_seconds'}
+                    if not required.issubset(args) or not set(args).issubset(allowed):raise ValueError('slug, plan_digest e reason são obrigatórios.')
+                    client_id=self.headers.get('X-CloudIF-Client','').strip()
+                    if not client_id:raise ValueError('identified_client_required')
+                    slug=str(args['slug']).strip();plan_digest_value=str(args['plan_digest']).strip().lower();reason=str(args['reason']).strip();ttl=int(args.get('ttl_seconds') or 900)
+                    control('/v1/projects/'+urllib.parse.quote(slug,safe=''))
+                    if not re.fullmatch(r'[a-f0-9]{64}',plan_digest_value) or not 4<=len(reason)<=500 or not 60<=ttl<=86400:raise ValueError('plan_digest, reason ou ttl_seconds incompatível.')
+                    plan=environment_plan_get(slug,plan_digest_value)
+                    expected_action='promotion' if name.endswith('promotion') else 'change'
+                    if plan.get('action')!=expected_action:raise ValueError('environment_plan_action_mismatch')
+                    if plan.get('consumed') or int(plan.get('expiresAt') or 0)<=int(time.time()):raise ValueError('environment_plan_unavailable')
+                    created=environment_approval_create(slug,client_id,authz,plan,reason,ttl,trace_id)
+                    if not created.get('ok') or created.get('status')!='pending':raise ValueError('approval_create_failed')
+                    content={'ok':True,'approval_id':created['approval_id'],'status':'pending','expires_at':created['expires_at'],'project_slug':slug,'plan_digest':plan_digest_value,'environment_action':expected_action,'side_effects':False,'content_stored_in_approval':False,'secret_values_in_metadata':False}
+                elif name in {'project.environment.change.execute','project.environment.promote.execute'}:
+                    args,_wrappers=_unwrap_tool_arguments(args);required={'slug','plan_digest','approval_id'}
+                    if set(args)!=required:raise ValueError('slug, plan_digest e approval_id são obrigatórios.')
+                    client_id=self.headers.get('X-CloudIF-Client','').strip()
+                    if not client_id:raise ValueError('identified_client_required')
+                    slug=str(args['slug']).strip();plan_digest_value=str(args['plan_digest']).strip().lower();approval_id=str(args['approval_id']).strip()
+                    control('/v1/projects/'+urllib.parse.quote(slug,safe=''))
+                    plan=environment_plan_get(slug,plan_digest_value)
+                    expected_action='promotion' if name=='project.environment.promote.execute' else 'change'
+                    if plan.get('action')!=expected_action:raise ValueError('environment_plan_action_mismatch')
+                    approval=approval_get(approval_id)
+                    if not approval:raise ValueError('approval_not_found')
+                    try:metadata=json.loads(approval.get('metadata_json') or '{}')
+                    except Exception:raise ValueError('approval_metadata_invalid')
+                    approval_action='project.environment.promotion' if expected_action=='promotion' else 'project.environment.change'
+                    reservation_id,execution_id=transaction_ids(approval_action,approval_id,client_id,plan_digest_value)
+                    valid_status=bool(approval.get('status')=='approved' or (approval.get('status') in {'reserved','consumed'} and approval.get('reservation_id')==reservation_id))
+                    valid=bool(valid_status and approval.get('project_slug')==slug and approval.get('action')==approval_action and approval.get('requested_by')==client_id and approval.get('approved_by') and hmac.compare_digest(str(metadata.get('environment_plan_digest') or ''),plan_digest_value) and metadata.get('environment_action')==expected_action and int(metadata.get('expected_revision') or 0)==int(plan.get('expectedRevision') or 0) and metadata.get('target_environment')==plan.get('targetEnvironment') and metadata.get('source_environment')==plan.get('sourceEnvironment') and metadata.get('content_stored') is False and metadata.get('secret_values_in_metadata') is False)
+                    if not valid:raise ValueError('approval_binding_mismatch')
+                    if approval.get('status')=='approved':
+                        reserve_code,reserved=approval_transition(approval_id,'reserve',{'reservation_id':reservation_id,'reserved_by':client_id,'ttl_seconds':900})
+                        if reserve_code!=200 or reserved.get('status')!='reserved':raise ValueError('approval_reserve_failed')
+                    path='/promote/apply' if expected_action=='promotion' else '/change/apply'
+                    payload={'planDigest':plan_digest_value,'expectedRevision':int(plan['expectedRevision']),'approved':True,'actor':supabase_actor_user(authz) or client_id,'executionId':execution_id}
+                    code,data=project_environment_call('POST',slug,path,payload)
+                    current=approval_get(approval_id)
+                    if code==200 and data.get('ok'):
+                        if current and current.get('status')!='consumed':
+                            final_code,finalized=approval_transition(approval_id,'finalize',{'reservation_id':reservation_id,'result':'success'})
+                            if final_code!=200 or finalized.get('status')!='consumed':raise ValueError('approval_finalize_failed')
+                        data['transaction']={'approval_id':approval_id,'reservation_id':reservation_id,'execution_id':execution_id,'approval_status':'consumed'};data['secretValuesIncluded']=False;content=data
+                    else:
+                        if current and current.get('status')=='reserved':approval_transition(approval_id,'release',{'reservation_id':reservation_id})
+                        error=data.get('error') or {};raise ValueError(str(error.get('message') if isinstance(error,dict) else error or 'environment_apply_failed'))
                 elif name=='runtime.catalog':
                     if args:raise ValueError('argumentos inválidos')
                     content=runtime_call('/v1/catalog')
