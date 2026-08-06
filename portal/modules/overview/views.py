@@ -118,7 +118,7 @@ def overview_body(data: dict) -> str:
     if resources["can_view_others"]:
         others = (
             '<div class="other-resources">'
-            f'<a href="{BASE}/?tab=publicacao" class="other-link"><span>Sites de outros usuários</span><b>{resources["other_sites"]}</b></a>'
+            f'<a href="{BASE}/?tab=publicacao&amp;scope=others#other-user-sites" class="other-link"><span>Sites de outros usuários</span><b>{resources["other_sites"]}</b></a>'
             f'<a href="{BASE}/?tab=bancos" class="other-link"><span>Bancos de outros usuários</span><b>{resources["other_databases"]}</b></a>'
             '</div>'
         )

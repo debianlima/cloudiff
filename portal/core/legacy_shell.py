@@ -240,7 +240,7 @@ def _card_spans(body: str, class_token: str) -> list[tuple[int, int, str]]:
     return spans
 
 
-def _group_cards(body: str, class_token: str, owner_for_card, current_user: str, kind: str, own_label: str = "") -> str:
+def _group_cards(body: str, class_token: str, owner_for_card, current_user: str, kind: str, own_label: str = "", resource_scope: str = "") -> str:
     spans = _card_spans(body, class_token)
     if not spans:
         return body
@@ -250,8 +250,10 @@ def _group_cards(body: str, class_token: str, owner_for_card, current_user: str,
         grouped.setdefault(owner, []).append(card)
     blocks: list[str] = []
     ordered = sorted(grouped.items(), key=lambda item: (item[0] != current_user, (item[0] or "~").lower()))
+    if resource_scope == "others":
+        ordered = [(owner, cards) for owner, cards in ordered if owner != current_user]
     for owner, cards in ordered:
-        opened = " open" if owner == current_user else ""
+        opened = " open" if (owner != current_user if resource_scope == "others" else owner == current_user) else ""
         label = escape(_group_label(owner, current_user, own_label))
         count = len(cards)
         if kind == "site":
@@ -265,7 +267,9 @@ def _group_cards(body: str, class_token: str, owner_for_card, current_user: str,
             f'<summary><span>{label}</span><span class="owner-resource-count">{count} {noun}</span></summary>'
             f'<div class="owner-resource-items">{"".join(cards)}</div></details>'
         )
-    return body[: spans[0][0]] + '<div class="owner-resource-groups">' + "".join(blocks) + '</div>' + body[spans[-1][1] :]
+    group_id = ' id="other-user-sites"' if kind == "site" and resource_scope == "others" else ""
+    empty = '<div class="resource-empty"><h3>Nenhum site de outro usuário</h3><p>Não existem publicações de outros proprietários disponíveis para esta sessão.</p></div>' if kind == "site" and resource_scope == "others" and not blocks else ""
+    return body[: spans[0][0]] + f'<div class="owner-resource-groups"{group_id}>' + ("".join(blocks) or empty) + '</div>' + body[spans[-1][1] :]
 
 
 def filter_publication_project(body: str, selected_project: str) -> str:
@@ -348,7 +352,7 @@ def individual_publication_body(body: str, selected_project: str) -> str:
     return body
 
 
-def group_resources_by_user(body: str, tab: str, identity: Identity, selected_project: str = "") -> str:
+def group_resources_by_user(body: str, tab: str, identity: Identity, selected_project: str = "", resource_scope: str = "") -> str:
     """Group only general publication/database screens; the overview is untouched."""
     if tab not in {"publicacao", "bancos"}:
         return body
@@ -361,7 +365,7 @@ def group_resources_by_user(body: str, tab: str, identity: Identity, selected_pr
         def publication_owner(card: str) -> str:
             slug = next((item for item in slugs if item in card), "")
             return project_owners.get(slug, "")
-        return _group_cards(body, "publication-project", publication_owner, identity.username, "site", "Meus sites")
+        return _group_cards(body, "publication-project", publication_owner, identity.username, "site", "Meus sites", resource_scope)
 
     def mark_database(match: re.Match[str]) -> str:
         opening = match.group(0)
@@ -384,10 +388,10 @@ def group_resources_by_user(body: str, tab: str, identity: Identity, selected_pr
         f'data-current-user="{escape(identity.username)}">{marked}</div>'
     )
 
-def transform(markup: str, identity: Identity, tab: str, selected_project: str = "") -> str:
+def transform(markup: str, identity: Identity, tab: str, selected_project: str = "", resource_scope: str = "") -> str:
     page = parse_legacy(markup, tab)
     if page.tab == "publicacao":
-        body = individual_publication_body(page.body, selected_project) if selected_project else page.body
+        body = individual_publication_body(page.body, selected_project) if selected_project else group_resources_by_user(page.body, page.tab, identity, "", resource_scope)
         return render_legacy(
             identity=identity,
             active_tab=page.tab,

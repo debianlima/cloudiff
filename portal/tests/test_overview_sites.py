@@ -55,6 +55,15 @@ class OverviewSiteCardTest(unittest.TestCase):
         self.assertEqual([item["tenant"] for item in resources["databases"]], ["iff1742962"])
         self.assertEqual(resources["other_databases"], 1)
 
+    def test_other_sites_card_opens_filtered_publication_scope(self):
+        from portal.modules.overview.views import overview_body
+        data = {
+            "username": "admin", "metrics": {"nodes": [], "fmt": lambda _v: "0 B", "fmt_rate": lambda _v: "0 B/s", "online_count": 0, "node_count": 0},
+            "resources": {"sites": [], "databases": [], "can_view_others": True, "other_sites": 2, "other_databases": 1},
+        }
+        markup = overview_body(data)
+        self.assertIn('/cloudiff/portal/?tab=publicacao&amp;scope=others#other-user-sites', markup)
+
     def test_sites_page_uses_canonical_empty_state(self):
         markup = sites_body({"resources": {"sites": []}})
         self.assertIn("Meus sites", markup)

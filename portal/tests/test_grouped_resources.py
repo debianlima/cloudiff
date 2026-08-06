@@ -25,6 +25,24 @@ class GroupedResourcesTest(unittest.TestCase):
         self.assertEqual(output.count('publication-project card'), 2)
 
     @patch("portal.core.legacy_shell._resource_ownership")
+    def test_other_sites_scope_filters_current_user_and_opens_other_groups(self, ownership):
+        ownership.return_value = ({"site-a": "alice", "site-b": "bob", "site-c": "carol"}, {})
+        body = (
+            '<div class="publication-shell">'
+            '<article class="publication-project card"><h2>site-a</h2></article>'
+            '<article class="publication-project card"><h2>site-b</h2></article>'
+            '<article class="publication-project card"><h2>site-c</h2></article>'
+            '</div>'
+        )
+        output = group_resources_by_user(body, "publicacao", self.identity, resource_scope="others")
+        self.assertIn('id="other-user-sites"', output)
+        self.assertNotIn('<h2>site-a</h2>', output)
+        self.assertIn('<h2>site-b</h2>', output)
+        self.assertIn('<h2>site-c</h2>', output)
+        self.assertIn('<span>bob</span>', output)
+        self.assertIn('class="owner-resource-group" open', output)
+
+    @patch("portal.core.legacy_shell._resource_ownership")
     def test_databases_without_owner_are_not_misattributed(self, ownership):
         ownership.return_value = ({}, {"alice-db": "alice"})
         body = (
@@ -37,6 +55,24 @@ class GroupedResourcesTest(unittest.TestCase):
         self.assertIn('data-tenant="orphan-db" data-resource-owner=""', output)
         self.assertEqual(output.count('db96-card'), 2)
         self.assertIn('<article class="nested">inner</article>', output)
+
+    @patch("portal.core.legacy_shell._resource_ownership")
+    def test_full_publication_transform_applies_other_user_scope(self, ownership):
+        from portal.core.legacy_shell import transform
+        ownership.return_value = ({"site-a": "alice", "site-b": "bob"}, {})
+        markup = (
+            '<html><head><title>Publicações</title></head><body>'
+            '<main id="conteudo-principal">'
+            '<section class="publication-shell">'
+            '<article class="publication-project card"><h2>site-a</h2></article>'
+            '<article class="publication-project card"><h2>site-b</h2></article>'
+            '</section></main></body></html>'
+        )
+        output = transform(markup, self.identity, "publicacao", resource_scope="others")
+        self.assertIn('id="other-user-sites"', output)
+        self.assertIn('<h2>site-b</h2>', output)
+        self.assertNotIn('<h2>site-a</h2>', output)
+        self.assertIn('data-legacy-tab="publicacao"', output)
 
     def test_other_tabs_remain_untouched(self):
         body = '<article class="publication-project card">site-a</article>'

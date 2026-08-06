@@ -601,12 +601,6 @@ def _install() -> None:
                     body = '<section class="overview-canonical"><div class="section-title"><div><h1>Visão geral</h1><p>Projetos, bancos, perfil e infraestrutura autorizados para sua sessão.</p></div></div>' + getattr(owner, "render_resumo")(self.user()) + '</section>'
                     markup = render_legacy(identity(self.headers), "resumo", "Visão geral", body, "", "")
                     return send(self, 200, "text/html; charset=utf-8", markup.encode("utf-8"))
-                if path in PORTAL_PATHS and tab == "publicacao" and not (query.get("project") or [""])[0].strip():
-                    from portal.modules.overview import service as overview_service, views as overview_views
-                    data = overview_service.overview_data(identity(self.headers))
-                    body = overview_views.overview_body(data)
-                    markup = render_legacy(identity(self.headers), "publicacao", "Publicações", body, "", "")
-                    return send(self, 200, "text/html; charset=utf-8", markup.encode("utf-8"))
                 if path in PORTAL_PATHS and tab == "admin-manutencao":
                     if not tenant_admin_allowed(self):
                         denied = render_legacy(identity(self.headers), tab, "Serviços globais", '<section class="card"><h1>Acesso negado</h1></section>', "", "")
@@ -641,8 +635,9 @@ def _install() -> None:
                         try:
                             markup = body.decode("utf-8")
                             selected_project = (query.get("project") or [""])[0]
+                            resource_scope = (query.get("scope") or [""])[0].strip().lower()
                             owner = sys.modules.get(handler_class.__module__)
-                            adapted_markup = transform(markup, identity(self.headers), tab or "publicacao", selected_project)
+                            adapted_markup = transform(markup, identity(self.headers), tab or "publicacao", selected_project, resource_scope)
                             if tab == "admin" and tenant_admin_allowed(self):
                                 from cloudif_admin_tenant_delete import render_panel
                                 owner = sys.modules.get(handler_class.__module__)
