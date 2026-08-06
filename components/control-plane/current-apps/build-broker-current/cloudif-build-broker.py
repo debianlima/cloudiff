@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import hashlib,json,os,re,sqlite3,sys,time,urllib.request,urllib.error,uuid,hmac
+import hashlib,json,os,re,sqlite3,sys,time,urllib.request,urllib.error,urllib.parse,uuid,hmac,secrets,threading
 from http.server import BaseHTTPRequestHandler,ThreadingHTTPServer
 DB=os.environ.get('CLOUDIF_BUILD_DB','/var/lib/cloudif/build-broker/builds.sqlite3')
 TOKEN=os.environ.get('CLOUDIF_BUILD_TOKEN','')
@@ -8,6 +8,12 @@ ATTEST_KEY=os.environ.get('CLOUDIF_BUILD_ATTESTATION_KEY','').encode()
 RUNTIME_URL=os.environ.get('CLOUDIF_RUNTIME_URL','http://127.0.0.1:18212').rstrip('/')
 WORKSPACE_URL=os.environ.get('CLOUDIF_WORKSPACE_URL','http://127.0.0.1:18206').rstrip('/')
 WORKSPACE_TOKEN=os.environ.get('CLOUDIF_WORKSPACE_TOKEN','')
+PROJECT_CONFIG_URL=os.environ.get('CLOUDIF_PROJECT_CONFIG_URL','http://127.0.0.1:18219').rstrip('/')
+PROJECT_CONFIG_TOKEN=os.environ.get('CLOUDIF_PROJECT_CONFIG_TOKEN','')
+MULTISERVICE_WORKER_INTERVAL=int(os.environ.get('CLOUDIF_MULTISERVICE_BUILD_INTERVAL','2'))
+STATIC_BASE='cgr.dev/chainguard/nginx@sha256:d36a7338ffc140bc1e3cd85e2eb9d3419cf8b03b848a2f26cc99db157f1f505d'
+NODE24_BUILDER='node@sha256:a0b9bf06e4e6193cf7a0f58816cc935ff8c2a908f81e6f1a95432d679c54fbfd'
+NODE24_RUNTIME='gcr.io/distroless/nodejs24-debian12@sha256:6afed2f0373317ea4c66843fc7f1d4b4c88ef3e97254b2c5925793c2beb72809'
 ARTIFACT_URL=os.environ.get('CLOUDIF_ARTIFACT_EXECUTOR_URL','http://10.62.91.3').rstrip('/')
 ARTIFACT_TOKEN=os.environ.get('CLOUDIF_ARTIFACT_EXECUTOR_TOKEN','')
 HOST=os.environ.get('CLOUDIF_BUILD_HOST','127.0.0.1'); PORT=int(os.environ.get('CLOUDIF_BUILD_PORT','18213'))
@@ -22,7 +28,12 @@ def db():
  if 'dead_reason' not in cols:c.execute('ALTER TABLE builds ADD COLUMN dead_reason TEXT')
  c.execute('CREATE INDEX IF NOT EXISTS idx_build_due ON builds(status,next_attempt_at,created_at)')
  c.execute('CREATE INDEX IF NOT EXISTS idx_build_project_active ON builds(project_slug,status)')
+ c.execute('''CREATE TABLE IF NOT EXISTS multiservice_jobs(job_id TEXT PRIMARY KEY,idempotency_key TEXT UNIQUE,project_slug TEXT NOT NULL,ref TEXT NOT NULL,config_revision INTEGER NOT NULL,config_digest TEXT NOT NULL,toolchain_digest TEXT NOT NULL,archive_sha256 TEXT NOT NULL,plan_digest TEXT NOT NULL,status TEXT NOT NULL,payload_json TEXT NOT NULL,result_json TEXT NOT NULL DEFAULT '{}',created_at INTEGER NOT NULL,updated_at INTEGER NOT NULL,attempts INTEGER NOT NULL DEFAULT 0,last_error TEXT NOT NULL DEFAULT '')''')
+ c.execute('CREATE INDEX IF NOT EXISTS idx_multiservice_jobs_due ON multiservice_jobs(status,created_at)')
+ c.commit()
  return c
+def init_db():
+ c=db();c.close()
 def sanitize(s):
  s=str(s)[:20000]
  s=re.sub(r'(?i)(authorization|token|password|secret|api[_-]?key)\s*[:=]\s*\S+',r'\1=[redacted]',s)
@@ -100,6 +111,128 @@ def getrow(slug,bid):
  if isinstance(d['result'],dict) and d['result'].get('attestation'):
   d['result']['attestation_verified']=verify_attestation(d['result']['attestation'])
  d.pop('idempotency_key',None); d.pop('lease_until',None); d['retry_scheduled']=d.get('status')=='queued' and int(d.get('attempts') or 0)>0; d['dead_letter']=d.get('status')=='dead_letter'; d['secrets_exposed']=False; return d
+def canonical(value):return json.dumps(value,ensure_ascii=False,sort_keys=True,separators=(',',':')).encode()
+def structured_error(code,message,field='',example=None,allowed=None):
+ error={'code':code,'message':message}
+ if field:error['field']=field
+ if example is not None:error['example']=example
+ if allowed is not None:error['allowedValues']=allowed
+ return error
+def internal_json(method,url,token,payload=None,timeout=90):
+ raw=json.dumps(payload,ensure_ascii=False,separators=(',',':')).encode() if payload is not None else None
+ req=urllib.request.Request(url,data=raw,method=method,headers={'Authorization':'Bearer '+token,'Content-Type':'application/json','Accept':'application/json'})
+ try:
+  with urllib.request.urlopen(req,timeout=timeout) as response:return response.status,json.load(response)
+ except urllib.error.HTTPError as error:
+  try:data=json.load(error)
+  except Exception:data={'ok':False,'error':{'code':'internal_http_error','message':'Falha em serviço interno.'}}
+  return error.code,data
+def project_configuration(slug):
+ code,data=internal_json('GET',PROJECT_CONFIG_URL+'/v1/projects/'+urllib.parse.quote(slug,safe='')+'/configuration',PROJECT_CONFIG_TOKEN,timeout=30)
+ if code!=200 or not data.get('ok'):raise ValueError('configuration_unavailable')
+ return data
+def source_detection(slug,ref,trace):
+ code,data=internal_json('POST',WORKSPACE_URL+'/v1/detect-multiservice',WORKSPACE_TOKEN,{'project_slug':slug,'ref':ref,'trace_id':trace},timeout=180)
+ if code!=200 or not data.get('ok'):
+  error=data.get('error') or {};raise ValueError(str(error.get('code') if isinstance(error,dict) else error or 'source_detection_failed'))
+ return data.get('result') or data
+def multiservice_runtime_policy(runtime,version):
+ runtime=str(runtime or '').lower();version=str(version or '')
+ if runtime=='static':return {'status':'ready','builder':STATIC_BASE,'runtimeImage':STATIC_BASE,'reason':'approved_static_digest'}
+ if runtime=='node' and version=='24':return {'status':'ready','builder':NODE24_BUILDER,'runtimeImage':NODE24_RUNTIME,'reason':'node24_homologated'}
+ if runtime=='node':return {'status':'blocked','reason':'node_version_not_homologated','allowedVersions':['24']}
+ if runtime=='php':return {'status':'blocked','reason':'php_base_failed_security_scan','scannerCounts':{'HIGH':17,'CRITICAL':1}}
+ if runtime in {'docker','compose'}:return {'status':'blocked','reason':'custom_container_policy_not_enabled_in_phase4'}
+ return {'status':'blocked','reason':'runtime_not_supported'}
+def normalize_command(value,field):
+ if value is None or value=='':return None
+ if not isinstance(value,list) or not value or len(value)>32:raise ValueError('invalid_command:'+field)
+ result=[str(item) for item in value]
+ if any(not item or len(item)>512 for item in result):raise ValueError('invalid_command:'+field)
+ return result
+def normalized_multiservice_services(configuration):
+ raw_services=configuration.get('services') or {}
+ if not isinstance(raw_services,dict) or not raw_services:raise ValueError('services_required')
+ if len(raw_services)>16:raise ValueError('service_limit_exceeded')
+ hooks=configuration.get('hooks') or {};services=[]
+ root_children={str(cfg.get('path') or '.').split('/')[0] for cfg in raw_services.values() if isinstance(cfg,dict) and str(cfg.get('path') or '.')!='.'}
+ for name,cfg in raw_services.items():
+  if not isinstance(cfg,dict):raise ValueError('invalid_service:'+str(name))
+  path=str(cfg.get('path') or '.');runtime=str(cfg.get('runtime') or '').lower();version=str(cfg.get('version') or '') or None
+  health=cfg.get('healthcheck');health_path=str(health.get('path') or '') if isinstance(health,dict) else str(health or '')
+  hook_steps=[]
+  for phase in ('preBuild','postBuild'):
+   values=hooks.get(phase) or []
+   if not isinstance(values,list):continue
+   for item in values:
+    if isinstance(item,dict) and str(item.get('service') or '')==str(name) and item.get('script'):
+     hook_steps.append({'phase':phase,'path':str(item['script'])})
+  service={'name':str(name),'path':path,'runtime':runtime,'version':version,
+   'install':normalize_command(cfg.get('install'),f'services.{name}.install'),'build':normalize_command(cfg.get('build'),f'services.{name}.build'),
+   'start':normalize_command(cfg.get('start'),f'services.{name}.start'),'publish':cfg.get('publish'),'port':cfg.get('port'),
+   'healthcheck':health_path or None,'hookSteps':hook_steps,'excludePaths':sorted(root_children) if path=='.' else []}
+  service['policy']=multiservice_runtime_policy(runtime,version)
+  services.append(service)
+ return services
+def reusable_multiservice(plan_digest):
+ c=db();row=c.execute("select job_id,result_json from multiservice_jobs where plan_digest=? and status='succeeded' order by updated_at desc limit 1",(plan_digest,)).fetchone();c.close()
+ if not row:return None
+ return {'job_id':row['job_id'],'result':json.loads(row['result_json'] or '{}')}
+def multiservice_plan(payload):
+ if not isinstance(payload,dict):raise ValueError('invalid_request')
+ slug=str(payload.get('project_slug') or '').strip();ref=str(payload.get('ref') or 'main').strip();expected=int(payload.get('expected_revision') or 0);trace=str(payload.get('trace_id') or 'build-plan')[:128]
+ if not SLUG.fullmatch(slug):raise ValueError('invalid_project_slug')
+ if not REF.fullmatch(ref) or '..' in ref or ref.startswith('/') or ref.endswith('/'):raise ValueError('invalid_ref')
+ config=project_configuration(slug);actual=int(config.get('currentRevision') or 0)
+ if actual<1:raise ValueError('configuration_required')
+ if expected and expected!=actual:raise ValueError('configuration_revision_mismatch')
+ detection=source_detection(slug,ref,trace);archive=str(detection.get('archiveSha256') or '').lower()
+ if not re.fullmatch(r'[a-f0-9]{64}',archive):raise ValueError('archive_digest_missing')
+ services=normalized_multiservice_services(config.get('configuration') or {})
+ blocked=[{'service':item['name'],**item['policy']} for item in services if item['policy']['status']!='ready']
+ material={'project_slug':slug,'ref':ref,'config_revision':actual,'config_digest':config.get('configDigest'),'toolchain_digest':config.get('toolchainDigest'),'archive_sha256':archive,'services':services}
+ plan_digest=hashlib.sha256(canonical(material)).hexdigest();reusable=reusable_multiservice(plan_digest)
+ summary={'projectType':(config.get('configuration') or {}).get('project',{}).get('type') or detection.get('projectType'),'serviceCount':len(services),'componentCount':detection.get('componentCount'),'networkPolicy':'none','scannerPolicy':'block-high-critical','signatureAlgorithm':'Ed25519','secretsIncluded':False}
+ return {'ok':True,'side_effect_free':True,'project_slug':slug,'ref':ref,'config_revision':actual,'config_digest':config.get('configDigest'),'toolchain_digest':config.get('toolchainDigest'),'archive_sha256':archive,'plan_digest':plan_digest,'services':services,'blocked':blocked,'policies':[item['policy'] for item in services],'summary':summary,'approval_required':not blocked and reusable is None,'build_required':reusable is None,'reusable_build':bool(reusable),'reusable':reusable,'secret_values_included':False}
+def artifact_multiservice_build(request):
+ payload={**request,'profile':'multiservice-v1'}
+ code,data=internal_json('POST',ARTIFACT_URL+'/v1/multiservice/build',ARTIFACT_TOKEN,payload,timeout=3600)
+ if code!=200 or not data.get('ok'):
+  error=data.get('error') or {};message=error.get('message') if isinstance(error,dict) else str(error)
+  raise RuntimeError(message or 'multiservice_artifact_failed')
+ return data
+def run_multiservice_job(job_id):
+ c=db();row=c.execute('select * from multiservice_jobs where job_id=?',(job_id,)).fetchone()
+ if not row:c.close();return
+ if row['status'] not in {'queued','running'}:c.close();return
+ c.execute("update multiservice_jobs set status='running',attempts=attempts+1,updated_at=? where job_id=?",(now(),job_id));c.commit();payload=json.loads(row['payload_json']);c.close()
+ try:
+  result=artifact_multiservice_build(payload);status='succeeded'
+  c=db();c.execute('update multiservice_jobs set status=?,result_json=?,last_error=?,updated_at=? where job_id=?',(status,json.dumps(result,ensure_ascii=False,separators=(',',':')),'',now(),job_id));c.commit();c.close()
+ except Exception as exc:
+  c=db();c.execute('update multiservice_jobs set status=?,last_error=?,result_json=?,updated_at=? where job_id=?',('failed',sanitize(str(exc)),json.dumps({'ok':False,'error':{'code':'multiservice_build_failed','message':'O build multissserviço falhou.'},'secrets_exposed':False},separators=(',',':')),now(),job_id));c.commit();c.close()
+def queue_multiservice(payload):
+ if not isinstance(payload,dict):raise ValueError('invalid_request')
+ if payload.get('approved') is not True:raise PermissionError('approval_required')
+ plan=multiservice_plan(payload);provided=str(payload.get('plan_digest') or '').lower()
+ if not hmac.compare_digest(plan['plan_digest'],provided):raise ValueError('plan_digest_mismatch')
+ if plan['blocked']:raise ValueError('runtime_policy_blocked')
+ key=hashlib.sha256((plan['project_slug']+'|'+plan['ref']+'|'+provided).encode()).hexdigest();c=db();row=c.execute('select * from multiservice_jobs where idempotency_key=?',(key,)).fetchone()
+ if row:c.close();return {'ok':True,'job_id':row['job_id'],'status':row['status'],'idempotent':True,'plan_digest':provided}
+ job_id='build_'+secrets.token_hex(12);t=now();request={'job_id':job_id,'project_slug':plan['project_slug'],'ref':plan['ref'],'archive_sha256':plan['archive_sha256'],'config_revision':plan['config_revision'],'config_digest':plan['config_digest'],'toolchain_digest':plan['toolchain_digest'],'plan_digest':provided,'services':plan['services'],'trace_id':str(payload.get('trace_id') or job_id)}
+ c.execute('insert into multiservice_jobs(job_id,idempotency_key,project_slug,ref,config_revision,config_digest,toolchain_digest,archive_sha256,plan_digest,status,payload_json,result_json,created_at,updated_at) values(?,?,?,?,?,?,?,?,?,?,?,?,?,?)',(job_id,key,plan['project_slug'],plan['ref'],plan['config_revision'],plan['config_digest'],plan['toolchain_digest'],plan['archive_sha256'],provided,'queued',json.dumps(request,ensure_ascii=False,separators=(',',':')),'{}',t,t));c.commit();c.close()
+ threading.Thread(target=run_multiservice_job,args=(job_id,),daemon=True).start()
+ return {'ok':True,'job_id':job_id,'status':'queued','idempotent':False,'plan_digest':provided,'config_revision':plan['config_revision'],'archive_sha256':plan['archive_sha256']}
+def multiservice_status(job_id):
+ if not re.fullmatch(r'build_[a-f0-9]{24}',str(job_id or '')):raise ValueError('invalid_job_id')
+ c=db();row=c.execute('select * from multiservice_jobs where job_id=?',(job_id,)).fetchone();c.close()
+ if not row:raise LookupError('build_not_found')
+ result=json.loads(row['result_json'] or '{}');payload={'project_slug':row['project_slug'],'ref':row['ref'],'config_revision':row['config_revision'],'config_digest':row['config_digest'],'toolchain_digest':row['toolchain_digest'],'archive_sha256':row['archive_sha256'],'plan_digest':row['plan_digest']}
+ return {'ok':True,'job_id':job_id,'status':row['status'],'attempts':row['attempts'],'created_at':row['created_at'],'updated_at':row['updated_at'],'payload':payload,'result':result,'error':row['last_error'] or None,'secrets_exposed':False}
+def recover_multiservice_jobs():
+ c=db();rows=c.execute("select job_id from multiservice_jobs where status in ('queued','running') order by created_at").fetchall();c.execute("update multiservice_jobs set status='queued' where status='running'");c.commit();c.close()
+ for row in rows:threading.Thread(target=run_multiservice_job,args=(row['job_id'],),daemon=True).start()
+
 class H(BaseHTTPRequestHandler):
  def log_message(self,*a):pass
  def sendj(self,n,x):
@@ -107,6 +240,11 @@ class H(BaseHTTPRequestHandler):
  def do_GET(self):
   if self.path=='/health': return self.sendj(200,{'ok':True,'service':'build-broker','queue':'sqlite-wal','production_ready':False,'secrets_exposed':False})
   if not auth(self.headers): return self.sendj(401,{'ok':False,'error':'unauthorized'})
+  mm=re.fullmatch(r'/v1/multiservice/jobs/(build_[a-f0-9]{24})',self.path)
+  if mm:
+   try:return self.sendj(200,multiservice_status(mm.group(1)))
+   except LookupError:return self.sendj(404,{'ok':False,'error':{'code':'build_not_found','message':'Build não encontrado.'}})
+   except ValueError as error:return self.sendj(400,{'ok':False,'error':{'code':str(error),'message':'job_id inválido.'}})
   m=re.fullmatch(r'/v1/projects/([a-z0-9][a-z0-9-]{0,62})/builds/([0-9a-f-]+)(/logs|/artifact)?',self.path)
   if not m:return self.sendj(404,{'ok':False,'error':'not_found'})
   r=getrow(m.group(1),m.group(2))
@@ -122,10 +260,22 @@ class H(BaseHTTPRequestHandler):
   try:a=json.loads(self.rfile.read(int(self.headers.get('Content-Length','0'))) or b'{}')
   except Exception:return self.sendj(400,{'ok':False,'error':'invalid_json'})
   try:
+   if self.path=='/v1/plan':
+    framework=str(a.get('framework') or '')
+    data=json.dumps({'framework':framework},separators=(',',':')).encode()
+    request=urllib.request.Request(RUNTIME_URL+'/v1/plan',data=data,method='POST',headers={'Content-Type':'application/json','Accept':'application/json'})
+    with urllib.request.urlopen(request,timeout=15) as response:return self.sendj(200,json.load(response))
+   if self.path=='/v1/execute':
+    r=reserve(a);return self.sendj(202,{'ok':True,'phase':'reserve','build_id':r['id'],'status':r['status'],'idempotent':True,'secrets_exposed':False})
    if self.path=='/v1/builds':
     r=reserve(a); return self.sendj(202,{'ok':True,'phase':'reserve','build_id':r['id'],'status':r['status'],'idempotent':True,'secrets_exposed':False})
+   if self.path=='/v1/multiservice/plan':return self.sendj(200,multiservice_plan(a))
+   if self.path=='/v1/multiservice/execute':return self.sendj(202,queue_multiservice(a))
    return self.sendj(404,{'ok':False,'error':'not_found'})
-  except ValueError as e:return self.sendj(400,{'ok':False,'error':str(e)})
+  except PermissionError as e:return self.sendj(403,{'ok':False,'error':{'code':str(e),'message':'Aprovação humana obrigatória.'}})
+  except LookupError as e:return self.sendj(404,{'ok':False,'error':{'code':str(e),'message':'Recurso não encontrado.'}})
+  except ValueError as e:return self.sendj(422,{'ok':False,'error':{'code':str(e),'message':'A solicitação contém campos ausentes ou incompatíveis.'}})
 if __name__=='__main__':
+ init_db();recover_multiservice_jobs()
  if len(sys.argv)>1 and sys.argv[1]=='drain': print(json.dumps(drain_one()))
  else: ThreadingHTTPServer((HOST,PORT),H).serve_forever()

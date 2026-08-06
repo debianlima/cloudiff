@@ -1,0 +1,55 @@
+[Unit]
+Description=CloudIFF multiservice preview executor
+After=network-online.target docker.service cloudif-artifact-executor.service
+Wants=network-online.target
+Requires=docker.service cloudif-artifact-executor.service
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+User=root
+Group=root
+SupplementaryGroups=docker
+EnvironmentFile=/etc/cloudif/multiservice-preview-executor.env
+Environment=CLOUDIF_MULTISERVICE_PREVIEW_EXECUTOR_HOST=10.62.91.2
+Environment=CLOUDIF_MULTISERVICE_PREVIEW_EXECUTOR_PORT=18227
+Environment=CLOUDIF_PREVIEW_EXECUTOR_DB=/var/lib/cloudif/multiservice-preview-executor/previews.db
+ExecStart=/usr/bin/python3 /srv/cloudif/app-pointers/multiservice-preview-executor-current/cloudif-multiservice-preview-executor.py
+Restart=on-failure
+RestartSec=3
+TimeoutStartSec=30s
+TimeoutStopSec=30s
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadOnlyPaths=/srv/cloudif/app-releases/multiservice-preview-executor /srv/cloudif/app-pointers
+ReadWritePaths=/var/lib/cloudif/multiservice-preview-executor
+PrivateDevices=true
+ProtectClock=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+ProtectHostname=true
+ProtectProc=invisible
+ProcSubset=pid
+RestrictNamespaces=true
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+RestrictRealtime=true
+SystemCallArchitectures=native
+RestrictAddressFamilies=AF_INET AF_UNIX
+CapabilityBoundingSet=
+AmbientCapabilities=
+RemoveIPC=true
+UMask=0077
+IPAddressAllow=127.0.0.0/8
+IPAddressAllow=10.0.0.0/8
+IPAddressAllow=172.16.0.0/12
+IPAddressAllow=192.168.0.0/16
+IPAddressDeny=any
+
+[Install]
+WantedBy=multi-user.target

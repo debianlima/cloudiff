@@ -46,6 +46,7 @@ def _install() -> None:
     from portal.ui.shell import render_legacy
     from portal.registry import registry
     from portal.wiring import install as wire
+    from cloudif_multiservice_preview_portal import handle_preview_request
 
     if not registry.routes():
         wire()
@@ -495,6 +496,8 @@ def _install() -> None:
         previous_get = handler_class.do_GET
 
         def do_GET(self):
+            if handle_preview_request(self):
+                return
             parsed = urllib.parse.urlparse(self.path)
             path = parsed.path
             route_query = urllib.parse.parse_qs(parsed.query)
@@ -666,6 +669,8 @@ def _install() -> None:
         previous_post = getattr(handler_class, "do_POST", None)
         if previous_post is not None:
             def do_POST(self):
+                if handle_preview_request(self):
+                    return
                 parsed = urllib.parse.urlparse(self.path)
                 query_action = (self.headers.get("X-CloudIF-Action") or (urllib.parse.parse_qs(parsed.query).get("action") or [""])[0]).strip()
                 query_routed = parsed.path in PORTAL_PATHS and query_action in {
@@ -827,6 +832,16 @@ def _install() -> None:
                     return previous_post(self)
 
             handler_class.do_POST = do_POST
+
+        for method_name in ('do_HEAD','do_PUT','do_PATCH','do_DELETE'):
+            previous_method=getattr(handler_class,method_name,None)
+            if previous_method is None:
+                continue
+            def preview_method(self,_previous=previous_method):
+                if handle_preview_request(self):
+                    return
+                return _previous(self)
+            setattr(handler_class,method_name,preview_method)
 
         handler_class._v2_coexist_wrapped = True
 

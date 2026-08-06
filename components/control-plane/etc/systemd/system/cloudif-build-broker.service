@@ -1,11 +1,14 @@
 [Unit]
 Description=CloudIF durable build queue broker
-After=network.target cloudif-workspace-broker.service
+After=network.target cloudif-workspace-broker.service cloudif-project-config-controller.service
+Requires=cloudif-workspace-broker.service cloudif-project-config-controller.service
 [Service]
 Type=simple
 User=cloudif-control
 Group=cloudif-control
 EnvironmentFile=/etc/cloudif/build-broker.env
+EnvironmentFile=/etc/cloudif/project-config-controller.env
+EnvironmentFile=/etc/cloudif/workspace-broker.env
 ExecStart=/usr/bin/python3 /srv/cloudif/app-pointers/build-broker-current/cloudif-build-broker.py
 Restart=on-failure
 NoNewPrivileges=true

@@ -1,0 +1,56 @@
+[Unit]
+Description=CloudIFF multiservice preview broker
+After=network-online.target cloudif-build-broker.service
+Wants=network-online.target
+Requires=cloudif-build-broker.service
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+User=root
+Group=root
+EnvironmentFile=/etc/cloudif/multiservice-preview.env
+EnvironmentFile=/etc/cloudif/build-broker.env
+Environment=CLOUDIF_MULTISERVICE_PREVIEW_HOST=127.0.0.1
+Environment=CLOUDIF_MULTISERVICE_PREVIEW_PORT=18228
+Environment=CLOUDIF_PREVIEW_EXECUTOR_URL=http://10.62.91.2:18227
+Environment=CLOUDIF_BUILD_URL=http://127.0.0.1:18213
+Environment=CLOUDIF_MULTISERVICE_PREVIEW_DB=/var/lib/cloudif/multiservice-preview/previews.db
+Environment=CLOUDIF_PUBLIC_ORIGIN=https://cloudiff.duckdns.org
+ExecStart=/usr/bin/python3 /srv/cloudif/app-pointers/multiservice-preview-current/cloudif-multiservice-preview-broker.py
+Restart=on-failure
+RestartSec=3
+TimeoutStartSec=30s
+TimeoutStopSec=20s
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadOnlyPaths=/srv/cloudif/app-releases/multiservice-preview /srv/cloudif/app-pointers
+ReadWritePaths=/var/lib/cloudif/multiservice-preview
+PrivateDevices=true
+ProtectClock=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+ProtectHostname=true
+ProtectProc=invisible
+ProcSubset=pid
+RestrictNamespaces=true
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+RestrictRealtime=true
+SystemCallArchitectures=native
+RestrictAddressFamilies=AF_INET AF_UNIX
+CapabilityBoundingSet=
+AmbientCapabilities=
+RemoveIPC=true
+UMask=0077
+IPAddressAllow=127.0.0.0/8
+IPAddressAllow=10.0.0.0/8
+IPAddressDeny=any
+
+[Install]
+WantedBy=multi-user.target

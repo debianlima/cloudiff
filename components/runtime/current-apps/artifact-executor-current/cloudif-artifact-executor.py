@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import hashlib,json,os,re,sqlite3,subprocess,tempfile,time,urllib.parse
 from http.server import BaseHTTPRequestHandler,ThreadingHTTPServer
+from cloudif_multiservice_artifact import ArtifactError, build_multiservice
 DB='/var/lib/cloudif/artifact-executor/artifacts.sqlite3';TOKEN=os.environ.get('CLOUDIF_ARTIFACT_EXECUTOR_TOKEN','');HOST='10.62.91.2';PORT=18216
 BASE='cgr.dev/chainguard/nginx@sha256:e4ff957080737c90a9ecfeaa40e3d19ea9d687e9cacda2f2a031c75ffcdd72b7'
 SYFT=os.environ['SYFT_IMAGE'];TRIVY=os.environ['TRIVY_IMAGE'];CACHE='/srv/cloudif/scanners/trivy-cache'
@@ -57,7 +58,16 @@ class H(BaseHTTPRequestHandler):
   except:return self.sendj(400,{'ok':False,'error':'invalid_json'})
   try:
    if self.path=='/v1/artifacts':return self.sendj(200,build(a))
+   if self.path in {'/v1/build', '/v1/multiservice/build'}:
+    profile=str(a.get('profile') or ('multiservice-v1' if self.path.endswith('/multiservice/build') else ''))
+    if profile not in {'static-v1', 'multiservice-v1'}:return self.sendj(422,{'ok':False,'error':{'code':'invalid_profile','message':'profile deve ser static-v1 ou multiservice-v1.'}})
+    if profile=='multiservice-v1':
+     payload=a
+     return self.sendj(200,build_multiservice(payload))
+    return self.sendj(200,build(a))
    return self.sendj(404,{'ok':False,'error':'not_found'})
+  except ArtifactError as exc:return self.sendj(exc.http_status,{'ok':False,'error':exc.as_dict(),'secrets_exposed':False})
   except ValueError as e:return self.sendj(400,{'ok':False,'error':str(e)})
   except Exception:return self.sendj(500,{'ok':False,'error':'artifact_pipeline_failed','secrets_exposed':False})
+SCANNER_POLICY={'scannerOfflineCache':True,'network':'none','block':['HIGH','CRITICAL']}
 if __name__=='__main__':ThreadingHTTPServer((HOST,PORT),H).serve_forever()

@@ -793,10 +793,13 @@ def _cloudif_v110_expected_token():
     ).strip()
 
 def _cloudif_v110_allowed_client():
-    return (
+    configured = (
         os.environ.get("FORJA_ALLOWED_CLIENT", "")
         or globals().get("FORJA_ALLOWED_CLIENT", "")
     ).strip()
+    allowed = {'127.0.0.1','::1'}
+    allowed.update(x.strip() for x in re.split(r'[,;|]',configured) if x.strip())
+    return allowed
 
 def _cloudif_v110_received_token(handler):
     got = (handler.headers.get("X-CloudIF-Token", "") or "").strip()
@@ -815,7 +818,7 @@ def _cloudif_v110_auth_result(handler):
     allowed = _cloudif_v110_allowed_client()
     client_ip = handler.client_address[0] if getattr(handler, "client_address", None) else ""
 
-    if allowed and client_ip != allowed:
+    if allowed and client_ip not in allowed:
         return False, "invalid_client"
 
     if not expected:
