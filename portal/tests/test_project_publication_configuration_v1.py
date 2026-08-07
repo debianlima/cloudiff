@@ -55,7 +55,11 @@ class ProjectPublicationConfigurationV1Tests(unittest.TestCase):
         self.assertIn(".cloudif-runtime-snapshot.json",source)
         self.assertIn('environmentRevision',source);self.assertIn('environmentDigest',source)
         self.assertIn("'variableValuesReturned':False",source);self.assertIn("'secretValuesIncluded':False",source)
-        self.assertGreaterEqual(source.count('/srv/cloudif/publication-secrets/p{public_number}/d{deploy_number}/runtime.env'),2);self.assertNotIn("'environment_variables':environment_values",source)
+        latest=source[source.rfind('def cloudif_publication_deploy(handler):'):]
+        self.assertIn("runtime_source=_cloudif_publication_environment_path(public_number,deploy_number)",latest)
+        self.assertIn("source: ./runtime.env",latest);self.assertIn("target: /run/cloudif/runtime.env",latest)
+        self.assertIn("runtime_path.chmod(0o600)",latest);self.assertNotIn('    env_file:',latest)
+        self.assertNotIn("'environment_variables':environment_values",source)
 
     def test_portal_job_freezes_base_and_environment_identity(self):
         source=PUBLICATIONS.read_text();helper=PUB_CONFIG.read_text()

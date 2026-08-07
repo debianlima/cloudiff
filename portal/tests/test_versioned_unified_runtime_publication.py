@@ -74,6 +74,21 @@ class VersionedUnifiedRuntimePublicationTests(unittest.TestCase):
         self.assertIn("if healthy:break",latest)
         self.assertIn("time.sleep(2)",latest)
 
+    def test_runtime_values_are_loaded_without_compose_log_exposure(self):
+        latest=self.agent[self.agent.rfind('def cloudif_publication_deploy(handler):'):]
+        self.assertIn("source: ./runtime.env",latest)
+        self.assertIn("target: /run/cloudif/runtime.env",latest)
+        self.assertIn("read_only: true",latest)
+        self.assertNotIn("    env_file:",latest)
+        self.assertIn("runtime_path.chmod(0o600)",latest)
+        self.assertIn("stack_dir.chmod(0o700)",latest)
+        self.assertIn("loader_js=r",latest)
+        self.assertIn("JSON.parse(raw.slice(pos+1))",latest)
+        self.assertIn("base_entrypoint=base_config.get('Entrypoint')",latest)
+        self.assertIn("base_cmd=base_config.get('Cmd')",latest)
+        self.assertIn("ENTRYPOINT [\"node\",\"/opt/cloudif/publication-env-loader.js\"]",latest)
+        self.assertIn("CMD {startup_json}",latest)
+
     def test_publication_failures_are_short_and_actionable(self):
         self.assertIn("'publication_container_not_healthy'",self.agent)
         self.assertIn("def _publication_error(stage,data):",self.portal)

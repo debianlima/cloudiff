@@ -5000,12 +5000,56 @@ def cloudif_publication_deploy(handler):
     resolved_base_id=base_check.stdout.strip() if base_check.returncode==0 else ''
     if not hmac.compare_digest(resolved_base_id,frozen_base_id):
         return send(handler,422,{'ok':False,'error':'publication_base_identity_mismatch','message':'A imagem-base local não corresponde à revisão congelada da publicação.','baseRevision':int(snapshot.get('baseRevision') or base.get('base_revision') or 0),'secretValuesIncluded':False})
+    meta_proc=subprocess.run(['docker','image','inspect',base_reference],text=True,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,timeout=30)
+    try:
+        meta_rows=json.loads(meta_proc.stdout or '[]');base_config=((meta_rows[0] if meta_rows else {}).get('Config') or {})
+    except Exception:
+        base_config={}
+    base_entrypoint=base_config.get('Entrypoint') or [];base_cmd=base_config.get('Cmd') or []
+    if isinstance(base_entrypoint,str):base_entrypoint=[base_entrypoint]
+    if isinstance(base_cmd,str):base_cmd=[base_cmd]
+    startup=[str(x) for x in [*base_entrypoint,*base_cmd] if str(x)]
+    if not startup:
+        return send(handler,422,{'ok':False,'error':'publication_base_startup_missing','message':'A imagem-base congelada não possui comando de inicialização.','secretValuesIncluded':False})
+    loader_js=r"""'use strict';
+const fs=require('fs');
+const {spawn}=require('child_process');
+const env={...process.env};
+const file='/run/cloudif/runtime.env';
+try {
+  if (fs.existsSync(file)) {
+    for (const raw of fs.readFileSync(file,'utf8').split(/\r?\n/)) {
+      if (!raw) continue;
+      const pos=raw.indexOf('=');
+      if (pos<=0) throw new Error('invalid_runtime_environment_line');
+      const name=raw.slice(0,pos);
+      if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) throw new Error('invalid_runtime_environment_name');
+      const value=JSON.parse(raw.slice(pos+1));
+      env[name]=String(value);
+    }
+  }
+} catch (_) {
+  console.error('CloudIFF: falha ao carregar configuração de runtime.');
+  process.exit(78);
+}
+const argv=process.argv.slice(2);
+if (!argv.length) { console.error('CloudIFF: comando base ausente.'); process.exit(127); }
+const child=spawn(argv[0],argv.slice(1),{stdio:'inherit',env});
+for (const signal of ['SIGTERM','SIGINT','SIGHUP','SIGQUIT']) process.on(signal,()=>{try{child.kill(signal)}catch(_){}});
+child.on('error',()=>process.exit(127));
+child.on('exit',(code)=>process.exit(Number.isInteger(code)?code:1));
+"""
+    loader_path=snap/'cloudif-publication-env-loader.js';loader_path.write_text(loader_js,encoding='utf-8');loader_path.chmod(0o644)
+    startup_json=json.dumps(startup,ensure_ascii=False,separators=(',',':'))
     dockerfile=f'''FROM {base_reference}
 COPY --chown=www-data:www-data source/ /var/www/html/
+COPY cloudif-publication-env-loader.js /opt/cloudif/publication-env-loader.js
 WORKDIR /var/www/html
 RUN rm -f /run/apache2/apache2.pid /var/run/apache2/apache2.pid /run/supervisord.pid /var/run/supervisord.pid \\
  && if [ -f api/package-lock.json ]; then cd api && npm ci --omit=dev; elif [ -f api/package.json ]; then cd api && npm install --omit=dev; fi \\
  && chown -R www-data:www-data /var/www/html
+ENTRYPOINT ["node","/opt/cloudif/publication-env-loader.js"]
+CMD {startup_json}
 '''
     (snap/'Dockerfile.runtime').write_text(dockerfile,encoding='utf-8')
     image=f'cloudif/publication-p{public_number}-d{deploy_number}:php{php}-node{node}'
@@ -5027,8 +5071,13 @@ RUN rm -f /run/apache2/apache2.pid /var/run/apache2/apache2.pid /run/supervisord
     image: {image}
     container_name: cloudif-p{public_number}-d{deploy_number}-web
     restart: unless-stopped
-    env_file:
-      - /srv/cloudif/publication-secrets/p{public_number}/d{deploy_number}/runtime.env
+    volumes:
+      - type: bind
+        source: ./runtime.env
+        target: /run/cloudif/runtime.env
+        read_only: true
+        bind:
+          create_host_path: false
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://127.0.0.1/.cloudif-health >/dev/null"]
       interval: 15s
@@ -5067,8 +5116,11 @@ networks:
         if staged.exists():shutil.rmtree(staged)
         shutil.copytree(source,staged)
         shutil.copy2(snap/'Dockerfile.runtime',stack_dir/'Dockerfile.runtime')
+        runtime_source=_cloudif_publication_environment_path(public_number,deploy_number)
+        runtime_tmp=stack_dir/'.runtime.env.tmp';runtime_path=stack_dir/'runtime.env'
+        shutil.copyfile(runtime_source,runtime_tmp);runtime_tmp.chmod(0o600);os.replace(runtime_tmp,runtime_path);runtime_path.chmod(0o600)
         compose_tmp=stack_dir/'.docker-compose.yml.tmp';compose_path=stack_dir/'docker-compose.yml'
-        compose_tmp.write_text(compose,encoding='utf-8');compose_tmp.chmod(0o640);os.replace(compose_tmp,compose_path);compose_path.chmod(0o640)
+        compose_tmp.write_text(compose,encoding='utf-8');compose_tmp.chmod(0o600);os.replace(compose_tmp,compose_path);compose_path.chmod(0o600);stack_dir.chmod(0o700)
     except Exception as exc:
         return send(handler,422,{'ok':False,'error':'version_runtime_stage_failed','detail':str(exc)[:500]})
     cfg={'server_id':server_id,'files_on_host':True,'run_build':False,'auto_pull':False,'file_contents':'','file_paths':['docker-compose.yml'],'env_file_path':'','project_name':name.replace('-','_'),'linked_repo':'','repo':'','branch':'','commit':commit,'git_provider':'','git_https':True,'run_directory':str(stack_dir),'webhook_enabled':False,'reclone':False,'send_alerts':False}
