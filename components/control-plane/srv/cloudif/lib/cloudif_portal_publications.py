@@ -26,6 +26,33 @@ def _post(url,payload,token,host='',timeout=420):
         except:data={'raw':raw}
         return e.code,data
 
+def _publication_error(stage,data):
+    data=data if isinstance(data,dict) else {}
+    code=str(data.get('error') or '').strip()
+    message=str(data.get('message') or '').strip()
+    known={
+      'publication_image_build_failed':'A imagem da publicação não pôde ser criada a partir da base atual.',
+      'publication_image_digest_missing':'A imagem da publicação foi criada sem identificação imutável.',
+      'publication_base_reference_invalid':'A revisão da imagem-base não está disponível para esta publicação.',
+      'publication_base_identity_mismatch':'A imagem-base local não corresponde à revisão congelada. Abra a base e publique novamente.',
+      'publication_stack_update_failed':'A configuração da nova versão não pôde ser atualizada no Komodo.',
+      'publication_stack_deploy_failed':'O Komodo não conseguiu iniciar a nova versão.',
+      'publication_container_not_healthy':'A nova versão foi criada, mas o container não ficou saudável no tempo esperado.',
+      'publication_terminal_unavailable':'A nova versão subiu, mas a validação do terminal não ficou disponível.',
+      'target_not_healthy':'A versão selecionada não está saudável para ser ativada.',
+    }
+    if code in known:return known[code]
+    if message and len(message)<=320 and not any(ch in message for ch in '{}[]'):
+        return message
+    fallback={
+      'deploy':'Não foi possível iniciar a nova versão a partir da base atual.',
+      'https':'Não foi possível configurar o endereço HTTPS da nova versão.',
+      'promote':'A nova versão foi preparada, mas não pôde ser ativada.',
+      'rebuild':'Não foi possível reconstruir a versão selecionada.',
+    }
+    return fallback.get(stage,'A publicação não pôde ser concluída.')
+
+
 def _project_allowed(con,slug,user):
     row=con.execute('select * from projects where slug=?',(slug,)).fetchone()
     if not row:return None
@@ -179,20 +206,20 @@ def publish_now(slug,user,progress=None,publication_snapshot=None):
         environment_runtime['values']={}
         deploy_payload['environment_variables']={}
     if status//100!=2 or not kres.get('ok'):
-        con.close(); raise RuntimeError('Falha no deploy versionado: '+json.dumps(kres,ensure_ascii=False)[:500])
+        con.close(); raise RuntimeError(_publication_error('deploy',kres))
     notify('https','Configurando HTTPS e endereços públicos.')
     alias_row=con.execute('select alias from project_publication_aliases where project_slug=?',(slug,)).fetchone()
     alias=str(alias_row[0]) if alias_row else ''
     status,nres=_post('http://10.62.91.3/publish',{'public_number':num,'deploy_number':dep,'alias':alias},nt,host='cloudif-publisher.internal',timeout=300)
     if status//100!=2 or not nres.get('ok'):
-        con.close(); raise RuntimeError('Falha na publicação HTTPS: '+json.dumps(nres,ensure_ascii=False)[:500])
+        con.close(); raise RuntimeError(_publication_error('https',nres))
     version_host=f'{num}-d{dep}.cloudiff.duckdns.org'
     if not _external_ok(version_host):
         con.close(); raise RuntimeError('Validação HTTPS externa falhou para '+version_host)
     notify('promoting','Ativando a nova versão com rollback disponível.')
     status,pres=_post(ku+'/komodo/publication/promote',{'project':slug,'public_number':num,'deploy_number':dep},kt,timeout=120)
     if status//100!=2 or not pres.get('ok'):
-        con.close(); raise RuntimeError('Falha ao promover a publicação: '+json.dumps(pres,ensure_ascii=False)[:500])
+        con.close(); raise RuntimeError(_publication_error('promote',pres))
     notify('validating','Validando o endereço público.')
     stable_host=f'{num}.cloudiff.duckdns.org'
     if not _external_ok(stable_host):
@@ -298,7 +325,7 @@ def set_alias(slug,alias,user):
         _,_,nt=_clients();status,data=_post('http://10.62.91.3/alias',{'public_number':int(pub['public_number']),'deploy_number':int(pub['deploy_number']),'alias':alias},nt,host='cloudif-publisher.internal',timeout=300)
         if status//100!=2 or not data.get('ok'):
             con.close()
-            raise RuntimeError('Falha ao ativar alias HTTPS: '+json.dumps(data,ensure_ascii=False)[:500])
+            raise RuntimeError(_publication_error('https',data))
     con.execute('insert into project_publication_aliases(alias,project_slug,created_by,created_at,updated_at) values(?,?,?,?,?) on conflict(project_slug) do update set alias=excluded.alias,updated_at=excluded.updated_at',(alias,slug,actor,(previous['created_at'] if previous else now),now))
     con.commit();con.close()
     result={'ok':True,'alias':alias,'hostname':alias+'.cloudiff.duckdns.org'}
@@ -339,19 +366,19 @@ def activate(slug,deploy_number,user):
     if status//100!=2 or not pres.get('ok'):
         reason=str(pres.get('error') or '')
         if reason!='target_not_healthy':
-            con.close();raise RuntimeError('Falha ao ativar versão: '+json.dumps(pres,ensure_ascii=False)[:500])
+            con.close();raise RuntimeError(_publication_error('promote',pres))
         if len(commit)!=40:
             con.close();raise RuntimeError('A versão não possui commit imutável registrado e não pode ser reconstruída automaticamente.')
         deploy_status,rebuilt=_post(ku+'/komodo/publication/deploy',{'project':slug,'public_number':num,'deploy_number':dep,'commit':commit,'timeout':600},kt,timeout=900)
         if deploy_status//100!=2 or not rebuilt.get('ok'):
-            con.close();raise RuntimeError('Falha ao reconstruir a versão: '+json.dumps(rebuilt,ensure_ascii=False)[:700])
+            con.close();raise RuntimeError(_publication_error('rebuild',rebuilt))
         status,pres=_post(ku+'/komodo/publication/promote',promote_payload,kt,timeout=180)
         if status//100!=2 or not pres.get('ok'):
-            con.close();raise RuntimeError('Versão reconstruída, mas a promoção falhou: '+json.dumps(pres,ensure_ascii=False)[:500])
+            con.close();raise RuntimeError(_publication_error('promote',pres))
     alias_row=con.execute('select alias from project_publication_aliases where project_slug=?',(slug,)).fetchone();alias=str(alias_row[0]) if alias_row else ''
     pstatus,publisher=_post('http://10.62.91.3/publish',{'public_number':num,'deploy_number':dep,'alias':alias},nt,host='cloudif-publisher.internal',timeout=300)
     if pstatus//100!=2 or not publisher.get('ok'):
-        con.close();raise RuntimeError('Falha ao atualizar o endereço HTTPS: '+json.dumps(publisher,ensure_ascii=False)[:500])
+        con.close();raise RuntimeError(_publication_error('https',publisher))
     if not _external_ok(f'{num}.cloudiff.duckdns.org'):
         con.close();raise RuntimeError('URL estável falhou após ativação.')
     access=_project_access_snapshot(con,slug)

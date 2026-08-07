@@ -32,4 +32,24 @@ class VersionedUnifiedRuntimePublicationTests(unittest.TestCase):
             self.assertIn(marker,self.agent)
         self.assertIn('curl -fsS http://127.0.0.1/.cloudif-health',self.agent)
 
+    def test_publication_image_is_materialized_from_exact_versioned_base_before_komodo(self):
+        self.assertIn("base_reference=str(base.get('image') or '').strip()",self.agent)
+        self.assertIn("frozen_base_id=str(base.get('image_id') or '').strip()",self.agent)
+        self.assertIn("docker','image','inspect',base_reference",self.agent)
+        self.assertIn('hmac.compare_digest(resolved_base_id,frozen_base_id)',self.agent)
+        self.assertIn("dockerfile=f'''FROM {base_reference}",self.agent)
+        self.assertIn("'docker','build','--pull=false','--tag',image",self.agent)
+        self.assertIn("'run_build':False",self.agent)
+        self.assertNotIn("'run_build':True,'auto_pull':False,'file_contents':compose",self.agent)
+        latest=self.agent[self.agent.rfind('def cloudif_publication_deploy(handler):'):]
+        self.assertNotIn('build:\n      context: .\n      dockerfile: Dockerfile.runtime',latest)
+        self.assertIn("'materialization':'local_base_derived'",latest)
+
+    def test_publication_failures_are_short_and_actionable(self):
+        self.assertIn("'publication_container_not_healthy'",self.agent)
+        self.assertIn("def _publication_error(stage,data):",self.portal)
+        self.assertIn("'publication_image_build_failed':'A imagem da publicação não pôde ser criada a partir da base atual.'",self.portal)
+        self.assertNotIn("'Falha no deploy versionado: '+json.dumps",self.portal)
+        self.assertNotIn("'Falha na publicação HTTPS: '+json.dumps",self.portal)
+
 if __name__=='__main__':unittest.main()

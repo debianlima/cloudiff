@@ -4970,7 +4970,14 @@ def cloudif_publication_deploy(handler):
     if not marker.is_file():return send(handler,422,{'ok':False,'error':'publication_source_snapshot_missing'})
     if not _cloudif_publication_environment_path(public_number,deploy_number).is_file():_cloudif_write_publication_environment(public_number,deploy_number,{})
     source=snap/'source'
-    dockerfile=f'''FROM {base['image_id']}
+    base_reference=str(base.get('image') or '').strip();frozen_base_id=str(base.get('image_id') or '').strip()
+    if not base_reference or not re.fullmatch(r'sha256:[a-f0-9]{64}',frozen_base_id):
+        return send(handler,422,{'ok':False,'error':'publication_base_reference_invalid','message':'A revisão base congelada não possui referência local válida.','secretValuesIncluded':False})
+    base_check=subprocess.run(['docker','image','inspect',base_reference,'--format','{{.Id}}'],text=True,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,timeout=30)
+    resolved_base_id=base_check.stdout.strip() if base_check.returncode==0 else ''
+    if not hmac.compare_digest(resolved_base_id,frozen_base_id):
+        return send(handler,422,{'ok':False,'error':'publication_base_identity_mismatch','message':'A imagem-base local não corresponde à revisão congelada da publicação.','baseRevision':int(snapshot.get('baseRevision') or base.get('base_revision') or 0),'secretValuesIncluded':False})
+    dockerfile=f'''FROM {base_reference}
 COPY --chown=www-data:www-data source/ /var/www/html/
 WORKDIR /var/www/html
 RUN if [ -f api/package-lock.json ]; then cd api && npm ci --omit=dev; elif [ -f api/package.json ]; then cd api && npm install --omit=dev; fi \\
@@ -4978,12 +4985,22 @@ RUN if [ -f api/package-lock.json ]; then cd api && npm ci --omit=dev; elif [ -f
 '''
     (snap/'Dockerfile.runtime').write_text(dockerfile,encoding='utf-8')
     image=f'cloudif/publication-p{public_number}-d{deploy_number}:php{php}-node{node}'
+    # Materialize the immutable publication image locally from the exact
+    # versioned project base. Komodo only starts the already-built image; it
+    # never needs the local build context and cannot silently lose source/.
+    build=subprocess.run([
+      'docker','build','--pull=false','--tag',image,'--file',str(snap/'Dockerfile.runtime'),str(snap),
+    ],text=True,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,timeout=int(payload.get('build_timeout') or 300))
+    if build.returncode!=0:
+        tail='\n'.join((build.stdout or '').splitlines()[-24:])[-4000:]
+        return send(handler,422,{'ok':False,'error':'publication_image_build_failed','message':'A imagem da publicação não pôde ser materializada a partir da base versionada.','baseRevision':int(snapshot.get('baseRevision') or base.get('base_revision') or 0),'detail':tail,'secretValuesIncluded':False})
+    built=subprocess.run(['docker','image','inspect',image,'--format','{{.Id}}'],text=True,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,timeout=30)
+    publication_image_id=built.stdout.strip() if built.returncode==0 else ''
+    if not re.fullmatch(r'sha256:[a-f0-9]{64}',publication_image_id):
+        return send(handler,422,{'ok':False,'error':'publication_image_digest_missing','message':'A imagem derivada da base foi criada sem digest verificável.','secretValuesIncluded':False})
     compose=f'''services:
   web:
     image: {image}
-    build:
-      context: .
-      dockerfile: Dockerfile.runtime
     container_name: cloudif-p{public_number}-d{deploy_number}-web
     restart: unless-stopped
     env_file:
@@ -5028,7 +5045,7 @@ networks:
         shutil.copy2(snap/'Dockerfile.runtime',stack_dir/'Dockerfile.runtime')
     except Exception as exc:
         return send(handler,422,{'ok':False,'error':'version_runtime_stage_failed','detail':str(exc)[:500]})
-    cfg={'server_id':server_id,'files_on_host':False,'run_build':True,'auto_pull':False,'file_contents':compose,'file_paths':[],'linked_repo':'','repo':'','branch':'','commit':commit,'git_provider':'','git_https':True,'run_directory':'.','webhook_enabled':False,'reclone':False}
+    cfg={'server_id':server_id,'files_on_host':False,'run_build':False,'auto_pull':False,'file_contents':compose,'file_paths':[],'linked_repo':'','repo':'','branch':'','commit':commit,'git_provider':'','git_https':True,'run_directory':'.','webhook_enabled':False,'reclone':False}
     stacks=_cloudif_v131_list_items((_cloudif_v131_core_call('read','ListStacks',{}).get('data')))
     existing=next((x for x in stacks if isinstance(x,dict) and x.get('name')==name),None)
     if existing:
@@ -5053,9 +5070,17 @@ networks:
         time.sleep(4)
     terminal=_cloudif_ensure_container_terminal(server_id,container) if healthy else {'ok':False,'error':'container_not_ready'}
     ok=bool(update.get('ok') and deploy.get('ok') and healthy and terminal.get('ok'))
+    failure_code='';failure_message=''
+    if not ok:
+        if not update.get('ok'):failure_code='publication_stack_update_failed';failure_message='A configuração da versão não pôde ser atualizada no Komodo.'
+        elif not deploy.get('ok'):failure_code='publication_stack_deploy_failed';failure_message='O Komodo recusou a inicialização da nova versão.'
+        elif not healthy:failure_code='publication_container_not_healthy';failure_message='A nova versão foi criada, mas o container não ficou saudável no tempo esperado.'
+        else:failure_code='publication_terminal_unavailable';failure_message='A versão subiu, mas o terminal de diagnóstico não ficou disponível.'
     db_exec('''insert into publication_runtimes(project,public_number,deploy_number,stack_id,stack_name,container,commit_sha,status,is_active,updated_at)
       values(?,?,?,?,?,?,?,?,0,?) on conflict(project,deploy_number) do update set stack_id=excluded.stack_id,stack_name=excluded.stack_name,container=excluded.container,commit_sha=excluded.commit_sha,status=excluded.status,updated_at=excluded.updated_at''',(project,public_number,deploy_number,stack_id,name,container,commit,'ready' if ok else 'failed',now()))
-    return send(handler,200 if ok else 422,{'ok':ok,'project':project,'public_number':public_number,'deploy_number':deploy_number,'commit':commit,'stack_id':stack_id,'stack_name':name,'container':container,'created':created,'deploy':deploy,'operation_id':opid,'operation_final':final,'healthy':healthy,'terminal':terminal,'expected_image':image,'actual_image':actual,'runtime':runtime,'runtime_base':base,'baseRevision':int(snapshot.get('baseRevision') or base.get('base_revision') or 0),'baseImageId':str(snapshot.get('baseImageId') or base.get('image_id') or ''),'environmentRevision':int(snapshot.get('environmentRevision') or 0),'environmentDigest':str(snapshot.get('environmentDigest') or ''),'variableNames':variable_names,'variableValuesReturned':False,'secretValuesIncluded':False,'content_digest':content_digest,'source':'git_commit','publication_source':source_kind,'infrastructure_in_git':False,'republished':republished_from is not None,'republished_from':republished_from})
+    response={'ok':ok,'project':project,'public_number':public_number,'deploy_number':deploy_number,'commit':commit,'stack_id':stack_id,'stack_name':name,'container':container,'created':created,'deploy':deploy,'operation_id':opid,'operation_final':final,'healthy':healthy,'terminal':terminal,'expected_image':image,'actual_image':actual,'publicationImageId':publication_image_id,'runtime':runtime,'runtime_base':base,'baseRevision':int(snapshot.get('baseRevision') or base.get('base_revision') or 0),'baseImageId':str(snapshot.get('baseImageId') or base.get('image_id') or ''),'materialization':'local_base_derived','environmentRevision':int(snapshot.get('environmentRevision') or 0),'environmentDigest':str(snapshot.get('environmentDigest') or ''),'variableNames':variable_names,'variableValuesReturned':False,'secretValuesIncluded':False,'content_digest':content_digest,'source':'git_commit','publication_source':source_kind,'infrastructure_in_git':False,'republished':republished_from is not None,'republished_from':republished_from}
+    if failure_code:response.update({'error':failure_code,'message':failure_message})
+    return send(handler,200 if ok else 422,response)
 
 
 def cloudif_publication_promote(handler):

@@ -41,7 +41,10 @@ class ProjectPublicationConfigurationV1Tests(unittest.TestCase):
         self.assertIn('"/komodo/project/base/snapshot"',source)
         self.assertIn("_cloudif_ensure_container_terminal(server_id,workspace)",source)
         self.assertIn("'terminal':terminal.get('terminal')",source)
-        self.assertIn("dockerfile=f'''FROM {base['image_id']}",source)
+        self.assertIn("base_reference=str(base.get('image') or '').strip()",source)
+        self.assertIn("frozen_base_id=str(base.get('image_id') or '').strip()",source)
+        self.assertIn('hmac.compare_digest(resolved_base_id,frozen_base_id)',source)
+        self.assertIn("dockerfile=f'''FROM {base_reference}",source)
         self.assertIn("base_editor_re=re.compile",source);self.assertIn("delete from project_base_revisions where project=?",source)
         self.assertIn("Path('/srv/cloudif/publication-secrets')/('p'+number)",source)
 
