@@ -3,7 +3,8 @@
 Native v2 routes are dispatched first. Every remaining Portal HTML GET is
 rendered by the legacy handler into an in-memory buffer and adapted to the
 canonical v2 shell. APIs, downloads, redirects and all state-changing methods
-remain untouched. Any adapter exception returns the exact legacy response.
+remain untouched. Adapter failures render a canonical recovery page; legacy
+HTML is never exposed as a visual fallback.
 """
 from __future__ import annotations
 
@@ -90,6 +91,14 @@ def _install() -> None:
 
     def send_json(handler, status: int, payload) -> None:
         send(handler, status, "application/json; charset=utf-8", json.dumps(payload, ensure_ascii=False).encode("utf-8"))
+
+    def recovery_page(title: str, message: str, retry_url: str = "", back_url: str = "/cloudiff/portal/?tab=projetos") -> bytes:
+        safe_title=html.escape(title);safe_message=html.escape(message);safe_retry=html.escape(retry_url,quote=True);safe_back=html.escape(back_url,quote=True)
+        retry=(f'<a class="primary" href="{safe_retry}">Tentar novamente</a>' if safe_retry else '')
+        markup=f'''<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{safe_title} · CloudIFF</title><style>
+        :root{{font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#17211b;background:#f4f7f5}}*{{box-sizing:border-box}}body{{margin:0;min-height:100vh;display:grid;place-items:center;padding:24px}}main{{width:min(620px,100%);padding:28px;border:1px solid #d7e1da;border-radius:18px;background:#fff}}.eyebrow{{font-size:.72rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#176b35}}h1{{margin:8px 0 10px;font-size:clamp(1.6rem,5vw,2.2rem)}}p{{margin:0;color:#5e6b63;line-height:1.6}}nav{{display:flex;gap:10px;flex-wrap:wrap;margin-top:24px}}a{{display:inline-flex;align-items:center;justify-content:center;min-height:42px;padding:0 14px;border:1px solid #c8d5cc;border-radius:10px;color:#17211b;text-decoration:none;font-weight:750}}a.primary{{background:#176b35;border-color:#176b35;color:#fff}}@media(prefers-color-scheme:dark){{:root{{color:#e8f1eb;background:#07110b}}main{{background:#0d1b12;border-color:#274331}}p{{color:#a9b8ae}}a{{color:#e8f1eb;border-color:#345545}}}}
+        </style></head><body><main><span class="eyebrow">CloudIFF</span><h1>{safe_title}</h1><p>{safe_message}</p><nav>{retry}<a href="{safe_back}">Voltar aos projetos</a></nav></main></body></html>'''
+        return markup.encode('utf-8')
 
     def try_asset(handler, path: str) -> bool:
         name = None
@@ -504,6 +513,25 @@ def _install() -> None:
             route_query = urllib.parse.parse_qs(parsed.query)
             query_api = (route_query.get("api") or [""])[0].strip()
             try:
+                base_workspace_match = re.fullmatch(r'/cloudiff?/portal/publication/base/([a-z0-9][a-z0-9-]{0,62})', path)
+                if base_workspace_match:
+                    slug=base_workspace_match.group(1)
+                    try:
+                        import cloudif_portal_publications as publications
+                        user=self.user();publications.base_workspace_preflight(slug,user)
+                        owner=sys.modules.get(handler_class.__module__)
+                        renderer=getattr(owner,'_cloudif_pub_base_preparing_page',None) if owner else None
+                        csrf_factory=getattr(owner,'_prod_csrf_token',None) if owner else None
+                        if not renderer or not csrf_factory:raise RuntimeError('base_workspace_preparing_renderer_unavailable')
+                        body=renderer(slug,csrf_factory(user)).encode('utf-8')
+                        return send(self,200,'text/html; charset=utf-8',body)
+                    except PermissionError:
+                        body=recovery_page('Acesso ao terminal não autorizado','Você não possui permissão de escrita neste projeto.','', '/cloudiff/portal/?tab=projetos')
+                        return send(self,403,'text/html; charset=utf-8',body)
+                    except Exception as exc:
+                        print(f'cloudif_base_workspace_prepare_failed slug={slug} type={type(exc).__name__}',flush=True)
+                        body=recovery_page('Não foi possível preparar o terminal','A preparação foi interrompida antes de qualquer redirecionamento. Tente novamente por esta tela.',self.path)
+                        return send(self,503,'text/html; charset=utf-8',body)
                 toolchain_match = re.fullmatch(r'/cloudiff?/portal/api/projects/([a-z0-9][a-z0-9-]{0,62})/toolchain(?:/(builds/toolchain_[a-f0-9]{24}(?:/logs)?|images(?:/img_[a-f0-9]{24})?))?', path)
                 if toolchain_match:
                     try:
@@ -732,9 +760,10 @@ def _install() -> None:
                                 adapted_markup = adapted_markup.replace('<h3>Parâmetros de política</h3>', wizard + '<h3>Parâmetros de política</h3>', 1)
                             adapted = adapted_markup.encode("utf-8")
                             return send(self, 200, "text/html; charset=utf-8", adapted, captured_headers)
-                        except Exception:
-                            # Auto-recovery: return byte-identical legacy output.
-                            return send(self, status, content_type, body, captured_headers)
+                        except Exception as exc:
+                            print(f'cloudif_portal_v2_transform_failed path={path} type={type(exc).__name__}',flush=True)
+                            recovery=recovery_page('Não foi possível montar esta tela','O Portal preservou sua sessão, mas interrompeu a renderização antiga para evitar uma interface inconsistente.',self.path)
+                            return send(self,503,'text/html; charset=utf-8',recovery)
                     return send(self, status, content_type, body, captured_headers)
             except sqlite3.Error:
                 body = (
@@ -1039,8 +1068,10 @@ def _install() -> None:
                                 "admin-excluir-projeto",
                             ).encode("utf-8")
                             return send(self, status, "text/html; charset=utf-8", adapted, captured_headers)
-                        except Exception:
-                            return send(self, status, content_type, body, captured_headers)
+                        except Exception as exc:
+                            print(f'cloudif_portal_v2_post_transform_failed path={path} type={type(exc).__name__}',flush=True)
+                            recovery=recovery_page('Não foi possível concluir esta tela','A operação foi interrompida antes de expor a interface antiga. Atualize a página e tente novamente.',self.path)
+                            return send(self,503,'text/html; charset=utf-8',recovery)
                     return send(self, status, content_type, body, captured_headers)
                 except Exception:
                     self.rfile = BytesIO(raw)
@@ -1067,10 +1098,7 @@ def _install() -> None:
 
         class V2Server(original_server):
             def __init__(self, address, handler, *args, **kwargs):
-                try:
-                    wrap(handler)
-                except Exception:
-                    pass
+                wrap(handler)
                 super().__init__(address, handler, *args, **kwargs)
 
         http_server.ThreadingHTTPServer = V2Server
@@ -1080,4 +1108,5 @@ def _install() -> None:
 try:
     _install()
 except Exception:
-    pass
+    if os.environ.get("CLOUDIF_PORTAL_V2") == "1":
+        raise

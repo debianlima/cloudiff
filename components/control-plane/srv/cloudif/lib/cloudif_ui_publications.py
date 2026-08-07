@@ -126,7 +126,7 @@ def _configuration_controls(slug,rows):
     return (
       '<section class="publication-configuration" data-publication-config="'+h(slug)+'">'
       '<article><span>Base da publicação</span><strong>'+h(base_label)+'</strong><p>Abrir no Komodo permite instalar ferramentas e ajustar a base. Ao publicar, a CloudIFF congela uma nova revisão imutável.</p>'
-      '<form method="post" target="_blank" action="/cloudiff/portal/action/publication"><input type="hidden" name="slug" value="'+h(slug)+'"><button class="btn light" name="op" value="open_base_workspace">Abrir base no Komodo</button></form></article>'
+      '<a class="btn light" target="_blank" rel="noopener" href="/cloudiff/portal/publication/base/'+h(slug)+'">Abrir base no Komodo</a></article>'
       '<article><span>Ambientes de publicação</span><strong>Preview · Homologação · Produção</strong><p>Consulte um ambiente por vez e gerencie suas variáveis dentro do próprio wizard.</p>'
       '<button class="btn light" type="button" data-publication-environments data-project-slug="'+h(slug)+'">Ambientes de publicação</button></article>'
       '</section>'
