@@ -31,6 +31,12 @@ class FrozenSurfacesContractTests(unittest.TestCase):
         self.assertIn('.db96-compact-tools', css)
         self.assertIn('.db96-service-list', css)
 
+        # O agrupador moderno precisa vencer o details{background:white} legado.
+        self.assertIn('.legacy-content .owner-resource-group{background:var(--surface)', css)
+        self.assertIn('.legacy-content .owner-resource-group>summary{', css)
+        self.assertIn('.legacy-content .owner-resource-items{display:grid;gap:var(--s3);padding:var(--s4);background:var(--surface);color:var(--ink)}', css)
+        self.assertNotIn('\n.owner-resource-group{background:var(--surface)', css)
+
         # Agrupamento e identidade do proprietário.
         self.assertIn("owner===current?'Meus bancos'", app_js)
         self.assertIn('tenant-owner-row', base)
