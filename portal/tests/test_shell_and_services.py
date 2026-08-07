@@ -28,7 +28,7 @@ class ShellTest(unittest.TestCase):
         self.assertIn('href="/cloudiff/portal/?tab=resumo"', doc)
         self.assertIn('href="/cloudiff/portal/?tab=projetos"', doc)
         self.assertIn('href="/cloudiff/portal/?tab=bancos"', doc)
-        self.assertIn('href="/cloudiff/portal/?tab=monitor-saude"', doc)
+        self.assertIn('href="/cloudiff/portal/?tab=backup"', doc);self.assertIn('href="/cloudiff/portal/?tab=agentes"', doc)
 
 
     def test_health_summary_and_score(self):
@@ -73,14 +73,9 @@ if __name__ == "__main__":
 
 
 class DataServiceTest(unittest.TestCase):
-    def test_tenant_filter_and_render(self):
-        from portal.modules.data import service as data_service
-        from portal.modules.data import views as data_views
-        entries = ["akadmin", "aluno", "BAD_NAME", "iff1742962", "x"]
-        tenants = data_service.filter_tenants(entries)
-        self.assertEqual(tenants, ["akadmin", "aluno", "iff1742962"])
-        html_admin = data_views.tenant_grid(tenants, admin=True)
-        self.assertIn("Avançado", html_admin)
-        html_user = data_views.tenant_grid(tenants, admin=False)
-        self.assertNotIn("Avançado", html_user)
-        self.assertIn("akadmin", html_user)
+    def test_tenant_screen_remains_on_legacy_adapter(self):
+        root = Path(__file__).resolve().parents[1]
+        self.assertFalse((root / "modules" / "data").exists())
+        self.assertEqual(shell._MODULE_TO_TAB["data"], "bancos")
+        coexist = (root.parent / "components" / "control-plane" / "srv" / "cloudif" / "lib" / "cloudif_portal_v2_coexist.py").read_text()
+        self.assertIn("legacy", coexist.lower())

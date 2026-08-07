@@ -76,12 +76,43 @@ def init_db():
       updated_at integer not null
     );
     create index if not exists idx_deployments_project on deployments(project_slug,environment,status,updated_at);
+    create table if not exists runtime_states(
+      project_slug text not null,
+      environment text not null,
+      deployment_id text not null,
+      status text not null,
+      config_revision integer not null,
+      config_digest text not null,
+      toolchain_digest text not null,
+      build_environment_digest text not null,
+      runtime_environment_digest text not null,
+      environment_digest text not null,
+      build_job_id text not null,
+      variable_names_json text not null,
+      updated_at integer not null,
+      primary key(project_slug,environment)
+    );
     ''')
     conn.commit();conn.close();os.chmod(DB_PATH,0o600)
 
 
+def run(command:list[str],timeout:int=90)->subprocess.CompletedProcess:
+    safe=list(command);child_env=os.environ.copy();index=0
+    while index<len(safe):
+        if safe[index]=='--env' and index+1<len(safe) and '=' in str(safe[index+1]):
+            name,value=str(safe[index+1]).split('=',1)
+            if not ENV_NAME_RE.fullmatch(name):raise DeploymentError('invalid_environment_name','Nome de variável de ambiente inválido.')
+            child_env[name]=value;safe[index+1]=name
+        elif str(safe[index]).startswith('--env=') and '=' in str(safe[index])[6:]:
+            name,value=str(safe[index])[6:].split('=',1)
+            if not ENV_NAME_RE.fullmatch(name):raise DeploymentError('invalid_environment_name','Nome de variável de ambiente inválido.')
+            child_env[name]=value;safe[index]='--env='+name
+        index+=1
+    if isinstance(command,list):command[:]=safe
+    return subprocess.run(safe,text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=timeout,env=child_env)
+
 def docker(*args:str,timeout:int=90,check:bool=True)->subprocess.CompletedProcess:
-    result=subprocess.run(['docker',*args],text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=timeout)
+    result=run(['docker',*args],timeout=timeout)
     if check and result.returncode:
         raise DeploymentError('docker_operation_failed','A operação Docker do deploy falhou.',502,{'operation':args[:3],'error':result.stderr[-500:]})
     return result
@@ -259,9 +290,10 @@ def _validated_runtime_configuration(payload):
         for name,value in values.items():
             if not re.fullmatch(r'[A-Z][A-Z0-9_]{0,127}',str(name)):raise ValueError('invalid_runtime_environment_name')
             normalized[str(service)][str(name)]=_runtime_scalar(value)
-    runtime_digest=str(configuration.get('runtimeEnvironmentDigest') or '');environment_digest=str(configuration.get('environmentDigest') or '')
+    runtime_digest=str(configuration.get('runtimeEnvironmentDigest') or '');environment_digest=str(configuration.get('environmentDigest') or '');build_environment_digest=str(configuration.get('buildEnvironmentDigest') or '')
     if not re.fullmatch(r'[a-f0-9]{64}',runtime_digest) or not re.fullmatch(r'[a-f0-9]{64}',environment_digest):raise ValueError('runtime_environment_digest_invalid')
-    return {'publicRuntimeEnvironment':normalized,'runtimeEnvironmentDigest':runtime_digest,'environmentDigest':environment_digest,'buildJobId':configuration_job or build_job,'secretValuesIncluded':False,'legacyCompatibility':legacy}
+    if build_environment_digest and not re.fullmatch(r'[a-f0-9]{64}',build_environment_digest):raise ValueError('build_environment_digest_invalid')
+    return {'publicRuntimeEnvironment':normalized,'buildEnvironmentDigest':build_environment_digest,'runtimeEnvironmentDigest':runtime_digest,'environmentDigest':environment_digest,'buildJobId':configuration_job or build_job,'secretValuesIncluded':False,'legacyCompatibility':legacy}
 
 def _apply_runtime_configuration(payload,configuration):
     public=configuration['publicRuntimeEnvironment']
@@ -295,6 +327,36 @@ def _apply_runtime_configuration(payload,configuration):
     payload['variables_digest']=hashlib.sha256(canonical(variables)).hexdigest()
     return payload
 
+def _runtime_state_record(request:dict,runtime_configuration:dict,status:str='running')->None:
+    variable_names={}
+    for service,values in (request.get('variables') or {}).items():
+        if isinstance(values,dict):variable_names[str(service)]=sorted(str(name) for name in values)
+    record=(
+        str(request.get('project_slug') or ''),str(request.get('environment') or ''),str(request.get('deployment_id') or ''),str(status or 'unknown'),
+        int(request.get('config_revision') or 0),str(request.get('config_digest') or ''),str(request.get('toolchain_digest') or ''),
+        str(runtime_configuration.get('buildEnvironmentDigest') or ''),str(runtime_configuration.get('runtimeEnvironmentDigest') or ''),str(runtime_configuration.get('environmentDigest') or ''),
+        str(request.get('build_job_id') or ''),json.dumps(variable_names,ensure_ascii=False,sort_keys=True,separators=(',',':')),int(time.time()),
+    )
+    connection=db();connection.execute('''insert into runtime_states(project_slug,environment,deployment_id,status,config_revision,config_digest,toolchain_digest,build_environment_digest,runtime_environment_digest,environment_digest,build_job_id,variable_names_json,updated_at) values(?,?,?,?,?,?,?,?,?,?,?,?,?) on conflict(project_slug,environment) do update set deployment_id=excluded.deployment_id,status=excluded.status,config_revision=excluded.config_revision,config_digest=excluded.config_digest,toolchain_digest=excluded.toolchain_digest,build_environment_digest=excluded.build_environment_digest,runtime_environment_digest=excluded.runtime_environment_digest,environment_digest=excluded.environment_digest,build_job_id=excluded.build_job_id,variable_names_json=excluded.variable_names_json,updated_at=excluded.updated_at''',record);connection.commit();connection.close()
+
+def project_runtime_state(project_slug:str,environment:str)->dict:
+    if not SLUG_RE.fullmatch(str(project_slug or '')):raise DeploymentError('invalid_project_slug','project_slug é inválido.',400)
+    if environment not in ENVIRONMENTS:raise DeploymentError('invalid_environment','environment deve ser homologation ou production.',400)
+    connection=db();row=connection.execute('select * from runtime_states where project_slug=? and environment=?',(project_slug,environment)).fetchone()
+    if row:
+        deployment=connection.execute('select status from deployments where deployment_id=?',(row['deployment_id'],)).fetchone()
+    else:deployment=None
+    connection.close()
+    if not row:return {'ok':True,'projectSlug':project_slug,'environment':environment,'states':[],'count':0,'secretValuesIncluded':False,'secretReferencesIncluded':False,'effectsExecuted':False}
+    status=str((deployment['status'] if deployment else row['status']) or row['status'])
+    state={'deploymentId':row['deployment_id'],'status':status,'configRevision':int(row['config_revision']),'configDigest':row['config_digest'],'toolchainDigest':row['toolchain_digest'],'buildEnvironmentDigest':row['build_environment_digest'],'runtimeEnvironmentDigest':row['runtime_environment_digest'],'environmentDigest':row['environment_digest'],'buildJobId':row['build_job_id'],'variableNames':json.loads(row['variable_names_json'] or '{}'),'updatedAt':int(row['updated_at'])}
+    return {'ok':True,'projectSlug':project_slug,'environment':environment,'states':[state],'count':1,'secretValuesIncluded':False,'secretReferencesIncluded':False,'effectsExecuted':False}
+
+def _runtime_state_authorized(headers)->bool:
+    presented=str(headers.get('Authorization') or '');expected='Bearer '+TOKEN
+    return bool(TOKEN) and hmac.compare_digest(presented,expected)
+
+
 def create_deployment(payload:Any)->dict:
     runtime_configuration=_validated_runtime_configuration(payload)
     _apply_runtime_configuration(payload,runtime_configuration)
@@ -321,6 +383,7 @@ def create_deployment(payload:Any)->dict:
         if failed:raise DeploymentError('deployment_healthcheck_failed','Um ou mais serviços não ficaram prontos.',409,failed)
         safe_services=[{key:value for key,value in item.items() if key not in {'host_port','image_validation'}} for item in services]
         conn=db();conn.execute('insert into deployments(deployment_id,project_slug,environment,build_job_id,plan_digest,build_plan_digest,config_revision,config_digest,toolchain_digest,archive_sha256,variables_digest,status,services_json,routes_json,error_json,created_at,updated_at) values(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',(deployment_id,request['project_slug'],request['environment'],request['build_job_id'],request['deployment_plan_digest'],request['build_plan_digest'],request['config_revision'],request['config_digest'],request['toolchain_digest'],request['archive_sha256'],request['variables_digest'],'running',json.dumps(services,separators=(',',':')),json.dumps(request['routes'],separators=(',',':')),'{}',now,now));conn.commit();conn.close()
+        _runtime_state_record(request,runtime_configuration,'running')
         return {'ok':True,'deployment_id':deployment_id,'project_slug':request['project_slug'],'environment':request['environment'],'build_job_id':request['build_job_id'],'status':'running','services':safe_services,'routes':request['routes'],'health':health,'created_at':now,'network_internal':False,'ports_loopback_only':True,'read_only':True,'capabilities_dropped':True,'variables_digest':request['variables_digest'],'variable_values_returned':False,'secrets_persisted':False,'idempotent':False}
     except Exception as error:
         cleanup_resources(deployment_id);detail=error.as_dict() if isinstance(error,DeploymentError) else {'code':'deployment_create_failed','message':type(error).__name__}
@@ -348,14 +411,14 @@ def status_deployment(deployment_id:str)->dict:
 
 def remove_deployment(deployment_id:str,reason:str='removed')->dict:
     status_deployment(deployment_id);cleanup=cleanup_resources(deployment_id);now=int(time.time())
-    conn=db();conn.execute('update deployments set status=?,updated_at=? where deployment_id=?',(reason,now,deployment_id));conn.commit();conn.close()
+    conn=db();conn.execute('update deployments set status=?,updated_at=? where deployment_id=?',(reason,now,deployment_id));conn.execute('update runtime_states set status=?,updated_at=? where deployment_id=?',(reason,now,deployment_id));conn.commit();conn.close()
     return {'ok':True,'deployment_id':deployment_id,'status':reason,**cleanup,'removed_at':now}
 
 
 class Handler(BaseHTTPRequestHandler):
     server_version='CloudIFFMultiserviceDeploymentExecutor/1'
     def log_message(self,*args):pass
-    def authorized(self):return bool(TOKEN) and hmac.compare_digest(self.headers.get('Authorization',''),'Bearer '+TOKEN)
+    def authorized(self):return _runtime_state_authorized(self.headers)
     def out(self,status:int,data:dict):
         raw=json.dumps(data,ensure_ascii=False,separators=(',',':')).encode();self.send_response(status);self.send_header('Content-Type','application/json');self.send_header('Cache-Control','no-store');self.send_header('X-Content-Type-Options','nosniff');self.send_header('Content-Length',str(len(raw)));self.end_headers();self.wfile.write(raw)
     def body(self):
@@ -369,7 +432,12 @@ class Handler(BaseHTTPRequestHandler):
         if self.path=='/health':
             conn=db();counts={row['status']:row['n'] for row in conn.execute('select status,count(*) n from deployments group by status')};conn.close();return self.out(200,{'ok':True,'service':'cloudif-multiservice-deployment-executor','deployments':counts,'portsLoopbackOnly':True,'persistent':True,'variableValuesReturned':False})
         if not self.authorized():return self.out(401,{'ok':False,'error':{'code':'unauthorized','message':'Credencial interna inválida.'}})
-        match=re.fullmatch(r'/v1/deployments/(dep_[a-f0-9]{24})',self.path)
+        parsed=urllib.parse.urlparse(self.path);runtime_match=re.fullmatch(r'/v1/projects/([a-z0-9][a-z0-9-]{0,62})/runtime-state',parsed.path)
+        if runtime_match:
+            environment=(urllib.parse.parse_qs(parsed.query).get('environment') or [''])[0]
+            try:return self.out(200,project_runtime_state(runtime_match.group(1),environment))
+            except Exception as error:return self.error(error)
+        match=re.fullmatch(r'/v1/deployments/(dep_[a-f0-9]{24})',parsed.path)
         if match:
             try:return self.out(200,status_deployment(match.group(1)))
             except Exception as error:return self.error(error)

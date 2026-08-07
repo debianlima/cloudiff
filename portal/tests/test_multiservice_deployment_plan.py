@@ -117,11 +117,21 @@ class MultiserviceDeploymentPlanTests(unittest.TestCase):
     def test_secret_reference_is_actionable_and_value_is_not_exposed(self):
         plan=self.plan(runtime_configuration=self.runtime_configuration(secret=True))
         self.assertFalse(plan['execution_allowed'])
-        self.assertIn('secret-resolution-unavailable',plan['blockers'])
+        self.assertIn('secret-resolver-unavailable',plan['blockers'])
         self.assertIn('DATABASE_URL',plan['summary']['runtimeEnvironment']['secretNames']['api'])
         rendered=str(plan)
         self.assertNotIn('vault://project/demo/database',rendered)
         self.assertFalse(plan['secret_references_included'])
+
+    def test_secret_reference_is_allowed_when_internal_resolver_is_available(self):
+        with patch.object(self.module,'SECRET_RESOLVER_TOKEN','resolver-token'):
+            plan=self.plan(runtime_configuration=self.runtime_configuration(secret=True))
+        self.assertTrue(plan['execution_allowed'],plan['blockers'])
+        self.assertNotIn('secret-resolver-unavailable',plan['blockers'])
+        self.assertTrue(plan['summary']['secretResolutionRequired'])
+        self.assertTrue(plan['summary']['secretResolverAvailable'])
+        self.assertIn('DATABASE_URL',plan['summary']['runtimeEnvironment']['secretNames']['api'])
+        self.assertNotIn('vault://project/demo/database',str(plan))
 
     def test_production_requires_enabled_target(self):
         plan=self.plan(environment='production')

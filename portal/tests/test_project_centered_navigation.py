@@ -13,28 +13,28 @@ class ProjectCenteredNavigationTest(unittest.TestCase):
         )
 
     def test_global_navigation_contains_entities_only(self):
-        self.assertEqual(shell._TAB_GROUPS["Projetos"], (("projetos", "Projetos"),))
-        self.assertEqual(shell._TAB_GROUPS["Dados"], (("bancos", "Bancos e tenants"),))
-        self.assertEqual(shell._TAB_GROUPS["Ferramentas"], (("monitor-saude", "Saúde da plataforma"),))
+        self.assertEqual(tuple(shell._TAB_GROUPS), ("Painel geral", "Administração", "Ajuda"))
+        self.assertIn(("projetos", "Projetos"), shell._TAB_GROUPS["Painel geral"])
+        self.assertIn(("bancos", "Bancos e tenants"), shell._TAB_GROUPS["Painel geral"])
         global_tabs={tab for entries in shell._TAB_GROUPS.values() for tab,_ in entries}
         self.assertNotIn("aprovacoes",global_tabs)
         self.assertNotIn("documentacao-mcp",global_tabs)
         self.assertNotIn("monitor-telemetria",global_tabs)
 
     def test_project_navigation_is_grouped_by_user_goal(self):
-        self.assertEqual(tuple(shell._PROJECT_NAV), ("Construir","Entregar","Operar","Automatizar"))
+        self.assertEqual(tuple(shell._PROJECT_NAV), ("Construir","Entregar","Operar"))
         project_tabs={tab for entries in shell._PROJECT_NAV.values() for tab,_ in entries}
         self.assertIn("git",project_tabs)
         self.assertIn("publicacao",project_tabs)
         self.assertIn("aprovacoes",project_tabs)
-        self.assertIn("documentacao-mcp",project_tabs)
+        self.assertIn("reconciliacao",project_tabs)
 
     def test_context_navigation_marks_active_route(self):
         markup=shell._project_navigation("aprovacoes")
         self.assertIn('aria-label="Navegação do projeto"',markup)
         self.assertIn('href="/cloudiff/portal/?tab=aprovacoes" aria-current="page"',markup)
         self.assertIn("Construir",markup)
-        self.assertIn("Automatizar",markup)
+        self.assertIn("Operar",markup)
 
     def test_frozen_publication_does_not_receive_context_navigation(self):
         doc=shell.render_legacy(self.identity,"publicacao","Publicação","<p>conteúdo</p>","","")
@@ -43,8 +43,8 @@ class ProjectCenteredNavigationTest(unittest.TestCase):
 
 
     def test_project_page_title_is_management(self):
-        self.assertEqual(shell._TAB_TITLES["projetos"], "Gestão de projetos")
-        self.assertIn("?v=", shell._document(self.identity, "projetos", "Gestão de projetos", "<p>ok</p>"))
+        self.assertEqual(shell._TAB_TITLES["projetos"], "Projetos")
+        self.assertIn("?v=", shell._document(self.identity, "projetos", "Projetos", "<p>ok</p>"))
 
 
 if __name__ == "__main__":

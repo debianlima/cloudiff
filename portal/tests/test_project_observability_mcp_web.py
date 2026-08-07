@@ -56,7 +56,8 @@ class ProjectObservabilityMCPWebTests(unittest.TestCase):
         registry=REGISTRY.read_text();role_start=registry.index('ROLE_SCOPES=')
         for role,next_role in (('viewer','developer'),('developer','maintainer'),('maintainer','release-manager'),('release-manager','project-admin')):
             a=registry.index("'"+role+"':",role_start);b=registry.index("'"+next_role+"':",a);self.assertIn('PROJECT_OBSERVABILITY_SCOPES',registry[a:b])
-        a=registry.index("'project-admin':",role_start);b=registry.find('\n}',a);self.assertIn('PROJECT_OBSERVABILITY_SCOPES',registry[a:b])
+        admin_def=registry[registry.index('PROJECT_ADMIN_SCOPES='):role_start];self.assertIn('PROJECT_OBSERVABILITY_SCOPES',admin_def)
+        a=registry.index("'project-admin':",role_start);b=registry.find('\n}',a);self.assertIn('PROJECT_ADMIN_SCOPES',registry[a:b])
         self.assertIn('project:observability-read',ONBOARDING.read_text())
 
     def test_portal_and_mcp_receive_only_observability_service_token(self):

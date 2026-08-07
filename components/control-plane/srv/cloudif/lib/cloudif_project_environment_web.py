@@ -152,6 +152,7 @@ def handle_get(slug:str,operation:str,query:dict[str,str],username:str,groups:li
     if operation=='history':suffix='/history';params={'limit':query.get('limit','100')}
     elif operation=='missing':suffix='/missing';params={'environment':query.get('environment','')}
     elif operation=='effective':suffix='/effective';params={'environment':query.get('environment','development')}
+    elif operation=='export':suffix='/export';params={key:query[key] for key in ('environment','service') if query.get(key)}
     else:
         params={key:query[key] for key in ('environment','service') if query.get(key)}
         if query.get('includePublicValues','').lower() in {'1','true','yes','on'}:params['includeValues']='true'
@@ -167,7 +168,7 @@ def handle_post(slug:str,operation:str,payload:dict[str,Any],username:str,groups
         result=request_approval(slug,str(body.get('planDigest',body.get('plan_digest',''))),str(body.get('reason') or ''),username,groups,int(body.get('ttlSeconds',body.get('ttl_seconds',900)) or 900));return 201,result
     if operation in {'change/execute','promote/execute'}:
         result=execute(slug,str(body.get('planDigest',body.get('plan_digest',''))),str(body.get('approvalId',body.get('approval_id',''))),username,groups);return 200,result
-    mapping={'validate':'/validate','change/plan':'/change/plan','promote/plan':'/promote/plan'}
+    mapping={'validate':'/validate','change/plan':'/change/plan','promote/plan':'/promote/plan','import/plan':'/import/plan'}
     if operation not in mapping:return 404,{'ok':False,'error':{'code':'not_found'}}
     code,data=_config('POST',slug,mapping[operation],body)
     return code,data

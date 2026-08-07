@@ -5,7 +5,7 @@ from pathlib import Path
 class ProjectResourceReorganizationTest(unittest.TestCase):
     def setUp(self):
         self.root=Path(__file__).resolve().parents[2]
-        source=self.root/'components/control-plane/current-apps/portal-current/cloudif-admin-portal.py'
+        source=self.root/'components/control-plane/current-apps/portal-current/cloudif-admin-portal-base.py'
         if not source.exists():
             source=self.root/'portal/legacy/cloudif-admin-portal.py'
         self.source=source.read_text()
@@ -76,7 +76,7 @@ class ProjectResourceReorganizationTest(unittest.TestCase):
 class ActiveProjectRendererContractTest(unittest.TestCase):
     def setUp(self):
         root=Path(__file__).resolve().parents[2]
-        source=root/"components/control-plane/current-apps/portal-current/cloudif-admin-portal.py"
+        source=root/"components/control-plane/current-apps/portal-current/cloudif-admin-portal-base.py"
         if not source.exists():
             source=root/"portal/legacy/cloudif-admin-portal.py"
         self.source=source.read_text()
@@ -145,7 +145,7 @@ class ActiveProjectRendererContractTest(unittest.TestCase):
 class DefinitiveProjectManagementRendererTest(unittest.TestCase):
     def setUp(self):
         root=Path(__file__).resolve().parents[2]
-        source=root/'components/control-plane/current-apps/portal-current/cloudif-admin-portal.py'
+        source=root/'components/control-plane/current-apps/portal-current/cloudif-admin-portal-base.py'
         if not source.exists():
             source=root/'portal/legacy/cloudif-admin-portal.py'
         self.source=source.read_text()
@@ -161,7 +161,7 @@ class DefinitiveProjectManagementRendererTest(unittest.TestCase):
 
     def test_final_renderer_keeps_project_actions(self):
         block=self.source[self.source.rfind('# CloudIF definitive project management renderer BEGIN'):]
-        for label in ('Abrir Studio','Abrir repositório','Acessar SSH','Checar projeto','Gerenciar permissões'):
+        for label in ('Abrir Studio','Abrir repositório','Abrir terminal','Checar projeto','Gerenciar permissões'):
             self.assertIn(label,block)
         for removed in ('Sincronizar','Integrar','Editar projeto:'):
             self.assertNotIn(removed,block)

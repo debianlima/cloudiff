@@ -120,8 +120,9 @@ class ProvisioningPolicyReadmeDarkThemeTest(unittest.TestCase):
             '.pm-new-shell',
         ):
             self.assertIn('html[data-theme="dark"] body .legacy-content ' + selector, css)
-        self.assertIn('background:var(--surface)!important', css)
-        self.assertIn('background:var(--paper)!important', css)
+        self.assertIn('background:var(--surface);', css)
+        self.assertIn('background:var(--paper);', css)
+        self.assertNotIn('!important', css)
 
 
 if __name__ == '__main__':

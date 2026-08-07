@@ -242,23 +242,23 @@
 .db96-compact>summary>span:first-child{display:grid;gap:2px}
 .db96-compact>summary b{font-size:.9rem;color:var(--text)}
 .db96-compact>summary small{font-size:.78rem;color:var(--muted)}
-.db96-summary-count,.db96-summary-action{padding:5px 9px;border-radius:999px;background:#edf7f0;color:#176b35;font-size:.73rem;font-weight:800;white-space:nowrap}
+.db96-summary-count,.db96-summary-action{padding:5px 9px;border-radius:999px;background:var(--iff-wash);color:var(--iff-dark);font-size:.73rem;font-weight:800;white-space:nowrap}
 .db96-compact[open]>summary{border-bottom:1px solid var(--border)}
 .db96-service-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;padding:12px 15px}
 .db96-service-list .container-chip{min-height:0;padding:9px 10px;margin:0}
 .db96-permissions-content{padding:15px;position:relative}
-.db96-permissions-content>.grid2{grid-template-columns:1fr!important}
-.db96-permissions-content .box{padding:0!important;border:0!important;background:transparent!important;box-shadow:none!important}
+.db96-permissions-content>.grid2{grid-template-columns:1fr}
+.db96-permissions-content .box{padding:0;border:0;background:transparent;box-shadow:none}
 .db96-permissions-content table{margin-bottom:14px}
-.tenant-acl-results{position:absolute;z-index:40;width:min(520px,calc(100% - 30px));max-height:280px;overflow:auto;margin-top:4px;border:1px solid var(--border);border-radius:12px;background:var(--surface);box-shadow:0 16px 38px rgba(15,23,42,.16)}
+.tenant-acl-results{position:absolute;z-index:40;width:min(520px,calc(100% - 30px));max-height:280px;overflow:auto;margin-top:4px;border:1px solid var(--border);border-radius:12px;background:var(--surface);box-shadow:0 16px 38px var(--overlay)}
 .tenant-acl-result{display:grid;width:100%;gap:2px;padding:10px 12px;border:0;border-bottom:1px solid var(--border);border-radius:0;background:var(--surface);color:var(--text);text-align:left;box-shadow:none}
-.tenant-acl-result:last-child{border-bottom:0}.tenant-acl-result:hover,.tenant-acl-result:focus{background:#edf7f0;outline:2px solid #67a875;outline-offset:-2px}
+.tenant-acl-result:last-child{border-bottom:0}.tenant-acl-result:hover,.tenant-acl-result:focus{background:var(--iff-wash);outline:2px solid var(--iff);outline-offset:-2px}
 .tenant-acl-result strong{font-size:.88rem}.tenant-acl-result small,.tenant-acl-empty{font-size:.76rem;color:var(--muted)}.tenant-acl-empty{margin:0;padding:12px}
 @media(max-width:720px){.db96-compact-tools{margin:0 20px 20px}.db96-compact>summary{align-items:flex-start}.db96-service-list{grid-template-columns:1fr}}
 
-.tenant-owner-row{background:#f0fdf4}.tenant-owner-row td{vertical-align:middle}.tenant-owner-badge{margin-left:8px}.tenant-owner-lock{display:inline-flex;padding:5px 9px;border-radius:999px;background:#edf7f0;color:#176b35;font-size:.73rem;font-weight:800}.tenant-acl-table td:nth-child(3){text-align:right}
+.tenant-owner-row{background:var(--iff-wash)}.tenant-owner-row td{vertical-align:middle}.tenant-owner-badge{margin-left:8px}.tenant-owner-lock{display:inline-flex;padding:5px 9px;border-radius:999px;background:var(--iff-wash);color:var(--iff-dark);font-size:.73rem;font-weight:800}.tenant-acl-table td:nth-child(3){text-align:right}
 
-.tenant-identity-note{margin:7px 0 0;padding:9px 10px;border-radius:9px;background:#f8fafc;color:var(--muted);font-weight:650}.tenant-identity-note.is-searching{background:#f0fdf4;color:#176b35}.tenant-identity-note.is-success{background:#edf7f0;color:#176b35}.tenant-identity-note.is-error{background:#fef2f2;color:#991b1b;border:1px solid #fecaca}.tenant-acl-empty-error{color:#991b1b;background:#fef2f2}.db96-permissions input[aria-invalid="true"]{border-color:#dc2626!important;outline:2px solid rgba(220,38,38,.16)!important}
+.tenant-identity-note{margin:7px 0 0;padding:9px 10px;border-radius:9px;background:var(--paper);color:var(--muted);font-weight:650}.tenant-identity-note.is-searching{background:var(--iff-wash);color:var(--iff-dark)}.tenant-identity-note.is-success{background:var(--iff-wash);color:var(--iff-dark)}.tenant-identity-note.is-error{background:var(--halt-wash);color:var(--halt);border:1px solid var(--rule)}.tenant-acl-empty-error{color:var(--halt);background:var(--halt-wash)}.db96-permissions input[aria-invalid="true"]{border-color:var(--halt);outline:2px solid color-mix(in srgb,var(--halt) 16%,transparent)}
 
 /* Theme bridge for pages rendered by the legacy compatibility layer.
    The legacy UI has several historical token families. They all resolve to the
@@ -343,26 +343,26 @@ html[data-theme="dark"] .legacy-content .db96-mode.inactive,
 html[data-theme="dark"] .legacy-content .db96-readonly,
 html[data-theme="dark"] .legacy-content .technology-wizard-steps li,
 html[data-theme="dark"] .legacy-content .rd-pill{
-  background:var(--paper)!important;
-  border-color:var(--rule)!important;
-  color:var(--ink)!important;
+  background:var(--paper);
+  border-color:var(--rule);
+  color:var(--ink);
 }
 html[data-theme="dark"] .legacy-content .db97-legend,
 html[data-theme="dark"] .legacy-content .security-note,
 html[data-theme="dark"] .legacy-content .help{
-  background:var(--rule-soft)!important;
-  border-color:var(--focus)!important;
-  color:var(--ink)!important;
+  background:var(--rule-soft);
+  border-color:var(--focus);
+  color:var(--ink);
 }
 html[data-theme="dark"] .legacy-content .infra-note,
 html[data-theme="dark"] .legacy-content .ai-disclaimer{
-  background:var(--drift-wash)!important;
-  border-color:var(--drift)!important;
-  color:var(--drift)!important;
+  background:var(--drift-wash);
+  border-color:var(--drift);
+  color:var(--drift);
 }
 html[data-theme="dark"] .legacy-content .project-preview,
 html[data-theme="dark"] .legacy-content .project-preview iframe{
-  background:var(--surface)!important;
+  background:var(--surface);
 }
 
 /* CloudIFF dark compatibility — legacy modules must consume the active theme. */
@@ -402,11 +402,11 @@ html[data-theme="dark"] body .legacy-content .cloudif-wizard>.wizard-box,
 html[data-theme="dark"] body .legacy-content .cloudif-wizard>.card,
 html[data-theme="dark"] body .legacy-content .cloudif-wizard .wizard-head,
 html[data-theme="dark"] body .legacy-content .pm-new-footer{
-  background:var(--surface)!important;
-  border-color:var(--rule)!important;
-  color:var(--ink)!important;
-  box-shadow:none!important;
-  color-scheme:dark!important;
+  background:var(--surface);
+  border-color:var(--rule);
+  color:var(--ink);
+  box-shadow:none;
+  color-scheme:dark;
 }
 
 html[data-theme="dark"] body .legacy-content .db96-mode.inactive,
@@ -428,9 +428,9 @@ html[data-theme="dark"] body .legacy-content .pm-new-steps li,
 html[data-theme="dark"] body .legacy-content .pm-field input,
 html[data-theme="dark"] body .legacy-content .pm-field textarea,
 html[data-theme="dark"] body .legacy-content .pm-field select{
-  background:var(--paper)!important;
-  border-color:var(--rule)!important;
-  color:var(--ink)!important;
+  background:var(--paper);
+  border-color:var(--rule);
+  color:var(--ink);
 }
 
 html[data-theme="dark"] body .legacy-content .db96-mode.active,
@@ -442,9 +442,9 @@ html[data-theme="dark"] body .legacy-content .pm-tenant-preview,
 html[data-theme="dark"] body .legacy-content .pm-live-step.done,
 html[data-theme="dark"] body .legacy-content .backup-progress-step.done,
 html[data-theme="dark"] body .legacy-content .backup-progress-result{
-  background:var(--iff-wash)!important;
-  border-color:var(--iff)!important;
-  color:var(--ink)!important;
+  background:var(--iff-wash);
+  border-color:var(--iff);
+  color:var(--ink);
 }
 
 html[data-theme="dark"] body .legacy-content .agent-approval,
@@ -454,9 +454,9 @@ html[data-theme="dark"] body .legacy-content .admin-action-status.running,
 html[data-theme="dark"] body .legacy-content .admin-action-status.ok,
 html[data-theme="dark"] body .legacy-content .pm-live-status,
 html[data-theme="dark"] body .legacy-content .pm-live-step.running{
-  background:var(--drift-wash)!important;
-  border-color:var(--drift)!important;
-  color:var(--ink)!important;
+  background:var(--drift-wash);
+  border-color:var(--drift);
+  color:var(--ink);
 }
 
 html[data-theme="dark"] body .legacy-content .backup-progress-step.failed,
@@ -464,18 +464,18 @@ html[data-theme="dark"] body .legacy-content .backup-progress-result.bad,
 html[data-theme="dark"] body .legacy-content .admin-action-status.bad,
 html[data-theme="dark"] body .legacy-content .pm-live-step.failed,
 html[data-theme="dark"] body .legacy-content .pm-live-terminal.bad{
-  background:var(--halt-wash)!important;
-  border-color:var(--halt)!important;
-  color:var(--halt)!important;
+  background:var(--halt-wash);
+  border-color:var(--halt);
+  color:var(--halt);
 }
 
 html[data-theme="dark"] body .legacy-content .admin-wizard-tabs button,
 html[data-theme="dark"] body .legacy-content .admin-action-card,
 html[data-theme="dark"] body .legacy-content .view-toggle button.active,
 html[data-theme="dark"] body .legacy-content .project-manage>summary{
-  background:var(--surface)!important;
-  border-color:var(--rule)!important;
-  color:var(--ink)!important;
+  background:var(--surface);
+  border-color:var(--rule);
+  color:var(--ink);
 }
 
 html[data-theme="dark"] body .legacy-content .admin-operation-center,
@@ -499,7 +499,7 @@ html[data-theme="dark"] body .legacy-content .global-admin-hub p,
 html[data-theme="dark"] body .legacy-content .backup-console-card,
 html[data-theme="dark"] body .legacy-content .backup-console-card strong,
 html[data-theme="dark"] body .legacy-content .backup-console-card h3{
-  color:var(--ink)!important;
+  color:var(--ink);
 }
 
 html[data-theme="dark"] body .legacy-content .admin-operation-center small,
@@ -516,15 +516,15 @@ html[data-theme="dark"] body .legacy-content .pm-new-summary p,
 html[data-theme="dark"] body .legacy-content .pm-new-section__head p,
 html[data-theme="dark"] body .legacy-content .pm-field small,
 html[data-theme="dark"] body .legacy-content .pm-choice small{
-  color:var(--ink-2)!important;
+  color:var(--ink-2);
 }
 
 html[data-theme="dark"] body .legacy-content .backup-progress-track,
 html[data-theme="dark"] body .legacy-content .backup-progress-step .icon,
 html[data-theme="dark"] body .legacy-content .db96-mode.inactive .db96-check,
 html[data-theme="dark"] body .legacy-content .db96-mode.inactive .db96-mode-badge{
-  background:var(--rule-soft)!important;
-  color:var(--ink-2)!important;
+  background:var(--rule-soft);
+  color:var(--ink-2);
 }
 
 
@@ -537,19 +537,19 @@ html[data-theme="dark"] body .legacy-content .s98-item,
 html[data-theme="dark"] body .legacy-content .u98-kpi,
 html[data-theme="dark"] body .legacy-content .u98-panel,
 html[data-theme="dark"] body .legacy-content .u98-row{
-  background:var(--surface)!important;
-  border-color:var(--rule)!important;
-  color:var(--ink)!important;
-  box-shadow:none!important;
+  background:var(--surface);
+  border-color:var(--rule);
+  color:var(--ink);
+  box-shadow:none;
 }
 html[data-theme="dark"] body .legacy-content .s98-note,
 html[data-theme="dark"] body .legacy-content .u98-note{
-  background:var(--rule-soft)!important;
-  color:var(--ink)!important;
+  background:var(--rule-soft);
+  color:var(--ink);
 }
 html[data-theme="dark"] body .legacy-content .u98-warn{
-  background:var(--drift-wash)!important;
-  color:var(--ink)!important;
+  background:var(--drift-wash);
+  color:var(--ink);
 }
 html[data-theme="dark"] body .legacy-content .agent-detail summary,
 html[data-theme="dark"] body .legacy-content .agent-detail h1,
@@ -558,7 +558,7 @@ html[data-theme="dark"] body .legacy-content .agent-detail h3,
 html[data-theme="dark"] body .legacy-content .agent-detail h4,
 html[data-theme="dark"] body .legacy-content .s98-kpi strong,
 html[data-theme="dark"] body .legacy-content .u98-kpi strong{
-  color:var(--ink)!important;
+  color:var(--ink);
 }
 
 /* Final dark guard for project, tenant and guide surfaces rendered by page-local CSS. */
@@ -574,24 +574,24 @@ html[data-theme="dark"] body .legacy-content .guide-connection-project,
 html[data-theme="dark"] body .legacy-content .guide-connection-url,
 html[data-theme="dark"] body .legacy-content .guide-connection-project dd code,
 html[data-theme="dark"] body .legacy-content .guide-connection-note{
-  background:var(--surface)!important;
-  border-color:var(--rule)!important;
-  color:var(--ink)!important;
-  box-shadow:none!important;
+  background:var(--surface);
+  border-color:var(--rule);
+  color:var(--ink);
+  box-shadow:none;
 }
 html[data-theme="dark"] body .legacy-content .project-owner-final,
 html[data-theme="dark"] body .legacy-content .project-owner-final>summary{
-  background:transparent!important;
-  color:var(--ink)!important;
+  background:transparent;
+  color:var(--ink);
 }
 html[data-theme="dark"] body .legacy-content .project-final[open]>summary,
 html[data-theme="dark"] body .legacy-content .db96-compact>summary,
 html[data-theme="dark"] body .legacy-content .guide-connection-project{
-  background:var(--paper)!important;
+  background:var(--paper);
 }
 html[data-theme="dark"] body .legacy-content .project-final__meta,
 html[data-theme="dark"] body .legacy-content .db96-compact>summary small,
 html[data-theme="dark"] body .legacy-content .guide-connection-project dt,
 html[data-theme="dark"] body .legacy-content .guide-connection-warning{
-  color:var(--ink-2)!important;
+  color:var(--ink-2);
 }

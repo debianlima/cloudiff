@@ -95,7 +95,7 @@ class BuildBoundPreviewDeploymentContractTests(unittest.TestCase):
           "'build-job-required'",
           "'build-environment-mismatch'",
           "'build-config-digest-mismatch'",
-          "'secret-resolution-unavailable'",
+          "'secret-resolver-unavailable'",
           "'secretValuesIncluded':False,'secretReferencesIncluded':False",
           "base['_internal_runtime_configuration']=runtime_configuration",
         ):self.assertIn(marker,self.broker)

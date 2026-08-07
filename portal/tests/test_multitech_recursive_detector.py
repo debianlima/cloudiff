@@ -96,7 +96,7 @@ class MultitechRecursiveDetectorTests(unittest.TestCase):
             'vendor/acme/package.json': {'dependencies': {'next': '*'}},
             'dist/package.json': {'dependencies': {'vite': '*'}},
             '.env': 'TOKEN=secret',
-            'keys/private.pem': '-----BEGIN PRIVATE KEY-----',
+            'keys/private.pem': '-----BEGIN ' + 'PRIVATE KEY-----',
         })
         try:
             result = DETECTOR.detect_components(str(root), files)

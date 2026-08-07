@@ -40,10 +40,13 @@ class MultiserviceBuildMCPContractTests(unittest.TestCase):
         self.assertNotIn("'approval.request-multiservice-build'",destructive)
 
     def test_plan_is_bound_to_configuration_toolchain_and_archive(self):
-        dispatch=self.gateway[self.gateway.index("elif name in {'project.toolchain.plan','build.multiservice.plan'}:"):self.gateway.index("elif name=='build.multiservice.status':")]
-        for marker in ('expected_revision','multiservice_build_plan','config_revision','config_digest','toolchain_digest','archive_sha256','scanner_policy','signature_algorithm','secrets_included'):
+        dispatch=self.gateway[self.gateway.index("elif name=='build.multiservice.plan':"):self.gateway.index("elif name=='build.multiservice.status':")]
+        helper=self.gateway[self.gateway.index('def multiservice_build_plan('):self.gateway.index('def toolchain_broker_plan(')]
+        for marker in ('expected_revision','multiservice_build_plan'):
             self.assertIn(marker,dispatch)
-        for marker in ('config_revision','config_digest','toolchain_digest','archive_sha256','plan_digest','services'):
+        for marker in ('config_revision','config_digest','toolchain_digest','archive_sha256','plan_digest'):
+            self.assertIn(marker,helper)
+        for marker in ('config_revision','config_digest','toolchain_digest','archive_sha256','plan_digest','services','scannerPolicy','signatureAlgorithm','secretsIncluded'):
             self.assertIn(marker,self.build)
 
     def test_approval_metadata_contains_no_code_or_secrets(self):

@@ -1086,24 +1086,28 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json(404,{'ok':False,'error':{'code':'secret_operation_not_found'}})
             environment_match = re.fullmatch(r'/v1/projects/([a-z0-9][a-z0-9-]{0,62})/environment/(validate|change/plan|change/apply|promote/plan|promote/apply|import/plan)', parsed_path)
             if environment_match:
-                slug, operation = environment_match.groups(); actor = str(body.get('actor') or 'internal').strip()[:128]
-                expected = int(body.get('expectedRevision', body.get('expected_revision', 0)) or 0)
-                if operation == 'validate':
-                    result = project_environment.validate_changes(slug, str(body.get('environment') or ''), body.get('changes'))
+                slug, operation = environment_match.groups()
+                try:
+                    actor = str(body.get('actor') or 'internal').strip()[:128]
+                    expected = int(body.get('expectedRevision', body.get('expected_revision', 0)) or 0)
+                    if operation == 'validate':
+                        result = project_environment.validate_changes(slug, str(body.get('environment') or ''), body.get('changes'))
+                        return self.send_json(200, result)
+                    if operation == 'import/plan':
+                        result = project_environment.import_dotenv_plan(slug, str(body.get('environment') or ''), str(body.get('service') or ''), body.get('content'), body.get('secretNames',body.get('secret_names',[])), expected, actor, int(body.get('ttlSeconds',body.get('ttl_seconds',900)) or 900))
+                        return self.send_json(200, result)
+                    if operation == 'change/plan':
+                        result = project_environment.plan_change(slug, str(body.get('environment') or ''), body.get('changes'), expected, actor, int(body.get('ttlSeconds', body.get('ttl_seconds', 900)) or 900))
+                        return self.send_json(200, result)
+                    if operation == 'promote/plan':
+                        result = project_environment.plan_promotion(slug, str(body.get('sourceEnvironment', body.get('source_environment', ''))), str(body.get('targetEnvironment', body.get('target_environment', ''))), str(body.get('service') or ''), expected, actor, int(body.get('ttlSeconds', body.get('ttl_seconds', 900)) or 900))
+                        return self.send_json(200, result)
+                    if not body.get('approved'):
+                        return self.send_json(403, {'ok': False, 'error': {'code': 'approval_required', 'message': 'A alteração de ambiente exige aprovação humana.'}})
+                    result = project_environment.apply_plan(slug, str(body.get('planDigest', body.get('plan_digest', ''))), expected, actor)
                     return self.send_json(200, result)
-                if operation == 'import/plan':
-                    result = project_environment.import_dotenv_plan(slug, str(body.get('environment') or ''), str(body.get('service') or ''), body.get('content'), body.get('secretNames',body.get('secret_names',[])), expected, actor, int(body.get('ttlSeconds',body.get('ttl_seconds',900)) or 900))
-                    return self.send_json(200, result)
-                if operation == 'change/plan':
-                    result = project_environment.plan_change(slug, str(body.get('environment') or ''), body.get('changes'), expected, actor, int(body.get('ttlSeconds', body.get('ttl_seconds', 900)) or 900))
-                    return self.send_json(200, result)
-                if operation == 'promote/plan':
-                    result = project_environment.plan_promotion(slug, str(body.get('sourceEnvironment', body.get('source_environment', ''))), str(body.get('targetEnvironment', body.get('target_environment', ''))), str(body.get('service') or ''), expected, actor, int(body.get('ttlSeconds', body.get('ttl_seconds', 900)) or 900))
-                    return self.send_json(200, result)
-                if not body.get('approved'):
-                    return self.send_json(403, {'ok': False, 'error': {'code': 'approval_required', 'message': 'A alteração de ambiente exige aprovação humana.'}})
-                result = project_environment.apply_plan(slug, str(body.get('planDigest', body.get('plan_digest', ''))), expected, actor)
-                return self.send_json(200, result)
+                except ValueError as exc:
+                    return self.send_json(400, {'ok': False, 'error': project_environment.actionable_request_error(operation, body, exc)})
             match = re.fullmatch(r'/v1/projects/([a-z0-9][a-z0-9-]{0,62})/(configuration/plan|configuration/apply|events)', parsed_path)
             if not match:
                 return self.send_json(404, {'ok': False, 'error': {'code': 'not_found'}})

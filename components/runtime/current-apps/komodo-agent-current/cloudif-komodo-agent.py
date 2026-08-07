@@ -3833,6 +3833,8 @@ def cloudif_project_terminal_ensure(handler):
         if not sync.get("ok"):return send(handler,422,{"ok":False,"error":"actor_permission_sync_failed","actor":actor,"sync":sync})
     base_stack_id=normalize_resource_id((integration or {}).get("stack_id") or payload.get("stack_id"))
     metadata=_cloudif_reconcile_unified_stack_metadata(payload.get("project"),base_stack_id)
+    if not metadata.get("ok"):
+        return send(handler,422,{"ok":False,"error":"stack_metadata_reconcile_failed","stack_metadata":metadata})
     active=_cloudif_active_publication_stack(payload.get("project"),base_stack_id)
     audit_payload=dict(payload);audit_payload["stack_id"]=active.get("stack_id") if active.get("ok") else base_stack_id
     audit=_cloudif_project_audit_data(audit_payload)

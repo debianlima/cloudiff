@@ -5,6 +5,7 @@ from pathlib import Path
 ROOT=Path(__file__).resolve().parents[2]
 CANDIDATES=[
     os.environ.get('CLOUDIF_TEST_PORTAL_SOURCE'),
+    ROOT/'components/control-plane/current-apps/portal-current/cloudif-admin-portal-base.py',
     ROOT/'components/control-plane/current-apps/portal-current/cloudif-admin-portal.py',
     '/srv/cloudif/app-pointers/portal-current/cloudif-admin-portal.py',
 ]
@@ -36,8 +37,8 @@ class ProjectCreationWizardStepsTest(unittest.TestCase):
             self.assertIn(marker,SOURCE)
 
     def test_green_accent_and_persistent_summary(self):
-        self.assertIn('--pm-accent:#157a2b',SOURCE)
-        self.assertIn('--pm-accent-soft:#edf7ef',SOURCE)
+        self.assertIn('--pm-accent:var(--iff,#168821)',SOURCE)
+        self.assertIn('--pm-accent-soft:var(--iff-wash,#eaf4ec)',SOURCE)
         self.assertIn('aria-label="Resumo do provisionamento"',SOURCE)
         self.assertIn('data-pm-summary="name"',SOURCE)
         self.assertIn('data-pm-summary="db"',SOURCE)

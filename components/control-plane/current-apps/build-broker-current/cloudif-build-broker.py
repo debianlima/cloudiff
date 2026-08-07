@@ -363,7 +363,10 @@ class H(BaseHTTPRequestHandler):
   toolchain_get_match=re.fullmatch(r'/v1/projects/([a-z0-9][a-z0-9-]{0,62})/toolchain',parsed.path)
   if toolchain_get_match:
    try:return self.sendj(200,toolchain_lifecycle.get(toolchain_get_match.group(1),(query.get('ref') or ['main'])[0]))
-   except ValueError as error:return self.sendj(422,{'ok':False,'error':{'code':str(error),'message':'Configuração da toolchain inválida.'}})
+   except ValueError as error:
+    error_code=str(error)
+    if error_code=='configuration_required':return self.sendj(409,{'ok':False,'error':{'code':'toolchain_not_configured','message':'O projeto ainda não possui configuração aprovada. A toolchain fica disponível a partir da revisão 1.','minimumRevision':1}})
+    return self.sendj(422,{'ok':False,'error':{'code':error_code,'message':'Configuração da toolchain inválida.'}})
   runtime_config_match=re.fullmatch(r'/v1/multiservice/jobs/(build_[a-f0-9]{24})/runtime-config',parsed.path)
   if runtime_config_match:
    try:return self.sendj(200,multiservice_runtime_config(runtime_config_match.group(1)))

@@ -14,11 +14,12 @@ class RuntimeCardsOpenKomodoTests(unittest.TestCase):
         self.assertIn('project-runtime-info?slug=',self.pub)
         self.assertIn('&amp;kind=php',self.pub)
         self.assertIn('&amp;kind=node',self.pub)
-    def test_old_runtime_page_redirects(self):
+    def test_runtime_action_is_standalone_and_not_terminal_redirect(self):
         route=self.base[self.base.index("project-runtime-info'"):self.base.index("open-project-terminal'",self.base.index("project-runtime-info'"))]
-        self.assertIn('self.send_response(302)',route)
-        self.assertIn('open-project-terminal',route)
-        self.assertNotIn('runtime-info-page',route)
+        self.assertIn('<!doctype html>',route)
+        self.assertIn('CloudIFF · diagnóstico autenticado',route)
+        self.assertNotIn('self.send_response(302)',route)
+        self.assertNotIn('open-project-terminal?slug=',route)
     def test_fixed_diagnostic_commands_end_in_interactive_shell(self):
         for marker in ('php -i','process.versions','package.json','exec sh','phpinfo-','nodeinfo-'):
             self.assertIn(marker,self.base)

@@ -112,6 +112,12 @@ class ToolInputError(ValueError):
         super().__init__(str(payload.get('message') or payload.get('code') or 'invalid_arguments'))
 
 
+class ToolStateError(RuntimeError):
+    def __init__(self, payload):
+        self.payload = dict(payload or {})
+        super().__init__(str(self.payload.get('message') or self.payload.get('code') or 'tool_state_error'))
+
+
 def _unwrap_tool_arguments(raw):
     if not isinstance(raw, dict):
         return {}, []
@@ -266,9 +272,9 @@ TOOLS=[
  {'name':'runtime.plan','description':'Gera plano declarativo usando somente templates homologados','inputSchema':{'type':'object','properties':{'framework':{'type':'string','enum':['static','react','vite','nextjs','vue','nuxt','angular','svelte','sveltekit','astro','express','nestjs','node']},'runtime_version':{'type':'string','enum':['20','22','24']},'package_manager':{'type':'string','enum':['npm','pnpm','yarn']}},'required':['framework'],'additionalProperties':False}},
  {'name':'runtime.validate','description':'Valida plano declarativo contra a política server-side','inputSchema':{'type':'object','properties':{'framework':{'type':'string','enum':['static','react','vite','nextjs','vue','nuxt','angular','svelte','sveltekit','astro','express','nestjs','node']},'runtime_version':{'type':'string','enum':['20','22','24']},'package_manager':{'type':'string','enum':['npm','pnpm','yarn']}},'required':['framework'],'additionalProperties':False}},
  {'name':'project.toolchain.get','description':'Consulta configuração, imagens reutilizáveis e ativações da toolchain sem executar build','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'ref':{'type':'string','pattern':'^[A-Za-z0-9._/-]+$'}},'required':['slug'],'additionalProperties':False}},
- {'name':'project.toolchain.validate','description':'Valida catálogo, archive e script de provisionamento em modo side-effect-free','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'ref':{'type':'string','pattern':'^[A-Za-z0-9._/-]+$'},'expected_revision':{'type':'integer','minimum':1}},'required':['slug'],'additionalProperties':False}},
- {'name':'project.toolchain.plan','description':'Planeja imagens imutáveis por serviço, digests, catálogo, scanner e reutilização sem construir imagens','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'ref':{'type':'string','pattern':'^[A-Za-z0-9._/-]+$'},'expected_revision':{'type':'integer','minimum':1}},'required':['slug'],'additionalProperties':False}},
- {'name':'project.toolchain.build.plan','description':'Alias explícito do plano de construção da toolchain; não cria imagem','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'ref':{'type':'string','pattern':'^[A-Za-z0-9._/-]+$'},'expected_revision':{'type':'integer','minimum':1}},'required':['slug'],'additionalProperties':False}},
+ {'name':'project.toolchain.validate','description':'Valida catálogo, archive e script de provisionamento em modo side-effect-free','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'ref':{'type':'string','pattern':'^[A-Za-z0-9._/-]+$'},'expected_revision':{'type':'integer','minimum':0}},'required':['slug'],'additionalProperties':False}},
+ {'name':'project.toolchain.plan','description':'Planeja imagens imutáveis por serviço, digests, catálogo, scanner e reutilização sem construir imagens','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'ref':{'type':'string','pattern':'^[A-Za-z0-9._/-]+$'},'expected_revision':{'type':'integer','minimum':0}},'required':['slug'],'additionalProperties':False}},
+ {'name':'project.toolchain.build.plan','description':'Alias explícito do plano de construção da toolchain; não cria imagem','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'ref':{'type':'string','pattern':'^[A-Za-z0-9._/-]+$'},'expected_revision':{'type':'integer','minimum':0}},'required':['slug'],'additionalProperties':False}},
  {'name':'approval.request-toolchain-build','description':'Solicita aprovação humana vinculada ao plano, revisão, archive e digests da toolchain','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'ref':{'type':'string','pattern':'^[A-Za-z0-9._/-]+$'},'expected_revision':{'type':'integer','minimum':1},'plan_digest':{'type':'string','pattern':'^[a-f0-9]{64}$'},'reason':{'type':'string','minLength':4,'maxLength':500},'ttl_seconds':{'type':'integer','minimum':60,'maximum':86400}},'required':['slug','expected_revision','plan_digest','reason'],'additionalProperties':False}},
  {'name':'project.toolchain.build.execute','description':'Enfileira build aprovado da toolchain usando reserve-effect-finalize; não ativa imagens','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'ref':{'type':'string','pattern':'^[A-Za-z0-9._/-]+$'},'expected_revision':{'type':'integer','minimum':1},'plan_digest':{'type':'string','pattern':'^[a-f0-9]{64}$'},'approval_id':{'type':'string','pattern':'^apr_[a-f0-9]{20}$'}},'required':['slug','expected_revision','plan_digest','approval_id'],'additionalProperties':False}},
  {'name':'project.toolchain.build.status','description':'Consulta estado e resultado sanitizado de um build de toolchain','inputSchema':{'type':'object','properties':{'job_id':{'type':'string','pattern':'^toolchain_[a-f0-9]{24}$'}},'required':['job_id'],'additionalProperties':False}},
@@ -803,6 +809,26 @@ def project_config_call(method,path,payload=None,timeout=45):
         try:data=json.load(e)
         except Exception:data={'ok':False,'error':{'code':'project_config_error','message':'Falha ao consultar a configuração do projeto.'}}
         return e.code,data
+def toolchain_configuration_revision(slug,expected_revision=0):
+    code,current=project_config_call('GET','/v1/projects/'+urllib.parse.quote(slug,safe='')+'/configuration')
+    actual=int(current.get('currentRevision') or 0) if isinstance(current,dict) else 0
+    if code!=200 or actual<1:
+        raise ToolStateError({
+            'code':'toolchain_not_configured',
+            'message':'O projeto ainda não possui configuração ou imagem de toolchain ativa. Aprove o cloudiff.yaml para criar a revisão 1 antes de usar a toolchain.',
+            'currentRevision':actual,'minimumRevision':1,'configured':False,
+            'nextAction':'Criar e aprovar o cloudiff.yaml para tornar o projeto configured e iniciar a revisão 1.',
+        })
+    expected=int(expected_revision or 0)
+    if expected>=1 and expected!=actual:
+        raise ToolStateError({
+            'code':'revision_conflict',
+            'message':f'A revisão esperada ({expected}) não corresponde à revisão atual ({actual}).',
+            'expectedRevision':expected,'currentRevision':actual,'minimumRevision':1,'configured':True,
+        })
+    return actual
+
+
 def project_environment_call(method,slug,path='',payload=None,query=None,timeout=45):
     suffix='/v1/projects/'+urllib.parse.quote(slug,safe='')+'/environment'+path
     if query:suffix+='?'+urllib.parse.urlencode(query)
@@ -1804,17 +1830,19 @@ class H(BaseHTTPRequestHandler):
                         if not required.issubset(args) or not set(args).issubset(allowed):raise ValueError('slug é obrigatório; ref é opcional.')
                         slug=str(args['slug']).strip();ref=str(args.get('ref') or 'main').strip();control('/v1/projects/'+urllib.parse.quote(slug,safe=''))
                         code,data=build_broker_call('GET','/v1/projects/'+urllib.parse.quote(slug,safe='')+'/toolchain?'+urllib.parse.urlencode({'ref':ref}),timeout=180)
-                        if code!=200 or not data.get('ok'):raise ValueError('Falha ao consultar a toolchain.')
+                        if code!=200 or not data.get('ok'):
+                            error=data.get('error') or {};error_code=str(error.get('code') if isinstance(error,dict) else error or 'toolchain_query_failed')
+                            if error_code in {'configuration_required','toolchain_not_configured'}:
+                                toolchain_configuration_revision(slug,0)
+                            message=str(error.get('message') if isinstance(error,dict) else '') or 'Falha ao consultar a toolchain.'
+                            raise ToolStateError({'code':error_code,'message':message})
                         data['secret_values_included']=False;content=data
                     else:
                         required={'slug'};allowed=required|{'ref','expected_revision'}
                         if not required.issubset(args) or not set(args).issubset(allowed):raise ValueError('slug é obrigatório; ref e expected_revision são opcionais.')
                         slug=str(args['slug']).strip();ref=str(args.get('ref') or 'main').strip();expected=int(args.get('expected_revision') or 0)
                         control('/v1/projects/'+urllib.parse.quote(slug,safe=''))
-                        if expected<1:
-                            code,current=project_config_call('GET','/v1/projects/'+urllib.parse.quote(slug,safe='')+'/configuration')
-                            if code!=200 or int(current.get('currentRevision') or 0)<1:raise ValueError('O projeto precisa de configuração aprovada antes da toolchain.')
-                            expected=int(current['currentRevision'])
+                        expected=toolchain_configuration_revision(slug,expected)
                         content=toolchain_broker_plan(slug,ref,expected,trace_id,validate=name=='project.toolchain.validate')
                 elif name=='approval.request-toolchain-build':
                     required={'slug','expected_revision','plan_digest','reason'};allowed=required|{'ref','ttl_seconds'}
@@ -2784,6 +2812,10 @@ class H(BaseHTTPRequestHandler):
             _args=args if 'args' in locals() else {}
             _data=enrich_tool_error(_tool_name,_args,e.payload,e.payload.get('message','Parâmetros inválidos.'))
             self.sendj(200,{'jsonrpc':'2.0','id':req.get('id') if 'req' in locals() else None,'error':{'code':-32602,'message':_data['message'],'data':_data}})
+        except ToolStateError as e:
+            _tool_name=tool if 'tool' in locals() else (name if 'name' in locals() else '')
+            _data=dict(e.payload);_data['tool']=_tool_name or _data.get('tool') or ''
+            self.sendj(200,{'jsonrpc':'2.0','id':req.get('id') if 'req' in locals() else None,'error':{'code':-32009,'message':str(_data.get('message') or 'Estado do projeto não permite esta operação.'),'data':_data}})
         except urllib.error.HTTPError as e:self.sendj(200,{'jsonrpc':'2.0','id':req.get('id') if 'req' in locals() else None,'error':{'code':-32004,'message':'Recurso não encontrado' if e.code==404 else 'Falha no plano de controle'}})
         except Exception as e:
             _tool_name=tool if 'tool' in locals() else (name if 'name' in locals() else '')

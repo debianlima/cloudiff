@@ -16,6 +16,6 @@ class KomodoUnifiedLayoutEnsureTests(unittest.TestCase):
         self.assertIn('create_or_update_stack(project, repo_info, server_id, str(payload.get("runtime_layout") or "legacy"))',self.source)
     def test_worker_surfaces_component_failure(self):
         self.assertIn("provision-report.json",self.worker)
-        self.assertIn("failures.append(name+': '",self.worker)
+        self.assertIn("failures.append(name + ': ' +",self.worker)
 
 if __name__=='__main__': unittest.main()

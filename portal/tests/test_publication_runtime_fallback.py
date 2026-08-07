@@ -23,7 +23,7 @@ class PublicationRuntimeFallbackTest(unittest.TestCase):
             self.skipTest("runtime source is outside the isolated Portal release")
         source = runtime.read_text()
         self.assertIn('expected_names = {project, f"cloudif-{project}"}', source)
-        self.assertIn('expected_repo = f"cloudif/{project}"', source)
+        self.assertIn('expected_repo_suffix = "/cloudif-" + project', source);self.assertNotIn('expected_repo = f"cloudif/{project}"', source)
         self.assertIn('item.get("name") == "Local"', source)
         self.assertIn('get("state") == "Ok"', source)
 

@@ -26,7 +26,7 @@ class MultiserviceDeploymentMCPContractTests(unittest.TestCase):
     def test_deployment_broker_depends_on_reconciled_sources(self):
         source=(ROOT/'components/control-plane/current-apps/deployment-broker-current/cloudif-deployment-broker.py').read_text()
         unit=(ROOT/'components/control-plane/etc/systemd/system/cloudif-deployment-broker.service').read_text()
-        for marker in ('PROJECT_CONFIG_URL','PROJECT_RECONCILER_URL','BUILD_BROKER_URL','_multiservice_deployment_plan','build-job-required','secret-resolution-unavailable','secret_values_included'):
+        for marker in ('PROJECT_CONFIG_URL','PROJECT_RECONCILER_URL','BUILD_BROKER_URL','_multiservice_deployment_plan','build-job-required','secret-resolver-unavailable','secret_values_included'):
             self.assertIn(marker,source)
         for marker in ('cloudif-project-config-controller.service','cloudif-project-config-reconciler.service','cloudif-build-broker.service','EnvironmentFile=/etc/cloudif/project-config-controller.env','EnvironmentFile=/etc/cloudif/project-config-reconciler.env','EnvironmentFile=/etc/cloudif/build-broker.env'):
             self.assertIn(marker,unit)

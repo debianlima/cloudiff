@@ -26,6 +26,92 @@ SENSITIVE_VALUE_RE=re.compile(
 )
 
 
+ENVIRONMENT_REQUEST_CONTRACTS={
+    'validate':{
+        'requiredFields':['environment','changes'],
+        'acceptedFields':['actor','environment','changes'],
+        'fieldTypes':{'actor':'string','environment':'string','changes':'array<object>'},
+        'minimalExample':{'environment':'preview','changes':[{'operation':'upsert','name':'API_URL','value':'https://example.invalid'}]},
+    },
+    'change/plan':{
+        'requiredFields':['environment','changes'],
+        'acceptedFields':['actor','environment','changes','expectedRevision','expected_revision','ttlSeconds','ttl_seconds'],
+        'fieldTypes':{'actor':'string','environment':'string','changes':'array<object>','expectedRevision':'integer >= 0','expected_revision':'integer >= 0','ttlSeconds':'integer','ttl_seconds':'integer'},
+        'minimalExample':{'environment':'preview','changes':[{'operation':'upsert','name':'API_URL','value':'https://example.invalid'}],'expectedRevision':0},
+    },
+    'change/apply':{
+        'requiredFields':['planDigest','approved'],
+        'acceptedFields':['actor','planDigest','plan_digest','expectedRevision','expected_revision','approved'],
+        'fieldTypes':{'actor':'string','planDigest':'string (64 hex)','plan_digest':'string (64 hex)','expectedRevision':'integer >= 0','expected_revision':'integer >= 0','approved':'boolean'},
+        'minimalExample':{'planDigest':'0'*64,'expectedRevision':0,'approved':True},
+    },
+    'promote/plan':{
+        'requiredFields':['sourceEnvironment','targetEnvironment'],
+        'acceptedFields':['actor','sourceEnvironment','source_environment','targetEnvironment','target_environment','service','expectedRevision','expected_revision','ttlSeconds','ttl_seconds'],
+        'fieldTypes':{'actor':'string','sourceEnvironment':'string','source_environment':'string','targetEnvironment':'string','target_environment':'string','service':'string','expectedRevision':'integer >= 0','expected_revision':'integer >= 0','ttlSeconds':'integer','ttl_seconds':'integer'},
+        'minimalExample':{'sourceEnvironment':'preview','targetEnvironment':'homologation','expectedRevision':0},
+    },
+    'promote/apply':{
+        'requiredFields':['planDigest','approved'],
+        'acceptedFields':['actor','planDigest','plan_digest','expectedRevision','expected_revision','approved'],
+        'fieldTypes':{'actor':'string','planDigest':'string (64 hex)','plan_digest':'string (64 hex)','expectedRevision':'integer >= 0','expected_revision':'integer >= 0','approved':'boolean'},
+        'minimalExample':{'planDigest':'0'*64,'expectedRevision':0,'approved':True},
+    },
+    'import/plan':{
+        'requiredFields':['environment','content'],
+        'acceptedFields':['actor','environment','service','content','secretNames','secret_names','expectedRevision','expected_revision','ttlSeconds','ttl_seconds'],
+        'fieldTypes':{'actor':'string','environment':'string','service':'string','content':'string','secretNames':'array<string>','secret_names':'array<string>','expectedRevision':'integer >= 0','expected_revision':'integer >= 0','ttlSeconds':'integer','ttl_seconds':'integer'},
+        'minimalExample':{'environment':'preview','content':'PUBLIC_API_URL=https://example.invalid\n','expectedRevision':0},
+    },
+}
+ENVIRONMENT_CHANGE_FIELDS=['operation','name','service','value','secret_reference','secretReference','secretRef','definition']
+ENVIRONMENT_CHANGE_FIELD_TYPES={'operation':'string: upsert|delete','name':'string: ^[A-Z_][A-Z0-9_]{0,127}$','service':'string','value':'any public JSON value','secret_reference':'string reference','secretReference':'string reference','secretRef':'string reference','definition':'object'}
+
+def environment_request_contract(operation:str)->dict[str,Any]:
+    contract=ENVIRONMENT_REQUEST_CONTRACTS.get(str(operation or ''),{})
+    return {**contract,'acceptedChangeFields':list(ENVIRONMENT_CHANGE_FIELDS),'changeFieldTypes':dict(ENVIRONMENT_CHANGE_FIELD_TYPES),'environmentAllowedValues':list(ENVIRONMENTS)}
+
+def actionable_request_error(operation:str,body:Any,error:Exception|str)->dict[str,Any]:
+    contract=environment_request_contract(operation);raw=str(error or 'invalid_request')[:240];detail=raw.split(':',1)[0]
+    data=body if isinstance(body,dict) else {}
+    field='';expected='object';message='A solicitação não corresponde ao contrato esperado.'
+    for required in contract.get('requiredFields') or []:
+        aliases={'planDigest':['planDigest','plan_digest'],'sourceEnvironment':['sourceEnvironment','source_environment'],'targetEnvironment':['targetEnvironment','target_environment']}
+        names=aliases.get(required,[required])
+        if not any(name in data and data.get(name) not in (None,'') for name in names):
+            field=required;expected=(contract.get('fieldTypes') or {}).get(required,'required');message=f'O campo {required} é obrigatório.';detail='missing_field';break
+    if not field:
+        if detail=='invalid_environment':field='environment';expected='string';message='O campo environment deve usar um ambiente permitido.'
+        elif detail=='changes_must_be_nonempty_list':field='changes';expected='array<object> não vazio';message='O campo changes deve ser uma lista não vazia de alterações.'
+        elif detail=='invalid_operation':
+            try:index=int(raw.split(':',1)[1])
+            except Exception:index=0
+            changes=data.get('changes') if isinstance(data.get('changes'),list) else []
+            if index>=len(changes) or not isinstance(changes[index],dict):field=f'changes.{index}';expected='object';message=f'O campo changes.{index} deve ser um objeto.'
+            else:field=f'changes.{index}.operation';expected='string: upsert|delete';message=f'O campo changes.{index}.operation deve ser upsert ou delete.'
+        elif detail=='invalid_environment_name':
+            try:index=int(raw.split(':',1)[1])
+            except Exception:index=0
+            field=f'changes.{index}.name';expected='string: ^[A-Z_][A-Z0-9_]{0,127}$';message=f'O campo changes.{index}.name possui formato inválido.'
+        elif detail in {'invalid_service','service_not_found','project_configuration_required_for_service_scope'}:field='changes.*.service';expected='string de serviço configurado';message='O serviço informado não é válido para este projeto.'
+        elif detail=='duplicate_environment_operation':field='changes';expected='array<object> com pares service/name únicos';message='changes contém alterações duplicadas para a mesma variável e serviço.'
+        elif detail.startswith('dotenv_'):field='content';expected='string no formato KEY=VALUE';message='O conteúdo .env não corresponde ao formato aceito.'
+        elif detail.startswith('invalid_environment_plan_digest'):field='planDigest';expected='string (64 hex)';message='O digest do plano de ambiente possui formato inválido.'
+        else:
+            expected_types=contract.get('fieldTypes') or {}
+            for name,type_name in expected_types.items():
+                value=data.get(name)
+                if name in {'expectedRevision','expected_revision','ttlSeconds','ttl_seconds'} and name in data and (isinstance(value,bool) or not isinstance(value,int)):
+                    field=name;expected=type_name;message=f'O campo {name} deve ser do tipo inteiro.';detail='invalid_field_type';break
+    return {
+        'code':'invalid_request' if detail not in {'missing_field','invalid_field_type'} else detail,
+        'detailCode':detail,'message':message,'field':field,'expectedType':expected,
+        'acceptedFields':contract.get('acceptedFields') or [],'requiredFields':contract.get('requiredFields') or [],
+        'acceptedChangeFields':contract.get('acceptedChangeFields') or [],'changeFieldTypes':contract.get('changeFieldTypes') or {},
+        'environmentAllowedValues':contract.get('environmentAllowedValues') or [],'minimalExample':contract.get('minimalExample') or {},
+    }
+
+
 def now()->int:return int(time.time())
 def canonical(value:Any)->bytes:return json.dumps(value,ensure_ascii=False,sort_keys=True,separators=(',',':'),default=str).encode()
 def digest(value:Any)->str:return hashlib.sha256(canonical(value)).hexdigest()

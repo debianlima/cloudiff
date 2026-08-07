@@ -129,7 +129,7 @@ class ToolchainMCPContractTests(unittest.TestCase):
         self.assertIn("'/v1/toolchain/validate'",http)
         self.assertIn("'/v1/toolchain/build'",http)
 
-    def test_role_scopes_are_coherent_without_secret_read_scope(self):
+    def test_role_scopes_are_coherent_without_implicit_secret_value_scope(self):
         registry=REGISTRY.read_text();onboarding=ONBOARDING.read_text()
         scopes={
           'project:toolchain-read','project:toolchain-plan','approval:request-toolchain-build',
@@ -143,8 +143,9 @@ class ToolchainMCPContractTests(unittest.TestCase):
         self.assertNotIn('PROJECT_TOOLCHAIN_WRITE_SCOPES',viewer)
         developer=registry[registry.index("'developer':"):registry.index("'maintainer':")]
         self.assertIn('PROJECT_TOOLCHAIN_WRITE_SCOPES',developer)
-        self.assertNotIn('secret-read',registry)
-        self.assertNotIn('secret-read',onboarding)
+        toolchain_block=registry[registry.index('PROJECT_TOOLCHAIN_READ_SCOPES'):registry.index('PROJECT_ADMIN_SCOPES')]
+        self.assertNotIn('environment-secret',toolchain_block)
+        self.assertNotIn('project:environment-secret-read-execute',onboarding)
 
 
 if __name__=='__main__':unittest.main()

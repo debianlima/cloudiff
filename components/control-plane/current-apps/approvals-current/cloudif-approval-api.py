@@ -4,6 +4,7 @@ import cloudif_approval_policy as approval_policy
 from http.server import BaseHTTPRequestHandler,ThreadingHTTPServer
 from urllib.parse import urlparse,parse_qs
 DB=os.environ.get('CLOUDIF_APPROVAL_DB','/var/lib/cloudif/approvals/approvals.db');TOKEN=os.environ.get('CLOUDIF_APPROVAL_TOKEN','');HOST=os.environ.get('CLOUDIF_APPROVAL_HOST','127.0.0.1');PORT=int(os.environ.get('CLOUDIF_APPROVAL_PORT','18204'))
+DUAL_APPROVAL_ACTIONS={'deployment.production.activate','project.environment.secret.read'}
 def c():
  x=sqlite3.connect(DB,timeout=20);x.row_factory=sqlite3.Row;x.execute('pragma busy_timeout=20000');return x
 def init():
@@ -46,7 +47,7 @@ class H(BaseHTTPRequestHandler):
    x=c();x.execute('begin immediate');expire_rows(x,now)
    if p=='/v1/approvals':
     slug=str(d.get('project_slug')or'').strip();action=str(d.get('action')or'').strip();user=str(d.get('requested_by')or'').strip();ttl=max(60,min(int(d.get('ttl_seconds') or 900),86400));assert slug and action and user
-    requester_role=str(d.get('requester_role') or 'agent').strip().lower();self_authorize=bool(d.get('self_authorize'));production=action.startswith('deployment.production');dual=action=='deployment.production.activate'
+    requester_role=str(d.get('requester_role') or 'agent').strip().lower();self_authorize=bool(d.get('self_authorize'));production=action.startswith('deployment.production');dual=action in DUAL_APPROVAL_ACTIONS
     privileged=requester_role in {'admin','professor'};policy=approval_policy.active_policy(x,slug,action,user)
     policy_applied=bool(policy)
     status='approved' if policy_applied or (production and self_authorize and privileged and not dual) else 'pending'
@@ -62,6 +63,7 @@ class H(BaseHTTPRequestHandler):
     r=x.execute('select * from approvals where approval_id=?',(aid,)).fetchone();assert r
     if always_allow:approval_policy.request_persistent(x,aid,approver,approver_role or 'human',now)
     if str(r['action']).startswith('deployment.production') and approver_role not in {'admin','professor'}:raise ValueError('production_approver_role_required')
+    if str(r['action']) in DUAL_APPROVAL_ACTIONS and not str(r['action']).startswith('deployment.production') and approver_role not in {'admin','professor'}:raise ValueError('critical_approver_role_required')
     if r['expires_at']<=now:raise ValueError('expired')
     if int(r['two_approvers_required'] or 0)==1:
      if approver==r['requested_by']:raise ValueError('requester_cannot_approve_activation')

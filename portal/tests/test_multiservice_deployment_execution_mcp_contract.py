@@ -55,7 +55,9 @@ class MultiserviceDeploymentExecutionMCPContractTests(unittest.TestCase):
         self.assertIn("'secret_references_included':False",plan)
         effect=self.broker[self.broker.index('def _multiservice_execute'):self.broker.index('def _production_config',self.broker.index('def _multiservice_execute'))]
         self.assertNotIn('_resolve_environment(',effect)
-        self.assertIn("raise PermissionError('secret_resolution_unavailable')",effect)
+        self.assertIn('_resolve_runtime_secrets(',effect)
+        self.assertIn('_runtime_configuration_for_executor(',effect)
+        self.assertIn("safe['secret_references_in_metadata']=False",effect)
         self.assertIn('EnvironmentFile=/etc/cloudif/multiservice-deployment-executor.env',self.unit)
         self.assertIn('ReadOnlyPaths=/srv/cloudif/lib /srv/cloudif/tenants /etc/cloudif',self.unit)
 

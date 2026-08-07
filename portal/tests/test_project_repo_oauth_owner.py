@@ -10,7 +10,7 @@ class ProjectRepoOauthOwnerTests(unittest.TestCase):
   self.assertIn('/git/(?!user/)[^/',self.portal)
   self.assertNotIn('/git/cloudif/[^',self.portal)
  def test_onboarding_redirect_uses_owner(self):
-  self.assertIn("repo_path=f'/git/{owner}/cloudif-{slug}'",self.onboarding)
+  self.assertIn('repo_web = f"https://cloudiff.duckdns.org/git/{owner}/cloudif-{slug}"',self.onboarding)
   self.assertNotIn('%2Fgit%2Fcloudif%2F',self.onboarding)
  def test_ui_fallback_uses_project_owner(self):
   self.assertIn("p.get('owner')",self.pages)

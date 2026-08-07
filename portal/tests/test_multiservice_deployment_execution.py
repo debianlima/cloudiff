@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import sys
 import types
 import unittest
@@ -75,13 +76,25 @@ class MultiserviceDeploymentExecutionTests(unittest.TestCase):
                 self.module._multiservice_execute(self.request(),'exec_'+'4'*32)
         executor.assert_not_called()
 
-    def test_secret_reference_blocks_before_executor(self):
-        plan=self.plan(secret_reference='vault://project/demo/db')
-        with patch.object(self.module,'_multiservice_deployment_plan',return_value=plan),             patch.object(self.module,'_deployment_executor_call') as executor:
-            with self.assertRaises(PermissionError):
-                self.module._multiservice_execute(self.request(),'exec_'+'5'*32)
-        executor.assert_not_called()
+    def test_secret_reference_is_resolved_only_after_approval_bound_plan(self):
+        plan=self.plan(secret_reference='cloudiff-secret://demo/homologation/api/DATABASE_URL/v1')
+        plan['execution_allowed']=True;plan['blockers']=[]
+        resolved={'api':{'DATABASE_URL':'runtime-only-secret'}};captured={}
+        def executor(method,path,payload=None,timeout=300):
+            captured['payload']=json.loads(json.dumps(payload));return 201,{'ok':True,'deployment_id':'dep_'+'a'*24,'status':'running'}
+        with patch.object(self.module,'_multiservice_deployment_plan',return_value=plan),             patch.object(self.module,'_resolve_runtime_secrets',return_value=resolved),             patch.object(self.module,'_deployment_executor_call',side_effect=executor),             patch.object(self.module,'idem_mark_effect'):
+            code,result=self.module._multiservice_execute(self.request(),'exec_'+'5'*32)
+        self.assertEqual(code,201);self.assertEqual(captured['payload']['variables']['api']['DATABASE_URL'],'runtime-only-secret')
+        self.assertEqual(captured['payload']['runtimeConfiguration']['secretRuntimeReferences'],{'api':{}})
+        self.assertNotIn('runtime-only-secret',json.dumps(result));self.assertFalse(result['secret_values_in_metadata']);self.assertFalse(result['secret_references_in_metadata'])
+        self.assertEqual(resolved,{})
 
+    def test_secret_resolution_failure_happens_before_executor_effect(self):
+        plan=self.plan(secret_reference='cloudiff-secret://demo/homologation/api/DATABASE_URL/v1');plan['execution_allowed']=True;plan['blockers']=[]
+        with patch.object(self.module,'_multiservice_deployment_plan',return_value=plan),             patch.object(self.module,'_resolve_runtime_secrets',side_effect=RuntimeError('secret_resolution_failed')),             patch.object(self.module,'_deployment_executor_call') as executor:
+            with self.assertRaisesRegex(RuntimeError,'secret_resolution_failed'):
+                self.module._multiservice_execute(self.request(),'exec_'+'6'*32)
+        executor.assert_not_called()
 
     def test_execution_id_deterministically_selects_deployment_id(self):
         first=self.module._deployment_id('exec_'+'1'*32)

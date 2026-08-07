@@ -132,6 +132,14 @@ class ProjectConfigControllerHTTPTests(unittest.TestCase):
         self.assertEqual(current['currentRevision'], 1)
         self.assertEqual(current['configuration']['project']['type'], 'multi-service')
 
+    def test_environment_validation_errors_include_field_type_contract_and_minimal_example(self):
+        status, body = self.request('POST', '/v1/projects/http-project/environment/validate', {'environment': 'preview'})
+        self.assertEqual(status, 400);error=body['error']
+        self.assertEqual(error['code'],'missing_field');self.assertEqual(error['field'],'changes');self.assertEqual(error['expectedType'],'array<object>')
+        self.assertIn('changes',error['acceptedFields']);self.assertIn('changes',error['requiredFields']);self.assertIn('changes',error['minimalExample']);self.assertIn('name',error['acceptedChangeFields'])
+        status, body = self.request('POST', '/v1/projects/http-project/environment/validate', {'environment': 'preview', 'changes': [42]})
+        self.assertEqual(status,400);error=body['error'];self.assertEqual(error['code'],'invalid_request');self.assertEqual(error['field'],'changes.0');self.assertEqual(error['expectedType'],'object')
+
     def test_membership_event_only_changes_membership_revision(self):
         status, before = self.request('GET', '/v1/projects/http-project/configuration')
         self.assertEqual(status, 200)

@@ -89,7 +89,7 @@ class ProjectEnvironmentWebAPITests(unittest.TestCase):
     def test_coexist_routes_require_json_csrf_and_use_environment_module(self):
         source=COEXIST.read_text()
         for marker in (
-          "environment/(validate|change/plan|promote/plan|approval/request|change/execute|promote/execute)",
+          "environment/(validate|change/plan|promote/plan|import/plan|approval/request|change/execute|promote/execute)",
           "from cloudif_project_environment_web import handle_get",
           "from cloudif_project_environment_web import handle_post",
           "'X-CSRF-Token'","_prod_csrf_equal","application/json","payload_too_large",

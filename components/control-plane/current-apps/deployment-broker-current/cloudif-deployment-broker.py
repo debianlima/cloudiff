@@ -3,7 +3,12 @@ import datetime as dt, hashlib, hmac, json, os, re, sys, urllib.parse, urllib.re
 from pathlib import Path
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 sys.path.insert(0,'/srv/cloudif/lib')
-import cloudif_release_manager as rm
+try:
+ import cloudif_release_manager as rm
+except ModuleNotFoundError:
+ local_lib=Path(__file__).resolve().parents[2]/'srv/cloudif/lib'
+ if str(local_lib) not in sys.path:sys.path.insert(0,str(local_lib))
+ import cloudif_release_manager as rm
 HOST=os.environ.get('CLOUDIF_DEPLOYMENT_BROKER_HOST','127.0.0.1')
 PORT=int(os.environ.get('CLOUDIF_DEPLOYMENT_BROKER_PORT','18207'))
 TOKEN=os.environ.get('CLOUDIF_DEPLOYMENT_BROKER_TOKEN','')
@@ -76,6 +81,7 @@ HOMOLOGATION_URL=os.environ.get('CLOUDIF_PRODUCTION_HOMOLOGATION_URL','http://10
 HOMOLOGATION_TOKEN=os.environ.get('CLOUDIF_PRODUCTION_HOMOLOGATION_TOKEN','')
 PROJECT_CONFIG_URL=os.environ.get('CLOUDIF_PROJECT_CONFIG_URL','http://127.0.0.1:18219').rstrip('/')
 PROJECT_CONFIG_TOKEN=os.environ.get('CLOUDIF_PROJECT_CONFIG_TOKEN','')
+SECRET_RESOLVER_TOKEN=os.environ.get('CLOUDIF_SECRET_RESOLVER_TOKEN','')
 PROJECT_RECONCILER_URL=os.environ.get('CLOUDIF_PROJECT_CONFIG_RECONCILER_URL','http://127.0.0.1:18229').rstrip('/')
 PROJECT_RECONCILER_TOKEN=os.environ.get('CLOUDIF_PROJECT_CONFIG_RECONCILER_TOKEN','')
 BUILD_BROKER_URL=os.environ.get('CLOUDIF_BUILD_BROKER_URL','http://127.0.0.1:18213').rstrip('/')
@@ -130,6 +136,55 @@ def _build_runtime_configuration(job_id):
  if code!=200 or not data.get('ok'):raise RuntimeError('multiservice_runtime_configuration_unavailable')
  if data.get('internal') is not True or data.get('secretValuesIncluded') is not False:raise ValueError('runtime_secret_contract_invalid')
  return data
+
+def _resolve_runtime_secrets(slug,environment,references):
+ if not SECRET_RESOLVER_TOKEN:raise RuntimeError('secret_resolver_unavailable')
+ if not isinstance(references,dict):raise ValueError('invalid_secret_references')
+ payload={'environment':str(environment or ''),'references':references,'actor':'deployment-broker'}
+ data=json.dumps(payload,ensure_ascii=False,separators=(',',':')).encode()
+ path='/v1/projects/'+urllib.parse.quote(str(slug or ''),safe='')+'/environment/secrets/resolve-internal'
+ request=urllib.request.Request(PROJECT_CONFIG_URL+path,data=data,method='POST',headers={'Authorization':'Bearer '+PROJECT_CONFIG_TOKEN,'X-CloudIF-Secret-Resolver-Token':SECRET_RESOLVER_TOKEN,'Content-Type':'application/json','Accept':'application/json'})
+ try:
+  with urllib.request.urlopen(request,timeout=30) as response:result=json.load(response)
+ except urllib.error.HTTPError as error:
+  try:failure=json.load(error);code=(failure.get('error') or {}).get('code') if isinstance(failure,dict) else ''
+  except Exception:code=''
+  raise RuntimeError(str(code or 'secret_resolution_failed')) from error
+ except Exception as error:
+  if isinstance(error,RuntimeError):raise
+  raise RuntimeError('secret_resolution_failed') from error
+ if not isinstance(result,dict) or result.get('ok') is not True or result.get('internal') is not True or result.get('secretValuesIncluded') is not True:raise RuntimeError('secret_resolution_contract_invalid')
+ resolved=result.get('resolvedSecrets')
+ if not isinstance(resolved,dict) or set(resolved)!=set(references):raise RuntimeError('secret_resolution_scope_mismatch')
+ normalized={}
+ for service,expected in references.items():
+  values=resolved.get(service)
+  if not isinstance(expected,dict) or not isinstance(values,dict) or set(values)!=set(expected):raise RuntimeError('secret_resolution_scope_mismatch')
+  normalized[str(service)]={}
+  for name,value in values.items():
+   if not isinstance(value,str):raise RuntimeError('secret_resolution_contract_invalid')
+   normalized[str(service)][str(name)]=value
+ return normalized
+
+def _runtime_configuration_for_executor(runtime_configuration):
+ if not isinstance(runtime_configuration,dict):raise ValueError('runtime_configuration_missing')
+ safe=json.loads(json.dumps(runtime_configuration,ensure_ascii=False,separators=(',',':')))
+ references=safe.get('secretRuntimeReferences') or {}
+ if not isinstance(references,dict):raise ValueError('runtime_secret_contract_invalid')
+ safe['secretRuntimeReferences']={str(service):{} for service in references}
+ safe['secretValuesIncluded']=False
+ return safe
+
+def _merge_runtime_variables(public_runtime,resolved):
+ merged={}
+ for service,values in (public_runtime or {}).items():
+  if not isinstance(values,dict):raise ValueError('runtime_environment_contract_invalid')
+  merged[str(service)]={str(name):value for name,value in values.items()}
+ for service,values in (resolved or {}).items():
+  if not isinstance(values,dict):raise ValueError('runtime_secret_contract_invalid')
+  target=merged.setdefault(str(service),{})
+  for name,value in values.items():target[str(name)]=value
+ return merged
 
 def _deployment_runtime_summary(runtime_configuration):
  if not isinstance(runtime_configuration,dict):return {'environment':None,'variableNames':{},'secretNames':{},'digests':{},'secretReferencesPresent':False}
@@ -272,7 +327,7 @@ def multiservice_plan(payload,include_internal=False):
   if int(runtime_configuration.get('config_revision') or 0)!=int(config.get('currentRevision') or 0):blockers.append('build-config-revision-mismatch')
   if str(runtime_configuration.get('config_digest') or '')!=str(config.get('configDigest') or ''):blockers.append('build-config-digest-mismatch')
   if str(runtime_configuration.get('toolchain_digest') or '')!=str(config.get('toolchainDigest') or ''):blockers.append('build-toolchain-digest-mismatch')
-  if runtime_summary.get('secretReferencesPresent'):blockers.append('secret-resolution-unavailable')
+  if runtime_summary.get('secretReferencesPresent') and not SECRET_RESOLVER_TOKEN:blockers.append('secret-resolver-unavailable')
  if not applications and build and build.get('status')=='succeeded':blockers.append('build-applications-missing')
  try:routes=_deployment_routes(configuration,applications,payload.get('routes')) if applications else []
  except ValueError:routes=[];blockers.append('routes-invalid')
@@ -291,7 +346,7 @@ def multiservice_plan(payload,include_internal=False):
   'applications':applications,'routes':routes,'variables_digest':variables_digest,
  }
  plan_digest=hashlib.sha256(json.dumps(material,sort_keys=True,separators=(',',':')).encode()).hexdigest();blockers=sorted(set(blockers))
- summary={'technologies':sorted({item['runtime'] for item in applications if item.get('runtime')}),'services':[{'service':item['service'],'runtime':item['runtime'],'port':item['port'],'healthcheck':item['healthcheck']} for item in applications],'routes':routes,'runtimeEnvironment':runtime_summary,'buildJobId':build_job_id,'hooks':[{'phase':phase,'service':item.get('service'),'script':item.get('script')} for phase,items in (configuration.get('hooks') or {}).items() for item in (items or []) if isinstance(item,dict)]}
+ summary={'technologies':sorted({item['runtime'] for item in applications if item.get('runtime')}),'services':[{'service':item['service'],'runtime':item['runtime'],'port':item['port'],'healthcheck':item['healthcheck']} for item in applications],'routes':routes,'runtimeEnvironment':runtime_summary,'buildJobId':build_job_id,'secretResolutionRequired':bool(runtime_summary.get('secretReferencesPresent')),'secretResolverAvailable':bool(SECRET_RESOLVER_TOKEN),'hooks':[{'phase':phase,'service':item.get('service'),'script':item.get('script')} for phase,items in (configuration.get('hooks') or {}).items() for item in (items or []) if isinstance(item,dict)]}
  base={'ok':True,'side_effect_free':True,'project_slug':slug,'environment':environment,'build_job_id':build_job_id,'deployment_plan_digest':plan_digest,'operation':material,'summary':summary,'blockers':blockers,'execution_allowed':not blockers,'approval_required':True,'reconciliation':{'status':(state or {}).get('status'),'configRevision':(state or {}).get('configRevision'),'membershipRevision':(state or {}).get('membershipRevision'),'aclDigest':(state or {}).get('aclDigest')},'variables_digest':variables_digest,'secret_values_included':False,'secret_references_included':False,'secretValuesIncluded':False,'secretReferencesIncluded':False,'containers_created':False,'trace_id':trace}
  if include_internal:base['_internal_runtime_configuration']=runtime_configuration
  return base
@@ -327,16 +382,22 @@ def _multiservice_execute(d,execution_id):
  runtime_configuration=plan.pop('_internal_runtime_configuration',None)
  if not isinstance(runtime_configuration,dict):raise ValueError('runtime_configuration_missing')
  if runtime_configuration.get('secretValuesIncluded') is not False:raise ValueError('runtime_secret_contract_invalid')
- if any(bool(values) for values in (runtime_configuration.get('secretRuntimeReferences') or {}).values() if isinstance(values,dict)):raise PermissionError('secret_resolution_unavailable')
- public_runtime=runtime_configuration.get('publicRuntimeEnvironment') or {}
- variables_digest=hashlib.sha256(json.dumps(public_runtime,ensure_ascii=False,sort_keys=True,separators=(',',':')).encode()).hexdigest()
- if not hmac.compare_digest(variables_digest,str(plan.get('variables_digest') or '')):raise ValueError('variables_digest_changed')
- operation=plan['operation'];deployment_id=_deployment_id(execution_id)
- applications=[{'service':item['service'],'image_id':item['imageId'],'application_digest':item['applicationDigest'],'port':item['port'],'healthcheck':item['healthcheck']} for item in operation['applications']]
- payload={'deployment_id':deployment_id,'project_slug':plan['project_slug'],'environment':plan['environment'],'build_job_id':build_job_id,'deployment_plan_digest':digest,'build_plan_digest':operation['build_plan_digest'],'config_revision':operation['config_revision'],'config_digest':operation['config_digest'],'toolchain_digest':operation['toolchain_digest'],'archive_sha256':operation['archive_sha256'],'applications':applications,'routes':operation['routes'],'variables':public_runtime,'variables_digest':variables_digest,'runtimeConfiguration':runtime_configuration}
- idem_mark_effect(execution_id);code,result=_deployment_executor_call('POST','/v1/deployments',payload,timeout=600)
+ public_runtime=runtime_configuration.get('publicRuntimeEnvironment') or {};references=runtime_configuration.get('secretRuntimeReferences') or {}
+ approved_variables_digest=hashlib.sha256(json.dumps(public_runtime,ensure_ascii=False,sort_keys=True,separators=(',',':')).encode()).hexdigest()
+ if not hmac.compare_digest(approved_variables_digest,str(plan.get('variables_digest') or '')):raise ValueError('variables_digest_changed')
+ resolved={}
+ try:
+  if any(bool(values) for values in references.values() if isinstance(values,dict)):resolved=_resolve_runtime_secrets(plan['project_slug'],plan['environment'],references)
+  variables=_merge_runtime_variables(public_runtime,resolved);executor_runtime=_runtime_configuration_for_executor(runtime_configuration)
+  variables_digest=hashlib.sha256(json.dumps(variables,ensure_ascii=False,sort_keys=True,separators=(',',':')).encode()).hexdigest()
+  operation=plan['operation'];deployment_id=_deployment_id(execution_id)
+  applications=[{'service':item['service'],'image_id':item['imageId'],'application_digest':item['applicationDigest'],'port':item['port'],'healthcheck':item['healthcheck']} for item in operation['applications']]
+  payload={'deployment_id':deployment_id,'project_slug':plan['project_slug'],'environment':plan['environment'],'build_job_id':build_job_id,'deployment_plan_digest':digest,'build_plan_digest':operation['build_plan_digest'],'config_revision':operation['config_revision'],'config_digest':operation['config_digest'],'toolchain_digest':operation['toolchain_digest'],'archive_sha256':operation['archive_sha256'],'applications':applications,'routes':operation['routes'],'variables':variables,'variables_digest':variables_digest,'runtimeConfiguration':executor_runtime}
+  idem_mark_effect(execution_id);code,result=_deployment_executor_call('POST','/v1/deployments',payload,timeout=600)
+ finally:
+  resolved.clear()
  safe=dict(result) if isinstance(result,dict) else {'ok':False}
- safe.pop('variables',None);safe.pop('runtimeConfiguration',None);safe['variable_values_returned']=False;safe['secret_values_in_metadata']=False;safe['effect_started']=True;safe['deployment_plan_digest']=digest
+ safe.pop('variables',None);safe.pop('runtimeConfiguration',None);safe['variable_values_returned']=False;safe['secret_values_in_metadata']=False;safe['secret_references_in_metadata']=False;safe['effect_started']=True;safe['deployment_plan_digest']=digest
  return code,safe
 
 def _production_config(slug):

@@ -88,6 +88,15 @@ class PersistentHumanApprovalPolicyTests(unittest.TestCase):
         self.assertIn('approval_policy',source)
 
 
+    def test_critical_secret_read_can_be_marked_always_allow_after_two_privileged_decisions(self):
+        _,created=self.create('project.environment.secret.read');self.assertEqual(created['status'],'pending');self.assertTrue(created['two_approvers_required'])
+        code,first=self.call('POST',f"/v1/approvals/{created['approval_id']}/approve",{'approved_by':'prof-a','approver_role':'professor','always_allow':True})
+        self.assertEqual(code,200);self.assertEqual(first['status'],'pending_second');self.assertTrue(first['persistent_policy_requested'])
+        code,second=self.call('POST',f"/v1/approvals/{created['approval_id']}/approve",{'approved_by':'admin-b','approver_role':'admin'})
+        self.assertEqual(code,200);self.assertEqual(second['status'],'approved');self.assertTrue(second['persistent_policy_created'])
+        _,future=self.create('project.environment.secret.read');self.assertEqual(future['status'],'approved');self.assertTrue(future['policy_applied']);self.assertTrue(future['two_approvers_required'])
+
+
     def test_legacy_active_index_is_migrated(self):
         import sqlite3
         legacy=tempfile.TemporaryDirectory();root=Path(legacy.name);db=root/'approvals.db'

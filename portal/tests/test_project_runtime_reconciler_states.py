@@ -21,6 +21,8 @@ def load_module(root:Path):
     sys.modules[spec.name]=module;spec.loader.exec_module(module);module.STATE_DB=root/'state.db';module.init_db();return module
 
 
+_OBSERVED_UNSET=object()
+
 class ProjectRuntimeReconcilerStateTests(unittest.TestCase):
     def setUp(self):self.temp=tempfile.TemporaryDirectory();self.root=Path(self.temp.name);self.module=load_module(self.root)
     def tearDown(self):self.temp.cleanup()
@@ -33,8 +35,9 @@ class ProjectRuntimeReconcilerStateTests(unittest.TestCase):
         base={'status':'running','configRevision':2,'configDigest':'c'*64,'toolchainDigest':'t'*64,'buildEnvironmentDigest':'b'*64,'runtimeEnvironmentDigest':'r'*64,'environmentDigest':'e'*64,'buildJobId':'build_'+'1'*24}
         base.update(updates);return base
 
-    def assert_state(self,status,desired=None,observed=None,environment='homologation',pending=None):
-        result=self.module.evaluate(desired or self.desired(),observed if observed is not None else self.observed(),environment);self.assertEqual(result['status'],status,result)
+    def assert_state(self,status,desired=None,observed=_OBSERVED_UNSET,environment='homologation',pending=None):
+        runtime_observed=self.observed() if observed is _OBSERVED_UNSET else observed
+        result=self.module.evaluate(desired or self.desired(),runtime_observed,environment);self.assertEqual(result['status'],status,result)
         if pending is not None:self.assertEqual(result['pendingAction'],pending)
         self.assertFalse(result['effectsExecuted']);self.assertFalse(result['productionAutoRepairAllowed']);return result
 
@@ -69,8 +72,15 @@ class ProjectRuntimeReconcilerStateTests(unittest.TestCase):
     def test_runtime_status_endpoint_is_authenticated_and_no_store(self):
         source=EXECUTOR.read_text();self.assertIn('def _runtime_state_authorized',source);self.assertIn("hmac.compare_digest(presented,expected)",source);self.assertIn("'/v1/projects/([a-z0-9][a-z0-9-]{0,62})/runtime-state'",source);self.assertIn("self.send_header('Cache-Control','no-store')",source)
 
+    def test_catalog_and_build_sqlite_are_opened_read_only(self):
+        source=RECONCILER.read_text()
+        self.assertIn("f'file:{CONTROL_DB}?mode=ro'",source)
+        self.assertIn("f'file:{BUILD_DB}?mode=ro'",source)
+        self.assertNotIn('sqlite3.connect(CONTROL_DB)',source)
+        self.assertNotIn('sqlite3.connect(BUILD_DB)',source)
+
     def test_service_is_isolated_and_production_network_is_explicit(self):
-        unit=UNIT.read_text();self.assertIn('ProtectSystem=strict',unit);self.assertIn('ReadWritePaths=/var/lib/cloudif/runtime-reconciler',unit);self.assertIn('IPAddressAllow=127.0.0.0/8',unit);self.assertIn('IPAddressAllow=10.62.91.2/32',unit);self.assertIn('IPAddressDeny=any',unit)
+        unit=UNIT.read_text();self.assertIn('ProtectSystem=strict',unit);self.assertIn('ReadWritePaths=/var/lib/cloudif/runtime-reconciler /var/lib/cloudif/control-plane /var/lib/cloudif/build-broker',unit);self.assertIn('IPAddressAllow=127.0.0.0/8',unit);self.assertIn('IPAddressAllow=10.62.91.2/32',unit);self.assertIn('IPAddressDeny=any',unit)
 
 
 if __name__=='__main__':unittest.main()

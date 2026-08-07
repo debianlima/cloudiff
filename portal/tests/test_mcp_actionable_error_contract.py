@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib.util
 import sys
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 ROOT=Path(__file__).resolve().parents[2]
@@ -45,6 +46,24 @@ class MCPActionableErrorContractTests(unittest.TestCase):
         payload=self.error('project.get',{'slug':'demo','password':'super-secret-value'})
         self.assertEqual(payload['code'],'unknown_field');self.assertEqual(payload['field'],'password');self.assertEqual(payload['receivedFields'],['password','slug']);self.assert_usage(payload,'project.get')
         serialized=str(payload);self.assertNotIn('super-secret-value',serialized)
+
+    def test_environment_incomplete_change_points_to_nested_field_and_usage(self):
+        payload=self.error('project.environment.validate',{'slug':'demo','environment':'preview','changes':[{}]})
+        self.assertEqual(payload['code'],'missing_field');self.assertEqual(payload['field'],'changes.0.name');self.assert_usage(payload,'project.environment.validate')
+        changes=payload['usage']['parameters']['changes'];self.assertEqual(changes['type'],'array');self.assertEqual(changes['items']['type'],'object');self.assertIn('name',changes['items']['properties'])
+
+    def test_toolchain_revision_zero_is_bootstrap_sentinel_only_for_side_effect_free_tools(self):
+        by_name={item['name']:item for item in self.module.TOOLS}
+        for name in ('project.toolchain.validate','project.toolchain.plan','project.toolchain.build.plan'):
+            self.assertEqual(by_name[name]['inputSchema']['properties']['expected_revision']['minimum'],0)
+            self.module.validate_tool_arguments(name,{'slug':'demo','expected_revision':0})
+        for name in ('approval.request-toolchain-build','project.toolchain.build.execute'):
+            self.assertEqual(by_name[name]['inputSchema']['properties']['expected_revision']['minimum'],1)
+
+    def test_unconfigured_toolchain_state_is_semantic_not_generic_argument_error(self):
+        with patch.object(self.module,'project_config_call',return_value=(200,{'ok':True,'configured':False,'currentRevision':0})):
+            with self.assertRaises(self.module.ToolStateError) as captured:self.module.toolchain_configuration_revision('demo',0)
+        payload=captured.exception.payload;self.assertEqual(payload['code'],'toolchain_not_configured');self.assertEqual(payload['currentRevision'],0);self.assertEqual(payload['minimumRevision'],1);self.assertIn('cloudiff.yaml',payload['nextAction'])
 
     def test_legacy_value_error_is_enriched_from_public_schema(self):
         payload=self.module.enrich_tool_error('forgejo.propose-edit.plan',{'slug':'demo'},message='argumentos inválidos')

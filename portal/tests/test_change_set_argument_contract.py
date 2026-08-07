@@ -72,10 +72,11 @@ class ChangeSetArgumentContractTests(unittest.TestCase):
         self.assertEqual(set(schema['properties']),self.required)
         self.assertFalse(schema['additionalProperties'])
         self.assertTrue(schema['examples'])
-        source=SOURCE.read_text()
-        self.assertIn("except ToolInputError as e:self.sendj",source)
-        self.assertIn("'data':e.payload",source)
-        self.assertIn('auth_args,_auth_wrappers=_unwrap_tool_arguments(args)',source)
+        source=SOURCE.read_text();start=source.index('except ToolInputError as e:');end=source.index('except ToolStateError as e:',start);handler=source[start:end]
+        self.assertIn('enrich_tool_error(',handler)
+        self.assertIn("'data':_data",handler)
+        self.assertIn("'code':-32602",handler)
+        self.assertIn('args,input_wrappers=_unwrap_tool_arguments(raw_args)',source);self.assertIn('auth_args=args',source)
 
 
 if __name__=='__main__':unittest.main()
