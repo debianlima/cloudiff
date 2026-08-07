@@ -17,6 +17,7 @@ PUBLICATIONS=ROOT/'components/control-plane/current-apps/portal-current/cloudif_
 PUB_CONFIG=ROOT/'components/control-plane/srv/cloudif/lib/cloudif_project_publication_config.py'
 ENV_WEB=ROOT/'components/control-plane/srv/cloudif/lib/cloudif_project_environment_web.py'
 PORTAL=ROOT/'components/control-plane/current-apps/portal-current/cloudif-admin-portal-base.py'
+DESIGN_COMPONENTS=ROOT/'portal/design/components.css'
 PUB_UI=ROOT/'components/control-plane/current-apps/portal-current/cloudif_ui_publications.py'
 RECONCILE=ROOT/'components/control-plane/current-apps/reconcile-worker-current/cloudif-reconcile-worker.py'
 RECONCILE_CLIENT=ROOT/'components/control-plane/srv/cloudif/lib/cloudif_reconcile_client.py'
@@ -83,6 +84,13 @@ class ProjectPublicationConfigurationV1Tests(unittest.TestCase):
         self.assertIn('result=publications.base_workspace_preflight(slug,user)',portal)
         self.assertIn('result=publications.ensure_base_workspace(slug,user)',portal)
         self.assertIn('def base_workspace_preflight',PUBLICATIONS.read_text())
+        design=DESIGN_COMPONENTS.read_text()
+        self.assertIn('.legacy-content #cloudif-environment-wizard{',design)
+        self.assertIn('position:fixed;inset:0;z-index:1600;display:none;place-items:center',design)
+        self.assertIn('.legacy-content #cloudif-environment-wizard>.env-wizard-box{',design)
+        self.assertIn('.legacy-content #cloudif-environment-wizard .env-wizard-footer{',design)
+        self.assertIn('body.cloudif-modal-open{overflow:hidden}',design)
+        self.assertNotIn('!important',design)
         self.assertIn('html[data-theme=\"dark\"] #cloudif-environment-wizard',portal)
         self.assertIn('--c-surface:var(--cif-surface)',portal)
         self.assertIn('#cloudif-environment-wizard .env-wizard-close{background:transparent!important',portal)
