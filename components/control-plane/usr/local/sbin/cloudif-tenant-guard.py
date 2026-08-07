@@ -29,6 +29,7 @@ WARMUP_SECONDS = int(os.environ.get("CLOUDIF_GUARD_WARMUP_SECONDS", "5"))
 WARMUP_TTL = int(os.environ.get("CLOUDIF_GUARD_WARMUP_TTL", "20"))
 
 HEALTH_CACHE = {}
+NON_RECOVERABLE_STATES = {"deleting", "deleted", "delete_pending", "maintenance"}
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):
@@ -274,6 +275,15 @@ def tenant_health(tenant):
 
 def existing_tenant_recovery_decision(health, state, age, current_action="", current_message=""):
     """Return the next recovery decision without performing side effects."""
+    state = str(state or "").strip().lower()
+    if state in NON_RECOVERABLE_STATES:
+        return {
+            "action": "blocked",
+            "state": state,
+            "message": "Tenant está em estado administrativo que bloqueia recuperação automática.",
+            "write": False,
+            "trigger": False,
+        }
     in_progress = {"running", "creating", "restoring", "waiting_health"}
     if health == "stopped":
         if state in in_progress and age < RESTORE_COOLDOWN:
@@ -322,6 +332,28 @@ def existing_tenant_recovery_decision(health, state, age, current_action="", cur
         "write": True,
         "trigger": False,
     }
+
+
+def recover_clean_stop_on_open(tenant, username):
+    """Recover a cleanly stopped existing stack on the first authorized open."""
+    compose_ok, compose_message = docker_compose_health(tenant)
+    if compose_ok or not compose_message.startswith("STACK_STOPPED_CLEAN:"):
+        return {"trigger": False, "action": "warmup", "message": ""}
+    st = read_status(tenant)
+    age = time.time() - st.get("_mtime", 0) if st.get("_mtime", 0) else 999999
+    decision = existing_tenant_recovery_decision(
+        "stopped",
+        st.get("STATE", ""),
+        age,
+        current_action=st.get("ACTION", ""),
+        current_message=st.get("MESSAGE", ""),
+    )
+    if decision["write"]:
+        write_status(tenant, decision["action"], decision["state"], decision["message"])
+    if decision["trigger"]:
+        HEALTH_CACHE.pop(tenant, None)
+        trigger_background(tenant, decision["action"], username)
+    return decision
 
 
 def warmup_path(tenant, username):
@@ -478,14 +510,18 @@ class Handler(BaseHTTPRequestHandler):
         # CloudIF v255: warmup ANTES do health check pesado.
         # Isso evita tela branca/502 na primeira volta do Authentik.
         if need_warmup_once(tenant, username):
+            warmup_recovery = recover_clean_stop_on_open(tenant, username)
+            warmup_action = "restore" if warmup_recovery.get("trigger") else "warmup"
+            warmup_health = "stopped" if warmup_recovery.get("trigger") else "warmup"
+            warmup_message = warmup_recovery.get("message") or f"Aguardando {WARMUP_SECONDS} segundos para estabilizar o ambiente."
             self.send_response(403)
             self.send_header("X-CloudIF-AuthZ-Reason", "tenant-provisioning")
             self.send_header("X-CloudIF-Tenant", tenant)
             self.send_header("X-Authentik-Username", username)
             self.send_header("X-Authentik-Email", email)
-            self.send_header("X-CloudIF-Provision-Action", "warmup")
-            self.send_header("X-CloudIF-Provision-Health", "warmup")
-            self.send_header("X-CloudIF-Provision-Message", f"Aguardando {WARMUP_SECONDS} segundos para estabilizar o ambiente.")
+            self.send_header("X-CloudIF-Provision-Action", warmup_action)
+            self.send_header("X-CloudIF-Provision-Health", warmup_health)
+            self.send_header("X-CloudIF-Provision-Message", warmup_message)
             self.end_headers()
             if self.command != "HEAD":
                 self.wfile.write((f"Aguardando {WARMUP_SECONDS} segundos para estabilizar o ambiente.\\n").encode("utf-8"))

@@ -108,5 +108,41 @@ class TenantGuardAutoRecoveryTests(unittest.TestCase):
             self.assertEqual(state,'stopped')
             self.assertIn('STACK_STOPPED_CLEAN',message)
 
+    def test_first_open_warmup_triggers_clean_stop_recovery_without_refresh(self):
+        with mock.patch.object(self.guard,'docker_compose_health',return_value=(False,'STACK_STOPPED_CLEAN: clean')), \
+             mock.patch.object(self.guard,'read_status',return_value={'STATE':'ready','ACTION':'none','MESSAGE':'','_mtime':0}), \
+             mock.patch.object(self.guard,'write_status') as write_status, \
+             mock.patch.object(self.guard,'trigger_background') as trigger:
+            decision=self.guard.recover_clean_stop_on_open('tenant-demo','alice')
+        self.assertTrue(decision['trigger'])
+        self.assertEqual(decision['action'],'restore')
+        write_status.assert_called_once()
+        trigger.assert_called_once_with('tenant-demo','restore','alice')
+
+    def test_first_open_does_not_recover_abnormal_or_partial_stack(self):
+        with mock.patch.object(self.guard,'docker_compose_health',return_value=(False,'Estado intermediário ou anormal dos serviços principais: db=exited/exit-2')), \
+             mock.patch.object(self.guard,'trigger_background') as trigger:
+            decision=self.guard.recover_clean_stop_on_open('tenant-demo','alice')
+        self.assertFalse(decision['trigger'])
+        trigger.assert_not_called()
+
+    def test_administrative_state_blocks_clean_stop_auto_recovery(self):
+        with mock.patch.object(self.guard,'docker_compose_health',return_value=(False,'STACK_STOPPED_CLEAN: clean')), \
+             mock.patch.object(self.guard,'read_status',return_value={'STATE':'maintenance','ACTION':'maintenance','MESSAGE':'Janela administrativa','_mtime':0}), \
+             mock.patch.object(self.guard,'write_status') as write_status, \
+             mock.patch.object(self.guard,'trigger_background') as trigger:
+            decision=self.guard.recover_clean_stop_on_open('tenant-demo','alice')
+        self.assertFalse(decision['trigger'])
+        self.assertEqual(decision['action'],'blocked')
+        write_status.assert_not_called();trigger.assert_not_called()
+
+    def test_warmup_handler_calls_clean_stop_recovery_before_returning(self):
+        source=SOURCE.read_text()
+        start=source.index('if need_warmup_once(tenant, username):')
+        end=source.index('health, msg = tenant_health(tenant)',start)
+        block=source[start:end]
+        self.assertIn('recover_clean_stop_on_open(tenant, username)',block)
+        self.assertLess(block.index('recover_clean_stop_on_open'),block.index('self.send_response(403)'))
+
 
 if __name__=='__main__':unittest.main()
