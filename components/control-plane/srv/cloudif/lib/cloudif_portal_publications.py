@@ -40,6 +40,8 @@ def _publication_error(stage,data):
       'publication_container_not_healthy':'A nova versão foi criada, mas o container não ficou saudável no tempo esperado.',
       'publication_terminal_unavailable':'A nova versão subiu, mas a validação do terminal não ficou disponível.',
       'target_not_healthy':'A versão selecionada não está saudável para ser ativada.',
+      'immutable_runtime_snapshot_conflict':'Esta versão já está pronta e não pode trocar a revisão da base ou do ambiente. Publique uma nova versão.',
+      'immutable_deploy_conflict':'Esta versão já está pronta com outro commit. Publique uma nova versão.',
     }
     if code in known:return known[code]
     if message and len(message)<=320 and not any(ch in message for ch in '{}[]'):

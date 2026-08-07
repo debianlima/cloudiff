@@ -45,6 +45,16 @@ class VersionedUnifiedRuntimePublicationTests(unittest.TestCase):
         self.assertNotIn('build:\n      context: .\n      dockerfile: Dockerfile.runtime',latest)
         self.assertIn("'materialization':'local_base_derived'",latest)
 
+    def test_failed_version_can_refresh_frozen_base_but_ready_version_is_immutable(self):
+        latest=self.agent[self.agent.rfind('def cloudif_publication_deploy(handler):'):]
+        self.assertIn("runtime_rows=db_query('select status,is_active from publication_runtimes",latest)
+        self.assertIn("runtime_immutable=str(runtime_row.get('status') or '')=='ready'",latest)
+        self.assertIn('identity_mismatch=(',latest)
+        self.assertIn("'immutable_runtime_snapshot_conflict'",latest)
+        self.assertIn('shutil.rmtree(snap)',latest)
+        self.assertIn("requested_base_image_id=str(payload.get('base_image_id')",latest)
+        self.assertIn("requested_environment_digest=str(payload.get('environment_digest')",latest)
+
     def test_publication_failures_are_short_and_actionable(self):
         self.assertIn("'publication_container_not_healthy'",self.agent)
         self.assertIn("def _publication_error(stage,data):",self.portal)

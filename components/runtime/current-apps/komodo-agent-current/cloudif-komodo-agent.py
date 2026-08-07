@@ -4916,8 +4916,31 @@ def cloudif_publication_deploy(handler):
     files,source_kind=_cloudif_v143_git_files(base_dir,commit)
     snap=Path(f'/srv/cloudif/publications/p{public_number}/d{deploy_number}')
     marker=snap/'.cloudif-commit';snapshot_file=snap/'.cloudif-runtime-snapshot.json'
+    runtime_rows=db_query('select status,is_active from publication_runtimes where project=? and deploy_number=?',(project,deploy_number))
+    runtime_row=runtime_rows[0] if runtime_rows else {}
+    runtime_immutable=str(runtime_row.get('status') or '')=='ready' or bool(runtime_row.get('is_active'))
+    try:
+        requested_base_revision=int(payload.get('base_revision') or 0);requested_environment_revision=int(payload.get('environment_revision') or 0)
+    except Exception:
+        return send(handler,400,{'ok':False,'error':'invalid_snapshot_revision'})
+    requested_base_image_id=str(payload.get('base_image_id') or '').strip();requested_environment_digest=str(payload.get('environment_digest') or '').strip().lower()
     if marker.is_file() and marker.read_text().strip()!=commit:
-        return send(handler,409,{'ok':False,'error':'immutable_deploy_conflict','existing_commit':marker.read_text().strip(),'requested_commit':commit})
+        if runtime_immutable:
+            return send(handler,409,{'ok':False,'error':'immutable_deploy_conflict','existing_commit':marker.read_text().strip(),'requested_commit':commit})
+        shutil.rmtree(snap);marker=snap/'.cloudif-commit';snapshot_file=snap/'.cloudif-runtime-snapshot.json'
+    if marker.is_file() and snapshot_file.is_file() and (requested_base_image_id or 'environment_revision' in payload or 'environment_digest' in payload):
+        try:existing_snapshot=json.loads(snapshot_file.read_text(encoding='utf-8'))
+        except Exception:existing_snapshot={}
+        identity_mismatch=(
+          (requested_base_image_id and str(existing_snapshot.get('baseImageId') or '')!=requested_base_image_id)
+          or (requested_base_revision>0 and int(existing_snapshot.get('baseRevision') or 0)!=requested_base_revision)
+          or ('environment_revision' in payload and int(existing_snapshot.get('environmentRevision') or 0)!=requested_environment_revision)
+          or ('environment_digest' in payload and str(existing_snapshot.get('environmentDigest') or '').lower()!=requested_environment_digest)
+        )
+        if identity_mismatch:
+            if runtime_immutable:
+                return send(handler,409,{'ok':False,'error':'immutable_runtime_snapshot_conflict','message':'A versão já está pronta e não pode trocar a revisão da base ou do ambiente.'})
+            shutil.rmtree(snap);marker=snap/'.cloudif-commit';snapshot_file=snap/'.cloudif-runtime-snapshot.json'
     snapshot={}
     if marker.is_file() and snapshot_file.is_file():
         try:snapshot=json.loads(snapshot_file.read_text(encoding='utf-8'))
