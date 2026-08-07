@@ -19,6 +19,13 @@ def assignment_nodes(tree):
 def safe_value(node,assignments,stack=()):
  try:return ast.literal_eval(node)
  except (ValueError,TypeError):pass
+ if isinstance(node,ast.List):
+  return [safe_value(item,assignments,stack) for item in node.elts]
+ if isinstance(node,ast.Tuple):
+  return tuple(safe_value(item,assignments,stack) for item in node.elts)
+ if isinstance(node,ast.Dict):
+  if any(key is None for key in node.keys):raise ValueError('catalog_dict_unpack_not_allowed')
+  return {safe_value(key,assignments,stack):safe_value(value,assignments,stack) for key,value in zip(node.keys,node.values)}
  if isinstance(node,ast.Name):
   name=node.id
   if name in stack:raise ValueError('catalog_assignment_cycle:'+name)

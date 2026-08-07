@@ -36,5 +36,5 @@ class PreviewMCPContractTests(unittest.TestCase):
   self.assertIn('EnvironmentFile=-/etc/cloudif/multiservice-preview.env',PORTAL_UNIT.read_text());self.assertIn('EnvironmentFile=/etc/cloudif/multiservice-preview.env',GATEWAY_UNIT.read_text())
  def test_portal_documents_and_labels(self):
   for tool in READ|WRITE:self.assertIn("'"+tool+"':",self.guide)
-  self.assertIn("'documentation_version':'132A'",self.guide);self.assertIn('Criar preview multissserviço',APPROVAL.read_text());self.assertIn('Criar preview multissserviço',TRANSACTION.read_text())
+  self.assertIn("'documentation_version':'134A'",self.guide);self.assertIn('Criar preview multissserviço',APPROVAL.read_text());self.assertIn('Criar preview multissserviço',TRANSACTION.read_text())
 if __name__=='__main__':unittest.main()

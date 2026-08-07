@@ -414,9 +414,14 @@ except Exception as e:checks.append({'name':'portal-ai-agent-token-instructions'
 try:
  import ast,importlib.util
  mcp_path='/srv/cloudif/app-pointers/mcp-gateway-current/cloudif-mcp-gateway.py';guide_path='/srv/cloudif/app-pointers/portal-current/cloudif_ai_agents_guide.py'
- tree=ast.parse(Path(mcp_path).read_text());published=None
- for n in ast.walk(tree):
-  if isinstance(n,ast.Assign) and any(isinstance(x,ast.Name) and x.id=='TOOLS' for x in n.targets):published={x['name'] for x in ast.literal_eval(n.value)};break
+ tree=ast.parse(Path(mcp_path).read_text());published=set()
+ for n in tree.body:
+  if isinstance(n,ast.Assign) and any(isinstance(x,ast.Name) and x.id=='TOOLS' for x in n.targets) and isinstance(n.value,(ast.List,ast.Tuple)):
+   for item in n.value.elts:
+    if not isinstance(item,ast.Dict):continue
+    for key,value in zip(item.keys,item.values):
+     if isinstance(key,ast.Constant) and key.value=='name' and isinstance(value,ast.Constant) and isinstance(value.value,str):published.add(value.value)
+   break
  spec=importlib.util.spec_from_file_location('cloudif_doc_catalog',guide_path);mod=importlib.util.module_from_spec(spec);spec.loader.exec_module(mod);documented=set(mod.TOOL_DOC)
  missing=sorted(published-documented);extra=sorted(documented-published);complete=all(len(mod.TOOL_DOC[t])==4 and all(str(v).strip() for v in mod.TOOL_DOC[t]) for t in documented)
  checks.append({'name':'mcp-documentation-catalog-parity','ok':bool(published) and not missing and not extra and complete,'published':len(published or []),'documented':len(documented),'missing':missing,'extra':extra,'descriptions_complete':complete})

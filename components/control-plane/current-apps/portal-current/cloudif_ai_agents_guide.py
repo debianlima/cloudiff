@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 import html,json
-DOCUMENTATION_RELEASES=({'documentation_version':'130A'},{'documentation_version':'131A'},{'documentation_version':'133A'},{'documentation_version':'133A'})
+DOCUMENTATION_RELEASES=({'documentation_version':'130A'},{'documentation_version':'131A'},{'documentation_version':'132A'},{'documentation_version':'133A'},{'documentation_version':'134A'})
 APPROVAL_URL='/cloudiff/portal/?tab=aprovacoes'
 FORGEJO_BASE='https://cloudiff.duckdns.org/git/'
 KOMODO_URL='https://komodoiff.duckdns.org/auth/oidc/login'
@@ -110,8 +110,73 @@ TOOL_DOC={
 'approval.request-rollback-test':('Solicitar aprovação do rollback','Cria a decisão humana para restaurar uma release histórica.','Portal CloudIFF','Portal CloudIFF'),
 'deployment.rollback-test':('Executar rollback isolado','Faz backup, restaura a release e executa smoke após aprovação.','Portal CloudIFF','Komodo'),
 }
+TOOL_DOC.update({
+'project.configuration.status':('Estado reconciliado do projeto', 'Mostra o estado observado por ambiente, incluindo sincronização, drift e ação pendente, sem executar correções.', 'Nenhuma', 'Portal CloudIFF'),
+'project.configuration.drift':('Consultar drift de configuração', 'Lista somente ambientes com rebuild, restart, variável ausente, imagem desatualizada, unhealthy ou bloqueio.', 'Nenhuma', 'Portal CloudIFF'),
+'project.configuration.reconcile.plan':('Planejar reconciliação', 'Gera um plano sem efeitos indicando qual fluxo aprovado deve corrigir cada divergência.', 'Nenhuma', 'Portal CloudIFF'),
+'project.observability.get':('Consultar observabilidade do projeto', 'Consolida runtime, ambiente, build, toolchain e estado de segredos sem retornar valores ou referências secretas.', 'Nenhuma', 'Portal CloudIFF'),
+'project.observability.alerts':('Consultar alertas do projeto', 'Lista alertas de drift, variáveis ausentes, expiração, runtime unhealthy e falhas de build ou toolchain.', 'Nenhuma', 'Portal CloudIFF'),
+'project.environment.export':('Exportar ambiente sanitizado', 'Gera representação exportável das variáveis públicas e metadados; valores secretos permanecem ausentes.', 'Nenhuma', 'Portal CloudIFF'),
+'project.environment.import.plan':('Planejar importação de ambiente', 'Valida conteúdo declarativo e cria plano de importação sem persistir ou reiniciar serviços.', 'Nenhuma', 'Portal CloudIFF'),
+'project.environment.secret.list':('Listar segredos declarados', 'Lista nomes, versões, escopos e estado dos segredos sem revelar valores.', 'Nenhuma', 'Portal CloudIFF'),
+'project.environment.secret.history':('Histórico de segredos', 'Mostra eventos de estágio, rotação, promoção e revogação sem conteúdo secreto.', 'Nenhuma', 'Portal CloudIFF'),
+'project.environment.secret.stage':('Estagiar segredo', 'Registra de forma protegida uma nova versão de segredo para posterior promoção ou rotação.', 'Conforme papel do projeto', 'Portal CloudIFF'),
+'project.environment.secret.rotate.plan':('Planejar rotação de segredo', 'Gera plano e digest para substituir uma versão de segredo sem executar efeitos.', 'Nenhuma', 'Portal CloudIFF'),
+'approval.request-secret-rotation':('Solicitar rotação de segredo', 'Cria aprovação humana vinculada ao plano exato de rotação.', 'Portal CloudIFF', 'Portal CloudIFF'),
+'project.environment.secret.rotate.execute':('Executar rotação de segredo', 'Aplica a rotação aprovada com auditoria e sem retornar o valor secreto.', 'Portal CloudIFF', 'Portal CloudIFF'),
+'project.environment.secret.promote.plan':('Planejar promoção de segredo', 'Planeja promoção explícita de uma versão de segredo entre ambientes sem revelar conteúdo.', 'Nenhuma', 'Portal CloudIFF'),
+'approval.request-secret-promotion':('Solicitar promoção de segredo', 'Cria aprovação humana vinculada ao ambiente de origem, destino, versão e digest.', 'Portal CloudIFF', 'Portal CloudIFF'),
+'project.environment.secret.promote.execute':('Promover segredo aprovado', 'Promove a referência protegida após aprovação sem expor o valor.', 'Portal CloudIFF', 'Portal CloudIFF'),
+'project.environment.secret.revoke.plan':('Planejar revogação de segredo', 'Gera plano para revogar uma versão e informa impacto sem executar a revogação.', 'Nenhuma', 'Portal CloudIFF'),
+'approval.request-secret-revocation':('Solicitar revogação de segredo', 'Cria aprovação humana vinculada ao plano e à versão exata a revogar.', 'Portal CloudIFF', 'Portal CloudIFF'),
+'project.environment.secret.revoke.execute':('Revogar segredo aprovado', 'Revoga a versão aprovada e registra o evento sem retornar material secreto.', 'Portal CloudIFF', 'Portal CloudIFF'),
+'project.environment.secret.read.plan':('Planejar leitura excepcional de segredo', 'Seleciona uma versão e gera digest para leitura de uso único, sem revelar o valor.', 'Nenhuma', 'Portal CloudIFF'),
+'approval.request-secret-read':('Solicitar leitura excepcional de segredo', 'Solicita decisão humana crítica; a primeira autorização persistente exige dois aprovadores privilegiados.', 'Dupla aprovação na primeira autorização crítica', 'Portal CloudIFF'),
+'project.environment.secret.read.execute':('Ler segredo excepcionalmente', 'Entrega o valor somente no fluxo aprovado e auditado, sem persistir a resposta em metadados.', 'Portal CloudIFF', 'Portal CloudIFF'),
+'project.toolchain.get':('Consultar toolchain do projeto', 'Mostra configuração, revisão e estado da toolchain sem executar build.', 'Nenhuma', 'Portal CloudIFF'),
+'project.toolchain.validate':('Validar toolchain', 'Valida runtime, pacotes, ferramentas e provisionamento contra a configuração aprovada.', 'Nenhuma', 'Portal CloudIFF'),
+'project.toolchain.build.plan':('Planejar build da toolchain', 'Gera plano imutável da imagem-base, incluindo digests e bloqueios, sem construir.', 'Nenhuma', 'Portal CloudIFF'),
+'approval.request-toolchain-build':('Solicitar build da toolchain', 'Cria aprovação humana vinculada à revisão e ao digest exatos da toolchain.', 'Portal CloudIFF', 'Portal CloudIFF'),
+'project.toolchain.build.execute':('Construir imagem de toolchain', 'Constrói a imagem imutável aprovada e registra digest, logs e estado.', 'Portal CloudIFF', 'Portal CloudIFF'),
+'project.toolchain.build.status':('Status do build da toolchain', 'Consulta fila, execução e resultado do build sem expor credenciais.', 'Nenhuma', 'Portal CloudIFF'),
+'project.toolchain.logs.read':('Ler logs da toolchain', 'Lê logs sanitizados do build e provisionamento.', 'Nenhuma', 'Portal CloudIFF'),
+'project.toolchain.image.list':('Listar imagens de toolchain', 'Lista imagens imutáveis disponíveis, digests e estado de ativação.', 'Nenhuma', 'Portal CloudIFF'),
+'project.toolchain.image.get':('Consultar imagem de toolchain', 'Obtém metadados e attestations de uma imagem específica.', 'Nenhuma', 'Portal CloudIFF'),
+'project.toolchain.image.activate.plan':('Planejar ativação de toolchain', 'Gera plano para ativar uma imagem em um ambiente sem alterar serviços.', 'Nenhuma', 'Portal CloudIFF'),
+'approval.request-toolchain-activation':('Solicitar ativação de toolchain', 'Cria aprovação humana vinculada à imagem, ambiente e digest exatos.', 'Portal CloudIFF', 'Portal CloudIFF'),
+'project.toolchain.image.activate':('Ativar toolchain aprovada', 'Ativa a imagem imutável aprovada no ambiente selecionado.', 'Portal CloudIFF', 'Portal CloudIFF'),
+})
 SCOPE_TOOLS={
 'project:read':['project.list','project.get','project.connectors','runtime.catalog','runtime.detect','runtime.plan','runtime.validate','build.plan','build.status','build.logs.read','build.artifact.get','deployment.production.readiness'],'workspace:detect-multiservice':['project.technologies.detect'],'project:configuration-read':['project.manifest.validate','project.configuration.get'],'project:environment-read':['project.environment.list','project.environment.get','project.environment.history'],'project:environment-plan':['project.environment.validate','project.environment.change.plan','project.environment.promote.plan'],'approval:request-environment-change':['approval.request-environment-change'],'project:environment-execute':['project.environment.change.execute'],'approval:request-environment-promotion':['approval.request-environment-promotion'],'project:environment-promote':['project.environment.promote.execute'],'build:multiservice-plan':['project.toolchain.plan','build.multiservice.plan','build.multiservice.status'],'approval:request-multiservice-build':['approval.request-multiservice-build'],'build:multiservice-execute':['build.multiservice.execute'],'preview:multiservice-plan':['preview.multiservice.plan','preview.multiservice.status'],'approval:request-multiservice-preview':['approval.request-multiservice-preview'],'preview:multiservice-execute':['preview.multiservice.create'],'preview:multiservice-delete':['preview.multiservice.delete'],'deployment:multiservice-plan':['deployment.multiservice.plan','deployment.multiservice.status'],'approval:request-multiservice-deployment':['approval.request-multiservice-deployment'],'deployment:multiservice-execute':['deployment.multiservice.execute'],'workspace:probe':['workspace.probe'],'workspace:prepare':['workspace.prepare'],'workspace:validate':['workspace.validate'],'workspace:test-static':['workspace.test-static'],'workspace:preview-static':['workspace.preview-static'],'workspace:edit-preview':['workspace.edit-preview'],'workspace:change-set-plan':['workspace.normalize.plan','workspace.change-set.validate','forgejo.proposal.change-set.plan'],'approval:request-change-set':['approval.request-change-set-proposal'],'forgejo:propose-change-set':['forgejo.proposal.change-set.create'],'forgejo:plan-edit':['forgejo.propose-edit.plan'],'approval:request-proposal':['approval.request-proposal'],'forgejo:propose-edit':['forgejo.propose-edit'],'approval:read-own':['approval.get'],'forgejo:proposal-read':['forgejo.proposal.list'],'forgejo:proposal-close':['forgejo.proposal.close'],'forgejo:proposal-delete-branch':['forgejo.proposal.delete-branch'],'forgejo:proposal-merge-plan':['forgejo.proposal.merge.plan'],'approval:request-merge':['approval.request-merge'],'forgejo:proposal-merge':['forgejo.proposal.merge'],'supabase:migration-inspect':['supabase.migrations.inspect'],'supabase:migration-plan':['supabase.migrations.plan'],'deployment:production-plan':['deployment.production.plan','deployment.production.homologation.plan','deployment.production.homologation.deploy','deployment.production.homologation.rollback','deployment.production.activation.plan'],'deployment:plan':['deployment.plan'],'approval:request-deploy':['approval.request-deploy','approval.request-production-homologation','approval.request-production-activation'],'deployment:validate':['deployment.validate'],'approval:request-preview':['approval.request-preview'],'deployment:preview':['deployment.preview'],'deployment:promote-test-plan':['deployment.promote-test.plan'],'approval:request-promote-test':['approval.request-promote-test'],'deployment:promote-test':['deployment.promote-test'],'deployment:promote-test-status':['deployment.promote-test.status'],'deployment:rollback-test-plan':['deployment.rollback-test.plan'],'approval:request-rollback-test':['approval.request-rollback-test'],'deployment:rollback-test':['deployment.rollback-test'],'supabase:database-read':['supabase.tables.list','supabase.records.select','supabase.sql.query','supabase.rls.inspect','supabase.schema.inspect'],'supabase:auth-read':['supabase.auth.users.list'],'supabase:storage-read':['supabase.storage.buckets.list','supabase.storage.objects.list','supabase.storage.object.read'],'supabase:admin-read':['supabase.secrets.list','supabase.logs.read','supabase.admin.config.read'],'supabase:change-plan':['supabase.records.change.plan','supabase.sql.change.plan','supabase.rls.change.plan','supabase.schema.change.plan','supabase.secrets.read.plan'],'approval:request-supabase':['approval.request-supabase-operation'],'supabase:change-execute':['supabase.operation.execute']}
+_SCOPE_TOOL_EXTENSIONS={
+'project:runtime-status-read':['project.configuration.status', 'project.configuration.drift'],
+'project:runtime-reconcile-plan':['project.configuration.reconcile.plan'],
+'project:observability-read':['project.observability.get', 'project.observability.alerts'],
+'project:environment-read':['project.environment.export'],
+'project:environment-plan':['project.environment.import.plan'],
+'project:environment-secret-read':['project.environment.secret.list', 'project.environment.secret.history'],
+'project:environment-secret-stage':['project.environment.secret.stage'],
+'project:environment-secret-plan':['project.environment.secret.rotate.plan', 'project.environment.secret.promote.plan', 'project.environment.secret.revoke.plan'],
+'approval:request-secret-rotation':['approval.request-secret-rotation'],
+'approval:request-secret-promotion':['approval.request-secret-promotion'],
+'approval:request-secret-revocation':['approval.request-secret-revocation'],
+'project:environment-secret-execute':['project.environment.secret.rotate.execute', 'project.environment.secret.promote.execute', 'project.environment.secret.revoke.execute'],
+'project:environment-secret-read-plan':['project.environment.secret.read.plan'],
+'approval:request-secret-read':['approval.request-secret-read'],
+'project:environment-secret-read-execute':['project.environment.secret.read.execute'],
+'project:toolchain-read':['project.toolchain.get', 'project.toolchain.build.status', 'project.toolchain.logs.read', 'project.toolchain.image.list', 'project.toolchain.image.get'],
+'project:toolchain-plan':['project.toolchain.validate', 'project.toolchain.build.plan'],
+'approval:request-toolchain-build':['approval.request-toolchain-build'],
+'project:toolchain-build-execute':['project.toolchain.build.execute'],
+'project:toolchain-activate-plan':['project.toolchain.image.activate.plan'],
+'approval:request-toolchain-activation':['approval.request-toolchain-activation'],
+'project:toolchain-activate-execute':['project.toolchain.image.activate'],
+'workspace:test-static':['build.request'],
+'project:read':['deployment.preview.plan','deployment.preview.status'],
+}
+for _scope,_tools in _SCOPE_TOOL_EXTENSIONS.items():
+ SCOPE_TOOLS.setdefault(_scope,[])
+ SCOPE_TOOLS[_scope].extend(tool for tool in _tools if tool not in SCOPE_TOOLS[_scope])
 ROLE_LABELS={'viewer':'Visualizador','developer':'Desenvolvedor','maintainer':'Mantenedor','release-manager':'Gestor de releases','project-admin':'Administrador do projeto','test-operator':'Operador do ambiente isolado','custom':'Personalizado'}
 def e(v):return html.escape(str(v if v is not None else ''))
 def tools(scopes):
@@ -125,7 +190,7 @@ def guide_data(rows):
  for x in rows:
   slug=x.get('project_slug') or '';cid=x.get('client_id') or '';ep=(x.get('instructions') or {}).get('mcp_endpoint') or 'https://cloudiff.duckdns.org/cloudiff/mcp';ts=tools(x.get('scopes') or [])
   ps.append({'project_slug':slug,'owner_user':x.get('owner_user'),'tenant':x.get('tenant'),'client_id':cid,'role_profile':x.get('role_profile'),'environment':x.get('environment'),'mcp_endpoint':ep,'openapi_schema_url':actions_schema_url(cid),'privacy_policy_url':actions_privacy_url(),'authentication':'public_oauth_pkce','oauth':oauth_fields(ep,cid,slug),'tools':[dict(name=t,title=TOOL_DOC[t][0],purpose=TOOL_DOC[t][1],approval=TOOL_DOC[t][2],portal=TOOL_DOC[t][3]) for t in ts],'links':links(x),'credential_included':False,'production_enabled':False})
- return {'ok':True,'projects':ps,'secrets_exposed':False,'production_enabled':False,'documentation_version':'132A','documentation_policy':'Toda nova função MCP deve ter finalidade, uso, aprovação e portal documentados antes da homologação.','connector_authentication':{'type':'oauth2_public_client','token_endpoint_auth_method':'none','pkce':'S256','client_secret_required':False,'anonymous_access':False},'production_policy':{'homologacao':'uma aprovação por operação','ativacao_real':'dois administradores ou professores distintos','requester_cannot_approve_activation':True,'two_approvers_required_for_activation':True},'agent_discovery':{'initialize_instructions':True,'resources':['cloudiff://guide/agent','cloudiff://guide/project/{slug}'],'prompts':['cloudiff-project-workflow','cloudiff-production-policy']}}
+ return {'ok':True,'projects':ps,'secrets_exposed':False,'production_enabled':False,'documentation_version':'134A','documentation_policy':'Toda nova função MCP deve ter finalidade, uso, aprovação e portal documentados antes da homologação.','connector_authentication':{'type':'oauth2_public_client','token_endpoint_auth_method':'none','pkce':'S256','client_secret_required':False,'anonymous_access':False},'production_policy':{'homologacao':'uma aprovação por operação','ativacao_real':'dois administradores ou professores distintos','requester_cannot_approve_activation':True,'two_approvers_required_for_activation':True},'agent_discovery':{'initialize_instructions':True,'resources':['cloudiff://guide/agent','cloudiff://guide/project/{slug}'],'prompts':['cloudiff-project-workflow','cloudiff-production-policy']}}
 def oauth_fields(ep,cid,slug):
  return {'name':'CloudIFF - '+slug,'url':ep,'authentication':'oauth','client_id':cid,'client_secret':'','authorization_url':'https://cloudiff.duckdns.org/cloudiff/mcp/oauth/authorize','token_url':'https://cloudiff.duckdns.org/cloudiff/mcp/oauth/token','scopes':['mcp','offline_access'],'token_endpoint_auth_method':'none','code_challenge_method':'S256'}
 def actions_schema_url(cid):return 'https://cloudiff.duckdns.org/cloudiff/mcp/openapi/'+cid+'.json'

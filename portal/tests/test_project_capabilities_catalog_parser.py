@@ -23,6 +23,13 @@ class ProjectCapabilitiesCatalogParserTests(unittest.TestCase):
         tree = ast.parse("BASIC=['a']\nADMIN=['b']\nALL=BASIC+ADMIN\nPROJECT=['root']+ALL")
         self.assertEqual(ASSIGNED(tree, 'PROJECT'), ['root', 'a', 'b'])
 
+    def test_current_mcp_tools_with_named_schema_fragments_are_resolvable(self):
+        gateway = ast.parse(Path('components/control-plane/current-apps/mcp-gateway-current/cloudif-mcp-gateway.py').read_text())
+        tools = ASSIGNED(gateway, 'TOOLS')
+        self.assertGreaterEqual(len(tools), 130)
+        self.assertTrue(all(isinstance(item, dict) and item.get('name') for item in tools))
+        self.assertIn('project.toolchain.validate', {item['name'] for item in tools})
+
     def test_calls_and_attributes_are_rejected(self):
         for source in ("X=list(['a'])", "X=os.environ", "X=[x for x in []]"):
             with self.subTest(source=source):
