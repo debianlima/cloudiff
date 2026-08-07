@@ -667,3 +667,29 @@ body.cloudif-modal-open{overflow:hidden}
   .legacy-content #cloudif-environment-wizard .env-wizard-footer{margin:20px -18px -18px;padding:14px 18px;display:grid;grid-template-columns:1fr}
   .legacy-content #cloudif-environment-wizard .env-wizard-footer .btn{width:100%}
 }
+
+/* Project environments overview — Preview, Homologation and Production. */
+.project-environments-shell{display:grid;gap:var(--s4);grid-column:1/-1;min-width:0;padding:var(--s4);border:1px solid var(--rule);border-radius:var(--r-lg);background:var(--surface);color:var(--ink)}
+.environment-overview-head{display:flex;align-items:flex-end;justify-content:space-between;gap:var(--s4)}
+.environment-overview-head>div{display:grid;gap:var(--s1)}
+.environment-overview-head span{font-family:var(--data);font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3)}
+.environment-overview-head h3,.environment-overview-head p{margin:0}
+.environment-overview-head p{max-width:760px;color:var(--ink-2);font-size:.86rem;line-height:1.5}
+.environment-overview-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:var(--s3)}
+.environment-card{display:grid;align-content:start;gap:var(--s4);min-width:0;padding:var(--s4);border:1px solid var(--rule);border-radius:var(--r-lg);background:var(--paper);color:var(--ink)}
+.environment-card.is-loading{grid-column:1/-1;min-height:110px;place-items:center;color:var(--ink-3)}
+.environment-card__head{display:flex;align-items:flex-start;justify-content:space-between;gap:var(--s3)}
+.environment-card__head>div{display:grid;gap:var(--s1)}
+.environment-card__head span{font-size:.72rem;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:var(--ink-3)}
+.environment-card__head strong{font-size:1.08rem;letter-spacing:-.02em}
+.environment-state{display:inline-flex;align-items:center;min-height:26px;padding:4px 8px;border:1px solid var(--rule);border-radius:999px;background:var(--surface);color:var(--ink-2);font-size:.7rem;font-weight:800;white-space:nowrap}
+.environment-state.is-ok{border-color:var(--iff);background:var(--iff-wash);color:var(--iff-dark)}
+.environment-card dl{display:grid;gap:0;margin:0}
+.environment-card dl>div{display:flex;justify-content:space-between;gap:var(--s3);padding:8px 0;border-bottom:1px solid var(--rule-soft)}
+.environment-card dl>div:last-child{border-bottom:0}
+.environment-card dt{color:var(--ink-3);font-size:.75rem}
+.environment-card dd{min-width:0;margin:0;text-align:right;font-size:.78rem;font-weight:750;overflow-wrap:anywhere}
+.environment-card dd code{font-size:.75rem}
+.environment-card__actions{display:flex;align-items:center;gap:var(--s2);flex-wrap:wrap;margin-top:auto}
+.environment-card__hint{font-size:.76rem;color:var(--ink-3)}
+@media(max-width:900px){.environment-overview-grid{grid-template-columns:1fr}.environment-overview-head{align-items:flex-start;display:grid}}
