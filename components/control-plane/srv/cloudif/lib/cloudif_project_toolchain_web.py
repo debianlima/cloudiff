@@ -73,7 +73,7 @@ def _create_approval(slug:str,action:str,plan:dict[str,Any],reason:str,username:
     payload={'project_slug':slug,'action':action,'requested_by':requested_by,'requester_role':auth['role'],'ttl_seconds':max(60,min(int(ttl_seconds),86400)),'reason':str(reason)[:500],'trace_id':'portal-toolchain-'+plan.get('plan_digest','')[:20],'metadata':metadata}
     code,data=_json_call('POST',APPROVAL_URL+'/v1/approvals',APPROVAL_TOKEN,payload)
     if code not in {200,201} or not data.get('ok'):raise RuntimeError(str((data.get('error') or {}).get('message') or 'approval_create_failed'))
-    return {'ok':True,'approvalId':data['approval_id'],'status':data['status'],'expiresAt':data['expires_at'],'projectSlug':slug,'action':action,'planDigest':plan.get('plan_digest'),'approvalUrl':'/cloudiff/portal/?tab=aprovacoes','contentStoredInApproval':False,'secretValuesInMetadata':False}
+    return {'ok':True,'approvalId':data['approval_id'],'status':data['status'],'expiresAt':data['expires_at'],'projectSlug':slug,'action':action,'planDigest':plan.get('plan_digest'),'approvalUrl':'/cloudiff/portal/?tab=aprovacoes','policyApplied':bool(data.get('policy_applied')),'approvalPolicyId':data.get('approval_policy_id'),'contentStoredInApproval':False,'secretValuesInMetadata':False}
 
 
 def request_build_approval(slug:str,payload:dict[str,Any],username:str,groups:list[str]|set[str])->dict[str,Any]:

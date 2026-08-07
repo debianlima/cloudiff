@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import os,json,hmac,urllib.request,urllib.error,threading,time,uuid,hashlib,secrets,base64,re
+import jsonschema
 from http.server import BaseHTTPRequestHandler,ThreadingHTTPServer
 from urllib.parse import urlparse,parse_qs,urlencode
 HOST=os.environ.get('CLOUDIF_MCP_HOST','127.0.0.1');PORT=int(os.environ.get('CLOUDIF_MCP_PORT','18198'))
@@ -324,6 +325,180 @@ TOOLS=[
  {'name':'approval.request-rollback-test','description':'Solicita aprovação humana separada para rollback manual no ambiente isolado','inputSchema':{'type':'object','properties':{'slug':{'type':'string','enum':['sistema-de-biblioteca-teste']},'target_job_id':{'type':'integer','minimum':1,'maximum':2147483647},'expected_current_job_id':{'type':'integer','minimum':1,'maximum':2147483647},'expected_current_commit':{'type':'string','pattern':'^[a-f0-9]{40}$'},'target_commit':{'type':'string','pattern':'^[a-f0-9]{40}$'},'reason':{'type':'string','minLength':4,'maxLength':500},'ttl_seconds':{'type':'integer','minimum':60,'maximum':86400}},'required':['slug','target_job_id','expected_current_job_id','expected_current_commit','target_commit','reason'],'additionalProperties':False}},
  {'name':'deployment.rollback-test','description':'Executa rollback manual aprovado para release histórica do ambiente isolado','inputSchema':{'type':'object','properties':{'slug':{'type':'string','enum':['sistema-de-biblioteca-teste']},'target_job_id':{'type':'integer','minimum':1,'maximum':2147483647},'expected_current_job_id':{'type':'integer','minimum':1,'maximum':2147483647},'expected_current_commit':{'type':'string','pattern':'^[a-f0-9]{40}$'},'target_commit':{'type':'string','pattern':'^[a-f0-9]{40}$'},'approval_id':{'type':'string','pattern':'^apr_[a-f0-9]{20}$'}},'required':['slug','target_job_id','expected_current_job_id','expected_current_commit','target_commit','approval_id'],'additionalProperties':False}},
  ]
+
+def _tool_definition(tool_name):
+    return next((item for item in TOOLS if item.get('name') == tool_name), None)
+
+
+def _schema_type(schema):
+    if not isinstance(schema, dict):
+        return 'any'
+    declared = schema.get('type')
+    if isinstance(declared, list):
+        return '|'.join(str(item) for item in declared)
+    if declared:
+        return str(declared)
+    variants = schema.get('oneOf') or schema.get('anyOf') or []
+    if variants:
+        values=[]
+        for variant in variants:
+            value=_schema_type(variant)
+            if value not in values:values.append(value)
+        return '|'.join(values) if values else 'any'
+    return 'any'
+
+
+def _example_for_schema(schema, field='', include_optional=True, depth=0):
+    if depth > 4 or not isinstance(schema, dict):
+        return None
+    if 'const' in schema:return schema['const']
+    enum=schema.get('enum')
+    if isinstance(enum,list) and enum:return enum[0]
+    variants=schema.get('oneOf') or schema.get('anyOf') or []
+    if variants:return _example_for_schema(variants[0],field,include_optional,depth+1)
+    kind=schema.get('type')
+    if isinstance(kind,list):kind=next((item for item in kind if item!='null'),kind[0] if kind else None)
+    key=str(field or '').lower()
+    if kind=='object' or ('properties' in schema and kind is None):
+        properties=schema.get('properties') or {};required=set(schema.get('required') or [])
+        result={}
+        for name,child in properties.items():
+            if include_optional or name in required:
+                result[name]=_example_for_schema(child,name,include_optional,depth+1)
+        return result
+    if kind=='array':
+        item=_example_for_schema(schema.get('items') or {},field,include_optional,depth+1)
+        return [item] if item is not None else []
+    if kind in ('integer','number'):
+        minimum=schema.get('minimum')
+        if minimum is not None:return minimum
+        return 1
+    if kind=='boolean':return False
+    if kind=='null':return None
+    if kind=='string' or kind is None:
+        pattern=str(schema.get('pattern') or '')
+        if key in {'slug','project_slug'}:return 'meu-projeto'
+        if key=='workspace_id':return 'ws_'+'1'*24
+        if 'digest' in key or key.endswith('sha256') or key=='expected_sha256':return 'a'*64
+        if key=='approval_id':return 'apr_'+'1'*20
+        if key in {'commit_sha','expected_head_sha','expected_previous_commit','expected_current_commit','target_commit','head_sha'}:return 'a'*40
+        if key in {'environment','source_environment','target_environment'}:return 'preview'
+        if key=='service':return 'api'
+        if key in {'ref','commit_ref'}:return 'main'
+        if key=='reason':return 'Operação revisada e autorizada'
+        if key in {'name','names'} and ('A-Z' in pattern or not pattern):return 'APP_NAME'
+        if key=='path':return 'site/index.html'
+        if 'url' in key:return 'https://example.invalid'
+        if key=='secret_reference':return 'vault://project/meu-projeto/secret'
+        prefix_match=re.fullmatch(r'\^([A-Za-z][A-Za-z0-9_-]*)\_\[a-f0-9\]\{(\d+)\}\\$',pattern)
+        if prefix_match:return prefix_match.group(1)+'_'+('1'*int(prefix_match.group(2)))
+        fixed_hex=re.fullmatch(r'\^\[a-f0-9\]\{(\d+)\}\\$',pattern) or re.fullmatch(r'\^\[0-9a-f\]\{(\d+)\}\\$',pattern)
+        if fixed_hex:return 'a'*int(fixed_hex.group(1))
+        fixed_hex_dash=re.fullmatch(r'\^\[0-9a-f-\]\{(\d+)\}\\$',pattern)
+        if fixed_hex_dash:return '1'*int(fixed_hex_dash.group(1))
+        if pattern=='^[0-9a-f-]+$':return '1'*32
+        if pattern.startswith('^[A-Z_') or pattern.startswith('^[A-Z]'):return 'APP_NAME'
+        if pattern.startswith('^/'):return '/'
+        if key=='job_id':
+            if pattern.startswith('^toolchain_'):return 'toolchain_'+'1'*24
+            return 'build_'+'1'*24
+        if key=='build_job_id':return 'build_'+'1'*24
+        if key=='image_record_id':return 'img_'+'1'*24
+        if key=='preview_id':return ('prv_'+'1'*20) if pattern.startswith('^prv_') else ('pv_'+'1'*24)
+        if key=='deployment_id':return 'dep_'+'1'*24
+        if key=='build_id':return '1'*36 if '{36}' in pattern else '1'*32
+        min_length=max(1,int(schema.get('minLength') or 1))
+        return 'valor' if min_length<=5 else ('x'*min(min_length,32))
+    return None
+
+
+def _schema_contract(schema, required=False, depth=0):
+    if depth > 3 or not isinstance(schema,dict):return {'type':'any','required':bool(required)}
+    result={'type':_schema_type(schema),'required':bool(required)}
+    for source,target in (
+        ('description','description'),('enum','allowedValues'),('pattern','pattern'),
+        ('minimum','minimum'),('maximum','maximum'),('minLength','minLength'),('maxLength','maxLength'),
+        ('minItems','minItems'),('maxItems','maxItems'),
+    ):
+        if source in schema:result[target]=schema[source]
+    if schema.get('items') is not None:
+        result['items']=_schema_contract(schema.get('items') or {},False,depth+1)
+    if schema.get('properties'):
+        child_required=set(schema.get('required') or [])
+        result['properties']={name:_schema_contract(child,name in child_required,depth+1) for name,child in schema['properties'].items()}
+    variants=schema.get('oneOf') or schema.get('anyOf')
+    if variants:result['variants']=[_schema_contract(item,False,depth+1) for item in variants[:6]]
+    return result
+
+
+def tool_usage(tool_name):
+    definition=_tool_definition(tool_name)
+    if not definition:
+        return {'tool':tool_name,'known':False}
+    schema=definition.get('inputSchema') or {'type':'object','properties':{}}
+    properties=schema.get('properties') or {};required=list(schema.get('required') or [])
+    optional=[name for name in properties if name not in set(required)]
+    return {
+        'tool':tool_name,
+        'known':True,
+        'description':definition.get('description') or '',
+        'requiredParameters':required,
+        'optionalParameters':optional,
+        'parameters':{name:_schema_contract(child,name in set(required)) for name,child in properties.items()},
+        'additionalPropertiesAllowed':schema.get('additionalProperties',True) is not False,
+        'minimumExample':_example_for_schema(schema,'',False),
+        'completeExample':(schema.get('examples') or [None])[0] or _example_for_schema(schema,'',True),
+    }
+
+
+def _validation_issue_payload(tool_name,args,issue):
+    path='.'.join(str(part) for part in issue.absolute_path)
+    code='invalid_arguments';field=path
+    message=issue.message
+    if issue.validator=='required':
+        missing=next((name for name in issue.validator_value if name not in issue.instance),'')
+        field='.'.join(filter(None,[path,missing]));code='missing_field';message=f'O campo {field or missing} é obrigatório.'
+    elif issue.validator=='type':
+        code='invalid_field_type';expected=issue.validator_value
+        message=f'O campo {field or "arguments"} deve ser do tipo {expected}.'
+    elif issue.validator=='enum':
+        code='invalid_field_value';message=f'O campo {field or "arguments"} deve usar um dos valores permitidos.'
+    elif issue.validator=='pattern':
+        code='invalid_field_format';message=f'O campo {field or "arguments"} possui formato inválido.'
+    elif issue.validator=='additionalProperties':
+        code='unknown_field';known=set((issue.schema.get('properties') or {}).keys()) if isinstance(issue.schema,dict) else set()
+        extras=sorted(set(issue.instance or {})-known) if isinstance(issue.instance,dict) else []
+        if extras:field='.'.join(filter(None,[path,extras[0]]));message=f'O campo {field} não é aceito por esta ferramenta.'
+    elif issue.validator in {'minimum','maximum','minLength','maxLength','minItems','maxItems'}:
+        code='field_limit_violation';message=f'O campo {field or "arguments"} está fora dos limites permitidos.'
+    return {
+        'code':code,'field':field,'path':'$.'+field if field else '$','message':message,
+        'receivedFields':sorted(str(key) for key in args) if isinstance(args,dict) else [],
+        'usage':tool_usage(tool_name),
+    }
+
+
+def validate_tool_arguments(tool_name,args):
+    definition=_tool_definition(tool_name)
+    if not definition:return
+    schema=definition.get('inputSchema') or {'type':'object'}
+    validator=jsonschema.Draft202012Validator(schema)
+    issues=sorted(validator.iter_errors(args),key=lambda item:(list(item.absolute_path),str(item.message)))
+    if issues:raise ToolInputError(_validation_issue_payload(tool_name,args,issues[0]))
+
+
+def enrich_tool_error(tool_name,args,error_payload=None,message='Parâmetros inválidos.'):
+    payload=dict(error_payload or {})
+    payload.setdefault('code','invalid_arguments')
+    payload.setdefault('message',str(message or 'Parâmetros inválidos.')[:240])
+    payload.setdefault('field','')
+    payload.setdefault('path','$.'+payload['field'] if payload.get('field') else '$')
+    payload.setdefault('receivedFields',sorted(str(key) for key in args) if isinstance(args,dict) else [])
+    payload['tool']=tool_name or payload.get('tool') or ''
+    payload.setdefault('usage',tool_usage(tool_name))
+    return payload
+
+
 READ_ONLY_TOOLS={
  'project.list','project.get','project.connectors','project.technologies.detect','project.manifest.validate','project.configuration.get','project.environment.list','project.environment.get','project.environment.validate','project.environment.change.plan','project.environment.promote.plan','project.environment.history','workspace.normalize.plan','workspace.change-set.validate','forgejo.proposal.change-set.plan','runtime.catalog','runtime.detect','runtime.plan','runtime.validate',
  'build.plan','build.status','build.logs.read','build.artifact.get','deployment.preview.plan','deployment.preview.status',
@@ -1201,8 +1376,10 @@ class H(BaseHTTPRequestHandler):
         try:
             n=int(self.headers.get('Content-Length','0')); raw=self.rfile.read(min(n,1048576)); req=json.loads(raw or b'{}')
             rid=req.get('id'); method=req.get('method'); params=req.get('params') or {}
-            args=params.get('arguments') or {};tool=params.get('name') if method=='tools/call' else method
-            auth_args,_auth_wrappers=_unwrap_tool_arguments(args)
+            raw_args=params.get('arguments') or {};tool=params.get('name') if method=='tools/call' else method
+            args,input_wrappers=_unwrap_tool_arguments(raw_args)
+            validate_tool_arguments(tool,args)
+            auth_args=args
             slug=str(auth_args.get('slug') or auth_args.get('project_slug') or '')
             if method=='resources/read':
                 resource_uri=str(params.get('uri') or '')
@@ -1317,8 +1494,8 @@ class H(BaseHTTPRequestHandler):
                     if plan.get('action')!=expected_action:raise ValueError('environment_plan_action_mismatch')
                     if plan.get('consumed') or int(plan.get('expiresAt') or 0)<=int(time.time()):raise ValueError('environment_plan_unavailable')
                     created=environment_approval_create(slug,client_id,authz,plan,reason,ttl,trace_id)
-                    if not created.get('ok') or created.get('status')!='pending':raise ValueError('approval_create_failed')
-                    content={'ok':True,'approval_id':created['approval_id'],'status':'pending','expires_at':created['expires_at'],'project_slug':slug,'plan_digest':plan_digest_value,'environment_action':expected_action,'side_effects':False,'content_stored_in_approval':False,'secret_values_in_metadata':False}
+                    if not created.get('ok') or created.get('status') not in {'pending','approved'}:raise ValueError('approval_create_failed')
+                    content={'ok':True,'approval_id':created['approval_id'],'status':created.get('status'),'expires_at':created['expires_at'],'policy_applied':bool(created.get('policy_applied')),'approval_policy_id':created.get('approval_policy_id'),'project_slug':slug,'plan_digest':plan_digest_value,'environment_action':expected_action,'side_effects':False,'content_stored_in_approval':False,'secret_values_in_metadata':False}
                 elif name in {'project.environment.change.execute','project.environment.promote.execute'}:
                     args,_wrappers=_unwrap_tool_arguments(args);required={'slug','plan_digest','approval_id'}
                     if set(args)!=required:raise ValueError('slug, plan_digest e approval_id são obrigatórios.')
@@ -1415,8 +1592,8 @@ class H(BaseHTTPRequestHandler):
                     if plan.get('blocked') or not plan.get('valid'):raise ValueError('A toolchain está bloqueada pela política ou pelo script.')
                     if not hmac.compare_digest(str(plan.get('plan_digest') or ''),digest_value):raise ValueError('O plano da toolchain mudou.')
                     created=approval_create_toolchain(slug,client_id,authz,'project.toolchain.build',plan,reason,ttl,trace_id)
-                    if not created.get('ok') or created.get('status')!='pending':raise ValueError('approval_create_failed')
-                    content={'ok':True,'approval_id':created['approval_id'],'status':'pending','expires_at':created['expires_at'],'project_slug':slug,'plan_digest':digest_value,'action':'project.toolchain.build','images_created':False,'images_activated':False,'content_stored_in_approval':False,'secret_values_in_metadata':False}
+                    if not created.get('ok') or created.get('status') not in {'pending','approved'}:raise ValueError('approval_create_failed')
+                    content={'ok':True,'approval_id':created['approval_id'],'status':created.get('status'),'expires_at':created['expires_at'],'policy_applied':bool(created.get('policy_applied')),'approval_policy_id':created.get('approval_policy_id'),'project_slug':slug,'plan_digest':digest_value,'action':'project.toolchain.build','images_created':False,'images_activated':False,'content_stored_in_approval':False,'secret_values_in_metadata':False}
                 elif name=='project.toolchain.build.execute':
                     required={'slug','expected_revision','plan_digest','approval_id'};allowed=required|{'ref'}
                     if not required.issubset(args) or not set(args).issubset(allowed):raise ValueError('slug, expected_revision, plan_digest e approval_id são obrigatórios.')
@@ -1458,8 +1635,8 @@ class H(BaseHTTPRequestHandler):
                     plan=toolchain_activation_plan(slug,environment,job_id,expected,trace_id)
                     if not hmac.compare_digest(str(plan.get('plan_digest') or ''),digest_value) or not 4<=len(reason)<=500 or not 60<=ttl<=86400:raise ValueError('O plano de ativação mudou ou a solicitação é inválida.')
                     created=approval_create_toolchain(slug,client_id,authz,'project.toolchain.activation',plan,reason,ttl,trace_id)
-                    if not created.get('ok') or created.get('status')!='pending':raise ValueError('approval_create_failed')
-                    content={'ok':True,'approval_id':created['approval_id'],'status':'pending','expires_at':created['expires_at'],'project_slug':slug,'environment':environment,'plan_digest':digest_value,'action':'project.toolchain.activation','containers_changed':False,'content_stored_in_approval':False,'secret_values_in_metadata':False}
+                    if not created.get('ok') or created.get('status') not in {'pending','approved'}:raise ValueError('approval_create_failed')
+                    content={'ok':True,'approval_id':created['approval_id'],'status':created.get('status'),'expires_at':created['expires_at'],'policy_applied':bool(created.get('policy_applied')),'approval_policy_id':created.get('approval_policy_id'),'project_slug':slug,'environment':environment,'plan_digest':digest_value,'action':'project.toolchain.activation','containers_changed':False,'content_stored_in_approval':False,'secret_values_in_metadata':False}
                 elif name=='project.toolchain.image.activate':
                     required={'slug','environment','job_id','expected_revision','plan_digest','approval_id'}
                     if set(args)!=required:raise ValueError('Parâmetros da ativação estão incompletos.')
@@ -1532,8 +1709,8 @@ class H(BaseHTTPRequestHandler):
                     if plan.get('blocked'):raise ValueError('O plano contém runtimes bloqueados pela política de segurança.')
                     if not hmac.compare_digest(str(plan.get('plan_digest') or ''),digest_value):raise ValueError('O plano mudou. Gere um novo plano antes de solicitar aprovação.')
                     created=approval_create_multiservice_build(slug,client_id,authz,plan,reason,ttl,trace_id)
-                    if not created.get('ok') or created.get('status')!='pending':raise ValueError('approval_create_failed')
-                    content={'ok':True,'approval_id':created['approval_id'],'status':'pending','expires_at':created['expires_at'],'project_slug':slug,'plan_digest':digest_value,'config_revision':expected,'archive_sha256':plan.get('archive_sha256'),'action':'build.multiservice','side_effects':{'build_queued':False,'images_created':False},'content_stored_in_approval':False,'secret_values_in_metadata':False}
+                    if not created.get('ok') or created.get('status') not in {'pending','approved'}:raise ValueError('approval_create_failed')
+                    content={'ok':True,'approval_id':created['approval_id'],'status':created.get('status'),'expires_at':created['expires_at'],'policy_applied':bool(created.get('policy_applied')),'approval_policy_id':created.get('approval_policy_id'),'project_slug':slug,'plan_digest':digest_value,'config_revision':expected,'archive_sha256':plan.get('archive_sha256'),'action':'build.multiservice','side_effects':{'build_queued':False,'images_created':False},'content_stored_in_approval':False,'secret_values_in_metadata':False}
                 elif name=='build.multiservice.execute':
                     required={'slug','expected_revision','plan_digest','approval_id'};allowed=required|{'ref'}
                     if not required.issubset(args) or not set(args).issubset(allowed):raise ValueError('Os campos slug, expected_revision, plan_digest e approval_id são obrigatórios.')
@@ -1597,8 +1774,8 @@ class H(BaseHTTPRequestHandler):
                     control('/v1/projects/'+urllib.parse.quote(slug,safe=''))
                     if not hmac.compare_digest(str(plan.get('preview_plan_digest') or ''),digest):raise ValueError('O plano do preview mudou.')
                     created=approval_create_multiservice_preview(slug,client_id,authz,plan,reason,approval_ttl,trace_id)
-                    if not created.get('ok') or created.get('status')!='pending':raise ValueError('approval_create_failed')
-                    content={'ok':True,'approval_id':created['approval_id'],'status':'pending','expires_at':created['expires_at'],'project_slug':slug,'preview_plan_digest':digest,'build_job_id':job_id,'side_effects':False,'content_stored_in_approval':False,'secret_values_in_metadata':False}
+                    if not created.get('ok') or created.get('status') not in {'pending','approved'}:raise ValueError('approval_create_failed')
+                    content={'ok':True,'approval_id':created['approval_id'],'status':created.get('status'),'expires_at':created['expires_at'],'policy_applied':bool(created.get('policy_applied')),'approval_policy_id':created.get('approval_policy_id'),'project_slug':slug,'preview_plan_digest':digest,'build_job_id':job_id,'side_effects':False,'content_stored_in_approval':False,'secret_values_in_metadata':False}
                 elif name=='preview.multiservice.create':
                     required={'build_job_id','preview_plan_digest','approval_id'};allowed=required|{'routes','ttl_seconds'}
                     if not required.issubset(args) or not set(args).issubset(allowed):raise ValueError('build_job_id, preview_plan_digest e approval_id são obrigatórios.')
@@ -1673,8 +1850,8 @@ class H(BaseHTTPRequestHandler):
                     if not hmac.compare_digest(str(plan.get('deployment_plan_digest') or ''),digest):raise ValueError('O plano do deploy mudou.')
                     if not plan.get('execution_allowed'):raise ValueError('Deploy bloqueado: '+', '.join(plan.get('blockers') or []))
                     created=approval_create_multiservice_deployment(slug,client_id,authz,plan,reason,ttl,trace_id)
-                    if not created.get('ok') or created.get('status')!='pending':raise ValueError('approval_create_failed')
-                    content={'ok':True,'approval_id':created['approval_id'],'status':'pending','expires_at':created['expires_at'],'project_slug':slug,'environment':environment,'deployment_plan_digest':digest,'side_effects':False,'content_stored_in_approval':False,'secret_values_in_metadata':False}
+                    if not created.get('ok') or created.get('status') not in {'pending','approved'}:raise ValueError('approval_create_failed')
+                    content={'ok':True,'approval_id':created['approval_id'],'status':created.get('status'),'expires_at':created['expires_at'],'policy_applied':bool(created.get('policy_applied')),'approval_policy_id':created.get('approval_policy_id'),'project_slug':slug,'environment':environment,'deployment_plan_digest':digest,'side_effects':False,'content_stored_in_approval':False,'secret_values_in_metadata':False}
                 elif name=='deployment.multiservice.execute':
                     required={'slug','environment','deployment_plan_digest','approval_id'};allowed=required|{'build_job_id','routes'}
                     if not required.issubset(args) or not set(args).issubset(allowed):raise ValueError('slug, environment, deployment_plan_digest e approval_id são obrigatórios.')
@@ -1736,8 +1913,8 @@ class H(BaseHTTPRequestHandler):
                     control('/v1/projects/'+urllib.parse.quote(slug,safe=''));planned=preview_call('/v1/plan',{'project_slug':slug,'build_id':build_id,'commit_ref':commit_ref,'ttl_seconds':3600});digest=planned.get('preview_plan_digest');art=planned.get('artifact') or {}
                     if not digest or not art.get('artifact_image_id') or not art.get('immutable_source_digest'):raise ValueError('preview_plan_binding_failed')
                     created=approval_create_preview(slug,client_id,reason,ttl,trace_id,digest,build_id,commit_ref)
-                    if created.get('status')!='pending':raise ValueError('approval_create_failed')
-                    content={'ok':True,'approval_id':created['approval_id'],'status':'pending','expires_at':created['expires_at'],'preview_plan_digest':digest,'artifact_image_id':art.get('artifact_image_id'),'immutable_source_digest':art.get('immutable_source_digest'),'public_url_ready':False,'two_approvers_required':False}
+                    if created.get('status') not in {'pending','approved'}:raise ValueError('approval_create_failed')
+                    content={'ok':True,'approval_id':created['approval_id'],'status':created.get('status'),'expires_at':created['expires_at'],'policy_applied':bool(created.get('policy_applied')),'approval_policy_id':created.get('approval_policy_id'),'preview_plan_digest':digest,'artifact_image_id':art.get('artifact_image_id'),'immutable_source_digest':art.get('immutable_source_digest'),'public_url_ready':False,'two_approvers_required':False}
                 elif name=='deployment.preview':
                     if set(args)!={'slug','build_id','commit_ref','approval_id'}:raise ValueError('argumentos inválidos')
                     client_id=self.headers.get('X-CloudIF-Client','').strip()
@@ -1863,8 +2040,8 @@ class H(BaseHTTPRequestHandler):
                     if slug!='sistema-de-biblioteca-teste' or len(commit)!=40 or len(prev)!=40 or not (5<=len(version)<=120) or not (4<=len(reason)<=500) or not (60<=ttl<=86400):raise ValueError('argumentos inválidos')
                     control('/v1/projects/'+urllib.parse.quote(slug,safe=''));digest=promotion_digest(client_id,slug,commit,version,prev)
                     created=approval_create_promote_test(slug,client_id,reason,ttl,trace_id,digest,commit,version,prev)
-                    if created.get('status')!='pending':raise ValueError('approval_create_failed')
-                    content={'ok':True,'approval_id':created['approval_id'],'status':'pending','expires_at':created['expires_at'],'promotion_digest':digest,'side_effects':{'release':False,'backup':False,'migrations':False,'komodo':False}}
+                    if created.get('status') not in {'pending','approved'}:raise ValueError('approval_create_failed')
+                    content={'ok':True,'approval_id':created['approval_id'],'status':created.get('status'),'expires_at':created['expires_at'],'policy_applied':bool(created.get('policy_applied')),'approval_policy_id':created.get('approval_policy_id'),'promotion_digest':digest,'side_effects':{'release':False,'backup':False,'migrations':False,'komodo':False}}
                 elif name=='deployment.promote-test':
                     if set(args)!={'slug','commit_sha','version','expected_previous_commit','approval_id'}:raise ValueError('argumentos inválidos')
                     client_id=self.headers.get('X-CloudIF-Client','').strip()
@@ -1912,8 +2089,8 @@ class H(BaseHTTPRequestHandler):
                     if slug!='sistema-de-biblioteca-teste' or target_job_id<1 or current_job_id<1 or len(current_commit)!=40 or len(target_commit)!=40 or not (4<=len(reason)<=500) or not (60<=ttl<=86400):raise ValueError('argumentos inválidos')
                     control('/v1/projects/'+urllib.parse.quote(slug,safe=''));digest=rollback_digest(client_id,slug,target_job_id,current_job_id,current_commit,target_commit)
                     created=approval_create_rollback_test(slug,client_id,reason,ttl,trace_id,digest,target_job_id,current_job_id,current_commit,target_commit)
-                    if created.get('status')!='pending':raise ValueError('approval_create_failed')
-                    content={'ok':True,'approval_id':created['approval_id'],'status':'pending','expires_at':created['expires_at'],'rollback_digest':digest,'side_effects':{'backup':False,'komodo':False,'rollback':False}}
+                    if created.get('status') not in {'pending','approved'}:raise ValueError('approval_create_failed')
+                    content={'ok':True,'approval_id':created['approval_id'],'status':created.get('status'),'expires_at':created['expires_at'],'policy_applied':bool(created.get('policy_applied')),'approval_policy_id':created.get('approval_policy_id'),'rollback_digest':digest,'side_effects':{'backup':False,'komodo':False,'rollback':False}}
                 elif name=='deployment.rollback-test':
                     if set(args)!={'slug','target_job_id','expected_current_job_id','expected_current_commit','target_commit','approval_id'}:raise ValueError('argumentos inválidos')
                     client_id=self.headers.get('X-CloudIF-Client','').strip();slug=str(args['slug']).strip();target_job_id=int(args['target_job_id']);current_job_id=int(args['expected_current_job_id']);current_commit=str(args['expected_current_commit']).strip();target_commit=str(args['target_commit']).strip();approval_id=str(args['approval_id']).strip()
@@ -2050,8 +2227,8 @@ class H(BaseHTTPRequestHandler):
                     plan=supabase_plan(slug,authz,operation,payload)
                     if not hmac.compare_digest(str(plan.get('plan_digest') or ''),digest):raise ValueError('plan_digest_mismatch')
                     created=supabase_approval_create(slug,client_id,authz,operation,digest,plan.get('summary') or {},reason,ttl,trace_id)
-                    if not created.get('ok') or created.get('status')!='pending':raise ValueError('approval_create_failed')
-                    content={'ok':True,'approval_id':created['approval_id'],'status':'pending','expires_at':created['expires_at'],'project_slug':slug,'operation':operation,'plan_digest':digest,'summary':plan.get('summary') or {},'secret_values_exposed':False,'side_effects':False}
+                    if not created.get('ok') or created.get('status') not in {'pending','approved'}:raise ValueError('approval_create_failed')
+                    content={'ok':True,'approval_id':created['approval_id'],'status':created.get('status'),'expires_at':created['expires_at'],'policy_applied':bool(created.get('policy_applied')),'approval_policy_id':created.get('approval_policy_id'),'project_slug':slug,'operation':operation,'plan_digest':digest,'summary':plan.get('summary') or {},'secret_values_exposed':False,'side_effects':False}
                 elif name=='supabase.operation.execute':
                     if set(args)!={'slug','operation','payload','plan_digest','approval_id'}:raise ValueError('argumentos inválidos')
                     client_id=self.headers.get('X-CloudIF-Client','').strip()
@@ -2112,8 +2289,8 @@ class H(BaseHTTPRequestHandler):
                         reason=str(args.get('reason') or '').strip();ttl=int(args.get('ttl_seconds') or 900)
                         if not (4<=len(reason)<=500) or not (60<=ttl<=86400):raise ValueError('aprovação inválida')
                         created=approval_create_deploy(slug,client_id,reason,ttl,trace_id,digest,commit,version)
-                        if created.get('status')!='pending':raise ValueError('approval_create_failed')
-                        content={'ok':True,'approval_id':created['approval_id'],'status':'pending','expires_at':created['expires_at'],'deployment_digest':digest,'side_effects':{'release':False,'backup':False,'migrations':False,'komodo':False}}
+                        if created.get('status') not in {'pending','approved'}:raise ValueError('approval_create_failed')
+                        content={'ok':True,'approval_id':created['approval_id'],'status':created.get('status'),'expires_at':created['expires_at'],'policy_applied':bool(created.get('policy_applied')),'approval_policy_id':created.get('approval_policy_id'),'deployment_digest':digest,'side_effects':{'release':False,'backup':False,'migrations':False,'komodo':False}}
                 elif name=='deployment.validate':
                     if set(args)!={'slug','commit_sha','version','approval_id'}:raise ValueError('argumentos inválidos')
                     client_id=self.headers.get('X-CloudIF-Client','').strip()
@@ -2173,8 +2350,8 @@ class H(BaseHTTPRequestHandler):
                         reason=str(args.get('reason') or '').strip();ttl=int(args.get('ttl_seconds') or 900)
                         if not (4<=len(reason)<=500) or not (60<=ttl<=86400):raise ValueError('aprovação inválida')
                         created=approval_create_merge(slug,client_id,reason,ttl,trace_id,digest,number,sha)
-                        if created.get('status')!='pending':raise ValueError('approval_create_failed')
-                        content={'ok':True,'approval_id':created['approval_id'],'status':'pending','expires_at':created['expires_at'],'merge_digest':digest,'side_effects':{'forgejo':False,'main_modified':False}}
+                        if created.get('status') not in {'pending','approved'}:raise ValueError('approval_create_failed')
+                        content={'ok':True,'approval_id':created['approval_id'],'status':created.get('status'),'expires_at':created['expires_at'],'policy_applied':bool(created.get('policy_applied')),'approval_policy_id':created.get('approval_policy_id'),'merge_digest':digest,'side_effects':{'forgejo':False,'main_modified':False}}
                 elif name=='forgejo.proposal.merge':
                     if set(args)!={'slug','number','expected_head_sha','approval_id'}:raise ValueError('argumentos inválidos')
                     client_id=self.headers.get('X-CloudIF-Client','').strip()
@@ -2273,8 +2450,8 @@ class H(BaseHTTPRequestHandler):
                         reason=str(args.get('reason') or '').strip();ttl=int(args.get('ttl_seconds') or 900)
                         if not (4<=len(reason)<=500) or not (60<=ttl<=86400):raise ValueError('reason deve ter 4 a 500 caracteres e ttl_seconds deve estar entre 60 e 86400.')
                         created=approval_create_change_set(slug,client_id,authz,workspace_id,digest_value,str(sealed.get('archive_sha256') or ''),sealed.get('summary') or {},reason,ttl,trace_id)
-                        if not created.get('ok') or created.get('status')!='pending':raise ValueError('approval_create_failed')
-                        content={'ok':True,'approval_id':created['approval_id'],'status':'pending','expires_at':created['expires_at'],'project_slug':slug,'workspace_id':workspace_id,'change_set_digest':digest_value,'action':'forgejo.propose-change-set','side_effects':{'forgejo':False,'branch_created':False,'pull_request_created':False},'content_stored_in_approval':False}
+                        if not created.get('ok') or created.get('status') not in {'pending','approved'}:raise ValueError('approval_create_failed')
+                        content={'ok':True,'approval_id':created['approval_id'],'status':created.get('status'),'expires_at':created['expires_at'],'policy_applied':bool(created.get('policy_applied')),'approval_policy_id':created.get('approval_policy_id'),'project_slug':slug,'workspace_id':workspace_id,'change_set_digest':digest_value,'action':'forgejo.propose-change-set','side_effects':{'forgejo':False,'branch_created':False,'pull_request_created':False},'content_stored_in_approval':False}
                 elif name=='forgejo.proposal.change-set.create':
                     required={'slug','workspace_id','change_set_digest','approval_id'}
                     example={'slug':'meu-projeto','workspace_id':'ws_'+'1'*24,'change_set_digest':'a'*64,'approval_id':'apr_'+'1'*20}
@@ -2331,8 +2508,8 @@ class H(BaseHTTPRequestHandler):
                         reason=str(args.get('reason') or '').strip();ttl=int(args.get('ttl_seconds') or 900)
                         if not (4<=len(reason)<=500) or not (60<=ttl<=86400):raise ValueError('aprovação inválida')
                         created=approval_create(slug,client_id,reason,ttl,trace_id,digest)
-                        if not created.get('ok') or created.get('status')!='pending':raise ValueError('approval_create_failed')
-                        content={'ok':True,'approval_id':created['approval_id'],'status':'pending','expires_at':created['expires_at'],'proposal_digest':digest,'project_slug':slug,'requested_by':client_id,'action':'forgejo.propose-edit','side_effects':{'forgejo':False,'branch_created':False,'pull_request_created':False}}
+                        if not created.get('ok') or created.get('status') not in {'pending','approved'}:raise ValueError('approval_create_failed')
+                        content={'ok':True,'approval_id':created['approval_id'],'status':created.get('status'),'expires_at':created['expires_at'],'policy_applied':bool(created.get('policy_applied')),'approval_policy_id':created.get('approval_policy_id'),'proposal_digest':digest,'project_slug':slug,'requested_by':client_id,'action':'forgejo.propose-edit','side_effects':{'forgejo':False,'branch_created':False,'pull_request_created':False}}
                 elif name=='forgejo.propose-edit':
                     required={'slug','approval_id','path','expected_sha256','find','replace','title','body'}
                     if set(args)!=required:raise ValueError('argumentos inválidos')
@@ -2365,8 +2542,17 @@ class H(BaseHTTPRequestHandler):
                 result={'content':[{'type':'text','text':json.dumps(content,ensure_ascii=False,separators=(',',':'))}],'isError':False}
             else:self.sendj(200,{'jsonrpc':'2.0','id':rid,'error':{'code':-32601,'message':'Method not found'}});return
             self.sendj(200,{'jsonrpc':'2.0','id':rid,'result':result})
-        except ToolInputError as e:self.sendj(200,{'jsonrpc':'2.0','id':req.get('id') if 'req' in locals() else None,'error':{'code':-32602,'message':e.payload.get('message','Parâmetros inválidos.'),'data':e.payload}})
+        except ToolInputError as e:
+            _tool_name=tool if 'tool' in locals() else (name if 'name' in locals() else '')
+            _args=args if 'args' in locals() else {}
+            _data=enrich_tool_error(_tool_name,_args,e.payload,e.payload.get('message','Parâmetros inválidos.'))
+            self.sendj(200,{'jsonrpc':'2.0','id':req.get('id') if 'req' in locals() else None,'error':{'code':-32602,'message':_data['message'],'data':_data}})
         except urllib.error.HTTPError as e:self.sendj(200,{'jsonrpc':'2.0','id':req.get('id') if 'req' in locals() else None,'error':{'code':-32004,'message':'Recurso não encontrado' if e.code==404 else 'Falha no plano de controle'}})
-        except Exception as e:self.sendj(200,{'jsonrpc':'2.0','id':req.get('id') if 'req' in locals() else None,'error':{'code':-32602,'message':str(e)[:160]}})
+        except Exception as e:
+            _tool_name=tool if 'tool' in locals() else (name if 'name' in locals() else '')
+            _args=args if 'args' in locals() else {}
+            _message=str(e)[:160] or 'Parâmetros inválidos.'
+            _data=enrich_tool_error(_tool_name,_args,{},_message)
+            self.sendj(200,{'jsonrpc':'2.0','id':req.get('id') if 'req' in locals() else None,'error':{'code':-32602,'message':_message,'data':_data}})
 if __name__ == '__main__':
     ThreadingHTTPServer((HOST,PORT),H).serve_forever()

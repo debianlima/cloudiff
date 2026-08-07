@@ -114,7 +114,7 @@ def request_approval(slug:str,plan_digest:str,reason:str,username:str,groups:lis
     payload={'project_slug':slug,'action':action,'requested_by':requested_by,'requester_role':auth['role'],'ttl_seconds':max(60,min(int(ttl_seconds),86400)),'reason':str(reason)[:500],'trace_id':'portal-environment-'+hashlib.sha256((slug+plan_digest).encode()).hexdigest()[:20],'metadata':metadata}
     code,data=_json_call('POST',APPROVAL_URL+'/v1/approvals',APPROVAL_TOKEN,payload)
     if code not in {200,201} or not data.get('ok'):raise RuntimeError(str((data.get('error') or {}).get('message') or 'approval_create_failed'))
-    return {'ok':True,'approvalId':data['approval_id'],'status':data['status'],'expiresAt':data['expires_at'],'projectSlug':slug,'planDigest':plan_digest,'approvalUrl':'/cloudiff/portal/?tab=aprovacoes','secretValuesIncluded':False}
+    return {'ok':True,'approvalId':data['approval_id'],'status':data['status'],'expiresAt':data['expires_at'],'projectSlug':slug,'planDigest':plan_digest,'approvalUrl':'/cloudiff/portal/?tab=aprovacoes','policyApplied':bool(data.get('policy_applied')),'approvalPolicyId':data.get('approval_policy_id'),'secretValuesIncluded':False}
 
 
 def execute(slug:str,plan_digest:str,approval_id:str,username:str,groups:list[str]|set[str])->dict[str,Any]:

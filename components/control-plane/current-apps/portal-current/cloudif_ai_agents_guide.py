@@ -159,6 +159,7 @@ def render(rows,csrf_token='',approvals=None,can_decide=False):
                     f'<input type="hidden" name="csrf_token" value="{e(csrf_token)}">'
                     f'<input type="hidden" name="approval_id" value="{aid}">'
                     '<input type="hidden" name="operation" value="approve"><input type="hidden" name="return_to" value="agentes">'
+                    '<label class="small" style="display:flex;gap:.45rem;align-items:flex-start;margin:.55rem 0"><input type="checkbox" name="always_allow" value="1"><span>Sempre permitir esta ação neste projeto para este agente.</span></label>'
                     '<button class="btn" type="submit">Aceitar</button></form>'
                     '<form method="post" action="/cloudiff/portal/action/approval">'
                     f'<input type="hidden" name="csrf_token" value="{e(csrf_token)}">'

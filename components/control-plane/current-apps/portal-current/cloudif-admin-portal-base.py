@@ -5640,9 +5640,20 @@ def _ap_raw():
     if code!=200 or not isinstance(data,dict) or not data.get('ok'):
         return []
     return data.get('approvals') or []
+def _ap_raw_policies():
+    try:
+        code,data=_ap_panel.request(_ap_cfg('CLOUDIF_APPROVAL_URL','http://127.0.0.1:18204'),_ap_cfg('CLOUDIF_APPROVAL_TOKEN',''),'GET','/v1/approval-policies?status=active')
+    except Exception:
+        return []
+    if code!=200 or not isinstance(data,dict) or not data.get('ok'):
+        return []
+    return data.get('policies') or []
 def _ap_visible(user):
     slugs={x['slug'] for x in user_visible_projects(user['username'],user['groups'])}
     return _ap_panel.filter_rows(_ap_raw(),slugs)
+def _ap_visible_policies(user):
+    slugs={x['slug'] for x in user_visible_projects(user['username'],user['groups'])}
+    return _ap_panel.filter_policies(_ap_raw_policies(),slugs)
 def _ap_can_decide(user):
     groups=set(user.get('groups') or [])
     return bool(user.get('admin') or 'CloudIF-Tenants-Admin' in groups or 'CloudIF-Professor' in groups)
@@ -5652,7 +5663,7 @@ def _ap_human_role(user):
     if 'CloudIF-Professor' in groups:return 'professor'
     return 'aluno'
 def _ap_render(user):
-    try:return _ap_panel.render(_ap_visible(user),_prod_csrf_token(user),_ap_can_decide(user))
+    try:return _ap_panel.render(_ap_visible(user),_prod_csrf_token(user),_ap_can_decide(user),_ap_visible_policies(user))
     except Exception:return '<section class="card"><h2>Aprovações humanas</h2><p class="pill bad">Serviço de aprovações temporariamente indisponível.</p></section>'
 # Dedicated project-context tab; not appended to Todos os projetos.
 if 'Portal' in globals() and not globals().get('_ap_portal_wrapped'):
@@ -5663,7 +5674,7 @@ if 'Portal' in globals() and not globals().get('_ap_portal_wrapped'):
     def _ap_get(self):
         path=urllib.parse.urlparse(self.path).path.rstrip('/')
         if path in ('/cloudiff/portal/api/approvals','/cloudif/portal/api/approvals','/api/approvals'):
-            try:return _ap_send_json(self,200,{'ok':True,'approvals':_ap_visible(self.user()),'metadata_sanitized':True,'secrets_exposed':False,'can_decide':_ap_can_decide(self.user())})
+            try:return _ap_send_json(self,200,{'ok':True,'approvals':_ap_visible(self.user()),'policies':_ap_visible_policies(self.user()),'metadata_sanitized':True,'secrets_exposed':False,'can_decide':_ap_can_decide(self.user())})
             except Exception:return _ap_send_json(self,503,{'ok':False,'error':'approval_api_unavailable'})
         return _ap_prev_get(self)
     def _ap_post(self):
@@ -5676,15 +5687,23 @@ if 'Portal' in globals() and not globals().get('_ap_portal_wrapped'):
             user=self.user()
             if not _prod_csrf_equal(val('csrf_token'),_prod_csrf_token(user)):return _cloudif_security_reject(self,'Token CSRF inválido ou ausente.',403)
             if not _ap_can_decide(user):return _cloudif_security_reject(self,'Perfil sem permissão para decidir aprovações.',403)
-            aid=val('approval_id').strip();operation=val('operation').strip();reason=val('rejection_reason').strip()
-            rows={x['approval_id']:x for x in _ap_visible(user)};item=rows.get(aid)
-            if not item or item.get('status') not in ('pending','pending_second'):return _cloudif_security_reject(self,'Aprovação não encontrada, expirada ou já decidida.',409)
-            if operation=='approve':endpoint='/v1/approvals/'+urllib.parse.quote(aid)+'/approve';payload={'approved_by':user['username'],'approver_role':_ap_human_role(user)}
-            elif operation=='reject' and 4<=len(reason)<=500:endpoint='/v1/approvals/'+urllib.parse.quote(aid)+'/reject';payload={'rejected_by':user['username'],'rejection_reason':reason}
-            else:return _cloudif_security_reject(self,'Decisão inválida.',400)
-            code,data=_ap_panel.request(_ap_cfg('CLOUDIF_APPROVAL_URL','http://127.0.0.1:18204'),_ap_cfg('CLOUDIF_APPROVAL_TOKEN',''),'POST',endpoint,payload)
-            if code!=200 or not data.get('ok'):return _cloudif_security_reject(self,'A decisão não pôde ser registrada.',409)
-            log_action(user['username'],'approval_'+operation,aid,0,item['project_slug'],'')
+            aid=val('approval_id').strip();policy_id=val('policy_id').strip();operation=val('operation').strip();reason=val('rejection_reason').strip();always_allow=val('always_allow').strip().lower() in ('1','true','yes','on')
+            if operation=='revoke_policy':
+                policies={x['policy_id']:x for x in _ap_visible_policies(user)};policy=policies.get(policy_id)
+                if not policy or not policy.get('active'):return _cloudif_security_reject(self,'Política não encontrada ou já revogada.',409)
+                endpoint='/v1/approval-policies/'+urllib.parse.quote(policy_id)+'/revoke';payload={'revoked_by':user['username'],'reason':'Revogada pelo Portal'}
+                code,data=_ap_panel.request(_ap_cfg('CLOUDIF_APPROVAL_URL','http://127.0.0.1:18204'),_ap_cfg('CLOUDIF_APPROVAL_TOKEN',''),'POST',endpoint,payload)
+                if code!=200 or not data.get('ok'):return _cloudif_security_reject(self,'A política não pôde ser revogada.',409)
+                log_action(user['username'],'approval_policy_revoke',policy_id,0,policy['project_slug'],'')
+            else:
+                rows={x['approval_id']:x for x in _ap_visible(user)};item=rows.get(aid)
+                if not item or item.get('status') not in ('pending','pending_second'):return _cloudif_security_reject(self,'Aprovação não encontrada, expirada ou já decidida.',409)
+                if operation=='approve':endpoint='/v1/approvals/'+urllib.parse.quote(aid)+'/approve';payload={'approved_by':user['username'],'approver_role':_ap_human_role(user),'always_allow':always_allow}
+                elif operation=='reject' and 4<=len(reason)<=500:endpoint='/v1/approvals/'+urllib.parse.quote(aid)+'/reject';payload={'rejected_by':user['username'],'rejection_reason':reason}
+                else:return _cloudif_security_reject(self,'Decisão inválida.',400)
+                code,data=_ap_panel.request(_ap_cfg('CLOUDIF_APPROVAL_URL','http://127.0.0.1:18204'),_ap_cfg('CLOUDIF_APPROVAL_TOKEN',''),'POST',endpoint,payload)
+                if code!=200 or not data.get('ok'):return _cloudif_security_reject(self,'A decisão não pôde ser registrada.',409)
+                log_action(user['username'],'approval_'+operation,aid,0,item['project_slug'],'always_allow='+('1' if always_allow else '0'))
             return_to=val('return_to').strip()
             return self.redirect('/cloudiff/portal/?tab='+('agentes' if return_to=='agentes' else 'aprovacoes'))
         return _ap_prev_post(self)
