@@ -68,7 +68,7 @@ class ProjectPublicationConfigurationV1Tests(unittest.TestCase):
     def test_wizard_and_base_controls_are_in_project_publication_ui(self):
         portal=PORTAL.read_text();ui=PUB_UI.read_text();env=ENV_WEB.read_text()
         self.assertIn('data-env-wizard',ui);self.assertIn('Abrir base no Komodo',ui)
-        self.assertIn("envLayer.className='cloudif-wizard'",portal);self.assertIn('wizard-box env-wizard-box',portal);self.assertIn('class=\"wizard-head\"',portal);self.assertIn('class=\"pm-field\"',portal);self.assertIn('class=\"pm-new-footer\"',portal);self.assertIn("const envMount=document.querySelector('.legacy-content')||document.body;envMount.appendChild(envLayer)",portal);self.assertNotIn('document.body.appendChild(envLayer)',portal);self.assertNotIn("createElement('dialog')",portal);self.assertNotIn('env-wizard-dialog::backdrop',portal);self.assertIn("change/plan",portal);self.assertIn("approval/request",portal);self.assertIn("change/execute",portal)
+        self.assertIn("envLayer.className='cloudif-wizard'",portal);self.assertIn('wizard-box env-wizard-box',portal);self.assertIn('class=\"wizard-head\"',portal);self.assertIn('class=\"pm-field\"',portal);self.assertIn('class=\"pm-new-footer\"',portal);self.assertIn("const envMount=document.querySelector('.legacy-content')||document.body;envMount.appendChild(envLayer)",portal);self.assertNotIn('document.body.appendChild(envLayer)',portal);self.assertNotIn("createElement('dialog')",portal);self.assertNotIn('env-wizard-dialog::backdrop',portal);self.assertIn('#cloudif-environment-wizard{position:fixed!important;inset:0!important;z-index:1600!important;display:none;place-items:center',portal);self.assertIn('#cloudif-environment-wizard>.env-wizard-box{width:min(900px,100%);max-height:94vh;overflow:auto',portal);self.assertIn('#cloudif-environment-wizard .env-wizard-footer{position:sticky;bottom:0',portal);self.assertIn("change/plan",portal);self.assertIn("approval/request",portal);self.assertIn("change/execute",portal)
         self.assertIn('approval/status',env);self.assertIn('valores secretos nunca são carregados',portal)
         self.assertIn('open_base_workspace',portal);self.assertIn('canWrite',PUBLICATIONS.read_text())
         final_renderer=portal[portal.index('def _pm197_render'):portal.index('render_projects=_pm197_render')]
@@ -85,7 +85,7 @@ class ProjectPublicationConfigurationV1Tests(unittest.TestCase):
         self.assertIn('def base_workspace_preflight',PUBLICATIONS.read_text())
         self.assertIn('html[data-theme=\"dark\"] #cloudif-environment-wizard',portal)
         self.assertIn('--c-surface:var(--cif-surface)',portal)
-        self.assertIn('#cloudif-environment-wizard .wizard-close{background:transparent!important',portal)
+        self.assertIn('#cloudif-environment-wizard .env-wizard-close{background:transparent!important',portal)
         self.assertIn('.project-tabs button[aria-selected=\"true\"]{background:#176b35!important',portal)
         self.assertIn('html[data-theme=\"dark\"] .project-tabs button{background:#0b1510!important',portal)
         self.assertIn('project-final__section project-final__publication',portal)
