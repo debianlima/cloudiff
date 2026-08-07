@@ -1001,7 +1001,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json(404, {'ok': False, 'error': {'code': str(exc), 'message': 'Segredo não encontrado.'}})
             except ValueError as exc:
                 return self.send_json(400, {'ok': False, 'error': {'code': str(exc), 'message': 'Filtro de segredo inválido.'}})
-        environment_match = re.fullmatch(r'/v1/projects/([a-z0-9][a-z0-9-]{0,62})/environment(?:/(history|missing|effective|effective-internal))?', parsed.path)
+        environment_match = re.fullmatch(r'/v1/projects/([a-z0-9][a-z0-9-]{0,62})/environment(?:/(history|missing|effective|effective-internal|export))?', parsed.path)
         if environment_match:
             slug, operation = environment_match.groups(); query = urllib.parse.parse_qs(parsed.query)
             try:
@@ -1009,6 +1009,8 @@ class Handler(BaseHTTPRequestHandler):
                     return self.send_json(200, project_environment.history(slug, int((query.get('limit') or ['100'])[0])))
                 if operation == 'missing':
                     return self.send_json(200, project_environment.missing_variables(slug, (query.get('environment') or [''])[0]))
+                if operation == 'export':
+                    return self.send_json(200, project_environment.export_environment_metadata(slug, (query.get('environment') or [''])[0], (query.get('service') or [''])[0]))
                 if operation == 'effective':
                     return self.send_json(200, project_environment.effective_summary(slug, (query.get('environment') or ['development'])[0], (query.get('service') or [''])[0]))
                 if operation == 'effective-internal':
@@ -1082,12 +1084,15 @@ class Handler(BaseHTTPRequestHandler):
                         return self.send_json(403,{'ok':False,'error':{'code':'secret_resolver_forbidden','message':'Autorização adicional do resolvedor de segredos é obrigatória.'}})
                     result=project_secret_store.resolve_internal(slug,str(body.get('environment') or ''),body.get('references') or {},actor);return self.send_json(200,result)
                 return self.send_json(404,{'ok':False,'error':{'code':'secret_operation_not_found'}})
-            environment_match = re.fullmatch(r'/v1/projects/([a-z0-9][a-z0-9-]{0,62})/environment/(validate|change/plan|change/apply|promote/plan|promote/apply)', parsed_path)
+            environment_match = re.fullmatch(r'/v1/projects/([a-z0-9][a-z0-9-]{0,62})/environment/(validate|change/plan|change/apply|promote/plan|promote/apply|import/plan)', parsed_path)
             if environment_match:
                 slug, operation = environment_match.groups(); actor = str(body.get('actor') or 'internal').strip()[:128]
                 expected = int(body.get('expectedRevision', body.get('expected_revision', 0)) or 0)
                 if operation == 'validate':
                     result = project_environment.validate_changes(slug, str(body.get('environment') or ''), body.get('changes'))
+                    return self.send_json(200, result)
+                if operation == 'import/plan':
+                    result = project_environment.import_dotenv_plan(slug, str(body.get('environment') or ''), str(body.get('service') or ''), body.get('content'), body.get('secretNames',body.get('secret_names',[])), expected, actor, int(body.get('ttlSeconds',body.get('ttl_seconds',900)) or 900))
                     return self.send_json(200, result)
                 if operation == 'change/plan':
                     result = project_environment.plan_change(slug, str(body.get('environment') or ''), body.get('changes'), expected, actor, int(body.get('ttlSeconds', body.get('ttl_seconds', 900)) or 900))

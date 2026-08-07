@@ -679,3 +679,90 @@ def effective_summary(slug: str, environment: str, service: str = '') -> dict[st
         'secretRuntimeNames': {name: sorted(values) for name, values in internal['secretRuntimeReferences'].items()},
         'secretValuesIncluded': False, 'secretReferencesIncluded': False,
     }
+
+DOTENV_MAX_BYTES=262144
+DOTENV_MAX_LINES=1024
+
+
+def parse_dotenv(content:Any)->dict[str,str]:
+    if not isinstance(content,str):raise ValueError('dotenv_content_must_be_string')
+    if len(content.encode('utf-8'))>DOTENV_MAX_BYTES:raise ValueError('dotenv_too_large')
+    if '\x00' in content:raise ValueError('dotenv_nul_forbidden')
+    values={}
+    lines=content.splitlines()
+    if len(lines)>DOTENV_MAX_LINES:raise ValueError('dotenv_too_many_lines')
+    for line_number,raw in enumerate(lines,1):
+        line=raw.strip()
+        if not line or line.startswith('#'):continue
+        if line.startswith('export '):line=line[7:].lstrip()
+        if '=' not in line:raise ValueError(f'dotenv_invalid_line:{line_number}')
+        name,value=line.split('=',1);name=name.strip();value=value.strip()
+        if not ENV_RE.fullmatch(name):raise ValueError(f'dotenv_invalid_name:{line_number}:{name[:64]}')
+        if name in values:raise ValueError(f'dotenv_duplicate_name:{line_number}:{name}')
+        if '\n' in value or '\r' in value:raise ValueError(f'dotenv_multiline_forbidden:{line_number}:{name}')
+        if '$(' in value or '`' in value or '${' in value:raise ValueError(f'dotenv_shell_expansion_forbidden:{line_number}:{name}')
+        if len(value)>=2 and value[0]==value[-1] and value[0] in {'\"',"'"}:
+            quote=value[0];value=value[1:-1]
+            if quote=='\"':
+                value=value.replace('\\n','\n').replace('\\r','\r').replace('\\t','\t').replace('\\\"','\"').replace('\\\\','\\')
+        elif ' #' in value:
+            value=value.split(' #',1)[0].rstrip()
+        if '\n' in value or '\r' in value:raise ValueError(f'dotenv_multiline_forbidden:{line_number}:{name}')
+        values[name]=value
+    if not values:raise ValueError('dotenv_empty')
+    return values
+
+
+def _manifest_environment_definitions(slug:str,environment:str,service:str='')->dict[str,dict[str,Any]]:
+    configuration=project_configuration(slug);definitions={}
+    definitions.update(((configuration.get('environment') or {}).get('definitions') or {}))
+    overlay=((configuration.get('environments') or {}).get(environment) or {})
+    definitions.update(((overlay.get('environment') or {}).get('definitions') or {}))
+    if service:
+        service_config=(configuration.get('services') or {}).get(service) or {}
+        definitions.update(((service_config.get('environment') or {}).get('definitions') or {}))
+        service_overlay=((overlay.get('services') or {}).get(service) or {}).get('environment') or {}
+        definitions.update(service_overlay.get('definitions') or {})
+    return {str(name):dict(spec or {}) for name,spec in definitions.items() if isinstance(spec,dict)}
+
+
+def import_dotenv_plan(slug:str,environment:str,service:str,content:Any,secret_names:Any,expected_revision:int,actor:str,ttl_seconds:int=900)->dict[str,Any]:
+    project_exists(slug);environment=_validate_environment(environment);service=_validate_service(slug,service) if service else ''
+    current=state(slug)
+    if int(expected_revision)!=int(current['revision']):raise RuntimeError(f'environment_revision_conflict:{current["revision"]}')
+    parsed=parse_dotenv(content);definitions=_manifest_environment_definitions(slug,environment,service)
+    explicit={str(name).strip().upper() for name in (secret_names or []) if str(name).strip()}
+    invalid=sorted(name for name in explicit if not ENV_RE.fullmatch(name))
+    if invalid:raise ValueError('invalid_secret_name:'+invalid[0])
+    secrets=[];public=[]
+    for name,value in parsed.items():
+        definition=dict(definitions.get(name) or {})
+        is_secret=bool(definition.get('secret')) or name in explicit or bool(SECRET_NAME_RE.search(name)) or bool(SENSITIVE_VALUE_RE.search(value))
+        if is_secret:
+            secrets.append({'name':name,'service':service,'declared':bool(definition.get('secret')),'reason':'manifest' if definition.get('secret') else 'explicit' if name in explicit else 'sensitive-pattern'})
+            continue
+        definition['secret']=False;definition.pop('value',None);definition.pop('default',None)
+        public.append({'operation':'upsert','name':name,'service':service,'value':value,'definition':definition})
+    names_digest=digest({'projectSlug':slug,'environment':environment,'service':service,'publicNames':sorted(item['name'] for item in public),'secretNames':sorted(item['name'] for item in secrets)})
+    if not public:
+        return {'ok':True,'sideEffectFree':True,'projectSlug':slug,'environment':environment,'service':service,'expectedRevision':expected_revision,'planDigest':None,'approvalRequired':False,'publicVariables':[],'secretVariables':sorted(secrets,key=lambda item:item['name']),'publicCount':0,'secretCount':len(secrets),'namesDigest':names_digest,'secretValuesImported':False,'contentStored':False,'actionRequired':'stage-secrets','secretValuesIncluded':False}
+    plan=plan_change(slug,environment,public,expected_revision,actor,ttl_seconds,'dotenv-import','')
+    plan.update({'service':service,'publicVariables':sorted(item['name'] for item in public),'secretVariables':sorted(secrets,key=lambda item:item['name']),'publicCount':len(public),'secretCount':len(secrets),'namesDigest':names_digest,'secretValuesImported':False,'contentStored':False,'actionRequired':'approval' if not secrets else 'approval-and-stage-secrets','secretValuesIncluded':False})
+    return plan
+
+
+def export_environment_metadata(slug:str,environment:str,service:str='')->dict[str,Any]:
+    project_exists(slug);environment=_validate_environment(environment);service=_validate_service(slug,service) if service else ''
+    definitions=_manifest_environment_definitions(slug,environment,service)
+    persisted=list_environment(slug,environment,service,include_values=False)
+    persisted_by={item['name']:item for item in persisted['entries'] if item.get('service','')==service}
+    names=sorted(set(definitions)|set(persisted_by));items=[];example=[]
+    for name in names:
+        definition=dict(definitions.get(name) or {});entry=persisted_by.get(name) or {};secret=bool(definition.get('secret') or entry.get('secret'))
+        item={'name':name,'environment':environment,'service':service,'secret':secret,'required':bool(definition.get('required')),'description':str(definition.get('description') or ''),'buildTime':bool(definition.get('buildTime')),'runtime':bool(definition.get('runtime',True)),'restartRequired':bool(definition.get('restartRequired',True)),'exposeToClient':bool(definition.get('exposeToClient')),'configured':bool(entry.get('configured')),'source':'persisted' if entry else 'manifest'}
+        items.append(item)
+        if item['description']:example.append('# '+item['description'].replace('\n',' ')[:500])
+        if secret:example.append('# secret')
+        if item['required']:example.append('# required')
+        example.append(name+'=')
+    return {'ok':True,'projectSlug':slug,'environment':environment,'service':service,'variables':items,'count':len(items),'dotenvExample':'\n'.join(example)+('\n' if example else ''),'valuesIncluded':False,'secretValuesIncluded':False,'secretReferencesIncluded':False}
