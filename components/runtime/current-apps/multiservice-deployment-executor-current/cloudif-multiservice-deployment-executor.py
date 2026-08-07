@@ -231,74 +231,69 @@ def _runtime_scalar(value):
 
 
 def _validated_runtime_configuration(payload):
-    configuration=payload.get('runtimeConfiguration') or {}
-    if not isinstance(configuration,dict):
-        raise ValueError('invalid_runtime_configuration')
-    if configuration.get('secretValuesIncluded') is not False:
-        raise ValueError('runtime_secret_contract_invalid')
-    project=str(payload.get('project_slug') or payload.get('projectSlug') or '')
-    environment=str(payload.get('environment') or '')
-    if str(configuration.get('project_slug') or configuration.get('projectSlug') or '')!=project:
-        raise ValueError('runtime_project_binding_mismatch')
-    if str(configuration.get('environment') or '')!=environment:
-        raise ValueError('runtime_environment_binding_mismatch')
-    public=configuration.get('publicRuntimeEnvironment') or {}
-    secret=configuration.get('secretRuntimeReferences') or {}
-    if not isinstance(public,dict) or not isinstance(secret,dict):
-        raise ValueError('invalid_runtime_environment_contract')
-    if any(bool(values) for values in secret.values()):
-        raise ValueError('secret_resolution_unavailable')
+    configuration=payload.get('runtimeConfiguration')
+    legacy=configuration is None
+    if legacy:
+        public=payload.get('variables') or {}
+        if not isinstance(public,dict):raise ValueError('invalid_runtime_configuration')
+        digest=str(payload.get('variables_digest') or '')
+        configuration={
+            'project_slug':str(payload.get('project_slug') or ''),'environment':str(payload.get('environment') or ''),
+            'job_id':str(payload.get('build_job_id') or ''),'publicRuntimeEnvironment':public,'secretRuntimeReferences':{},
+            'runtimeEnvironmentDigest':digest,'environmentDigest':digest,'secretValuesIncluded':False,
+        }
+    if not isinstance(configuration,dict):raise ValueError('invalid_runtime_configuration')
+    if configuration.get('secretValuesIncluded') is not False:raise ValueError('runtime_secret_contract_invalid')
+    project=str(payload.get('project_slug') or payload.get('projectSlug') or '');environment=str(payload.get('environment') or '');build_job=str(payload.get('build_job_id') or '')
+    if str(configuration.get('project_slug') or configuration.get('projectSlug') or '')!=project:raise ValueError('runtime_project_binding_mismatch')
+    if str(configuration.get('environment') or '')!=environment:raise ValueError('runtime_environment_binding_mismatch')
+    configuration_job=str(configuration.get('job_id') or configuration.get('buildJobId') or '')
+    if configuration_job and configuration_job!=build_job:raise ValueError('runtime_build_binding_mismatch')
+    public=configuration.get('publicRuntimeEnvironment') or {};secret=configuration.get('secretRuntimeReferences') or {}
+    if not isinstance(public,dict) or not isinstance(secret,dict):raise ValueError('invalid_runtime_environment_contract')
+    if any(bool(values) for values in secret.values() if isinstance(values,dict)):raise ValueError('secret_resolution_unavailable')
     normalized={}
     for service,values in public.items():
-        if not isinstance(values,dict):
-            raise ValueError('invalid_public_runtime_environment')
+        if not isinstance(values,dict):raise ValueError('invalid_public_runtime_environment')
         normalized[str(service)]={}
         for name,value in values.items():
-            if not re.fullmatch(r'[A-Z][A-Z0-9_]{0,127}',str(name)):
-                raise ValueError('invalid_runtime_environment_name')
+            if not re.fullmatch(r'[A-Z][A-Z0-9_]{0,127}',str(name)):raise ValueError('invalid_runtime_environment_name')
             normalized[str(service)][str(name)]=_runtime_scalar(value)
-    return {
-        'publicRuntimeEnvironment':normalized,
-        'runtimeEnvironmentDigest':str(configuration.get('runtimeEnvironmentDigest') or ''),
-        'environmentDigest':str(configuration.get('environmentDigest') or ''),
-        'buildJobId':str(configuration.get('job_id') or configuration.get('buildJobId') or ''),
-        'secretValuesIncluded':False,
-    }
-
+    runtime_digest=str(configuration.get('runtimeEnvironmentDigest') or '');environment_digest=str(configuration.get('environmentDigest') or '')
+    if not re.fullmatch(r'[a-f0-9]{64}',runtime_digest) or not re.fullmatch(r'[a-f0-9]{64}',environment_digest):raise ValueError('runtime_environment_digest_invalid')
+    return {'publicRuntimeEnvironment':normalized,'runtimeEnvironmentDigest':runtime_digest,'environmentDigest':environment_digest,'buildJobId':configuration_job or build_job,'secretValuesIncluded':False,'legacyCompatibility':legacy}
 
 def _apply_runtime_configuration(payload,configuration):
+    public=configuration['publicRuntimeEnvironment']
+    applications=payload.get('applications') or []
+    application_names={str(item.get('service') or '') for item in applications if isinstance(item,dict)}
     services=payload.get('services') or []
-    if not isinstance(services,list):
-        raise ValueError('invalid_deployment_services')
-    names=set()
-    for service in services:
-        if not isinstance(service,dict):
-            raise ValueError('invalid_deployment_service')
-        name=str(service.get('name') or service.get('service') or '')
-        if not name:
-            raise ValueError('deployment_service_name_missing')
-        names.add(name)
-        existing=service.get('environment') or {}
-        if not isinstance(existing,dict):
-            raise ValueError('deployment_service_environment_must_be_object')
-        merged={str(key):_runtime_scalar(value) for key,value in existing.items()}
-        merged.update(configuration['publicRuntimeEnvironment'].get(name) or {})
-        service['environment']=merged
-        labels=service.get('labels') or {}
-        if not isinstance(labels,dict):
-            raise ValueError('deployment_service_labels_must_be_object')
-        labels.update({
-            'cloudiff.environment':str(payload.get('environment') or ''),
-            'cloudiff.environment.digest':configuration['environmentDigest'],
-            'cloudiff.runtime-environment.digest':configuration['runtimeEnvironmentDigest'],
-            'cloudiff.build.job':configuration['buildJobId'],
-        })
-        service['labels']=labels
-    unknown=sorted(set(configuration['publicRuntimeEnvironment'])-names)
-    if unknown:
-        raise ValueError('runtime_environment_unknown_service')
+    service_names=set()
+    if services:
+        if not isinstance(services,list):raise ValueError('invalid_deployment_services')
+        for service in services:
+            if not isinstance(service,dict):raise ValueError('invalid_deployment_service')
+            name=str(service.get('name') or service.get('service') or '')
+            if not name:raise ValueError('deployment_service_name_missing')
+            service_names.add(name)
+            existing=service.get('environment') or {}
+            if not isinstance(existing,dict):raise ValueError('deployment_service_environment_must_be_object')
+            merged={str(key):_runtime_scalar(value) for key,value in existing.items()};merged.update(public.get(name) or {});service['environment']=merged
+            labels=service.get('labels') or {}
+            if not isinstance(labels,dict):raise ValueError('deployment_service_labels_must_be_object')
+            labels.update({'cloudiff.environment':str(payload.get('environment') or ''),'cloudiff.environment.digest':configuration['environmentDigest'],'cloudiff.runtime-environment.digest':configuration['runtimeEnvironmentDigest'],'cloudiff.build.job':configuration['buildJobId']});service['labels']=labels
+    known=service_names or application_names
+    unknown=sorted(set(public)-known)
+    if unknown:raise ValueError('runtime_environment_unknown_service')
+    variables=payload.get('variables') or {}
+    if not isinstance(variables,dict):raise ValueError('invalid_variables')
+    for name in known:
+        existing=variables.get(name) or {}
+        if not isinstance(existing,dict):raise ValueError('invalid_variables')
+        merged={str(key):_runtime_scalar(value) for key,value in existing.items()};merged.update(public.get(name) or {});variables[name]=merged
+    payload['variables']=variables
+    payload['variables_digest']=hashlib.sha256(canonical(variables)).hexdigest()
     return payload
-
 
 def create_deployment(payload:Any)->dict:
     runtime_configuration=_validated_runtime_configuration(payload)

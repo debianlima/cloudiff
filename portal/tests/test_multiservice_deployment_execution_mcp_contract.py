@@ -46,12 +46,16 @@ class MultiserviceDeploymentExecutionMCPContractTests(unittest.TestCase):
         self.assertIn('deployment:multiservice-execute',self.onboarding)
         self.assertNotIn('MULTISERVICE_DEPLOYMENT_CLIENT_SECRET',self.registry+self.onboarding+self.gateway)
 
-    def test_broker_resolves_values_only_during_effect(self):
-        for marker in ('_resolve_environment','variables_digest_changed','_deployment_executor_call','idem_mark_effect','MULTISERVICE_DEPLOYMENT_EXECUTOR_URL'):
+    def test_broker_uses_build_bound_runtime_only_during_effect(self):
+        for marker in ('_build_runtime_configuration','runtimeConfiguration','variables_digest_changed','_deployment_executor_call','idem_mark_effect','MULTISERVICE_DEPLOYMENT_EXECUTOR_URL'):
             self.assertIn(marker,self.broker)
-        plan=self.broker[self.broker.index('def _multiservice_deployment_plan'):self.broker.index('def _deployment_executor_call')]
+        plan=self.broker[self.broker.index('def multiservice_plan('):self.broker.index('def _multiservice_deployment_plan',self.broker.index('def multiservice_plan('))]
         self.assertNotIn("'values':values",plan)
         self.assertIn("'secret_values_included':False",plan)
+        self.assertIn("'secret_references_included':False",plan)
+        effect=self.broker[self.broker.index('def _multiservice_execute'):self.broker.index('def _production_config',self.broker.index('def _multiservice_execute'))]
+        self.assertNotIn('_resolve_environment(',effect)
+        self.assertIn("raise PermissionError('secret_resolution_unavailable')",effect)
         self.assertIn('EnvironmentFile=/etc/cloudif/multiservice-deployment-executor.env',self.unit)
         self.assertIn('ReadOnlyPaths=/srv/cloudif/lib /srv/cloudif/tenants /etc/cloudif',self.unit)
 

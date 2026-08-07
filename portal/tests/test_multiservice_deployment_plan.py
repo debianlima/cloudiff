@@ -58,20 +58,21 @@ class MultiserviceDeploymentPlanTests(unittest.TestCase):
             },
         }
 
-    def plan(self,configuration=None,state=None,build=None,environment='homologation'):
-        tenant_env={
-            'POSTGRES_PASSWORD':'database-password-for-test',
-            'POSTGRES_PORT':'54400',
-            'SUPABASE_PUBLIC_URL':'https://tenant-demo.cloudiff.duckdns.org',
-            'ANON_KEY':'anon-test',
-            'SERVICE_ROLE_KEY':'service-role-test',
-            'JWT_SECRET':'jwt-test',
+    def runtime_configuration(self,environment='homologation',secret=False,environment_digest='6'*64,config_revision=2,config_digest='c'*64):
+        return {
+            'ok':True,'internal':True,'job_id':'build_'+'b'*24,'project_slug':'demo','environment':environment,
+            'config_revision':config_revision,'config_digest':config_digest,'toolchain_digest':'t'*64,
+            'archive_sha256':'f'*64,'plan_digest':'p'*64,
+            'publicRuntimeEnvironment':{'web':{'PUBLIC_MODE':'school','API_PREFIX':'/api'},'api':{'LOG_LEVEL':'info'}},
+            'secretRuntimeReferences':{'web':{},'api':({'DATABASE_URL':'vault://project/demo/database'} if secret else {})},
+            'buildEnvironmentDigest':'4'*64,'runtimeEnvironmentDigest':'5'*64,'environmentDigest':environment_digest,
+            'serviceArtifacts':[{'service':'web','imageRef':'cloudif-app/demo-web:1','imageId':'sha256:'+'2'*64},{'service':'api','imageRef':'cloudif-app/demo-api:1','imageId':'sha256:'+'4'*64}],
+            'secretValuesIncluded':False,'secretReferencesIncluded':secret,'containersChanged':False,
         }
-        with patch.object(self.module,'_multiservice_configuration',return_value=configuration or self.configuration()),\
-             patch.object(self.module,'_multiservice_reconciliation',return_value=state or self.state()),\
-             patch.object(self.module,'_multiservice_build',return_value=build or self.build()),\
-             patch.object(self.module,'_tenant_env',return_value=('tenant-demo',tenant_env)),\
-             patch.object(self.module,'_production_config',return_value={}):
+
+    def plan(self,configuration=None,state=None,build=None,environment='homologation',runtime_configuration=None):
+        runtime_configuration = runtime_configuration or self.runtime_configuration(environment=environment)
+        with patch.object(self.module,'_multiservice_configuration',return_value=configuration or self.configuration()),             patch.object(self.module,'_multiservice_reconciliation',return_value=state or self.state()),             patch.object(self.module,'_multiservice_build',return_value=build or self.build()),             patch.object(self.module,'_build_runtime_configuration',return_value=runtime_configuration),             patch.object(self.module,'_production_config',return_value={}):
             return self.module._multiservice_deployment_plan({
                 'project_slug':'demo','build_job_id':'build_'+'b'*24,
                 'environment':environment,'trace_id':'test-trace',
@@ -89,49 +90,43 @@ class MultiserviceDeploymentPlanTests(unittest.TestCase):
         self.assertEqual(plan['operation']['archive_sha256'],'f'*64)
         self.assertEqual({x['service'] for x in plan['summary']['services']},{'web','api'})
         self.assertEqual({x['pathPrefix'] for x in plan['summary']['routes']},{'/','/api'})
-        self.assertIn('PUBLIC_MODE',plan['summary']['variables']['web'])
-        self.assertIn('API_PREFIX',plan['summary']['variables']['web'])
+        self.assertIn('PUBLIC_MODE',plan['summary']['runtimeEnvironment']['variableNames']['web'])
+        self.assertIn('API_PREFIX',plan['summary']['runtimeEnvironment']['variableNames']['web'])
         self.assertEqual(plan['summary']['hooks'],[{'phase':'preBuild','service':'web','script':'scripts/prepare.sh'}])
         rendered=str(plan)
         self.assertNotIn('school',rendered)
         self.assertFalse(plan['secret_values_included'])
 
-    def test_secret_rotation_changes_digest_without_exposing_value(self):
-        configuration=self.configuration()
-        with patch.object(self.module,'_multiservice_configuration',return_value=configuration),\
-             patch.object(self.module,'_multiservice_reconciliation',return_value=self.state()),\
-             patch.object(self.module,'_multiservice_build',return_value=self.build()),\
-             patch.object(self.module,'_production_config',return_value={}):
-            with patch.object(self.module,'_tenant_env',return_value=('tenant-demo',{'POSTGRES_PASSWORD':'first-secret','POSTGRES_PORT':'54400'})):
-                first=self.module._multiservice_deployment_plan({'project_slug':'demo','build_job_id':'build_'+'b'*24,'environment':'homologation','trace_id':'one'})
-            with patch.object(self.module,'_tenant_env',return_value=('tenant-demo',{'POSTGRES_PASSWORD':'second-secret','POSTGRES_PORT':'54400'})):
-                second=self.module._multiservice_deployment_plan({'project_slug':'demo','build_job_id':'build_'+'b'*24,'environment':'homologation','trace_id':'two'})
-        self.assertNotEqual(first['variables_digest'],second['variables_digest'])
+    def test_environment_revision_changes_digest_without_exposing_runtime_values(self):
+        first=self.plan(runtime_configuration=self.runtime_configuration(environment_digest='6'*64))
+        second=self.plan(runtime_configuration=self.runtime_configuration(environment_digest='7'*64))
         self.assertNotEqual(first['deployment_plan_digest'],second['deployment_plan_digest'])
         rendered=str(first)+str(second)
-        self.assertNotIn('first-secret',rendered)
-        self.assertNotIn('second-secret',rendered)
+        self.assertNotIn('school',rendered)
+        self.assertNotIn('vault://',rendered)
         self.assertFalse(first['secret_values_included'])
+        self.assertFalse(first['secret_references_included'])
 
     def test_reconciliation_and_build_mismatch_block_execution(self):
-        plan=self.plan(state=self.state('toolchain_build_required'),build=self.build(config_revision=1,config_digest='d'*64))
+        plan=self.plan(state=self.state('toolchain_build_required'),build=self.build(config_revision=1,config_digest='d'*64),runtime_configuration=self.runtime_configuration(config_revision=1,config_digest='d'*64))
         self.assertFalse(plan['execution_allowed'])
-        self.assertIn('reconciliation_not_ready:toolchain_build_required',plan['blockers'])
-        self.assertIn('build_config_revision_mismatch',plan['blockers'])
-        self.assertIn('build_config_digest_mismatch',plan['blockers'])
+        self.assertIn('reconciliation-not-ready:toolchain_build_required',plan['blockers'])
+        self.assertIn('build-config-revision-mismatch',plan['blockers'])
+        self.assertIn('build-config-digest-mismatch',plan['blockers'])
 
-    def test_missing_reference_is_actionable_and_value_is_not_exposed(self):
-        plan=self.plan(configuration=self.configuration(secret_ref=False))
+    def test_secret_reference_is_actionable_and_value_is_not_exposed(self):
+        plan=self.plan(runtime_configuration=self.runtime_configuration(secret=True))
         self.assertFalse(plan['execution_allowed'])
-        self.assertIn('required_environment_unresolved',plan['blockers'])
-        ref=next(x for x in plan['summary']['requiredReferences'] if x['name']=='DATABASE_URL')
-        self.assertFalse(ref['configured'])
-        self.assertNotIn('reference',ref)
+        self.assertIn('secret-resolution-unavailable',plan['blockers'])
+        self.assertIn('DATABASE_URL',plan['summary']['runtimeEnvironment']['secretNames']['api'])
+        rendered=str(plan)
+        self.assertNotIn('vault://project/demo/database',rendered)
+        self.assertFalse(plan['secret_references_included'])
 
     def test_production_requires_enabled_target(self):
         plan=self.plan(environment='production')
         self.assertFalse(plan['execution_allowed'])
-        self.assertIn('production_target_not_enabled',plan['blockers'])
+        self.assertIn('production-target-not-enabled',plan['blockers'])
 
 
 if __name__=='__main__':unittest.main()

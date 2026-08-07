@@ -256,9 +256,9 @@ TOOLS=[
  {'name':'preview.multiservice.create','description':'Cria preview multissserviço aprovado com rede interna, containers isolados e proxy autenticado','inputSchema':{'type':'object','properties':{'build_job_id':{'type':'string','pattern':'^build_[a-f0-9]{24}$'},'routes':{'type':'array','items':{'type':'object','properties':{'pathPrefix':{'type':'string'},'service':{'type':'string'},'stripPrefix':{'type':'boolean'}},'required':['pathPrefix','service'],'additionalProperties':False}},'ttl_seconds':{'type':'integer','minimum':300,'maximum':7200},'preview_plan_digest':{'type':'string','pattern':'^[a-f0-9]{64}$'},'approval_id':{'type':'string','pattern':'^apr_[a-f0-9]{20}$'}},'required':['build_job_id','preview_plan_digest','approval_id'],'additionalProperties':False}},
  {'name':'preview.multiservice.status','description':'Consulta estado, URL autenticada, serviços e expiração do preview multissserviço','inputSchema':{'type':'object','properties':{'preview_id':{'type':'string','pattern':'^pv_[a-f0-9]{24}$'}},'required':['preview_id'],'additionalProperties':False}},
  {'name':'preview.multiservice.delete','description':'Remove antecipadamente um preview multissserviço autorizado','inputSchema':{'type':'object','properties':{'preview_id':{'type':'string','pattern':'^pv_[a-f0-9]{24}$'}},'required':['preview_id'],'additionalProperties':False}},
- {'name':'deployment.multiservice.plan','description':'Gera resumo único e plano de deploy multissserviço vinculado ao build, revisão, variáveis, rotas e reconciliação, sem criar containers','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'build_job_id':{'type':'string','pattern':'^build_[a-f0-9]{24}$'},'environment':{'type':'string','enum':['homologation','production']},'routes':{'type':'array','items':{'type':'object','properties':{'pathPrefix':{'type':'string','pattern':'^/'},'service':{'type':'string','pattern':'^[a-z][a-z0-9-]*$'},'stripPrefix':{'type':'boolean'}},'required':['pathPrefix','service'],'additionalProperties':False}}},'required':['slug','environment'],'additionalProperties':False}},
- {'name':'approval.request-multiservice-deployment','description':'Cria aprovação humana vinculada ao plano, build, revisão, ACL, variáveis por digest, rotas e ambiente do deploy','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'build_job_id':{'type':'string','pattern':'^build_[a-f0-9]{24}$'},'environment':{'type':'string','enum':['homologation','production']},'routes':{'type':'array','items':{'type':'object','properties':{'pathPrefix':{'type':'string','pattern':'^/'},'service':{'type':'string','pattern':'^[a-z][a-z0-9-]*$'},'stripPrefix':{'type':'boolean'}},'required':['pathPrefix','service'],'additionalProperties':False}},'deployment_plan_digest':{'type':'string','pattern':'^[a-f0-9]{64}$'},'reason':{'type':'string','minLength':4,'maxLength':500},'ttl_seconds':{'type':'integer','minimum':60,'maximum':86400}},'required':['slug','environment','deployment_plan_digest','reason'],'additionalProperties':False}},
- {'name':'deployment.multiservice.execute','description':'Executa deploy multissserviço aprovado usando reserve-effect-finalize; valores protegidos são resolvidos somente durante o efeito','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'build_job_id':{'type':'string','pattern':'^build_[a-f0-9]{24}$'},'environment':{'type':'string','enum':['homologation','production']},'routes':{'type':'array','items':{'type':'object','properties':{'pathPrefix':{'type':'string','pattern':'^/'},'service':{'type':'string','pattern':'^[a-z][a-z0-9-]*$'},'stripPrefix':{'type':'boolean'}},'required':['pathPrefix','service'],'additionalProperties':False}},'deployment_plan_digest':{'type':'string','pattern':'^[a-f0-9]{64}$'},'approval_id':{'type':'string','pattern':'^apr_[a-f0-9]{20}$'}},'required':['slug','environment','deployment_plan_digest','approval_id'],'additionalProperties':False}},
+ {'name':'deployment.multiservice.plan','description':'Gera resumo único e plano de deploy multissserviço vinculado ao build, revisão, variáveis, rotas e reconciliação, sem criar containers','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'build_job_id':{'type':'string','pattern':'^build_[a-f0-9]{24}$'},'environment':{'type':'string','enum':['homologation','production']},'routes':{'type':'array','items':{'type':'object','properties':{'pathPrefix':{'type':'string','pattern':'^/'},'service':{'type':'string','pattern':'^[a-z][a-z0-9-]*$'},'stripPrefix':{'type':'boolean'}},'required':['pathPrefix','service'],'additionalProperties':False}}},'required':['slug','build_job_id','environment'],'additionalProperties':False}},
+ {'name':'approval.request-multiservice-deployment','description':'Cria aprovação humana vinculada ao plano, build, revisão, ACL, variáveis por digest, rotas e ambiente do deploy','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'build_job_id':{'type':'string','pattern':'^build_[a-f0-9]{24}$'},'environment':{'type':'string','enum':['homologation','production']},'routes':{'type':'array','items':{'type':'object','properties':{'pathPrefix':{'type':'string','pattern':'^/'},'service':{'type':'string','pattern':'^[a-z][a-z0-9-]*$'},'stripPrefix':{'type':'boolean'}},'required':['pathPrefix','service'],'additionalProperties':False}},'deployment_plan_digest':{'type':'string','pattern':'^[a-f0-9]{64}$'},'reason':{'type':'string','minLength':4,'maxLength':500},'ttl_seconds':{'type':'integer','minimum':60,'maximum':86400}},'required':['slug','build_job_id','environment','deployment_plan_digest','reason'],'additionalProperties':False}},
+ {'name':'deployment.multiservice.execute','description':'Executa deploy multissserviço aprovado usando reserve-effect-finalize; valores protegidos são resolvidos somente durante o efeito','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'build_job_id':{'type':'string','pattern':'^build_[a-f0-9]{24}$'},'environment':{'type':'string','enum':['homologation','production']},'routes':{'type':'array','items':{'type':'object','properties':{'pathPrefix':{'type':'string','pattern':'^/'},'service':{'type':'string','pattern':'^[a-z][a-z0-9-]*$'},'stripPrefix':{'type':'boolean'}},'required':['pathPrefix','service'],'additionalProperties':False}},'deployment_plan_digest':{'type':'string','pattern':'^[a-f0-9]{64}$'},'approval_id':{'type':'string','pattern':'^apr_[a-f0-9]{20}$'}},'required':['slug','build_job_id','environment','deployment_plan_digest','approval_id'],'additionalProperties':False}},
  {'name':'deployment.multiservice.status','description':'Consulta estado sanitizado do deploy sem retornar valores de variáveis ou portas internas do host','inputSchema':{'type':'object','properties':{'deployment_id':{'type':'string','pattern':'^dep_[a-f0-9]{24}$'}},'required':['deployment_id'],'additionalProperties':False}},
  {'name':'deployment.preview.plan','description':'Planeja preview temporário por build sem criar URL ou efeito','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'build_id':{'type':'string','pattern':'^[0-9a-f-]+$'},'commit_ref':{'type':'string','pattern':'^[A-Za-z0-9._/-]+$'},'ttl_seconds':{'type':'integer','minimum':300,'maximum':86400}},'required':['slug','build_id','commit_ref'],'additionalProperties':False}},
  {'name':'deployment.preview.status','description':'Consulta estado sanitizado de preview temporário vinculado ao projeto autorizado','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'preview_id':{'type':'string','pattern':'^prv_[0-9a-f]{20}$'}},'required':['slug','preview_id'],'additionalProperties':False}},
@@ -1759,9 +1759,9 @@ class H(BaseHTTPRequestHandler):
                     content=build_call('/v1/projects/'+urllib.parse.quote(slug,safe='')+'/builds/'+urllib.parse.quote(str(args['build_id']),safe='')+suffix)
                 elif name=='preview.multiservice.plan':
                     if 'build_job_id' not in args or not set(args).issubset({'build_job_id','routes','ttl_seconds'}):raise ValueError('O campo build_job_id é obrigatório. Campos permitidos: build_job_id, routes e ttl_seconds.')
-                    job_id=str(args.get('build_job_id') or '');ttl=int(args.get('ttl_seconds') or 1800);routes=args.get('routes')
-                    if not re.fullmatch(r'build_[a-f0-9]{24}',job_id):raise ValueError('build_job_id incompatível.')
-                    content=multiservice_preview_plan(job_id,routes,ttl,authz)
+                    build_job_id=str(args.get('build_job_id') or '').strip();ttl=int(args.get('ttl_seconds') or 1800);routes=args.get('routes')
+                    if not re.fullmatch(r'build_[a-f0-9]{24}',build_job_id):raise ValueError('build_job_id incompatível.')
+                    content=multiservice_preview_plan(build_job_id,routes,ttl,authz)
                 elif name=='approval.request-multiservice-preview':
                     required={'build_job_id','preview_plan_digest','reason'};allowed=required|{'routes','ttl_seconds','approval_ttl_seconds'}
                     if not required.issubset(args) or not set(args).issubset(allowed):raise ValueError('build_job_id, preview_plan_digest e reason são obrigatórios.')
@@ -1781,8 +1781,9 @@ class H(BaseHTTPRequestHandler):
                     if not required.issubset(args) or not set(args).issubset(allowed):raise ValueError('build_job_id, preview_plan_digest e approval_id são obrigatórios.')
                     client_id=self.headers.get('X-CloudIF-Client','').strip()
                     if not client_id:raise ValueError('identified_client_required')
-                    job_id=str(args['build_job_id']);digest=str(args['preview_plan_digest']).lower();approval_id=str(args['approval_id']);ttl=int(args.get('ttl_seconds') or 1800);routes=args.get('routes')
-                    plan=multiservice_preview_plan(job_id,routes,ttl,authz);slug=str(plan.get('project_slug') or '')
+                    build_job_id=str(args.get('build_job_id') or '').strip();digest=str(args['preview_plan_digest']).lower();approval_id=str(args['approval_id']);ttl=int(args.get('ttl_seconds') or 1800);routes=args.get('routes')
+                    if not re.fullmatch(r'build_[a-f0-9]{24}',build_job_id):raise ValueError('build_job_id incompatível.')
+                    plan=multiservice_preview_plan(build_job_id,routes,ttl,authz);slug=str(plan.get('project_slug') or '')
                     control('/v1/projects/'+urllib.parse.quote(slug,safe=''))
                     if not hmac.compare_digest(str(plan.get('preview_plan_digest') or ''),digest):raise ValueError('preview_plan_digest_mismatch')
                     approval=approval_get(approval_id)
@@ -1796,7 +1797,7 @@ class H(BaseHTTPRequestHandler):
                     if approval.get('status')=='approved':
                         reserve_code,reserved=approval_transition(approval_id,'reserve',{'reservation_id':reservation_id,'reserved_by':client_id,'ttl_seconds':900})
                         if reserve_code!=200 or reserved.get('status')!='reserved':raise ValueError('approval_reserve_failed')
-                    payload={'build_job_id':job_id,'preview_plan_digest':digest,'ttl_seconds':ttl,'actor_user':supabase_actor_user(authz),'actor_groups':list(authz.get('authorized_groups') or [])}
+                    payload={'build_job_id':build_job_id,'preview_plan_digest':digest,'ttl_seconds':ttl,'actor_user':supabase_actor_user(authz),'actor_groups':list(authz.get('authorized_groups') or [])}
                     if routes is not None:payload['routes']=routes
                     code,created=multiservice_preview_call('POST','/v1/previews',payload,authz,240)
                     current=approval_get(approval_id)
@@ -1823,27 +1824,27 @@ class H(BaseHTTPRequestHandler):
                     if code not in {200,404} or not data.get('ok'):raise ValueError('O preview não pôde ser removido.')
                     content=data
                 elif name=='deployment.multiservice.plan':
-                    required={'slug','environment'};allowed=required|{'build_job_id','routes'}
-                    if not required.issubset(args) or not set(args).issubset(allowed):raise ValueError('Os campos slug e environment são obrigatórios. build_job_id e routes são opcionais.')
-                    slug=str(args['slug']).strip();environment=str(args['environment']).strip()
+                    required={'slug','build_job_id','environment'};allowed=required|{'routes'}
+                    if not required.issubset(args) or not set(args).issubset(allowed):raise ValueError('Os campos slug, build_job_id e environment são obrigatórios.')
+                    slug=str(args['slug']).strip();build_job_id=str(args.get('build_job_id') or '').strip();environment=str(args['environment']).strip()
+                    if not re.fullmatch(r'build_[a-f0-9]{24}',build_job_id):raise ValueError('build_job_id incompatível.')
                     control('/v1/projects/'+urllib.parse.quote(slug,safe=''))
-                    payload={'project_slug':slug,'environment':environment,'trace_id':trace_id}
-                    if args.get('build_job_id'):payload['build_job_id']=str(args['build_job_id'])
+                    payload={'project_slug':slug,'build_job_id':build_job_id,'environment':environment,'trace_id':trace_id}
                     if args.get('routes') is not None:payload['routes']=args['routes']
                     code,data=deployment_multiservice_plan_call(payload)
                     if code!=200 or not data.get('ok'):
                         error=data.get('error') or {};raise ValueError(str(error.get('message') if isinstance(error,dict) else error or 'deployment_plan_failed'))
                     content=data
                 elif name=='approval.request-multiservice-deployment':
-                    required={'slug','environment','deployment_plan_digest','reason'};allowed=required|{'build_job_id','routes','ttl_seconds'}
-                    if not required.issubset(args) or not set(args).issubset(allowed):raise ValueError('slug, environment, deployment_plan_digest e reason são obrigatórios.')
+                    required={'slug','build_job_id','environment','deployment_plan_digest','reason'};allowed=required|{'routes','ttl_seconds'}
+                    if not required.issubset(args) or not set(args).issubset(allowed):raise ValueError('slug, build_job_id, environment, deployment_plan_digest e reason são obrigatórios.')
                     client_id=self.headers.get('X-CloudIF-Client','').strip()
                     if not client_id:raise ValueError('identified_client_required')
-                    slug=str(args['slug']).strip();environment=str(args['environment']).strip();digest=str(args['deployment_plan_digest']).lower();reason=str(args['reason']).strip();ttl=int(args.get('ttl_seconds') or 900)
+                    slug=str(args['slug']).strip();build_job_id=str(args.get('build_job_id') or '').strip();environment=str(args['environment']).strip();digest=str(args['deployment_plan_digest']).lower();reason=str(args['reason']).strip();ttl=int(args.get('ttl_seconds') or 900)
+                    if not re.fullmatch(r'build_[a-f0-9]{24}',build_job_id):raise ValueError('build_job_id incompatível.')
                     if not re.fullmatch(r'[a-f0-9]{64}',digest) or not 4<=len(reason)<=500 or not 60<=ttl<=86400:raise ValueError('digest, reason ou ttl_seconds incompatível.')
                     control('/v1/projects/'+urllib.parse.quote(slug,safe=''))
-                    payload={'project_slug':slug,'environment':environment,'trace_id':trace_id}
-                    if args.get('build_job_id'):payload['build_job_id']=str(args['build_job_id'])
+                    payload={'project_slug':slug,'build_job_id':build_job_id,'environment':environment,'trace_id':trace_id}
                     if args.get('routes') is not None:payload['routes']=args['routes']
                     code,plan=deployment_multiservice_plan_call(payload)
                     if code!=200 or not plan.get('ok'):raise ValueError('deployment_plan_failed')
@@ -1853,14 +1854,14 @@ class H(BaseHTTPRequestHandler):
                     if not created.get('ok') or created.get('status') not in {'pending','approved'}:raise ValueError('approval_create_failed')
                     content={'ok':True,'approval_id':created['approval_id'],'status':created.get('status'),'expires_at':created['expires_at'],'policy_applied':bool(created.get('policy_applied')),'approval_policy_id':created.get('approval_policy_id'),'project_slug':slug,'environment':environment,'deployment_plan_digest':digest,'side_effects':False,'content_stored_in_approval':False,'secret_values_in_metadata':False}
                 elif name=='deployment.multiservice.execute':
-                    required={'slug','environment','deployment_plan_digest','approval_id'};allowed=required|{'build_job_id','routes'}
-                    if not required.issubset(args) or not set(args).issubset(allowed):raise ValueError('slug, environment, deployment_plan_digest e approval_id são obrigatórios.')
+                    required={'slug','build_job_id','environment','deployment_plan_digest','approval_id'};allowed=required|{'routes'}
+                    if not required.issubset(args) or not set(args).issubset(allowed):raise ValueError('slug, build_job_id, environment, deployment_plan_digest e approval_id são obrigatórios.')
                     client_id=self.headers.get('X-CloudIF-Client','').strip()
                     if not client_id:raise ValueError('identified_client_required')
-                    slug=str(args['slug']).strip();environment=str(args['environment']).strip();digest=str(args['deployment_plan_digest']).lower();approval_id=str(args['approval_id'])
+                    slug=str(args['slug']).strip();build_job_id=str(args.get('build_job_id') or '').strip();environment=str(args['environment']).strip();digest=str(args['deployment_plan_digest']).lower();approval_id=str(args['approval_id'])
+                    if not re.fullmatch(r'build_[a-f0-9]{24}',build_job_id):raise ValueError('build_job_id incompatível.')
                     control('/v1/projects/'+urllib.parse.quote(slug,safe=''))
-                    payload={'project_slug':slug,'environment':environment,'trace_id':trace_id}
-                    if args.get('build_job_id'):payload['build_job_id']=str(args['build_job_id'])
+                    payload={'project_slug':slug,'build_job_id':build_job_id,'environment':environment,'trace_id':trace_id}
                     if args.get('routes') is not None:payload['routes']=args['routes']
                     code,plan=deployment_multiservice_plan_call(payload)
                     if code!=200 or not plan.get('ok') or not plan.get('execution_allowed'):raise ValueError('deployment_plan_blocked')
@@ -1872,7 +1873,7 @@ class H(BaseHTTPRequestHandler):
                     operation=plan.get('operation') or {};reconciliation=plan.get('reconciliation') or {}
                     reservation_id,execution_id=transaction_ids('deployment.multiservice',approval_id,client_id,digest)
                     valid_status=bool(approval.get('status')=='approved' or (approval.get('status') in {'reserved','consumed'} and approval.get('reservation_id')==reservation_id))
-                    valid=bool(valid_status and approval.get('project_slug')==slug and approval.get('action')=='deployment.multiservice' and approval.get('requested_by')==client_id and approval.get('approved_by') and hmac.compare_digest(str(metadata.get('deployment_plan_digest') or ''),digest) and metadata.get('environment')==environment and metadata.get('build_job_id')==operation.get('build_job_id') and hmac.compare_digest(str(metadata.get('build_plan_digest') or ''),str(operation.get('build_plan_digest') or '')) and int(metadata.get('config_revision') or 0)==int(operation.get('config_revision') or 0) and hmac.compare_digest(str(metadata.get('config_digest') or ''),str(operation.get('config_digest') or '')) and hmac.compare_digest(str(metadata.get('toolchain_digest') or ''),str(operation.get('toolchain_digest') or '')) and hmac.compare_digest(str(metadata.get('archive_sha256') or ''),str(operation.get('archive_sha256') or '')) and hmac.compare_digest(str(metadata.get('variables_digest') or ''),str(plan.get('variables_digest') or '')) and metadata.get('routes')==(operation.get('routes') or []) and int(metadata.get('membership_revision') or 0)==int(reconciliation.get('membershipRevision') or 0) and hmac.compare_digest(str(metadata.get('acl_digest') or ''),str(reconciliation.get('aclDigest') or '')) and metadata.get('content_stored') is False and metadata.get('secret_values_in_metadata') is False)
+                    valid=bool(valid_status and approval.get('project_slug')==slug and approval.get('action')=='deployment.multiservice' and approval.get('requested_by')==client_id and approval.get('approved_by') and hmac.compare_digest(str(metadata.get('deployment_plan_digest') or ''),digest) and metadata.get('environment')==environment and metadata.get('build_job_id')==build_job_id and operation.get('build_job_id')==build_job_id and hmac.compare_digest(str(metadata.get('build_plan_digest') or ''),str(operation.get('build_plan_digest') or '')) and int(metadata.get('config_revision') or 0)==int(operation.get('config_revision') or 0) and hmac.compare_digest(str(metadata.get('config_digest') or ''),str(operation.get('config_digest') or '')) and hmac.compare_digest(str(metadata.get('toolchain_digest') or ''),str(operation.get('toolchain_digest') or '')) and hmac.compare_digest(str(metadata.get('archive_sha256') or ''),str(operation.get('archive_sha256') or '')) and hmac.compare_digest(str(metadata.get('variables_digest') or ''),str(plan.get('variables_digest') or '')) and metadata.get('routes')==(operation.get('routes') or []) and int(metadata.get('membership_revision') or 0)==int(reconciliation.get('membershipRevision') or 0) and hmac.compare_digest(str(metadata.get('acl_digest') or ''),str(reconciliation.get('aclDigest') or '')) and metadata.get('content_stored') is False and metadata.get('secret_values_in_metadata') is False)
                     if not valid:raise ValueError('approval_binding_mismatch')
                     if approval.get('status')=='approved':
                         reserve_code,reserved=approval_transition(approval_id,'reserve',{'reservation_id':reservation_id,'reserved_by':client_id,'ttl_seconds':900})

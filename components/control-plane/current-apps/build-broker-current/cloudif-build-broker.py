@@ -39,7 +39,9 @@ def db():
  if 'dead_reason' not in cols:c.execute('ALTER TABLE builds ADD COLUMN dead_reason TEXT')
  c.execute('CREATE INDEX IF NOT EXISTS idx_build_due ON builds(status,next_attempt_at,created_at)')
  c.execute('CREATE INDEX IF NOT EXISTS idx_build_project_active ON builds(project_slug,status)')
- c.execute('''CREATE TABLE IF NOT EXISTS multiservice_jobs(job_id TEXT PRIMARY KEY,idempotency_key TEXT UNIQUE,project_slug TEXT NOT NULL,ref TEXT NOT NULL,config_revision INTEGER NOT NULL,config_digest TEXT NOT NULL,toolchain_digest TEXT NOT NULL,archive_sha256 TEXT NOT NULL,plan_digest TEXT NOT NULL,status TEXT NOT NULL,payload_json TEXT NOT NULL,result_json TEXT NOT NULL DEFAULT '{}',created_at INTEGER NOT NULL,updated_at INTEGER NOT NULL,attempts INTEGER NOT NULL DEFAULT 0,last_error TEXT NOT NULL DEFAULT '')''')
+ c.execute('''CREATE TABLE IF NOT EXISTS multiservice_jobs(job_id TEXT PRIMARY KEY,idempotency_key TEXT UNIQUE,project_slug TEXT NOT NULL,ref TEXT NOT NULL,config_revision INTEGER NOT NULL,config_digest TEXT NOT NULL,toolchain_digest TEXT NOT NULL,archive_sha256 TEXT NOT NULL,plan_digest TEXT NOT NULL,status TEXT NOT NULL,payload_json TEXT NOT NULL,result_json TEXT NOT NULL DEFAULT '{}',log_text TEXT NOT NULL DEFAULT '',created_at INTEGER NOT NULL,updated_at INTEGER NOT NULL,attempts INTEGER NOT NULL DEFAULT 0,last_error TEXT NOT NULL DEFAULT '')''')
+ multiservice_cols={r[1] for r in c.execute('PRAGMA table_info(multiservice_jobs)')}
+ if 'log_text' not in multiservice_cols:c.execute("ALTER TABLE multiservice_jobs ADD COLUMN log_text TEXT NOT NULL DEFAULT ''")
  c.execute('CREATE INDEX IF NOT EXISTS idx_multiservice_jobs_due ON multiservice_jobs(status,created_at)')
  c.execute('''CREATE TABLE IF NOT EXISTS toolchain_jobs(job_id TEXT PRIMARY KEY,idempotency_key TEXT UNIQUE,project_slug TEXT NOT NULL,ref TEXT NOT NULL,config_revision INTEGER NOT NULL,config_digest TEXT NOT NULL,toolchain_digest TEXT NOT NULL,archive_sha256 TEXT NOT NULL,plan_digest TEXT NOT NULL,status TEXT NOT NULL,payload_json TEXT NOT NULL,result_json TEXT NOT NULL DEFAULT '{}',log_text TEXT NOT NULL DEFAULT '',created_at INTEGER NOT NULL,updated_at INTEGER NOT NULL,attempts INTEGER NOT NULL DEFAULT 0,last_error TEXT NOT NULL DEFAULT '')''')
  c.execute('CREATE INDEX IF NOT EXISTS idx_toolchain_jobs_project ON toolchain_jobs(project_slug,status,created_at)')
@@ -320,7 +322,7 @@ def multiservice_runtime_config(job_id):
   for name,reference in values.items():
    if not re.fullmatch(r'[A-Z][A-Z0-9_]{0,127}',str(name)) or not re.fullmatch(r'[a-z][a-z0-9_.+:-]{1,31}://[^\s\x00]{3,240}',str(reference or '')):raise ValueError('secret_runtime_references_invalid')
  service_artifacts=[]
- for item in result.get('services') or result.get('artifacts') or []:
+ for item in result.get('applications') or result.get('services') or result.get('artifacts') or []:
   if not isinstance(item,dict):continue
   image=item.get('image') or item.get('applicationImage') or {}
   service=str(item.get('service') or item.get('name') or '')

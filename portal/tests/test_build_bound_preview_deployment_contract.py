@@ -37,7 +37,7 @@ class BuildBoundPreviewDeploymentContractTests(unittest.TestCase):
 
     def test_persistent_tools_require_exact_build_job(self):
         names={
-          'preview.multiservice.plan','preview.multiservice.execute',
+          'preview.multiservice.plan','preview.multiservice.create',
           'deployment.multiservice.plan','approval.request-multiservice-deployment','deployment.multiservice.execute',
         }
         tools={item['name']:item for item in self.gateway.TOOLS}
@@ -65,11 +65,14 @@ class BuildBoundPreviewDeploymentContractTests(unittest.TestCase):
         return self.source[match.start():end]
 
     def test_handlers_validate_and_forward_build_job(self):
-        for tool in ('preview.multiservice.plan','preview.multiservice.execute','deployment.multiservice.plan','approval.request-multiservice-deployment','deployment.multiservice.execute'):
+        for tool in ('preview.multiservice.plan','preview.multiservice.create','deployment.multiservice.plan','approval.request-multiservice-deployment','deployment.multiservice.execute'):
             block=self._branch(tool)
             self.assertIn("build_job_id=str(args.get('build_job_id') or '').strip()",block,tool)
             self.assertIn("re.fullmatch(r'build_[a-f0-9]{24}',build_job_id)",block,tool)
-            self.assertIn("'build_job_id':build_job_id",block,tool)
+            if tool=='preview.multiservice.plan':
+                self.assertIn('multiservice_preview_plan(build_job_id',block)
+            else:
+                self.assertIn("'build_job_id':build_job_id",block,tool)
 
     def test_deployment_approval_is_bound_to_build_job(self):
         self.assertIn("'build_job_id':plan.get('build_job_id')",self.source)
@@ -96,9 +99,12 @@ class BuildBoundPreviewDeploymentContractTests(unittest.TestCase):
           "'secretValuesIncluded':False,'secretReferencesIncluded':False",
           "base['_internal_runtime_configuration']=runtime_configuration",
         ):self.assertIn(marker,self.broker)
-        start=self.broker.index('def _deployment_runtime_summary(');end=self.broker.index('def multiservice_plan(',start);block=self.broker[start:end]
-        self.assertNotIn('secretRuntimeReferences',block[block.index('return {'):])
-        self.assertNotIn('publicRuntimeEnvironment',block[block.index('return {'):])
+        start=self.broker.index('def _deployment_runtime_summary(');end=self.broker.index('def _deployment_routes(',start);block=self.broker[start:end]
+        return_block=block[block.rindex('return {'):]
+        self.assertNotIn('secretRuntimeReferences',return_block)
+        self.assertNotIn('publicRuntimeEnvironment',return_block)
+        self.assertIn("'secretNames':secret_names",return_block)
+        self.assertIn("'variableNames':public_names",return_block)
 
     def test_runtime_executor_fails_closed_before_docker_and_injects_public_only(self):
         for marker in (

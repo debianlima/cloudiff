@@ -121,6 +121,29 @@ def _multiservice_build(job_id):
  if code!=200 or not data.get('ok'):raise RuntimeError('multiservice_build_unavailable')
  return data
 
+def _build_runtime_configuration(job_id):
+ if not BUILD_JOB_RE.fullmatch(str(job_id or '')):raise ValueError('invalid_build_job_id')
+ code,data=_internal_json('GET',BUILD_BROKER_URL+'/v1/multiservice/jobs/'+urllib.parse.quote(job_id,safe='')+'/runtime-config',BUILD_BROKER_TOKEN,timeout=30)
+ if code==404:return None
+ if code==409:
+  error=data.get('error') or {};raise ValueError(str(error.get('code') if isinstance(error,dict) else error or 'multiservice_build_not_ready'))
+ if code!=200 or not data.get('ok'):raise RuntimeError('multiservice_runtime_configuration_unavailable')
+ if data.get('internal') is not True or data.get('secretValuesIncluded') is not False:raise ValueError('runtime_secret_contract_invalid')
+ return data
+
+def _deployment_runtime_summary(runtime_configuration):
+ if not isinstance(runtime_configuration,dict):return {'environment':None,'variableNames':{},'secretNames':{},'digests':{},'secretReferencesPresent':False}
+ public=runtime_configuration.get('publicRuntimeEnvironment') or {};secret=runtime_configuration.get('secretRuntimeReferences') or {}
+ if not isinstance(public,dict) or not isinstance(secret,dict):raise ValueError('runtime_environment_contract_invalid')
+ public_names={str(service):sorted(str(name) for name in values) for service,values in sorted(public.items()) if isinstance(values,dict)}
+ secret_names={str(service):sorted(str(name) for name in values) for service,values in sorted(secret.items()) if isinstance(values,dict)}
+ return {
+  'environment':str(runtime_configuration.get('environment') or ''),
+  'variableNames':public_names,'secretNames':secret_names,
+  'digests':{'build':runtime_configuration.get('buildEnvironmentDigest'),'runtime':runtime_configuration.get('runtimeEnvironmentDigest'),'effective':runtime_configuration.get('environmentDigest')},
+  'secretReferencesPresent':any(bool(values) for values in secret.values() if isinstance(values,dict)),
+ }
+
 def _deployment_routes(configuration,applications,requested=None):
  names={str(item.get('service') or '') for item in applications}
  if requested is not None:
@@ -218,40 +241,64 @@ def _multiservice_applications(build):
   applications.append(item)
  return applications
 
-def _multiservice_deployment_plan(d):
+def multiservice_plan(payload,include_internal=False):
  allowed={'project_slug','build_job_id','environment','routes','trace_id'}
- if not isinstance(d,dict) or not set(d).issubset(allowed) or 'project_slug' not in d or 'environment' not in d or 'trace_id' not in d:raise ValueError('invalid_request')
- slug=str(d.get('project_slug') or '').strip().lower();environment=str(d.get('environment') or '').strip().lower();trace=str(d.get('trace_id') or '').strip();requested_job=str(d.get('build_job_id') or '').strip()
+ if not isinstance(payload,dict) or not set(payload).issubset(allowed) or 'project_slug' not in payload or 'environment' not in payload or 'trace_id' not in payload:raise ValueError('invalid_request')
+ slug=str(payload.get('project_slug') or '').strip().lower();environment=str(payload.get('environment') or '').strip().lower();trace=str(payload.get('trace_id') or '').strip();build_job_id=str(payload.get('build_job_id') or '').strip()
  if not SLUG.fullmatch(slug) or environment not in DEPLOY_ENVIRONMENTS or not trace:raise ValueError('invalid_request')
+ if build_job_id and not BUILD_JOB_RE.fullmatch(build_job_id):raise ValueError('invalid_build_job_id')
  config=_multiservice_configuration(slug);configuration=config.get('configuration') or {};state=_multiservice_reconciliation(slug)
- job_id=requested_job or str((state or {}).get('latestBuildJobId') or '')
- build=_multiservice_build(job_id) if job_id else None;applications=_multiservice_applications(build);environment_summary=_environment_summary(slug,environment,configuration)
  blockers=[]
- if not config.get('configured') or int(config.get('currentRevision') or 0)<1:blockers.append('configuration_required')
- if not state:blockers.append('reconciliation_state_missing')
- elif state.get('status')!='ready':blockers.append('reconciliation_not_ready:'+str(state.get('status') or 'unknown'))
- if not job_id:blockers.append('matching_build_required')
- elif not build:blockers.append('build_not_found')
- elif build.get('status')!='succeeded':blockers.append('build_not_succeeded')
- if build:
-  payload=build.get('payload') or {};result=build.get('result') or {}
-  expected={'config_revision':int(config.get('currentRevision') or 0),'config_digest':str(config.get('configDigest') or ''),'toolchain_digest':str(config.get('toolchainDigest') or '')}
-  actual={'config_revision':int(payload.get('config_revision') or result.get('configRevision') or 0),'config_digest':str(payload.get('config_digest') or result.get('configDigest') or ''),'toolchain_digest':str(payload.get('toolchain_digest') or result.get('toolchainDigest') or '')}
-  for key in expected:
-   if expected[key]!=actual[key]:blockers.append('build_'+key+'_mismatch')
- if environment_summary['unresolved']:blockers.append('required_environment_unresolved')
- if not applications and build and build.get('status')=='succeeded':blockers.append('build_applications_missing')
- try:routes=_deployment_routes(configuration,applications,d.get('routes')) if applications else []
- except ValueError:routes=[];blockers.append('routes_invalid')
+ if not config.get('configured') or int(config.get('currentRevision') or 0)<1:blockers.append('configuration-required')
+ if not state:blockers.append('reconciliation-state-missing')
+ elif state.get('status')!='ready':blockers.append('reconciliation-not-ready:'+str(state.get('status') or 'unknown'))
+ build=None;runtime_configuration=None
+ if not build_job_id:
+  blockers.append('build-job-required')
+ else:
+  build=_multiservice_build(build_job_id)
+  if not build:blockers.append('build-not-found')
+  elif build.get('status')!='succeeded':blockers.append('build-not-succeeded')
+  else:
+   try:runtime_configuration=_build_runtime_configuration(build_job_id)
+   except ValueError as error:
+    code=str(error);blockers.append('build-not-ready' if code=='multiservice_build_not_ready' else code.replace('_','-'))
+   if runtime_configuration is None:blockers.append('build-runtime-configuration-missing')
+ applications=_multiservice_applications(build)
+ runtime_summary=_deployment_runtime_summary(runtime_configuration)
+ if runtime_configuration:
+  if str(runtime_configuration.get('project_slug') or '')!=slug:blockers.append('build-project-mismatch')
+  if str(runtime_configuration.get('environment') or '')!=environment:blockers.append('build-environment-mismatch')
+  if int(runtime_configuration.get('config_revision') or 0)!=int(config.get('currentRevision') or 0):blockers.append('build-config-revision-mismatch')
+  if str(runtime_configuration.get('config_digest') or '')!=str(config.get('configDigest') or ''):blockers.append('build-config-digest-mismatch')
+  if str(runtime_configuration.get('toolchain_digest') or '')!=str(config.get('toolchainDigest') or ''):blockers.append('build-toolchain-digest-mismatch')
+  if runtime_summary.get('secretReferencesPresent'):blockers.append('secret-resolution-unavailable')
+ if not applications and build and build.get('status')=='succeeded':blockers.append('build-applications-missing')
+ try:routes=_deployment_routes(configuration,applications,payload.get('routes')) if applications else []
+ except ValueError:routes=[];blockers.append('routes-invalid')
  if environment=='production':
   cfg=_production_config(slug)
-  if cfg.get('enabled') is not True or cfg.get('production_effects_enabled') is not True:blockers.append('production_target_not_enabled')
- material={'action':'deployment.multiservice.deploy','project_slug':slug,'environment':environment,'build_job_id':job_id,'build_plan_digest':str(((build or {}).get('result') or {}).get('planDigest') or ''),'config_revision':int(config.get('currentRevision') or 0),'config_digest':str(config.get('configDigest') or ''),'toolchain_digest':str(config.get('toolchainDigest') or ''),'archive_sha256':str(((build or {}).get('payload') or {}).get('archive_sha256') or ((build or {}).get('result') or {}).get('archiveSha256') or ''),'applications':applications,'routes':routes,'environment_value_digests':environment_summary['valueDigests'],'variables_digest':environment_summary['variablesDigest']}
- plan_digest=hashlib.sha256(json.dumps(material,sort_keys=True,separators=(',',':')).encode()).hexdigest()
- blockers=sorted(set(blockers));summary={'technologies':sorted({item['runtime'] for item in applications if item.get('runtime')}),'services':[{'service':item['service'],'runtime':item['runtime'],'port':item['port'],'healthcheck':item['healthcheck']} for item in applications],'routes':routes,'variables':environment_summary['variableNames'],'requiredReferences':environment_summary['references'],'hooks':[{key:item.get(key) for key in ('phase','service','script')} for phase,items in (configuration.get('hooks') or {}).items() for item in (items or []) if isinstance(item,dict) for key in []]}
- # Build hooks without exposing commands or contents.
- summary['hooks']=[{'phase':phase,'service':item.get('service'),'script':item.get('script')} for phase,items in (configuration.get('hooks') or {}).items() for item in (items or []) if isinstance(item,dict)]
- return {'ok':True,'side_effect_free':True,'project_slug':slug,'environment':environment,'deployment_plan_digest':plan_digest,'operation':material,'summary':summary,'blockers':blockers,'execution_allowed':not blockers,'approval_required':True,'reconciliation':{'status':(state or {}).get('status'),'configRevision':(state or {}).get('configRevision'),'membershipRevision':(state or {}).get('membershipRevision'),'aclDigest':(state or {}).get('aclDigest')},'variables_digest':environment_summary['variablesDigest'],'secret_values_included':False,'containers_created':False,'trace_id':trace}
+  if cfg.get('enabled') is not True or cfg.get('production_effects_enabled') is not True:blockers.append('production-target-not-enabled')
+ public_runtime=(runtime_configuration or {}).get('publicRuntimeEnvironment') or {}
+ variables_digest=hashlib.sha256(json.dumps(public_runtime,ensure_ascii=False,sort_keys=True,separators=(',',':')).encode()).hexdigest()
+ build_result=(build or {}).get('result') or {};build_payload=(build or {}).get('payload') or {}
+ material={
+  'action':'deployment.multiservice.deploy','project_slug':slug,'environment':environment,'build_job_id':build_job_id,
+  'build_plan_digest':str((runtime_configuration or {}).get('plan_digest') or build_result.get('planDigest') or ''),
+  'config_revision':int(config.get('currentRevision') or 0),'config_digest':str(config.get('configDigest') or ''),'toolchain_digest':str(config.get('toolchainDigest') or ''),
+  'archive_sha256':str((runtime_configuration or {}).get('archive_sha256') or build_payload.get('archive_sha256') or build_result.get('archiveSha256') or ''),
+  'environment_digest':str((runtime_configuration or {}).get('environmentDigest') or ''),'runtime_environment_digest':str((runtime_configuration or {}).get('runtimeEnvironmentDigest') or ''),
+  'applications':applications,'routes':routes,'variables_digest':variables_digest,
+ }
+ plan_digest=hashlib.sha256(json.dumps(material,sort_keys=True,separators=(',',':')).encode()).hexdigest();blockers=sorted(set(blockers))
+ summary={'technologies':sorted({item['runtime'] for item in applications if item.get('runtime')}),'services':[{'service':item['service'],'runtime':item['runtime'],'port':item['port'],'healthcheck':item['healthcheck']} for item in applications],'routes':routes,'runtimeEnvironment':runtime_summary,'buildJobId':build_job_id,'hooks':[{'phase':phase,'service':item.get('service'),'script':item.get('script')} for phase,items in (configuration.get('hooks') or {}).items() for item in (items or []) if isinstance(item,dict)]}
+ base={'ok':True,'side_effect_free':True,'project_slug':slug,'environment':environment,'build_job_id':build_job_id,'deployment_plan_digest':plan_digest,'operation':material,'summary':summary,'blockers':blockers,'execution_allowed':not blockers,'approval_required':True,'reconciliation':{'status':(state or {}).get('status'),'configRevision':(state or {}).get('configRevision'),'membershipRevision':(state or {}).get('membershipRevision'),'aclDigest':(state or {}).get('aclDigest')},'variables_digest':variables_digest,'secret_values_included':False,'secret_references_included':False,'secretValuesIncluded':False,'secretReferencesIncluded':False,'containers_created':False,'trace_id':trace}
+ if include_internal:base['_internal_runtime_configuration']=runtime_configuration
+ return base
+
+def _multiservice_deployment_plan(payload,include_internal=False):
+ return multiservice_plan(payload,include_internal=include_internal)
+
 
 def _deployment_executor_call(method,path,payload=None,timeout=300):
  data=None if payload is None else json.dumps(payload,ensure_ascii=False,separators=(',',':')).encode()
@@ -269,23 +316,29 @@ def _deployment_id(execution_id):
 
 def _multiservice_execute(d,execution_id):
  allowed={'project_slug','build_job_id','environment','routes','trace_id','deployment_plan_digest'}
- if not isinstance(d,dict) or not set(d).issubset(allowed) or not {'project_slug','environment','trace_id','deployment_plan_digest'}.issubset(d):raise ValueError('invalid_request')
- plan_payload={key:d[key] for key in ('project_slug','environment','trace_id')}
- if d.get('build_job_id'):plan_payload['build_job_id']=d['build_job_id']
+ if not isinstance(d,dict) or not set(d).issubset(allowed) or not {'project_slug','build_job_id','environment','trace_id','deployment_plan_digest'}.issubset(d):raise ValueError('invalid_request')
+ build_job_id=str(d.get('build_job_id') or '').strip()
+ if not BUILD_JOB_RE.fullmatch(build_job_id):raise ValueError('invalid_build_job_id')
+ plan_payload={key:d[key] for key in ('project_slug','build_job_id','environment','trace_id')}
  if d.get('routes') is not None:plan_payload['routes']=d['routes']
- plan=_multiservice_deployment_plan(plan_payload);digest=str(d.get('deployment_plan_digest') or '').lower()
+ plan=_multiservice_deployment_plan(plan_payload,include_internal=True);digest=str(d.get('deployment_plan_digest') or '').lower()
  if not SHA256_RE.fullmatch(digest) or not hmac.compare_digest(digest,plan['deployment_plan_digest']):raise ValueError('deployment_plan_digest_mismatch')
  if not plan.get('execution_allowed'):raise PermissionError('deployment_plan_blocked:'+','.join(plan.get('blockers') or []))
- config=_multiservice_configuration(plan['project_slug']);resolved=_resolve_environment(plan['project_slug'],plan['environment'],config.get('configuration') or {})
- if resolved['unresolved']:raise PermissionError('required_environment_unresolved')
- if not hmac.compare_digest(resolved['variablesDigest'],str(plan.get('variables_digest') or '')):raise ValueError('variables_digest_changed')
+ runtime_configuration=plan.pop('_internal_runtime_configuration',None)
+ if not isinstance(runtime_configuration,dict):raise ValueError('runtime_configuration_missing')
+ if runtime_configuration.get('secretValuesIncluded') is not False:raise ValueError('runtime_secret_contract_invalid')
+ if any(bool(values) for values in (runtime_configuration.get('secretRuntimeReferences') or {}).values() if isinstance(values,dict)):raise PermissionError('secret_resolution_unavailable')
+ public_runtime=runtime_configuration.get('publicRuntimeEnvironment') or {}
+ variables_digest=hashlib.sha256(json.dumps(public_runtime,ensure_ascii=False,sort_keys=True,separators=(',',':')).encode()).hexdigest()
+ if not hmac.compare_digest(variables_digest,str(plan.get('variables_digest') or '')):raise ValueError('variables_digest_changed')
  operation=plan['operation'];deployment_id=_deployment_id(execution_id)
  applications=[{'service':item['service'],'image_id':item['imageId'],'application_digest':item['applicationDigest'],'port':item['port'],'healthcheck':item['healthcheck']} for item in operation['applications']]
- payload={'deployment_id':deployment_id,'project_slug':plan['project_slug'],'environment':plan['environment'],'build_job_id':operation['build_job_id'],'deployment_plan_digest':digest,'build_plan_digest':operation['build_plan_digest'],'config_revision':operation['config_revision'],'config_digest':operation['config_digest'],'toolchain_digest':operation['toolchain_digest'],'archive_sha256':operation['archive_sha256'],'applications':applications,'routes':operation['routes'],'variables':resolved['values'],'variables_digest':resolved['variablesDigest']}
+ payload={'deployment_id':deployment_id,'project_slug':plan['project_slug'],'environment':plan['environment'],'build_job_id':build_job_id,'deployment_plan_digest':digest,'build_plan_digest':operation['build_plan_digest'],'config_revision':operation['config_revision'],'config_digest':operation['config_digest'],'toolchain_digest':operation['toolchain_digest'],'archive_sha256':operation['archive_sha256'],'applications':applications,'routes':operation['routes'],'variables':public_runtime,'variables_digest':variables_digest,'runtimeConfiguration':runtime_configuration}
  idem_mark_effect(execution_id);code,result=_deployment_executor_call('POST','/v1/deployments',payload,timeout=600)
  safe=dict(result) if isinstance(result,dict) else {'ok':False}
- safe.pop('variables',None);safe['variable_values_returned']=False;safe['secret_values_in_metadata']=False;safe['effect_started']=True;safe['deployment_plan_digest']=digest
+ safe.pop('variables',None);safe.pop('runtimeConfiguration',None);safe['variable_values_returned']=False;safe['secret_values_in_metadata']=False;safe['effect_started']=True;safe['deployment_plan_digest']=digest
  return code,safe
+
 def _production_config(slug):
  try:
   data=json.load(open(PRODUCTION_TARGETS))
@@ -531,7 +584,7 @@ class H(BaseHTTPRequestHandler):
    try:result=_multiservice_deployment_plan(d)
    except LookupError as e:return send(self,404,{'ok':False,'error':{'code':str(e),'message':'Configuração do projeto não encontrada.'}})
    except RuntimeError as e:return send(self,503,{'ok':False,'error':{'code':str(e),'message':'Serviço interno indisponível.'}})
-   except ValueError as e:return send(self,422,{'ok':False,'error':{'code':str(e),'message':'project_slug, environment e trace_id são obrigatórios; build_job_id e routes são opcionais.','example':{'project_slug':'meu-projeto','environment':'homologation','trace_id':'trace-123'}}})
+   except ValueError as e:return send(self,422,{'ok':False,'error':{'code':str(e),'message':'project_slug, environment e trace_id são obrigatórios. build_job_id é obrigatório para um plano executável; sem ele o plano retorna build-job-required.','example':{'project_slug':'meu-projeto','build_job_id':'build_111111111111111111111111','environment':'homologation','trace_id':'trace-123'}}})
    return send(self,200,result)
   if self.path=='/v1/multiservice-deploy':
    execution_id=str(d.pop('execution_id','') or '').strip();payload=dict(d)
