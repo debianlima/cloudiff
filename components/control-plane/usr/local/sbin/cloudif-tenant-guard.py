@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import json
 import os
 import re
 import sys
@@ -126,12 +127,11 @@ def docker_compose_health(tenant):
     if not os.path.isdir(tdir):
         return False, "Tenant não existe."
 
-    code, out = run_cmd(["docker", "compose", "ps", "--format", "json"], timeout=8) if False else (1, "")
-
-    # Forma compatível: executa dentro do diretório do tenant.
+    # Inclui containers parados. Sem -a, uma stack completamente desligada
+    # aparece como saída vazia e fica indistinguível de erro de descoberta.
     try:
         out = subprocess.check_output(
-            ["bash", "-lc", f"cd {tdir!r} && docker compose ps --format json"],
+            ["bash", "-lc", f"cd {tdir!r} && docker compose ps -a --format json"],
             stderr=subprocess.STDOUT,
             timeout=10,
             text=True,
@@ -142,29 +142,66 @@ def docker_compose_health(tenant):
     if not out.strip():
         return False, "docker compose ps vazio."
 
-    # Aceita tanto JSON lines quanto array textual.
-    required = {
-        "kong": False,
-        "studio": False,
-        "db": False,
-    }
+    records = []
+    raw = out.strip()
+    try:
+        if raw.startswith("["):
+            parsed = json.loads(raw)
+            records = parsed if isinstance(parsed, list) else [parsed]
+        else:
+            records = [json.loads(line) for line in raw.splitlines() if line.strip()]
+    except Exception:
+        # Compatibilidade defensiva com versões antigas do compose.
+        joined = raw.lower()
+        required = {key: key in joined for key in ("kong", "studio", "db")}
+        bad_words = ["exited", "dead", "removing", "restarting"]
+        if any(word in joined for word in bad_words):
+            return False, "Há container em estado ruim: " + ", ".join(word for word in bad_words if word in joined)
+        if not all(required.values()):
+            return False, f"Serviços principais ausentes no compose: {required}"
+        return True, "Containers principais do tenant estão presentes e não estão em estado ruim."
 
-    lines = [x for x in out.splitlines() if x.strip()]
-    joined = "\n".join(lines).lower()
+    by_service = {}
+    for record in records:
+        if not isinstance(record, dict):
+            continue
+        service = str(record.get("Service") or record.get("service") or "").strip().lower()
+        if not service:
+            continue
+        state = str(record.get("State") or record.get("state") or "").strip().lower()
+        status = str(record.get("Status") or record.get("status") or "").strip().lower()
+        health = str(record.get("Health") or record.get("health") or "").strip().lower()
+        try:
+            exit_code = int(record.get("ExitCode", record.get("exit_code", 0)) or 0)
+        except Exception:
+            exit_code = -1
+        by_service[service] = {"state": state, "status": status, "health": health, "exit_code": exit_code}
 
-    # Critério robusto: os serviços principais precisam existir e não podem estar exited/dead.
-    for key in list(required):
-        if key in joined:
-            required[key] = True
+    required_names = ("db", "kong", "studio")
+    missing = [name for name in required_names if name not in by_service]
+    if missing:
+        return False, "Serviços principais ausentes no compose: " + ", ".join(missing)
 
-    bad_words = ["exited", "dead", "removing", "restarting"]
-    if any(w in joined for w in bad_words):
-        return False, "Há container em estado ruim: " + ", ".join(w for w in bad_words if w in joined)
+    required = {name: by_service[name] for name in required_names}
+    running_states = {"running", "up"}
+    stopped_states = {"exited", "created", "stopped"}
 
-    if not all(required.values()):
-        return False, f"Serviços principais ausentes no compose: {required}"
+    if all(item["state"] in running_states for item in required.values()):
+        unhealthy = [name for name, item in required.items() if item["health"] == "unhealthy"]
+        if unhealthy:
+            return False, "Serviços principais não saudáveis: " + ", ".join(unhealthy)
+        return True, "Containers principais do tenant estão em execução."
 
-    return True, "Containers principais do tenant estão presentes e não estão em estado ruim."
+    # Uma stack desligada de forma limpa não é corrupção. O Guard pode
+    # iniciar docker compose up preservando volumes e dados existentes.
+    if all(item["state"] in stopped_states for item in required.values()) and required["db"]["exit_code"] == 0:
+        return False, "STACK_STOPPED_CLEAN: db, kong e studio estão parados; PostgreSQL encerrou com código 0."
+
+    details = ", ".join(
+        f"{name}={item['state'] or 'unknown'}/exit-{item['exit_code']}"
+        for name, item in required.items()
+    )
+    return False, "Estado intermediário ou anormal dos serviços principais: " + details
 
 def kong_port_alive(tenant):
     port = tenant_port(tenant)
@@ -226,9 +263,66 @@ def tenant_health(tenant):
         HEALTH_CACHE[tenant] = (now + 15, *result)
         return result
 
+    if compose_msg.startswith("STACK_STOPPED_CLEAN:"):
+        result = ("stopped", compose_msg + " " + kong_msg)
+        HEALTH_CACHE[tenant] = (now + 2, *result)
+        return result
+
     result = ("slow", compose_msg + " " + kong_msg)
     HEALTH_CACHE[tenant] = (now + 5, *result)
     return result
+
+def existing_tenant_recovery_decision(health, state, age, current_action="", current_message=""):
+    """Return the next recovery decision without performing side effects."""
+    in_progress = {"running", "creating", "restoring", "waiting_health"}
+    if health == "stopped":
+        if state in in_progress and age < RESTORE_COOLDOWN:
+            return {
+                "action": current_action or "restore",
+                "state": state or "restoring",
+                "message": current_message or "Inicialização do tenant já está em andamento.",
+                "write": False,
+                "trigger": False,
+            }
+        return {
+            "action": "restore",
+            "state": "restoring",
+            "message": "Tenant estava parado de forma limpa. Iniciando ambiente em segundo plano.",
+            "write": True,
+            "trigger": True,
+        }
+    if state in in_progress and age < RESTORE_COOLDOWN:
+        return {
+            "action": current_action or "checking",
+            "state": state,
+            "message": current_message or "Tarefa anterior ainda está em andamento.",
+            "write": False,
+            "trigger": False,
+        }
+    if state == "suspect" and age >= SUSPECT_SECONDS:
+        return {
+            "action": "restore",
+            "state": "restoring",
+            "message": "Falha confirmada. Restaurando ambiente em segundo plano.",
+            "write": True,
+            "trigger": True,
+        }
+    if state == "suspect":
+        return {
+            "action": "checking",
+            "state": "suspect",
+            "message": current_message or "Tenant instável. Aguardando confirmação antes de restaurar.",
+            "write": False,
+            "trigger": False,
+        }
+    return {
+        "action": "checking",
+        "state": "suspect",
+        "message": "Tenant existe, mas respondeu lentamente. Aguardando estabilização antes de restaurar.",
+        "write": True,
+        "trigger": False,
+    }
+
 
 def warmup_path(tenant, username):
     safe_user = (username or "unknown").replace("/", "_")
@@ -469,22 +563,19 @@ class Handler(BaseHTTPRequestHandler):
                 trigger_background(tenant, action, username)
 
         else:
-            # Tenant existe, mas resposta foi lenta/falhou. Não restaura na primeira falha.
-            if state in {"running", "creating", "restoring", "waiting_health"} and age < RESTORE_COOLDOWN:
-                action = action or "checking"
-                message = st.get("MESSAGE", "Tarefa anterior ainda está em andamento.")
-            elif state == "suspect" and age >= SUSPECT_SECONDS:
-                action = "restore"
-                message = "Falha confirmada. Restaurando ambiente em segundo plano."
-                write_status(tenant, action, "restoring", message)
+            decision = existing_tenant_recovery_decision(
+                health,
+                state,
+                age,
+                current_action=action,
+                current_message=st.get("MESSAGE", ""),
+            )
+            action = decision["action"]
+            message = decision["message"]
+            if decision["write"]:
+                write_status(tenant, action, decision["state"], message)
+            if decision["trigger"]:
                 trigger_background(tenant, action, username)
-            elif state == "restoring" and age < RESTORE_COOLDOWN:
-                action = "restore"
-                message = "Restauração recente em andamento ou em estabilização."
-            else:
-                action = "checking"
-                message = "Tenant existe, mas respondeu lentamente. Aguardando estabilização antes de restaurar."
-                write_status(tenant, action, "suspect", message)
 
         self.send_response(403)
         self.send_header("X-CloudIF-AuthZ-Reason", "tenant-provisioning")
