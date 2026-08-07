@@ -81,5 +81,22 @@ class PersistentHumanApprovalPolicyTests(unittest.TestCase):
         code,reserved=self.call('POST',f'/v1/approvals/{aid}/reserve',{'reservation_id':reservation,'reserved_by':'agent-a','ttl_seconds':300});self.assertEqual(code,200);self.assertEqual(reserved['status'],'reserved')
         code,done=self.call('POST',f'/v1/approvals/{aid}/finalize',{'reservation_id':reservation,'result':'success'});self.assertEqual(code,200);self.assertEqual(done['status'],'consumed')
 
+    def test_legacy_active_index_is_migrated(self):
+        import sqlite3
+        legacy=tempfile.TemporaryDirectory();root=Path(legacy.name);db=root/'approvals.db'
+        connection=sqlite3.connect(db)
+        connection.executescript('''
+          create table approvals(approval_id text primary key,project_slug text not null,action text not null,requested_by text not null,approved_by text,status text not null,reason text,created_at integer not null,expires_at integer not null,approved_at integer,consumed_at integer,trace_id text,metadata_json text not null default '{}');
+          create unique index idx_approval_active on approvals(project_slug,action,requested_by) where status in ('pending','approved');
+        ''');connection.commit();connection.close()
+        module=load_api(root)
+        connection=sqlite3.connect(db)
+        sql=connection.execute("select sql from sqlite_master where type='index' and name='idx_approval_active'").fetchone()[0]
+        cols={row[1] for row in connection.execute('pragma table_info(approvals)')}
+        policies=connection.execute("select name from sqlite_master where type='table' and name='approval_policies'").fetchone()
+        connection.close();legacy.cleanup()
+        self.assertIn("pending_second",sql);self.assertNotIn("'approved'",sql)
+        self.assertIn('approval_policy_id',cols);self.assertIsNotNone(policies)
+
 
 if __name__=='__main__':unittest.main()
