@@ -1,0 +1,35 @@
+[Unit]
+Description=CloudIFF project runtime drift reconciler
+After=network-online.target cloudif-project-config-controller.service cloudif-build-broker.service cloudif-deployment-broker.service
+Requires=cloudif-project-config-controller.service cloudif-build-broker.service
+
+[Service]
+Type=simple
+User=cloudif-control
+Group=cloudif-control
+EnvironmentFile=/etc/cloudif/runtime-reconciler.env
+EnvironmentFile=/etc/cloudif/project-config-controller.env
+EnvironmentFile=/etc/cloudif/build-broker.env
+EnvironmentFile=/etc/cloudif/deployment-broker.env
+ExecStart=/usr/bin/python3 /srv/cloudif/app-pointers/project-runtime-reconciler-current/cloudif-project-runtime-reconciler.py
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/cloudif/runtime-reconciler
+ReadOnlyPaths=/var/lib/cloudif/control-plane /var/lib/cloudif/build-broker /etc/cloudif /srv/cloudif/app-releases/project-runtime-reconciler /srv/cloudif/app-pointers
+PrivateDevices=true
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+CapabilityBoundingSet=
+RestrictAddressFamilies=AF_INET AF_UNIX
+IPAddressAllow=127.0.0.0/8
+IPAddressAllow=10.62.91.2/32
+IPAddressDeny=any
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target
