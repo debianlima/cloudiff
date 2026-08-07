@@ -13,6 +13,9 @@ BROKER=ROOT/'components/control-plane/current-apps/deployment-broker-current/clo
 EXECUTOR=ROOT/'components/runtime/current-apps/multiservice-deployment-executor-current/cloudif-multiservice-deployment-executor.py'
 GATEWAY=ROOT/'components/control-plane/current-apps/mcp-gateway-current/cloudif-mcp-gateway.py'
 UNIT=ROOT/'components/control-plane/etc/systemd/system/cloudif-deployment-broker.service'
+KOMODO=ROOT/'components/runtime/current-apps/komodo-agent-current/cloudif-komodo-agent.py'
+KOMODO_UNIT=ROOT/'components/runtime/etc/systemd/system/cloudif-komodo-agent.service'
+RECONCILER=ROOT/'components/control-plane/current-apps/project-runtime-reconciler-current/cloudif-project-runtime-reconciler.py'
 
 
 def load(path:Path,name:str):
@@ -70,6 +73,19 @@ class DeploymentSecretInjectionSecurityTests(unittest.TestCase):
 
     def test_deployment_service_loads_protected_resolver_environment(self):
         unit=UNIT.read_text();self.assertIn('EnvironmentFile=/etc/cloudif/project-config-controller.env',unit)
+
+    def test_cross_segment_executor_gateway_is_narrow_and_token_bound(self):
+        source=KOMODO.read_text();unit=KOMODO_UNIT.read_text();broker=BROKER.read_text();reconciler=RECONCILER.read_text()
+        self.assertIn("_EXECUTOR_PROXY_PREFIX='/cloudif/executor'",source)
+        self.assertIn("re.fullmatch(r'/cloudif/executor/v1/deployments/(dep_[a-f0-9]{24})'",source)
+        self.assertIn("re.fullmatch(r'/cloudif/executor/v1/projects/([a-z0-9][a-z0-9-]{0,62})/runtime-state'",source)
+        self.assertIn("path==_EXECUTOR_PROXY_PREFIX+'/v1/deployments'",source)
+        self.assertIn("hmac.compare_digest(expected,supplied)",source)
+        self.assertIn("CLOUDIF_MULTISERVICE_DEPLOYMENT_EXECUTOR_TOKEN",source)
+        self.assertIn("executor_proxy_secret_contract_invalid",source)
+        self.assertIn('EnvironmentFile=/etc/cloudif/multiservice-deployment-executor.env',unit)
+        self.assertIn('http://10.62.91.2:18098/cloudif/executor',broker)
+        self.assertIn('http://10.62.91.2:18098/cloudif/executor',reconciler)
 
 
 if __name__=='__main__':unittest.main()

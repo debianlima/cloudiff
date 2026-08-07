@@ -4271,7 +4271,60 @@ def cloudif_container_telemetry(handler):
         })
     return send(handler,200,{"ok":True,"generated_at":now(),"items":items})
 
-# CloudIF versioned publications END
+# CloudIF multiservice executor gateway BEGIN
+_EXECUTOR_PROXY_PREFIX='/cloudif/executor'
+_EXECUTOR_PROXY_TARGET=os.environ.get('CLOUDIF_MULTISERVICE_EXECUTOR_PROXY_TARGET','http://10.62.91.2:18230').rstrip('/')
+_EXECUTOR_PROXY_MAX_BODY=2*1024*1024
+
+
+def _cloudif_executor_proxy_auth(handler):
+    import hmac
+    expected=str(os.environ.get('CLOUDIF_MULTISERVICE_DEPLOYMENT_EXECUTOR_TOKEN') or '')
+    supplied=str(handler.headers.get('X-CloudIF-Executor-Token') or handler.headers.get('Authorization','').replace('Bearer ','',1))
+    return bool(expected and supplied and hmac.compare_digest(expected,supplied)),expected
+
+
+def _cloudif_executor_proxy(handler,method):
+    parsed=urllib.parse.urlparse(handler.path);path=parsed.path
+    downstream='';payload=None;timeout=30
+    if method=='GET':
+        deployment=re.fullmatch(r'/cloudif/executor/v1/deployments/(dep_[a-f0-9]{24})',path)
+        runtime=re.fullmatch(r'/cloudif/executor/v1/projects/([a-z0-9][a-z0-9-]{0,62})/runtime-state',path)
+        if deployment and not parsed.query:
+            downstream='/v1/deployments/'+deployment.group(1)
+        elif runtime:
+            query=urllib.parse.parse_qs(parsed.query,keep_blank_values=True)
+            environment=(query.get('environment') or [''])[0]
+            if set(query)!={'environment'} or len(query.get('environment') or [])!=1 or environment not in {'homologation','production'}:
+                return send(handler,400,{'ok':False,'error':'invalid_environment'})
+            downstream='/v1/projects/'+runtime.group(1)+'/runtime-state?'+urllib.parse.urlencode({'environment':environment})
+    elif method=='POST' and path==_EXECUTOR_PROXY_PREFIX+'/v1/deployments' and not parsed.query:
+        try:length=int(handler.headers.get('Content-Length','0') or 0)
+        except Exception:return send(handler,400,{'ok':False,'error':'invalid_content_length'})
+        if length<0 or length>_EXECUTOR_PROXY_MAX_BODY:return send(handler,413,{'ok':False,'error':'request_too_large'})
+        try:payload=handler.parse_json()
+        except Exception:return send(handler,400,{'ok':False,'error':'invalid_json'})
+        if not isinstance(payload,dict):return send(handler,400,{'ok':False,'error':'invalid_request'})
+        downstream='/v1/deployments';timeout=600
+    if not downstream:return send(handler,404,{'ok':False,'error':'not_found'})
+    authorized,token=_cloudif_executor_proxy_auth(handler)
+    if not authorized:return send(handler,403,{'ok':False,'error':'forbidden'})
+    raw=None if payload is None else json.dumps(payload,ensure_ascii=False,separators=(',',':')).encode()
+    request=urllib.request.Request(_EXECUTOR_PROXY_TARGET+downstream,data=raw,method=method,headers={'Authorization':'Bearer '+token,'Content-Type':'application/json','Accept':'application/json','User-Agent':'CloudIF-Komodo-Executor-Gateway/1.0'})
+    try:
+        with urllib.request.urlopen(request,timeout=timeout) as response:
+            body=json.load(response)
+            if not isinstance(body,dict):return send(handler,502,{'ok':False,'error':'executor_proxy_contract_invalid'})
+            if body.get('secretValuesIncluded') is True or body.get('secretReferencesIncluded') is True:return send(handler,502,{'ok':False,'error':'executor_proxy_secret_contract_invalid'})
+            return send(handler,response.status,body)
+    except urllib.error.HTTPError as error:
+        try:body=json.load(error)
+        except Exception:body={'ok':False,'error':'executor_request_failed'}
+        if not isinstance(body,dict):body={'ok':False,'error':'executor_request_failed'}
+        return send(handler,error.code,body)
+    except Exception as error:
+        return send(handler,502,{'ok':False,'error':'executor_proxy_unavailable','error_type':type(error).__name__})
+# CloudIF multiservice executor gateway END
 
 class H(BaseHTTPRequestHandler):
     def parse_json(self):
@@ -4282,6 +4335,9 @@ class H(BaseHTTPRequestHandler):
         return json.loads(raw)
 
     def do_GET(self):
+
+        if self.path.split("?",1)[0].startswith(_EXECUTOR_PROXY_PREFIX+'/'):
+            return _cloudif_executor_proxy(self,'GET')
 
         _cloudif_v132_get_path = self.path.split("?", 1)[0]
         if _cloudif_v132_get_path in ["/komodo/project/status", "/komodo/status"]:
@@ -4350,6 +4406,9 @@ class H(BaseHTTPRequestHandler):
         return send(self, 404, {"ok": False, "error": "not_found", "path": self.path})
 
     def do_POST(self):
+
+        if self.path.split("?",1)[0].startswith(_EXECUTOR_PROXY_PREFIX+'/'):
+            return _cloudif_executor_proxy(self,'POST')
 
         _cloudif_http_smoke_path = self.path.split("?", 1)[0]
         if _cloudif_http_smoke_path == "/komodo/stack/http-smoke":

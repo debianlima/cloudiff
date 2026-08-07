@@ -5,6 +5,7 @@ Wants=network-online.target
 
 [Service]
 Type=simple
+EnvironmentFile=/etc/cloudif/multiservice-deployment-executor.env
 ExecStart=/usr/bin/python3 /srv/cloudif/app-pointers/komodo-agent-current/cloudif-komodo-agent.py
 Restart=always
 RestartSec=3
