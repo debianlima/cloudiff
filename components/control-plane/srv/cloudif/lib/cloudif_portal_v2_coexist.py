@@ -521,6 +521,13 @@ def _install() -> None:
                         return send_json(self,409,{"ok":False,"error":{"code":str(exc),"message":"A operação não pode ser concluída neste estado."}})
                     except Exception as exc:
                         return send_json(self,503,{"ok":False,"error":{"code":"toolchain_api_unavailable","message":"A API de toolchain está temporariamente indisponível.","detail":type(exc).__name__}})
+                observability_match = re.fullmatch(r'/cloudiff?/portal/api/projects/([a-z0-9][a-z0-9-]{0,62})/observability(?:/(alerts))?', path)
+                if observability_match:
+                    try:
+                        from cloudif_project_observability_web import handle_get as handle_observability_get
+                        actor=identity(self.headers);status,payload=handle_observability_get(observability_match.group(1),observability_match.group(2) or 'snapshot',actor.username,list(actor.groups));return send_json(self,status,payload)
+                    except PermissionError as exc:return send_json(self,403,{"ok":False,"error":{"code":str(exc)}})
+                    except Exception as exc:return send_json(self,503,{"ok":False,"error":{"code":"observability_unavailable","detail":type(exc).__name__}})
                 runtime_match = re.fullmatch(r'/cloudiff?/portal/api/projects/([a-z0-9][a-z0-9-]{0,62})/(runtime-state|runtime-drift)', path)
                 if runtime_match:
                     try:

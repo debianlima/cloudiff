@@ -8,6 +8,7 @@ Type=simple
 EnvironmentFile=/etc/cloudif/portal.env
 EnvironmentFile=-/etc/cloudif/multiservice-preview.env
 EnvironmentFile=-/etc/cloudif/runtime-reconciler.env
+EnvironmentFile=-/etc/cloudif/project-observability.env
 ExecStart=/usr/bin/python3 /srv/cloudif/app-pointers/portal-current/cloudif-admin-portal.py
 Restart=always
 RestartSec=3

@@ -11,6 +11,7 @@ EnvironmentFile=/etc/cloudif/supabase-mcp-broker.env
 EnvironmentFile=/etc/cloudif/project-config-controller.env
 EnvironmentFile=/etc/cloudif/multiservice-preview.env
 EnvironmentFile=-/etc/cloudif/runtime-reconciler.env
+EnvironmentFile=-/etc/cloudif/project-observability.env
 ExecStart=/usr/bin/python3 /srv/cloudif/app-pointers/mcp-gateway-current/cloudif-mcp-gateway.py
 Restart=on-failure
 RestartSec=3
