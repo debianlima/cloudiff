@@ -27,6 +27,7 @@ class ProjectSecretMCPContractTests(unittest.TestCase):
           'project.environment.secret.rotate.plan','approval.request-secret-rotation','project.environment.secret.rotate.execute',
           'project.environment.secret.revoke.plan','approval.request-secret-revocation','project.environment.secret.revoke.execute',
           'project.environment.secret.promote.plan','approval.request-secret-promotion','project.environment.secret.promote.execute',
+          'project.environment.secret.read.plan','approval.request-secret-read','project.environment.secret.read.execute',
         }
         names={item['name'] for item in self.module.TOOLS};self.assertTrue(expected<=names,expected-names)
         self.assertFalse(any('resolve-internal' in name or name.endswith('.secret.read') for name in names))
@@ -83,6 +84,28 @@ class ProjectSecretMCPContractTests(unittest.TestCase):
         developer=registry[registry.index("'developer':"):registry.index("'maintainer':")]
         self.assertIn('PROJECT_SECRET_WRITE_SCOPES',developer)
         self.assertNotIn('resolve-internal',registry+onboarding)
+
+    def test_exceptional_read_tools_are_separate_critical_and_raw_only_on_execute(self):
+        self.assertEqual(self.module.SCOPE_BY_TOOL['project.environment.secret.read.plan'],'project:environment-secret-read-plan')
+        self.assertEqual(self.module.SCOPE_BY_TOOL['approval.request-secret-read'],'approval:request-secret-read')
+        self.assertEqual(self.module.SCOPE_BY_TOOL['project.environment.secret.read.execute'],'project:environment-secret-read-execute')
+        self.assertIn('project.environment.secret.read.plan',self.module.READ_ONLY_TOOLS)
+        self.assertIn('project.environment.secret.read.execute',self.module.DESTRUCTIVE_TOOLS)
+        source=self.source
+        start=source.index('def secret_mcp_execute(');end=source.index('def environment_plan_get',start);block=source[start:end]
+        self.assertIn("'project.environment.secret.read.execute':'read'",block)
+        self.assertIn("path='/read/apply'",block)
+        self.assertIn("data['cacheControl']='no-store'",block)
+        self.assertIn("data['secretValuesIncluded']=True",block)
+
+    def test_raw_read_scopes_are_not_granted_to_viewer_or_developer(self):
+        registry=REGISTRY.read_text()
+        viewer=registry[registry.index("'viewer':"):registry.index("'developer':")]
+        developer=registry[registry.index("'developer':"):registry.index("'maintainer':")]
+        maintainer=registry[registry.index("'maintainer':"):registry.index("'release-manager':")]
+        self.assertNotIn('PROJECT_SECRET_VALUE_READ_SCOPES',viewer)
+        self.assertNotIn('PROJECT_SECRET_VALUE_READ_SCOPES',developer)
+        self.assertIn('PROJECT_SECRET_VALUE_READ_SCOPES',maintainer)
 
     def test_actionable_errors_never_echo_supplied_secret_value(self):
         tool='project.environment.secret.stage';args={'slug':'demo','environment':'preview','name':'DATABASE_URL','secret_value':'very-sensitive-value','extra':True}

@@ -81,6 +81,13 @@ class PersistentHumanApprovalPolicyTests(unittest.TestCase):
         code,reserved=self.call('POST',f'/v1/approvals/{aid}/reserve',{'reservation_id':reservation,'reserved_by':'agent-a','ttl_seconds':300});self.assertEqual(code,200);self.assertEqual(reserved['status'],'reserved')
         code,done=self.call('POST',f'/v1/approvals/{aid}/finalize',{'reservation_id':reservation,'result':'success'});self.assertEqual(code,200);self.assertEqual(done['status'],'consumed')
 
+    def test_secret_read_is_critical_dual_approval_action(self):
+        source=Path('components/control-plane/current-apps/approvals-current/cloudif-approval-api.py').read_text()
+        start=source.index('DUAL_APPROVAL_ACTIONS=');end=source.index('}',start)
+        self.assertIn("'project.environment.secret.read'",source[start:end+1])
+        self.assertIn('approval_policy',source)
+
+
     def test_legacy_active_index_is_migrated(self):
         import sqlite3
         legacy=tempfile.TemporaryDirectory();root=Path(legacy.name);db=root/'approvals.db'

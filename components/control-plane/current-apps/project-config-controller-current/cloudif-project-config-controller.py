@@ -1046,7 +1046,7 @@ class Handler(BaseHTTPRequestHandler):
                     'secretValuesIncluded': False,
                 })
             parsed_path = urllib.parse.urlparse(self.path).path
-            secret_match = re.fullmatch(r'/v1/projects/([a-z0-9][a-z0-9-]{0,62})/environment/secrets/(stage|rotate/plan|rotate/apply|revoke/plan|revoke/apply|promote/plan|promote/apply|resolve-internal)', parsed_path)
+            secret_match = re.fullmatch(r'/v1/projects/([a-z0-9][a-z0-9-]{0,62})/environment/secrets/(stage|rotate/plan|rotate/apply|revoke/plan|revoke/apply|promote/plan|promote/apply|read/plan|read/apply|resolve-internal)', parsed_path)
             if secret_match:
                 slug, operation = secret_match.groups(); actor = str(body.get('actor') or 'internal').strip()[:128]
                 expected = int(body.get('expectedRevision', body.get('expected_revision', 0)) or 0)
@@ -1071,6 +1071,11 @@ class Handler(BaseHTTPRequestHandler):
                 if operation=='promote/apply':
                     if not body.get('approved'):return self.send_json(403,{'ok':False,'error':{'code':'approval_required','message':'A promoção de segredo exige aprovação humana.'}})
                     result=project_secret_store.apply_promotion(slug,str(body.get('planDigest',body.get('plan_digest',''))),str(body.get('sourceSecretReference',body.get('source_secret_reference',''))),expected,actor);return self.send_json(200,result)
+                if operation=='read/plan':
+                    result=project_secret_store.read_plan(slug,str(body.get('secretReference',body.get('secret_reference',''))),actor,str(body.get('reason') or ''),int(body.get('ttlSeconds',body.get('ttl_seconds',300)) or 300));return self.send_json(200,result)
+                if operation=='read/apply':
+                    if not body.get('approved'):return self.send_json(403,{'ok':False,'error':{'code':'approval_required','message':'A leitura real de segredo exige aprovação humana específica.'}})
+                    result=project_secret_store.read_once(slug,str(body.get('planDigest',body.get('plan_digest',''))),str(body.get('secretReference',body.get('secret_reference',''))),actor);return self.send_json(200,result)
                 if operation=='resolve-internal':
                     provided=str(self.headers.get('X-CloudIF-Secret-Resolver-Token') or '')
                     if not SECRET_RESOLVER_TOKEN or not provided or not hmac.compare_digest(provided,SECRET_RESOLVER_TOKEN):

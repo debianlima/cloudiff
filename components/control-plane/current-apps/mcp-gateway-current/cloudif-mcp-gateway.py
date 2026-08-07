@@ -246,6 +246,10 @@ TOOLS=[
  {'name':'project.environment.secret.promote.plan','description':'Planeja promoção criptografada de um segredo ativo para outro ambiente sem revelar o valor','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'source_secret_reference':SECRET_REFERENCE_SCHEMA,'target_environment':ENVIRONMENT_NAME_SCHEMA,'expected_revision':{'type':'integer','minimum':0},'reason':{'type':'string','minLength':4,'maxLength':500},'definition':SECRET_DEFINITION_SCHEMA,'ttl_seconds':{'type':'integer','minimum':60,'maximum':86400},'active_ttl_seconds':{'type':'integer','minimum':0,'maximum':31536000}},'required':['slug','source_secret_reference','target_environment','expected_revision','reason'],'additionalProperties':False}},
  {'name':'approval.request-secret-promotion','description':'Solicita aprovação humana vinculada à promoção exata do segredo entre ambientes','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'plan_digest':{'type':'string','pattern':'^[a-f0-9]{64}$'},'reason':{'type':'string','minLength':4,'maxLength':500},'ttl_seconds':{'type':'integer','minimum':60,'maximum':86400}},'required':['slug','plan_digest','reason'],'additionalProperties':False}},
  {'name':'project.environment.secret.promote.execute','description':'Executa promoção aprovada e recriptografa o segredo no ambiente de destino','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'plan_digest':{'type':'string','pattern':'^[a-f0-9]{64}$'},'source_secret_reference':SECRET_REFERENCE_SCHEMA,'approval_id':{'type':'string','pattern':'^apr_[a-f0-9]{20}$'}},'required':['slug','plan_digest','source_secret_reference','approval_id'],'additionalProperties':False}},
+
+ {'name':'project.environment.secret.read.plan','description':'Planeja uma leitura excepcional e única do valor real de um segredo ativo; o plano não revela o valor','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'secret_reference':SECRET_REFERENCE_SCHEMA,'reason':{'type':'string','minLength':4,'maxLength':500},'ttl_seconds':{'type':'integer','minimum':60,'maximum':900}},'required':['slug','secret_reference','reason'],'additionalProperties':False}},
+ {'name':'approval.request-secret-read','description':'Solicita aprovação humana crítica vinculada à leitura única de um segredo real','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'plan_digest':{'type':'string','pattern':'^[a-f0-9]{64}$'},'reason':{'type':'string','minLength':4,'maxLength':500},'ttl_seconds':{'type':'integer','minimum':60,'maximum':900}},'required':['slug','plan_digest','reason'],'additionalProperties':False}},
+ {'name':'project.environment.secret.read.execute','description':'Executa uma leitura excepcional aprovada e retorna o valor uma única vez com no-store; a leitura é auditada e o plano é consumido','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'plan_digest':{'type':'string','pattern':'^[a-f0-9]{64}$'},'secret_reference':SECRET_REFERENCE_SCHEMA,'approval_id':{'type':'string','pattern':'^apr_[a-f0-9]{20}$'}},'required':['slug','plan_digest','secret_reference','approval_id'],'additionalProperties':False}},
  {'name':'runtime.catalog','description':'Lista política homologada de runtimes e frameworks sem efeitos','inputSchema':{'type':'object','properties':{},'additionalProperties':False}},
  {'name':'runtime.detect','description':'Detecta framework a partir de evidências sanitizadas do workspace autorizado','inputSchema':{'type':'object','properties':{'slug':{'type':'string','minLength':1,'maxLength':63,'pattern':'^[a-z0-9][a-z0-9-]*$'},'ref':{'type':'string','minLength':1,'maxLength':128,'pattern':'^[A-Za-z0-9._/-]+$'}},'required':['slug'],'additionalProperties':False}},
  {'name':'runtime.plan','description':'Gera plano declarativo usando somente templates homologados','inputSchema':{'type':'object','properties':{'framework':{'type':'string','enum':['static','react','vite','nextjs','vue','nuxt','angular','svelte','sveltekit','astro','express','nestjs','node']},'runtime_version':{'type':'string','enum':['20','22','24']},'package_manager':{'type':'string','enum':['npm','pnpm','yarn']}},'required':['framework'],'additionalProperties':False}},
@@ -524,7 +528,7 @@ def enrich_tool_error(tool_name,args,error_payload=None,message='Parâmetros inv
 
 
 READ_ONLY_TOOLS={
- 'project.list','project.get','project.connectors','project.technologies.detect','project.manifest.validate','project.configuration.get','project.environment.list','project.environment.get','project.environment.validate','project.environment.change.plan','project.environment.promote.plan','project.environment.history','project.environment.secret.list','project.environment.secret.history','project.environment.secret.rotate.plan','project.environment.secret.revoke.plan','project.environment.secret.promote.plan','workspace.normalize.plan','workspace.change-set.validate','forgejo.proposal.change-set.plan','runtime.catalog','runtime.detect','runtime.plan','runtime.validate',
+ 'project.list','project.get','project.connectors','project.technologies.detect','project.manifest.validate','project.configuration.get','project.environment.list','project.environment.get','project.environment.validate','project.environment.change.plan','project.environment.promote.plan','project.environment.history','project.environment.secret.list','project.environment.secret.history','project.environment.secret.rotate.plan','project.environment.secret.revoke.plan','project.environment.secret.promote.plan','project.environment.secret.read.plan','workspace.normalize.plan','workspace.change-set.validate','forgejo.proposal.change-set.plan','runtime.catalog','runtime.detect','runtime.plan','runtime.validate',
  'build.plan','build.status','build.logs.read','build.artifact.get','deployment.preview.plan','deployment.preview.status',
  'approval.get','forgejo.proposal.list','forgejo.proposal.merge.plan','supabase.migrations.inspect','supabase.migrations.plan',
  'deployment.production.activation.plan','deployment.production.readiness','deployment.production.homologation.plan',
@@ -537,7 +541,7 @@ READ_ONLY_TOOLS={
 DESTRUCTIVE_TOOLS={
  'forgejo.proposal.delete-branch','forgejo.proposal.merge','deployment.production.homologation.deploy',
  'deployment.production.homologation.rollback','deployment.promote-test','deployment.rollback-test','supabase.operation.execute','forgejo.proposal.change-set.create'
-,'build.multiservice.execute','deployment.multiservice.execute','preview.multiservice.create','preview.multiservice.delete','project.environment.change.execute','project.environment.promote.execute','project.environment.secret.stage','project.environment.secret.rotate.execute','project.environment.secret.revoke.execute','project.environment.secret.promote.execute','project.toolchain.build.execute','project.toolchain.image.activate'}
+,'build.multiservice.execute','deployment.multiservice.execute','preview.multiservice.create','preview.multiservice.delete','project.environment.change.execute','project.environment.promote.execute','project.environment.secret.stage','project.environment.secret.rotate.execute','project.environment.secret.revoke.execute','project.environment.secret.promote.execute','project.environment.secret.read.execute','project.toolchain.build.execute','project.toolchain.image.activate'}
 OPEN_WORLD_PREFIXES=('forgejo.','supabase.','deployment.','approval.','build.')
 for _tool in TOOLS:
     _name=str(_tool.get('name') or '')
@@ -806,7 +810,7 @@ def secret_plan_get(slug,plan_digest):
     return data
 
 def secret_approval_create(slug,client_id,authz,plan,reason,ttl,trace_id):
-    actions={'rotate':'project.environment.secret.rotation','revoke':'project.environment.secret.revocation','promote':'project.environment.secret.promotion'}
+    actions={'rotate':'project.environment.secret.rotation','revoke':'project.environment.secret.revocation','promote':'project.environment.secret.promotion','read':'project.environment.secret.read'}
     action=actions.get(str(plan.get('action') or ''))
     if not action:raise ValueError('unsupported_secret_action')
     metadata={
@@ -834,9 +838,9 @@ def secret_plan_metadata(plan):
       'content_stored':False,'secret_values_in_metadata':False,'ciphertext_in_metadata':False,
     }
 
-SECRET_READ_PLAN_TOOLS={'project.environment.secret.list','project.environment.secret.history','project.environment.secret.stage','project.environment.secret.rotate.plan','project.environment.secret.revoke.plan','project.environment.secret.promote.plan'}
-SECRET_APPROVAL_TOOLS={'approval.request-secret-rotation','approval.request-secret-revocation','approval.request-secret-promotion'}
-SECRET_EXECUTE_TOOLS={'project.environment.secret.rotate.execute','project.environment.secret.revoke.execute','project.environment.secret.promote.execute'}
+SECRET_READ_PLAN_TOOLS={'project.environment.secret.list','project.environment.secret.history','project.environment.secret.stage','project.environment.secret.rotate.plan','project.environment.secret.revoke.plan','project.environment.secret.promote.plan','project.environment.secret.read.plan'}
+SECRET_APPROVAL_TOOLS={'approval.request-secret-rotation','approval.request-secret-revocation','approval.request-secret-promotion','approval.request-secret-read'}
+SECRET_EXECUTE_TOOLS={'project.environment.secret.rotate.execute','project.environment.secret.revoke.execute','project.environment.secret.promote.execute','project.environment.secret.read.execute'}
 
 def secret_mcp_read_or_plan(name,args,authz,client_id,trace_id):
     slug=str(args.get('slug') or '').strip();actor=supabase_actor_user(authz) or client_id
@@ -861,9 +865,12 @@ def secret_mcp_read_or_plan(name,args,authz,client_id,trace_id):
     elif name=='project.environment.secret.revoke.plan':
         payload={'secretReference':args['secret_reference'],'expectedRevision':int(args['expected_revision']),'reason':args['reason'],'ttlSeconds':int(args.get('ttl_seconds') or 900),'actor':actor}
         code,data=project_secret_call('POST',slug,'/revoke/plan',payload)
-    else:
+    elif name=='project.environment.secret.promote.plan':
         payload={'sourceSecretReference':args['source_secret_reference'],'targetEnvironment':args['target_environment'],'expectedRevision':int(args['expected_revision']),'reason':args['reason'],'definition':args.get('definition') or {},'ttlSeconds':int(args.get('ttl_seconds') or 900),'activeTtlSeconds':int(args.get('active_ttl_seconds') or 0),'actor':actor}
         code,data=project_secret_call('POST',slug,'/promote/plan',payload)
+    else:
+        payload={'secretReference':args['secret_reference'],'reason':args['reason'],'ttlSeconds':int(args.get('ttl_seconds') or 300),'actor':actor}
+        code,data=project_secret_call('POST',slug,'/read/plan',payload)
     if code not in {200,201} or not data.get('ok'):
         error=data.get('error') or {};raise ValueError(str(error.get('message') if isinstance(error,dict) else error or 'secret_operation_failed'))
     if data.get('secretValueIncluded') is True or data.get('secretValuesIncluded') is True or data.get('ciphertextIncluded') is True or data.get('ciphertextsIncluded') is True:raise ValueError('secret_public_contract_violation')
@@ -872,7 +879,7 @@ def secret_mcp_read_or_plan(name,args,authz,client_id,trace_id):
 def secret_mcp_request_approval(name,args,authz,client_id,trace_id):
     slug=str(args['slug']).strip();plan_digest=str(args['plan_digest']).strip().lower();reason=str(args['reason']).strip();ttl=int(args.get('ttl_seconds') or 900)
     control('/v1/projects/'+urllib.parse.quote(slug,safe=''));plan=secret_plan_get(slug,plan_digest)
-    expected_action={'approval.request-secret-rotation':'rotate','approval.request-secret-revocation':'revoke','approval.request-secret-promotion':'promote'}[name]
+    expected_action={'approval.request-secret-rotation':'rotate','approval.request-secret-revocation':'revoke','approval.request-secret-promotion':'promote','approval.request-secret-read':'read'}[name]
     if plan.get('action')!=expected_action:raise ValueError('secret_plan_action_mismatch')
     if plan.get('consumed') or plan.get('status')!='planned' or int(plan.get('expiresAt') or 0)<=int(time.time()):raise ValueError('secret_plan_unavailable')
     created=secret_approval_create(slug,client_id,authz,plan,reason,ttl,trace_id)
@@ -881,16 +888,17 @@ def secret_mcp_request_approval(name,args,authz,client_id,trace_id):
 
 def secret_mcp_execute(name,args,authz,client_id,trace_id):
     slug=str(args['slug']).strip();plan_digest=str(args['plan_digest']).strip().lower();approval_id=str(args['approval_id']).strip();plan=secret_plan_get(slug,plan_digest)
-    action_key={'project.environment.secret.rotate.execute':'rotate','project.environment.secret.revoke.execute':'revoke','project.environment.secret.promote.execute':'promote'}[name]
+    action_key={'project.environment.secret.rotate.execute':'rotate','project.environment.secret.revoke.execute':'revoke','project.environment.secret.promote.execute':'promote','project.environment.secret.read.execute':'read'}[name]
     if plan.get('action')!=action_key:raise ValueError('secret_plan_action_mismatch')
     if action_key=='rotate' and not hmac.compare_digest(str(args['stage_id']),str(plan.get('stageId') or '')):raise ValueError('secret_stage_binding_mismatch')
     if action_key=='revoke' and not hmac.compare_digest(str(args['secret_reference']),str(plan.get('secretReference') or '')):raise ValueError('secret_reference_binding_mismatch')
     if action_key=='promote' and not hmac.compare_digest(str(args['source_secret_reference']),str(plan.get('sourceSecretReference') or '')):raise ValueError('source_secret_reference_binding_mismatch')
+    if action_key=='read' and not hmac.compare_digest(str(args['secret_reference']),str(plan.get('secretReference') or '')):raise ValueError('secret_reference_binding_mismatch')
     approval=approval_get(approval_id)
     if not approval:raise ValueError('approval_not_found')
     try:metadata=json.loads(approval.get('metadata_json') or '{}')
     except Exception:raise ValueError('approval_metadata_invalid')
-    approval_action={'rotate':'project.environment.secret.rotation','revoke':'project.environment.secret.revocation','promote':'project.environment.secret.promotion'}[action_key]
+    approval_action={'rotate':'project.environment.secret.rotation','revoke':'project.environment.secret.revocation','promote':'project.environment.secret.promotion','read':'project.environment.secret.read'}[action_key]
     reservation_id,execution_id=transaction_ids(approval_action,approval_id,client_id,plan_digest)
     valid_status=approval.get('status')=='approved' or (approval.get('status') in {'reserved','consumed'} and approval.get('reservation_id')==reservation_id)
     expected=secret_plan_metadata(plan)
@@ -902,14 +910,20 @@ def secret_mcp_execute(name,args,authz,client_id,trace_id):
     actor=supabase_actor_user(authz) or client_id;payload={'planDigest':plan_digest,'expectedRevision':int(plan['expectedRevision']),'approved':True,'actor':actor,'executionId':execution_id}
     if action_key=='rotate':payload['stageId']=args['stage_id'];path='/rotate/apply'
     elif action_key=='revoke':payload['secretReference']=args['secret_reference'];path='/revoke/apply'
-    else:payload['sourceSecretReference']=args['source_secret_reference'];path='/promote/apply'
+    elif action_key=='promote':payload['sourceSecretReference']=args['source_secret_reference'];path='/promote/apply'
+    else:payload['secretReference']=args['secret_reference'];path='/read/apply'
     code,data=project_secret_call('POST',slug,path,payload,timeout=120);current=approval_get(approval_id)
     if code==200 and data.get('ok'):
-        if data.get('secretValueIncluded') is True or data.get('ciphertextIncluded') is True:raise ValueError('secret_public_contract_violation')
+        if action_key=='read':
+            if data.get('secretValueIncluded') is not True or not isinstance(data.get('secretValue'),str) or data.get('ciphertextIncluded') is True:raise ValueError('secret_read_contract_invalid')
+        elif data.get('secretValueIncluded') is True or data.get('ciphertextIncluded') is True:raise ValueError('secret_public_contract_violation')
         if current and current.get('status')!='consumed':
             final_code,finalized=approval_transition(approval_id,'finalize',{'reservation_id':reservation_id,'result':'success'})
             if final_code!=200 or finalized.get('status')!='consumed':raise ValueError('approval_finalize_failed')
-        data['transaction']={'approval_id':approval_id,'reservation_id':reservation_id,'execution_id':execution_id,'approval_status':'consumed'};data['secretValuesIncluded']=False;data['ciphertextIncluded']=False;return data
+        data['transaction']={'approval_id':approval_id,'reservation_id':reservation_id,'execution_id':execution_id,'approval_status':'consumed'};data['ciphertextIncluded']=False
+        if action_key=='read':data['secretValuesIncluded']=True;data['oneTime']=True;data['cacheControl']='no-store'
+        else:data.pop('secretValue',None);data['secretValueIncluded']=False;data['secretValuesIncluded']=False
+        return data
     if current and current.get('status')=='reserved':approval_transition(approval_id,'release',{'reservation_id':reservation_id})
     error=data.get('error') or {};raise ValueError(str(error.get('message') if isinstance(error,dict) else error or 'secret_apply_failed'))
 
@@ -1302,7 +1316,7 @@ def homologation_call(path,payload,timeout=300):
 
 SCOPE_BY_TOOL={
  'project.environment.list':'project:environment-read','project.environment.get':'project:environment-read','project.environment.validate':'project:environment-plan','project.environment.change.plan':'project:environment-plan','approval.request-environment-change':'approval:request-environment-change','project.environment.change.execute':'project:environment-execute','project.environment.promote.plan':'project:environment-plan','approval.request-environment-promotion':'approval:request-environment-promotion','project.environment.promote.execute':'project:environment-promote','project.environment.history':'project:environment-read',
- 'project.environment.secret.list':'project:environment-secret-read','project.environment.secret.history':'project:environment-secret-read','project.environment.secret.stage':'project:environment-secret-stage','project.environment.secret.rotate.plan':'project:environment-secret-plan','approval.request-secret-rotation':'approval:request-secret-rotation','project.environment.secret.rotate.execute':'project:environment-secret-execute','project.environment.secret.revoke.plan':'project:environment-secret-plan','approval.request-secret-revocation':'approval:request-secret-revocation','project.environment.secret.revoke.execute':'project:environment-secret-execute','project.environment.secret.promote.plan':'project:environment-secret-plan','approval.request-secret-promotion':'approval:request-secret-promotion','project.environment.secret.promote.execute':'project:environment-secret-execute',
+ 'project.environment.secret.list':'project:environment-secret-read','project.environment.secret.history':'project:environment-secret-read','project.environment.secret.stage':'project:environment-secret-stage','project.environment.secret.rotate.plan':'project:environment-secret-plan','approval.request-secret-rotation':'approval:request-secret-rotation','project.environment.secret.rotate.execute':'project:environment-secret-execute','project.environment.secret.revoke.plan':'project:environment-secret-plan','approval.request-secret-revocation':'approval:request-secret-revocation','project.environment.secret.revoke.execute':'project:environment-secret-execute','project.environment.secret.promote.plan':'project:environment-secret-plan','approval.request-secret-promotion':'approval:request-secret-promotion','project.environment.secret.promote.execute':'project:environment-secret-execute','project.environment.secret.read.plan':'project:environment-secret-read-plan','approval.request-secret-read':'approval:request-secret-read','project.environment.secret.read.execute':'project:environment-secret-read-execute',
  'project.toolchain.get':'project:toolchain-read','project.toolchain.validate':'project:toolchain-plan','project.toolchain.plan':'project:toolchain-plan','project.toolchain.build.plan':'project:toolchain-plan','approval.request-toolchain-build':'approval:request-toolchain-build','project.toolchain.build.execute':'project:toolchain-build-execute','project.toolchain.build.status':'project:toolchain-read','project.toolchain.logs.read':'project:toolchain-read','project.toolchain.image.list':'project:toolchain-read','project.toolchain.image.get':'project:toolchain-read','project.toolchain.image.activate.plan':'project:toolchain-activate-plan','approval.request-toolchain-activation':'approval:request-toolchain-activation','project.toolchain.image.activate':'project:toolchain-activate-execute',
  'runtime.catalog':'project:read','runtime.detect':'project:read','runtime.plan':'project:read','runtime.validate':'project:read','project.technologies.detect':'workspace:detect-multiservice','project.manifest.validate':'project:configuration-read','project.configuration.get':'project:configuration-read','build.plan':'project:read','build.multiservice.plan':'build:multiservice-plan','build.multiservice.status':'build:multiservice-plan','approval.request-multiservice-build':'approval:request-multiservice-build','build.multiservice.execute':'build:multiservice-execute','preview.multiservice.plan':'preview:multiservice-plan','preview.multiservice.status':'preview:multiservice-plan','approval.request-multiservice-preview':'approval:request-multiservice-preview','preview.multiservice.create':'preview:multiservice-execute','preview.multiservice.delete':'preview:multiservice-delete','build.request':'workspace:test-static','build.status':'project:read','build.logs.read':'project:read','build.artifact.get':'project:read','deployment.multiservice.plan':'deployment:multiservice-plan','deployment.multiservice.status':'deployment:multiservice-plan','approval.request-multiservice-deployment':'approval:request-multiservice-deployment','deployment.multiservice.execute':'deployment:multiservice-execute','deployment.preview.plan':'project:read','deployment.preview.status':'project:read','approval.request-preview':'approval:request-preview','deployment.preview':'deployment:preview',
  'workspace.probe':'workspace:probe','workspace.prepare':'workspace:prepare','workspace.validate':'workspace:validate','workspace.test-static':'workspace:test-static','workspace.preview-static':'workspace:preview-static','workspace.edit-preview':'workspace:edit-preview',

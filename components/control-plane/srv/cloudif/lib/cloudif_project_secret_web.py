@@ -29,6 +29,7 @@ ACTIONS={
     'rotate':'project.environment.secret.rotation',
     'revoke':'project.environment.secret.revocation',
     'promote':'project.environment.secret.promotion',
+    'read':'project.environment.secret.read',
 }
 PLAN_RE=re.compile(r'^[a-f0-9]{64}$')
 APPROVAL_RE=re.compile(r'^apr_[a-f0-9]{20}$')
@@ -62,6 +63,11 @@ def _require_write(slug:str,username:str,groups:list[str]|set[str])->dict[str,An
     if not auth['canWrite']:raise PermissionError('forbidden')
     return auth
 
+def _require_secret_read(slug:str,username:str,groups:list[str]|set[str])->dict[str,Any]:
+    auth=authorization(slug,username,groups)
+    if int(auth.get('rank') or 0)<80:raise PermissionError('secret_read_forbidden')
+    return auth
+
 
 def _approval_metadata(plan:dict[str,Any])->dict[str,Any]:
     return {
@@ -74,7 +80,7 @@ def _approval_metadata(plan:dict[str,Any])->dict[str,Any]:
 
 
 def request_approval(slug:str,plan_digest:str,reason:str,username:str,groups:list[str]|set[str],ttl_seconds:int=900)->dict[str,Any]:
-    auth=_require_write(slug,username,groups);plan=_plan(slug,plan_digest);action=ACTIONS.get(str(plan.get('action') or ''))
+    plan=_plan(slug,plan_digest);action_key=str(plan.get('action') or '');auth=(_require_secret_read if action_key=='read' else _require_write)(slug,username,groups);action=ACTIONS.get(action_key)
     if not action:raise ValueError('unsupported_secret_action')
     if plan.get('consumed') or str(plan.get('status') or '')!='planned' or int(plan.get('expiresAt') or 0)<=int(time.time()):raise RuntimeError('secret_plan_unavailable')
     requested_by='portal:'+str(username).strip().casefold();metadata=_approval_metadata(plan)
@@ -99,13 +105,17 @@ def _execution_payload(plan:dict[str,Any],actor:str)->tuple[str,dict[str,Any]]:
         source=str(plan.get('sourceSecretReference') or '')
         if not REFERENCE_RE.fullmatch(source):raise ValueError('invalid_source_secret_reference')
         base['sourceSecretReference']=source;return '/promote/apply',base
+    if action=='read':
+        reference=str(plan.get('secretReference') or '')
+        if not REFERENCE_RE.fullmatch(reference):raise ValueError('invalid_secret_reference')
+        base['secretReference']=reference;return '/read/apply',base
     raise ValueError('unsupported_secret_action')
 
 
 def execute(slug:str,plan_digest:str,approval_id:str,binding:dict[str,Any],username:str,groups:list[str]|set[str])->dict[str,Any]:
-    _require_write(slug,username,groups)
     if not PLAN_RE.fullmatch(plan_digest) or not APPROVAL_RE.fullmatch(approval_id):raise ValueError('invalid_secret_execution_binding')
     plan=_plan(slug,plan_digest);action_key=str(plan.get('action') or '');action=ACTIONS.get(action_key)
+    (_require_secret_read if action_key=='read' else _require_write)(slug,username,groups)
     if not action:raise ValueError('unsupported_secret_action')
     approval=_approval_get(approval_id)
     if not approval:raise LookupError('approval_not_found')
@@ -129,13 +139,22 @@ def execute(slug:str,plan_digest:str,approval_id:str,binding:dict[str,Any],usern
         source=str(binding.get('sourceSecretReference',binding.get('source_secret_reference',plan.get('sourceSecretReference') or '')))
         if not REFERENCE_RE.fullmatch(source) or not hmac.compare_digest(source,str(plan.get('sourceSecretReference') or '')):raise ValueError('source_secret_reference_binding_mismatch')
         payload['sourceSecretReference']=source
+    if action_key=='read':
+        reference=str(binding.get('secretReference',binding.get('secret_reference',plan.get('secretReference') or '')))
+        if not REFERENCE_RE.fullmatch(reference) or not hmac.compare_digest(reference,str(plan.get('secretReference') or '')):raise ValueError('secret_reference_binding_mismatch')
+        payload['secretReference']=reference
     code,result=_config('POST',slug,suffix,payload,timeout=120)
     current=_approval_get(approval_id)
     if code==200 and result.get('ok'):
         if current and current.get('status')!='consumed':
             final_code,finalized=_approval_transition(approval_id,'finalize',{'reservation_id':reservation_id,'result':'success'})
             if final_code!=200 or finalized.get('status')!='consumed':raise RuntimeError('approval_finalize_failed')
-        result['transaction']={'approvalId':approval_id,'reservationId':reservation_id,'executionId':execution_id,'approvalStatus':'consumed'};result['secretValuesIncluded']=False;result['ciphertextIncluded']=False;return result
+        result['transaction']={'approvalId':approval_id,'reservationId':reservation_id,'executionId':execution_id,'approvalStatus':'consumed'}
+        result['ciphertextIncluded']=False
+        if action_key=='read':
+            if result.get('secretValueIncluded') is not True or not isinstance(result.get('secretValue'),str):raise RuntimeError('secret_read_contract_invalid')
+            result['secretValuesIncluded']=True;result['oneTime']=True;result['cacheControl']='no-store';return result
+        result.pop('secretValue',None);result['secretValueIncluded']=False;result['secretValuesIncluded']=False;return result
     if current and current.get('status')=='reserved':_approval_transition(approval_id,'release',{'reservation_id':reservation_id})
     error=result.get('error') or {};raise RuntimeError(str(error.get('message') if isinstance(error,dict) else error or 'secret_apply_failed'))
 
@@ -150,15 +169,17 @@ def handle_get(slug:str,operation:str,query:dict[str,str],username:str,groups:li
 
 
 def handle_post(slug:str,operation:str,payload:dict[str,Any],username:str,groups:list[str]|set[str])->tuple[int,dict[str,Any]]:
-    _require_write(slug,username,groups);actor=str(username).strip().casefold();body=dict(payload);body['actor']=actor
+    actor=str(username).strip().casefold();body=dict(payload);body['actor']=actor
+    if operation.startswith('read/'):_require_secret_read(slug,username,groups)
+    else:_require_write(slug,username,groups)
     if operation=='stage':
         value=body.pop('secretValue',body.pop('secret_value',None))
         try:
             body['secretValue']=value;return _config('POST',slug,'/stage',body,timeout=30)
         finally:value=None;body.pop('secretValue',None)
-    if operation in {'rotate/plan','revoke/plan','promote/plan'}:return _config('POST',slug,'/'+operation,body)
-    if operation in {'rotate/approval/request','revoke/approval/request','promote/approval/request'}:
+    if operation in {'rotate/plan','revoke/plan','promote/plan','read/plan'}:return _config('POST',slug,'/'+operation,body)
+    if operation in {'rotate/approval/request','revoke/approval/request','promote/approval/request','read/approval/request'}:
         return 201,request_approval(slug,str(body.get('planDigest',body.get('plan_digest',''))),str(body.get('reason') or ''),username,groups,int(body.get('ttlSeconds',body.get('ttl_seconds',900)) or 900))
-    if operation in {'rotate/execute','revoke/execute','promote/execute'}:
+    if operation in {'rotate/execute','revoke/execute','promote/execute','read/execute'}:
         result=execute(slug,str(body.get('planDigest',body.get('plan_digest',''))),str(body.get('approvalId',body.get('approval_id',''))),body,username,groups);return 200,result
     return 404,{'ok':False,'error':{'code':'not_found'}}

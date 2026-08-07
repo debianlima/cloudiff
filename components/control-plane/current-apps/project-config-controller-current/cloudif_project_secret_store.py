@@ -306,6 +306,37 @@ def apply_promotion(slug:str,plan_digest:str,source_secret_reference:str,expecte
     return {'ok':True,'idempotent':False,'projectSlug':slug,'sourceEnvironment':source['environment'],'targetEnvironment':plan['environment'],'service':plan['service'],'name':plan['name'],'secretReference':plan['secret_reference'],'version':int(plan['target_version']),'activeExpiresAt':active_expires_at,'environmentRevision':_current_environment_revision(slug),'secretValueIncluded':False,'ciphertextIncluded':False}
 
 
+def read_plan(slug:str,secret_reference:str,actor:str,reason:str,ttl_seconds:int=300)->dict[str,Any]:
+    init_db();slug=str(slug or '').strip().lower();match=REFERENCE_RE.fullmatch(str(secret_reference or ''))
+    if not match or match.group(1)!=slug:raise ValueError('invalid_secret_reference')
+    connection=db();row=connection.execute("select * from environment_secret_materials where secret_reference=? and project_slug=? and status='active' and expires_at>?",(secret_reference,slug,now())).fetchone();connection.close()
+    if not row:raise LookupError('active_secret_not_found')
+    row=dict(row);revision=_current_environment_revision(slug);created=now();expires=created+max(60,min(int(ttl_seconds),900))
+    definition={'_cloudiffReadMaterialDigest':row['material_digest']}
+    material={'kind':'secret-read-v1','projectSlug':slug,'environment':row['environment'],'service':row['service'],'name':row['name'],'secretReference':secret_reference,'materialDigest':row['material_digest'],'environmentRevision':revision}
+    plan_digest=digest(material)
+    connection=db();connection.execute('insert or ignore into environment_secret_plans values(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',(
+        plan_digest,'read',slug,row['environment'],row['service'],row['name'],None,secret_reference,revision,int(row['version']),json.dumps(definition,separators=(',',':')),str(reason)[:500],'planned',str(actor)[:128],created,expires,None,
+    ));connection.commit();connection.close()
+    return {'ok':True,'sideEffectFree':True,'action':'read','projectSlug':slug,'environment':row['environment'],'service':row['service'],'name':row['name'],'secretReference':secret_reference,'version':int(row['version']),'expectedRevision':revision,'planDigest':plan_digest,'expiresAt':expires,'approvalRequired':True,'criticalApproval':True,'oneTime':True,'secretValueIncluded':False,'ciphertextIncluded':False}
+
+
+def read_once(slug:str,plan_digest:str,secret_reference:str,actor:str)->dict[str,Any]:
+    init_db();plan=_plan(plan_digest);slug=str(slug or '').strip().lower()
+    if plan['action']!='read' or plan['project_slug']!=slug or not hmac.compare_digest(str(plan['secret_reference'] or ''),str(secret_reference or '')):raise PermissionError('secret_plan_binding_mismatch')
+    if plan['status']=='applied':raise PermissionError('secret_read_already_consumed')
+    if plan['status']!='planned' or int(plan['expires_at'])<=now():raise ValueError('secret_plan_expired_or_unavailable')
+    definition=json.loads(plan['definition_json'] or '{}');bound_digest=str(definition.get('_cloudiffReadMaterialDigest') or '')
+    connection=db();row=connection.execute("select * from environment_secret_materials where secret_reference=? and project_slug=? and status='active' and expires_at>?",(secret_reference,slug,now())).fetchone();connection.close()
+    if not row:raise LookupError('active_secret_not_found')
+    row=dict(row)
+    if not hmac.compare_digest(str(row['material_digest']),bound_digest):raise PermissionError('secret_material_changed')
+    plaintext=_decrypt(row);timestamp=now();connection=db();connection.execute('begin immediate');fresh=connection.execute('select status from environment_secret_plans where plan_digest=?',(plan_digest,)).fetchone()
+    if not fresh or fresh['status']!='planned':connection.rollback();connection.close();plaintext='';raise PermissionError('secret_read_already_consumed')
+    connection.execute("update environment_secret_plans set status='applied',applied_at=? where plan_digest=? and status='planned'",(timestamp,plan_digest));_event(connection,row,'read-approved',actor,{'planDigest':plan_digest,'oneTime':True});connection.commit();connection.close()
+    return {'ok':True,'projectSlug':slug,'environment':row['environment'],'service':row['service'],'name':row['name'],'secretReference':secret_reference,'version':int(row['version']),'secretValue':plaintext,'secretValueIncluded':True,'ciphertextIncluded':False,'oneTime':True,'cacheControl':'no-store','auditRecorded':True}
+
+
 def revocation_plan(slug:str,secret_reference:str,expected_revision:int,actor:str,reason:str,ttl_seconds:int=900)->dict[str,Any]:
     init_db();slug=str(slug or '').strip().lower();match=REFERENCE_RE.fullmatch(str(secret_reference or ''))
     if not match or match.group(1)!=slug:raise ValueError('invalid_secret_reference')

@@ -76,6 +76,25 @@ class ProjectSecretWebAPITests(unittest.TestCase):
         result=self.module.execute('demo','a'*64,approval_id,{},'alice',[])
         self.assertEqual([item[0] for item in transitions],['reserve','finalize']);self.assertEqual(captured['suffix'],'/rotate/apply');self.assertEqual(captured['payload']['stageId'],plan['stageId']);self.assertEqual(result['transaction']['executionId'],execution)
 
+    def test_exceptional_read_requires_maintainer_or_higher(self):
+        plan=self.plan('read');plan['stageId']=None;self.module._plan=lambda slug,digest:plan
+        with self.assertRaisesRegex(PermissionError,'secret_read_forbidden'):
+            self.module.request_approval('demo','a'*64,'Diagnóstico','viewer',[])
+        self.assertEqual(self.module._require_secret_read('demo','alice',[])['role'],'owner')
+        self.assertGreaterEqual(self.module._require_secret_read('demo','prof',['CloudIF-Professor'])['rank'],80)
+
+    def test_exceptional_read_returns_value_once_with_no_store_contract(self):
+        plan=self.plan('read');plan['stageId']=None;self.module._plan=lambda slug,digest:plan
+        requested_by='portal:alice';approval_id='apr_'+'2'*20;reservation,execution=self.module._transaction_ids(self.module.ACTIONS['read'],approval_id,requested_by,'a'*64)
+        metadata=self.module._approval_metadata(plan)
+        approval={'status':'approved','project_slug':'demo','action':self.module.ACTIONS['read'],'requested_by':requested_by,'approved_by':'professor','reservation_id':None,'metadata_json':json.dumps(metadata)}
+        states=[approval,{**approval,'status':'reserved','reservation_id':reservation}]
+        self.module._approval_get=lambda aid:states.pop(0) if states else {**approval,'status':'consumed','reservation_id':reservation}
+        transitions=[];self.module._approval_transition=lambda aid,op,payload:(transitions.append(op) or (200,{'status':'reserved' if op=='reserve' else 'consumed'}))
+        self.module._config=lambda method,slug,suffix='',payload=None,query=None,timeout=45:(200,{'ok':True,'secretReference':plan['secretReference'],'secretValue':'one-time-value','secretValueIncluded':True,'ciphertextIncluded':False,'oneTime':True,'cacheControl':'no-store','auditRecorded':True})
+        result=self.module.execute('demo','a'*64,approval_id,{'secretReference':plan['secretReference']},'alice',[])
+        self.assertEqual(result['secretValue'],'one-time-value');self.assertTrue(result['secretValuesIncluded']);self.assertTrue(result['oneTime']);self.assertEqual(result['cacheControl'],'no-store');self.assertEqual(transitions,['reserve','finalize'])
+
     def test_common_get_never_resolves_plaintext(self):
         self.module._config=lambda method,slug,suffix='',payload=None,query=None,timeout=45:(200,{'ok':True,'secrets':[{'name':'DATABASE_URL','status':'active'}],'secretValuesIncluded':False,'ciphertextsIncluded':False})
         code,result=self.module.handle_get('demo','',{'environment':'preview'},'viewer',[])
@@ -88,6 +107,17 @@ class ProjectSecretWebAPITests(unittest.TestCase):
         end=source.index('environment_match = re.fullmatch',start);block=source[start:end]
         self.assertIn("'X-CSRF-Token'",block);self.assertIn('_prod_csrf_equal',block);self.assertLess(block.index('_prod_csrf_equal'),block.index('handle_secret_post'))
         self.assertNotIn('resolve-internal',block)
+
+    def test_portal_exceptional_read_is_post_only_and_no_store(self):
+        source=COEXIST.read_text()
+        self.assertIn('read/plan|read/approval/request|read/execute',source)
+        self.assertIn("if operation=='read/execute':",source)
+        self.assertIn("('Cache-Control','no-store, max-age=0')",source)
+        self.assertIn("('Pragma','no-cache')",source)
+        get_start=source.index('def do_GET') if 'def do_GET' in source else 0
+        post_start=source.index('def do_POST') if 'def do_POST' in source else len(source)
+        self.assertNotIn('read/execute',source[get_start:post_start])
+
 
 
 if __name__=='__main__':unittest.main()

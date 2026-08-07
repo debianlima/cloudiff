@@ -771,7 +771,7 @@ def _install() -> None:
                         return send_json(self,409,{"ok":False,"error":{"code":str(exc),"message":"A operação não pode ser concluída neste estado."}})
                     except Exception as exc:
                         return send_json(self,503,{"ok":False,"error":{"code":"toolchain_api_unavailable","message":"A API de toolchain está temporariamente indisponível.","detail":type(exc).__name__}})
-                secret_match = re.fullmatch(r'/cloudiff?/portal/api/projects/([a-z0-9][a-z0-9-]{0,62})/environment/secrets/(stage|rotate/plan|rotate/approval/request|rotate/execute|revoke/plan|revoke/approval/request|revoke/execute|promote/plan|promote/approval/request|promote/execute)', parsed.path)
+                secret_match = re.fullmatch(r'/cloudiff?/portal/api/projects/([a-z0-9][a-z0-9-]{0,62})/environment/secrets/(stage|rotate/plan|rotate/approval/request|rotate/execute|revoke/plan|revoke/approval/request|revoke/execute|promote/plan|promote/approval/request|promote/execute|read/plan|read/approval/request|read/execute)', parsed.path)
                 if secret_match:
                     try:
                         content_length=int(self.headers.get('Content-Length','0') or 0)
@@ -790,7 +790,11 @@ def _install() -> None:
                         if not getattr(owner,'_prod_csrf_equal')(provided,getattr(owner,'_prod_csrf_token')(user)):
                             return send_json(self,403,{"ok":False,"error":{"code":"invalid_csrf","message":"Token CSRF inválido ou ausente."}})
                         from cloudif_project_secret_web import handle_post as handle_secret_post
-                        status,response=handle_secret_post(secret_match.group(1),secret_match.group(2),payload,actor.username,groups)
+                        operation=secret_match.group(2)
+                        status,response=handle_secret_post(secret_match.group(1),operation,payload,actor.username,groups)
+                        if operation=='read/execute':
+                            body=json.dumps(response,ensure_ascii=False,separators=(',',':')).encode('utf-8')
+                            return send(self,status,'application/json; charset=utf-8',body,[('Cache-Control','no-store, max-age=0'),('Pragma','no-cache'),('Expires','0')])
                         return send_json(self,status,response)
                     except json.JSONDecodeError:
                         return send_json(self,400,{"ok":False,"error":{"code":"invalid_json","message":"O corpo JSON é inválido."}})
