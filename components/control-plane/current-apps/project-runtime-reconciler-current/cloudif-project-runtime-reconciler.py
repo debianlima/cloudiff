@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -56,6 +57,21 @@ def init_db()->None:
         primary key(project_slug,environment)
       );
       create index if not exists idx_runtime_reconciliation_status on runtime_reconciliation(status,checked_at desc);
+      create table if not exists runtime_reconcile_plans(
+        plan_digest text primary key,
+        project_slug text not null,
+        environment text not null,
+        state_status text not null,
+        pending_action text not null,
+        state_checked_at integer not null,
+        latest_build_job_id text,
+        observed_build_job_id text,
+        summary_json text not null,
+        created_by text not null,
+        created_at integer not null,
+        expires_at integer not null
+      );
+      create index if not exists idx_runtime_reconcile_plans_project on runtime_reconcile_plans(project_slug,environment,created_at desc);
     ''');connection.commit();connection.close()
 
 
@@ -201,6 +217,44 @@ def reconcile_all()->dict[str,Any]:
     return {'ok':all(item.get('ok') for item in results),'projects':len(set(item['projectSlug'] for item in results)) if results else 0,'states':len(results),'counts':counts,'effectsExecuted':False,'secretValuesIncluded':False}
 
 
+def recommended_workflow(status:str,pending_action:str,latest_build_job_id:str)->list[dict[str,Any]]:
+    if status=='synchronized':return []
+    if pending_action in {'build','rebuild'}:
+        return [
+          {'tool':'build.multiservice.plan','approvalRequired':False},
+          {'tool':'approval.request-multiservice-build','approvalRequired':True},
+          {'tool':'build.multiservice.execute','approvalRequired':True},
+          {'tool':'deployment.multiservice.plan','approvalRequired':False},
+          {'tool':'approval.request-multiservice-deployment','approvalRequired':True},
+          {'tool':'deployment.multiservice.execute','approvalRequired':True},
+        ]
+    if pending_action in {'restart','redeploy','deploy'} and latest_build_job_id:
+        return [
+          {'tool':'deployment.multiservice.plan','approvalRequired':False,'buildJobId':latest_build_job_id},
+          {'tool':'approval.request-multiservice-deployment','approvalRequired':True,'buildJobId':latest_build_job_id},
+          {'tool':'deployment.multiservice.execute','approvalRequired':True,'buildJobId':latest_build_job_id},
+        ]
+    if pending_action=='configure':
+        return [{'tool':'project.environment.validate','approvalRequired':False},{'tool':'project.environment.change.plan','approvalRequired':False},{'tool':'approval.request-environment-change','approvalRequired':True},{'tool':'project.environment.change.execute','approvalRequired':True}]
+    return []
+
+
+def reconciliation_plan(slug:str,environment:str,actor:str='internal',ttl_seconds:int=900)->dict[str,Any]:
+    state=reconcile_one(slug,environment);workflow=recommended_workflow(state['status'],state['pendingAction'],state.get('latestBuildJobId') or '')
+    material={'projectSlug':slug,'environment':environment,'status':state['status'],'pendingAction':state['pendingAction'],'reasons':state['reasons'],'latestBuildJobId':state.get('latestBuildJobId') or '','observedBuildJobId':state.get('observedBuildJobId') or '','checkedAt':state['checkedAt'],'workflow':workflow}
+    plan_digest=hashlib.sha256(canonical(material).encode()).hexdigest();created=now();expires=created+max(60,min(int(ttl_seconds),86400));summary={'status':state['status'],'pendingAction':state['pendingAction'],'reasons':state['reasons'],'workflow':workflow,'effectCount':0,'effectsExecuted':False,'productionAutoRepairAllowed':False,'secretValuesIncluded':False,'secretReferencesIncluded':False}
+    connection=db();connection.execute('insert or replace into runtime_reconcile_plans(plan_digest,project_slug,environment,state_status,pending_action,state_checked_at,latest_build_job_id,observed_build_job_id,summary_json,created_by,created_at,expires_at) values(?,?,?,?,?,?,?,?,?,?,?,?)',(plan_digest,slug,environment,state['status'],state['pendingAction'],state['checkedAt'],state.get('latestBuildJobId') or None,state.get('observedBuildJobId') or None,canonical(summary),str(actor)[:128],created,expires));connection.commit();connection.close()
+    return {'ok':True,'sideEffectFree':True,'projectSlug':slug,'environment':environment,'planDigest':plan_digest,'status':state['status'],'pendingAction':state['pendingAction'],'reasons':state['reasons'],'latestBuildJobId':state.get('latestBuildJobId') or None,'observedBuildJobId':state.get('observedBuildJobId') or None,'workflow':workflow,'approvalRequired':bool(workflow),'expiresAt':expires,'effectsExecuted':False,'productionAutoRepairAllowed':False,'secretValuesIncluded':False,'secretReferencesIncluded':False}
+
+
+def get_plan(slug:str,plan_digest:str)->dict[str,Any]:
+    if not re.fullmatch(r'[a-f0-9]{64}',str(plan_digest or '')):raise ValueError('invalid_plan_digest')
+    connection=db();row=connection.execute('select * from runtime_reconcile_plans where plan_digest=? and project_slug=?',(plan_digest,slug)).fetchone();connection.close()
+    if not row:raise LookupError('reconciliation_plan_not_found')
+    summary=json.loads(row['summary_json'] or '{}')
+    return {'ok':True,'sideEffectFree':True,'projectSlug':slug,'environment':row['environment'],'planDigest':row['plan_digest'],'status':row['state_status'],'pendingAction':row['pending_action'],'latestBuildJobId':row['latest_build_job_id'],'observedBuildJobId':row['observed_build_job_id'],'summary':summary,'createdBy':row['created_by'],'createdAt':int(row['created_at']),'expiresAt':int(row['expires_at']),'expired':int(row['expires_at'])<=now(),'effectsExecuted':False,'secretValuesIncluded':False,'secretReferencesIncluded':False}
+
+
 def saved_state(slug:str,environment:str='')->dict[str,Any]:
     connection=db();query='select * from runtime_reconciliation where project_slug=?';args=[slug]
     if environment:query+=' and environment=?';args.append(environment)
@@ -225,6 +279,11 @@ class H(BaseHTTPRequestHandler):
         parsed=urllib.parse.urlparse(self.path)
         if parsed.path=='/health':return self.sendj(200,{'ok':True,'service':'cloudif-project-runtime-reconciler','effectsExecuted':False})
         if not _authorized(self.headers):return self.sendj(401,{'ok':False,'error':'unauthorized'})
+        plan_match=re.fullmatch(r'/v1/projects/([a-z0-9][a-z0-9-]{0,62})/reconcile-plans/([a-f0-9]{64})',parsed.path)
+        if plan_match:
+            try:return self.sendj(200,get_plan(*plan_match.groups()))
+            except LookupError as error:return self.sendj(404,{'ok':False,'error':str(error)})
+            except ValueError as error:return self.sendj(400,{'ok':False,'error':str(error)})
         match=re.fullmatch(r'/v1/projects/([a-z0-9][a-z0-9-]{0,62})/runtime-state',parsed.path)
         if match:
             query=urllib.parse.parse_qs(parsed.query);environment=(query.get('environment') or [''])[0]
@@ -234,6 +293,11 @@ class H(BaseHTTPRequestHandler):
         if not _authorized(self.headers):return self.sendj(401,{'ok':False,'error':'unauthorized'})
         parsed=urllib.parse.urlparse(self.path)
         if parsed.path=='/v1/reconcile':return self.sendj(200,reconcile_all())
+        plan_match=re.fullmatch(r'/v1/projects/([a-z0-9][a-z0-9-]{0,62})/reconcile-plan',parsed.path)
+        if plan_match:
+            length=int(self.headers.get('Content-Length','0') or 0);body=json.loads(self.rfile.read(length) or b'{}');environment=str(body.get('environment') or '');actor=str(body.get('actor') or 'internal')
+            try:return self.sendj(200,reconciliation_plan(plan_match.group(1),environment,actor,int(body.get('ttlSeconds',body.get('ttl_seconds',900)) or 900)))
+            except ValueError as error:return self.sendj(400,{'ok':False,'error':str(error)})
         match=re.fullmatch(r'/v1/projects/([a-z0-9][a-z0-9-]{0,62})/reconcile',parsed.path)
         if match:
             length=int(self.headers.get('Content-Length','0') or 0);body=json.loads(self.rfile.read(length) or b'{}');environment=str(body.get('environment') or '')

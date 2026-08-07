@@ -521,6 +521,15 @@ def _install() -> None:
                         return send_json(self,409,{"ok":False,"error":{"code":str(exc),"message":"A operação não pode ser concluída neste estado."}})
                     except Exception as exc:
                         return send_json(self,503,{"ok":False,"error":{"code":"toolchain_api_unavailable","message":"A API de toolchain está temporariamente indisponível.","detail":type(exc).__name__}})
+                runtime_match = re.fullmatch(r'/cloudiff?/portal/api/projects/([a-z0-9][a-z0-9-]{0,62})/(runtime-state|runtime-drift)', path)
+                if runtime_match:
+                    try:
+                        from cloudif_project_runtime_reconcile_web import handle_get as handle_runtime_get
+                        actor=identity(self.headers);query={key:(values or [''])[0] for key,values in route_query.items()}
+                        status,payload=handle_runtime_get(runtime_match.group(1),'drift' if runtime_match.group(2)=='runtime-drift' else 'status',query,actor.username,list(actor.groups))
+                        return send_json(self,status,payload)
+                    except PermissionError as exc:return send_json(self,403,{"ok":False,"error":{"code":str(exc)}})
+                    except Exception as exc:return send_json(self,503,{"ok":False,"error":{"code":"runtime_reconciler_unavailable","detail":type(exc).__name__}})
                 secret_match = re.fullmatch(r'/cloudiff?/portal/api/projects/([a-z0-9][a-z0-9-]{0,62})/environment/secrets(?:/(history))?', path)
                 if secret_match:
                     try:
@@ -771,6 +780,21 @@ def _install() -> None:
                         return send_json(self,409,{"ok":False,"error":{"code":str(exc),"message":"A operação não pode ser concluída neste estado."}})
                     except Exception as exc:
                         return send_json(self,503,{"ok":False,"error":{"code":"toolchain_api_unavailable","message":"A API de toolchain está temporariamente indisponível.","detail":type(exc).__name__}})
+                runtime_match = re.fullmatch(r'/cloudiff?/portal/api/projects/([a-z0-9][a-z0-9-]{0,62})/runtime-reconcile/(plan)', parsed.path)
+                if runtime_match:
+                    try:
+                        content_length=int(self.headers.get('Content-Length','0') or 0)
+                        if content_length<0 or content_length>262144:return send_json(self,413,{"ok":False,"error":{"code":"payload_too_large"}})
+                        raw=self.rfile.read(content_length)
+                        if 'application/json' not in (self.headers.get('Content-Type') or '').lower():return send_json(self,415,{"ok":False,"error":{"code":"json_required"}})
+                        payload=json.loads(raw or b'{}');actor=identity(self.headers);groups=[str(group) for group in actor.groups]
+                        user={"username":actor.username,"email":actor.email,"groups":groups,"admin":"cloudif-tenants-admin" in {group.lower() for group in groups}}
+                        owner=sys.modules.get(handler_class.__module__);provided=str(self.headers.get('X-CSRF-Token') or payload.pop('csrfToken',payload.pop('csrf_token','')))
+                        if not getattr(owner,'_prod_csrf_equal')(provided,getattr(owner,'_prod_csrf_token')(user)):return send_json(self,403,{"ok":False,"error":{"code":"invalid_csrf"}})
+                        from cloudif_project_runtime_reconcile_web import handle_post as handle_runtime_post
+                        status,response=handle_runtime_post(runtime_match.group(1),runtime_match.group(2),payload,actor.username,groups);return send_json(self,status,response)
+                    except json.JSONDecodeError:return send_json(self,400,{"ok":False,"error":{"code":"invalid_json"}})
+                    except Exception as exc:return send_json(self,503,{"ok":False,"error":{"code":"runtime_reconciler_unavailable","detail":type(exc).__name__}})
                 secret_match = re.fullmatch(r'/cloudiff?/portal/api/projects/([a-z0-9][a-z0-9-]{0,62})/environment/secrets/(stage|rotate/plan|rotate/approval/request|rotate/execute|revoke/plan|revoke/approval/request|revoke/execute|promote/plan|promote/approval/request|promote/execute|read/plan|read/approval/request|read/execute)', parsed.path)
                 if secret_match:
                     try:
