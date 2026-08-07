@@ -69,8 +69,10 @@ class ActiveToolchainConsumptionTests(unittest.TestCase):
         self.assertTrue(result['active']);self.assertTrue(result['reused']);self.assertFalse(result['built'])
         self.assertEqual(result['activationEnvironment'],'preview');self.assertEqual(result['activationRevision'],3)
         active['imageId']='sha256:'+'9'*64
-        with self.assertRaisesRegex(artifact.ArtifactError,'imagem ativa diverge'):
+        with self.assertRaises(artifact.ArtifactError) as captured:
             artifact.reuse_active_toolchain(request,service,Path('.'),active)
+        self.assertEqual(captured.exception.code,'active_toolchain_verification_failed')
+        self.assertIn('imagem ativa diverge',captured.exception.message)
 
     def test_build_plan_and_executor_bind_environment_and_active_images(self):
         broker=BROKER.read_text();artifact=ARTIFACT.read_text();gateway=GATEWAY.read_text()

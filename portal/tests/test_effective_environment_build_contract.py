@@ -47,16 +47,22 @@ class EffectiveEnvironmentBuildContractTests(unittest.TestCase):
 
     def test_build_secret_references_fail_closed(self):
         request=self.request();request['effectiveEnvironment']['secretBuildReferences']['api']={'NPM_TOKEN':'vault://project/demo/npm-token'}
-        with self.assertRaisesRegex(self.artifact.ArtifactError,'Segredos de build'):
+        with self.assertRaises(self.artifact.ArtifactError) as captured:
             self.artifact.service_effective_environment(request,'api')
+        self.assertEqual(captured.exception.code,'build_secret_injection_unavailable')
+        self.assertIn('Segredos de build',captured.exception.message)
 
     def test_invalid_secret_reference_and_complex_public_value_are_rejected(self):
         request=self.request();request['effectiveEnvironment']['secretRuntimeReferences']['api']['DATABASE_URL']='not-a-reference'
-        with self.assertRaisesRegex(self.artifact.ArtifactError,'Referência de segredo'):
+        with self.assertRaises(self.artifact.ArtifactError) as captured:
             self.artifact.service_effective_environment(request,'api')
+        self.assertEqual(captured.exception.code,'invalid_secret_reference')
+        self.assertIn('Referência de segredo',captured.exception.message)
         request=self.request();request['effectiveEnvironment']['publicBuildEnvironment']['api']['OBJECT']={'unsafe':True}
-        with self.assertRaisesRegex(self.artifact.ArtifactError,'escalares'):
+        with self.assertRaises(self.artifact.ArtifactError) as captured:
             self.artifact.service_effective_environment(request,'api')
+        self.assertEqual(captured.exception.code,'invalid_public_environment_value')
+        self.assertIn('escalares',captured.exception.message)
 
     def test_application_dockerfile_uses_only_public_build_args(self):
         start=self.source.index('def build_service_artifact(')
@@ -76,9 +82,10 @@ class EffectiveEnvironmentBuildContractTests(unittest.TestCase):
     def test_broker_plan_uses_digests_and_sanitized_summary_only(self):
         source=BROKER.read_text()
         self.assertIn('project_effective_environment(slug,environment)',source)
+        self.assertIn('project_effective_environment_internal(slug,environment)',source)
         self.assertIn("'environment_digests':{'build':environment_summary.get('buildEnvironmentDigest')",source)
         self.assertIn("'effective_environment':environment_summary",source)
-        self.assertIn("if include_internal:response['_internal_effective_environment']=effective_environment",source)
+        self.assertIn("if include_internal:response['_internal_effective_environment']=project_effective_environment_internal(slug,environment)",source)
         self.assertIn("'effectiveEnvironment':internal_effective_environment",source)
         self.assertIn('build-secret-injection-unavailable',source)
         self.assertIn('missing-variable',source)

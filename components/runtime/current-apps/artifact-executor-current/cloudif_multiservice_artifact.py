@@ -544,6 +544,45 @@ def build_toolchain(request: dict[str, Any], service: dict[str, Any], source: Pa
     }
 
 
+def _environment_scalar(value: Any) -> str:
+    if value is None:return ''
+    if isinstance(value,bool):return 'true' if value else 'false'
+    if isinstance(value,(str,int,float)):return str(value)
+    raise ArtifactError('invalid_public_environment_value','Variáveis públicas de build e runtime devem conter somente valores escalares.','effectiveEnvironment')
+
+
+def service_effective_environment(request: dict[str, Any], service_name: str) -> dict[str, Any]:
+    effective=request.get('effectiveEnvironment') or {}
+    if not isinstance(effective,dict) or effective.get('secretValuesIncluded') is not False:
+        raise ArtifactError('effective_environment_contract_invalid','O ambiente efetivo não possui contrato seguro.','effectiveEnvironment')
+    services={str(item.get('name') or '') for item in request.get('services') or [] if isinstance(item,dict)}
+    if service_name not in services:raise ArtifactError('effective_environment_service_unknown','O serviço não pertence ao plano de build.','effectiveEnvironment')
+    result={'publicBuildEnvironment':{},'publicRuntimeEnvironment':{},'secretBuildReferences':{},'secretRuntimeReferences':{},'buildEnvironmentDigest':str(effective.get('buildEnvironmentDigest') or ''),'runtimeEnvironmentDigest':str(effective.get('runtimeEnvironmentDigest') or ''),'environmentDigest':str(effective.get('environmentDigest') or ''),'secretValuesIncluded':False}
+    for field in ('buildEnvironmentDigest','runtimeEnvironmentDigest','environmentDigest'):
+        if not SHA_RE.fullmatch(result[field]):raise ArtifactError('effective_environment_digest_invalid',f'{field} é inválido.','effectiveEnvironment')
+    for field in ('publicBuildEnvironment','publicRuntimeEnvironment'):
+        mapping=effective.get(field) or {}
+        if not isinstance(mapping,dict):raise ArtifactError('effective_environment_contract_invalid',f'{field} deve ser um objeto.','effectiveEnvironment')
+        values=mapping.get(service_name) or {}
+        if not isinstance(values,dict):raise ArtifactError('effective_environment_contract_invalid',f'{field}.{service_name} deve ser um objeto.','effectiveEnvironment')
+        for name,value in values.items():
+            if not re.fullmatch(r'[A-Z_][A-Z0-9_]{0,127}',str(name)):raise ArtifactError('invalid_environment_name','Nome de variável de ambiente inválido.','effectiveEnvironment')
+            result[field][str(name)]=_environment_scalar(value)
+    secret_pattern=re.compile(r'[a-z][a-z0-9_.+:-]{1,31}://[^\s\x00]{3,240}')
+    for field in ('secretBuildReferences','secretRuntimeReferences'):
+        mapping=effective.get(field) or {}
+        if not isinstance(mapping,dict):raise ArtifactError('effective_environment_contract_invalid',f'{field} deve ser um objeto.','effectiveEnvironment')
+        values=mapping.get(service_name) or {}
+        if not isinstance(values,dict):raise ArtifactError('effective_environment_contract_invalid',f'{field}.{service_name} deve ser um objeto.','effectiveEnvironment')
+        for name,reference in values.items():
+            if not re.fullmatch(r'[A-Z_][A-Z0-9_]{0,127}',str(name)) or not secret_pattern.fullmatch(str(reference or '')):
+                raise ArtifactError('invalid_secret_reference','Referência de segredo inválida; use uma referência opaca homologada.','effectiveEnvironment')
+            result[field][str(name)]=str(reference)
+    if result['secretBuildReferences']:
+        raise ArtifactError('build_secret_injection_unavailable','Segredos de build ainda não possuem injeção efêmera homologada e o build foi bloqueado.','effectiveEnvironment')
+    return result
+
+
 def copy_context(source: Path, target: Path, exclude_paths: list[str] | None = None) -> None:
     if not source.is_dir() or source.is_symlink():
         raise ArtifactError('service_path_not_found', 'O diretório do serviço não existe no snapshot.')
@@ -568,7 +607,8 @@ def copy_context(source: Path, target: Path, exclude_paths: list[str] | None = N
             shutil.copy2(src, dst)
 
 
-def build_application(request: dict[str, Any], service: dict[str, Any], source: Path, toolchain: dict[str, Any], output_dir: Path) -> dict[str, Any]:
+def build_service_artifact(request: dict[str, Any], service: dict[str, Any], source: Path, toolchain: dict[str, Any], output_dir: Path) -> dict[str, Any]:
+    environment_contract=service_effective_environment(request,service['name'])
     output = output_dir / service['name'] / 'application'
     context = output / 'context'
     context.mkdir(parents=True, exist_ok=True)
@@ -578,6 +618,8 @@ def build_application(request: dict[str, Any], service: dict[str, Any], source: 
         'project': request['project_slug'], 'service': service['name'],
         'configRevision': request['config_revision'], 'configDigest': request['config_digest'],
         'archiveSha256': request['archive_sha256'], 'toolchainImageId': toolchain['image']['imageId'],
+        'environment':request['environment'],'environmentDigest':environment_contract['environmentDigest'],'buildEnvironmentDigest':environment_contract['buildEnvironmentDigest'],
+        'publicBuildNames':sorted(environment_contract['publicBuildEnvironment']),'publicRuntimeNames':sorted(environment_contract['publicRuntimeEnvironment']),'secretRuntimeNames':sorted(environment_contract['secretRuntimeReferences']),
         'install': service.get('install'), 'build': service.get('build'), 'start': service.get('start'),
         'publish': service.get('publish'), 'port': service.get('port'), 'healthcheck': service.get('healthcheck'),
     }
@@ -630,8 +672,15 @@ CMD {json.dumps(runtime_args, ensure_ascii=False)}
 '''
     else:
         raise ArtifactError('runtime_policy_blocked', 'O runtime não está habilitado para application build.')
-    (context / 'Dockerfile').write_text(dockerfile)
-    run(['docker', 'build', '--pull=false', '--network', 'none', '--no-cache=false', '-t', image, str(context)], timeout=1200)
+    dockerfile=dockerfile.splitlines()
+    dockerfile.insert(1,'LABEL org.cloudiff.environment-digest="'+environment_contract['environmentDigest']+'" org.cloudiff.build-environment-digest="'+environment_contract['buildEnvironmentDigest']+'"')
+    build_arguments=[]
+    for name,value in reversed(sorted(environment_contract['publicBuildEnvironment'].items())):
+        dockerfile.insert(1,'ARG '+name)
+    for name,value in sorted(environment_contract['publicBuildEnvironment'].items()):
+        build_arguments.extend(['--build-arg',name+'='+value])
+    (context / 'Dockerfile').write_text('\n'.join(dockerfile)+'\n')
+    run(['docker', 'build', *build_arguments, '--pull=false', '--network', 'none', '--no-cache=false', '-t', image, str(context)], timeout=1200)
     scan = scan_image(image, output, 'application')
     if scan['scannerBlocked']:
         raise ArtifactError('application_scanner_blocked', 'A imagem da aplicação contém vulnerabilidades HIGH ou CRITICAL.', detail=scan['scannerCounts'])
@@ -643,7 +692,9 @@ CMD {json.dumps(runtime_args, ensure_ascii=False)}
         'kind': 'cloudiff-application-v1', 'applicationDigest': app_digest,
         'material': app_material, 'image': inspected,
         'scan': {key: value for key, value in scan.items() if not key.endswith('Path')},
-        'builtAt': int(time.time()), 'secretsIncluded': False,
+        'environment':request['environment'],'environmentDigest':environment_contract['environmentDigest'],
+        'publicBuildNames':sorted(environment_contract['publicBuildEnvironment']),'publicRuntimeNames':sorted(environment_contract['publicRuntimeEnvironment']),'secretRuntimeNames':sorted(environment_contract['secretRuntimeReferences']),
+        'secretReferencesIncluded':False,'builtAt': int(time.time()), 'secretsIncluded': False,
     }
     signature = sign_provenance(output, provenance, 'application')
     return {
@@ -651,7 +702,7 @@ CMD {json.dumps(runtime_args, ensure_ascii=False)}
         'containerPort': 8080 if service['runtime'] == 'static' or (service.get('publish') and not service.get('start')) else service.get('port'),
         'healthcheck': service.get('healthcheck') or ('/__cloudif_health' if service['runtime'] == 'static' else '/'),
         'applicationDigest': app_digest, 'image': inspected, **scan, **signature,
-        'runtimeProof': 'deferred-to-isolated-preview', 'secretsIncluded': False,
+        'runtimeProof': 'deferred-to-isolated-preview', 'environment':request['environment'],'environmentDigest':environment_contract['environmentDigest'],'buildEnvironmentDigest':environment_contract['buildEnvironmentDigest'],'runtimeEnvironmentDigest':environment_contract['runtimeEnvironmentDigest'],'publicBuildNames':sorted(environment_contract['publicBuildEnvironment']),'publicRuntimeNames':sorted(environment_contract['publicRuntimeEnvironment']),'secretRuntimeNames':sorted(environment_contract['secretRuntimeReferences']),'secretReferencesIncluded':False,'secretsIncluded': False,
     }
 
 
@@ -774,6 +825,9 @@ def reuse_active_toolchain(request:dict[str,Any],service:dict[str,Any],source:Pa
     }
 
 
+build_application = build_service_artifact
+
+
 def build_multiservice(payload: Any) -> dict[str, Any]:
     request = validate_request(payload)
     ARTIFACT_ROOT.mkdir(parents=True, exist_ok=True)
@@ -798,7 +852,7 @@ def build_multiservice(payload: Any) -> dict[str, Any]:
         for service in request['services']:
             toolchain = build_toolchain(request, service, source, job_dir)
             toolchains.append(toolchain)
-            applications.append(build_application(request, service, source, toolchain, job_dir))
+            applications.append(build_service_artifact(request, service, source, toolchain, job_dir))
         result = {
             'ok': True, 'jobId': request['job_id'], 'projectSlug': request['project_slug'],
             'configRevision': request['config_revision'], 'configDigest': request['config_digest'],

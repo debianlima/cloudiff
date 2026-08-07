@@ -32,6 +32,8 @@ class MultiserviceBuildBrokerTests(unittest.TestCase):
     def setUp(self):
         self.original_config = self.module.project_configuration
         self.original_detection = self.module.source_detection
+        self.original_environment = self.module.project_effective_environment
+        self.original_environment_internal = self.module.project_effective_environment_internal
         self.module.project_configuration = lambda slug: {
             'ok': True, 'projectSlug': slug, 'currentRevision': 3,
             'configDigest': 'b' * 64, 'toolchainDigest': 'c' * 64,
@@ -45,11 +47,28 @@ class MultiserviceBuildBrokerTests(unittest.TestCase):
             },
         }
         self.module.source_detection = lambda slug, ref, trace: {'archiveSha256': 'a' * 64, 'projectType': 'multi-service', 'componentCount': 2}
+        self.module.project_effective_environment = lambda slug, environment: {
+            'ok': True, 'projectSlug': slug, 'environment': environment, 'revision': 3,
+            'entries': [], 'missingRequired': [], 'valid': True,
+            'buildEnvironmentDigest': '4' * 64, 'runtimeEnvironmentDigest': '5' * 64,
+            'environmentDigest': '6' * 64, 'publicBuildNames': {}, 'publicRuntimeNames': {},
+            'secretBuildNames': {}, 'secretRuntimeNames': {},
+            'secretValuesIncluded': False, 'secretReferencesIncluded': False,
+        }
+        self.module.project_effective_environment_internal = lambda slug, environment: {
+            'ok': True, 'projectSlug': slug, 'environment': environment, 'revision': 3,
+            'publicBuildEnvironment': {}, 'publicRuntimeEnvironment': {},
+            'secretBuildReferences': {}, 'secretRuntimeReferences': {}, 'missingRequired': [],
+            'buildEnvironmentDigest': '4' * 64, 'runtimeEnvironmentDigest': '5' * 64,
+            'environmentDigest': '6' * 64, 'secretValuesIncluded': False,
+        }
         conn = self.module.db(); conn.execute('delete from multiservice_jobs'); conn.commit(); conn.close()
 
     def tearDown(self):
         self.module.project_configuration = self.original_config
         self.module.source_detection = self.original_detection
+        self.module.project_effective_environment = self.original_environment
+        self.module.project_effective_environment_internal = self.original_environment_internal
 
     def test_plan_binds_revision_config_toolchain_archive_and_services(self):
         plan = self.module.multiservice_plan({'project_slug': 'project-a', 'ref': 'main', 'expected_revision': 3, 'trace_id': 'trace'})

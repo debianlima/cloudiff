@@ -149,6 +149,26 @@ def project_configuration(slug):
  code,data=internal_json('GET',PROJECT_CONFIG_URL+'/v1/projects/'+urllib.parse.quote(slug,safe='')+'/configuration',PROJECT_CONFIG_TOKEN,timeout=30)
  if code!=200 or not data.get('ok'):raise ValueError('configuration_unavailable')
  return data
+def project_effective_environment(slug,environment):
+ environment=str(environment or 'development').strip().lower()
+ if environment not in {'development','preview','homologation','production'}:raise ValueError('invalid_environment')
+ base=PROJECT_CONFIG_URL+'/v1/projects/'+urllib.parse.quote(slug,safe='')+'/environment/'
+ code,environment_summary=internal_json('GET',base+'effective?'+urllib.parse.urlencode({'environment':environment}),PROJECT_CONFIG_TOKEN,timeout=30)
+ if code!=200 or not environment_summary.get('ok'):raise ValueError('effective_environment_unavailable')
+ if environment_summary.get('secretValuesIncluded') is not False or environment_summary.get('secretReferencesIncluded') is not False:raise ValueError('effective_environment_public_contract_invalid')
+ return environment_summary
+
+
+def project_effective_environment_internal(slug,environment):
+ environment=str(environment or 'development').strip().lower()
+ if environment not in {'development','preview','homologation','production'}:raise ValueError('invalid_environment')
+ base=PROJECT_CONFIG_URL+'/v1/projects/'+urllib.parse.quote(slug,safe='')+'/environment/'
+ code,effective_environment=internal_json('GET',base+'effective-internal?'+urllib.parse.urlencode({'environment':environment}),PROJECT_CONFIG_TOKEN,timeout=30)
+ if code!=200 or not effective_environment.get('ok'):raise ValueError('effective_environment_internal_unavailable')
+ if effective_environment.get('secretValuesIncluded') is not False:raise ValueError('effective_environment_secret_contract_invalid')
+ return effective_environment
+
+
 def source_detection(slug,ref,trace):
  code,data=internal_json('POST',WORKSPACE_URL+'/v1/detect-multiservice',WORKSPACE_TOKEN,{'project_slug':slug,'ref':ref,'trace_id':trace},timeout=180)
  if code!=200 or not data.get('ok'):
@@ -196,19 +216,20 @@ def reusable_multiservice(plan_digest):
  c=db();row=c.execute("select job_id,result_json from multiservice_jobs where plan_digest=? and status='succeeded' order by updated_at desc limit 1",(plan_digest,)).fetchone();c.close()
  if not row:return None
  return {'job_id':row['job_id'],'result':json.loads(row['result_json'] or '{}')}
-def multiservice_plan(payload):
+def multiservice_plan(payload,include_internal=False):
  if not isinstance(payload,dict):raise ValueError('invalid_request')
  slug=str(payload.get('project_slug') or '').strip();ref=str(payload.get('ref') or 'main').strip();expected=int(payload.get('expected_revision') or 0);trace=str(payload.get('trace_id') or 'build-plan')[:128]
+ environment=str(payload.get('environment') or 'development').strip().lower()
  if not SLUG.fullmatch(slug):raise ValueError('invalid_project_slug')
+ if environment not in {'development','preview','homologation','production'}:raise ValueError('invalid_environment')
  if not REF.fullmatch(ref) or '..' in ref or ref.startswith('/') or ref.endswith('/'):raise ValueError('invalid_ref')
  config=project_configuration(slug);actual=int(config.get('currentRevision') or 0)
  if actual<1:raise ValueError('configuration_required')
  if expected and expected!=actual:raise ValueError('configuration_revision_mismatch')
  detection=source_detection(slug,ref,trace);archive=str(detection.get('archiveSha256') or '').lower()
  if not re.fullmatch(r'[a-f0-9]{64}',archive):raise ValueError('archive_digest_missing')
- configuration=config.get('configuration') or {}
- services=normalized_multiservice_services(configuration)
- toolchain=configuration.get('toolchain') or {}
+ configuration=config.get('configuration') or {};services=normalized_multiservice_services(configuration);toolchain=configuration.get('toolchain') or {}
+ environment_summary=project_effective_environment(slug,environment)
  toolchain_validations=[]
  for item in services:
   validation=validate_toolchain(toolchain,item['runtime'],item.get('version'),catalog_path=TOOLCHAIN_CATALOG)
@@ -216,10 +237,22 @@ def multiservice_plan(payload):
  blocked=[{'service':item['name'],**item['policy']} for item in services if item['policy']['status']!='ready']
  for validation in toolchain_validations:
   for issue in validation.get('blockers') or []:blocked.append({'service':validation['service'],**issue})
- material={'project_slug':slug,'ref':ref,'config_revision':actual,'config_digest':config.get('configDigest'),'toolchain_digest':config.get('toolchainDigest'),'archive_sha256':archive,'services':services,'toolchain':toolchain,'toolchain_validations':[{key:value for key,value in item.items() if key not in {'warnings'}} for item in toolchain_validations]}
+ for issue in environment_summary.get('missingRequired') or []:
+  blocked.append({'code':'missing-variable','field':'environment','environment':environment,'service':issue.get('service') or '','name':issue.get('name'),'secret':bool(issue.get('secret'))})
+ secret_build_names=environment_summary.get('secretBuildNames') or {}
+ if any(bool(values) for values in secret_build_names.values()):
+  blocked.append({'code':'build-secret-injection-unavailable','field':'environment','environment':environment,'services':sorted(service for service,values in secret_build_names.items() if values)})
+ activation=toolchain_lifecycle.compatible_activations(slug,environment,toolchain_validations,archive,str(config.get('configDigest') or ''))
+ blocked.extend(activation.get('blocked') or [])
+ activation_material={service:{key:value for key,value in image.items() if key in {'imageRecordId','imageRef','imageId','effectiveToolchainDigest','validatedToolchainDigest','activationRevision','environment'}} for service,image in sorted((activation.get('images') or {}).items())}
+ material={'project_slug':slug,'ref':ref,'environment':environment,'config_revision':actual,'config_digest':config.get('configDigest'),'toolchain_digest':config.get('toolchainDigest'),'archive_sha256':archive,'services':services,'toolchain':toolchain,'toolchain_validations':[{key:value for key,value in item.items() if key not in {'warnings'}} for item in toolchain_validations],'environment_digests':{'build':environment_summary.get('buildEnvironmentDigest'),'runtime':environment_summary.get('runtimeEnvironmentDigest'),'effective':environment_summary.get('environmentDigest')},'active_toolchain_images':activation_material}
  plan_digest=hashlib.sha256(canonical(material)).hexdigest();reusable=reusable_multiservice(plan_digest)
- summary={'projectType':configuration.get('project',{}).get('type') or detection.get('projectType'),'serviceCount':len(services),'componentCount':detection.get('componentCount'),'networkPolicy':str((((toolchain.get('provision') or {}).get('network') or {'mode':'none'}).get('mode') if isinstance((toolchain.get('provision') or {}).get('network'),dict) else (toolchain.get('provision') or {}).get('network') or 'none')),'scannerPolicy':'block-high-critical','signatureAlgorithm':'Ed25519','secretsIncluded':False,'toolchainCatalogVersion':int(load_catalog(TOOLCHAIN_CATALOG).get('version') or 0),'sourceValidationRequired':any(item.get('script',{}).get('ok') is None for item in toolchain_validations)}
- return {'ok':True,'side_effect_free':True,'project_slug':slug,'ref':ref,'config_revision':actual,'config_digest':config.get('configDigest'),'toolchain_digest':config.get('toolchainDigest'),'archive_sha256':archive,'plan_digest':plan_digest,'services':services,'toolchain':toolchain,'toolchain_validations':toolchain_validations,'blocked':blocked,'policies':[item['policy'] for item in services],'summary':summary,'approval_required':not blocked and reusable is None,'build_required':reusable is None,'reusable_build':bool(reusable),'reusable':reusable,'secret_values_included':False}
+ summary={'projectType':configuration.get('project',{}).get('type') or detection.get('projectType'),'serviceCount':len(services),'componentCount':detection.get('componentCount'),'environment':environment,'environmentDigests':material['environment_digests'],'environmentVariables':environment_summary.get('entries') or [],'activeToolchainImages':len(activation_material),'toolchainStates':activation.get('states') or [],'networkPolicy':str((((toolchain.get('provision') or {}).get('network') or {'mode':'none'}).get('mode') if isinstance((toolchain.get('provision') or {}).get('network'),dict) else (toolchain.get('provision') or {}).get('network') or 'none')),'scannerPolicy':'block-high-critical','signatureAlgorithm':'Ed25519','secretsIncluded':False,'secretReferencesIncluded':False,'toolchainCatalogVersion':int(load_catalog(TOOLCHAIN_CATALOG).get('version') or 0),'sourceValidationRequired':any(item.get('script',{}).get('ok') is None for item in toolchain_validations)}
+ response={'ok':True,'side_effect_free':True,'project_slug':slug,'ref':ref,'environment':environment,'config_revision':actual,'config_digest':config.get('configDigest'),'toolchain_digest':config.get('toolchainDigest'),'archive_sha256':archive,'plan_digest':plan_digest,'services':services,'toolchain':toolchain,'toolchain_validations':toolchain_validations,'effective_environment':environment_summary,'environment_digests':material['environment_digests'],'active_toolchain_images':activation.get('images') or {},'toolchain_states':activation.get('states') or [],'blocked':blocked,'policies':[item['policy'] for item in services],'summary':summary,'approval_required':not blocked and reusable is None,'build_required':reusable is None,'reusable_build':bool(reusable),'reusable':reusable,'secret_values_included':False,'secret_references_included':False}
+ if include_internal:response['_internal_effective_environment']=project_effective_environment_internal(slug,environment)
+ return response
+
+
 def artifact_multiservice_build(request):
  payload={**request,'profile':'multiservice-v1'}
  code,data=internal_json('POST',ARTIFACT_URL+'/v1/multiservice/build',ARTIFACT_TOKEN,payload,timeout=3600)
@@ -245,7 +278,10 @@ def queue_multiservice(payload):
  if plan['blocked']:raise ValueError('runtime_policy_blocked')
  key=hashlib.sha256((plan['project_slug']+'|'+plan['ref']+'|'+provided).encode()).hexdigest();c=db();row=c.execute('select * from multiservice_jobs where idempotency_key=?',(key,)).fetchone()
  if row:c.close();return {'ok':True,'job_id':row['job_id'],'status':row['status'],'idempotent':True,'plan_digest':provided}
- job_id='build_'+secrets.token_hex(12);t=now();request={'job_id':job_id,'project_slug':plan['project_slug'],'ref':plan['ref'],'archive_sha256':plan['archive_sha256'],'config_revision':plan['config_revision'],'config_digest':plan['config_digest'],'toolchain_digest':plan['toolchain_digest'],'plan_digest':provided,'services':plan['services'],'toolchain':plan.get('toolchain') or {},'trace_id':str(payload.get('trace_id') or job_id)}
+ internal_effective_environment=project_effective_environment_internal(plan['project_slug'],plan['environment'])
+ if not isinstance(internal_effective_environment,dict):raise ValueError('effective_environment_internal_missing')
+ if internal_effective_environment.get('environmentDigest')!=plan.get('environment_digests',{}).get('effective'):raise ValueError('effective_environment_changed_after_approval')
+ job_id='build_'+secrets.token_hex(12);t=now();request={'job_id':job_id,'project_slug':plan['project_slug'],'ref':plan['ref'],'environment':plan['environment'],'archive_sha256':plan['archive_sha256'],'config_revision':plan['config_revision'],'config_digest':plan['config_digest'],'toolchain_digest':plan['toolchain_digest'],'plan_digest':provided,'services':plan['services'],'toolchain':plan.get('toolchain') or {},'activeToolchainImages':plan.get('active_toolchain_images') or {},'effectiveEnvironment':internal_effective_environment,'trace_id':str(payload.get('trace_id') or job_id)}
  c.execute('insert into multiservice_jobs(job_id,idempotency_key,project_slug,ref,config_revision,config_digest,toolchain_digest,archive_sha256,plan_digest,status,payload_json,result_json,created_at,updated_at) values(?,?,?,?,?,?,?,?,?,?,?,?,?,?)',(job_id,key,plan['project_slug'],plan['ref'],plan['config_revision'],plan['config_digest'],plan['toolchain_digest'],plan['archive_sha256'],provided,'queued',json.dumps(request,ensure_ascii=False,separators=(',',':')),'{}',t,t));c.commit();c.close()
  threading.Thread(target=run_multiservice_job,args=(job_id,),daemon=True).start()
  return {'ok':True,'job_id':job_id,'status':'queued','idempotent':False,'plan_digest':provided,'config_revision':plan['config_revision'],'archive_sha256':plan['archive_sha256']}

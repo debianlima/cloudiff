@@ -504,7 +504,7 @@ def _persisted_environment_entries(slug: str, environment: str) -> list[dict[str
 
 def effective_internal(slug: str, environment: str, service: str = '') -> dict[str, Any]:
     slug = str(slug or '').strip()
-    environment = normalize_environment(environment)
+    environment = _validate_environment(environment)
     service = str(service or '').strip().lower()
     revision, configuration = _current_effective_configuration(slug)
     services_configuration = configuration.get('services') or {}
