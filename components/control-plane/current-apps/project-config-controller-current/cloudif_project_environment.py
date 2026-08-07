@@ -16,7 +16,7 @@ CONTROL_DB=Path(os.environ.get('CLOUDIF_PROJECT_SNAPSHOT_DB','/var/lib/cloudif/c
 ENVIRONMENTS=('development','preview','homologation','production')
 ENV_RE=re.compile(r'^[A-Z_][A-Z0-9_]{0,127}$')
 SERVICE_RE=re.compile(r'^[a-z][a-z0-9-]{0,31}$')
-REFERENCE_RE=re.compile(r'^[a-z][a-z0-9_.:/-]{2,255}$')
+REFERENCE_RE=re.compile(r'^[a-z][A-Za-z0-9_.:/-]{2,255}$')
 SECRET_NAME_RE=re.compile(r'(?i)(?:password|secret|token|private|jwt|service[_-]?role|api[_-]?key|access[_-]?key|smtp[_-]?pass|signing[_-]?key)')
 SENSITIVE_VALUE_RE=re.compile(
     r'(?i)(?:-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----|'

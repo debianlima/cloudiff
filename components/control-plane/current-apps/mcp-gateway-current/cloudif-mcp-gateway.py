@@ -208,6 +208,15 @@ ENVIRONMENT_CHANGE_SCHEMA={
  }
 }
 
+SECRET_REFERENCE_SCHEMA={'type':'string','pattern':'^cloudiff-secret://[a-z0-9][A-Za-z0-9_.:/-]{2,255}$'}
+SECRET_STAGE_SCHEMA={'type':'string','pattern':'^stage_[a-f0-9]{24}$'}
+SECRET_DEFINITION_SCHEMA={'type':'object','additionalProperties':False,'properties':{
+ 'required':{'type':'boolean'},'secret':{'type':'boolean','const':True},'description':{'type':'string','maxLength':1000},
+ 'scope':{'type':'string','enum':['project','environment','service']},'exposeToClient':{'type':'boolean','const':False},
+ 'immutable':{'type':'boolean'},'restartRequired':{'type':'boolean'},'buildTime':{'type':'boolean'},'runtime':{'type':'boolean'},
+ 'allowedValues':{'type':'array','maxItems':256},'pattern':{'type':'string','maxLength':512},'validation':{'type':'object','additionalProperties':True}
+}}
+
 TOOLS=[
  {'name':'project.list','description':'Lista projetos registrados na CloudIFF','inputSchema':{'type':'object','properties':{},'additionalProperties':False}},
  {'name':'project.get','description':'Obtém projeto pelo slug','inputSchema':{'type':'object','properties':{'slug':{'type':'string','minLength':1}},'required':['slug'],'additionalProperties':False}},
@@ -225,6 +234,18 @@ TOOLS=[
  {'name':'approval.request-environment-promotion','description':'Solicita aprovação humana vinculada à promoção de ambiente planejada','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'plan_digest':{'type':'string','pattern':'^[a-f0-9]{64}$'},'reason':{'type':'string','minLength':4,'maxLength':500},'ttl_seconds':{'type':'integer','minimum':60,'maximum':86400}},'required':['slug','plan_digest','reason'],'additionalProperties':False}},
  {'name':'project.environment.promote.execute','description':'Executa promoção aprovada usando reserve-effect-finalize sem reiniciar containers','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'plan_digest':{'type':'string','pattern':'^[a-f0-9]{64}$'},'approval_id':{'type':'string','pattern':'^apr_[a-f0-9]{20}$'}},'required':['slug','plan_digest','approval_id'],'additionalProperties':False}},
  {'name':'project.environment.history','description':'Consulta histórico sanitizado de alterações de ambiente','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'limit':{'type':'integer','minimum':1,'maximum':500}},'required':['slug'],'additionalProperties':False}},
+ {'name':'project.environment.secret.list','description':'Lista somente metadados, versões, referências opacas e estado dos segredos; nunca retorna valores ou ciphertext','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'environment':ENVIRONMENT_NAME_SCHEMA,'service':ENVIRONMENT_SERVICE_SCHEMA},'required':['slug'],'additionalProperties':False}},
+ {'name':'project.environment.secret.history','description':'Consulta a trilha de auditoria sanitizada do ciclo de vida de segredos','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'limit':{'type':'integer','minimum':1,'maximum':500}},'required':['slug'],'additionalProperties':False}},
+ {'name':'project.environment.secret.stage','description':'Criptografa e armazena temporariamente um novo valor secreto sem ativá-lo no projeto','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'environment':ENVIRONMENT_NAME_SCHEMA,'service':ENVIRONMENT_SERVICE_SCHEMA,'name':ENVIRONMENT_VARIABLE_SCHEMA,'secret_value':{'type':'string','minLength':1,'maxLength':65536},'ttl_seconds':{'type':'integer','minimum':60,'maximum':3600}},'required':['slug','environment','name','secret_value'],'additionalProperties':False}},
+ {'name':'project.environment.secret.rotate.plan','description':'Planeja uma rotação usando um segredo staged; não ativa nem revela o valor','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'stage_id':SECRET_STAGE_SCHEMA,'expected_revision':{'type':'integer','minimum':0},'reason':{'type':'string','minLength':4,'maxLength':500},'definition':SECRET_DEFINITION_SCHEMA,'ttl_seconds':{'type':'integer','minimum':60,'maximum':86400},'active_ttl_seconds':{'type':'integer','minimum':0,'maximum':31536000}},'required':['slug','stage_id','expected_revision','reason'],'additionalProperties':False}},
+ {'name':'approval.request-secret-rotation','description':'Solicita aprovação humana vinculada ao digest exato da rotação de segredo','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'plan_digest':{'type':'string','pattern':'^[a-f0-9]{64}$'},'reason':{'type':'string','minLength':4,'maxLength':500},'ttl_seconds':{'type':'integer','minimum':60,'maximum':86400}},'required':['slug','plan_digest','reason'],'additionalProperties':False}},
+ {'name':'project.environment.secret.rotate.execute','description':'Ativa a rotação aprovada usando reserve-effect-finalize','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'plan_digest':{'type':'string','pattern':'^[a-f0-9]{64}$'},'stage_id':SECRET_STAGE_SCHEMA,'approval_id':{'type':'string','pattern':'^apr_[a-f0-9]{20}$'}},'required':['slug','plan_digest','stage_id','approval_id'],'additionalProperties':False}},
+ {'name':'project.environment.secret.revoke.plan','description':'Planeja a revogação de uma referência secreta ativa sem executar efeito','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'secret_reference':SECRET_REFERENCE_SCHEMA,'expected_revision':{'type':'integer','minimum':0},'reason':{'type':'string','minLength':4,'maxLength':500},'ttl_seconds':{'type':'integer','minimum':60,'maximum':86400}},'required':['slug','secret_reference','expected_revision','reason'],'additionalProperties':False}},
+ {'name':'approval.request-secret-revocation','description':'Solicita aprovação humana vinculada à revogação exata do segredo','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'plan_digest':{'type':'string','pattern':'^[a-f0-9]{64}$'},'reason':{'type':'string','minLength':4,'maxLength':500},'ttl_seconds':{'type':'integer','minimum':60,'maximum':86400}},'required':['slug','plan_digest','reason'],'additionalProperties':False}},
+ {'name':'project.environment.secret.revoke.execute','description':'Executa revogação aprovada usando reserve-effect-finalize','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'plan_digest':{'type':'string','pattern':'^[a-f0-9]{64}$'},'secret_reference':SECRET_REFERENCE_SCHEMA,'approval_id':{'type':'string','pattern':'^apr_[a-f0-9]{20}$'}},'required':['slug','plan_digest','secret_reference','approval_id'],'additionalProperties':False}},
+ {'name':'project.environment.secret.promote.plan','description':'Planeja promoção criptografada de um segredo ativo para outro ambiente sem revelar o valor','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'source_secret_reference':SECRET_REFERENCE_SCHEMA,'target_environment':ENVIRONMENT_NAME_SCHEMA,'expected_revision':{'type':'integer','minimum':0},'reason':{'type':'string','minLength':4,'maxLength':500},'definition':SECRET_DEFINITION_SCHEMA,'ttl_seconds':{'type':'integer','minimum':60,'maximum':86400},'active_ttl_seconds':{'type':'integer','minimum':0,'maximum':31536000}},'required':['slug','source_secret_reference','target_environment','expected_revision','reason'],'additionalProperties':False}},
+ {'name':'approval.request-secret-promotion','description':'Solicita aprovação humana vinculada à promoção exata do segredo entre ambientes','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'plan_digest':{'type':'string','pattern':'^[a-f0-9]{64}$'},'reason':{'type':'string','minLength':4,'maxLength':500},'ttl_seconds':{'type':'integer','minimum':60,'maximum':86400}},'required':['slug','plan_digest','reason'],'additionalProperties':False}},
+ {'name':'project.environment.secret.promote.execute','description':'Executa promoção aprovada e recriptografa o segredo no ambiente de destino','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'plan_digest':{'type':'string','pattern':'^[a-f0-9]{64}$'},'source_secret_reference':SECRET_REFERENCE_SCHEMA,'approval_id':{'type':'string','pattern':'^apr_[a-f0-9]{20}$'}},'required':['slug','plan_digest','source_secret_reference','approval_id'],'additionalProperties':False}},
  {'name':'runtime.catalog','description':'Lista política homologada de runtimes e frameworks sem efeitos','inputSchema':{'type':'object','properties':{},'additionalProperties':False}},
  {'name':'runtime.detect','description':'Detecta framework a partir de evidências sanitizadas do workspace autorizado','inputSchema':{'type':'object','properties':{'slug':{'type':'string','minLength':1,'maxLength':63,'pattern':'^[a-z0-9][a-z0-9-]*$'},'ref':{'type':'string','minLength':1,'maxLength':128,'pattern':'^[A-Za-z0-9._/-]+$'}},'required':['slug'],'additionalProperties':False}},
  {'name':'runtime.plan','description':'Gera plano declarativo usando somente templates homologados','inputSchema':{'type':'object','properties':{'framework':{'type':'string','enum':['static','react','vite','nextjs','vue','nuxt','angular','svelte','sveltekit','astro','express','nestjs','node']},'runtime_version':{'type':'string','enum':['20','22','24']},'package_manager':{'type':'string','enum':['npm','pnpm','yarn']}},'required':['framework'],'additionalProperties':False}},
@@ -373,7 +394,7 @@ def _example_for_schema(schema, field='', include_optional=True, depth=0):
         minimum=schema.get('minimum')
         if minimum is not None:return minimum
         return 1
-    if kind=='boolean':return False
+    if kind=='boolean':return True if key=='runtime' else False
     if kind=='null':return None
     if kind=='string' or kind is None:
         pattern=str(schema.get('pattern') or '')
@@ -389,7 +410,10 @@ def _example_for_schema(schema, field='', include_optional=True, depth=0):
         if key in {'name','names'} and ('A-Z' in pattern or not pattern):return 'APP_NAME'
         if key=='path':return 'site/index.html'
         if 'url' in key:return 'https://example.invalid'
-        if key=='secret_reference':return 'vault://project/meu-projeto/secret'
+        if key in {'secret_reference','source_secret_reference'}:
+            if pattern.startswith('^cloudiff-secret://'):return 'cloudiff-secret://meu-projeto/preview/api/DATABASE_URL/v1'
+            return 'vault://project/meu-projeto/secret'
+        if key=='stage_id':return 'stage_'+'1'*24
         prefix_match=re.fullmatch(r'\^([A-Za-z][A-Za-z0-9_-]*)\_\[a-f0-9\]\{(\d+)\}\\$',pattern)
         if prefix_match:return prefix_match.group(1)+'_'+('1'*int(prefix_match.group(2)))
         fixed_hex=re.fullmatch(r'\^\[a-f0-9\]\{(\d+)\}\\$',pattern) or re.fullmatch(r'\^\[0-9a-f\]\{(\d+)\}\\$',pattern)
@@ -500,7 +524,7 @@ def enrich_tool_error(tool_name,args,error_payload=None,message='Parâmetros inv
 
 
 READ_ONLY_TOOLS={
- 'project.list','project.get','project.connectors','project.technologies.detect','project.manifest.validate','project.configuration.get','project.environment.list','project.environment.get','project.environment.validate','project.environment.change.plan','project.environment.promote.plan','project.environment.history','workspace.normalize.plan','workspace.change-set.validate','forgejo.proposal.change-set.plan','runtime.catalog','runtime.detect','runtime.plan','runtime.validate',
+ 'project.list','project.get','project.connectors','project.technologies.detect','project.manifest.validate','project.configuration.get','project.environment.list','project.environment.get','project.environment.validate','project.environment.change.plan','project.environment.promote.plan','project.environment.history','project.environment.secret.list','project.environment.secret.history','project.environment.secret.rotate.plan','project.environment.secret.revoke.plan','project.environment.secret.promote.plan','workspace.normalize.plan','workspace.change-set.validate','forgejo.proposal.change-set.plan','runtime.catalog','runtime.detect','runtime.plan','runtime.validate',
  'build.plan','build.status','build.logs.read','build.artifact.get','deployment.preview.plan','deployment.preview.status',
  'approval.get','forgejo.proposal.list','forgejo.proposal.merge.plan','supabase.migrations.inspect','supabase.migrations.plan',
  'deployment.production.activation.plan','deployment.production.readiness','deployment.production.homologation.plan',
@@ -513,7 +537,7 @@ READ_ONLY_TOOLS={
 DESTRUCTIVE_TOOLS={
  'forgejo.proposal.delete-branch','forgejo.proposal.merge','deployment.production.homologation.deploy',
  'deployment.production.homologation.rollback','deployment.promote-test','deployment.rollback-test','supabase.operation.execute','forgejo.proposal.change-set.create'
-,'build.multiservice.execute','deployment.multiservice.execute','preview.multiservice.create','preview.multiservice.delete','project.environment.change.execute','project.environment.promote.execute','project.toolchain.build.execute','project.toolchain.image.activate'}
+,'build.multiservice.execute','deployment.multiservice.execute','preview.multiservice.create','preview.multiservice.delete','project.environment.change.execute','project.environment.promote.execute','project.environment.secret.stage','project.environment.secret.rotate.execute','project.environment.secret.revoke.execute','project.environment.secret.promote.execute','project.toolchain.build.execute','project.toolchain.image.activate'}
 OPEN_WORLD_PREFIXES=('forgejo.','supabase.','deployment.','approval.','build.')
 for _tool in TOOLS:
     _name=str(_tool.get('name') or '')
@@ -768,6 +792,126 @@ def project_environment_call(method,slug,path='',payload=None,query=None,timeout
     suffix='/v1/projects/'+urllib.parse.quote(slug,safe='')+'/environment'+path
     if query:suffix+='?'+urllib.parse.urlencode(query)
     return project_config_call(method,suffix,payload,timeout)
+
+def project_secret_call(method,slug,path='',payload=None,query=None,timeout=45):
+    suffix='/v1/projects/'+urllib.parse.quote(slug,safe='')+'/environment/secrets'+path
+    if query:suffix+='?'+urllib.parse.urlencode(query)
+    return project_config_call(method,suffix,payload,timeout)
+
+def secret_plan_get(slug,plan_digest):
+    code,data=project_secret_call('GET',slug,'/plans/'+urllib.parse.quote(plan_digest,safe=''))
+    if code!=200 or not data.get('ok'):
+        error=data.get('error') or {};raise ValueError(str(error.get('message') if isinstance(error,dict) else error or 'secret_plan_not_found'))
+    if data.get('secretValueIncluded') is not False or data.get('ciphertextIncluded') is not False:raise ValueError('secret_plan_public_contract_invalid')
+    return data
+
+def secret_approval_create(slug,client_id,authz,plan,reason,ttl,trace_id):
+    actions={'rotate':'project.environment.secret.rotation','revoke':'project.environment.secret.revocation','promote':'project.environment.secret.promotion'}
+    action=actions.get(str(plan.get('action') or ''))
+    if not action:raise ValueError('unsupported_secret_action')
+    metadata={
+      'secret_plan_digest':plan.get('planDigest'),'secret_action':plan.get('action'),
+      'environment':plan.get('environment'),'service':plan.get('service'),'name':plan.get('name'),
+      'stage_id':plan.get('stageId'),'secret_reference':plan.get('secretReference'),'source_secret_reference':plan.get('sourceSecretReference'),
+      'expected_revision':plan.get('expectedRevision'),'target_version':plan.get('targetVersion'),
+      'content_stored':False,'secret_values_in_metadata':False,'ciphertext_in_metadata':False,
+    }
+    payload={'project_slug':slug,'action':action,'requested_by':client_id,'requester_role':str(authz.get('project_role') or 'agent'),'ttl_seconds':ttl,'reason':reason,'trace_id':trace_id,'metadata':metadata}
+    request=urllib.request.Request(APPROVAL_URL+'/v1/approvals',data=json.dumps(payload,ensure_ascii=False,separators=(',',':')).encode(),method='POST',headers={'Authorization':'Bearer '+APPROVAL_TOKEN,'Content-Type':'application/json','Accept':'application/json'})
+    try:
+        with urllib.request.urlopen(request,timeout=10) as response:return json.load(response)
+    except urllib.error.HTTPError as error:
+        try:data=json.load(error)
+        except Exception:data={}
+        raise ValueError(str(data.get('error') or 'approval_create_failed')) from error
+
+def secret_plan_metadata(plan):
+    return {
+      'secret_plan_digest':plan.get('planDigest'),'secret_action':plan.get('action'),
+      'environment':plan.get('environment'),'service':plan.get('service'),'name':plan.get('name'),
+      'stage_id':plan.get('stageId'),'secret_reference':plan.get('secretReference'),'source_secret_reference':plan.get('sourceSecretReference'),
+      'expected_revision':plan.get('expectedRevision'),'target_version':plan.get('targetVersion'),
+      'content_stored':False,'secret_values_in_metadata':False,'ciphertext_in_metadata':False,
+    }
+
+SECRET_READ_PLAN_TOOLS={'project.environment.secret.list','project.environment.secret.history','project.environment.secret.stage','project.environment.secret.rotate.plan','project.environment.secret.revoke.plan','project.environment.secret.promote.plan'}
+SECRET_APPROVAL_TOOLS={'approval.request-secret-rotation','approval.request-secret-revocation','approval.request-secret-promotion'}
+SECRET_EXECUTE_TOOLS={'project.environment.secret.rotate.execute','project.environment.secret.revoke.execute','project.environment.secret.promote.execute'}
+
+def secret_mcp_read_or_plan(name,args,authz,client_id,trace_id):
+    slug=str(args.get('slug') or '').strip();actor=supabase_actor_user(authz) or client_id
+    control('/v1/projects/'+urllib.parse.quote(slug,safe=''))
+    if name=='project.environment.secret.list':
+        query={}
+        if args.get('environment'):query['environment']=str(args['environment'])
+        if args.get('service'):query['service']=str(args['service'])
+        code,data=project_secret_call('GET',slug,query=query)
+    elif name=='project.environment.secret.history':
+        code,data=project_secret_call('GET',slug,'/history',query={'limit':int(args.get('limit') or 100)})
+    elif name=='project.environment.secret.stage':
+        secret_value=args.get('secret_value')
+        try:
+            payload={'environment':args['environment'],'service':str(args.get('service') or ''),'name':args['name'],'secretValue':secret_value,'ttlSeconds':int(args.get('ttl_seconds') or 900),'actor':actor}
+            code,data=project_secret_call('POST',slug,'/stage',payload,timeout=30)
+        finally:
+            secret_value=None
+    elif name=='project.environment.secret.rotate.plan':
+        payload={'stageId':args['stage_id'],'expectedRevision':int(args['expected_revision']),'reason':args['reason'],'definition':args.get('definition') or {},'ttlSeconds':int(args.get('ttl_seconds') or 900),'activeTtlSeconds':int(args.get('active_ttl_seconds') or 0),'actor':actor}
+        code,data=project_secret_call('POST',slug,'/rotate/plan',payload)
+    elif name=='project.environment.secret.revoke.plan':
+        payload={'secretReference':args['secret_reference'],'expectedRevision':int(args['expected_revision']),'reason':args['reason'],'ttlSeconds':int(args.get('ttl_seconds') or 900),'actor':actor}
+        code,data=project_secret_call('POST',slug,'/revoke/plan',payload)
+    else:
+        payload={'sourceSecretReference':args['source_secret_reference'],'targetEnvironment':args['target_environment'],'expectedRevision':int(args['expected_revision']),'reason':args['reason'],'definition':args.get('definition') or {},'ttlSeconds':int(args.get('ttl_seconds') or 900),'activeTtlSeconds':int(args.get('active_ttl_seconds') or 0),'actor':actor}
+        code,data=project_secret_call('POST',slug,'/promote/plan',payload)
+    if code not in {200,201} or not data.get('ok'):
+        error=data.get('error') or {};raise ValueError(str(error.get('message') if isinstance(error,dict) else error or 'secret_operation_failed'))
+    if data.get('secretValueIncluded') is True or data.get('secretValuesIncluded') is True or data.get('ciphertextIncluded') is True or data.get('ciphertextsIncluded') is True:raise ValueError('secret_public_contract_violation')
+    return data
+
+def secret_mcp_request_approval(name,args,authz,client_id,trace_id):
+    slug=str(args['slug']).strip();plan_digest=str(args['plan_digest']).strip().lower();reason=str(args['reason']).strip();ttl=int(args.get('ttl_seconds') or 900)
+    control('/v1/projects/'+urllib.parse.quote(slug,safe=''));plan=secret_plan_get(slug,plan_digest)
+    expected_action={'approval.request-secret-rotation':'rotate','approval.request-secret-revocation':'revoke','approval.request-secret-promotion':'promote'}[name]
+    if plan.get('action')!=expected_action:raise ValueError('secret_plan_action_mismatch')
+    if plan.get('consumed') or plan.get('status')!='planned' or int(plan.get('expiresAt') or 0)<=int(time.time()):raise ValueError('secret_plan_unavailable')
+    created=secret_approval_create(slug,client_id,authz,plan,reason,ttl,trace_id)
+    if not created.get('ok') or created.get('status') not in {'pending','approved'}:raise ValueError('approval_create_failed')
+    return {'ok':True,'approval_id':created['approval_id'],'status':created.get('status'),'expires_at':created['expires_at'],'policy_applied':bool(created.get('policy_applied')),'approval_policy_id':created.get('approval_policy_id'),'project_slug':slug,'plan_digest':plan_digest,'secret_action':expected_action,'side_effects':False,'content_stored_in_approval':False,'secret_values_in_metadata':False,'ciphertext_in_metadata':False}
+
+def secret_mcp_execute(name,args,authz,client_id,trace_id):
+    slug=str(args['slug']).strip();plan_digest=str(args['plan_digest']).strip().lower();approval_id=str(args['approval_id']).strip();plan=secret_plan_get(slug,plan_digest)
+    action_key={'project.environment.secret.rotate.execute':'rotate','project.environment.secret.revoke.execute':'revoke','project.environment.secret.promote.execute':'promote'}[name]
+    if plan.get('action')!=action_key:raise ValueError('secret_plan_action_mismatch')
+    if action_key=='rotate' and not hmac.compare_digest(str(args['stage_id']),str(plan.get('stageId') or '')):raise ValueError('secret_stage_binding_mismatch')
+    if action_key=='revoke' and not hmac.compare_digest(str(args['secret_reference']),str(plan.get('secretReference') or '')):raise ValueError('secret_reference_binding_mismatch')
+    if action_key=='promote' and not hmac.compare_digest(str(args['source_secret_reference']),str(plan.get('sourceSecretReference') or '')):raise ValueError('source_secret_reference_binding_mismatch')
+    approval=approval_get(approval_id)
+    if not approval:raise ValueError('approval_not_found')
+    try:metadata=json.loads(approval.get('metadata_json') or '{}')
+    except Exception:raise ValueError('approval_metadata_invalid')
+    approval_action={'rotate':'project.environment.secret.rotation','revoke':'project.environment.secret.revocation','promote':'project.environment.secret.promotion'}[action_key]
+    reservation_id,execution_id=transaction_ids(approval_action,approval_id,client_id,plan_digest)
+    valid_status=approval.get('status')=='approved' or (approval.get('status') in {'reserved','consumed'} and approval.get('reservation_id')==reservation_id)
+    expected=secret_plan_metadata(plan)
+    valid=bool(valid_status and approval.get('project_slug')==slug and approval.get('action')==approval_action and approval.get('requested_by')==client_id and approval.get('approved_by') and all(metadata.get(key)==value for key,value in expected.items()))
+    if not valid:raise ValueError('approval_binding_mismatch')
+    if approval.get('status')=='approved':
+        reserve_code,reserved=approval_transition(approval_id,'reserve',{'reservation_id':reservation_id,'reserved_by':client_id,'ttl_seconds':900})
+        if reserve_code!=200 or reserved.get('status')!='reserved':raise ValueError('approval_reserve_failed')
+    actor=supabase_actor_user(authz) or client_id;payload={'planDigest':plan_digest,'expectedRevision':int(plan['expectedRevision']),'approved':True,'actor':actor,'executionId':execution_id}
+    if action_key=='rotate':payload['stageId']=args['stage_id'];path='/rotate/apply'
+    elif action_key=='revoke':payload['secretReference']=args['secret_reference'];path='/revoke/apply'
+    else:payload['sourceSecretReference']=args['source_secret_reference'];path='/promote/apply'
+    code,data=project_secret_call('POST',slug,path,payload,timeout=120);current=approval_get(approval_id)
+    if code==200 and data.get('ok'):
+        if data.get('secretValueIncluded') is True or data.get('ciphertextIncluded') is True:raise ValueError('secret_public_contract_violation')
+        if current and current.get('status')!='consumed':
+            final_code,finalized=approval_transition(approval_id,'finalize',{'reservation_id':reservation_id,'result':'success'})
+            if final_code!=200 or finalized.get('status')!='consumed':raise ValueError('approval_finalize_failed')
+        data['transaction']={'approval_id':approval_id,'reservation_id':reservation_id,'execution_id':execution_id,'approval_status':'consumed'};data['secretValuesIncluded']=False;data['ciphertextIncluded']=False;return data
+    if current and current.get('status')=='reserved':approval_transition(approval_id,'release',{'reservation_id':reservation_id})
+    error=data.get('error') or {};raise ValueError(str(error.get('message') if isinstance(error,dict) else error or 'secret_apply_failed'))
 
 def environment_plan_get(slug,plan_digest):
     code,data=project_environment_call('GET',slug,'/plans/'+urllib.parse.quote(plan_digest,safe=''))
@@ -1158,6 +1302,7 @@ def homologation_call(path,payload,timeout=300):
 
 SCOPE_BY_TOOL={
  'project.environment.list':'project:environment-read','project.environment.get':'project:environment-read','project.environment.validate':'project:environment-plan','project.environment.change.plan':'project:environment-plan','approval.request-environment-change':'approval:request-environment-change','project.environment.change.execute':'project:environment-execute','project.environment.promote.plan':'project:environment-plan','approval.request-environment-promotion':'approval:request-environment-promotion','project.environment.promote.execute':'project:environment-promote','project.environment.history':'project:environment-read',
+ 'project.environment.secret.list':'project:environment-secret-read','project.environment.secret.history':'project:environment-secret-read','project.environment.secret.stage':'project:environment-secret-stage','project.environment.secret.rotate.plan':'project:environment-secret-plan','approval.request-secret-rotation':'approval:request-secret-rotation','project.environment.secret.rotate.execute':'project:environment-secret-execute','project.environment.secret.revoke.plan':'project:environment-secret-plan','approval.request-secret-revocation':'approval:request-secret-revocation','project.environment.secret.revoke.execute':'project:environment-secret-execute','project.environment.secret.promote.plan':'project:environment-secret-plan','approval.request-secret-promotion':'approval:request-secret-promotion','project.environment.secret.promote.execute':'project:environment-secret-execute',
  'project.toolchain.get':'project:toolchain-read','project.toolchain.validate':'project:toolchain-plan','project.toolchain.plan':'project:toolchain-plan','project.toolchain.build.plan':'project:toolchain-plan','approval.request-toolchain-build':'approval:request-toolchain-build','project.toolchain.build.execute':'project:toolchain-build-execute','project.toolchain.build.status':'project:toolchain-read','project.toolchain.logs.read':'project:toolchain-read','project.toolchain.image.list':'project:toolchain-read','project.toolchain.image.get':'project:toolchain-read','project.toolchain.image.activate.plan':'project:toolchain-activate-plan','approval.request-toolchain-activation':'approval:request-toolchain-activation','project.toolchain.image.activate':'project:toolchain-activate-execute',
  'runtime.catalog':'project:read','runtime.detect':'project:read','runtime.plan':'project:read','runtime.validate':'project:read','project.technologies.detect':'workspace:detect-multiservice','project.manifest.validate':'project:configuration-read','project.configuration.get':'project:configuration-read','build.plan':'project:read','build.multiservice.plan':'build:multiservice-plan','build.multiservice.status':'build:multiservice-plan','approval.request-multiservice-build':'approval:request-multiservice-build','build.multiservice.execute':'build:multiservice-execute','preview.multiservice.plan':'preview:multiservice-plan','preview.multiservice.status':'preview:multiservice-plan','approval.request-multiservice-preview':'approval:request-multiservice-preview','preview.multiservice.create':'preview:multiservice-execute','preview.multiservice.delete':'preview:multiservice-delete','build.request':'workspace:test-static','build.status':'project:read','build.logs.read':'project:read','build.artifact.get':'project:read','deployment.multiservice.plan':'deployment:multiservice-plan','deployment.multiservice.status':'deployment:multiservice-plan','approval.request-multiservice-deployment':'approval:request-multiservice-deployment','deployment.multiservice.execute':'deployment:multiservice-execute','deployment.preview.plan':'project:read','deployment.preview.status':'project:read','approval.request-preview':'approval:request-preview','deployment.preview':'deployment:preview',
  'workspace.probe':'workspace:probe','workspace.prepare':'workspace:prepare','workspace.validate':'workspace:validate','workspace.test-static':'workspace:test-static','workspace.preview-static':'workspace:preview-static','workspace.edit-preview':'workspace:edit-preview',
@@ -1430,6 +1575,12 @@ class H(BaseHTTPRequestHandler):
                         code,configured=project_config_call('GET','/v1/projects/'+urllib.parse.quote(slug,safe='')+'/configuration')
                         if code not in {200,404}:raise ValueError('Falha ao consultar a configuração efetiva do projeto.')
                         content=configured
+                elif name in SECRET_READ_PLAN_TOOLS:
+                    content=secret_mcp_read_or_plan(name,args,authz,client_id,trace_id)
+                elif name in SECRET_APPROVAL_TOOLS:
+                    content=secret_mcp_request_approval(name,args,authz,client_id,trace_id)
+                elif name in SECRET_EXECUTE_TOOLS:
+                    content=secret_mcp_execute(name,args,authz,client_id,trace_id)
                 elif name in {'project.environment.list','project.environment.get','project.environment.validate','project.environment.change.plan','project.environment.promote.plan','project.environment.history'}:
                     args,input_normalization=_unwrap_tool_arguments(args)
                     slug=str(args.get('slug') or '').strip();control('/v1/projects/'+urllib.parse.quote(slug,safe=''))

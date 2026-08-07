@@ -58,6 +58,16 @@ except ModuleNotFoundError:
     assert _environment_spec.loader
     _environment_spec.loader.exec_module(project_environment)
 
+_SECRET_STORE_PATH = Path(__file__).with_name('cloudif_project_secret_store.py')
+try:
+    import cloudif_project_secret_store as project_secret_store
+except ModuleNotFoundError:
+    _secret_spec = importlib.util.spec_from_file_location('cloudif_project_secret_store', _SECRET_STORE_PATH)
+    project_secret_store = importlib.util.module_from_spec(_secret_spec)
+    assert _secret_spec.loader
+    _secret_spec.loader.exec_module(project_secret_store)
+SECRET_RESOLVER_TOKEN=os.environ.get('CLOUDIF_SECRET_RESOLVER_TOKEN','')
+
 
 @dataclass
 class ManifestResult:
@@ -158,6 +168,7 @@ def init_db() -> None:
     conn.close()
     os.chmod(STATE_DB, 0o600)
     project_environment.init_db()
+    project_secret_store.init_db()
 
 
 def project_exists(slug: str) -> dict[str, Any]:
@@ -974,6 +985,22 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json(404, {'ok': False, 'error': {'code': str(exc), 'message': 'Plano de ambiente não encontrado.'}})
             except ValueError as exc:
                 return self.send_json(400, {'ok': False, 'error': {'code': str(exc), 'message': 'Digest de plano inválido.'}})
+        secret_plan_match = re.fullmatch(r'/v1/projects/([a-z0-9][a-z0-9-]{0,62})/environment/secrets/plans/([a-f0-9]{64})', parsed.path)
+        if secret_plan_match:
+            try:return self.send_json(200,project_secret_store.get_plan(*secret_plan_match.groups()))
+            except LookupError as exc:return self.send_json(404,{'ok':False,'error':{'code':str(exc),'message':'Plano de segredo não encontrado.'}})
+            except ValueError as exc:return self.send_json(400,{'ok':False,'error':{'code':str(exc),'message':'Digest de plano inválido.'}})
+        secret_match = re.fullmatch(r'/v1/projects/([a-z0-9][a-z0-9-]{0,62})/environment/secrets(?:/(history))?', parsed.path)
+        if secret_match:
+            slug, operation = secret_match.groups(); query = urllib.parse.parse_qs(parsed.query)
+            try:
+                if operation == 'history':
+                    return self.send_json(200, project_secret_store.history(slug, int((query.get('limit') or ['100'])[0])))
+                return self.send_json(200, project_secret_store.list_secrets(slug, (query.get('environment') or [''])[0], (query.get('service') or [''])[0]))
+            except LookupError as exc:
+                return self.send_json(404, {'ok': False, 'error': {'code': str(exc), 'message': 'Segredo não encontrado.'}})
+            except ValueError as exc:
+                return self.send_json(400, {'ok': False, 'error': {'code': str(exc), 'message': 'Filtro de segredo inválido.'}})
         environment_match = re.fullmatch(r'/v1/projects/([a-z0-9][a-z0-9-]{0,62})/environment(?:/(history|missing|effective|effective-internal))?', parsed.path)
         if environment_match:
             slug, operation = environment_match.groups(); query = urllib.parse.parse_qs(parsed.query)
@@ -1019,6 +1046,37 @@ class Handler(BaseHTTPRequestHandler):
                     'secretValuesIncluded': False,
                 })
             parsed_path = urllib.parse.urlparse(self.path).path
+            secret_match = re.fullmatch(r'/v1/projects/([a-z0-9][a-z0-9-]{0,62})/environment/secrets/(stage|rotate/plan|rotate/apply|revoke/plan|revoke/apply|promote/plan|promote/apply|resolve-internal)', parsed_path)
+            if secret_match:
+                slug, operation = secret_match.groups(); actor = str(body.get('actor') or 'internal').strip()[:128]
+                expected = int(body.get('expectedRevision', body.get('expected_revision', 0)) or 0)
+                if operation=='stage':
+                    payload=dict(body);value=payload.pop('secretValue', payload.pop('secret_value', None))
+                    try:
+                        result=project_secret_store.stage_secret(slug, str(payload.get('environment') or ''), str(payload.get('service') or ''), str(payload.get('name') or ''), value, actor, int(payload.get('ttlSeconds', payload.get('ttl_seconds', 900)) or 900))
+                    finally:value=None
+                    return self.send_json(201,result)
+                if operation=='rotate/plan':
+                    result=project_secret_store.rotation_plan(slug,str(body.get('stageId',body.get('stage_id',''))),expected,actor,str(body.get('reason') or ''),body.get('definition') or {},int(body.get('ttlSeconds',body.get('ttl_seconds',900)) or 900),int(body.get('activeTtlSeconds',body.get('active_ttl_seconds',0)) or 0));return self.send_json(200,result)
+                if operation=='rotate/apply':
+                    if not body.get('approved'):return self.send_json(403,{'ok':False,'error':{'code':'approval_required','message':'A rotação exige aprovação humana.'}})
+                    result=project_secret_store.apply_rotation(slug,str(body.get('planDigest',body.get('plan_digest',''))),str(body.get('stageId',body.get('stage_id',''))),expected,actor);return self.send_json(200,result)
+                if operation=='revoke/plan':
+                    result=project_secret_store.revocation_plan(slug,str(body.get('secretReference',body.get('secret_reference',''))),expected,actor,str(body.get('reason') or ''),int(body.get('ttlSeconds',body.get('ttl_seconds',900)) or 900));return self.send_json(200,result)
+                if operation=='revoke/apply':
+                    if not body.get('approved'):return self.send_json(403,{'ok':False,'error':{'code':'approval_required','message':'A revogação exige aprovação humana.'}})
+                    result=project_secret_store.apply_revocation(slug,str(body.get('planDigest',body.get('plan_digest',''))),str(body.get('secretReference',body.get('secret_reference',''))),expected,actor);return self.send_json(200,result)
+                if operation=='promote/plan':
+                    result=project_secret_store.promotion_plan(slug,str(body.get('sourceSecretReference',body.get('source_secret_reference',''))),str(body.get('targetEnvironment',body.get('target_environment',''))),expected,actor,str(body.get('reason') or ''),body.get('definition') or {},int(body.get('ttlSeconds',body.get('ttl_seconds',900)) or 900),int(body.get('activeTtlSeconds',body.get('active_ttl_seconds',0)) or 0));return self.send_json(200,result)
+                if operation=='promote/apply':
+                    if not body.get('approved'):return self.send_json(403,{'ok':False,'error':{'code':'approval_required','message':'A promoção de segredo exige aprovação humana.'}})
+                    result=project_secret_store.apply_promotion(slug,str(body.get('planDigest',body.get('plan_digest',''))),str(body.get('sourceSecretReference',body.get('source_secret_reference',''))),expected,actor);return self.send_json(200,result)
+                if operation=='resolve-internal':
+                    provided=str(self.headers.get('X-CloudIF-Secret-Resolver-Token') or '')
+                    if not SECRET_RESOLVER_TOKEN or not provided or not hmac.compare_digest(provided,SECRET_RESOLVER_TOKEN):
+                        return self.send_json(403,{'ok':False,'error':{'code':'secret_resolver_forbidden','message':'Autorização adicional do resolvedor de segredos é obrigatória.'}})
+                    result=project_secret_store.resolve_internal(slug,str(body.get('environment') or ''),body.get('references') or {},actor);return self.send_json(200,result)
+                return self.send_json(404,{'ok':False,'error':{'code':'secret_operation_not_found'}})
             environment_match = re.fullmatch(r'/v1/projects/([a-z0-9][a-z0-9-]{0,62})/environment/(validate|change/plan|change/apply|promote/plan|promote/apply)', parsed_path)
             if environment_match:
                 slug, operation = environment_match.groups(); actor = str(body.get('actor') or 'internal').strip()[:128]
