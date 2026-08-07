@@ -83,6 +83,13 @@ class ProjectPublicationConfigurationV1Tests(unittest.TestCase):
         self.assertIn('result=publications.base_workspace_preflight(slug,user)',portal)
         self.assertIn('result=publications.ensure_base_workspace(slug,user)',portal)
         self.assertIn('def base_workspace_preflight',PUBLICATIONS.read_text())
+        self.assertIn('html[data-theme=\"dark\"] #cloudif-environment-wizard',portal)
+        self.assertIn('--c-surface:var(--cif-surface)',portal)
+        self.assertIn('#cloudif-environment-wizard .wizard-close{background:transparent!important',portal)
+        self.assertIn('.project-tabs button[aria-selected=\"true\"]{background:#176b35!important',portal)
+        self.assertIn('html[data-theme=\"dark\"] .project-tabs button{background:#0b1510!important',portal)
+        self.assertIn('project-final__section project-final__publication',portal)
+        self.assertIn('.project-final__publication .project-final__actions form .btn{background:var(--iff,#168821)!important',portal)
 
     def test_configuration_change_uses_partitioned_reconcile_and_runtime_reconciler(self):
         client=RECONCILE_CLIENT.read_text();worker=RECONCILE.read_text();unit=RECONCILE_UNIT.read_text()
