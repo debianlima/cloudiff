@@ -68,7 +68,7 @@ class ProjectPublicationConfigurationV1Tests(unittest.TestCase):
     def test_wizard_and_base_controls_are_in_project_publication_ui(self):
         portal=PORTAL.read_text();ui=PUB_UI.read_text();env=ENV_WEB.read_text()
         self.assertIn('data-env-wizard',ui);self.assertIn('Abrir base no Komodo',ui)
-        self.assertIn('env-wizard-dialog',portal);self.assertIn("createElement('dialog')",portal);self.assertIn('envLayer.showModal()',portal);self.assertIn('.env-wizard-dialog::backdrop',portal);self.assertIn("change/plan",portal);self.assertIn("approval/request",portal);self.assertIn("change/execute",portal)
+        self.assertIn("envLayer.className='cloudif-wizard'",portal);self.assertIn('wizard-box env-wizard-box',portal);self.assertIn('class=\"wizard-head\"',portal);self.assertIn('class=\"pm-field\"',portal);self.assertIn('class=\"pm-new-footer\"',portal);self.assertNotIn("createElement('dialog')",portal);self.assertNotIn('env-wizard-dialog::backdrop',portal);self.assertIn("change/plan",portal);self.assertIn("approval/request",portal);self.assertIn("change/execute",portal)
         self.assertIn('approval/status',env);self.assertIn('valores secretos nunca são carregados',portal)
         self.assertIn('open_base_workspace',portal);self.assertIn('canWrite',PUBLICATIONS.read_text())
         final_renderer=portal[portal.index('def _pm197_render'):portal.index('render_projects=_pm197_render')]
