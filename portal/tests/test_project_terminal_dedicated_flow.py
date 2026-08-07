@@ -39,6 +39,16 @@ class ProjectTerminalDedicatedFlowTests(unittest.TestCase):
         self.assertIn("parsed_target.hostname!='komodoiff.duckdns.org'",source)
         self.assertIn("'terminalReady':True",source)
         self.assertIn("'secretValuesIncluded':False",source)
+        self.assertIn('except urllib.error.HTTPError as exc:',source)
+        self.assertIn("'missing_compose':'A stack do projeto não possui docker-compose.yml.'",source)
+        self.assertIn("'container_not_running':'O container do projeto não está em execução.'",source)
+        self.assertIn('Verificar ambiente',source)
+        self.assertIn('data.message||data.error',source)
+        self.assertIn("agent_code in {'container_not_running','missing_compose','stack_metadata_reconcile_failed'}",source)
+        self.assertIn('publications.ensure_base_workspace(slug,user)',source)
+        self.assertIn("'terminalSource':'base_workspace'",source)
+        self.assertIn("data.terminalSource==='base_workspace'",source)
+        self.assertIn('Runtime da publicação indisponível. Abrindo o container-base',source)
 
     def test_terminal_errors_never_render_legacy_portal(self):
         portal=PORTAL.read_text();coexist=COEXIST.read_text()
