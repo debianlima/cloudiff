@@ -6,6 +6,7 @@ class RuntimeCardsOpenKomodoTests(unittest.TestCase):
     def setUpClass(cls):
         cls.pub=Path('components/control-plane/current-apps/portal-current/cloudif_ui_publications.py').read_text()
         cls.base=Path('components/control-plane/current-apps/portal-current/cloudif-admin-portal-base.py').read_text()
+        cls.coexist=Path('components/control-plane/srv/cloudif/lib/cloudif_portal_v2_coexist.py').read_text()
     def test_cards_use_internal_buttons(self):
         for marker in ('publication-runtime-card','Configuração do PHP','Runtime do Node.js','Ver informações do PHP'):
             self.assertIn(marker,self.pub)
@@ -22,7 +23,7 @@ class RuntimeCardsOpenKomodoTests(unittest.TestCase):
         self.assertNotIn('open-project-terminal?slug=',route)
     def test_fixed_diagnostic_commands_end_in_interactive_shell(self):
         for marker in ('php -i','process.versions','package.json','exec sh','phpinfo-','nodeinfo-'):
-            self.assertIn(marker,self.base)
-        self.assertNotIn('q.get(\'command\')',self.base)
+            self.assertIn(marker,self.coexist)
+        self.assertNotIn('q.get(\'command\')',self.base+self.coexist)
 
 if __name__=='__main__': unittest.main()

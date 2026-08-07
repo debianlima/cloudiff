@@ -5352,7 +5352,7 @@ def _rd_page(user):
 <script>
 (()=>{const csrf=__CSRF__;const grid=document.getElementById('rd-grid'),search=document.getElementById('rd-search'),filter=document.getElementById('rd-filter');let rows=[];const esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 function level(x){if(!x.stack_id||x.error||x.missing_files?.length)return'critical';if(x.healthy)return'healthy';return'warning'}
-function render(){const q=search.value.toLowerCase(),f=filter.value;const shown=rows.filter(x=>(f==='all'||level(x)===f)&&JSON.stringify(x).toLowerCase().includes(q));grid.innerHTML=shown.length?shown.map(x=>{const l=level(x),issues=(x.issues||[]).map(i=>'<li>'+esc({'missing_stack_id':'Stack não vinculado','missing_compose':'docker-compose.yml ausente','stack_not_running':'Stack parado','terminal_invalid':'Terminal ausente ou shell inválido','stack_unavailable':'Stack indisponível'}[i]||i)+'</li>').join('');const term=x.stack_id?'/cloudiff/portal/action/open-project-terminal?slug='+encodeURIComponent(x.project):'#';return`<article class="rd-card ${l}" data-project="${esc(x.project)}"><h3>${esc(x.name||x.project)}</h3><div class="rd-meta">${esc(x.tenant||'')} · ${esc(x.stack_name||x.stack_id||'sem stack')}</div><div class="rd-pills"><span class="rd-pill">${esc(x.state||'desconhecido')}</span><span class="rd-pill">terminal ${x.terminal_ok?'OK':'pendente'}</span><span class="rd-pill">${esc(x.service||'web')}</span></div><ul>${issues||'<li>Nenhum problema detectado.</li>'}</ul><footer><button data-repair="${esc(x.project)}" ${!x.can_repair?'disabled':''}>Reparar</button><a target="_blank" href="${term}">Abrir terminal</a></footer></article>`}).join(''):'<div class="rd-loading">Nenhum projeto encontrado.</div>';grid.querySelectorAll('[data-repair]').forEach(b=>b.onclick=()=>repair(b.dataset.repair,b));}
+function render(){const q=search.value.toLowerCase(),f=filter.value;const shown=rows.filter(x=>(f==='all'||level(x)===f)&&JSON.stringify(x).toLowerCase().includes(q));grid.innerHTML=shown.length?shown.map(x=>{const l=level(x),issues=(x.issues||[]).map(i=>'<li>'+esc({'missing_stack_id':'Stack não vinculado','missing_compose':'docker-compose.yml ausente','stack_not_running':'Stack parado','terminal_invalid':'Terminal ausente ou shell inválido','stack_unavailable':'Stack indisponível'}[i]||i)+'</li>').join('');const term=x.stack_id?'/cloudiff/portal/project-terminal/'+encodeURIComponent(x.project):'#';return`<article class="rd-card ${l}" data-project="${esc(x.project)}"><h3>${esc(x.name||x.project)}</h3><div class="rd-meta">${esc(x.tenant||'')} · ${esc(x.stack_name||x.stack_id||'sem stack')}</div><div class="rd-pills"><span class="rd-pill">${esc(x.state||'desconhecido')}</span><span class="rd-pill">terminal ${x.terminal_ok?'OK':'pendente'}</span><span class="rd-pill">${esc(x.service||'web')}</span></div><ul>${issues||'<li>Nenhum problema detectado.</li>'}</ul><footer><button data-repair="${esc(x.project)}" ${!x.can_repair?'disabled':''}>Reparar</button><a target="_blank" href="${term}">Abrir terminal</a></footer></article>`}).join(''):'<div class="rd-loading">Nenhum projeto encontrado.</div>';grid.querySelectorAll('[data-repair]').forEach(b=>b.onclick=()=>repair(b.dataset.repair,b));}
 function summary(){const total=rows.length,ok=rows.filter(x=>level(x)==='healthy').length,warn=rows.filter(x=>level(x)==='warning').length,bad=total-ok-warn,score=total?Math.round(ok/total*100):0;document.getElementById('rd-ok').textContent=ok;document.getElementById('rd-warn').textContent=warn;document.getElementById('rd-bad').textContent=bad;document.getElementById('rd-total').textContent=total;document.getElementById('rd-score').textContent=score+'%';document.getElementById('rd-ring').style.background=`conic-gradient(#28c76f ${score}%,#26362d 0)`;document.getElementById('rd-updated').textContent='Atualizado em '+new Date().toLocaleTimeString('pt-BR');}
 async function load(){grid.classList.add('rd-spin');try{const r=await fetch('/cloudiff/portal/api/repair-dashboard',{credentials:'same-origin'});const d=await r.json();rows=d.items||[];summary();render()}catch(e){grid.innerHTML='<div class="rd-loading">Falha ao consultar o agente.</div>'}finally{grid.classList.remove('rd-spin')}}
 async function repair(project,btn){btn.disabled=true;btn.textContent='Reparando…';try{const body=new URLSearchParams({csrf_token:csrf,project});const r=await fetch('/cloudiff/portal/action/repair-project',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/x-www-form-urlencoded'},body});const d=await r.json();if(!r.ok)alert(d.error||'Falha na reparação');await load()}finally{btn.disabled=false;btn.textContent='Reparar'}}
@@ -5463,30 +5463,12 @@ if 'Portal' in globals() and not globals().get('_rd_wrapped'):
                 )
                 return self.send_html(body,503)
         if path in ('/cloudiff/portal/action/open-project-terminal','/cloudif/portal/action/open-project-terminal','/action/open-project-terminal'):
-            q=_rd_parse.parse_qs(parsed.query);slug=(q.get('slug') or [''])[0];kind=((q.get('kind') or [''])[0]).lower()
-            p=next((x for x in _rd_projects(user) if x['slug']==slug),None)
-            if not p or not p['stack_id']:return self.send_error(404)
-            terminal='cloudif-'+slug; shell='sh'
-            if kind=='php':
-                terminal='phpinfo-'+slug
-                shell="sh -lc 'clear; echo CloudIFF-PHP; php -i; echo; echo Terminal-interativo-liberado; exec sh'"
-            elif kind=='node':
-                terminal='nodeinfo-'+slug
-                shell="sh -lc 'clear; echo CloudIFF-Node.js; node -e \"console.log(process.version);console.log(JSON.stringify(process.versions,null,2))\"; echo; echo npm=$(npm --version 2>/dev/null || echo indisponivel); if [ -f /var/www/html/api/package.json ]; then echo; cat /var/www/html/api/package.json; fi; echo; echo Terminal-interativo-liberado; exec sh'"
+            q=_rd_parse.parse_qs(parsed.query);slug=(q.get('slug') or [''])[0].strip();kind=((q.get('kind') or [''])[0]).strip().lower()
+            if not re.fullmatch(r'[a-z0-9][a-z0-9-]{0,62}',slug):return self.send_error(404)
+            target='/cloudiff/portal/project-terminal/'+_rd_parse.quote(slug,safe='')
+            if kind in ('php','node'):target+='?kind='+_rd_parse.quote(kind,safe='')
             elif kind:return self.send_error(404)
-            access=_rd_project_access(slug)
-            if not _rd_actor_allowed(user,access):return self.send_error(403)
-            actor=str(user.get('username') or '').strip().lower()
-            actor_groups=[str(x).strip() for x in (user.get('groups') or []) if str(x).strip()]
-            try:
-                ensured=_rd_agent('/komodo/project/terminal/ensure',{'project':slug,'stack_id':p['stack_id'],'service':p['service'],'terminal':terminal,'shell':shell,'actor_username':actor,'actor_groups':actor_groups,'project_owner':access.get('owner') or '','access':access},timeout=45)
-                target=str(ensured.get('url') or '')
-                if not target:raise RuntimeError(str(ensured.get('error') or 'terminal_url_missing'))
-            except Exception as exc:
-                detail=str(exc)[:220]
-                diagnostic=f'<section class="card terminal-unavailable"><span class="pill bad">Terminal indisponível</span><h2>Não foi possível abrir o terminal</h2><p>O Komodo não confirmou um container em execução para este projeto.</p><p class="small">Diagnóstico: {h(detail)}</p><div class="cm-actions"><a class="btn" href="/cloudiff/portal/?tab=projetos">Voltar aos projetos</a><a class="btn light" href="/cloudiff/portal/repair-dashboard">Verificar ambiente</a></div></section>'
-                return self.send_html(page(user,'projetos',diagnostic),503)
-            self.send_response(302);self.send_header('Location',target);self.send_header('Cache-Control','no-store');self.end_headers();return
+            self.send_response(303);self.send_header('Location',target);self.send_header('Cache-Control','no-store');self.end_headers();return
         return _rd_prev_get(self)
     def _rd_post(self):
         path=_rd_parse.urlparse(self.path).path
@@ -6409,7 +6391,7 @@ def _pm197_render(user):
         runtime_project=runtime_projects.get(slug) or {}
         provision_state=_pm197_job_state(slug)
         runtime_state=_pm197_runtime_state(slug,runtime_project)
-        terminal_target=url('/action/open-project-terminal')+'?slug='+urllib.parse.quote(slug,safe='') if runtime_project.get('stack_id') else ''
+        terminal_target='/cloudiff/portal/project-terminal/'+urllib.parse.quote(slug,safe='') if runtime_project.get('stack_id') else ''
         studio=supabase_studio_url(p['tenant']) if p['tenant'] else ''
         acl_id='wiz_acl_'+safe
         delete_allowed=_admin_project_delete_allowed(user,slug) if '_admin_project_delete_allowed' in globals() else bool(user.get('admin') or {str(x).strip().lower() for x in (user.get('groups') or [])}.intersection({'cloudif-tenants-admin','domain admins'}))

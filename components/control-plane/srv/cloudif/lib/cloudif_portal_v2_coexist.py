@@ -100,6 +100,13 @@ def _install() -> None:
         </style></head><body><main><span class="eyebrow">CloudIFF</span><h1>{safe_title}</h1><p>{safe_message}</p><nav>{retry}<a href="{safe_back}">Voltar aos projetos</a></nav></main></body></html>'''
         return markup.encode('utf-8')
 
+    def project_terminal_page(slug: str, csrf_token: str, kind: str = '') -> bytes:
+        safe_slug=html.escape(slug,quote=True);safe_csrf=html.escape(csrf_token,quote=True);safe_kind=html.escape(kind,quote=True)
+        markup=f'''<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Preparando terminal · CloudIFF</title><style>
+        :root{{font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#17211b;background:#f6f8f6}}*{{box-sizing:border-box}}body{{margin:0;min-height:100vh;display:grid;place-items:center;padding:24px}}main{{width:min(620px,100%);padding:28px;border:1px solid #dfe6e1;border-radius:18px;background:#fff}}.eyebrow{{font-size:.72rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#66746b}}h1{{margin:8px 0 10px;font-size:clamp(1.55rem,5vw,2.15rem);letter-spacing:-.035em}}p{{margin:0;color:#66746b;line-height:1.55}}progress{{width:100%;height:8px;margin:20px 0}}ol{{list-style:none;margin:0;padding:0;display:grid;gap:8px}}li{{display:flex;gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid #edf1ee;color:#66746b}}.dot{{width:10px;height:10px;border-radius:50%;background:#c9d2cc}}li.active{{color:#17211b;font-weight:750}}li.active .dot,li.done .dot{{background:#16883f}}li.failed{{color:#991b1b}}li.failed .dot{{background:#991b1b}}.status{{margin-top:18px;padding:12px 14px;border-radius:10px;background:#f2f5f3;font-size:.86rem}}.error{{margin-top:12px;padding:12px 14px;border-radius:10px;background:#fff1f2;color:#991b1b}}.actions{{display:flex;gap:10px;flex-wrap:wrap;margin-top:18px}}a,button{{min-height:42px;padding:9px 13px;border:1px solid #d7dfd9;border-radius:9px;background:#fff;color:#17211b;text-decoration:none;font:inherit;font-weight:700;cursor:pointer}}[hidden]{{display:none!important}}@media(prefers-color-scheme:dark){{:root{{color:#e8f1eb;background:#07110b}}main{{background:#0d1b12;border-color:#274331}}p,li{{color:#a9b8ae}}li.active{{color:#e8f1eb}}.status{{background:#10261a}}a,button{{background:#102016;color:#e8f1eb;border-color:#345545}}}}
+        </style></head><body data-project="{safe_slug}" data-csrf="{safe_csrf}" data-kind="{safe_kind}"><main><span class="eyebrow">Terminal do projeto</span><h1>Preparando o terminal no Komodo</h1><p>A CloudIFF validará o projeto, confirmará o container em execução e abrirá o terminal automaticamente.</p><progress></progress><ol><li class="active"><span class="dot"></span><span>Validando acesso ao projeto</span></li><li><span class="dot"></span><span>Confirmando stack e container</span></li><li><span class="dot"></span><span>Preparando o terminal</span></li></ol><div class="status" id="status" role="status">Iniciando…</div><div class="error" id="error" hidden></div><div class="actions" id="actions" hidden><button type="button" id="retry">Tentar novamente</button><a href="/cloudiff/portal/?tab=projetos">Voltar aos projetos</a></div></main><script>(()=>{{const slug=document.body.dataset.project,csrf=document.body.dataset.csrf,kind=document.body.dataset.kind,steps=[...document.querySelectorAll('ol li')],status=document.getElementById('status'),error=document.getElementById('error'),actions=document.getElementById('actions'),retry=document.getElementById('retry');let timer=0,start=0;function mark(n){{steps.forEach((step,i)=>{{step.className=i<n?'done':(i===n?'active':'')}})}}function tick(){{const sec=Math.floor((Date.now()-start)/1000);status.textContent='Preparando há '+sec+'s…';if(sec>=2)mark(1);if(sec>=5)mark(2)}}async function run(){{clearInterval(timer);start=Date.now();mark(0);error.hidden=true;actions.hidden=true;tick();timer=setInterval(tick,1000);const body=new URLSearchParams({{csrf_token:csrf,kind}});try{{const response=await fetch('/cloudiff/portal/api/projects/'+encodeURIComponent(slug)+'/terminal/prepare',{{method:'POST',credentials:'same-origin',headers:{{'Content-Type':'application/x-www-form-urlencoded','Accept':'application/json'}},body}});const data=await response.json().catch(()=>({{ok:false,error:'Resposta inválida da CloudIFF.'}}));if(!response.ok||!data.ok||!data.terminalReady||!data.terminalUrl)throw new Error(data.error||('HTTP '+response.status));clearInterval(timer);steps.forEach(x=>x.className='done');status.textContent='Terminal pronto. Abrindo o Komodo…';setTimeout(()=>location.replace(data.terminalUrl),450)}}catch(err){{clearInterval(timer);steps.forEach((x,i)=>{{if(x.classList.contains('active'))x.className='failed'}});status.textContent='O terminal não foi aberto.';error.hidden=false;error.textContent=String(err.message||err);actions.hidden=false}}}}retry.onclick=run;run()}})();</script></body></html>'''
+        return markup.encode('utf-8')
+
     def try_asset(handler, path: str) -> bool:
         name = None
         for prefix in ASSET_PREFIXES:
@@ -556,6 +563,30 @@ def _install() -> None:
                         actor=identity(self.headers);status,payload=handle_observability_get(observability_match.group(1),observability_match.group(2) or 'snapshot',actor.username,list(actor.groups));return send_json(self,status,payload)
                     except PermissionError as exc:return send_json(self,403,{"ok":False,"error":{"code":str(exc)}})
                     except Exception as exc:return send_json(self,503,{"ok":False,"error":{"code":"observability_unavailable","detail":type(exc).__name__}})
+                project_terminal_match = re.fullmatch(r'/cloudiff?/portal/project-terminal/([a-z0-9][a-z0-9-]{0,62})', path)
+                if project_terminal_match:
+                    slug=project_terminal_match.group(1);kind=(route_query.get('kind') or [''])[0].strip().lower()
+                    if kind not in {'','php','node'}:
+                        body=recovery_page('Terminal inválido','O tipo de terminal solicitado não é suportado.', '', '/cloudiff/portal/?tab=projetos')
+                        return send(self,400,'text/html; charset=utf-8',body)
+                    try:
+                        owner=sys.modules.get(handler_class.__module__);user=self.user()
+                        projects=getattr(owner,'_rd_projects')(user);project=next((item for item in projects if item.get('slug')==slug),None)
+                        if not project or not project.get('stack_id'):raise LookupError('project_stack_not_found')
+                        access=getattr(owner,'_rd_project_access')(slug)
+                        if not getattr(owner,'_rd_actor_allowed')(user,access):raise PermissionError('forbidden')
+                        csrf=getattr(owner,'_prod_csrf_token')(user)
+                        return send(self,200,'text/html; charset=utf-8',project_terminal_page(slug,csrf,kind))
+                    except PermissionError:
+                        body=recovery_page('Acesso ao terminal não autorizado','Você não possui permissão para abrir o terminal deste projeto.','', '/cloudiff/portal/?tab=projetos')
+                        return send(self,403,'text/html; charset=utf-8',body)
+                    except LookupError:
+                        body=recovery_page('Terminal indisponível','Este projeto ainda não possui uma stack vinculada ao Komodo.','', '/cloudiff/portal/?tab=projetos')
+                        return send(self,409,'text/html; charset=utf-8',body)
+                    except Exception as exc:
+                        print(f'cloudif_project_terminal_page_failed slug={slug} type={type(exc).__name__}',flush=True)
+                        body=recovery_page('Não foi possível preparar o terminal','A CloudIFF interrompeu o fluxo antes de qualquer redirecionamento.',self.path)
+                        return send(self,503,'text/html; charset=utf-8',body)
                 environments_match = re.fullmatch(r'/cloudiff?/portal/api/projects/([a-z0-9][a-z0-9-]{0,62})/environments-overview', path)
                 if environments_match:
                     try:
@@ -789,6 +820,34 @@ def _install() -> None:
                 if handle_preview_request(self):
                     return
                 parsed = urllib.parse.urlparse(self.path)
+                terminal_prepare_match = re.fullmatch(r'/cloudiff?/portal/api/projects/([a-z0-9][a-z0-9-]{0,62})/terminal/prepare', parsed.path)
+                if terminal_prepare_match:
+                    slug=terminal_prepare_match.group(1)
+                    try:
+                        content_length=int(self.headers.get('Content-Length','0') or 0)
+                        if content_length<0 or content_length>65536:return send_json(self,413,{'ok':False,'error':'payload_too_large','terminalReady':False,'secretValuesIncluded':False})
+                        raw=self.rfile.read(content_length);form=urllib.parse.parse_qs(raw.decode('utf-8','ignore'))
+                        value=lambda key:(form.get(key) or [''])[0].strip();kind=value('kind').lower()
+                        if kind not in {'','php','node'}:return send_json(self,400,{'ok':False,'error':'invalid_terminal_kind','terminalReady':False,'secretValuesIncluded':False})
+                        owner=sys.modules.get(handler_class.__module__);user=self.user()
+                        if not getattr(owner,'_prod_csrf_equal')(value('csrf_token'),getattr(owner,'_prod_csrf_token')(user)):
+                            return send_json(self,403,{'ok':False,'error':'csrf','terminalReady':False,'secretValuesIncluded':False})
+                        projects=getattr(owner,'_rd_projects')(user);project=next((item for item in projects if item.get('slug')==slug),None)
+                        if not project or not project.get('stack_id'):return send_json(self,409,{'ok':False,'error':'project_stack_not_found','terminalReady':False,'secretValuesIncluded':False})
+                        access=getattr(owner,'_rd_project_access')(slug)
+                        if not getattr(owner,'_rd_actor_allowed')(user,access):return send_json(self,403,{'ok':False,'error':'forbidden','terminalReady':False,'secretValuesIncluded':False})
+                        terminal='cloudif-'+slug;shell='sh'
+                        if kind=='php':terminal='phpinfo-'+slug;shell="sh -lc 'clear; echo CloudIFF-PHP; php -i; echo; echo Terminal-interativo-liberado; exec sh'"
+                        elif kind=='node':terminal='nodeinfo-'+slug;shell="sh -lc 'clear; echo CloudIFF-Node.js; node -e \"console.log(process.version);console.log(JSON.stringify(process.versions,null,2))\"; echo; echo npm=$(npm --version 2>/dev/null || echo indisponivel); if [ -f /var/www/html/api/package.json ]; then echo; cat /var/www/html/api/package.json; fi; echo; echo Terminal-interativo-liberado; exec sh'"
+                        actor=str(user.get('username') or '').strip().lower();actor_groups=[str(x).strip() for x in (user.get('groups') or []) if str(x).strip()]
+                        ensured=getattr(owner,'_rd_agent')('/komodo/project/terminal/ensure',{'project':slug,'stack_id':project['stack_id'],'service':project['service'],'terminal':terminal,'shell':shell,'actor_username':actor,'actor_groups':actor_groups,'project_owner':access.get('owner') or '','access':access},timeout=45)
+                        target=str(ensured.get('url') or '').strip();parsed_target=urllib.parse.urlparse(target)
+                        if parsed_target.scheme!='https' or parsed_target.hostname!='komodoiff.duckdns.org' or '/terminal/' not in parsed_target.path:
+                            raise RuntimeError('invalid_terminal_url')
+                        return send_json(self,200,{'ok':True,'terminalReady':True,'terminalUrl':target,'container':str(ensured.get('container') or ''),'secretValuesIncluded':False,'secretReferencesIncluded':False})
+                    except Exception as exc:
+                        print(f'cloudif_project_terminal_prepare_failed slug={slug} type={type(exc).__name__}',flush=True)
+                        return send_json(self,503,{'ok':False,'error':type(exc).__name__,'terminalReady':False,'secretValuesIncluded':False,'secretReferencesIncluded':False})
                 toolchain_match = re.fullmatch(r'/cloudiff?/portal/api/projects/([a-z0-9][a-z0-9-]{0,62})/toolchain/(validate|build/plan|build/approval/request|build/execute|activation/plan|activation/approval/request|activation/execute)', parsed.path)
                 if toolchain_match:
                     try:
