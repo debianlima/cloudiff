@@ -93,17 +93,23 @@ def project_base_status(slug):
 def project_environment_status(slug):
     return _publication_config().environment_summary(slug)
 
-def ensure_base_workspace(slug,user):
+def base_workspace_preflight(slug,user):
     con=sqlite3.connect(DB);con.row_factory=sqlite3.Row;_ensure_schema(con);project=_project_allowed(con,slug,user)
     if not project:con.close();raise PermissionError('Projeto não encontrado ou sem permissão.')
     from cloudif_project_environment_web import authorization
     auth=authorization(slug,user.get('username') or '',user.get('groups') or [])
     if not auth.get('canWrite'):con.close();raise PermissionError('A edição da base exige permissão de escrita no projeto.')
-    num=_number(con,slug);con.close();base=_publication_config().ensure_base(slug,num,user.get('username') or 'portal')
+    num=_number(con,slug);con.close()
+    return {'ok':True,'project':slug,'public_number':num,'canWrite':True,'secretValuesIncluded':False}
+
+
+def ensure_base_workspace(slug,user):
+    access=base_workspace_preflight(slug,user);num=int(access['public_number'])
+    base=_publication_config().ensure_base(slug,num,user.get('username') or 'portal')
     container=str(base['workspace_container']);terminal=str(base.get('terminal') or '');server_id=str(base.get('server_id') or '')
     if not terminal or not server_id:raise RuntimeError('base_workspace_terminal_contract_invalid')
     target='https://komodoiff.duckdns.org/servers/'+urllib.parse.quote(server_id,safe='')+'/container/'+urllib.parse.quote(container,safe='')+'/terminal/'+urllib.parse.quote(terminal,safe='')
-    return {'ok':True,'project':slug,'public_number':num,'container':container,'baseRevision':int(base.get('base_revision') or 0),'baseImageId':str(base.get('base_image_id') or ''),'terminalUrl':target,'secretValuesIncluded':False}
+    return {'ok':True,'project':slug,'public_number':num,'container':container,'baseRevision':int(base.get('base_revision') or 0),'baseImageId':str(base.get('base_image_id') or ''),'terminalUrl':target,'terminalReady':True,'secretValuesIncluded':False}
 
 def _external_ok(host):
     req=urllib.request.Request('https://'+host+'/',headers={'User-Agent':'CloudIF-Publication-Validator/1.0'})

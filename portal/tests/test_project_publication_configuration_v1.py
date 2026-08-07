@@ -68,7 +68,7 @@ class ProjectPublicationConfigurationV1Tests(unittest.TestCase):
     def test_wizard_and_base_controls_are_in_project_publication_ui(self):
         portal=PORTAL.read_text();ui=PUB_UI.read_text();env=ENV_WEB.read_text()
         self.assertIn('data-env-wizard',ui);self.assertIn('Abrir base no Komodo',ui)
-        self.assertIn('env-wizard-layer',portal);self.assertIn("change/plan",portal);self.assertIn("approval/request",portal);self.assertIn("change/execute",portal)
+        self.assertIn('env-wizard-dialog',portal);self.assertIn("createElement('dialog')",portal);self.assertIn('envLayer.showModal()',portal);self.assertIn('.env-wizard-dialog::backdrop',portal);self.assertIn("change/plan",portal);self.assertIn("approval/request",portal);self.assertIn("change/execute",portal)
         self.assertIn('approval/status',env);self.assertIn('valores secretos nunca são carregados',portal)
         self.assertIn('open_base_workspace',portal);self.assertIn('canWrite',PUBLICATIONS.read_text())
         final_renderer=portal[portal.index('def _pm197_render'):portal.index('render_projects=_pm197_render')]
@@ -76,6 +76,13 @@ class ProjectPublicationConfigurationV1Tests(unittest.TestCase):
         self.assertIn('name=\"op\" value=\"open_base_workspace\"',final_renderer)
         self.assertIn('data-env-wizard data-project-slug=\"{h(slug)}\"',final_renderer)
         self.assertIn('name=\"csrf_token\" value=\"{h(csrf_token)}\"',final_renderer)
+        self.assertIn('def _cloudif_pub_base_preparing_page',portal)
+        self.assertIn('Preparando a imagem-base',portal)
+        self.assertIn("op:'prepare_base_workspace'",portal)
+        self.assertIn("status.textContent='Terminal pronto. Abrindo o Komodo…'",portal)
+        self.assertIn('result=publications.base_workspace_preflight(slug,user)',portal)
+        self.assertIn('result=publications.ensure_base_workspace(slug,user)',portal)
+        self.assertIn('def base_workspace_preflight',PUBLICATIONS.read_text())
 
     def test_configuration_change_uses_partitioned_reconcile_and_runtime_reconciler(self):
         client=RECONCILE_CLIENT.read_text();worker=RECONCILE.read_text();unit=RECONCILE_UNIT.read_text()
