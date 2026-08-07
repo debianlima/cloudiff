@@ -71,6 +71,11 @@ class ProjectPublicationConfigurationV1Tests(unittest.TestCase):
         self.assertIn('env-wizard-layer',portal);self.assertIn("change/plan",portal);self.assertIn("approval/request",portal);self.assertIn("change/execute",portal)
         self.assertIn('approval/status',env);self.assertIn('valores secretos nunca são carregados',portal)
         self.assertIn('open_base_workspace',portal);self.assertIn('canWrite',PUBLICATIONS.read_text())
+        final_renderer=portal[portal.index('def _pm197_render'):portal.index('render_projects=_pm197_render')]
+        self.assertIn('A próxima publicação congela a base editável e a revisão atual das variáveis.',final_renderer)
+        self.assertIn('name=\"op\" value=\"open_base_workspace\"',final_renderer)
+        self.assertIn('data-env-wizard data-project-slug=\"{h(slug)}\"',final_renderer)
+        self.assertIn('name=\"csrf_token\" value=\"{h(csrf_token)}\"',final_renderer)
 
     def test_configuration_change_uses_partitioned_reconcile_and_runtime_reconciler(self):
         client=RECONCILE_CLIENT.read_text();worker=RECONCILE.read_text();unit=RECONCILE_UNIT.read_text()
