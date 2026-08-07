@@ -80,7 +80,7 @@ class ProjectRuntimeReconcilerStateTests(unittest.TestCase):
         self.assertNotIn('sqlite3.connect(BUILD_DB)',source)
 
     def test_service_is_isolated_and_production_network_is_explicit(self):
-        unit=UNIT.read_text();self.assertIn('ProtectSystem=strict',unit);self.assertIn('ReadWritePaths=/var/lib/cloudif/runtime-reconciler /var/lib/cloudif/control-plane /var/lib/cloudif/build-broker',unit);self.assertIn('IPAddressAllow=127.0.0.0/8',unit);self.assertIn('IPAddressAllow=10.62.91.2/32',unit);self.assertIn('IPAddressDeny=any',unit)
+        unit=UNIT.read_text();self.assertIn('ProtectSystem=strict',unit);self.assertIn('EnvironmentFile=/etc/cloudif/multiservice-deployment-executor.env',unit);self.assertIn('ReadWritePaths=/var/lib/cloudif/runtime-reconciler /var/lib/cloudif/control-plane /var/lib/cloudif/build-broker',unit);self.assertIn('IPAddressAllow=127.0.0.0/8',unit);self.assertIn('IPAddressAllow=10.62.91.2/32',unit);self.assertIn('IPAddressDeny=any',unit)
 
 
 if __name__=='__main__':unittest.main()

@@ -11,6 +11,7 @@ EnvironmentFile=/etc/cloudif/runtime-reconciler.env
 EnvironmentFile=/etc/cloudif/project-config-controller.env
 EnvironmentFile=/etc/cloudif/build-broker.env
 EnvironmentFile=/etc/cloudif/deployment-broker.env
+EnvironmentFile=/etc/cloudif/multiservice-deployment-executor.env
 ExecStart=/usr/bin/python3 /srv/cloudif/app-pointers/project-runtime-reconciler-current/cloudif-project-runtime-reconciler.py
 Restart=on-failure
 RestartSec=3
