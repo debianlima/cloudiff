@@ -9,8 +9,9 @@ class RuntimeModalWebTests(unittest.TestCase):
     def test_runtime_cards_use_text_links(self):
         for marker in ('Ver informações do PHP','Ver informações do Node.js','publication-runtime-text','&amp;kind=php','&amp;kind=node'):
             self.assertIn(marker,self.pub)
-        self.assertNotIn('Abrir no Komodo',self.pub)
-        self.assertNotIn('publication-runtime-button',self.pub)
+        runtime_cards=self.pub[self.pub.index('def _project_information'):self.pub.index('def _publication_snapshot_from_rows')]
+        self.assertNotIn('Abrir no Komodo',runtime_cards)
+        self.assertNotIn('publication-runtime-button',runtime_cards)
     def test_runtime_diagnostics_use_isolated_modern_page(self):
         self.assertIn('target="_blank" rel="noopener"',self.pub)
         for marker in ('runtime-modal-backdrop','data-runtime-modal','document.body.appendChild(modal)'):

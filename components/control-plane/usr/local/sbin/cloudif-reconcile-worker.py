@@ -51,6 +51,12 @@ def forja_project(project):
         return {}
 
 
+def reconcile_project_runtime(project,environment):
+    token=os.environ.get('CLOUDIF_RUNTIME_RECONCILER_TOKEN','')
+    if not token:return {'ok':False,'error':'runtime_reconciler_token_missing'}
+    return internal_post('http://127.0.0.1:18232','/v1/projects/'+urllib.parse.quote(project,safe='')+'/reconcile',token,{'environment':environment},timeout=30)
+
+
 def db_container(tenant):
     try:
         p=subprocess.run(["docker","ps","--format",'{{.Names}}|{{.Label "com.docker.compose.project"}}|{{.Label "com.docker.compose.service"}}'],text=True,capture_output=True,timeout=20)
@@ -189,7 +195,7 @@ def process(row):
         con.commit(); con.close()
         update_request(rid,"ready","Usuário habilitado para automação de releases.",{"username":username})
         return
-    if event in {"project.created","project.updated","project.integrated","project.membership.changed","repository.created","repository.updated","reconcile.requested"}:
+    if event in {"project.created","project.updated","project.integrated","project.membership.changed","project.configuration.changed","repository.created","repository.updated","reconcile.requested"}:
         project=row["project"] or str(payload.get("project") or "")
         if not project:
             raise RuntimeError("projeto ausente")
@@ -211,15 +217,20 @@ def process(row):
                          enabled=1,updated_at=excluded.updated_at""",
                     (project,tenant,repo_full,repo_url,now,now))
         con.commit(); con.close()
-        membership=None
+        membership=None;runtime_reconcile=None
         if event=="project.membership.changed":
             membership=reconcile_project_membership(project)
             if not membership.get('ok'):
                 raise RuntimeError('project_membership_reconcile_failed')
+        if event=="project.configuration.changed":
+            environment=str(payload.get('environment') or 'production')
+            runtime_reconcile=reconcile_project_runtime(project,environment)
+            if not runtime_reconcile.get('ok'):raise RuntimeError('project_runtime_reconcile_failed')
         status="ready" if repo_full else "waiting"
-        msg=("Membros, terminais e integrações reconciliados." if membership else "Projeto e repositório reconciliados.") if repo_full else "Projeto preparado; aguardando criação do repositório."
+        if event=="project.configuration.changed":msg="Configuração e estado de runtime reconciliados."
+        else:msg=("Membros, terminais e integrações reconciliados." if membership else "Projeto e repositório reconciliados.") if repo_full else "Projeto preparado; aguardando criação do repositório."
         configuration_event=config_events.notify(project,event,payload)
-        update_request(rid,status,msg,{"project":project,"tenant":tenant,"repo_full_name":repo_full,"repo_url":repo_url,"membership":membership,"configuration_event":configuration_event})
+        update_request(rid,status,msg,{"project":project,"tenant":tenant,"repo_full_name":repo_full,"repo_url":repo_url,"membership":membership,"runtime_reconcile":runtime_reconcile,"configuration_event":configuration_event})
         return
     if event in {"tenant.created","tenant.ready","tenant.bound","tenant.membership.changed"}:
         tenant=row["tenant"] or str(payload.get("tenant") or "")

@@ -54,6 +54,8 @@ class ActiveProjectConfigurationReconciliationTests(unittest.TestCase):
         unit=WORKER_UNIT.read_text()
         self.assertIn('cloudif-project-config-controller.service',unit)
         self.assertIn('EnvironmentFile=/etc/cloudif/project-config-controller.env',unit)
+        self.assertIn('EnvironmentFile=/etc/cloudif/runtime-reconciler.env',unit)
+        self.assertIn('reconcile_project_runtime(project,environment)',self.worker)
 
     def test_reconciler_service_is_local_and_hardened(self):
         unit=RECONCILER_UNIT.read_text()

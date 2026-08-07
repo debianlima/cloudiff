@@ -9,6 +9,7 @@ TimeoutStartSec=30min
 Type=oneshot
 Environment=CLOUDIF_RECONCILE_WORKERS=4
 EnvironmentFile=/etc/cloudif/project-config-controller.env
+EnvironmentFile=/etc/cloudif/runtime-reconciler.env
 Environment=PYTHONPATH=/srv/cloudif/lib
 ExecStart=/usr/bin/python3 /srv/cloudif/app-pointers/reconcile-worker-current/cloudif-reconcile-worker.py drain
 NoNewPrivileges=true

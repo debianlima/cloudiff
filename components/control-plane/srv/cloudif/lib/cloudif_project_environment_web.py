@@ -117,6 +117,23 @@ def request_approval(slug:str,plan_digest:str,reason:str,username:str,groups:lis
     return {'ok':True,'approvalId':data['approval_id'],'status':data['status'],'expiresAt':data['expires_at'],'projectSlug':slug,'planDigest':plan_digest,'approvalUrl':'/cloudiff/portal/?tab=aprovacoes','policyApplied':bool(data.get('policy_applied')),'approvalPolicyId':data.get('approval_policy_id'),'secretValuesIncluded':False}
 
 
+def _enqueue_configuration_reconcile(slug:str,actor:str,result:dict[str,Any])->dict[str,Any]:
+    try:
+        from cloudif_reconcile_client import enqueue
+        return enqueue(
+            'project.configuration.changed', actor=actor or 'portal', username=actor or '', project=slug,
+            payload={
+                'source':'environment_wizard','operation':'environment_change','reason':'environment_changed',
+                'environment':str(result.get('environment') or ''),'environment_revision':int(result.get('revision') or 0),
+                'environment_digest':str(result.get('environmentDigest') or ''),
+                'affected_services':[str(x) for x in (result.get('affectedServices') or [])],
+                'required_action':str(result.get('requiredAction') or 'none'),
+            }, dedupe_seconds=0,
+        )
+    except Exception as exc:
+        return {'ok':False,'error':type(exc).__name__}
+
+
 def execute(slug:str,plan_digest:str,approval_id:str,username:str,groups:list[str]|set[str])->dict[str,Any]:
     auth=authorization(slug,username,groups)
     if not auth['canWrite']:raise PermissionError('forbidden')
@@ -140,7 +157,10 @@ def execute(slug:str,plan_digest:str,approval_id:str,username:str,groups:list[st
         if current and current.get('status')!='consumed':
             final_code,finalized=_approval_transition(approval_id,'finalize',{'reservation_id':reservation_id,'result':'success'})
             if final_code!=200 or finalized.get('status')!='consumed':raise RuntimeError('approval_finalize_failed')
-        data['transaction']={'approvalId':approval_id,'reservationId':reservation_id,'executionId':execution_id,'approvalStatus':'consumed'};data['secretValuesIncluded']=False;return data
+        data['transaction']={'approvalId':approval_id,'reservationId':reservation_id,'executionId':execution_id,'approvalStatus':'consumed'}
+        data['reconcile']=_enqueue_configuration_reconcile(slug,str(username).strip().casefold(),data)
+        data['secretValuesIncluded']=False
+        return data
     if current and current.get('status')=='reserved':_approval_transition(approval_id,'release',{'reservation_id':reservation_id})
     raise RuntimeError(str((data.get('error') or {}).get('message') or (data.get('error') or {}).get('code') or 'environment_apply_failed'))
 
@@ -153,6 +173,12 @@ def handle_get(slug:str,operation:str,query:dict[str,str],username:str,groups:li
     elif operation=='missing':suffix='/missing';params={'environment':query.get('environment','')}
     elif operation=='effective':suffix='/effective';params={'environment':query.get('environment','development')}
     elif operation=='export':suffix='/export';params={key:query[key] for key in ('environment','service') if query.get(key)}
+    elif operation=='approval/status':
+        approval_id=str(query.get('approvalId',query.get('approval_id','')) or '')
+        if not re.fullmatch(r'apr_[a-f0-9]{20}',approval_id):return 400,{'ok':False,'error':{'code':'invalid_approval_id'}}
+        approval=_approval_get(approval_id)
+        if not approval or approval.get('project_slug')!=slug:return 404,{'ok':False,'error':{'code':'approval_not_found'}}
+        return 200,{'ok':True,'approvalId':approval_id,'status':approval.get('status'),'expiresAt':approval.get('expires_at'),'approvedBy':approval.get('approved_by'),'secondApprovedBy':approval.get('second_approved_by'),'twoApproversRequired':bool(approval.get('two_approvers_required')),'approvalPolicyId':approval.get('approval_policy_id')}
     else:
         params={key:query[key] for key in ('environment','service') if query.get(key)}
         if query.get('includePublicValues','').lower() in {'1','true','yes','on'}:params['includeValues']='true'

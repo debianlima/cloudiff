@@ -554,7 +554,7 @@ def _install() -> None:
                         return send_json(self,409,{"ok":False,"error":{"code":str(exc),"message":"A operação não pode ser concluída neste estado."}})
                     except Exception as exc:
                         return send_json(self,503,{"ok":False,"error":{"code":"secret_api_unavailable","message":"A API de segredos está temporariamente indisponível.","detail":type(exc).__name__}})
-                environment_match = re.fullmatch(r'/cloudiff?/portal/api/projects/([a-z0-9][a-z0-9-]{0,62})/environment(?:/(history|missing|effective|export))?', path)
+                environment_match = re.fullmatch(r'/cloudiff?/portal/api/projects/([a-z0-9][a-z0-9-]{0,62})/environment(?:/(history|missing|effective|export|approval/status))?', path)
                 if environment_match:
                     try:
                         from cloudif_project_environment_web import handle_get

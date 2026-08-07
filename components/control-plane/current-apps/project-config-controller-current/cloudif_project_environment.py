@@ -518,6 +518,8 @@ def _current_effective_configuration(slug: str) -> tuple[int, dict[str, Any]]:
         (slug, revision),
     ).fetchone()
     connection.close()
+    if not current and revision == 0:
+        return 0, {}
     if not current:
         raise LookupError('project_configuration_not_found')
     raw = current['effective_json'] if hasattr(current, 'keys') else current[0]
@@ -722,12 +724,14 @@ def effective_internal(slug: str, environment: str, service: str = '') -> dict[s
                 'immutable': immutable, 'valueIncluded': False,
             })
 
+    environment_state = state(slug)
+    environment_revision = int(environment_state.get('revision') or 0)
     build_material = {
-        'projectSlug': slug, 'environment': environment, 'revision': revision,
+        'projectSlug': slug, 'environment': environment, 'configurationRevision': revision, 'environmentRevision': environment_revision,
         'public': public_build, 'secretReferences': secret_build,
     }
     runtime_material = {
-        'projectSlug': slug, 'environment': environment, 'revision': revision,
+        'projectSlug': slug, 'environment': environment, 'configurationRevision': revision, 'environmentRevision': environment_revision,
         'public': public_runtime, 'secretReferences': secret_runtime,
     }
     environment_material = {
@@ -736,7 +740,7 @@ def effective_internal(slug: str, environment: str, service: str = '') -> dict[s
     }
     return {
         'ok': True, 'projectSlug': slug, 'environment': environment, 'service': service,
-        'revision': revision,
+        'revision': revision, 'configurationRevision': revision, 'environmentRevision': environment_revision,
         'publicBuildEnvironment': public_build,
         'publicRuntimeEnvironment': public_runtime,
         'secretBuildReferences': secret_build,
@@ -754,6 +758,7 @@ def effective_summary(slug: str, environment: str, service: str = '') -> dict[st
     return {
         'ok': True, 'projectSlug': internal['projectSlug'], 'environment': internal['environment'],
         'service': internal['service'], 'revision': internal['revision'],
+        'configurationRevision': internal['configurationRevision'], 'environmentRevision': internal['environmentRevision'],
         'entries': internal['entries'], 'missingRequired': internal['missingRequired'],
         'valid': internal['valid'],
         'buildEnvironmentDigest': internal['buildEnvironmentDigest'],

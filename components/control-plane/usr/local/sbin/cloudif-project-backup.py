@@ -126,7 +126,7 @@ def make_application(slug,p,dest):
             out=[]
             for name in names:
                 low=name.lower()
-                if name in hidden or low.startswith('.env') or low.endswith(('.key','.pem','.p12','.pfx','.jks')) or any(x in low for x in ('secret','token','credential','password')):
+                if name in hidden or (low.startswith('.env') or low.endswith('.env')) or low.endswith(('.key','.pem','.p12','.pfx','.jks')) or any(x in low for x in ('secret','token','credential','password')):
                     out.append(name)
             return out
         prov=Path('/srv/cloudif/provisioning/projects')/slug

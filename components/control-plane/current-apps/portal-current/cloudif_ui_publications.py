@@ -111,10 +111,32 @@ def _project_information(context):
     )
 
 
+def _publication_snapshot_from_rows(rows):
+    active=next((x for x in rows if int(x.get('is_active') or 0)==1),rows[0] if rows else {})
+    try:detail=json.loads(active.get('detail_json') or '{}') if active else {}
+    except Exception:detail={}
+    snapshot=detail.get('snapshot') if isinstance(detail.get('snapshot'),dict) else {}
+    return snapshot
+
+def _configuration_controls(slug,rows):
+    snapshot=_publication_snapshot_from_rows(rows)
+    base_revision=int(snapshot.get('baseRevision') or 0);environment_revision=int(snapshot.get('environmentRevision') or 0)
+    base_label=('Base r'+str(base_revision)) if base_revision else 'Base editável pronta para versionar'
+    env_label=('Produção · revisão '+str(environment_revision)) if environment_revision else 'Produção · configuração atual'
+    return (
+      '<section class="publication-configuration" data-publication-config="'+h(slug)+'">'
+      '<article><span>Base da publicação</span><strong>'+h(base_label)+'</strong><p>Abrir no Komodo permite instalar ferramentas e ajustar a base. Ao publicar, a CloudIFF congela uma nova revisão imutável.</p>'
+      '<form method="post" target="_blank" action="/cloudiff/portal/action/publication"><input type="hidden" name="slug" value="'+h(slug)+'"><button class="btn light" name="op" value="open_base_workspace">Abrir base no Komodo</button></form></article>'
+      '<article><span>Variáveis de ambiente</span><strong>'+h(env_label)+'</strong><p>Crie, altere e remova variáveis. Secrets permanecem mascarados e seguem o fluxo protegido.</p>'
+      '<button class="btn light" type="button" data-env-wizard data-project-slug="'+h(slug)+'">Gerenciar variáveis</button></article>'
+      '</section>'
+    )
+
 def publication_panel(slug, framework_hint=''):
     rows=_rows(slug)
     context=_project_context(slug,framework_hint)
     information=_project_information(context)
+    configuration=_configuration_controls(slug,rows)
     try:
         from cloudif_portal_publications import latest_job
         job=latest_job(slug)
@@ -171,7 +193,7 @@ def publication_panel(slug, framework_hint=''):
 
     if not rows:
         return (
-            '<div class="cm-resource publication-manager-resource">'+information+job_html+alias_html+
+            '<div class="cm-resource publication-manager-resource">'+information+configuration+job_html+alias_html+
             '<div class="publication-active-card"><div><span>Estado</span><strong>Ainda não publicado</strong></div></div>'
             '<div class="cm-actions"><form method="post" action="/cloudiff/portal/action/publication">'
             f'<input type="hidden" name="slug" value="{h(slug)}">'
@@ -199,7 +221,7 @@ def publication_panel(slug, framework_hint=''):
             f'<td><a href="https://{h(r.get("version_hostname") or "")}/" target="_blank" rel="noopener">Abrir</a></td><td>{action}</td></tr>'
         )
     return (
-        '<div class="cm-resource publication-manager-resource">'+information+job_html+alias_html+
+        '<div class="cm-resource publication-manager-resource">'+information+configuration+job_html+alias_html+
         '<div class="publication-active-card"><div><span>Site publicado</span>'
         f'<a href="https://{h(active_host)}/" target="_blank" rel="noopener">{h(active_host)}</a></div><span class="pill ok">d{active_dep} ativa</span></div>'
         '<div class="cm-actions publication-site-actions">'

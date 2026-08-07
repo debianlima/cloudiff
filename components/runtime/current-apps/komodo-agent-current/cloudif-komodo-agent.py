@@ -2,6 +2,7 @@ import functools
 #!/usr/bin/env python3
 import json
 import hashlib
+import hmac
 import base64
 import os
 import pathlib
@@ -716,6 +717,7 @@ def _cloudif_delete_related_resources(project, public_number=0, tenant=''):
     base_name='cloudif-'+project
     publication_stack_re=re.compile(r'^cloudif-p(\d+)-d(\d+)$')
     publication_container_re=re.compile(r'^cloudif-p(\d+)-d(\d+)-web$')
+    base_editor_re=re.compile(r'^cloudif-p(\d+)-base-editor$')
     terminal_prefix=base_name+'-'
     result={
         'ok':True,'project':project,'tenant_preserved':tenant,'public_numbers':[],
@@ -769,8 +771,8 @@ def _cloudif_delete_related_resources(project, public_number=0, tenant=''):
         params=target.get('params') if isinstance(target.get('params'),dict) else {}
         target_stack=normalize_resource_id(params.get('stack')) if target.get('type')=='Stack' else ''
         container=str(params.get('container') or '') if target.get('type')=='Container' else ''
-        container_match=publication_container_re.match(container)
-        belongs=(name.startswith(terminal_prefix) or target_stack in related_stack_ids or bool(container_match and container_match.group(1) in public_numbers))
+        container_match=publication_container_re.match(container);base_editor_match=base_editor_re.match(container)
+        belongs=(name.startswith(terminal_prefix) or target_stack in related_stack_ids or bool(container_match and container_match.group(1) in public_numbers) or bool(base_editor_match and base_editor_match.group(1) in public_numbers))
         if not belongs: continue
         result['terminals']['matched'].append(name)
         deleted,_=komodo_call('write','DeleteTerminal',{'target':target,'terminal':name})
@@ -833,6 +835,7 @@ def _cloudif_delete_related_resources(project, public_number=0, tenant=''):
     paths=[]
     for number in public_numbers:
         paths.append(Path('/srv/cloudif/publications')/('p'+number))
+        paths.append(Path('/srv/cloudif/publication-secrets')/('p'+number))
         paths.extend(Path('/etc/komodo/stacks').glob('cloudif-p'+number+'-d*'))
     for path in sorted(set(paths),key=lambda x:str(x)):
         if not path.exists(): continue
@@ -849,9 +852,19 @@ def _cloudif_delete_related_resources(project, public_number=0, tenant=''):
     remaining_stacks=[str(x.get('name') or '') for x in after_items if isinstance(x,dict) and publication_stack_re.match(str(x.get('name') or '')) and (not public_numbers or publication_stack_re.match(str(x.get('name') or '')).group(1) in public_numbers)]
     after_terms,_=komodo_call('read','ListTerminals',{'limit':0,'use_names':False})
     after_term_items=after_terms.get('data') if isinstance(after_terms.get('data'),list) else []
-    remaining_terminals=[str(x.get('name') or '') for x in after_term_items if isinstance(x,dict) and str(x.get('name') or '').startswith(terminal_prefix)]
+    remaining_terminals=[]
+    for item in after_term_items:
+        if not isinstance(item,dict):continue
+        name=str(item.get('name') or '');target=item.get('target') if isinstance(item.get('target'),dict) else {};params=target.get('params') if isinstance(target.get('params'),dict) else {};container=str(params.get('container') or '')
+        match=base_editor_re.match(container)
+        if name.startswith(terminal_prefix) or bool(match and match.group(1) in public_numbers):remaining_terminals.append(name)
     result['remaining']={'publication_stacks':remaining_stacks,'terminals':remaining_terminals}
     result['ok']=not any((result['terminals']['errors'],result['publication_stacks']['errors'],result['builds']['errors'],result['images']['errors'],result['paths']['errors'],remaining_stacks,remaining_terminals))
+    if result['ok']:
+        try:
+            _cloudif_v143_ensure_schema();db_exec('delete from project_base_revisions where project=?',(project,));db_exec('delete from project_base_state where project=?',(project,))
+        except Exception as exc:
+            result['ok']=False;result['paths']['errors'].append({'path':'komodo-db:project-base-state','error':type(exc).__name__})
     return result
 
 def stack_action(action, payload):
@@ -4034,6 +4047,8 @@ COPY --chown=www-data:www-data site/ /var/www/html/
       dockerfile: Dockerfile.runtime
     container_name: cloudif-p${{CLOUDIF_PUBLIC_NUMBER}}-d${{CLOUDIF_DEPLOY_NUMBER}}-web
     restart: unless-stopped
+    env_file:
+      - /srv/cloudif/publication-secrets/p{public_number}/d{deploy_number}/runtime.env
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://127.0.0.1/.cloudif-health >/dev/null"]
       interval: 15s
@@ -4421,6 +4436,12 @@ class H(BaseHTTPRequestHandler):
             return cloudif_project_audit(self)
         if _cloudif_pub_path == "/komodo/project/runtime-info":
             return cloudif_project_runtime_info(self)
+        if _cloudif_pub_path == "/komodo/project/base/status":
+            return _cloudif_project_base_request(self,'status')
+        if _cloudif_pub_path == "/komodo/project/base/ensure":
+            return _cloudif_project_base_request(self,'ensure')
+        if _cloudif_pub_path == "/komodo/project/base/snapshot":
+            return _cloudif_project_base_request(self,'snapshot')
         if _cloudif_pub_path == "/komodo/project/authz-sync":
             return cloudif_project_authz_sync(self)
         if _cloudif_pub_path == "/komodo/project/membership/reconcile":
@@ -4523,6 +4544,14 @@ def _cloudif_v143_ensure_schema():
       project text not null,username text not null,stack_id text not null,
       terminal text not null,target_json text not null,updated_at text not null,
       primary key(project,username,stack_id));
+    create table if not exists project_base_state(
+      project text primary key,public_number integer not null,workspace_container text not null,
+      current_revision integer not null default 0,current_image text not null default '',current_image_id text not null default '',
+      runtime_template text not null default '',php_version text not null default '',updated_at text not null,updated_by text not null default '');
+    create table if not exists project_base_revisions(
+      project text not null,revision integer not null,image text not null,image_id text not null,
+      runtime_template text not null default '',php_version text not null default '',created_at text not null,created_by text not null default '',
+      primary key(project,revision));
     ''')
     con.commit();con.close()
 
@@ -4634,6 +4663,136 @@ def _cloudif_v143_ensure_base_image(php,node,no_cache=False):
     cmd.append(str(root))
     proc=subprocess.run(cmd,text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=2400)
     return {'ok':proc.returncode==0,'image':tag,'created':proc.returncode==0,'returncode':proc.returncode,'detail':(proc.stderr or proc.stdout)[-1600:]}
+
+
+_CLOUDIF_BASE_EDITOR_RE=re.compile(r'^cloudif-p([1-9][0-9]*)-base-editor$')
+_CLOUDIF_ENV_NAME_RE=re.compile(r'^[A-Z_][A-Z0-9_]{0,127}$')
+
+
+def _cloudif_project_base_row(project):
+    _cloudif_v143_ensure_schema();rows=db_query('select * from project_base_state where project=?',(safe_slug(project),))
+    return rows[0] if rows else None
+
+
+def _cloudif_project_base_status(project,public_number):
+    project=safe_slug(project)
+    try:public_number=int(public_number)
+    except Exception:public_number=0
+    if not project or public_number<1:return {'ok':False,'error':'invalid_project_base_request'}
+    row=_cloudif_project_base_row(project);workspace=f'cloudif-p{public_number}-base-editor'
+    inspect=subprocess.run(['docker','inspect',workspace,'--format','{{.State.Status}}|{{.Config.Image}}'],text=True,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,timeout=15)
+    status='missing';source_image=''
+    if inspect.returncode==0:
+        parts=inspect.stdout.strip().split('|',1);status=parts[0] if parts else 'unknown';source_image=parts[1] if len(parts)>1 else ''
+    return {
+      'ok':True,'project':project,'public_number':public_number,'workspace_container':workspace,'workspace_status':status,
+      'workspace_present':inspect.returncode==0,'workspace_image':source_image,
+      'base_revision':int((row or {}).get('current_revision') or 0),'base_image':str((row or {}).get('current_image') or ''),
+      'base_image_id':str((row or {}).get('current_image_id') or ''),'runtime_template':str((row or {}).get('runtime_template') or ''),
+      'php_version':str((row or {}).get('php_version') or ''),'updated_at':str((row or {}).get('updated_at') or ''),
+      'secretValuesIncluded':False,'environmentValuesIncluded':False,
+    }
+
+
+def _cloudif_project_base_ensure(project,public_number,actor='portal'):
+    project=safe_slug(project)
+    try:public_number=int(public_number)
+    except Exception:public_number=0
+    if not project or public_number<1:return {'ok':False,'error':'invalid_project_base_request'}
+    _cloudif_v143_ensure_schema();runtime=_cloudif_v143_runtime_settings(project);shared=_cloudif_v143_ensure_base_image(runtime['php'],runtime['node'])
+    if not shared.get('ok'):return {'ok':False,'error':'runtime_base_build_failed'}
+    workspace=f'cloudif-p{public_number}-base-editor';inspect=subprocess.run(['docker','inspect',workspace],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=15)
+    created=False
+    if inspect.returncode!=0:
+        proc=subprocess.run([
+          'docker','run','-d','--name',workspace,'--restart','unless-stopped',
+          '--label','cloudif.project='+project,'--label','cloudif.role=base-editor','--label','cloudif.public-number='+str(public_number),
+          shared['image'],
+        ],text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=120)
+        if proc.returncode!=0:return {'ok':False,'error':'base_workspace_create_failed','detail':(proc.stderr or proc.stdout)[-800:]}
+        created=True
+    else:
+        subprocess.run(['docker','start',workspace],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=30)
+    row=_cloudif_project_base_row(project)
+    if not row:
+        db_exec('''insert into project_base_state(project,public_number,workspace_container,current_revision,current_image,current_image_id,runtime_template,php_version,updated_at,updated_by)
+          values(?,?,?,0,'','',?,?,?,?)''',(project,public_number,workspace,runtime['runtime_template'],runtime['php'],now(),str(actor or 'portal')[:128]))
+    integration=find_integration(project) or {};server_id=normalize_resource_id(integration.get('server_id'))
+    if not server_id:
+        servers=_cloudif_v131_list_items((_cloudif_v131_core_call('read','ListServers',{}).get('data')))
+        preferred=next((x for x in servers if isinstance(x,dict) and x.get('name')=='Local'),None) or next((x for x in servers if isinstance(x,dict)),None)
+        server_id=_cloudif_v131_oid(preferred or {})
+    if not server_id:return {'ok':False,'error':'base_workspace_server_missing'}
+    terminal=_cloudif_ensure_container_terminal(server_id,workspace)
+    if not terminal.get('ok'):return {'ok':False,'error':'base_workspace_terminal_failed'}
+    status=_cloudif_project_base_status(project,public_number);status.update({'created':created,'shared_base':shared['image'],'server_id':server_id,'terminal':terminal.get('terminal'),'terminal_created':bool(terminal.get('created'))});return status
+
+
+def _cloudif_project_base_snapshot(project,public_number,actor='publication'):
+    ensured=_cloudif_project_base_ensure(project,public_number,actor)
+    if not ensured.get('ok'):return ensured
+    project=safe_slug(project);workspace=ensured['workspace_container'];row=_cloudif_project_base_row(project) or {};revision=int(row.get('current_revision') or 0)+1
+    tag=f'cloudif/project-{int(public_number)}:base-r{revision}'
+    proc=subprocess.run(['docker','commit','--pause=true',workspace,tag],text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=300)
+    if proc.returncode!=0:return {'ok':False,'error':'base_snapshot_failed','detail':(proc.stderr or proc.stdout)[-800:]}
+    inspect=subprocess.run(['docker','image','inspect',tag,'--format','{{.Id}}'],text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=30)
+    image_id=inspect.stdout.strip() if inspect.returncode==0 else ''
+    if not re.fullmatch(r'sha256:[a-f0-9]{64}',image_id):return {'ok':False,'error':'base_snapshot_digest_missing'}
+    runtime=_cloudif_v143_runtime_settings(project);created=now();actor=str(actor or 'publication')[:128]
+    db_exec('''insert into project_base_revisions(project,revision,image,image_id,runtime_template,php_version,created_at,created_by)
+      values(?,?,?,?,?,?,?,?)''',(project,revision,tag,image_id,runtime['runtime_template'],runtime['php'],created,actor))
+    db_exec('''insert into project_base_state(project,public_number,workspace_container,current_revision,current_image,current_image_id,runtime_template,php_version,updated_at,updated_by)
+      values(?,?,?,?,?,?,?,?,?,?) on conflict(project) do update set public_number=excluded.public_number,workspace_container=excluded.workspace_container,
+      current_revision=excluded.current_revision,current_image=excluded.current_image,current_image_id=excluded.current_image_id,runtime_template=excluded.runtime_template,
+      php_version=excluded.php_version,updated_at=excluded.updated_at,updated_by=excluded.updated_by''',(project,int(public_number),workspace,revision,tag,image_id,runtime['runtime_template'],runtime['php'],created,actor))
+    return {'ok':True,'project':project,'public_number':int(public_number),'base_revision':revision,'base_image':tag,'base_image_id':image_id,'workspace_container':workspace,'created_at':created,'secretValuesIncluded':False,'environmentValuesIncluded':False}
+
+
+def _cloudif_project_base_request(handler,operation):
+    if not _cloudif_pub_auth(handler):return send(handler,403,{'ok':False,'error':'forbidden'})
+    payload=_cloudif_pub_json(handler);allowed={'project','project_slug','public_number','actor'}
+    if not isinstance(payload,dict) or not set(payload).issubset(allowed):return send(handler,400,{'ok':False,'error':'invalid_request'})
+    project=safe_slug(payload.get('project') or payload.get('project_slug'))
+    try:public_number=int(payload.get('public_number') or 0)
+    except Exception:public_number=0
+    if operation=='status':result=_cloudif_project_base_status(project,public_number)
+    elif operation=='ensure':result=_cloudif_project_base_ensure(project,public_number,payload.get('actor') or 'portal')
+    elif operation=='snapshot':result=_cloudif_project_base_snapshot(project,public_number,payload.get('actor') or 'publication')
+    else:result={'ok':False,'error':'not_found'}
+    return send(handler,200 if result.get('ok') else 422,result)
+
+
+def _cloudif_validate_publication_environment(raw):
+    if raw in (None,{}):return {}
+    if not isinstance(raw,dict) or len(raw)>256:raise ValueError('invalid_environment_variables')
+    out={};total=0
+    for name,value in raw.items():
+        name=str(name or '').strip().upper()
+        if not _CLOUDIF_ENV_NAME_RE.fullmatch(name):raise ValueError('invalid_environment_variable_name')
+        if value is None:value=''
+        if isinstance(value,(dict,list,tuple,set)):raise ValueError('invalid_environment_variable_value')
+        value=str(value)
+        if '\x00' in value or '\n' in value or '\r' in value or len(value.encode())>16384:raise ValueError('invalid_environment_variable_value')
+        total+=len(name.encode())+len(value.encode())
+        if total>262144:raise ValueError('environment_variables_too_large')
+        out[name]=value
+    return out
+
+
+def _cloudif_publication_environment_path(public_number,deploy_number):
+    root=Path('/srv/cloudif/publication-secrets');root.mkdir(parents=True,exist_ok=True);root.chmod(0o700)
+    project_dir=root/f'p{int(public_number)}';project_dir.mkdir(exist_ok=True);project_dir.chmod(0o700)
+    deploy_dir=project_dir/f'd{int(deploy_number)}';deploy_dir.mkdir(exist_ok=True);deploy_dir.chmod(0o700)
+    return deploy_dir/'runtime.env'
+
+
+def _cloudif_write_publication_environment(public_number,deploy_number,values):
+    path=_cloudif_publication_environment_path(public_number,deploy_number);lines=[]
+    for name,value in sorted((values or {}).items()):
+        encoded=json.dumps(str(value),ensure_ascii=False)
+        lines.append(f'{name}={encoded}')
+    path.write_text('\n'.join(lines)+('\n' if lines else ''),encoding='utf-8');path.chmod(0o600)
+    return path
 
 
 def _cloudif_v143_ensure_checkout(project,base_dir):
@@ -4754,24 +4913,64 @@ def cloudif_publication_deploy(handler):
     if len(commit)!=40:
         return send(handler,422,{'ok':False,'error':'valid_git_commit_not_found'})
     runtime=_cloudif_v143_runtime_settings(project);php=runtime['php'];node=runtime['node']
-    base=_cloudif_v143_ensure_base_image(php,node,bool(payload.get('rebuild_runtime_base')))
-    if not base.get('ok'):
-        return send(handler,422,{'ok':False,'error':'runtime_base_build_failed','base':base})
     files,source_kind=_cloudif_v143_git_files(base_dir,commit)
     snap=Path(f'/srv/cloudif/publications/p{public_number}/d{deploy_number}')
-    marker=snap/'.cloudif-commit'
+    marker=snap/'.cloudif-commit';snapshot_file=snap/'.cloudif-runtime-snapshot.json'
     if marker.is_file() and marker.read_text().strip()!=commit:
         return send(handler,409,{'ok':False,'error':'immutable_deploy_conflict','existing_commit':marker.read_text().strip(),'requested_commit':commit})
-    if not marker.is_file():
-        if snap.exists():shutil.rmtree(snap)
-        source=snap/'source';source.mkdir(parents=True,exist_ok=True)
-        for src,dst in files:
-            target=source/dst;target.parent.mkdir(parents=True,exist_ok=True);target.write_bytes(_cloudif_v143_git_blob(base_dir,commit,src))
-        if not files:
-            (source/'index.php').write_text("<?php echo '<h1>CloudIFF</h1><p>Projeto sem código publicado.</p>';",encoding='utf-8')
-        marker.write_text(commit+'\n');marker.chmod(0o640)
+    snapshot={}
+    if marker.is_file() and snapshot_file.is_file():
+        try:snapshot=json.loads(snapshot_file.read_text(encoding='utf-8'))
+        except Exception:return send(handler,422,{'ok':False,'error':'runtime_snapshot_invalid'})
+        if not isinstance(snapshot,dict) or snapshot.get('commit')!=commit:
+            return send(handler,422,{'ok':False,'error':'runtime_snapshot_invalid'})
+        base_image_id=str(snapshot.get('baseImageId') or '')
+        if not re.fullmatch(r'sha256:[a-f0-9]{64}',base_image_id):return send(handler,422,{'ok':False,'error':'runtime_snapshot_base_missing'})
+        base={'ok':True,'image':str(snapshot.get('baseImage') or ''),'image_id':base_image_id,'base_revision':int(snapshot.get('baseRevision') or 0),'snapshot':True}
+        environment_revision=int(snapshot.get('environmentRevision') or 0);environment_digest=str(snapshot.get('environmentDigest') or '')
+        variable_names=[str(x) for x in (snapshot.get('variableNames') or [])]
+    else:
+        legacy_existing=marker.is_file() and not snapshot_file.is_file()
+        environment_values=_cloudif_validate_publication_environment(payload.get('environment_variables') or {})
+        try:environment_revision=int(payload.get('environment_revision') or 0);base_revision=int(payload.get('base_revision') or 0)
+        except Exception:return send(handler,400,{'ok':False,'error':'invalid_snapshot_revision'})
+        environment_digest=str(payload.get('environment_digest') or '').lower()
+        if environment_digest and not re.fullmatch(r'[a-f0-9]{64}',environment_digest):return send(handler,400,{'ok':False,'error':'invalid_environment_digest'})
+        base_image_id=str(payload.get('base_image_id') or '').strip();base_image=str(payload.get('base_image') or '').strip()
+        if base_image_id:
+            inspect=subprocess.run(['docker','image','inspect',base_image_id,'--format','{{.Id}}'],text=True,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,timeout=30)
+            actual_base_id=inspect.stdout.strip() if inspect.returncode==0 else ''
+            if not hmac.compare_digest(actual_base_id,base_image_id):return send(handler,422,{'ok':False,'error':'base_image_not_found'})
+            if base_revision<1:return send(handler,400,{'ok':False,'error':'invalid_base_revision'})
+            base={'ok':True,'image':base_image,'image_id':base_image_id,'base_revision':base_revision,'snapshot':True}
+        elif legacy_existing:
+            shared=_cloudif_v143_ensure_base_image(php,node,False)
+            if not shared.get('ok'):return send(handler,422,{'ok':False,'error':'runtime_base_build_failed'})
+            inspect=subprocess.run(['docker','image','inspect',shared['image'],'--format','{{.Id}}'],text=True,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,timeout=30)
+            base_image_id=inspect.stdout.strip() if inspect.returncode==0 else ''
+            if not re.fullmatch(r'sha256:[a-f0-9]{64}',base_image_id):return send(handler,422,{'ok':False,'error':'runtime_base_digest_missing'})
+            base_image=str(shared['image']);base_revision=0;base={'ok':True,'image':base_image,'image_id':base_image_id,'base_revision':0,'snapshot':True,'legacy':True}
+        else:
+            base=_cloudif_project_base_snapshot(project,public_number,payload.get('actor') or 'publication')
+            if not base.get('ok'):return send(handler,422,{'ok':False,'error':'project_base_snapshot_failed','base':{k:v for k,v in base.items() if k!='detail'}})
+            base_image_id=str(base.get('base_image_id') or '');base_revision=int(base.get('base_revision') or 0);base_image=str(base.get('base_image') or '')
+            base={'ok':True,'image':base_image,'image_id':base_image_id,'base_revision':base_revision,'snapshot':True}
+        if not marker.is_file():
+            if snap.exists():shutil.rmtree(snap)
+            source=snap/'source';source.mkdir(parents=True,exist_ok=True)
+            for src,dst in files:
+                target=source/dst;target.parent.mkdir(parents=True,exist_ok=True);target.write_bytes(_cloudif_v143_git_blob(base_dir,commit,src))
+            if not files:
+                (source/'index.php').write_text("<?php echo '<h1>CloudIFF</h1><p>Projeto sem código publicado.</p>';",encoding='utf-8')
+            marker.write_text(commit+'\n');marker.chmod(0o640)
+        _cloudif_write_publication_environment(public_number,deploy_number,environment_values)
+        variable_names=sorted(environment_values)
+        snapshot={'schemaVersion':1,'project':project,'publicNumber':public_number,'deployNumber':deploy_number,'commit':commit,'baseRevision':base_revision,'baseImage':base_image,'baseImageId':base_image_id,'environmentRevision':environment_revision,'environmentDigest':environment_digest,'variableNames':variable_names,'createdAt':now()}
+        snapshot_file.write_text(json.dumps(snapshot,ensure_ascii=False,sort_keys=True,separators=(',',':'))+'\n',encoding='utf-8');snapshot_file.chmod(0o640)
+    if not marker.is_file():return send(handler,422,{'ok':False,'error':'publication_source_snapshot_missing'})
+    if not _cloudif_publication_environment_path(public_number,deploy_number).is_file():_cloudif_write_publication_environment(public_number,deploy_number,{})
     source=snap/'source'
-    dockerfile=f'''FROM {base['image']}
+    dockerfile=f'''FROM {base['image_id']}
 COPY --chown=www-data:www-data source/ /var/www/html/
 WORKDIR /var/www/html
 RUN if [ -f api/package-lock.json ]; then cd api && npm ci --omit=dev; elif [ -f api/package.json ]; then cd api && npm install --omit=dev; fi \\
@@ -4787,6 +4986,8 @@ RUN if [ -f api/package-lock.json ]; then cd api && npm ci --omit=dev; elif [ -f
       dockerfile: Dockerfile.runtime
     container_name: cloudif-p{public_number}-d{deploy_number}-web
     restart: unless-stopped
+    env_file:
+      - /srv/cloudif/publication-secrets/p{public_number}/d{deploy_number}/runtime.env
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://127.0.0.1/.cloudif-health >/dev/null"]
       interval: 15s
@@ -4854,7 +5055,7 @@ networks:
     ok=bool(update.get('ok') and deploy.get('ok') and healthy and terminal.get('ok'))
     db_exec('''insert into publication_runtimes(project,public_number,deploy_number,stack_id,stack_name,container,commit_sha,status,is_active,updated_at)
       values(?,?,?,?,?,?,?,?,0,?) on conflict(project,deploy_number) do update set stack_id=excluded.stack_id,stack_name=excluded.stack_name,container=excluded.container,commit_sha=excluded.commit_sha,status=excluded.status,updated_at=excluded.updated_at''',(project,public_number,deploy_number,stack_id,name,container,commit,'ready' if ok else 'failed',now()))
-    return send(handler,200 if ok else 422,{'ok':ok,'project':project,'public_number':public_number,'deploy_number':deploy_number,'commit':commit,'stack_id':stack_id,'stack_name':name,'container':container,'created':created,'deploy':deploy,'operation_id':opid,'operation_final':final,'healthy':healthy,'terminal':terminal,'expected_image':image,'actual_image':actual,'runtime':runtime,'runtime_base':base,'content_digest':content_digest,'source':'git_commit','publication_source':source_kind,'infrastructure_in_git':False,'republished':republished_from is not None,'republished_from':republished_from})
+    return send(handler,200 if ok else 422,{'ok':ok,'project':project,'public_number':public_number,'deploy_number':deploy_number,'commit':commit,'stack_id':stack_id,'stack_name':name,'container':container,'created':created,'deploy':deploy,'operation_id':opid,'operation_final':final,'healthy':healthy,'terminal':terminal,'expected_image':image,'actual_image':actual,'runtime':runtime,'runtime_base':base,'baseRevision':int(snapshot.get('baseRevision') or base.get('base_revision') or 0),'baseImageId':str(snapshot.get('baseImageId') or base.get('image_id') or ''),'environmentRevision':int(snapshot.get('environmentRevision') or 0),'environmentDigest':str(snapshot.get('environmentDigest') or ''),'variableNames':variable_names,'variableValuesReturned':False,'secretValuesIncluded':False,'content_digest':content_digest,'source':'git_commit','publication_source':source_kind,'infrastructure_in_git':False,'republished':republished_from is not None,'republished_from':republished_from})
 
 
 def cloudif_publication_promote(handler):

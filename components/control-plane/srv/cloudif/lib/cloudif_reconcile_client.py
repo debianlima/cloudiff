@@ -13,7 +13,7 @@ DB = Path(os.environ.get("CLOUDIF_PORTAL_DB", "/var/lib/cloudif/portal/cloudif-p
 QUEUE = Path(os.environ.get("CLOUDIF_RECONCILE_QUEUE", "/var/lib/cloudif/reconcile-queue/incoming"))
 ALLOWED_EVENTS = {
     "user.created", "user.seen",
-    "project.created", "project.updated", "project.integrated", "project.membership.changed",
+    "project.created", "project.updated", "project.integrated", "project.membership.changed", "project.configuration.changed",
     "repository.created", "repository.updated",
     "tenant.created", "tenant.ready", "tenant.bound", "tenant.membership.changed",
     "reconcile.requested",

@@ -62,6 +62,12 @@ CREATE TABLE IF NOT EXISTS project_publication_aliases(
 CREATE TABLE IF NOT EXISTS publication_job_acknowledgements(
  job_id INTEGER PRIMARY KEY,actor TEXT NOT NULL,acknowledged_at TEXT NOT NULL);
 ''')
+    cols={row[1] for row in con.execute('pragma table_info(publication_jobs)')}
+    for name,kind in (
+      ('base_revision','INTEGER NOT NULL DEFAULT 0'),('base_image',"TEXT NOT NULL DEFAULT ''"),('base_image_id',"TEXT NOT NULL DEFAULT ''"),
+      ('environment',"TEXT NOT NULL DEFAULT 'production'"),('environment_revision','INTEGER NOT NULL DEFAULT 0'),('environment_digest',"TEXT NOT NULL DEFAULT ''"),
+    ):
+        if name not in cols:con.execute(f'alter table publication_jobs add column {name} {kind}')
 
 def _number(con,slug):
     r=con.execute('select public_number from project_public_ids where project_slug=?',(slug,)).fetchone()
@@ -74,6 +80,30 @@ def _clients():
     nt=n.get('NPM_PUBLISHER_TOKEN','')
     if not kt or not nt: raise RuntimeError('Credenciais internas de publicação ausentes.')
     return ku,kt,nt
+
+def _publication_config():
+    import cloudif_project_publication_config as module
+    return module
+
+def project_base_status(slug):
+    con=sqlite3.connect(DB);con.row_factory=sqlite3.Row;_ensure_schema(con)
+    num=_number(con,slug);con.close()
+    return _publication_config().base_status(slug,num)
+
+def project_environment_status(slug):
+    return _publication_config().environment_summary(slug)
+
+def ensure_base_workspace(slug,user):
+    con=sqlite3.connect(DB);con.row_factory=sqlite3.Row;_ensure_schema(con);project=_project_allowed(con,slug,user)
+    if not project:con.close();raise PermissionError('Projeto não encontrado ou sem permissão.')
+    from cloudif_project_environment_web import authorization
+    auth=authorization(slug,user.get('username') or '',user.get('groups') or [])
+    if not auth.get('canWrite'):con.close();raise PermissionError('A edição da base exige permissão de escrita no projeto.')
+    num=_number(con,slug);con.close();base=_publication_config().ensure_base(slug,num,user.get('username') or 'portal')
+    container=str(base['workspace_container']);terminal=str(base.get('terminal') or '');server_id=str(base.get('server_id') or '')
+    if not terminal or not server_id:raise RuntimeError('base_workspace_terminal_contract_invalid')
+    target='https://komodoiff.duckdns.org/servers/'+urllib.parse.quote(server_id,safe='')+'/container/'+urllib.parse.quote(container,safe='')+'/terminal/'+urllib.parse.quote(terminal,safe='')
+    return {'ok':True,'project':slug,'public_number':num,'container':container,'baseRevision':int(base.get('base_revision') or 0),'baseImageId':str(base.get('base_image_id') or ''),'terminalUrl':target,'secretValuesIncluded':False}
 
 def _external_ok(host):
     req=urllib.request.Request('https://'+host+'/',headers={'User-Agent':'CloudIF-Publication-Validator/1.0'})
@@ -117,7 +147,7 @@ def production_status(slug):
  try:return _production_call('/v1/status')
  except Exception:return {'ok':False,'public_url':PRODUCTION_URL,'public_traffic':False}
 
-def publish_now(slug,user,progress=None):
+def publish_now(slug,user,progress=None,publication_snapshot=None):
     def notify(step,message):
         if progress:
             progress(step,message)
@@ -128,9 +158,20 @@ def publish_now(slug,user,progress=None):
     if not project: con.close(); raise PermissionError('Projeto não encontrado ou sem permissão.')
     num=_number(con,slug)
     dep=int(con.execute('select coalesce(max(deploy_number),0)+1 from project_publications where project_slug=?',(slug,)).fetchone()[0])
-    actor=user.get('username') or 'portal'; ku,kt,nt=_clients()
+    actor=user.get('username') or 'portal'; ku,kt,nt=_clients();pc=_publication_config()
+    snapshot=publication_snapshot if isinstance(publication_snapshot,dict) else pc.capture_snapshot(slug,num,actor)
+    environment_runtime=pc.execution_environment(slug,int(snapshot.get('environment_revision',snapshot.get('environmentRevision',0)) or 0),str(snapshot.get('environment_digest',snapshot.get('environmentDigest','')) or ''))
+    deploy_payload={'project':slug,'public_number':num,'deploy_number':dep,'timeout':300,'actor':actor,
+      'base_revision':int(snapshot.get('base_revision',snapshot.get('baseRevision',0)) or 0),'base_image':str(snapshot.get('base_image',snapshot.get('baseImage','')) or ''),'base_image_id':str(snapshot.get('base_image_id',snapshot.get('baseImageId','')) or ''),
+      'environment_revision':int(environment_runtime['environmentRevision']),'environment_digest':str(environment_runtime['environmentDigest']),'environment_variables':environment_runtime['values']}
     notify('deploying','Agente de hospedagem criando a versão imutável.')
-    status,kres=_post(ku+'/komodo/publication/deploy',{'project':slug,'public_number':num,'deploy_number':dep,'timeout':300},kt,timeout=420)
+    transient_values=environment_runtime.get('values') or {}
+    try:
+        status,kres=_post(ku+'/komodo/publication/deploy',deploy_payload,kt,timeout=420)
+    finally:
+        if isinstance(transient_values,dict):transient_values.clear()
+        environment_runtime['values']={}
+        deploy_payload['environment_variables']={}
     if status//100!=2 or not kres.get('ok'):
         con.close(); raise RuntimeError('Falha no deploy versionado: '+json.dumps(kres,ensure_ascii=False)[:500])
     notify('https','Configurando HTTPS e endereços públicos.')
@@ -154,8 +195,9 @@ def publish_now(slug,user,progress=None):
     republished=bool(kres.get('republished'));republished_from=kres.get('republished_from')
     publication_message=('Republicação do mesmo código da d'+str(republished_from) if republished and republished_from is not None else 'Nova revisão publicada a partir do Git')
     con.execute('update project_publications set is_active=0 where project_slug=?',(slug,))
+    publication_snapshot_safe={'baseRevision':int(kres.get('baseRevision') or 0),'baseImageId':str(kres.get('baseImageId') or ''),'environment':'production','environmentRevision':int(kres.get('environmentRevision') or 0),'environmentDigest':str(kres.get('environmentDigest') or ''),'variableNames':[str(x) for x in (kres.get('variableNames') or [])],'secretValuesIncluded':False,'secretReferencesIncluded':False}
     con.execute('''insert into project_publications(project_slug,public_number,deploy_number,version,commit_sha,stable_hostname,version_hostname,status,is_active,created_by,created_at,published_at,message,detail_json)
- values(?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',(slug,num,dep,f'd{dep}',commit,stable_host,version_host,'published',1,actor,now,now,publication_message,json.dumps({'komodo':kres,'npm':nres,'promotion':pres,'republished':republished,'republished_from':republished_from},ensure_ascii=False)))
+ values(?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',(slug,num,dep,f'd{dep}',commit,stable_host,version_host,'published',1,actor,now,now,publication_message,json.dumps({'komodo':kres,'npm':nres,'promotion':pres,'republished':republished,'republished_from':republished_from,'snapshot':publication_snapshot_safe},ensure_ascii=False)))
     cols=[x[1] for x in con.execute('pragma table_info(projects)')]
     updates={k:v for k,v in {'status':'published','komodo_status':'running','updated_at':now}.items() if k in cols}
     if updates: con.execute('update projects set '+','.join(k+'=?' for k in updates)+' where slug=?',list(updates.values())+[slug])
@@ -164,7 +206,7 @@ def publish_now(slug,user,progress=None):
     con.commit(); con.close()
     membership=_reconcile_publication_members(ku,kt,slug,access)
     queued=_enqueue_membership_reconcile(slug,actor,project_tenant)
-    return {'ok':True,'slug':slug,'public_number':num,'deploy_number':dep,'stable_url':'https://'+stable_host+'/','version_url':'https://'+version_host+'/','alias':alias,'alias_url':('https://'+alias+'.cloudiff.duckdns.org/' if alias else ''),'commit':commit,'republished':republished,'republished_from':republished_from,'message':publication_message,'membership':membership,'reconcile':queued}
+    return {'ok':True,'slug':slug,'public_number':num,'deploy_number':dep,'stable_url':'https://'+stable_host+'/','version_url':'https://'+version_host+'/','alias':alias,'alias_url':('https://'+alias+'.cloudiff.duckdns.org/' if alias else ''),'commit':commit,'republished':republished,'republished_from':republished_from,'message':publication_message,'snapshot':publication_snapshot_safe,'membership':membership,'reconcile':queued}
 
 def _now():
     return time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime())
@@ -176,10 +218,12 @@ def enqueue_publish(slug,user):
     active=con.execute("select id from publication_jobs where project_slug=? and status in ('queued','running') order by id desc limit 1",(slug,)).fetchone()
     if active:
         job_id=int(active[0]);con.close();return {'ok':True,'queued':True,'job_id':job_id,'existing':True}
-    actor=user.get('username') or 'portal';now=_now()
-    cur=con.execute("insert into publication_jobs(project_slug,actor,status,step,message,created_at) values(?,?,?,?,?,?)",(slug,actor,'queued','queued','Solicitação recebida.',now))
+    actor=user.get('username') or 'portal';now=_now();num=_number(con,slug)
+    snapshot=_publication_config().capture_snapshot(slug,num,actor)
+    cur=con.execute("""insert into publication_jobs(project_slug,actor,status,step,message,created_at,base_revision,base_image,base_image_id,environment,environment_revision,environment_digest)
+      values(?,?,?,?,?,?,?,?,?,?,?,?)""",(slug,actor,'queued','queued','Solicitação recebida com base e ambiente congelados.',now,int(snapshot['baseRevision']),str(snapshot.get('baseImage') or ''),str(snapshot['baseImageId']),'production',int(snapshot['environmentRevision']),str(snapshot.get('environmentDigest') or '')))
     con.commit();job_id=int(cur.lastrowid);con.close()
-    return {'ok':True,'queued':True,'job_id':job_id,'existing':False}
+    return {'ok':True,'queued':True,'job_id':job_id,'existing':False,'baseRevision':int(snapshot['baseRevision']),'baseImageId':str(snapshot['baseImageId']),'environmentRevision':int(snapshot['environmentRevision']),'environmentDigest':str(snapshot.get('environmentDigest') or ''),'secretValuesIncluded':False}
 
 def latest_job(slug):
     con=sqlite3.connect(DB);con.row_factory=sqlite3.Row;_ensure_schema(con)
@@ -225,7 +269,7 @@ def run_job(job):
         if row and actor not in {(row['owner'] or ''),(row['created_by'] or '')}:user['admin']=True
         def progress(step,message):
             _job_update(job_id,status='running',step=step,message=message)
-        result=publish_now(slug,user,progress=progress)
+        result=publish_now(slug,user,progress=progress,publication_snapshot=job)
         _job_update(job_id,status='succeeded',step='completed',message='Site publicado e ativado.',detail=result,finished=True)
         return result
     except Exception as exc:

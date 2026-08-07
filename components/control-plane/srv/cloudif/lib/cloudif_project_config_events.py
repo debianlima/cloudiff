@@ -18,13 +18,14 @@ def _env():
     return values
 
 def _safe_details(details):
-    allowed={'source','operation','principal','principal_type','targets','publication_id','deploy_number','commit_sha','action','create_repo','setup_komodo','db_mode','runtime_template','runtime_layout'}
+    allowed={'source','operation','principal','principal_type','targets','publication_id','deploy_number','commit_sha','action','create_repo','setup_komodo','db_mode','runtime_template','runtime_layout','environment','environment_revision','environment_digest','affected_services','required_action','reason'}
     source=details if isinstance(details,dict) else {}
     return {key:source[key] for key in allowed if key in source and isinstance(source[key],(str,int,float,bool,list,type(None)))}
 
 def event_for_reconcile(event_type,payload):
     payload=payload if isinstance(payload,dict) else {}
     if event_type=='project.created':return 'project.created'
+    if event_type=='project.configuration.changed':return 'configuration.changed'
     if event_type=='project.membership.changed':
         if payload.get('source') in {'publication_activation','initial_publication'}:return 'publication.created'
         operation=str(payload.get('operation') or '').lower()
