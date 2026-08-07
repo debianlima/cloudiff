@@ -55,6 +55,25 @@ class VersionedUnifiedRuntimePublicationTests(unittest.TestCase):
         self.assertIn("requested_base_image_id=str(payload.get('base_image_id')",latest)
         self.assertIn("requested_environment_digest=str(payload.get('environment_digest')",latest)
 
+    def test_committed_base_runtime_state_is_sanitized_before_publication(self):
+        latest=self.agent[self.agent.rfind('def cloudif_publication_deploy(handler):'):]
+        self.assertIn('/run/apache2/apache2.pid',latest)
+        self.assertIn('/run/supervisord.pid',latest)
+        self.assertIn("compose_tmp=stack_dir/'.docker-compose.yml.tmp'",latest)
+        self.assertIn("os.replace(compose_tmp,compose_path)",latest)
+        self.assertIn("'files_on_host':True",latest)
+        self.assertIn("'file_paths':['docker-compose.yml']",latest)
+        self.assertIn("'run_directory':str(stack_dir)",latest)
+        self.assertIn("'run_build':False",latest)
+        self.assertNotIn("'files_on_host':False,'run_build':False,'auto_pull':False,'file_contents':compose",latest)
+
+    def test_deploy_health_is_polled_without_serial_operation_wait(self):
+        latest=self.agent[self.agent.rfind('def cloudif_publication_deploy(handler):'):]
+        self.assertNotIn('_cloudif_pub_wait_operation(opid',latest)
+        self.assertIn("updates=komodo_query_updates([opid])",latest)
+        self.assertIn("if healthy:break",latest)
+        self.assertIn("time.sleep(2)",latest)
+
     def test_publication_failures_are_short_and_actionable(self):
         self.assertIn("'publication_container_not_healthy'",self.agent)
         self.assertIn("def _publication_error(stage,data):",self.portal)

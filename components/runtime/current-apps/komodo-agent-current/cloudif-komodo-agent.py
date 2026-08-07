@@ -5003,7 +5003,8 @@ def cloudif_publication_deploy(handler):
     dockerfile=f'''FROM {base_reference}
 COPY --chown=www-data:www-data source/ /var/www/html/
 WORKDIR /var/www/html
-RUN if [ -f api/package-lock.json ]; then cd api && npm ci --omit=dev; elif [ -f api/package.json ]; then cd api && npm install --omit=dev; fi \\
+RUN rm -f /run/apache2/apache2.pid /var/run/apache2/apache2.pid /run/supervisord.pid /var/run/supervisord.pid \\
+ && if [ -f api/package-lock.json ]; then cd api && npm ci --omit=dev; elif [ -f api/package.json ]; then cd api && npm install --omit=dev; fi \\
  && chown -R www-data:www-data /var/www/html
 '''
     (snap/'Dockerfile.runtime').write_text(dockerfile,encoding='utf-8')
@@ -5066,9 +5067,11 @@ networks:
         if staged.exists():shutil.rmtree(staged)
         shutil.copytree(source,staged)
         shutil.copy2(snap/'Dockerfile.runtime',stack_dir/'Dockerfile.runtime')
+        compose_tmp=stack_dir/'.docker-compose.yml.tmp';compose_path=stack_dir/'docker-compose.yml'
+        compose_tmp.write_text(compose,encoding='utf-8');compose_tmp.chmod(0o640);os.replace(compose_tmp,compose_path);compose_path.chmod(0o640)
     except Exception as exc:
         return send(handler,422,{'ok':False,'error':'version_runtime_stage_failed','detail':str(exc)[:500]})
-    cfg={'server_id':server_id,'files_on_host':False,'run_build':False,'auto_pull':False,'file_contents':compose,'file_paths':[],'linked_repo':'','repo':'','branch':'','commit':commit,'git_provider':'','git_https':True,'run_directory':'.','webhook_enabled':False,'reclone':False}
+    cfg={'server_id':server_id,'files_on_host':True,'run_build':False,'auto_pull':False,'file_contents':'','file_paths':['docker-compose.yml'],'env_file_path':'','project_name':name.replace('-','_'),'linked_repo':'','repo':'','branch':'','commit':commit,'git_provider':'','git_https':True,'run_directory':str(stack_dir),'webhook_enabled':False,'reclone':False,'send_alerts':False}
     stacks=_cloudif_v131_list_items((_cloudif_v131_core_call('read','ListStacks',{}).get('data')))
     existing=next((x for x in stacks if isinstance(x,dict) and x.get('name')==name),None)
     if existing:
@@ -5082,15 +5085,19 @@ networks:
     if not stack_id:return send(handler,422,{'ok':False,'error':'stack_id_missing'})
     deploy=_cloudif_v131_core_call('execute','DeployStack',{'stack':stack_id},timeout=60)
     opid=_cloudif_v131_oid(deploy.get('data') or {})
-    final=_cloudif_pub_wait_operation(opid,timeout=int(payload.get('timeout') or 420)) if opid else {}
-    container=name+'-web';healthy=False;actual='';deadline=time.time()+int(payload.get('timeout') or 420)
+    final={};container=name+'-web';healthy=False;actual='';deadline=time.time()+int(payload.get('timeout') or 300)
     while time.time()<deadline:
         inspect=subprocess.run(['docker','inspect',container,'--format','{{.State.Status}}|{{if .State.Health}}{{.State.Health.Status}}{{end}}|{{.Config.Image}}'],text=True,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL)
         parts=inspect.stdout.strip().split('|',2) if inspect.returncode==0 else []
         actual=parts[2] if len(parts)==3 else ''
         healthy=len(parts)==3 and parts[0]=='running' and parts[1]=='healthy' and actual==image
+        if opid:
+            try:
+                updates=komodo_query_updates([opid]);final=updates.get(opid) if isinstance(updates,dict) else {}
+            except Exception:final={}
         if healthy:break
-        time.sleep(4)
+        if final and final.get('success') is False and (final.get('end_ts') or str(final.get('status') or '').lower() in {'complete','failed','error'}):break
+        time.sleep(2)
     terminal=_cloudif_ensure_container_terminal(server_id,container) if healthy else {'ok':False,'error':'container_not_ready'}
     ok=bool(update.get('ok') and deploy.get('ok') and healthy and terminal.get('ok'))
     failure_code='';failure_message=''
