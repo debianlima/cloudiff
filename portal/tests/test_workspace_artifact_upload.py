@@ -60,7 +60,8 @@ class WorkspaceArtifactUploadTests(unittest.TestCase):
 
  def test_artifact_store_is_outside_ephemeral_workspace_root(self):
   self.assertIn("ARTIFACT_ROOT = os.environ.get('CLOUDIF_WORKSPACE_ARTIFACT_ROOT', '/var/lib/cloudif/workspace-artifacts')",BROKER)
-  self.assertIn('ReadWritePaths=/var/lib/cloudif/workspaces /var/lib/cloudif/workspace-artifacts',UNIT)
+  self.assertIn('ReadWritePaths=/var/lib/cloudif/workspaces /var/lib/cloudif/workspace-artifacts /var/lib/cloudif/workspace-change-sets',UNIT)
+  self.assertIn("CHANGESET_ROOT = os.environ.get('CLOUDIF_WORKSPACE_CHANGESET_ROOT', '/var/lib/cloudif/workspace-change-sets')",BROKER)
   self.assertNotIn("Path(artifact_root) / '.artifacts'",PATH.read_text())
 
 if __name__=='__main__':unittest.main()

@@ -30,6 +30,7 @@ FORJA_URL = os.environ.get('CLOUDIF_FORJA_AGENT_URL', 'http://10.62.91.2:18095')
 FORJA_TOKEN = os.environ.get('CLOUDIF_FORJA_AGENT_TOKEN', '')
 WORKROOT = os.environ.get('CLOUDIF_WORKSPACE_ROOT', '/var/lib/cloudif/workspaces')
 ARTIFACT_ROOT = os.environ.get('CLOUDIF_WORKSPACE_ARTIFACT_ROOT', '/var/lib/cloudif/workspace-artifacts')
+CHANGESET_ROOT = os.environ.get('CLOUDIF_WORKSPACE_CHANGESET_ROOT', '/var/lib/cloudif/workspace-change-sets')
 PROJECT_CONFIG_URL = os.environ.get('CLOUDIF_PROJECT_CONFIG_URL', 'http://127.0.0.1:18219').rstrip('/')
 PROJECT_CONFIG_TOKEN = os.environ.get('CLOUDIF_PROJECT_CONFIG_TOKEN', '')
 SLUG = re.compile(r'^[a-z0-9][a-z0-9-]{0,62}$')
@@ -348,7 +349,7 @@ def validate_result_manifest(run_dir: str, files: list[str]) -> dict:
 
 def validate_change_set_workspace(slug: str, ref: str, trace: str, title: str, description: str, changes, ttl_seconds: int = 3600) -> tuple[dict, str]:
     os.makedirs(WORKROOT, exist_ok=True)
-    clean_expired(WORKROOT)
+    clean_expired(CHANGESET_ROOT)
     run_dir = tempfile.mkdtemp(prefix='change-set-', dir=WORKROOT)
     try:
         raw, archive_digest = fetch_archive(slug, ref)
@@ -384,7 +385,7 @@ def validate_change_set_workspace(slug: str, ref: str, trace: str, title: str, d
             'manifestValid': manifest_validation.get('valid'),
             'secretValuesIncluded': False,
         }
-        sealed = seal_change_set(WORKROOT, {
+        sealed = seal_change_set(CHANGESET_ROOT, {
             'version': 1, 'project_slug': slug, 'ref': ref, 'trace_id': trace,
             'archive_sha256': archive_digest, 'title': title, 'description': description,
             'changes': normalized, 'change_set_digest': digest_value,
@@ -433,7 +434,7 @@ def normalize_plan_workspace(slug: str, ref: str, trace: str, title: str, descri
 
 
 def resolve_change_set_workspace(slug: str, workspace_id: str, expected_digest: str) -> dict:
-    sealed = load_sealed(WORKROOT, workspace_id, expected_digest, slug)
+    sealed = load_sealed(CHANGESET_ROOT, workspace_id, expected_digest, slug)
     raw, current_archive = fetch_archive(slug, sealed['ref'])
     if current_archive != sealed['archive_sha256']:
         raise ChangeSetError('source_changed', 'A referência Forgejo mudou após a validação. Gere um novo workspace.', 'workspace_id', {'validated': sealed['archive_sha256'], 'current': current_archive})

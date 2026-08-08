@@ -247,16 +247,16 @@ def apply_changes(root: str, changes: list[dict[str, Any]], artifact_reader: Cal
     return applied, diff_lines
 
 
-def seal_path(workroot: str, workspace_id: str) -> Path:
-    return Path(workroot) / '.sealed' / (workspace_id + '.json')
+def seal_path(sealroot: str, workspace_id: str) -> Path:
+    return Path(sealroot) / (workspace_id + '.json')
 
 
-def seal_change_set(workroot: str, data: dict[str, Any], ttl_seconds: int = DEFAULT_TTL) -> dict[str, Any]:
+def seal_change_set(sealroot: str, data: dict[str, Any], ttl_seconds: int = DEFAULT_TTL) -> dict[str, Any]:
     workspace_id = 'ws_' + secrets.token_hex(12)
     created = int(time.time())
     sealed = dict(data)
     sealed.update({'workspace_id': workspace_id, 'created_at': created, 'expires_at': created + max(300, min(int(ttl_seconds), 86400))})
-    path = seal_path(workroot, workspace_id)
+    path = seal_path(sealroot, workspace_id)
     path.parent.mkdir(parents=True, exist_ok=True)
     flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
     fd = os.open(path, flags, 0o600)
@@ -271,12 +271,12 @@ def seal_change_set(workroot: str, data: dict[str, Any], ttl_seconds: int = DEFA
     return sealed
 
 
-def load_sealed(workroot: str, workspace_id: str, expected_digest: str, project_slug: str) -> dict[str, Any]:
+def load_sealed(sealroot: str, workspace_id: str, expected_digest: str, project_slug: str) -> dict[str, Any]:
     if not WORKSPACE_RE.fullmatch(workspace_id):
         raise ChangeSetError('invalid_workspace_id', 'O workspace_id é inválido.', 'workspace_id', 'ws_0123456789abcdef01234567')
     if not SHA_RE.fullmatch(expected_digest):
         raise ChangeSetError('invalid_change_set_digest', 'O change_set_digest deve ter 64 caracteres hexadecimais.', 'change_set_digest')
-    path = seal_path(workroot, workspace_id)
+    path = seal_path(sealroot, workspace_id)
     if not path.is_file() or path.is_symlink():
         raise ChangeSetError('workspace_not_found', 'O workspace selado não existe ou já expirou.', 'workspace_id')
     data = json.loads(path.read_text(encoding='utf-8'))
@@ -291,8 +291,8 @@ def load_sealed(workroot: str, workspace_id: str, expected_digest: str, project_
     return data
 
 
-def clean_expired(workroot: str) -> int:
-    root = Path(workroot) / '.sealed'
+def clean_expired(sealroot: str) -> int:
+    root = Path(sealroot)
     if not root.is_dir():
         return 0
     removed = 0

@@ -31,7 +31,7 @@ CapabilityBoundingSet=
 AmbientCapabilities=
 UMask=0077
 ReadOnlyPaths=/srv/cloudif/app-releases/workspace-broker /srv/cloudif/app-pointers /var/run/docker.sock
-ReadWritePaths=/var/lib/cloudif/workspaces /var/lib/cloudif/workspace-artifacts
+ReadWritePaths=/var/lib/cloudif/workspaces /var/lib/cloudif/workspace-artifacts /var/lib/cloudif/workspace-change-sets
 
 [Install]
 WantedBy=multi-user.target
