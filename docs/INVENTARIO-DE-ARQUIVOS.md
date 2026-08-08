@@ -1,6 +1,6 @@
 # Inventário de arquivos
 
-Este catálogo descreve **1144 arquivos versionados**. Ele é regenerado pelo script de documentação.
+Este catálogo descreve **1149 arquivos versionados**. Ele é regenerado pelo script de documentação.
 
 | Caminho | Finalidade |
 |---|---|
@@ -303,6 +303,7 @@ Este catálogo descreve **1144 arquivos versionados**. Ele é regenerado pelo sc
 | [`components/control-plane/srv/cloudif/lib/cloudif_machine_db.py`](../components/control-plane/srv/cloudif/lib/cloudif_machine_db.py) | Implementa `_pg_connect`, `PgConnection`, `connect`, `init_schema`, `table_columns`. |
 | [`components/control-plane/srv/cloudif/lib/cloudif_multiservice_preview_portal.py`](../components/control-plane/srv/cloudif/lib/cloudif_multiservice_preview_portal.py) | Implementa `_send`, `_json`, `handle_preview_request`. |
 | [`components/control-plane/srv/cloudif/lib/cloudif_onboarding_v2.py`](../components/control-plane/srv/cloudif/lib/cloudif_onboarding_v2.py) | Código inicial publicado em todo projeto novo da CloudIFF. |
+| [`components/control-plane/srv/cloudif/lib/cloudif_portal_artifact_upload.py`](../components/control-plane/srv/cloudif/lib/cloudif_portal_artifact_upload.py) | Implementa `_json_body`, `ticket_status`, `project_allowed`, `safe_metadata`, `forward_upload`, `render_page`. |
 | [`components/control-plane/srv/cloudif/lib/cloudif_portal_publications.py`](../components/control-plane/srv/cloudif/lib/cloudif_portal_publications.py) | Implementa `_env`, `_post`, `_publication_error`, `_project_allowed`, `_ensure_schema`, `_number` e outros componentes. |
 | [`components/control-plane/srv/cloudif/lib/cloudif_portal_v2_coexist.py`](../components/control-plane/srv/cloudif/lib/cloudif_portal_v2_coexist.py) | CloudIFF Portal v2 coexistence and auto-recovery adapter |
 | [`components/control-plane/srv/cloudif/lib/cloudif_project_acl_module.py`](../components/control-plane/srv/cloudif/lib/cloudif_project_acl_module.py) | Implementa `h`, `con`, `table_cols`, `pick`, `detect_acl_config`, `project_row` e outros componentes. |
@@ -888,6 +889,8 @@ Este catálogo descreve **1144 arquivos versionados**. Ele é regenerado pelo sc
 | [`portal/tests/test_platform_backup_progress_modal.py`](../portal/tests/test_platform_backup_progress_modal.py) | Implementa `PlatformBackupProgressModalTests`. |
 | [`portal/tests/test_platform_guide_canonical.py`](../portal/tests/test_platform_guide_canonical.py) | Implementa `CanonicalPlatformGuideTests`. |
 | [`portal/tests/test_platform_guide_github.py`](../portal/tests/test_platform_guide_github.py) | Implementa `PlatformGuideGithubTests`. |
+| [`portal/tests/test_portal_artifact_upload_bridge.py`](../portal/tests/test_portal_artifact_upload_bridge.py) | Implementa `Response`, `Handler`, `PortalArtifactUploadBridgeTests`. |
+| [`portal/tests/test_portal_artifact_upload_routes.py`](../portal/tests/test_portal_artifact_upload_routes.py) | Implementa `PortalArtifactUploadRoutesTests`. |
 | [`portal/tests/test_portal_launcher_base_compatibility.py`](../portal/tests/test_portal_launcher_base_compatibility.py) | Implementa `PortalLauncherBaseCompatibilityTests`. |
 | [`portal/tests/test_portal_no_legacy_visual_fallback.py`](../portal/tests/test_portal_no_legacy_visual_fallback.py) | Implementa `PortalNoLegacyVisualFallbackTests`. |
 | [`portal/tests/test_portal_sqlite_wal_resilience.py`](../portal/tests/test_portal_sqlite_wal_resilience.py) | Implementa `load_delete_module`, `PortalSQLiteWalResilienceTests`. |
@@ -988,6 +991,8 @@ Este catálogo descreve **1144 arquivos versionados**. Ele é regenerado pelo sc
 | [`portal/tests/test_user_owned_forgejo_and_komodo_acl.py`](../portal/tests/test_user_owned_forgejo_and_komodo_acl.py) | Implementa `UserOwnedForgejoAndKomodoAclTests`. |
 | [`portal/tests/test_versioned_unified_runtime_publication.py`](../portal/tests/test_versioned_unified_runtime_publication.py) | Implementa `VersionedUnifiedRuntimePublicationTests`. |
 | [`portal/tests/test_w_h_p_release_flow.py`](../portal/tests/test_w_h_p_release_flow.py) | Implementa `WHPReleaseFlowTests`. |
+| [`portal/tests/test_workspace_artifact_direct_http.py`](../portal/tests/test_workspace_artifact_direct_http.py) | Implementa `WorkspaceArtifactDirectHTTPTests`. |
+| [`portal/tests/test_workspace_artifact_direct_upload.py`](../portal/tests/test_workspace_artifact_direct_upload.py) | Implementa `WorkspaceArtifactDirectUploadTests`. |
 | [`portal/tests/test_workspace_artifact_session_import.py`](../portal/tests/test_workspace_artifact_session_import.py) | Implementa `FakeResponse`, `WorkspaceArtifactSessionImportTests`. |
 | [`portal/tests/test_workspace_artifact_upload.py`](../portal/tests/test_workspace_artifact_upload.py) | Implementa `WorkspaceArtifactUploadTests`. |
 | [`portal/tests/test_workspace_change_set.py`](../portal/tests/test_workspace_change_set.py) | Implementa `b64`, `WorkspaceChangeSetTests`. |

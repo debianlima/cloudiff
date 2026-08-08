@@ -65,6 +65,7 @@ portal_auth = r'''
 portal = r'''
     # CloudIF portal v1 BEGIN
     location ^~ /cloudiff/portal/ {
+        client_max_body_size 70m;
         auth_request /cloudiff/portal-auth;
         error_page 401 = @cloudif_authentik_signin_v244;
         error_page 403 = @cloudif_forbidden_v244;

@@ -18,7 +18,7 @@ import uuid
 import yaml
 from cloudif_multitech_detector import detect_components
 from cloudif_change_set import (ChangeSetError, apply_changes, change_set_digest, clean_expired, load_sealed, normalize_changes, seal_change_set)
-from cloudif_workspace_artifact import (ArtifactError, append_chunk, append_chunk_batch, complete_artifact, read_artifact, resolve_artifact, start_artifact)
+from cloudif_workspace_artifact import (ArtifactError, append_chunk, append_chunk_batch, complete_artifact, create_upload_ticket, direct_upload_artifact, inspect_upload_ticket, read_artifact, resolve_artifact, start_artifact)
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse
 
@@ -1064,6 +1064,9 @@ class H(BaseHTTPRequestHandler):
     def auth(self) -> bool:
         return bool(TOKEN) and hmac.compare_digest(self.headers.get('Authorization', ''), 'Bearer ' + TOKEN)
 
+    def local_client(self) -> bool:
+        return str((self.client_address or ('',0))[0]) in {'127.0.0.1','::1'}
+
     def do_GET(self) -> None:
         if urlparse(self.path).path == '/health':
             try:
@@ -1076,7 +1079,28 @@ class H(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:
         path = urlparse(self.path).path
-        if path not in {'/v1/artifact/start','/v1/artifact/chunk','/v1/artifact/batch','/v1/artifact/complete','/v1/artifact/read','/v1/probe', '/v1/prepare', '/v1/detect-multiservice', '/v1/normalize-plan', '/v1/change-set/validate', '/v1/change-set/resolve', '/v1/validate', '/v1/test-static', '/v1/preview-static', '/v1/edit-preview'}:
+        if path in {'/v1/artifact/ticket/status','/v1/artifact/direct-upload'}:
+            if not self.local_client():
+                self.sendj(403, {'ok':False,'error':{'code':'loopback_required'}});return
+            try:
+                if path == '/v1/artifact/ticket/status':
+                    n=int(self.headers.get('Content-Length','0') or 0)
+                    if not (0<n<=4096):raise ValueError('invalid_request')
+                    data=json.loads(self.rfile.read(n));ticket=str(data.get('upload_ticket') or '') if isinstance(data,dict) else ''
+                    result=inspect_upload_ticket(ARTIFACT_ROOT,ticket)
+                    self.sendj(200,{'ok':True,'result':result});return
+                ticket=str(self.headers.get('X-CloudIF-Upload-Ticket') or '').strip();ctype=(self.headers.get('Content-Type') or '').split(';',1)[0].strip().lower();n=int(self.headers.get('Content-Length','0') or 0)
+                if ctype!='application/octet-stream':
+                    self.sendj(415,{'ok':False,'error':{'code':'octet_stream_required'}});return
+                if not ticket or not (0<=n<=64*1024*1024):raise ValueError('invalid_direct_upload')
+                result=direct_upload_artifact(ARTIFACT_ROOT,ticket,self.rfile,n)
+                print(json.dumps({'event':'workspace.artifact.direct-upload','project_slug':result.get('project_slug'),'artifact_id':result.get('artifact_id'),'bytes':result.get('size'),'result':'success'},separators=(',',':')),flush=True)
+                self.sendj(200,{'ok':True,'result':result});return
+            except ArtifactError as exc:
+                self.sendj(422,{'ok':False,'error':exc.as_dict()});return
+            except Exception as exc:
+                self.sendj(400,{'ok':False,'error':{'code':'invalid_direct_upload','message':'O upload direto não pôde ser validado.','detail':type(exc).__name__}});return
+        if path not in {'/v1/artifact/start','/v1/artifact/chunk','/v1/artifact/batch','/v1/artifact/ticket','/v1/artifact/complete','/v1/artifact/read','/v1/probe', '/v1/prepare', '/v1/detect-multiservice', '/v1/normalize-plan', '/v1/change-set/validate', '/v1/change-set/resolve', '/v1/validate', '/v1/test-static', '/v1/preview-static', '/v1/edit-preview'}:
             self.sendj(404, {'ok': False, 'error': 'not_found'})
             return
         if not self.auth():
@@ -1095,6 +1119,8 @@ class H(BaseHTTPRequestHandler):
                 required={'project_slug','trace_id','artifact_id','chunk_index','content_base64','chunk_sha256'}; allowed=required
             elif path == '/v1/artifact/batch':
                 required={'project_slug','trace_id','artifact_id','chunks'}; allowed=required
+            elif path == '/v1/artifact/ticket':
+                required={'project_slug','trace_id','artifact_id'}; allowed=required|{'requested_by','ttl_seconds'}
             elif path == '/v1/artifact/complete':
                 required={'project_slug','trace_id','artifact_id'}; allowed=required
             elif path == '/v1/artifact/read':
@@ -1135,15 +1161,17 @@ class H(BaseHTTPRequestHandler):
             chunk_content = data.get('content_base64')
             chunk_sha256 = str(data.get('chunk_sha256') or '')
             chunk_batch = data.get('chunks')
-            if path not in {'/v1/change-set/resolve','/v1/artifact/start','/v1/artifact/chunk','/v1/artifact/batch','/v1/artifact/complete','/v1/artifact/read'}:
+            requested_by = str(data.get('requested_by') or '')
+            if path not in {'/v1/change-set/resolve','/v1/artifact/start','/v1/artifact/chunk','/v1/artifact/batch','/v1/artifact/ticket','/v1/artifact/complete','/v1/artifact/read'}:
                 assert REF.fullmatch(ref) and '..' not in ref and not ref.startswith('/') and not ref.endswith('/')
             if path in {'/v1/artifact/start','/v1/normalize-plan','/v1/change-set/validate'}: assert 300 <= ttl_seconds <= 86400
+            if path == '/v1/artifact/ticket': assert 60 <= ttl_seconds <= 1800
         except Exception:
             self.sendj(400, {'ok': False, 'error': {'code': 'invalid_request', 'message': 'A solicitação contém campos ausentes ou incompatíveis.'}})
             return
         started = time.monotonic()
         event_map = {
-            '/v1/artifact/start':'workspace.artifact.start','/v1/artifact/chunk':'workspace.artifact.chunk','/v1/artifact/batch':'workspace.artifact.batch','/v1/artifact/complete':'workspace.artifact.complete','/v1/artifact/read':'workspace.artifact.read',
+            '/v1/artifact/start':'workspace.artifact.start','/v1/artifact/chunk':'workspace.artifact.chunk','/v1/artifact/batch':'workspace.artifact.batch','/v1/artifact/ticket':'workspace.artifact.ticket','/v1/artifact/complete':'workspace.artifact.complete','/v1/artifact/read':'workspace.artifact.read',
             '/v1/probe':'workspace.probe','/v1/prepare':'workspace.prepare',
             '/v1/detect-multiservice':'workspace.detect-multiservice','/v1/normalize-plan':'workspace.normalize-plan',
             '/v1/change-set/validate':'workspace.change-set.validate','/v1/change-set/resolve':'workspace.change-set.resolve',
@@ -1158,6 +1186,8 @@ class H(BaseHTTPRequestHandler):
                 result=append_chunk(ARTIFACT_ROOT,slug,artifact_id,chunk_index,chunk_content,chunk_sha256);run_dir='';name='';removed=True
             elif path == '/v1/artifact/batch':
                 result=append_chunk_batch(ARTIFACT_ROOT,slug,artifact_id,chunk_batch);run_dir='';name='';removed=True
+            elif path == '/v1/artifact/ticket':
+                result=create_upload_ticket(ARTIFACT_ROOT,slug,artifact_id,requested_by,ttl_seconds);run_dir='';name='';removed=True
             elif path == '/v1/artifact/complete':
                 result=complete_artifact(ARTIFACT_ROOT,slug,artifact_id);run_dir='';name='';removed=True
             elif path == '/v1/artifact/read':

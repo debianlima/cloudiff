@@ -23,6 +23,7 @@ Componentes implantados no plano de controle e no host de hospedagem.
 | [`cloudif_machine_db.py`](cloudif_machine_db.py) | `.py` | Implementa `_pg_connect`, `PgConnection`, `connect`, `init_schema`, `table_columns`. |
 | [`cloudif_multiservice_preview_portal.py`](cloudif_multiservice_preview_portal.py) | `.py` | Implementa `_send`, `_json`, `handle_preview_request`. |
 | [`cloudif_onboarding_v2.py`](cloudif_onboarding_v2.py) | `.py` | Código inicial publicado em todo projeto novo da CloudIFF. |
+| [`cloudif_portal_artifact_upload.py`](cloudif_portal_artifact_upload.py) | `.py` | Implementa `_json_body`, `ticket_status`, `project_allowed`, `safe_metadata`, `forward_upload`, `render_page`. |
 | [`cloudif_portal_publications.py`](cloudif_portal_publications.py) | `.py` | Implementa `_env`, `_post`, `_publication_error`, `_project_allowed`, `_ensure_schema`, `_number` e outros componentes. |
 | [`cloudif_portal_v2_coexist.py`](cloudif_portal_v2_coexist.py) | `.py` | CloudIFF Portal v2 coexistence and auto-recovery adapter |
 | [`cloudif_project_acl_module.py`](cloudif_project_acl_module.py) | `.py` | Implementa `h`, `con`, `table_cols`, `pick`, `detect_acl_config`, `project_row` e outros componentes. |

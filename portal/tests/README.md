@@ -81,6 +81,8 @@ Arquitetura modular, interface, configuração e testes do Portal.
 | [`test_platform_backup_progress_modal.py`](test_platform_backup_progress_modal.py) | `.py` | Implementa `PlatformBackupProgressModalTests`. |
 | [`test_platform_guide_canonical.py`](test_platform_guide_canonical.py) | `.py` | Implementa `CanonicalPlatformGuideTests`. |
 | [`test_platform_guide_github.py`](test_platform_guide_github.py) | `.py` | Implementa `PlatformGuideGithubTests`. |
+| [`test_portal_artifact_upload_bridge.py`](test_portal_artifact_upload_bridge.py) | `.py` | Implementa `Response`, `Handler`, `PortalArtifactUploadBridgeTests`. |
+| [`test_portal_artifact_upload_routes.py`](test_portal_artifact_upload_routes.py) | `.py` | Implementa `PortalArtifactUploadRoutesTests`. |
 | [`test_portal_launcher_base_compatibility.py`](test_portal_launcher_base_compatibility.py) | `.py` | Implementa `PortalLauncherBaseCompatibilityTests`. |
 | [`test_portal_no_legacy_visual_fallback.py`](test_portal_no_legacy_visual_fallback.py) | `.py` | Implementa `PortalNoLegacyVisualFallbackTests`. |
 | [`test_portal_sqlite_wal_resilience.py`](test_portal_sqlite_wal_resilience.py) | `.py` | Implementa `load_delete_module`, `PortalSQLiteWalResilienceTests`. |
@@ -181,6 +183,8 @@ Arquitetura modular, interface, configuração e testes do Portal.
 | [`test_user_owned_forgejo_and_komodo_acl.py`](test_user_owned_forgejo_and_komodo_acl.py) | `.py` | Implementa `UserOwnedForgejoAndKomodoAclTests`. |
 | [`test_versioned_unified_runtime_publication.py`](test_versioned_unified_runtime_publication.py) | `.py` | Implementa `VersionedUnifiedRuntimePublicationTests`. |
 | [`test_w_h_p_release_flow.py`](test_w_h_p_release_flow.py) | `.py` | Implementa `WHPReleaseFlowTests`. |
+| [`test_workspace_artifact_direct_http.py`](test_workspace_artifact_direct_http.py) | `.py` | Implementa `WorkspaceArtifactDirectHTTPTests`. |
+| [`test_workspace_artifact_direct_upload.py`](test_workspace_artifact_direct_upload.py) | `.py` | Implementa `WorkspaceArtifactDirectUploadTests`. |
 | [`test_workspace_artifact_session_import.py`](test_workspace_artifact_session_import.py) | `.py` | Implementa `FakeResponse`, `WorkspaceArtifactSessionImportTests`. |
 | [`test_workspace_artifact_upload.py`](test_workspace_artifact_upload.py) | `.py` | Implementa `WorkspaceArtifactUploadTests`. |
 | [`test_workspace_change_set.py`](test_workspace_change_set.py) | `.py` | Implementa `b64`, `WorkspaceChangeSetTests`. |

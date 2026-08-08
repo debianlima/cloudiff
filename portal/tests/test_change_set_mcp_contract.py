@@ -21,7 +21,7 @@ READ_TOOLS = {
     'forgejo.proposal.change-set.plan',
 }
 WRITE_TOOLS = {
-    'workspace.artifact.upload.start', 'workspace.artifact.upload.chunk', 'workspace.artifact.upload.batch', 'workspace.artifact.import', 'workspace.artifact.upload.complete',
+    'workspace.artifact.upload.start', 'workspace.artifact.upload.chunk', 'workspace.artifact.upload.batch', 'workspace.artifact.import', 'workspace.artifact.upload.ticket', 'workspace.artifact.upload.complete',
     'approval.request-change-set-proposal', 'approval.cancel',
     'forgejo.proposal.change-set.create',
 }
@@ -96,10 +96,19 @@ class ChangeSetMCPContractTests(unittest.TestCase):
             self.assertIn(marker, execute)
 
     def test_artifact_transport_stays_out_of_change_set_json(self):
-        for marker in ('workspace.artifact.upload.start','workspace.artifact.upload.chunk','workspace.artifact.upload.batch','workspace.artifact.import','workspace.artifact.upload.complete',"'artifact_id':{'type':'string'",'def session_file_resolve','CLOUDIF_SESSION_FILE_RESOLVER_URL','def workspace_artifact_import_bytes','def workspace_artifact_read','application/octet-stream','def forgejo_artifact_stage','def stage_change_set_artifacts'):
+        for marker in ('workspace.artifact.upload.start','workspace.artifact.upload.chunk','workspace.artifact.upload.batch','workspace.artifact.import','workspace.artifact.upload.ticket','workspace.artifact.upload.complete',"'artifact_id':{'type':'string'",'def session_file_resolve','CLOUDIF_SESSION_FILE_RESOLVER_URL','def workspace_artifact_import_bytes','def workspace_artifact_read','application/octet-stream','def forgejo_artifact_stage','def stage_change_set_artifacts'):
             self.assertIn(marker,self.gateway)
         self.assertIn('/v1/artifact/batch',self.broker)
-        self.assertIn('MAX_BATCH_CHUNK_BYTES = 8 * 1024',(ROOT/'components/control-plane/current-apps/workspace-broker-current/cloudif_workspace_artifact.py').read_text())
+        self.assertIn('/v1/artifact/ticket',self.broker)
+        artifact_source=(ROOT/'components/control-plane/current-apps/workspace-broker-current/cloudif_workspace_artifact.py').read_text()
+        self.assertIn('MAX_BATCH_CHUNK_BYTES = 8 * 1024',artifact_source)
+        self.assertIn('def create_upload_ticket',artifact_source)
+        self.assertIn('def direct_upload_artifact',artifact_source)
+        self.assertIn("'/cloudiff/portal/artifact-upload#'",self.gateway)
+        router=(ROOT/'components/control-plane/srv/cloudif/router/conf.d/default.conf').read_text()
+        router_apply=(ROOT/'components/control-plane/srv/cloudif/bin/cloudif-apply-router-portal-v1.sh').read_text()
+        self.assertIn('client_max_body_size 70m;',router)
+        self.assertIn('client_max_body_size 70m;',router_apply)
         for marker in ('/project/proposal/artifact/stage','def _change_set_artifact_stage','def _change_set_artifact_load','def _change_set_put_bytes','_CHANGESET_ARTIFACT_MAX_BYTES = 64 * 1024 * 1024',"if len(raw)>1024*1024",'def _change_set_git_commit_bytes'):
             self.assertIn(marker,self.forja)
         self.assertIn("'content_stored':False",self.gateway)

@@ -50,6 +50,7 @@ def _install() -> None:
     from portal.registry import registry
     from portal.wiring import install as wire
     from cloudif_multiservice_preview_portal import handle_preview_request
+    from cloudif_portal_artifact_upload import forward_upload as artifact_forward_upload, project_allowed as artifact_project_allowed, render_page as artifact_upload_page, safe_metadata as artifact_safe_metadata, ticket_status as artifact_ticket_status
 
     if not registry.routes():
         wire()
@@ -521,6 +522,14 @@ def _install() -> None:
             route_query = urllib.parse.parse_qs(parsed.query)
             query_api = (route_query.get("api") or [""])[0].strip()
             try:
+                if path in {'/cloudiff/portal/artifact-upload','/cloudif/portal/artifact-upload'}:
+                    try:
+                        owner=sys.modules.get(handler_class.__module__);user=self.user();csrf_factory=getattr(owner,'_prod_csrf_token',None) if owner else None
+                        if not csrf_factory:raise RuntimeError('artifact_upload_csrf_unavailable')
+                        return send(self,200,'text/html; charset=utf-8',artifact_upload_page(csrf_factory(user)))
+                    except Exception as exc:
+                        print(f'cloudif_artifact_upload_page_failed type={type(exc).__name__}',flush=True)
+                        return send(self,503,'text/html; charset=utf-8',recovery_page('Upload temporariamente indisponível','A CloudIFF não conseguiu preparar a sessão segura de upload. Tente novamente em alguns instantes.',self.path))
                 base_workspace_match = re.fullmatch(r'/cloudiff?/portal/publication/base/([a-z0-9][a-z0-9-]{0,62})', path)
                 if base_workspace_match:
                     slug=base_workspace_match.group(1)
@@ -838,6 +847,48 @@ def _install() -> None:
                 if handle_preview_request(self):
                     return
                 parsed = urllib.parse.urlparse(self.path)
+                if parsed.path in {'/cloudiff/portal/api/artifact-upload/status','/cloudif/portal/api/artifact-upload/status'}:
+                    try:
+                        content_length=int(self.headers.get('Content-Length','0') or 0)
+                        if not (0<content_length<=4096) or 'application/json' not in (self.headers.get('Content-Type') or '').lower():
+                            return send_json(self,400,{'ok':False,'error':{'message':'Solicitação de ticket inválida.'}})
+                        payload=json.loads(self.rfile.read(content_length) or b'{}')
+                        if not isinstance(payload,dict):return send_json(self,400,{'ok':False,'error':{'message':'Solicitação de ticket inválida.'}})
+                        owner=sys.modules.get(handler_class.__module__);user=self.user();provided=str(self.headers.get('X-CSRF-Token') or '')
+                        if not getattr(owner,'_prod_csrf_equal')(provided,getattr(owner,'_prod_csrf_token')(user)):
+                            return send_json(self,403,{'ok':False,'error':{'message':'Token CSRF inválido.'}})
+                        ticket=str(payload.get('upload_ticket') or '').strip();meta=artifact_ticket_status(ticket);slug=str(meta.get('project_slug') or '')
+                        if not artifact_project_allowed(user,slug):return send_json(self,403,{'ok':False,'error':{'message':'Você não possui acesso a este projeto.'}})
+                        return send_json(self,200,{'ok':True,'artifact':artifact_safe_metadata(meta),'secrets_exposed':False})
+                    except ValueError as exc:
+                        return send_json(self,422,{'ok':False,'error':{'message':'O ticket de upload é inválido ou expirou.','code':str(exc)}})
+                    except json.JSONDecodeError:
+                        return send_json(self,400,{'ok':False,'error':{'message':'JSON inválido.'}})
+                    except Exception as exc:
+                        print(f'cloudif_artifact_upload_status_failed type={type(exc).__name__}',flush=True)
+                        return send_json(self,503,{'ok':False,'error':{'message':'Não foi possível validar o ticket agora.','detail':type(exc).__name__}})
+                if parsed.path in {'/cloudiff/portal/api/artifact-upload/content','/cloudif/portal/api/artifact-upload/content'}:
+                    try:
+                        owner=sys.modules.get(handler_class.__module__);user=self.user();provided=str(self.headers.get('X-CSRF-Token') or '');ticket=str(self.headers.get('X-CloudIF-Upload-Ticket') or '').strip()
+                        if not getattr(owner,'_prod_csrf_equal')(provided,getattr(owner,'_prod_csrf_token')(user)):
+                            return send_json(self,403,{'ok':False,'error':{'message':'Token CSRF inválido.'}})
+                        meta=artifact_ticket_status(ticket);slug=str(meta.get('project_slug') or '')
+                        if not artifact_project_allowed(user,slug):return send_json(self,403,{'ok':False,'error':{'message':'Você não possui acesso a este projeto.'}})
+                        expected=int(meta.get('expected_size') or -1)
+                        try:status,data=artifact_forward_upload(self,ticket,expected)
+                        except TypeError:return send_json(self,415,{'ok':False,'error':{'message':'Use application/octet-stream.'}})
+                        except ValueError:return send_json(self,422,{'ok':False,'error':{'message':'O tamanho enviado não corresponde ao artifact.'}})
+                        if status!=200 or not data.get('ok'):
+                            error=data.get('error') if isinstance(data,dict) else None;message=(error.get('message') if isinstance(error,dict) else str(error or '')) or 'O arquivo não passou na validação de integridade.'
+                            return send_json(self,422 if status<500 else 503,{'ok':False,'error':{'message':message}})
+                        result=data.get('result') or {}
+                        return send_json(self,200,{'ok':True,'artifact':artifact_safe_metadata(result),'secrets_exposed':False})
+                    except ValueError as exc:
+                        return send_json(self,422,{'ok':False,'error':{'message':'O ticket de upload é inválido, expirou ou não corresponde ao arquivo.','code':str(exc)}})
+                    except Exception as exc:
+                        self.close_connection=True
+                        print(f'cloudif_artifact_upload_content_failed type={type(exc).__name__}',flush=True)
+                        return send_json(self,503,{'ok':False,'error':{'message':'O upload foi interrompido antes de ser selado. Você pode tentar novamente.','detail':type(exc).__name__}})
                 release_flow_match = re.fullmatch(r'/cloudiff?/portal/api/projects/([a-z0-9][a-z0-9-]{0,62})/release-flow/(preview/ensure|preview/recreate|preview/terminal|homologation/enqueue|homologation/approve|homologation/reject|homologation/homologate-and-publish|homologators|production/approval/request|production/enqueue|rollback|job/acknowledge)', parsed.path)
                 if release_flow_match:
                     try:
