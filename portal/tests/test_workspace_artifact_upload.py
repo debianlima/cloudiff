@@ -1,6 +1,8 @@
 import base64,hashlib,importlib.util,tempfile,time,unittest,threading
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[2]
+BROKER=(ROOT/'components/control-plane/current-apps/workspace-broker-current/cloudif-workspace-broker.py').read_text()
+UNIT=(ROOT/'components/control-plane/etc/systemd/system/cloudif-workspace-broker.service').read_text()
 PATH=ROOT/'components/control-plane/current-apps/workspace-broker-current/cloudif_workspace_artifact.py'
 spec=importlib.util.spec_from_file_location('artifact',PATH);A=importlib.util.module_from_spec(spec);spec.loader.exec_module(A)
 
@@ -54,5 +56,11 @@ class WorkspaceArtifactUploadTests(unittest.TestCase):
    [t.start() for t in threads];barrier.wait();[t.join() for t in threads]
    self.assertFalse(errors);self.assertEqual(len(results),2);self.assertEqual(sorted(bool(x.get('idempotent')) for x in results),[False,True])
    sealed=A.complete_artifact(td,'demo',aid);self.assertEqual(sealed['size'],len(raw));self.assertEqual(sealed['sha256'],digest)
+
+
+ def test_artifact_store_is_outside_ephemeral_workspace_root(self):
+  self.assertIn("ARTIFACT_ROOT = os.environ.get('CLOUDIF_WORKSPACE_ARTIFACT_ROOT', '/var/lib/cloudif/workspace-artifacts')",BROKER)
+  self.assertIn('ReadWritePaths=/var/lib/cloudif/workspaces /var/lib/cloudif/workspace-artifacts',UNIT)
+  self.assertNotIn("Path(artifact_root) / '.artifacts'",PATH.read_text())
 
 if __name__=='__main__':unittest.main()

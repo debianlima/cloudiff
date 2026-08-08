@@ -29,6 +29,7 @@ IMAGE = os.environ.get('CLOUDIF_WORKSPACE_IMAGE', 'nginx@sha256:5f979dcfed4ce646
 FORJA_URL = os.environ.get('CLOUDIF_FORJA_AGENT_URL', 'http://10.62.91.2:18095').rstrip('/')
 FORJA_TOKEN = os.environ.get('CLOUDIF_FORJA_AGENT_TOKEN', '')
 WORKROOT = os.environ.get('CLOUDIF_WORKSPACE_ROOT', '/var/lib/cloudif/workspaces')
+ARTIFACT_ROOT = os.environ.get('CLOUDIF_WORKSPACE_ARTIFACT_ROOT', '/var/lib/cloudif/workspace-artifacts')
 PROJECT_CONFIG_URL = os.environ.get('CLOUDIF_PROJECT_CONFIG_URL', 'http://127.0.0.1:18219').rstrip('/')
 PROJECT_CONFIG_TOKEN = os.environ.get('CLOUDIF_PROJECT_CONFIG_TOKEN', '')
 SLUG = re.compile(r'^[a-z0-9][a-z0-9-]{0,62}$')
@@ -354,9 +355,9 @@ def validate_change_set_workspace(slug: str, ref: str, trace: str, title: str, d
         files, total = safe_extract(raw, run_dir)
         hold_until = int(time.time()) + max(300, min(int(ttl_seconds), 86400))
         def artifact_resolver(artifact_id):
-            return resolve_artifact(WORKROOT, slug, artifact_id, hold_until=hold_until)
+            return resolve_artifact(ARTIFACT_ROOT, slug, artifact_id, hold_until=hold_until)
         def artifact_reader(artifact_id, expected_sha256, expected_size):
-            return read_artifact(WORKROOT, slug, artifact_id, expected_sha256, expected_size)[1]
+            return read_artifact(ARTIFACT_ROOT, slug, artifact_id, expected_sha256, expected_size)[1]
         normalized, content_bytes = normalize_changes(changes, artifact_resolver)
         applied, diff_lines = apply_changes(run_dir, normalized, artifact_reader)
         after_files = workspace_files(run_dir)
@@ -1148,13 +1149,13 @@ class H(BaseHTTPRequestHandler):
         event = event_map[path]
         try:
             if path == '/v1/artifact/start':
-                result=start_artifact(WORKROOT,slug,filename,artifact_expected_size,artifact_expected_sha256,ttl_seconds);run_dir='';name='';removed=True
+                result=start_artifact(ARTIFACT_ROOT,slug,filename,artifact_expected_size,artifact_expected_sha256,ttl_seconds);run_dir='';name='';removed=True
             elif path == '/v1/artifact/chunk':
-                result=append_chunk(WORKROOT,slug,artifact_id,chunk_index,chunk_content,chunk_sha256);run_dir='';name='';removed=True
+                result=append_chunk(ARTIFACT_ROOT,slug,artifact_id,chunk_index,chunk_content,chunk_sha256);run_dir='';name='';removed=True
             elif path == '/v1/artifact/complete':
-                result=complete_artifact(WORKROOT,slug,artifact_id);run_dir='';name='';removed=True
+                result=complete_artifact(ARTIFACT_ROOT,slug,artifact_id);run_dir='';name='';removed=True
             elif path == '/v1/artifact/read':
-                meta,raw=read_artifact(WORKROOT,slug,artifact_id,artifact_expected_sha256,artifact_expected_size)
+                meta,raw=read_artifact(ARTIFACT_ROOT,slug,artifact_id,artifact_expected_sha256,artifact_expected_size)
                 print(json.dumps({'event': event, 'project_slug': slug, 'trace_id': trace, 'result':'success','artifact_id':artifact_id,'bytes':len(raw),'duration_ms':round((time.monotonic()-started)*1000,2)},separators=(',',':')),flush=True)
                 self.sendb(200,raw,meta);return
             elif path == '/v1/probe':
