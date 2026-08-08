@@ -81,7 +81,7 @@ class SupabaseMCPDatabaseConnectorContractTest(unittest.TestCase):
         block = self.gateway[self.gateway.index('def _public_oauth_client'):self.gateway.index('def _callback_mode')]
         for marker in ('authorized_groups', 'project_role', 'PROJECT_ROLE_RANK', "kind=='group'", "kind=='user'"):
             self.assertIn(marker, block)
-        authz = self.gateway[self.gateway.index('def authorize_client'):self.gateway.index('def redirect')]
+        start=self.gateway.index('def authorize_client');authz = self.gateway[start:self.gateway.index('    def redirect(self,url):',start)]
         self.assertIn("data.update({'authorized_user'", authz)
         self.assertIn("'authorized_groups'", authz)
         self.assertIn("'project_role'", authz)

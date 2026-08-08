@@ -21,7 +21,7 @@ READ_TOOLS = {
     'forgejo.proposal.change-set.plan',
 }
 WRITE_TOOLS = {
-    'workspace.artifact.upload.start', 'workspace.artifact.upload.chunk', 'workspace.artifact.upload.batch', 'workspace.artifact.import', 'workspace.artifact.upload.ticket', 'workspace.artifact.upload.complete',
+    'workspace.artifact.upload.start', 'workspace.artifact.upload.chunk', 'workspace.artifact.upload.batch', 'workspace.artifact.import', 'workspace.artifact.upload.ticket', 'workspace.artifact.upload.status', 'workspace.artifact.upload.complete',
     'approval.request-change-set-proposal', 'approval.cancel',
     'forgejo.proposal.change-set.create',
 }
@@ -96,7 +96,7 @@ class ChangeSetMCPContractTests(unittest.TestCase):
             self.assertIn(marker, execute)
 
     def test_artifact_transport_stays_out_of_change_set_json(self):
-        for marker in ('workspace.artifact.upload.start','workspace.artifact.upload.chunk','workspace.artifact.upload.batch','workspace.artifact.import','workspace.artifact.upload.ticket','workspace.artifact.upload.complete',"'artifact_id':{'type':'string'",'def session_file_resolve','CLOUDIF_SESSION_FILE_RESOLVER_URL','def workspace_artifact_import_bytes','def workspace_artifact_read','application/octet-stream','def forgejo_artifact_stage','def stage_change_set_artifacts'):
+        for marker in ('workspace.artifact.upload.start','workspace.artifact.upload.chunk','workspace.artifact.upload.batch','workspace.artifact.import','workspace.artifact.upload.ticket','workspace.artifact.upload.status','workspace.artifact.upload.complete',"'artifact_id':{'type':'string'",'def session_file_resolve','openai/fileParams','SESSION_FILE_DOWNLOAD_SUFFIXES','def workspace_artifact_import_bytes','def workspace_artifact_read','application/octet-stream','def forgejo_artifact_stage','def stage_change_set_artifacts'):
             self.assertIn(marker,self.gateway)
         self.assertIn('/v1/artifact/batch',self.broker)
         self.assertIn('/v1/artifact/ticket',self.broker)
@@ -107,6 +107,14 @@ class ChangeSetMCPContractTests(unittest.TestCase):
         self.assertIn("'/cloudiff/portal/artifact-upload/'",self.gateway)
         self.assertNotIn("'/cloudiff/portal/artifact-upload#'",self.gateway)
         self.assertIn('browser_secret_required',self.gateway)
+        self.assertIn("content['upload_url_audience']='human_user'",self.gateway)
+        self.assertIn("content['agent_must_not_open_upload_url']=True",self.gateway)
+        self.assertIn("content['agent_followup_tool']='workspace.artifact.upload.status'",self.gateway)
+        self.assertIn("name=='workspace.artifact.upload.status'",self.gateway)
+        self.assertIn("'/v1/artifact/upload/status'",self.gateway)
+        self.assertIn("'_meta':{'openai/fileParams':['file']}",self.gateway)
+        self.assertNotIn('CLOUDIF_SESSION_FILE_RESOLVER_URL',self.gateway)
+        self.assertNotIn('CLOUDIF_SESSION_FILE_RESOLVER_TOKEN',self.gateway)
         router=(ROOT/'components/control-plane/srv/cloudif/router/conf.d/default.conf').read_text()
         router_apply=(ROOT/'components/control-plane/srv/cloudif/bin/cloudif-apply-router-portal-v1.sh').read_text()
         self.assertIn('client_max_body_size 70m;',router)

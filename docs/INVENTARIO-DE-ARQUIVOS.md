@@ -1,6 +1,6 @@
 # Inventário de arquivos
 
-Este catálogo descreve **1149 arquivos versionados**. Ele é regenerado pelo script de documentação.
+Este catálogo descreve **1150 arquivos versionados**. Ele é regenerado pelo script de documentação.
 
 | Caminho | Finalidade |
 |---|---|
@@ -827,6 +827,7 @@ Este catálogo descreve **1149 arquivos versionados**. Ele é regenerado pelo sc
 | [`portal/tests/test_admin_project_delete_runtime_contract.py`](../portal/tests/test_admin_project_delete_runtime_contract.py) | Implementa `AdminProjectDeleteRuntimeContractTest`. |
 | [`portal/tests/test_ai_connectors_hub.py`](../portal/tests/test_ai_connectors_hub.py) | Implementa `AIConnectorsHubTests`. |
 | [`portal/tests/test_approval_cancel.py`](../portal/tests/test_approval_cancel.py) | Implementa `load_api`, `ApprovalCancelTests`. |
+| [`portal/tests/test_artifact_upload_agent_handoff.py`](../portal/tests/test_artifact_upload_agent_handoff.py) | Implementa `ArtifactUploadAgentHandoffTests`. |
 | [`portal/tests/test_authz_gate_tenant_allowlist.py`](../portal/tests/test_authz_gate_tenant_allowlist.py) | Implementa `load_module`, `AuthzGateTenantAllowlistTests`. |
 | [`portal/tests/test_backup_console_json_and_sections.py`](../portal/tests/test_backup_console_json_and_sections.py) | Implementa `BackupConsoleJsonAndSectionsTests`. |
 | [`portal/tests/test_backup_progress_modal.py`](../portal/tests/test_backup_progress_modal.py) | Implementa `BackupProgressModalTests`. |
@@ -993,7 +994,7 @@ Este catálogo descreve **1149 arquivos versionados**. Ele é regenerado pelo sc
 | [`portal/tests/test_w_h_p_release_flow.py`](../portal/tests/test_w_h_p_release_flow.py) | Implementa `WHPReleaseFlowTests`. |
 | [`portal/tests/test_workspace_artifact_direct_http.py`](../portal/tests/test_workspace_artifact_direct_http.py) | Implementa `WorkspaceArtifactDirectHTTPTests`. |
 | [`portal/tests/test_workspace_artifact_direct_upload.py`](../portal/tests/test_workspace_artifact_direct_upload.py) | Implementa `WorkspaceArtifactDirectUploadTests`. |
-| [`portal/tests/test_workspace_artifact_session_import.py`](../portal/tests/test_workspace_artifact_session_import.py) | Implementa `FakeResponse`, `WorkspaceArtifactSessionImportTests`. |
+| [`portal/tests/test_workspace_artifact_session_import.py`](../portal/tests/test_workspace_artifact_session_import.py) | Implementa `WorkspaceArtifactSessionImportTests`. |
 | [`portal/tests/test_workspace_artifact_upload.py`](../portal/tests/test_workspace_artifact_upload.py) | Implementa `WorkspaceArtifactUploadTests`. |
 | [`portal/tests/test_workspace_change_set.py`](../portal/tests/test_workspace_change_set.py) | Implementa `b64`, `WorkspaceChangeSetTests`. |
 | [`portal/ui/README.md`](../portal/ui/README.md) | Documentação deste diretório. |

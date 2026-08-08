@@ -19,6 +19,7 @@ Arquitetura modular, interface, configuração e testes do Portal.
 | [`test_admin_project_delete_runtime_contract.py`](test_admin_project_delete_runtime_contract.py) | `.py` | Implementa `AdminProjectDeleteRuntimeContractTest`. |
 | [`test_ai_connectors_hub.py`](test_ai_connectors_hub.py) | `.py` | Implementa `AIConnectorsHubTests`. |
 | [`test_approval_cancel.py`](test_approval_cancel.py) | `.py` | Implementa `load_api`, `ApprovalCancelTests`. |
+| [`test_artifact_upload_agent_handoff.py`](test_artifact_upload_agent_handoff.py) | `.py` | Implementa `ArtifactUploadAgentHandoffTests`. |
 | [`test_authz_gate_tenant_allowlist.py`](test_authz_gate_tenant_allowlist.py) | `.py` | Implementa `load_module`, `AuthzGateTenantAllowlistTests`. |
 | [`test_backup_console_json_and_sections.py`](test_backup_console_json_and_sections.py) | `.py` | Implementa `BackupConsoleJsonAndSectionsTests`. |
 | [`test_backup_progress_modal.py`](test_backup_progress_modal.py) | `.py` | Implementa `BackupProgressModalTests`. |
@@ -185,7 +186,7 @@ Arquitetura modular, interface, configuração e testes do Portal.
 | [`test_w_h_p_release_flow.py`](test_w_h_p_release_flow.py) | `.py` | Implementa `WHPReleaseFlowTests`. |
 | [`test_workspace_artifact_direct_http.py`](test_workspace_artifact_direct_http.py) | `.py` | Implementa `WorkspaceArtifactDirectHTTPTests`. |
 | [`test_workspace_artifact_direct_upload.py`](test_workspace_artifact_direct_upload.py) | `.py` | Implementa `WorkspaceArtifactDirectUploadTests`. |
-| [`test_workspace_artifact_session_import.py`](test_workspace_artifact_session_import.py) | `.py` | Implementa `FakeResponse`, `WorkspaceArtifactSessionImportTests`. |
+| [`test_workspace_artifact_session_import.py`](test_workspace_artifact_session_import.py) | `.py` | Implementa `WorkspaceArtifactSessionImportTests`. |
 | [`test_workspace_artifact_upload.py`](test_workspace_artifact_upload.py) | `.py` | Implementa `WorkspaceArtifactUploadTests`. |
 | [`test_workspace_change_set.py`](test_workspace_change_set.py) | `.py` | Implementa `b64`, `WorkspaceChangeSetTests`. |
 

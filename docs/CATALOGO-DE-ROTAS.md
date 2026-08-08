@@ -1,6 +1,6 @@
 # Catálogo de rotas e endpoints
 
-Catálogo estático de **607 referências de rota** encontradas nos serviços e módulos. Uma rota pode aparecer em mais de um adaptador por compatibilidade.
+Catálogo estático de **608 referências de rota** encontradas nos serviços e módulos. Uma rota pode aparecer em mais de um adaptador por compatibilidade.
 
 | Componente | Método observado | Rota |
 |---|---|---|
@@ -142,6 +142,7 @@ Catálogo estático de **607 referências de rota** encontradas nos serviços e 
 | [`components/control-plane/current-apps/mcp-gateway-current/cloudif-mcp-gateway.py`](../components/control-plane/current-apps/mcp-gateway-current/cloudif-mcp-gateway.py) | GET/POST | `/v1/artifact/read` |
 | [`components/control-plane/current-apps/mcp-gateway-current/cloudif-mcp-gateway.py`](../components/control-plane/current-apps/mcp-gateway-current/cloudif-mcp-gateway.py) | GET/POST | `/v1/artifact/start` |
 | [`components/control-plane/current-apps/mcp-gateway-current/cloudif-mcp-gateway.py`](../components/control-plane/current-apps/mcp-gateway-current/cloudif-mcp-gateway.py) | GET/POST | `/v1/artifact/ticket` |
+| [`components/control-plane/current-apps/mcp-gateway-current/cloudif-mcp-gateway.py`](../components/control-plane/current-apps/mcp-gateway-current/cloudif-mcp-gateway.py) | GET/POST | `/v1/artifact/upload/status` |
 | [`components/control-plane/current-apps/mcp-gateway-current/cloudif-mcp-gateway.py`](../components/control-plane/current-apps/mcp-gateway-current/cloudif-mcp-gateway.py) | GET/POST | `/v1/authorize` |
 | [`components/control-plane/current-apps/mcp-gateway-current/cloudif-mcp-gateway.py`](../components/control-plane/current-apps/mcp-gateway-current/cloudif-mcp-gateway.py) | GET/POST | `/v1/authorize-public` |
 | [`components/control-plane/current-apps/mcp-gateway-current/cloudif-mcp-gateway.py`](../components/control-plane/current-apps/mcp-gateway-current/cloudif-mcp-gateway.py) | GET/POST | `/v1/builds` |

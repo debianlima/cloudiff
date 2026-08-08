@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-import os,json,hmac,urllib.request,urllib.error,threading,time,uuid,hashlib,secrets,base64,re
+import os,json,hmac,urllib.request,urllib.error,threading,time,uuid,hashlib,secrets,base64,re,socket,ipaddress
 import jsonschema
 from http.server import BaseHTTPRequestHandler,ThreadingHTTPServer
-from urllib.parse import urlparse,parse_qs,urlencode
+from urllib.parse import urlparse,parse_qs,urlencode,urljoin
 HOST=os.environ.get('CLOUDIF_MCP_HOST','127.0.0.1');PORT=int(os.environ.get('CLOUDIF_MCP_PORT','18198'))
 TOKEN=os.environ.get('CLOUDIF_MCP_TOKEN','');CONTROL=os.environ.get('CLOUDIF_CONTROL_URL','http://127.0.0.1:18197').rstrip('/');CONTROL_TOKEN=os.environ.get('CLOUDIF_CONTROL_TOKEN','')
 AUDIT_URL=os.environ.get('CLOUDIF_AUDIT_URL','http://127.0.0.1:18201').rstrip('/')
@@ -11,8 +11,7 @@ AGENT_URL=os.environ.get('CLOUDIF_AGENT_URL','http://127.0.0.1:18203').rstrip('/
 AGENT_ADMIN_TOKEN=os.environ.get('CLOUDIF_AGENT_ADMIN_TOKEN','')
 WORKSPACE_URL=os.environ.get('CLOUDIF_WORKSPACE_URL','http://127.0.0.1:18206').rstrip('/')
 WORKSPACE_TOKEN=os.environ.get('CLOUDIF_WORKSPACE_TOKEN','')
-SESSION_FILE_RESOLVER_URL=os.environ.get('CLOUDIF_SESSION_FILE_RESOLVER_URL','').strip()
-SESSION_FILE_RESOLVER_TOKEN=os.environ.get('CLOUDIF_SESSION_FILE_RESOLVER_TOKEN','').strip()
+SESSION_FILE_DOWNLOAD_SUFFIXES=tuple(x.strip().lower().lstrip('.') for x in os.environ.get('CLOUDIF_SESSION_FILE_DOWNLOAD_SUFFIXES','oaiusercontent.com,openai.com,chatgpt.com').split(',') if x.strip())
 APPROVAL_URL=os.environ.get('CLOUDIF_APPROVAL_URL','http://127.0.0.1:18204').rstrip('/')
 APPROVAL_TOKEN=os.environ.get('CLOUDIF_APPROVAL_TOKEN','')
 FORJA_URL=os.environ.get('CLOUDIF_FORJA_AGENT_URL','http://10.62.91.2:18095').rstrip('/')
@@ -318,8 +317,9 @@ TOOLS=[
  {'name':'workspace.artifact.upload.start','description':'Inicia upload temporário de artefato binário vinculado ao projeto, tamanho e SHA-256 esperados','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'filename':{'type':'string','minLength':1,'maxLength':240},'expected_size':{'type':'integer','minimum':0,'maximum':67108864},'expected_sha256':{'type':'string','pattern':'^[a-f0-9]{64}$'},'ttl_seconds':{'type':'integer','minimum':300,'maximum':86400}},'required':['slug','filename','expected_size','expected_sha256'],'additionalProperties':False,'examples':[{'slug':'meu-projeto','filename':'documentos-anonimizados.zip','expected_size':1390970,'expected_sha256':'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa','ttl_seconds':3600}]}},
  {'name':'workspace.artifact.upload.chunk','description':'Envia um chunk Base64 pequeno e sequencial para um artifact_id; retries idênticos são idempotentes','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'artifact_id':{'type':'string','pattern':'^art_[a-f0-9]{24}$'},'chunk_index':{'type':'integer','minimum':0,'maximum':65535},'content_base64':{'type':'string','minLength':1,'maxLength':262144},'chunk_sha256':{'type':'string','pattern':'^[a-f0-9]{64}$'}},'required':['slug','artifact_id','chunk_index','content_base64','chunk_sha256'],'additionalProperties':False,'examples':[{'slug':'meu-projeto','artifact_id':'art_111111111111111111111111','chunk_index':0,'content_base64':'eA==','chunk_sha256':'2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881'}]}},
  {'name':'workspace.artifact.upload.batch','description':'Envia até 16 chunks pequenos de até 8 KiB raw cada em uma chamada; ideal quando strings Base64 maiores são truncadas pelo cliente','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'artifact_id':{'type':'string','pattern':'^art_[a-f0-9]{24}$'},'chunks':{'type':'array','minItems':1,'maxItems':16,'items':{'type':'object','properties':{'chunk_index':{'type':'integer','minimum':0,'maximum':65535},'content_base64':{'type':'string','minLength':1,'maxLength':11000},'chunk_sha256':{'type':'string','pattern':'^[a-f0-9]{64}$'}},'required':['chunk_index','content_base64','chunk_sha256'],'additionalProperties':False}}},'required':['slug','artifact_id','chunks'],'additionalProperties':False,'examples':[{'slug':'meu-projeto','artifact_id':'art_111111111111111111111111','chunks':[{'chunk_index':0,'content_base64':'eA==','chunk_sha256':'2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881'}]}]}},
- {'name':'workspace.artifact.import','description':'Importa um arquivo já disponível no provedor da sessão por file_id, valida tamanho e SHA-256 e retorna artifact_id selado; exige resolver server-side configurado','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'file_id':{'type':'string','minLength':6,'maxLength':192,'pattern':'^[A-Za-z0-9_-]+$'},'filename':{'type':'string','minLength':1,'maxLength':240},'expected_size':{'type':'integer','minimum':0,'maximum':67108864},'expected_sha256':{'type':'string','pattern':'^[a-f0-9]{64}$'},'ttl_seconds':{'type':'integer','minimum':300,'maximum':86400}},'required':['slug','file_id','filename','expected_size','expected_sha256'],'additionalProperties':False,'examples':[{'slug':'meu-projeto','file_id':'file_1111111111111111','filename':'documentos-anonimizados.zip','expected_size':1390970,'expected_sha256':'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa','ttl_seconds':3600}]}},
- {'name':'workspace.artifact.upload.ticket','description':'Gera um link HTTPS temporário do Portal para enviar o arquivo binário diretamente pelo navegador, sem Base64; vinculado ao artifact_id, tamanho e SHA-256 já registrados','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'artifact_id':{'type':'string','pattern':'^art_[a-f0-9]{24}$'},'ttl_seconds':{'type':'integer','minimum':60,'maximum':1800}},'required':['slug','artifact_id'],'additionalProperties':False,'examples':[{'slug':'meu-projeto','artifact_id':'art_111111111111111111111111','ttl_seconds':900}]}},
+ {'name':'workspace.artifact.import','description':'Importa automaticamente um arquivo anexado ao ChatGPT via file param oficial, baixa a URL temporária server-side, valida tamanho e SHA-256 e retorna artifact_id selado','inputSchema':{'type':'object','$defs':{'OpenAIFile':{'type':'object','properties':{'download_url':{'type':'string'},'file_id':{'type':'string'},'mime_type':{'type':'string'},'file_name':{'type':'string'}},'required':['download_url','file_id'],'additionalProperties':False}},'properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'file':{'$ref':'#/$defs/OpenAIFile'},'filename':{'type':'string','minLength':1,'maxLength':240},'expected_size':{'type':'integer','minimum':0,'maximum':67108864},'expected_sha256':{'type':'string','pattern':'^[a-f0-9]{64}$'},'ttl_seconds':{'type':'integer','minimum':300,'maximum':86400}},'required':['slug','file','filename','expected_size','expected_sha256'],'additionalProperties':False,'examples':[{'slug':'meu-projeto','file':{'download_url':'https://files.oaiusercontent.com/...','file_id':'file_1111111111111111'},'filename':'documentos-anonimizados.zip','expected_size':1390970,'expected_sha256':'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa','ttl_seconds':3600}]},'_meta':{'openai/fileParams':['file']}},
+ {'name':'workspace.artifact.upload.ticket','description':'Gera um link HTTPS temporário do Portal para o usuário enviar o binário pelo navegador, sem Base64. Não abra a upload_url do Portal como agente; entregue-a ao usuário e acompanhe por workspace.artifact.upload.status.','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'artifact_id':{'type':'string','pattern':'^art_[a-f0-9]{24}$'},'ttl_seconds':{'type':'integer','minimum':60,'maximum':1800}},'required':['slug','artifact_id'],'additionalProperties':False,'examples':[{'slug':'meu-projeto','artifact_id':'art_111111111111111111111111','ttl_seconds':900}]}},
+ {'name':'workspace.artifact.upload.status','description':'Consulta pelo MCP o estado do upload de um artifact. Use esta ferramenta para acompanhar o usuário; não abra a upload_url do Portal, pois ela é destinada à sessão humana autenticada.','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'artifact_id':{'type':'string','pattern':'^art_[a-f0-9]{24}$'}},'required':['slug','artifact_id'],'additionalProperties':False,'examples':[{'slug':'meu-projeto','artifact_id':'art_111111111111111111111111'}]}},
  {'name':'workspace.artifact.upload.complete','description':'Conclui o upload, verifica tamanho e SHA-256 integrais e sela o artefato para uso por artifact_id','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'artifact_id':{'type':'string','pattern':'^art_[a-f0-9]{24}$'}},'required':['slug','artifact_id'],'additionalProperties':False,'examples':[{'slug':'meu-projeto','artifact_id':'art_111111111111111111111111'}]}},
  {'name':'workspace.change-set.validate','description':'Aplica temporariamente create, update, delete e mkdir, valida o resultado e sela o conjunto completo por digest','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'ref':{'type':'string','pattern':'^[A-Za-z0-9._/-]+$'},'title':{'type':'string','minLength':4,'maxLength':160},'description':{'type':'string','maxLength':4000},'ttl_seconds':{'type':'integer','minimum':300,'maximum':86400},'changes':{'type':'array','minItems':1,'maxItems':100,'items':{'type':'object','properties':{'operation':{'type':'string','enum':['create','update','delete','mkdir']},'path':{'type':'string','minLength':1,'maxLength':240},'content_base64':{'type':'string','maxLength':349528},'artifact_id':{'type':'string','pattern':'^art_[a-f0-9]{24}$'},'expected_sha256':{'type':'string','pattern':'^[a-f0-9]{64}$'}},'required':['operation','path'],'additionalProperties':False}}},'required':['slug','title','description','changes'],'additionalProperties':False}},
  {'name':'forgejo.proposal.change-set.plan','description':'Confirma o snapshot selado e apresenta o plano completo sem criar aprovação, branch ou PR','inputSchema':{'type':'object','properties':{'slug':{'type':'string','description':'Slug do projeto autorizado','pattern':'^[a-z0-9][a-z0-9-]*$'},'workspace_id':{'type':'string','description':'Workspace selado retornado pela validação','pattern':'^ws_[a-f0-9]{24}$'},'change_set_digest':{'type':'string','description':'Digest SHA-256 canônico do change set','pattern':'^[a-f0-9]{64}$'}},'required':['slug','workspace_id','change_set_digest'],'additionalProperties':False,'examples':[{'slug':'meu-projeto','workspace_id':'ws_0123456789abcdef01234567','change_set_digest':'0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'}]}},
@@ -399,14 +399,25 @@ def _schema_type(schema):
     return 'any'
 
 
-def _example_for_schema(schema, field='', include_optional=True, depth=0):
+def _example_for_schema(schema, field='', include_optional=True, depth=0, root=None):
     if depth > 4 or not isinstance(schema, dict):
         return None
+    if root is None:
+        root=schema
+    ref=str(schema.get('$ref') or '')
+    if ref.startswith('#/$defs/'):
+        target=root
+        try:
+            for part in ref[2:].split('/'):
+                target=target[part]
+        except Exception:
+            return None
+        return _example_for_schema(target,field,include_optional,depth+1,root)
     if 'const' in schema:return schema['const']
     enum=schema.get('enum')
     if isinstance(enum,list) and enum:return enum[0]
     variants=schema.get('oneOf') or schema.get('anyOf') or []
-    if variants:return _example_for_schema(variants[0],field,include_optional,depth+1)
+    if variants:return _example_for_schema(variants[0],field,include_optional,depth+1,root)
     kind=schema.get('type')
     if isinstance(kind,list):kind=next((item for item in kind if item!='null'),kind[0] if kind else None)
     key=str(field or '').lower()
@@ -415,10 +426,10 @@ def _example_for_schema(schema, field='', include_optional=True, depth=0):
         result={}
         for name,child in properties.items():
             if include_optional or name in required:
-                result[name]=_example_for_schema(child,name,include_optional,depth+1)
+                result[name]=_example_for_schema(child,name,include_optional,depth+1,root)
         return result
     if kind=='array':
-        item=_example_for_schema(schema.get('items') or {},field,include_optional,depth+1)
+        item=_example_for_schema(schema.get('items') or {},field,include_optional,depth+1,root)
         return [item] if item is not None else []
     if kind in ('integer','number'):
         minimum=schema.get('minimum')
@@ -468,8 +479,17 @@ def _example_for_schema(schema, field='', include_optional=True, depth=0):
     return None
 
 
-def _schema_contract(schema, required=False, depth=0):
+def _schema_contract(schema, required=False, depth=0, root=None):
     if depth > 3 or not isinstance(schema,dict):return {'type':'any','required':bool(required)}
+    if root is None:root=schema
+    ref=str(schema.get('$ref') or '')
+    if ref.startswith('#/$defs/'):
+        target=root
+        try:
+            for part in ref[2:].split('/'):
+                target=target[part]
+        except Exception:return {'type':'any','required':bool(required)}
+        return _schema_contract(target,required,depth+1,root)
     result={'type':_schema_type(schema),'required':bool(required)}
     for source,target in (
         ('description','description'),('enum','allowedValues'),('pattern','pattern'),
@@ -478,12 +498,12 @@ def _schema_contract(schema, required=False, depth=0):
     ):
         if source in schema:result[target]=schema[source]
     if schema.get('items') is not None:
-        result['items']=_schema_contract(schema.get('items') or {},False,depth+1)
+        result['items']=_schema_contract(schema.get('items') or {},False,depth+1,root)
     if schema.get('properties'):
         child_required=set(schema.get('required') or [])
-        result['properties']={name:_schema_contract(child,name in child_required,depth+1) for name,child in schema['properties'].items()}
+        result['properties']={name:_schema_contract(child,name in child_required,depth+1,root) for name,child in schema['properties'].items()}
     variants=schema.get('oneOf') or schema.get('anyOf')
-    if variants:result['variants']=[_schema_contract(item,False,depth+1) for item in variants[:6]]
+    if variants:result['variants']=[_schema_contract(item,False,depth+1,root) for item in variants[:6]]
     return result
 
 
@@ -500,10 +520,10 @@ def tool_usage(tool_name):
         'description':definition.get('description') or '',
         'requiredParameters':required,
         'optionalParameters':optional,
-        'parameters':{name:_schema_contract(child,name in set(required)) for name,child in properties.items()},
+        'parameters':{name:_schema_contract(child,name in set(required),root=schema) for name,child in properties.items()},
         'additionalPropertiesAllowed':schema.get('additionalProperties',True) is not False,
-        'minimumExample':_example_for_schema(schema,'',False),
-        'completeExample':(schema.get('examples') or [None])[0] or _example_for_schema(schema,'',True),
+        'minimumExample':_example_for_schema(schema,'',False,root=schema),
+        'completeExample':(schema.get('examples') or [None])[0] or _example_for_schema(schema,'',True,root=schema),
     }
 
 
@@ -1047,32 +1067,72 @@ def approval_create_change_set(slug,client_id,authz,workspace_id,digest_value,ar
         except Exception:data={}
         raise ValueError(str(data.get('error') or 'approval_create_failed')) from error
 
-def session_file_resolve(file_id,expected_size,expected_sha256,trace_id):
-    if not SESSION_FILE_RESOLVER_URL or not SESSION_FILE_RESOLVER_TOKEN:
-        raise ValueError('O importador de arquivos da sessão ainda não está configurado no servidor. Use workspace.artifact.upload.batch para enviar chunks pequenos.')
-    parsed=urlparse(SESSION_FILE_RESOLVER_URL)
-    loopback_hosts={'127.0.0.1','localhost','::1'}
-    if not parsed.hostname or parsed.scheme not in {'https','http'} or (parsed.scheme=='http' and parsed.hostname not in loopback_hosts):
-        raise ValueError('session_file_resolver_invalid')
-    payload=json.dumps({'file_id':file_id,'trace_id':trace_id},separators=(',',':')).encode()
-    req=urllib.request.Request(SESSION_FILE_RESOLVER_URL,data=payload,method='POST',headers={'Authorization':'Bearer '+SESSION_FILE_RESOLVER_TOKEN,'Content-Type':'application/json','Accept':'application/octet-stream'})
+class _SessionFileNoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+def _session_file_url_allowed(url: str) -> str:
+    parsed=urlparse(str(url or '').strip())
+    host=str(parsed.hostname or '').rstrip('.').lower()
+    if parsed.scheme!='https' or not host or parsed.username or parsed.password or (parsed.port not in {None,443}):
+        raise ValueError('session_file_download_url_invalid')
+    if not SESSION_FILE_DOWNLOAD_SUFFIXES or not any(host==suffix or host.endswith('.'+suffix) for suffix in SESSION_FILE_DOWNLOAD_SUFFIXES):
+        raise ValueError('session_file_download_host_not_allowed')
     try:
-        with urllib.request.urlopen(req,timeout=120) as response:
-            header_length=response.headers.get('Content-Length')
-            if header_length is not None and int(header_length)!=int(expected_size):raise ValueError('session_file_size_mismatch')
-            raw=response.read(int(expected_size)+1);headers=response.headers
-    except urllib.error.HTTPError as error:
-        raise ValueError('session_file_resolver_rejected') from error
-    except urllib.error.URLError as error:
-        raise ValueError('session_file_resolver_unavailable') from error
+        answers=socket.getaddrinfo(host,443,type=socket.SOCK_STREAM)
+    except OSError as exc:
+        raise ValueError('session_file_download_dns_failed') from exc
+    if not answers:
+        raise ValueError('session_file_download_dns_failed')
+    for answer in answers:
+        address=str(answer[4][0]).split('%',1)[0]
+        try: ip=ipaddress.ip_address(address)
+        except ValueError as exc: raise ValueError('session_file_download_dns_invalid') from exc
+        if not ip.is_global:
+            raise ValueError('session_file_download_private_address')
+    return parsed.geturl()
+
+
+def _session_file_download(download_url: str, expected_size: int):
+    current=str(download_url or '').strip()
+    opener=urllib.request.build_opener(urllib.request.ProxyHandler({}),_SessionFileNoRedirect())
+    for redirects in range(4):
+        _session_file_url_allowed(current)
+        request=urllib.request.Request(current,headers={'Accept':'application/octet-stream,*/*;q=0.8','User-Agent':'CloudIFF-Artifact-Importer/1.0'})
+        try:
+            with opener.open(request,timeout=120) as response:
+                if int(response.getcode() or 0)!=200:raise ValueError('session_file_download_rejected')
+                _session_file_url_allowed(response.geturl())
+                header_length=response.headers.get('Content-Length')
+                if header_length is not None and int(header_length)!=int(expected_size):raise ValueError('session_file_size_mismatch')
+                raw=response.read(int(expected_size)+1)
+                return raw,response.headers
+        except urllib.error.HTTPError as error:
+            if error.code in {301,302,303,307,308}:
+                location=str(error.headers.get('Location') or '').strip()
+                if not location:raise ValueError('session_file_redirect_invalid') from error
+                current=urljoin(current,location)
+                continue
+            raise ValueError('session_file_download_rejected') from error
+        except urllib.error.URLError as error:
+            raise ValueError('session_file_download_unavailable') from error
+    raise ValueError('session_file_too_many_redirects')
+
+
+def session_file_resolve(file_ref,expected_size,expected_sha256,expected_filename=''):
+    if not isinstance(file_ref,dict) or set(file_ref)-{'download_url','file_id','mime_type','file_name'}:
+        raise ValueError('session_file_param_invalid')
+    file_id=str(file_ref.get('file_id') or '').strip();download_url=str(file_ref.get('download_url') or '').strip();file_name=str(file_ref.get('file_name') or '').strip()
+    if not re.fullmatch(r'[A-Za-z0-9_-]{6,192}',file_id) or not download_url:
+        raise ValueError('session_file_param_invalid')
+    if file_name and expected_filename and file_name!=expected_filename:
+        raise ValueError('session_file_name_mismatch')
+    raw,headers=_session_file_download(download_url,int(expected_size))
     if len(raw)!=int(expected_size) or len(raw)>64*1024*1024:raise ValueError('session_file_size_mismatch')
     digest=hashlib.sha256(raw).hexdigest()
     if not hmac.compare_digest(digest,str(expected_sha256).lower()):raise ValueError('session_file_sha256_mismatch')
-    returned_id=str(headers.get('X-CloudIF-File-Id') or '')
-    if returned_id and returned_id!=file_id:raise ValueError('session_file_id_mismatch')
-    returned_sha=str(headers.get('X-CloudIF-File-Sha256') or '').lower()
-    if returned_sha and not hmac.compare_digest(returned_sha,digest):raise ValueError('session_file_resolver_digest_mismatch')
-    return raw
+    return raw,{'file_id':file_id,'file_name':file_name,'mime_type':str(file_ref.get('mime_type') or ''),'size':len(raw),'sha256':digest}
 
 def workspace_artifact_import_bytes(slug,filename,raw,expected_sha256,ttl_seconds,trace_id):
     start_payload={'project_slug':slug,'trace_id':trace_id,'filename':filename,'expected_size':len(raw),'expected_sha256':expected_sha256,'ttl_seconds':ttl_seconds}
@@ -1473,7 +1533,7 @@ SCOPE_BY_TOOL={
  'project.toolchain.get':'project:toolchain-read','project.toolchain.validate':'project:toolchain-plan','project.toolchain.plan':'project:toolchain-plan','project.toolchain.build.plan':'project:toolchain-plan','approval.request-toolchain-build':'approval:request-toolchain-build','project.toolchain.build.execute':'project:toolchain-build-execute','project.toolchain.build.status':'project:toolchain-read','project.toolchain.logs.read':'project:toolchain-read','project.toolchain.image.list':'project:toolchain-read','project.toolchain.image.get':'project:toolchain-read','project.toolchain.image.activate.plan':'project:toolchain-activate-plan','approval.request-toolchain-activation':'approval:request-toolchain-activation','project.toolchain.image.activate':'project:toolchain-activate-execute',
  'runtime.catalog':'project:read','runtime.detect':'project:read','runtime.plan':'project:read','runtime.validate':'project:read','project.technologies.detect':'workspace:detect-multiservice','project.manifest.validate':'project:configuration-read','project.configuration.get':'project:configuration-read','project.configuration.status':'project:runtime-status-read','project.configuration.drift':'project:runtime-status-read','project.configuration.reconcile.plan':'project:runtime-reconcile-plan','project.observability.get':'project:observability-read','project.observability.alerts':'project:observability-read','build.plan':'project:read','build.multiservice.plan':'build:multiservice-plan','build.multiservice.status':'build:multiservice-plan','approval.request-multiservice-build':'approval:request-multiservice-build','build.multiservice.execute':'build:multiservice-execute','preview.multiservice.plan':'preview:multiservice-plan','preview.multiservice.status':'preview:multiservice-plan','approval.request-multiservice-preview':'approval:request-multiservice-preview','preview.multiservice.create':'preview:multiservice-execute','preview.multiservice.delete':'preview:multiservice-delete','build.request':'workspace:test-static','build.status':'project:read','build.logs.read':'project:read','build.artifact.get':'project:read','deployment.multiservice.plan':'deployment:multiservice-plan','deployment.multiservice.status':'deployment:multiservice-plan','approval.request-multiservice-deployment':'approval:request-multiservice-deployment','deployment.multiservice.execute':'deployment:multiservice-execute','deployment.preview.plan':'project:read','deployment.preview.status':'project:read','approval.request-preview':'approval:request-preview','deployment.preview':'deployment:preview',
  'workspace.probe':'workspace:probe','workspace.prepare':'workspace:prepare','workspace.validate':'workspace:validate','workspace.test-static':'workspace:test-static','workspace.preview-static':'workspace:preview-static','workspace.edit-preview':'workspace:edit-preview',
- 'forgejo.propose-edit':'forgejo:propose-edit','forgejo.propose-edit.plan':'forgejo:plan-edit','approval.request-proposal':'approval:request-proposal','workspace.normalize.plan':'workspace:change-set-plan','workspace.artifact.upload.start':'workspace:change-set-plan','workspace.artifact.upload.chunk':'workspace:change-set-plan','workspace.artifact.upload.batch':'workspace:change-set-plan','workspace.artifact.import':'workspace:change-set-plan','workspace.artifact.upload.ticket':'workspace:change-set-plan','workspace.artifact.upload.complete':'workspace:change-set-plan','workspace.change-set.validate':'workspace:change-set-plan','forgejo.proposal.change-set.plan':'workspace:change-set-plan','approval.request-change-set-proposal':'approval:request-change-set','forgejo.proposal.change-set.create':'forgejo:propose-change-set','approval.get':'approval:read-own','approval.cancel':'approval:read-own','forgejo.proposal.list':'forgejo:proposal-read','forgejo.proposal.close':'forgejo:proposal-close','forgejo.proposal.delete-branch':'forgejo:proposal-delete-branch','forgejo.proposal.merge.plan':'forgejo:proposal-merge-plan','approval.request-merge':'approval:request-merge','forgejo.proposal.merge':'forgejo:proposal-merge',
+ 'forgejo.propose-edit':'forgejo:propose-edit','forgejo.propose-edit.plan':'forgejo:plan-edit','approval.request-proposal':'approval:request-proposal','workspace.normalize.plan':'workspace:change-set-plan','workspace.artifact.upload.start':'workspace:change-set-plan','workspace.artifact.upload.chunk':'workspace:change-set-plan','workspace.artifact.upload.batch':'workspace:change-set-plan','workspace.artifact.import':'workspace:change-set-plan','workspace.artifact.upload.ticket':'workspace:change-set-plan','workspace.artifact.upload.status':'workspace:change-set-plan','workspace.artifact.upload.complete':'workspace:change-set-plan','workspace.change-set.validate':'workspace:change-set-plan','forgejo.proposal.change-set.plan':'workspace:change-set-plan','approval.request-change-set-proposal':'approval:request-change-set','forgejo.proposal.change-set.create':'forgejo:propose-change-set','approval.get':'approval:read-own','approval.cancel':'approval:read-own','forgejo.proposal.list':'forgejo:proposal-read','forgejo.proposal.close':'forgejo:proposal-close','forgejo.proposal.delete-branch':'forgejo:proposal-delete-branch','forgejo.proposal.merge.plan':'forgejo:proposal-merge-plan','approval.request-merge':'approval:request-merge','forgejo.proposal.merge':'forgejo:proposal-merge',
  'deployment.production.homologation.plan':'deployment:production-plan','approval.request-production-homologation':'approval:request-deploy','deployment.production.homologation.deploy':'deployment:production-plan','deployment.production.homologation.rollback':'deployment:production-plan','deployment.production.activation.plan':'deployment:production-plan','approval.request-production-activation':'approval:request-deploy','deployment.production.readiness':'project:read','deployment.production.plan':'deployment:production-plan','supabase.migrations.inspect':'supabase:migration-inspect','supabase.migrations.plan':'supabase:migration-plan','deployment.plan':'deployment:plan','approval.request-deploy':'approval:request-deploy','deployment.validate':'deployment:validate','deployment.promote-test.plan':'deployment:promote-test-plan','approval.request-promote-test':'approval:request-promote-test','deployment.promote-test':'deployment:promote-test','deployment.promote-test.status':'deployment:promote-test-status','deployment.rollback-test.plan':'deployment:rollback-test-plan','approval.request-rollback-test':'approval:request-rollback-test','deployment.rollback-test':'deployment:rollback-test',
  'supabase.tables.list':'supabase:database-read','supabase.records.select':'supabase:database-read','supabase.sql.query':'supabase:database-read','supabase.rls.inspect':'supabase:database-read','supabase.schema.inspect':'supabase:database-read',
  'supabase.auth.users.list':'supabase:auth-read','supabase.storage.buckets.list':'supabase:storage-read','supabase.storage.objects.list':'supabase:storage-read','supabase.storage.object.read':'supabase:storage-read',
@@ -2791,13 +2851,13 @@ class H(BaseHTTPRequestHandler):
                         error=data.get('error') or {};raise ValueError(str(error.get('message') if isinstance(error,dict) else error or 'normalization_plan_failed'))
                     content=data.get('result') or data
                 elif name=='workspace.artifact.import':
-                    required={'slug','file_id','filename','expected_size','expected_sha256'};allowed=required|{'ttl_seconds'}
-                    if not required.issubset(args) or not set(args).issubset(allowed):raise ValueError('Informe slug, file_id, filename, expected_size e expected_sha256.')
-                    slug=str(args.get('slug') or '').strip();file_id=str(args.get('file_id') or '').strip();filename=str(args.get('filename') or '').strip();size=int(args.get('expected_size'));digest=str(args.get('expected_sha256') or '').strip().lower();ttl=int(args.get('ttl_seconds') or 3600)
-                    if not re.fullmatch(r'[a-z0-9][a-z0-9-]*',slug) or not re.fullmatch(r'[A-Za-z0-9_-]{6,192}',file_id) or not filename or len(filename)>240 or not (0<=size<=67108864) or not re.fullmatch(r'[a-f0-9]{64}',digest) or not (300<=ttl<=86400):raise ValueError('Metadados da importação são inválidos.')
+                    required={'slug','file','filename','expected_size','expected_sha256'};allowed=required|{'ttl_seconds'}
+                    if not required.issubset(args) or not set(args).issubset(allowed):raise ValueError('Informe slug, file, filename, expected_size e expected_sha256. O campo file é preenchido pelo ChatGPT via openai/fileParams.')
+                    slug=str(args.get('slug') or '').strip();file_ref=args.get('file');filename=str(args.get('filename') or '').strip();size=int(args.get('expected_size'));digest=str(args.get('expected_sha256') or '').strip().lower();ttl=int(args.get('ttl_seconds') or 3600)
+                    if not re.fullmatch(r'[a-z0-9][a-z0-9-]*',slug) or not isinstance(file_ref,dict) or not filename or len(filename)>240 or not (0<=size<=67108864) or not re.fullmatch(r'[a-f0-9]{64}',digest) or not (300<=ttl<=86400):raise ValueError('Metadados da importação são inválidos.')
                     control('/v1/projects/'+urllib.parse.quote(slug,safe=''))
-                    raw=session_file_resolve(file_id,size,digest,trace_id)
-                    content=workspace_artifact_import_bytes(slug,filename,raw,digest,ttl,trace_id);content['file_id']=file_id
+                    raw,file_meta=session_file_resolve(file_ref,size,digest,filename)
+                    content=workspace_artifact_import_bytes(slug,filename,raw,digest,ttl,trace_id);content['file_id']=file_meta['file_id'];content['source']='chatgpt_file_param';content['download_url_persisted']=False;content['secrets_exposed']=False
                 elif name in {'workspace.artifact.upload.start','workspace.artifact.upload.chunk','workspace.artifact.upload.batch','workspace.artifact.upload.ticket','workspace.artifact.upload.complete'}:
                     slug=str(args.get('slug') or '').strip()
                     if not re.fullmatch(r'[a-z0-9][a-z0-9-]*',slug):raise ValueError('O campo slug é obrigatório e deve ser válido.')
@@ -2845,6 +2905,27 @@ class H(BaseHTTPRequestHandler):
                         if not re.fullmatch(r'art_[a-f0-9]{24}',artifact_id):raise ValueError('artifact_id_invalid')
                         content['upload_url']=PUBLIC_ORIGIN+'/cloudiff/portal/artifact-upload/'+urllib.parse.quote(artifact_id,safe='')
                         content['user_action_required']=True;content['upload_method']='browser_direct';content['browser_secret_required']=False;content['secrets_exposed']=False
+                        content['upload_url_audience']='human_user';content['agent_must_not_open_upload_url']=True;content['agent_followup_tool']='workspace.artifact.upload.status';content['human_portal_authentication_required']=True
+                elif name=='workspace.artifact.upload.status':
+                    required={'slug','artifact_id'};allowed=required
+                    if not required.issubset(args) or not set(args).issubset(allowed):raise ValueError('Informe slug e artifact_id.')
+                    slug=str(args.get('slug') or '').strip();artifact_id=str(args.get('artifact_id') or '').strip()
+                    if not re.fullmatch(r'[a-z0-9][a-z0-9-]*',slug) or not re.fullmatch(r'art_[a-f0-9]{24}',artifact_id):raise ValueError('Metadados do status inválidos.')
+                    control('/v1/projects/'+urllib.parse.quote(slug,safe=''))
+                    code,data=workspace_broker_post('/v1/artifact/upload/status',{'artifact_id':artifact_id},timeout=30)
+                    if code not in {200,201} or not data.get('ok'):
+                        error=data.get('error') if isinstance(data,dict) else None
+                        message=(error.get('message') if isinstance(error,dict) else str(error or '')) or 'Não foi possível consultar o upload.'
+                        raise ValueError(message)
+                    result=data.get('result') or data
+                    if str(result.get('project_slug') or '')!=slug:raise PermissionError('artifact_project_mismatch')
+                    content={k:result.get(k) for k in ('artifact_id','project_slug','filename','status','expected_size','expected_sha256','received_bytes','expires_at','upload_ticket_status','upload_ticket_expires_at','size','sha256','sealed_at','upload_transport') if result.get(k) is not None}
+                    content['ready_for_change_set']=str(content.get('status') or '')=='sealed'
+                    if content['ready_for_change_set']:
+                        content['next_action']='Use este artifact_id no workspace.change-set.validate.'
+                    else:
+                        content['next_action']='Aguardando o usuário concluir o upload no Portal. Não abra a upload_url como agente.'
+                    content['agent_must_not_open_upload_url']=True;content['secrets_exposed']=False
                 elif name=='workspace.change-set.validate':
                     required={'slug','title','description','changes'};allowed=required|{'ref','ttl_seconds'}
                     if not required.issubset(args) or not set(args).issubset(allowed):raise ValueError('Os campos slug, title, description e changes são obrigatórios.')
