@@ -4014,6 +4014,17 @@ def cloudif_preview_request(handler,operation):
 
 
 
+
+def _cloudif_v143_server_id(project=''):
+    project=safe_slug(project) if project else ''
+    integration=find_integration(project) if project else None
+    server_id=normalize_resource_id((integration or {}).get('server_id'))
+    if server_id:return server_id
+    servers=_cloudif_v131_list_items((_cloudif_v131_core_call('read','ListServers',{}).get('data')))
+    preferred=next((x for x in servers if isinstance(x,dict) and x.get('name')=='Local'),None) or next((x for x in servers if isinstance(x,dict)),None)
+    return _cloudif_v131_oid(preferred or {})
+
+
 def cloudif_preview_terminal(handler):
     if not _cloudif_pub_auth(handler):return send(handler,403,{'ok':False,'error':'forbidden'})
     payload=_cloudif_pub_json(handler);project=safe_slug(payload.get('project') or '')
@@ -4025,7 +4036,9 @@ def cloudif_preview_terminal(handler):
     generation=int(row.get('generation') or 1);container=str(row.get('container') or '')
     if container!=f'cloudif-p{num}-w{generation}-preview-web':return send(handler,409,{'ok':False,'error':'preview_container_identity_invalid','terminalReady':False,'secretValuesIncluded':False})
     if not _cloudif_wait_health(container,2).get('ok'):return send(handler,409,{'ok':False,'error':'preview_not_healthy','message':'O Preview não está saudável para abrir o terminal.','terminalReady':False,'secretValuesIncluded':False})
-    server_id=_cloudif_v143_server_id();target=_cloudif_ensure_container_terminal(server_id,container)
+    server_id=_cloudif_v143_server_id(project)
+    if not server_id:return send(handler,422,{'ok':False,'error':'preview_server_missing','message':'O servidor Komodo do Preview não foi localizado.','terminalReady':False,'secretValuesIncluded':False})
+    target=_cloudif_ensure_container_terminal(server_id,container)
     if not target.get('ok') or not target.get('terminal'):return send(handler,422,{'ok':False,'error':'preview_terminal_create_failed','message':'O Komodo não conseguiu preparar o terminal do Preview.','terminalReady':False,'secretValuesIncluded':False})
     return send(handler,200,{'ok':True,'project':project,'public_number':num,'generation':generation,'stageCode':'W'+str(generation),'container':container,'server_id':server_id,'terminal':str(target.get('terminal') or ''),'terminalReady':True,'secretValuesIncluded':False})
 
