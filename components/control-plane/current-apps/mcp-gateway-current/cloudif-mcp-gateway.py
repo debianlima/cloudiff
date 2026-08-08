@@ -2841,8 +2841,10 @@ class H(BaseHTTPRequestHandler):
                     if name=='workspace.artifact.upload.ticket':
                         token=str(content.pop('upload_ticket','') or '')
                         if not re.fullmatch(r'upt_[a-f0-9]{24}_[a-f0-9]{48}',token):raise ValueError('upload_ticket_invalid')
-                        content['upload_url']=PUBLIC_ORIGIN+'/cloudiff/portal/artifact-upload#'+urllib.parse.quote(token,safe='')
-                        content['user_action_required']=True;content['upload_method']='browser_direct';content['secrets_exposed']=False
+                        artifact_id=str(content.get('artifact_id') or '')
+                        if not re.fullmatch(r'art_[a-f0-9]{24}',artifact_id):raise ValueError('artifact_id_invalid')
+                        content['upload_url']=PUBLIC_ORIGIN+'/cloudiff/portal/artifact-upload/'+urllib.parse.quote(artifact_id,safe='')
+                        content['user_action_required']=True;content['upload_method']='browser_direct';content['browser_secret_required']=False;content['secrets_exposed']=False
                 elif name=='workspace.change-set.validate':
                     required={'slug','title','description','changes'};allowed=required|{'ref','ttl_seconds'}
                     if not required.issubset(args) or not set(args).issubset(allowed):raise ValueError('Os campos slug, title, description e changes são obrigatórios.')

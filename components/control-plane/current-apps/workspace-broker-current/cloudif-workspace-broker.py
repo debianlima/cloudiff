@@ -18,7 +18,7 @@ import uuid
 import yaml
 from cloudif_multitech_detector import detect_components
 from cloudif_change_set import (ChangeSetError, apply_changes, change_set_digest, clean_expired, load_sealed, normalize_changes, seal_change_set)
-from cloudif_workspace_artifact import (ArtifactError, append_chunk, append_chunk_batch, complete_artifact, create_upload_ticket, direct_upload_artifact, inspect_upload_ticket, read_artifact, resolve_artifact, start_artifact)
+from cloudif_workspace_artifact import (ArtifactError, append_chunk, append_chunk_batch, complete_artifact, create_upload_ticket, direct_upload_artifact, direct_upload_artifact_by_id, inspect_upload_artifact, inspect_upload_ticket, read_artifact, resolve_artifact, start_artifact)
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse
 
@@ -1079,21 +1079,31 @@ class H(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:
         path = urlparse(self.path).path
-        if path in {'/v1/artifact/ticket/status','/v1/artifact/direct-upload'}:
+        if path in {'/v1/artifact/ticket/status','/v1/artifact/upload/status','/v1/artifact/direct-upload','/v1/artifact/direct-upload-by-id'}:
             if not self.local_client():
                 self.sendj(403, {'ok':False,'error':{'code':'loopback_required'}});return
             try:
-                if path == '/v1/artifact/ticket/status':
+                if path in {'/v1/artifact/ticket/status','/v1/artifact/upload/status'}:
                     n=int(self.headers.get('Content-Length','0') or 0)
                     if not (0<n<=4096):raise ValueError('invalid_request')
-                    data=json.loads(self.rfile.read(n));ticket=str(data.get('upload_ticket') or '') if isinstance(data,dict) else ''
-                    result=inspect_upload_ticket(ARTIFACT_ROOT,ticket)
+                    data=json.loads(self.rfile.read(n));data=data if isinstance(data,dict) else {}
+                    if path == '/v1/artifact/ticket/status':
+                        result=inspect_upload_ticket(ARTIFACT_ROOT,str(data.get('upload_ticket') or ''))
+                    else:
+                        result=inspect_upload_artifact(ARTIFACT_ROOT,str(data.get('artifact_id') or ''))
                     self.sendj(200,{'ok':True,'result':result});return
-                ticket=str(self.headers.get('X-CloudIF-Upload-Ticket') or '').strip();ctype=(self.headers.get('Content-Type') or '').split(';',1)[0].strip().lower();n=int(self.headers.get('Content-Length','0') or 0)
+                ctype=(self.headers.get('Content-Type') or '').split(';',1)[0].strip().lower();n=int(self.headers.get('Content-Length','0') or 0)
                 if ctype!='application/octet-stream':
                     self.sendj(415,{'ok':False,'error':{'code':'octet_stream_required'}});return
-                if not ticket or not (0<=n<=64*1024*1024):raise ValueError('invalid_direct_upload')
-                result=direct_upload_artifact(ARTIFACT_ROOT,ticket,self.rfile,n)
+                if not (0<=n<=64*1024*1024):raise ValueError('invalid_direct_upload')
+                if path == '/v1/artifact/direct-upload':
+                    ticket=str(self.headers.get('X-CloudIF-Upload-Ticket') or '').strip()
+                    if not ticket:raise ValueError('invalid_direct_upload')
+                    result=direct_upload_artifact(ARTIFACT_ROOT,ticket,self.rfile,n)
+                else:
+                    artifact_id=str(self.headers.get('X-CloudIF-Artifact-Id') or '').strip()
+                    if not artifact_id:raise ValueError('invalid_direct_upload')
+                    result=direct_upload_artifact_by_id(ARTIFACT_ROOT,artifact_id,self.rfile,n)
                 print(json.dumps({'event':'workspace.artifact.direct-upload','project_slug':result.get('project_slug'),'artifact_id':result.get('artifact_id'),'bytes':result.get('size'),'result':'success'},separators=(',',':')),flush=True)
                 self.sendj(200,{'ok':True,'result':result});return
             except ArtifactError as exc:

@@ -30,6 +30,17 @@ class WorkspaceArtifactDirectUploadTests(unittest.TestCase):
    token=A.create_upload_ticket(td,'demo',aid,'client-a',300)['upload_ticket']
    with self.assertRaises(A.ArtifactError) as ctx:A.direct_upload_artifact(td,token,io.BytesIO(bad),len(bad))
    self.assertEqual(ctx.exception.code,'artifact_sha256_mismatch');self.assertEqual(p.read_bytes(),b'old');self.assertEqual(A.inspect_upload_ticket(td,token)['upload_ticket_status'],'pending')
+ def test_artifact_id_mode_requires_active_window_and_seals_without_browser_secret(self):
+  raw=b'PK\x03\x04artifact-id-mode';digest=hashlib.sha256(raw).hexdigest()
+  with tempfile.TemporaryDirectory() as td:
+   aid=A.start_artifact(td,'demo','x.zip',len(raw),digest,900)['artifact_id']
+   with self.assertRaises(A.ArtifactError) as ctx:A.inspect_upload_artifact(td,aid)
+   self.assertEqual(ctx.exception.code,'upload_ticket_not_found')
+   A.create_upload_ticket(td,'demo',aid,'client',300)
+   status=A.inspect_upload_artifact(td,aid);self.assertEqual(status['upload_ticket_status'],'pending')
+   result=A.direct_upload_artifact_by_id(td,aid,io.BytesIO(raw),len(raw));self.assertEqual(result['status'],'sealed');self.assertEqual(result['sha256'],digest)
+   self.assertEqual(A.inspect_upload_artifact(td,aid)['upload_ticket_status'],'used')
+
  def test_ticket_is_project_scoped_and_short_lived(self):
   raw=b'x';digest=hashlib.sha256(raw).hexdigest()
   with tempfile.TemporaryDirectory() as td:

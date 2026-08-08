@@ -1,6 +1,6 @@
 # Catálogo de rotas e endpoints
 
-Catálogo estático de **604 referências de rota** encontradas nos serviços e módulos. Uma rota pode aparecer em mais de um adaptador por compatibilidade.
+Catálogo estático de **607 referências de rota** encontradas nos serviços e módulos. Uma rota pode aparecer em mais de um adaptador por compatibilidade.
 
 | Componente | Método observado | Rota |
 |---|---|---|
@@ -119,6 +119,7 @@ Catálogo estático de **604 referências de rota** encontradas nos serviços e 
 | [`components/control-plane/current-apps/mcp-gateway-current/cloudif-mcp-gateway.py`](../components/control-plane/current-apps/mcp-gateway-current/cloudif-mcp-gateway.py) | GET/POST | `/cloudiff/mcp/oauth/revoke` |
 | [`components/control-plane/current-apps/mcp-gateway-current/cloudif-mcp-gateway.py`](../components/control-plane/current-apps/mcp-gateway-current/cloudif-mcp-gateway.py) | GET/POST | `/cloudiff/mcp/oauth/token` |
 | [`components/control-plane/current-apps/mcp-gateway-current/cloudif-mcp-gateway.py`](../components/control-plane/current-apps/mcp-gateway-current/cloudif-mcp-gateway.py) | GET/POST | `/cloudiff/mcp/privacy` |
+| [`components/control-plane/current-apps/mcp-gateway-current/cloudif-mcp-gateway.py`](../components/control-plane/current-apps/mcp-gateway-current/cloudif-mcp-gateway.py) | GET/POST | `/cloudiff/portal/artifact-upload/` |
 | [`components/control-plane/current-apps/mcp-gateway-current/cloudif-mcp-gateway.py`](../components/control-plane/current-apps/mcp-gateway-current/cloudif-mcp-gateway.py) | GET/POST | `/health` |
 | [`components/control-plane/current-apps/mcp-gateway-current/cloudif-mcp-gateway.py`](../components/control-plane/current-apps/mcp-gateway-current/cloudif-mcp-gateway.py) | GET/POST | `/oauth/.well-known/oauth-authorization-server` |
 | [`components/control-plane/current-apps/mcp-gateway-current/cloudif-mcp-gateway.py`](../components/control-plane/current-apps/mcp-gateway-current/cloudif-mcp-gateway.py) | GET/POST | `/oauth/authorize` |
@@ -448,10 +449,12 @@ Catálogo estático de **604 referências de rota** encontradas nos serviços e 
 | [`components/control-plane/current-apps/workspace-broker-current/cloudif-workspace-broker.py`](../components/control-plane/current-apps/workspace-broker-current/cloudif-workspace-broker.py) | GET/POST | `/v1/artifact/chunk` |
 | [`components/control-plane/current-apps/workspace-broker-current/cloudif-workspace-broker.py`](../components/control-plane/current-apps/workspace-broker-current/cloudif-workspace-broker.py) | GET/POST | `/v1/artifact/complete` |
 | [`components/control-plane/current-apps/workspace-broker-current/cloudif-workspace-broker.py`](../components/control-plane/current-apps/workspace-broker-current/cloudif-workspace-broker.py) | POST | `/v1/artifact/direct-upload` |
+| [`components/control-plane/current-apps/workspace-broker-current/cloudif-workspace-broker.py`](../components/control-plane/current-apps/workspace-broker-current/cloudif-workspace-broker.py) | POST | `/v1/artifact/direct-upload-by-id` |
 | [`components/control-plane/current-apps/workspace-broker-current/cloudif-workspace-broker.py`](../components/control-plane/current-apps/workspace-broker-current/cloudif-workspace-broker.py) | GET/POST | `/v1/artifact/read` |
 | [`components/control-plane/current-apps/workspace-broker-current/cloudif-workspace-broker.py`](../components/control-plane/current-apps/workspace-broker-current/cloudif-workspace-broker.py) | GET/POST | `/v1/artifact/start` |
 | [`components/control-plane/current-apps/workspace-broker-current/cloudif-workspace-broker.py`](../components/control-plane/current-apps/workspace-broker-current/cloudif-workspace-broker.py) | GET/POST | `/v1/artifact/ticket` |
 | [`components/control-plane/current-apps/workspace-broker-current/cloudif-workspace-broker.py`](../components/control-plane/current-apps/workspace-broker-current/cloudif-workspace-broker.py) | POST | `/v1/artifact/ticket/status` |
+| [`components/control-plane/current-apps/workspace-broker-current/cloudif-workspace-broker.py`](../components/control-plane/current-apps/workspace-broker-current/cloudif-workspace-broker.py) | POST | `/v1/artifact/upload/status` |
 | [`components/control-plane/current-apps/workspace-broker-current/cloudif-workspace-broker.py`](../components/control-plane/current-apps/workspace-broker-current/cloudif-workspace-broker.py) | GET/POST | `/v1/change-set/resolve` |
 | [`components/control-plane/current-apps/workspace-broker-current/cloudif-workspace-broker.py`](../components/control-plane/current-apps/workspace-broker-current/cloudif-workspace-broker.py) | GET/POST | `/v1/change-set/validate` |
 | [`components/control-plane/current-apps/workspace-broker-current/cloudif-workspace-broker.py`](../components/control-plane/current-apps/workspace-broker-current/cloudif-workspace-broker.py) | GET/POST | `/v1/detect-multiservice` |

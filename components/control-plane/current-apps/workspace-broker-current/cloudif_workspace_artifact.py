@@ -209,51 +209,88 @@ def inspect_upload_ticket(artifact_root: str, ticket: str) -> dict[str, Any]:
         return result
 
 
+def _validate_active_upload_window_unlocked(artifact_root: str, artifact_id: str, *, allow_used: bool = False) -> dict[str, Any]:
+    if not ARTIFACT_RE.fullmatch(str(artifact_id or '')):
+        raise ArtifactError('invalid_artifact_id','artifact_id inválido.','artifact_id')
+    data=_load(artifact_root,artifact_id)
+    record=data.get('upload_ticket') if isinstance(data.get('upload_ticket'),dict) else {}
+    if not str(record.get('sha256') or ''):
+        raise ArtifactError('upload_ticket_not_found','Não existe janela de upload ativa para este artifact.','artifact_id')
+    now=int(time.time())
+    if int(record.get('expires_at') or 0)<=now:
+        raise ArtifactError('upload_ticket_expired','A janela de upload expirou. Gere um novo link.','artifact_id')
+    if record.get('used_at') and not allow_used:
+        raise ArtifactError('upload_ticket_used','A janela de upload já foi utilizada.','artifact_id')
+    return data
+
+
+def inspect_upload_artifact(artifact_root: str, artifact_id: str) -> dict[str, Any]:
+    with _artifact_lock(artifact_id):
+        data=_validate_active_upload_window_unlocked(artifact_root,artifact_id,allow_used=True)
+        record=data.get('upload_ticket') or {}
+        status='used' if record.get('used_at') else 'pending'
+        result=public_metadata(data)
+        result.update({'upload_ticket_status':status,'upload_ticket_expires_at':int(record.get('expires_at') or 0),'upload_ticket_used_at':record.get('used_at')})
+        return result
+
+
+def _direct_upload_unlocked(artifact_root: str, artifact_id: str, data: dict[str, Any], stream, content_length: int) -> dict[str, Any]:
+    if data.get('status')!='uploading':
+        raise ArtifactError('artifact_already_sealed','O artefato já foi selado.','artifact_id')
+    expected_size=int(data.get('expected_size') or -1)
+    if content_length!=expected_size:
+        raise ArtifactError('artifact_size_mismatch','O tamanho enviado não confere com expected_size.','content_length')
+    directory=_dir(artifact_root,artifact_id)
+    tmp=directory/('.direct-upload-'+secrets.token_hex(8)+'.tmp')
+    fd=os.open(tmp,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)
+    digest=hashlib.sha256();remaining=content_length;written=0
+    try:
+        with os.fdopen(fd,'wb',buffering=0) as handle:
+            while remaining:
+                chunk=stream.read(min(1024*1024,remaining))
+                if not chunk:
+                    raise ArtifactError('upload_incomplete','O upload terminou antes do tamanho esperado.','content')
+                handle.write(chunk);digest.update(chunk);written+=len(chunk);remaining-=len(chunk)
+            os.fsync(handle.fileno())
+        actual=digest.hexdigest();expected=str(data.get('expected_sha256') or '')
+        if written!=expected_size:
+            raise ArtifactError('artifact_size_mismatch','O tamanho recebido não confere com expected_size.','content')
+        if not secrets.compare_digest(actual,expected):
+            raise ArtifactError('artifact_sha256_mismatch','O SHA-256 do arquivo enviado não confere.','content')
+        payload=_payload_path(artifact_root,artifact_id)
+        os.replace(tmp,payload);os.chmod(payload,0o400)
+        now=int(time.time())
+        record=dict(data.get('upload_ticket') or {});record['used_at']=now
+        data.update({
+            'status':'sealed','size':written,'sha256':actual,'received_bytes':written,
+            'next_chunk':0,'chunks':[],'sealed_at':now,'updated_at':now,
+            'upload_transport':'browser_direct','upload_ticket':record,
+        })
+        _write_json_atomic(_meta_path(artifact_root,artifact_id),data)
+        result=public_metadata(data)
+        result.update({'upload_transport':'browser_direct','upload_ticket_status':'used'})
+        return result
+    except Exception:
+        try: tmp.unlink()
+        except FileNotFoundError: pass
+        raise
+
+
 def direct_upload_artifact(artifact_root: str, ticket: str, stream, content_length: int) -> dict[str, Any]:
     artifact_id=_ticket_artifact_id(ticket)
     try: content_length=int(content_length)
     except Exception as exc: raise ArtifactError('invalid_upload_size','Content-Length inválido.','content_length') from exc
     with _artifact_lock(artifact_id):
         data,artifact_id=_validate_ticket_unlocked(artifact_root,ticket,allow_used=False)
-        if data.get('status')!='uploading':
-            raise ArtifactError('artifact_already_sealed','O artefato já foi selado.','artifact_id')
-        expected_size=int(data.get('expected_size') or -1)
-        if content_length!=expected_size:
-            raise ArtifactError('artifact_size_mismatch','O tamanho enviado não confere com expected_size.','content_length')
-        directory=_dir(artifact_root,artifact_id)
-        tmp=directory/('.direct-upload-'+secrets.token_hex(8)+'.tmp')
-        fd=os.open(tmp,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)
-        digest=hashlib.sha256();remaining=content_length;written=0
-        try:
-            with os.fdopen(fd,'wb',buffering=0) as handle:
-                while remaining:
-                    chunk=stream.read(min(1024*1024,remaining))
-                    if not chunk:
-                        raise ArtifactError('upload_incomplete','O upload terminou antes do tamanho esperado.','content')
-                    handle.write(chunk);digest.update(chunk);written+=len(chunk);remaining-=len(chunk)
-                os.fsync(handle.fileno())
-            actual=digest.hexdigest();expected=str(data.get('expected_sha256') or '')
-            if written!=expected_size:
-                raise ArtifactError('artifact_size_mismatch','O tamanho recebido não confere com expected_size.','content')
-            if not secrets.compare_digest(actual,expected):
-                raise ArtifactError('artifact_sha256_mismatch','O SHA-256 do arquivo enviado não confere.','content')
-            payload=_payload_path(artifact_root,artifact_id)
-            os.replace(tmp,payload);os.chmod(payload,0o400)
-            now=int(time.time())
-            record=dict(data.get('upload_ticket') or {});record['used_at']=now
-            data.update({
-                'status':'sealed','size':written,'sha256':actual,'received_bytes':written,
-                'next_chunk':0,'chunks':[],'sealed_at':now,'updated_at':now,
-                'upload_transport':'browser_direct','upload_ticket':record,
-            })
-            _write_json_atomic(_meta_path(artifact_root,artifact_id),data)
-            result=public_metadata(data)
-            result.update({'upload_transport':'browser_direct','upload_ticket_status':'used'})
-            return result
-        except Exception:
-            try: tmp.unlink()
-            except FileNotFoundError: pass
-            raise
+        return _direct_upload_unlocked(artifact_root,artifact_id,data,stream,content_length)
+
+
+def direct_upload_artifact_by_id(artifact_root: str, artifact_id: str, stream, content_length: int) -> dict[str, Any]:
+    try: content_length=int(content_length)
+    except Exception as exc: raise ArtifactError('invalid_upload_size','Content-Length inválido.','content_length') from exc
+    with _artifact_lock(artifact_id):
+        data=_validate_active_upload_window_unlocked(artifact_root,artifact_id,allow_used=False)
+        return _direct_upload_unlocked(artifact_root,artifact_id,data,stream,content_length)
 
 
 def _append_chunk_unlocked(artifact_root: str, project_slug: str, artifact_id: str, chunk_index: int, content_base64: str, chunk_sha256: str) -> dict[str, Any]:

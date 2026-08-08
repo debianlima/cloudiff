@@ -26,6 +26,14 @@ class WorkspaceArtifactDirectHTTPTests(unittest.TestCase):
   self.assertEqual(r.status,200);self.assertTrue(result['ok']);self.assertEqual(result['result']['sha256'],digest);self.assertEqual(result['result']['size'],size);self.assertEqual(result['result']['upload_transport'],'browser_direct')
   code,status=self.json_post('/v1/artifact/ticket/status',{'upload_ticket':ticket},auth=False);self.assertEqual(code,200);self.assertEqual(status['result']['upload_ticket_status'],'used')
   meta,loaded=B.read_artifact(self.temp.name,'demo',aid,digest,size);self.assertEqual(loaded,raw);self.assertEqual(meta['status'],'sealed')
+ def test_artifact_id_http_mode_uploads_exact_problem_size(self):
+  size=1_390_970;raw=(bytes(range(251))*((size//251)+1))[:size];digest=hashlib.sha256(raw).hexdigest();aid=B.start_artifact(self.temp.name,'demo','archive.zip',size,digest,900)['artifact_id']
+  code,data=self.json_post('/v1/artifact/ticket',{'project_slug':'demo','trace_id':'artifact-id-http-test','artifact_id':aid,'requested_by':'client-a','ttl_seconds':300});self.assertEqual(code,200)
+  code,status=self.json_post('/v1/artifact/upload/status',{'artifact_id':aid},auth=False);self.assertEqual(code,200);self.assertEqual(status['result']['upload_ticket_status'],'pending')
+  c=http.client.HTTPConnection('127.0.0.1',self.port,timeout=60);c.request('POST','/v1/artifact/direct-upload-by-id',body=raw,headers={'Content-Type':'application/octet-stream','Content-Length':str(size),'X-CloudIF-Artifact-Id':aid,'Accept':'application/json'});r=c.getresponse();result=json.loads(r.read());c.close()
+  self.assertEqual(r.status,200);self.assertTrue(result['ok']);self.assertEqual(result['result']['sha256'],digest);self.assertEqual(result['result']['size'],size)
+  code,status=self.json_post('/v1/artifact/upload/status',{'artifact_id':aid},auth=False);self.assertEqual(code,200);self.assertEqual(status['result']['upload_ticket_status'],'used')
+
  def test_direct_endpoints_are_loopback_only_by_contract(self):
   source=(DIR/'cloudif-workspace-broker.py').read_text();self.assertIn("self.client_address",source);self.assertIn("{'127.0.0.1','::1'}",source)
 

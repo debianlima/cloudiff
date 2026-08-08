@@ -1,6 +1,5 @@
 from __future__ import annotations
-import importlib.util,io,json,hashlib,sys,tempfile,threading,unittest
-from http.server import ThreadingHTTPServer
+import importlib.util,io,unittest
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[2]
 MODULE=ROOT/'components/control-plane/srv/cloudif/lib/cloudif_portal_artifact_upload.py'
@@ -13,18 +12,24 @@ class Handler:
  def __init__(self,raw):self.headers={'Content-Length':str(len(raw)),'Content-Type':'application/octet-stream'};self.rfile=Response(io.BytesIO(raw))
 
 class PortalArtifactUploadBridgeTests(unittest.TestCase):
- def test_page_uses_fragment_ticket_session_storage_and_no_ticket_placeholder(self):
-  page=M.render_page('csrf-token').decode()
-  self.assertIn("location.hash",page);self.assertIn("sessionStorage.setItem",page);self.assertIn("history.replaceState",page)
+ def test_new_page_embeds_artifact_id_and_does_not_require_fragment(self):
+  aid='art_'+'1'*24;page=M.render_page('csrf-token',aid).decode()
+  self.assertIn('artifactId="'+aid+'"',page)
+  self.assertIn("artifactId?{artifact_id:artifactId}",page)
+  self.assertIn("headers['X-CloudIF-Artifact-Id']=artifactId",page)
   self.assertIn('/cloudiff/portal/api/artifact-upload/status',page);self.assertIn('/cloudiff/portal/api/artifact-upload/content',page)
-  self.assertNotIn('upt_111111111111111111111111_',page)
   self.assertIn('csrf-token',page)
+  self.assertNotIn('upt_111111111111111111111111_',page)
+ def test_legacy_fragment_mode_is_kept_only_as_compatibility(self):
+  page=M.render_page('csrf-token').decode()
+  self.assertIn('location.hash',page);self.assertIn('sessionStorage.setItem',page);self.assertIn('history.replaceState',page)
+  self.assertIn("artifactId?'':",page)
  def test_safe_metadata_never_returns_ticket_hash_or_requester(self):
   meta={'artifact_id':'art_'+'1'*24,'project_slug':'demo','filename':'x.zip','expected_size':9,'expected_sha256':'a'*64,'upload_ticket':{'sha256':'secret'},'requested_by':'client'}
   safe=M.safe_metadata(meta);self.assertNotIn('upload_ticket',safe);self.assertNotIn('requested_by',safe);self.assertEqual(safe['filename'],'x.zip')
- def test_forward_upload_rejects_wrong_size_before_proxy(self):
+ def test_forward_upload_by_id_rejects_wrong_size_before_proxy(self):
   h=Handler(b'abc')
-  with self.assertRaises(ValueError) as ctx:M.forward_upload(h,'upt_'+('1'*24)+'_'+('2'*48),4)
+  with self.assertRaises(ValueError) as ctx:M.forward_upload_by_id(h,'art_'+'1'*24,4)
   self.assertEqual(str(ctx.exception),'artifact_size_mismatch')
 
 if __name__=='__main__':unittest.main()
