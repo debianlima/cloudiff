@@ -31,6 +31,7 @@ Arquitetura modular, interface, configuração e testes do Portal.
 | [`test_concurrent_project_tenant_operations.py`](test_concurrent_project_tenant_operations.py) | `.py` | Implementa `ConcurrentProjectTenantOperationsTests`. |
 | [`test_connector_public_oauth_onboarding.py`](test_connector_public_oauth_onboarding.py) | `.py` | Implementa `ConnectorPublicOAuthOnboardingTest`. |
 | [`test_dark_theme_legacy_surfaces.py`](test_dark_theme_legacy_surfaces.py) | `.py` | Implementa `DarkThemeLegacySurfacesTest`. |
+| [`test_database_active_mode_fallback.py`](test_database_active_mode_fallback.py) | `.py` | Implementa `DatabaseActiveModeFallbackTests`. |
 | [`test_deployment_sensitive_runtime_security.py`](test_deployment_sensitive_runtime_security.py) | `.py` | Implementa `load`, `DeploymentSecretInjectionSecurityTests`. |
 | [`test_effective_environment_build_contract.py`](test_effective_environment_build_contract.py) | `.py` | Implementa `load_artifact`, `EffectiveEnvironmentBuildContractTests`. |
 | [`test_forgejo_webhook_automation_contract.py`](test_forgejo_webhook_automation_contract.py) | `.py` | Implementa `ForgejoWebhookAutomationContractTest`. |

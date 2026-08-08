@@ -1006,7 +1006,7 @@ def render_bancos(user):
         keepalive_until = (pol["keepalive_until"] if pol else None) or ""
         policy_hours = int((pol["max_hours"] if pol else 0) or 0)
         deadline_active = (not always_alive) and keepalive_active(keepalive_until)
-        automatic_active = (not always_alive) and policy_hours == 0
+        automatic_active = (not always_alive) and (policy_hours == 0 or not deadline_active)
         timed_active = deadline_active and not automatic_active
         services = compose_services(tenant)
         running = tenant_is_running(tenant)
@@ -3342,7 +3342,7 @@ def render_bancos(user):
         keepalive_until = (pol["keepalive_until"] if pol else None) or ""
         policy_hours = int((pol["max_hours"] if pol else 0) or 0)
         deadline_active = (not always_alive) and keepalive_active(keepalive_until)
-        automatic_active = (not always_alive) and policy_hours == 0
+        automatic_active = (not always_alive) and (policy_hours == 0 or not deadline_active)
         timed_active = deadline_active and not automatic_active
         services = compose_services(tenant)
         running = tenant_is_running(tenant)

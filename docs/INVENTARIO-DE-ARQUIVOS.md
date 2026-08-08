@@ -1,6 +1,6 @@
 # Inventário de arquivos
 
-Este catálogo descreve **1143 arquivos versionados**. Ele é regenerado pelo script de documentação.
+Este catálogo descreve **1144 arquivos versionados**. Ele é regenerado pelo script de documentação.
 
 | Caminho | Finalidade |
 |---|---|
@@ -838,6 +838,7 @@ Este catálogo descreve **1143 arquivos versionados**. Ele é regenerado pelo sc
 | [`portal/tests/test_concurrent_project_tenant_operations.py`](../portal/tests/test_concurrent_project_tenant_operations.py) | Implementa `ConcurrentProjectTenantOperationsTests`. |
 | [`portal/tests/test_connector_public_oauth_onboarding.py`](../portal/tests/test_connector_public_oauth_onboarding.py) | Implementa `ConnectorPublicOAuthOnboardingTest`. |
 | [`portal/tests/test_dark_theme_legacy_surfaces.py`](../portal/tests/test_dark_theme_legacy_surfaces.py) | Implementa `DarkThemeLegacySurfacesTest`. |
+| [`portal/tests/test_database_active_mode_fallback.py`](../portal/tests/test_database_active_mode_fallback.py) | Implementa `DatabaseActiveModeFallbackTests`. |
 | [`portal/tests/test_deployment_sensitive_runtime_security.py`](../portal/tests/test_deployment_sensitive_runtime_security.py) | Implementa `load`, `DeploymentSecretInjectionSecurityTests`. |
 | [`portal/tests/test_effective_environment_build_contract.py`](../portal/tests/test_effective_environment_build_contract.py) | Implementa `load_artifact`, `EffectiveEnvironmentBuildContractTests`. |
 | [`portal/tests/test_forgejo_webhook_automation_contract.py`](../portal/tests/test_forgejo_webhook_automation_contract.py) | Implementa `ForgejoWebhookAutomationContractTest`. |
