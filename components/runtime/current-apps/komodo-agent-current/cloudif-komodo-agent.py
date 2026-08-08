@@ -4013,6 +4013,23 @@ def cloudif_preview_request(handler,operation):
     return send(handler,400,{'ok':False,'error':'invalid_preview_operation'})
 
 
+
+def cloudif_preview_terminal(handler):
+    if not _cloudif_pub_auth(handler):return send(handler,403,{'ok':False,'error':'forbidden'})
+    payload=_cloudif_pub_json(handler);project=safe_slug(payload.get('project') or '')
+    try:num=int(payload.get('public_number') or 0)
+    except Exception:return send(handler,400,{'ok':False,'error':'invalid_preview_terminal_request'})
+    if not project or num<1:return send(handler,400,{'ok':False,'error':'invalid_preview_terminal_request'})
+    _cloudif_v143_ensure_schema();row=_cloudif_preview_row(project)
+    if not row or int(row.get('public_number') or 0)!=num:return send(handler,409,{'ok':False,'error':'preview_not_ready','message':'O Preview ainda não foi preparado.','terminalReady':False,'secretValuesIncluded':False})
+    generation=int(row.get('generation') or 1);container=str(row.get('container') or '')
+    if container!=f'cloudif-p{num}-w{generation}-preview-web':return send(handler,409,{'ok':False,'error':'preview_container_identity_invalid','terminalReady':False,'secretValuesIncluded':False})
+    if not _cloudif_wait_health(container,2).get('ok'):return send(handler,409,{'ok':False,'error':'preview_not_healthy','message':'O Preview não está saudável para abrir o terminal.','terminalReady':False,'secretValuesIncluded':False})
+    server_id=_cloudif_v143_server_id();target=_cloudif_ensure_container_terminal(server_id,container)
+    if not target.get('ok') or not target.get('terminal'):return send(handler,422,{'ok':False,'error':'preview_terminal_create_failed','message':'O Komodo não conseguiu preparar o terminal do Preview.','terminalReady':False,'secretValuesIncluded':False})
+    return send(handler,200,{'ok':True,'project':project,'public_number':num,'generation':generation,'stageCode':'W'+str(generation),'container':container,'server_id':server_id,'terminal':str(target.get('terminal') or ''),'terminalReady':True,'secretValuesIncluded':False})
+
+
 def cloudif_preview_snapshot(handler):
     if not _cloudif_pub_auth(handler):return send(handler,403,{'ok':False,'error':'forbidden'})
     payload=_cloudif_pub_json(handler);project=safe_slug(payload.get('project') or '')
@@ -4680,6 +4697,8 @@ class H(BaseHTTPRequestHandler):
             return cloudif_preview_request(self,'ensure')
         if _cloudif_pub_path == "/komodo/project/preview/recreate":
             return cloudif_preview_request(self,'recreate')
+        if _cloudif_pub_path == "/komodo/project/preview/terminal":
+            return cloudif_preview_terminal(self)
         if _cloudif_pub_path == "/komodo/project/preview/snapshot":
             return cloudif_preview_snapshot(self)
         if _cloudif_pub_path == "/komodo/project/authz-sync":

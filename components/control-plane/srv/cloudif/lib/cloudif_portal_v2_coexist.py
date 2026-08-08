@@ -838,7 +838,7 @@ def _install() -> None:
                 if handle_preview_request(self):
                     return
                 parsed = urllib.parse.urlparse(self.path)
-                release_flow_match = re.fullmatch(r'/cloudiff?/portal/api/projects/([a-z0-9][a-z0-9-]{0,62})/release-flow/(preview/ensure|preview/recreate|homologation/enqueue|homologation/approve|homologation/reject|homologation/homologate-and-publish|homologators|production/approval/request|production/enqueue|rollback|job/acknowledge)', parsed.path)
+                release_flow_match = re.fullmatch(r'/cloudiff?/portal/api/projects/([a-z0-9][a-z0-9-]{0,62})/release-flow/(preview/ensure|preview/recreate|preview/terminal|homologation/enqueue|homologation/approve|homologation/reject|homologation/homologate-and-publish|homologators|production/approval/request|production/enqueue|rollback|job/acknowledge)', parsed.path)
                 if release_flow_match:
                     try:
                         content_length=int(self.headers.get('Content-Length','0') or 0)
@@ -853,6 +853,7 @@ def _install() -> None:
                         slug=release_flow_match.group(1);operation=release_flow_match.group(2)
                         if operation=='preview/ensure':result=publications.ensure_preview(slug,user)
                         elif operation=='preview/recreate':result=publications.recreate_preview(slug,user,str(payload.get('source') or 'production'))
+                        elif operation=='preview/terminal':result=publications.preview_terminal(slug,user)
                         elif operation=='homologation/enqueue':result=publications.enqueue_homologation(slug,user)
                         elif operation=='homologation/approve':result=publications.homologate_candidate(slug,int(payload.get('candidateNumber') or 0),user,'approved',str(payload.get('note') or ''))
                         elif operation=='homologation/reject':result=publications.homologate_candidate(slug,int(payload.get('candidateNumber') or 0),user,'rejected',str(payload.get('note') or ''))
@@ -882,9 +883,20 @@ def _install() -> None:
                         if not getattr(owner,'_prod_csrf_equal')(value('csrf_token'),getattr(owner,'_prod_csrf_token')(user)):
                             return send_json(self,403,{'ok':False,'error':'csrf','terminalReady':False,'secretValuesIncluded':False})
                         projects=getattr(owner,'_rd_projects')(user);project=next((item for item in projects if item.get('slug')==slug),None)
-                        if not project or not project.get('stack_id'):return send_json(self,409,{'ok':False,'error':'project_stack_not_found','terminalReady':False,'secretValuesIncluded':False})
+                        if not project:return send_json(self,404,{'ok':False,'error':'project_not_found','terminalReady':False,'secretValuesIncluded':False})
                         access=getattr(owner,'_rd_project_access')(slug)
                         if not getattr(owner,'_rd_actor_allowed')(user,access):return send_json(self,403,{'ok':False,'error':'forbidden','terminalReady':False,'secretValuesIncluded':False})
+                        if kind=='':
+                            try:
+                                import cloudif_portal_publications as publications
+                                preview=publications.preview_terminal(slug,user);target=str(preview.get('terminalUrl') or '').strip();parsed_target=urllib.parse.urlparse(target)
+                                if preview.get('terminalReady') is True and parsed_target.scheme=='https' and parsed_target.hostname=='komodoiff.duckdns.org' and '/terminal/' in parsed_target.path:
+                                    return send_json(self,200,{'ok':True,'terminalReady':True,'terminalUrl':target,'terminalSource':'preview_workspace','stageCode':str(preview.get('stageCode') or ''),'container':str(preview.get('container') or ''),'secretValuesIncluded':False,'secretReferencesIncluded':False})
+                            except PermissionError:
+                                return send_json(self,403,{'ok':False,'error':'preview_terminal_forbidden','message':'O terminal do Preview exige permissão de escrita no projeto.','terminalReady':False,'secretValuesIncluded':False})
+                            except (RuntimeError,ValueError,LookupError):
+                                pass
+                        if not project.get('stack_id'):return send_json(self,409,{'ok':False,'error':'project_stack_not_found','terminalReady':False,'secretValuesIncluded':False})
                         terminal='cloudif-'+slug;shell='sh'
                         if kind=='php':terminal='phpinfo-'+slug;shell="sh -lc 'clear; echo CloudIFF-PHP; php -i; echo; echo Terminal-interativo-liberado; exec sh'"
                         elif kind=='node':terminal='nodeinfo-'+slug;shell="sh -lc 'clear; echo CloudIFF-Node.js; node -e \"console.log(process.version);console.log(JSON.stringify(process.versions,null,2))\"; echo; echo npm=$(npm --version 2>/dev/null || echo indisponivel); if [ -f /var/www/html/api/package.json ]; then echo; cat /var/www/html/api/package.json; fi; echo; echo Terminal-interativo-liberado; exec sh'"

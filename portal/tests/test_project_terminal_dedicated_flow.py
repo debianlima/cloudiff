@@ -50,6 +50,15 @@ class ProjectTerminalDedicatedFlowTests(unittest.TestCase):
         self.assertIn("data.terminalSource==='base_workspace'",source)
         self.assertIn('Runtime da publicação indisponível. Abrindo o container-base',source)
 
+    def test_normal_project_terminal_prefers_live_preview_and_preserves_legacy_fallback(self):
+        source=COEXIST.read_text()
+        terminal=source[source.index('terminal_prepare_match = re.fullmatch'):]
+        self.assertIn('publications.preview_terminal(slug,user)',terminal)
+        self.assertIn("'terminalSource':'preview_workspace'",terminal)
+        self.assertIn("'preview_terminal_forbidden'",terminal)
+        self.assertIn("getattr(owner,'_rd_agent')('/komodo/project/terminal/ensure'",terminal)
+        self.assertIn('publications.ensure_base_workspace(slug,user)',terminal)
+
     def test_terminal_errors_never_render_legacy_portal(self):
         portal=PORTAL.read_text();coexist=COEXIST.read_text()
         self.assertNotIn("diagnostic=f'<section class=\"card terminal-unavailable\"",portal)

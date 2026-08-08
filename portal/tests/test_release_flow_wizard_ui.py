@@ -27,10 +27,19 @@ class ReleaseFlowWizardUITests(unittest.TestCase):
 
     def test_release_flow_api_is_csrf_protected(self):
         self.assertIn('/release-flow(?:/(approval/status))?',COEXIST)
-        self.assertIn('/release-flow/(preview/ensure|preview/recreate|homologation/enqueue',COEXIST)
+        self.assertIn('/release-flow/(preview/ensure|preview/recreate|preview/terminal|homologation/enqueue',COEXIST)
         self.assertIn("getattr(owner,'_prod_csrf_equal')",COEXIST)
         self.assertIn("'production/approval/request'",COEXIST)
         self.assertIn("'production/enqueue'",COEXIST)
+
+    def test_preview_tab_opens_preview_terminal_without_popup_race(self):
+        self.assertIn('Abrir terminal do Preview',BASE)
+        self.assertIn("data-release-action=\"preview-terminal\"",BASE)
+        self.assertIn('async function openPreviewTerminal()',BASE)
+        self.assertIn("window.open('about:blank','_blank')",BASE)
+        self.assertIn("post('preview/terminal',{})",BASE)
+        self.assertIn("target.hostname!=='komodoiff.duckdns.org'",BASE)
+        self.assertIn('preview/terminal',COEXIST)
 
     def test_wizard_has_dark_theme_safe_tokens_and_mobile_layout(self):
         self.assertIn('_WHP_RELEASE_ASSETS',BASE)

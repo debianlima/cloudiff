@@ -25,6 +25,18 @@ class WHPReleaseFlowTests(unittest.TestCase):
         self.assertIn('env_path},dst=/run/cloudif/runtime.env,readonly',latest)
         self.assertIn('cloudif-preview-security.conf',latest)
 
+    def test_preview_terminal_targets_only_the_active_w_container(self):
+        latest=RUNTIME[RUNTIME.index('def cloudif_preview_terminal'):RUNTIME.index('def cloudif_preview_snapshot')]
+        self.assertIn("cloudif-p{num}-w{generation}-preview-web",latest)
+        self.assertIn("_cloudif_wait_health(container,2)",latest)
+        self.assertIn("_cloudif_ensure_container_terminal(server_id,container)",latest)
+        self.assertIn("'terminalReady':True",latest)
+        self.assertIn("'secretValuesIncluded':False",latest)
+        self.assertIn('/komodo/project/preview/terminal',RUNTIME)
+        self.assertIn('def preview_terminal(slug,user):',PORTAL)
+        self.assertIn("if not auth.get('canWrite')",PORTAL)
+        self.assertIn("terminalSource':'preview_workspace'",PORTAL)
+
     def test_homologation_freezes_code_runtime_and_exposes_diffs(self):
         latest=RUNTIME[RUNTIME.index('def cloudif_preview_snapshot'):]
         self.assertIn("GIT_INDEX_FILE",latest)

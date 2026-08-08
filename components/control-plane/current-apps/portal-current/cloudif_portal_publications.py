@@ -283,6 +283,22 @@ def ensure_preview(slug,user):
     data.update({'url':ident['url'],'hostname':ident['hostname'],'stageCode':ident['code'],'publisher':{'ok':True}});return data
 
 
+
+def preview_terminal(slug,user):
+    con=sqlite3.connect(DB);con.row_factory=sqlite3.Row;_ensure_schema(con);project=_project_allowed(con,slug,user)
+    if not project:con.close();raise PermissionError('Projeto não encontrado ou sem permissão.')
+    from cloudif_project_environment_web import authorization
+    auth=authorization(slug,user.get('username') or '',user.get('groups') or [])
+    if not auth.get('canWrite'):con.close();raise PermissionError('O terminal do Preview exige permissão de escrita no projeto.')
+    num=_number(con,slug);con.close();ku,kt,_=_clients();status,data=_post(ku+'/komodo/project/preview/terminal',{'project':slug,'public_number':num,'actor':user.get('username') or 'portal'},kt,timeout=60)
+    if status//100!=2 or data.get('ok') is not True:raise RuntimeError(str(data.get('message') or 'O terminal do Preview está temporariamente indisponível.'))
+    container=str(data.get('container') or '');server_id=str(data.get('server_id') or '');terminal=str(data.get('terminal') or '');generation=int(data.get('generation') or 0)
+    expected=f'cloudif-p{num}-w{generation}-preview-web'
+    if generation<1 or container!=expected or not server_id or not terminal:raise RuntimeError('preview_terminal_contract_invalid')
+    target='https://komodoiff.duckdns.org/servers/'+urllib.parse.quote(server_id,safe='')+'/container/'+urllib.parse.quote(container,safe='')+'/terminal/'+urllib.parse.quote(terminal,safe='')
+    return {'ok':True,'project':slug,'public_number':num,'generation':generation,'stageCode':'W'+str(generation),'container':container,'terminalUrl':target,'terminalReady':True,'terminalSource':'preview_workspace','secretValuesIncluded':False,'secretReferencesIncluded':False}
+
+
 def recreate_preview(slug,user,source='production'):
     source=str(source or '').strip().lower()
     if source not in {'production','template'}:raise ValueError('Origem de Preview inválida.')
