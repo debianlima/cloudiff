@@ -1,6 +1,6 @@
 # Inventário de arquivos
 
-Este catálogo descreve **1142 arquivos versionados**. Ele é regenerado pelo script de documentação.
+Este catálogo descreve **1143 arquivos versionados**. Ele é regenerado pelo script de documentação.
 
 | Caminho | Finalidade |
 |---|---|
@@ -987,6 +987,7 @@ Este catálogo descreve **1142 arquivos versionados**. Ele é regenerado pelo sc
 | [`portal/tests/test_user_owned_forgejo_and_komodo_acl.py`](../portal/tests/test_user_owned_forgejo_and_komodo_acl.py) | Implementa `UserOwnedForgejoAndKomodoAclTests`. |
 | [`portal/tests/test_versioned_unified_runtime_publication.py`](../portal/tests/test_versioned_unified_runtime_publication.py) | Implementa `VersionedUnifiedRuntimePublicationTests`. |
 | [`portal/tests/test_w_h_p_release_flow.py`](../portal/tests/test_w_h_p_release_flow.py) | Implementa `WHPReleaseFlowTests`. |
+| [`portal/tests/test_workspace_artifact_session_import.py`](../portal/tests/test_workspace_artifact_session_import.py) | Implementa `FakeResponse`, `WorkspaceArtifactSessionImportTests`. |
 | [`portal/tests/test_workspace_artifact_upload.py`](../portal/tests/test_workspace_artifact_upload.py) | Implementa `WorkspaceArtifactUploadTests`. |
 | [`portal/tests/test_workspace_change_set.py`](../portal/tests/test_workspace_change_set.py) | Implementa `b64`, `WorkspaceChangeSetTests`. |
 | [`portal/ui/README.md`](../portal/ui/README.md) | Documentação deste diretório. |

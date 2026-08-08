@@ -1,6 +1,6 @@
 # Catálogo de rotas e endpoints
 
-Catálogo estático de **598 referências de rota** encontradas nos serviços e módulos. Uma rota pode aparecer em mais de um adaptador por compatibilidade.
+Catálogo estático de **600 referências de rota** encontradas nos serviços e módulos. Uma rota pode aparecer em mais de um adaptador por compatibilidade.
 
 | Componente | Método observado | Rota |
 |---|---|---|
@@ -135,6 +135,7 @@ Catálogo estático de **598 referências de rota** encontradas nos serviços e 
 | [`components/control-plane/current-apps/mcp-gateway-current/cloudif-mcp-gateway.py`](../components/control-plane/current-apps/mcp-gateway-current/cloudif-mcp-gateway.py) | GET/POST | `/v1/alerts` |
 | [`components/control-plane/current-apps/mcp-gateway-current/cloudif-mcp-gateway.py`](../components/control-plane/current-apps/mcp-gateway-current/cloudif-mcp-gateway.py) | GET/POST | `/v1/approvals` |
 | [`components/control-plane/current-apps/mcp-gateway-current/cloudif-mcp-gateway.py`](../components/control-plane/current-apps/mcp-gateway-current/cloudif-mcp-gateway.py) | GET/POST | `/v1/approvals/` |
+| [`components/control-plane/current-apps/mcp-gateway-current/cloudif-mcp-gateway.py`](../components/control-plane/current-apps/mcp-gateway-current/cloudif-mcp-gateway.py) | GET/POST | `/v1/artifact/batch` |
 | [`components/control-plane/current-apps/mcp-gateway-current/cloudif-mcp-gateway.py`](../components/control-plane/current-apps/mcp-gateway-current/cloudif-mcp-gateway.py) | GET/POST | `/v1/artifact/chunk` |
 | [`components/control-plane/current-apps/mcp-gateway-current/cloudif-mcp-gateway.py`](../components/control-plane/current-apps/mcp-gateway-current/cloudif-mcp-gateway.py) | GET/POST | `/v1/artifact/complete` |
 | [`components/control-plane/current-apps/mcp-gateway-current/cloudif-mcp-gateway.py`](../components/control-plane/current-apps/mcp-gateway-current/cloudif-mcp-gateway.py) | GET/POST | `/v1/artifact/read` |
@@ -442,6 +443,7 @@ Catálogo estático de **598 referências de rota** encontradas nos serviços e 
 | [`components/control-plane/current-apps/transaction-reconciler-current/cloudif-transaction-reconciler.py`](../components/control-plane/current-apps/transaction-reconciler-current/cloudif-transaction-reconciler.py) | GET/POST | `/v1/approvals?status=all` |
 | [`components/control-plane/current-apps/workspace-broker-current/cloudif-workspace-broker.py`](../components/control-plane/current-apps/workspace-broker-current/cloudif-workspace-broker.py) | GET | `/health` |
 | [`components/control-plane/current-apps/workspace-broker-current/cloudif-workspace-broker.py`](../components/control-plane/current-apps/workspace-broker-current/cloudif-workspace-broker.py) | GET/POST | `/project/archive?` |
+| [`components/control-plane/current-apps/workspace-broker-current/cloudif-workspace-broker.py`](../components/control-plane/current-apps/workspace-broker-current/cloudif-workspace-broker.py) | POST | `/v1/artifact/batch` |
 | [`components/control-plane/current-apps/workspace-broker-current/cloudif-workspace-broker.py`](../components/control-plane/current-apps/workspace-broker-current/cloudif-workspace-broker.py) | POST | `/v1/artifact/chunk` |
 | [`components/control-plane/current-apps/workspace-broker-current/cloudif-workspace-broker.py`](../components/control-plane/current-apps/workspace-broker-current/cloudif-workspace-broker.py) | POST | `/v1/artifact/complete` |
 | [`components/control-plane/current-apps/workspace-broker-current/cloudif-workspace-broker.py`](../components/control-plane/current-apps/workspace-broker-current/cloudif-workspace-broker.py) | POST | `/v1/artifact/read` |
@@ -454,7 +456,7 @@ Catálogo estático de **598 referências de rota** encontradas nos serviços e 
 | [`components/control-plane/current-apps/workspace-broker-current/cloudif-workspace-broker.py`](../components/control-plane/current-apps/workspace-broker-current/cloudif-workspace-broker.py) | GET/POST | `/v1/normalize-plan` |
 | [`components/control-plane/current-apps/workspace-broker-current/cloudif-workspace-broker.py`](../components/control-plane/current-apps/workspace-broker-current/cloudif-workspace-broker.py) | GET/POST | `/v1/prepare` |
 | [`components/control-plane/current-apps/workspace-broker-current/cloudif-workspace-broker.py`](../components/control-plane/current-apps/workspace-broker-current/cloudif-workspace-broker.py) | GET/POST | `/v1/preview-static` |
-| [`components/control-plane/current-apps/workspace-broker-current/cloudif-workspace-broker.py`](../components/control-plane/current-apps/workspace-broker-current/cloudif-workspace-broker.py) | POST | `/v1/probe` |
+| [`components/control-plane/current-apps/workspace-broker-current/cloudif-workspace-broker.py`](../components/control-plane/current-apps/workspace-broker-current/cloudif-workspace-broker.py) | GET/POST | `/v1/probe` |
 | [`components/control-plane/current-apps/workspace-broker-current/cloudif-workspace-broker.py`](../components/control-plane/current-apps/workspace-broker-current/cloudif-workspace-broker.py) | GET/POST | `/v1/test-static` |
 | [`components/control-plane/current-apps/workspace-broker-current/cloudif-workspace-broker.py`](../components/control-plane/current-apps/workspace-broker-current/cloudif-workspace-broker.py) | GET/POST | `/v1/validate` |
 | [`components/control-plane/current-apps/workspace-broker-current/cloudif_multitech_detector.py`](../components/control-plane/current-apps/workspace-broker-current/cloudif_multitech_detector.py) | GET/POST | `/health` |

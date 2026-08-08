@@ -16,6 +16,8 @@ ARTIFACT_RE = re.compile(r'^art_[a-f0-9]{24}$')
 SHA_RE = re.compile(r'^[a-f0-9]{64}$')
 MAX_ARTIFACT_BYTES = 64 * 1024 * 1024
 MAX_CHUNK_BYTES = 192 * 1024
+MAX_BATCH_CHUNK_BYTES = 8 * 1024
+MAX_BATCH_CHUNKS = 16
 DEFAULT_TTL = 3600
 MAX_TTL = 86400
 _LOCKS: dict[str, threading.RLock] = {}
@@ -174,6 +176,58 @@ def _append_chunk_unlocked(artifact_root: str, project_slug: str, artifact_id: s
     _write_json_atomic(_meta_path(artifact_root, artifact_id), data)
     result = public_metadata(data); result['idempotent'] = False; return result
 
+
+
+def append_chunk_batch(artifact_root: str, project_slug: str, artifact_id: str, chunks: Any) -> dict[str, Any]:
+    if not isinstance(chunks, list) or not (1 <= len(chunks) <= MAX_BATCH_CHUNKS):
+        raise ArtifactError('invalid_chunk_batch', f'O batch deve conter entre 1 e {MAX_BATCH_CHUNKS} chunks.', 'chunks')
+    with _artifact_lock(artifact_id):
+        data = _load(artifact_root, artifact_id)
+        if data.get('project_slug') != project_slug:
+            raise ArtifactError('artifact_project_mismatch', 'O artefato pertence a outro projeto.', 'artifact_id')
+        if data.get('status') != 'uploading':
+            raise ArtifactError('artifact_already_sealed', 'O artefato já foi selado.', 'artifact_id')
+        next_chunk = int(data.get('next_chunk') or 0)
+        known = {int(x.get('index', -1)): x for x in (data.get('chunks') or [])}
+        prevalidated = []
+        new_bytes = 0
+        new_count = 0
+        idempotent_count = 0
+        for position, item in enumerate(chunks):
+            if not isinstance(item, dict) or set(item) != {'chunk_index','content_base64','chunk_sha256'}:
+                raise ArtifactError('invalid_chunk_batch_item', 'Cada item exige chunk_index, content_base64 e chunk_sha256.', f'chunks.{position}')
+            try: index = int(item.get('chunk_index'))
+            except Exception as exc: raise ArtifactError('invalid_chunk_index', 'chunk_index deve ser inteiro.', f'chunks.{position}.chunk_index') from exc
+            encoded = item.get('content_base64'); digest = str(item.get('chunk_sha256') or '').lower().strip()
+            if index < 0 or not SHA_RE.fullmatch(digest) or not isinstance(encoded, str) or not encoded:
+                raise ArtifactError('invalid_chunk_metadata', 'Metadados do chunk são inválidos.', f'chunks.{position}')
+            try: raw = base64.b64decode(encoded, validate=True)
+            except Exception as exc: raise ArtifactError('invalid_chunk_base64', 'O chunk deve ser Base64 válido.', f'chunks.{position}.content_base64') from exc
+            if len(raw) > MAX_BATCH_CHUNK_BYTES:
+                raise ArtifactError('batch_chunk_too_large', 'No batch, cada chunk pode ter no máximo 8 KiB.', f'chunks.{position}.content_base64')
+            actual = hashlib.sha256(raw).hexdigest()
+            if actual != digest:
+                raise ArtifactError('chunk_sha256_mismatch', 'O SHA-256 do chunk não confere.', f'chunks.{position}.chunk_sha256')
+            if index < next_chunk:
+                previous = known.get(index)
+                if not previous or previous.get('sha256') != digest or int(previous.get('size') or -1) != len(raw):
+                    raise ArtifactError('chunk_conflict', 'O chunk já existe com conteúdo diferente.', f'chunks.{position}.chunk_index')
+                idempotent_count += 1; prevalidated.append((index, raw, digest, True)); continue
+            expected_index = next_chunk + new_count
+            if index != expected_index:
+                raise ArtifactError('chunk_out_of_order', f'O próximo chunk esperado é {expected_index}.', f'chunks.{position}.chunk_index')
+            new_bytes += len(raw); new_count += 1; prevalidated.append((index, raw, digest, False))
+        received = int(data.get('received_bytes') or 0)
+        if received + new_bytes > int(data.get('expected_size') or 0):
+            raise ArtifactError('artifact_size_overflow', 'O batch excede expected_size.', 'chunks')
+        result = None
+        for index, raw, digest, idempotent in prevalidated:
+            if idempotent: continue
+            result = _append_chunk_unlocked(artifact_root, project_slug, artifact_id, index, base64.b64encode(raw).decode(), digest)
+        if result is None:
+            result = public_metadata(_load(artifact_root, artifact_id))
+        result.update({'batch_count':len(chunks),'new_count':new_count,'idempotent_count':idempotent_count,'batch_max_chunk_bytes':MAX_BATCH_CHUNK_BYTES})
+        return result
 
 
 def append_chunk(artifact_root: str, project_slug: str, artifact_id: str, chunk_index: int, content_base64: str, chunk_sha256: str) -> dict[str, Any]:

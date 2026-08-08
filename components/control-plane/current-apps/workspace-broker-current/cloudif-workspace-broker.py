@@ -18,7 +18,7 @@ import uuid
 import yaml
 from cloudif_multitech_detector import detect_components
 from cloudif_change_set import (ChangeSetError, apply_changes, change_set_digest, clean_expired, load_sealed, normalize_changes, seal_change_set)
-from cloudif_workspace_artifact import (ArtifactError, append_chunk, complete_artifact, read_artifact, resolve_artifact, start_artifact)
+from cloudif_workspace_artifact import (ArtifactError, append_chunk, append_chunk_batch, complete_artifact, read_artifact, resolve_artifact, start_artifact)
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse
 
@@ -1076,7 +1076,7 @@ class H(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:
         path = urlparse(self.path).path
-        if path not in {'/v1/artifact/start','/v1/artifact/chunk','/v1/artifact/complete','/v1/artifact/read','/v1/probe', '/v1/prepare', '/v1/detect-multiservice', '/v1/normalize-plan', '/v1/change-set/validate', '/v1/change-set/resolve', '/v1/validate', '/v1/test-static', '/v1/preview-static', '/v1/edit-preview'}:
+        if path not in {'/v1/artifact/start','/v1/artifact/chunk','/v1/artifact/batch','/v1/artifact/complete','/v1/artifact/read','/v1/probe', '/v1/prepare', '/v1/detect-multiservice', '/v1/normalize-plan', '/v1/change-set/validate', '/v1/change-set/resolve', '/v1/validate', '/v1/test-static', '/v1/preview-static', '/v1/edit-preview'}:
             self.sendj(404, {'ok': False, 'error': 'not_found'})
             return
         if not self.auth():
@@ -1084,7 +1084,7 @@ class H(BaseHTTPRequestHandler):
             return
         try:
             n = int(self.headers.get('Content-Length', '0'))
-            maximum = 3 * 1024 * 1024 if path == '/v1/change-set/validate' else (384 * 1024 if path == '/v1/artifact/chunk' else 256 * 1024)
+            maximum = 3 * 1024 * 1024 if path == '/v1/change-set/validate' else (384 * 1024 if path in {'/v1/artifact/chunk','/v1/artifact/batch'} else 256 * 1024)
             assert 0 < n <= maximum
             data = json.loads(self.rfile.read(n))
             if not isinstance(data, dict):
@@ -1093,6 +1093,8 @@ class H(BaseHTTPRequestHandler):
                 required={'project_slug','trace_id','filename','expected_size','expected_sha256'}; allowed=required|{'ttl_seconds'}
             elif path == '/v1/artifact/chunk':
                 required={'project_slug','trace_id','artifact_id','chunk_index','content_base64','chunk_sha256'}; allowed=required
+            elif path == '/v1/artifact/batch':
+                required={'project_slug','trace_id','artifact_id','chunks'}; allowed=required
             elif path == '/v1/artifact/complete':
                 required={'project_slug','trace_id','artifact_id'}; allowed=required
             elif path == '/v1/artifact/read':
@@ -1132,7 +1134,8 @@ class H(BaseHTTPRequestHandler):
             chunk_index = int(data.get('chunk_index') or 0)
             chunk_content = data.get('content_base64')
             chunk_sha256 = str(data.get('chunk_sha256') or '')
-            if path not in {'/v1/change-set/resolve','/v1/artifact/start','/v1/artifact/chunk','/v1/artifact/complete','/v1/artifact/read'}:
+            chunk_batch = data.get('chunks')
+            if path not in {'/v1/change-set/resolve','/v1/artifact/start','/v1/artifact/chunk','/v1/artifact/batch','/v1/artifact/complete','/v1/artifact/read'}:
                 assert REF.fullmatch(ref) and '..' not in ref and not ref.startswith('/') and not ref.endswith('/')
             if path in {'/v1/artifact/start','/v1/normalize-plan','/v1/change-set/validate'}: assert 300 <= ttl_seconds <= 86400
         except Exception:
@@ -1140,7 +1143,7 @@ class H(BaseHTTPRequestHandler):
             return
         started = time.monotonic()
         event_map = {
-            '/v1/artifact/start':'workspace.artifact.start','/v1/artifact/chunk':'workspace.artifact.chunk','/v1/artifact/complete':'workspace.artifact.complete','/v1/artifact/read':'workspace.artifact.read',
+            '/v1/artifact/start':'workspace.artifact.start','/v1/artifact/chunk':'workspace.artifact.chunk','/v1/artifact/batch':'workspace.artifact.batch','/v1/artifact/complete':'workspace.artifact.complete','/v1/artifact/read':'workspace.artifact.read',
             '/v1/probe':'workspace.probe','/v1/prepare':'workspace.prepare',
             '/v1/detect-multiservice':'workspace.detect-multiservice','/v1/normalize-plan':'workspace.normalize-plan',
             '/v1/change-set/validate':'workspace.change-set.validate','/v1/change-set/resolve':'workspace.change-set.resolve',
@@ -1153,6 +1156,8 @@ class H(BaseHTTPRequestHandler):
                 result=start_artifact(ARTIFACT_ROOT,slug,filename,artifact_expected_size,artifact_expected_sha256,ttl_seconds);run_dir='';name='';removed=True
             elif path == '/v1/artifact/chunk':
                 result=append_chunk(ARTIFACT_ROOT,slug,artifact_id,chunk_index,chunk_content,chunk_sha256);run_dir='';name='';removed=True
+            elif path == '/v1/artifact/batch':
+                result=append_chunk_batch(ARTIFACT_ROOT,slug,artifact_id,chunk_batch);run_dir='';name='';removed=True
             elif path == '/v1/artifact/complete':
                 result=complete_artifact(ARTIFACT_ROOT,slug,artifact_id);run_dir='';name='';removed=True
             elif path == '/v1/artifact/read':

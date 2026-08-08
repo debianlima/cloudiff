@@ -180,6 +180,7 @@ Arquitetura modular, interface, configuração e testes do Portal.
 | [`test_user_owned_forgejo_and_komodo_acl.py`](test_user_owned_forgejo_and_komodo_acl.py) | `.py` | Implementa `UserOwnedForgejoAndKomodoAclTests`. |
 | [`test_versioned_unified_runtime_publication.py`](test_versioned_unified_runtime_publication.py) | `.py` | Implementa `VersionedUnifiedRuntimePublicationTests`. |
 | [`test_w_h_p_release_flow.py`](test_w_h_p_release_flow.py) | `.py` | Implementa `WHPReleaseFlowTests`. |
+| [`test_workspace_artifact_session_import.py`](test_workspace_artifact_session_import.py) | `.py` | Implementa `FakeResponse`, `WorkspaceArtifactSessionImportTests`. |
 | [`test_workspace_artifact_upload.py`](test_workspace_artifact_upload.py) | `.py` | Implementa `WorkspaceArtifactUploadTests`. |
 | [`test_workspace_change_set.py`](test_workspace_change_set.py) | `.py` | Implementa `b64`, `WorkspaceChangeSetTests`. |
 

@@ -64,4 +64,28 @@ class WorkspaceArtifactUploadTests(unittest.TestCase):
   self.assertIn("CHANGESET_ROOT = os.environ.get('CLOUDIF_WORKSPACE_CHANGESET_ROOT', '/var/lib/cloudif/workspace-change-sets')",BROKER)
   self.assertNotIn("Path(artifact_root) / '.artifacts'",PATH.read_text())
 
+ def test_batch_chunks_are_small_sequential_and_retryable(self):
+  raw=(bytes(range(256))*700)[:150000];digest=hashlib.sha256(raw).hexdigest()
+  with tempfile.TemporaryDirectory() as td:
+   aid=A.start_artifact(td,'demo','batch.zip',len(raw),digest,900)['artifact_id'];index=0;calls=0
+   for offset in range(0,len(raw),A.MAX_BATCH_CHUNK_BYTES*A.MAX_BATCH_CHUNKS):
+    group=[]
+    part=raw[offset:offset+A.MAX_BATCH_CHUNK_BYTES*A.MAX_BATCH_CHUNKS]
+    for pos in range(0,len(part),A.MAX_BATCH_CHUNK_BYTES):
+     chunk=part[pos:pos+A.MAX_BATCH_CHUNK_BYTES];group.append({'chunk_index':index,'content_base64':base64.b64encode(chunk).decode(),'chunk_sha256':hashlib.sha256(chunk).hexdigest()});index+=1
+    result=A.append_chunk_batch(td,'demo',aid,group);calls+=1;self.assertLessEqual(result['batch_count'],16);self.assertEqual(result['new_count'],len(group))
+    if calls==1:
+     retry=A.append_chunk_batch(td,'demo',aid,group);self.assertEqual(retry['idempotent_count'],len(group));self.assertEqual(retry['new_count'],0)
+   sealed=A.complete_artifact(td,'demo',aid);self.assertEqual(sealed['sha256'],digest);self.assertLess(calls,4)
+
+ def test_batch_rejects_large_scalar_and_out_of_order(self):
+  raw=b'x'*9000;digest=hashlib.sha256(raw).hexdigest()
+  with tempfile.TemporaryDirectory() as td:
+   aid=A.start_artifact(td,'demo','x.bin',len(raw),digest,900)['artifact_id']
+   with self.assertRaises(A.ArtifactError) as ctx:A.append_chunk_batch(td,'demo',aid,[{'chunk_index':0,'content_base64':base64.b64encode(raw).decode(),'chunk_sha256':digest}])
+   self.assertEqual(ctx.exception.code,'batch_chunk_too_large')
+   small=b'x';sha=hashlib.sha256(small).hexdigest()
+   with self.assertRaises(A.ArtifactError) as ctx:A.append_chunk_batch(td,'demo',aid,[{'chunk_index':1,'content_base64':base64.b64encode(small).decode(),'chunk_sha256':sha}])
+   self.assertEqual(ctx.exception.code,'chunk_out_of_order')
+
 if __name__=='__main__':unittest.main()

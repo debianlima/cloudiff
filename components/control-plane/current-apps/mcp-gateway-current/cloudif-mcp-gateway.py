@@ -11,6 +11,8 @@ AGENT_URL=os.environ.get('CLOUDIF_AGENT_URL','http://127.0.0.1:18203').rstrip('/
 AGENT_ADMIN_TOKEN=os.environ.get('CLOUDIF_AGENT_ADMIN_TOKEN','')
 WORKSPACE_URL=os.environ.get('CLOUDIF_WORKSPACE_URL','http://127.0.0.1:18206').rstrip('/')
 WORKSPACE_TOKEN=os.environ.get('CLOUDIF_WORKSPACE_TOKEN','')
+SESSION_FILE_RESOLVER_URL=os.environ.get('CLOUDIF_SESSION_FILE_RESOLVER_URL','').strip()
+SESSION_FILE_RESOLVER_TOKEN=os.environ.get('CLOUDIF_SESSION_FILE_RESOLVER_TOKEN','').strip()
 APPROVAL_URL=os.environ.get('CLOUDIF_APPROVAL_URL','http://127.0.0.1:18204').rstrip('/')
 APPROVAL_TOKEN=os.environ.get('CLOUDIF_APPROVAL_TOKEN','')
 FORJA_URL=os.environ.get('CLOUDIF_FORJA_AGENT_URL','http://10.62.91.2:18095').rstrip('/')
@@ -315,6 +317,8 @@ TOOLS=[
  {'name':'workspace.normalize.plan','description':'Analisa o snapshot e propõe cloudiff.yaml como change set revisável, sem alterar o repositório','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'ref':{'type':'string','pattern':'^[A-Za-z0-9._/-]+$'},'title':{'type':'string','minLength':4,'maxLength':160},'description':{'type':'string','maxLength':4000},'ttl_seconds':{'type':'integer','minimum':300,'maximum':86400}},'required':['slug'],'additionalProperties':False}},
  {'name':'workspace.artifact.upload.start','description':'Inicia upload temporário de artefato binário vinculado ao projeto, tamanho e SHA-256 esperados','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'filename':{'type':'string','minLength':1,'maxLength':240},'expected_size':{'type':'integer','minimum':0,'maximum':67108864},'expected_sha256':{'type':'string','pattern':'^[a-f0-9]{64}$'},'ttl_seconds':{'type':'integer','minimum':300,'maximum':86400}},'required':['slug','filename','expected_size','expected_sha256'],'additionalProperties':False,'examples':[{'slug':'meu-projeto','filename':'documentos-anonimizados.zip','expected_size':1390970,'expected_sha256':'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa','ttl_seconds':3600}]}},
  {'name':'workspace.artifact.upload.chunk','description':'Envia um chunk Base64 pequeno e sequencial para um artifact_id; retries idênticos são idempotentes','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'artifact_id':{'type':'string','pattern':'^art_[a-f0-9]{24}$'},'chunk_index':{'type':'integer','minimum':0,'maximum':65535},'content_base64':{'type':'string','minLength':1,'maxLength':262144},'chunk_sha256':{'type':'string','pattern':'^[a-f0-9]{64}$'}},'required':['slug','artifact_id','chunk_index','content_base64','chunk_sha256'],'additionalProperties':False,'examples':[{'slug':'meu-projeto','artifact_id':'art_111111111111111111111111','chunk_index':0,'content_base64':'eA==','chunk_sha256':'2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881'}]}},
+ {'name':'workspace.artifact.upload.batch','description':'Envia até 16 chunks pequenos de até 8 KiB raw cada em uma chamada; ideal quando strings Base64 maiores são truncadas pelo cliente','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'artifact_id':{'type':'string','pattern':'^art_[a-f0-9]{24}$'},'chunks':{'type':'array','minItems':1,'maxItems':16,'items':{'type':'object','properties':{'chunk_index':{'type':'integer','minimum':0,'maximum':65535},'content_base64':{'type':'string','minLength':1,'maxLength':11000},'chunk_sha256':{'type':'string','pattern':'^[a-f0-9]{64}$'}},'required':['chunk_index','content_base64','chunk_sha256'],'additionalProperties':False}}},'required':['slug','artifact_id','chunks'],'additionalProperties':False,'examples':[{'slug':'meu-projeto','artifact_id':'art_111111111111111111111111','chunks':[{'chunk_index':0,'content_base64':'eA==','chunk_sha256':'2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881'}]}]}},
+ {'name':'workspace.artifact.import','description':'Importa um arquivo já disponível no provedor da sessão por file_id, valida tamanho e SHA-256 e retorna artifact_id selado; exige resolver server-side configurado','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'file_id':{'type':'string','minLength':6,'maxLength':192,'pattern':'^[A-Za-z0-9_-]+$'},'filename':{'type':'string','minLength':1,'maxLength':240},'expected_size':{'type':'integer','minimum':0,'maximum':67108864},'expected_sha256':{'type':'string','pattern':'^[a-f0-9]{64}$'},'ttl_seconds':{'type':'integer','minimum':300,'maximum':86400}},'required':['slug','file_id','filename','expected_size','expected_sha256'],'additionalProperties':False,'examples':[{'slug':'meu-projeto','file_id':'file_1111111111111111','filename':'documentos-anonimizados.zip','expected_size':1390970,'expected_sha256':'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa','ttl_seconds':3600}]}},
  {'name':'workspace.artifact.upload.complete','description':'Conclui o upload, verifica tamanho e SHA-256 integrais e sela o artefato para uso por artifact_id','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'artifact_id':{'type':'string','pattern':'^art_[a-f0-9]{24}$'}},'required':['slug','artifact_id'],'additionalProperties':False,'examples':[{'slug':'meu-projeto','artifact_id':'art_111111111111111111111111'}]}},
  {'name':'workspace.change-set.validate','description':'Aplica temporariamente create, update, delete e mkdir, valida o resultado e sela o conjunto completo por digest','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'ref':{'type':'string','pattern':'^[A-Za-z0-9._/-]+$'},'title':{'type':'string','minLength':4,'maxLength':160},'description':{'type':'string','maxLength':4000},'ttl_seconds':{'type':'integer','minimum':300,'maximum':86400},'changes':{'type':'array','minItems':1,'maxItems':100,'items':{'type':'object','properties':{'operation':{'type':'string','enum':['create','update','delete','mkdir']},'path':{'type':'string','minLength':1,'maxLength':240},'content_base64':{'type':'string','maxLength':349528},'artifact_id':{'type':'string','pattern':'^art_[a-f0-9]{24}$'},'expected_sha256':{'type':'string','pattern':'^[a-f0-9]{64}$'}},'required':['operation','path'],'additionalProperties':False}}},'required':['slug','title','description','changes'],'additionalProperties':False}},
  {'name':'forgejo.proposal.change-set.plan','description':'Confirma o snapshot selado e apresenta o plano completo sem criar aprovação, branch ou PR','inputSchema':{'type':'object','properties':{'slug':{'type':'string','description':'Slug do projeto autorizado','pattern':'^[a-z0-9][a-z0-9-]*$'},'workspace_id':{'type':'string','description':'Workspace selado retornado pela validação','pattern':'^ws_[a-f0-9]{24}$'},'change_set_digest':{'type':'string','description':'Digest SHA-256 canônico do change set','pattern':'^[a-f0-9]{64}$'}},'required':['slug','workspace_id','change_set_digest'],'additionalProperties':False,'examples':[{'slug':'meu-projeto','workspace_id':'ws_0123456789abcdef01234567','change_set_digest':'0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'}]}},
@@ -426,6 +430,7 @@ def _example_for_schema(schema, field='', include_optional=True, depth=0):
         if key in {'slug','project_slug'}:return 'meu-projeto'
         if key=='workspace_id':return 'ws_'+'1'*24
         if key=='artifact_id':return 'art_'+'1'*24
+        if key=='file_id':return 'file_'+'1'*16
         if 'digest' in key or key.endswith('sha256') or key=='expected_sha256':return 'a'*64
         if key=='approval_id':return 'apr_'+'1'*20
         if key in {'commit_sha','expected_head_sha','expected_previous_commit','expected_current_commit','target_commit','head_sha'}:return 'a'*40
@@ -1041,6 +1046,54 @@ def approval_create_change_set(slug,client_id,authz,workspace_id,digest_value,ar
         except Exception:data={}
         raise ValueError(str(data.get('error') or 'approval_create_failed')) from error
 
+def session_file_resolve(file_id,expected_size,expected_sha256,trace_id):
+    if not SESSION_FILE_RESOLVER_URL or not SESSION_FILE_RESOLVER_TOKEN:
+        raise ValueError('O importador de arquivos da sessão ainda não está configurado no servidor. Use workspace.artifact.upload.batch para enviar chunks pequenos.')
+    parsed=urlparse(SESSION_FILE_RESOLVER_URL)
+    loopback_hosts={'127.0.0.1','localhost','::1'}
+    if not parsed.hostname or parsed.scheme not in {'https','http'} or (parsed.scheme=='http' and parsed.hostname not in loopback_hosts):
+        raise ValueError('session_file_resolver_invalid')
+    payload=json.dumps({'file_id':file_id,'trace_id':trace_id},separators=(',',':')).encode()
+    req=urllib.request.Request(SESSION_FILE_RESOLVER_URL,data=payload,method='POST',headers={'Authorization':'Bearer '+SESSION_FILE_RESOLVER_TOKEN,'Content-Type':'application/json','Accept':'application/octet-stream'})
+    try:
+        with urllib.request.urlopen(req,timeout=120) as response:
+            header_length=response.headers.get('Content-Length')
+            if header_length is not None and int(header_length)!=int(expected_size):raise ValueError('session_file_size_mismatch')
+            raw=response.read(int(expected_size)+1);headers=response.headers
+    except urllib.error.HTTPError as error:
+        raise ValueError('session_file_resolver_rejected') from error
+    except urllib.error.URLError as error:
+        raise ValueError('session_file_resolver_unavailable') from error
+    if len(raw)!=int(expected_size) or len(raw)>64*1024*1024:raise ValueError('session_file_size_mismatch')
+    digest=hashlib.sha256(raw).hexdigest()
+    if not hmac.compare_digest(digest,str(expected_sha256).lower()):raise ValueError('session_file_sha256_mismatch')
+    returned_id=str(headers.get('X-CloudIF-File-Id') or '')
+    if returned_id and returned_id!=file_id:raise ValueError('session_file_id_mismatch')
+    returned_sha=str(headers.get('X-CloudIF-File-Sha256') or '').lower()
+    if returned_sha and not hmac.compare_digest(returned_sha,digest):raise ValueError('session_file_resolver_digest_mismatch')
+    return raw
+
+def workspace_artifact_import_bytes(slug,filename,raw,expected_sha256,ttl_seconds,trace_id):
+    start_payload={'project_slug':slug,'trace_id':trace_id,'filename':filename,'expected_size':len(raw),'expected_sha256':expected_sha256,'ttl_seconds':ttl_seconds}
+    code,data=workspace_broker_post('/v1/artifact/start',start_payload,timeout=90)
+    if code not in {200,201} or not data.get('ok'):raise ValueError('artifact_import_start_failed')
+    started=data.get('result') or data;artifact_id=str(started.get('artifact_id') or '')
+    index=0
+    stride=8*1024*16
+    for offset in range(0,len(raw),stride):
+        group=[];part=raw[offset:offset+stride]
+        for inner in range(0,len(part),8*1024):
+            chunk=part[inner:inner+8*1024]
+            group.append({'chunk_index':index,'content_base64':base64.b64encode(chunk).decode(),'chunk_sha256':hashlib.sha256(chunk).hexdigest()});index+=1
+        code,batch=workspace_broker_post('/v1/artifact/batch',{'project_slug':slug,'trace_id':trace_id,'artifact_id':artifact_id,'chunks':group},timeout=90)
+        if code not in {200,201} or not batch.get('ok'):raise ValueError('artifact_import_batch_failed')
+    code,done=workspace_broker_post('/v1/artifact/complete',{'project_slug':slug,'trace_id':trace_id,'artifact_id':artifact_id},timeout=90)
+    if code not in {200,201} or not done.get('ok'):raise ValueError('artifact_import_complete_failed')
+    result=done.get('result') or done
+    if result.get('sha256')!=expected_sha256 or int(result.get('size') or -1)!=len(raw):raise ValueError('artifact_import_integrity_failed')
+    result.update({'imported':True,'transport':'session_file_resolver','batch_calls':(index+15)//16})
+    return result
+
 def workspace_artifact_read(slug,artifact_id,expected_sha256,expected_size,trace_id):
     payload={'project_slug':slug,'trace_id':trace_id,'artifact_id':artifact_id,'expected_sha256':expected_sha256,'expected_size':int(expected_size)}
     raw=json.dumps(payload,separators=(',',':')).encode();req=urllib.request.Request(WORKSPACE_URL+'/v1/artifact/read',data=raw,method='POST',headers={'Authorization':'Bearer '+WORKSPACE_TOKEN,'Content-Type':'application/json','Accept':'application/octet-stream'})
@@ -1419,7 +1472,7 @@ SCOPE_BY_TOOL={
  'project.toolchain.get':'project:toolchain-read','project.toolchain.validate':'project:toolchain-plan','project.toolchain.plan':'project:toolchain-plan','project.toolchain.build.plan':'project:toolchain-plan','approval.request-toolchain-build':'approval:request-toolchain-build','project.toolchain.build.execute':'project:toolchain-build-execute','project.toolchain.build.status':'project:toolchain-read','project.toolchain.logs.read':'project:toolchain-read','project.toolchain.image.list':'project:toolchain-read','project.toolchain.image.get':'project:toolchain-read','project.toolchain.image.activate.plan':'project:toolchain-activate-plan','approval.request-toolchain-activation':'approval:request-toolchain-activation','project.toolchain.image.activate':'project:toolchain-activate-execute',
  'runtime.catalog':'project:read','runtime.detect':'project:read','runtime.plan':'project:read','runtime.validate':'project:read','project.technologies.detect':'workspace:detect-multiservice','project.manifest.validate':'project:configuration-read','project.configuration.get':'project:configuration-read','project.configuration.status':'project:runtime-status-read','project.configuration.drift':'project:runtime-status-read','project.configuration.reconcile.plan':'project:runtime-reconcile-plan','project.observability.get':'project:observability-read','project.observability.alerts':'project:observability-read','build.plan':'project:read','build.multiservice.plan':'build:multiservice-plan','build.multiservice.status':'build:multiservice-plan','approval.request-multiservice-build':'approval:request-multiservice-build','build.multiservice.execute':'build:multiservice-execute','preview.multiservice.plan':'preview:multiservice-plan','preview.multiservice.status':'preview:multiservice-plan','approval.request-multiservice-preview':'approval:request-multiservice-preview','preview.multiservice.create':'preview:multiservice-execute','preview.multiservice.delete':'preview:multiservice-delete','build.request':'workspace:test-static','build.status':'project:read','build.logs.read':'project:read','build.artifact.get':'project:read','deployment.multiservice.plan':'deployment:multiservice-plan','deployment.multiservice.status':'deployment:multiservice-plan','approval.request-multiservice-deployment':'approval:request-multiservice-deployment','deployment.multiservice.execute':'deployment:multiservice-execute','deployment.preview.plan':'project:read','deployment.preview.status':'project:read','approval.request-preview':'approval:request-preview','deployment.preview':'deployment:preview',
  'workspace.probe':'workspace:probe','workspace.prepare':'workspace:prepare','workspace.validate':'workspace:validate','workspace.test-static':'workspace:test-static','workspace.preview-static':'workspace:preview-static','workspace.edit-preview':'workspace:edit-preview',
- 'forgejo.propose-edit':'forgejo:propose-edit','forgejo.propose-edit.plan':'forgejo:plan-edit','approval.request-proposal':'approval:request-proposal','workspace.normalize.plan':'workspace:change-set-plan','workspace.artifact.upload.start':'workspace:change-set-plan','workspace.artifact.upload.chunk':'workspace:change-set-plan','workspace.artifact.upload.complete':'workspace:change-set-plan','workspace.change-set.validate':'workspace:change-set-plan','forgejo.proposal.change-set.plan':'workspace:change-set-plan','approval.request-change-set-proposal':'approval:request-change-set','forgejo.proposal.change-set.create':'forgejo:propose-change-set','approval.get':'approval:read-own','approval.cancel':'approval:read-own','forgejo.proposal.list':'forgejo:proposal-read','forgejo.proposal.close':'forgejo:proposal-close','forgejo.proposal.delete-branch':'forgejo:proposal-delete-branch','forgejo.proposal.merge.plan':'forgejo:proposal-merge-plan','approval.request-merge':'approval:request-merge','forgejo.proposal.merge':'forgejo:proposal-merge',
+ 'forgejo.propose-edit':'forgejo:propose-edit','forgejo.propose-edit.plan':'forgejo:plan-edit','approval.request-proposal':'approval:request-proposal','workspace.normalize.plan':'workspace:change-set-plan','workspace.artifact.upload.start':'workspace:change-set-plan','workspace.artifact.upload.chunk':'workspace:change-set-plan','workspace.artifact.upload.batch':'workspace:change-set-plan','workspace.artifact.import':'workspace:change-set-plan','workspace.artifact.upload.complete':'workspace:change-set-plan','workspace.change-set.validate':'workspace:change-set-plan','forgejo.proposal.change-set.plan':'workspace:change-set-plan','approval.request-change-set-proposal':'approval:request-change-set','forgejo.proposal.change-set.create':'forgejo:propose-change-set','approval.get':'approval:read-own','approval.cancel':'approval:read-own','forgejo.proposal.list':'forgejo:proposal-read','forgejo.proposal.close':'forgejo:proposal-close','forgejo.proposal.delete-branch':'forgejo:proposal-delete-branch','forgejo.proposal.merge.plan':'forgejo:proposal-merge-plan','approval.request-merge':'approval:request-merge','forgejo.proposal.merge':'forgejo:proposal-merge',
  'deployment.production.homologation.plan':'deployment:production-plan','approval.request-production-homologation':'approval:request-deploy','deployment.production.homologation.deploy':'deployment:production-plan','deployment.production.homologation.rollback':'deployment:production-plan','deployment.production.activation.plan':'deployment:production-plan','approval.request-production-activation':'approval:request-deploy','deployment.production.readiness':'project:read','deployment.production.plan':'deployment:production-plan','supabase.migrations.inspect':'supabase:migration-inspect','supabase.migrations.plan':'supabase:migration-plan','deployment.plan':'deployment:plan','approval.request-deploy':'approval:request-deploy','deployment.validate':'deployment:validate','deployment.promote-test.plan':'deployment:promote-test-plan','approval.request-promote-test':'approval:request-promote-test','deployment.promote-test':'deployment:promote-test','deployment.promote-test.status':'deployment:promote-test-status','deployment.rollback-test.plan':'deployment:rollback-test-plan','approval.request-rollback-test':'approval:request-rollback-test','deployment.rollback-test':'deployment:rollback-test',
  'supabase.tables.list':'supabase:database-read','supabase.records.select':'supabase:database-read','supabase.sql.query':'supabase:database-read','supabase.rls.inspect':'supabase:database-read','supabase.schema.inspect':'supabase:database-read',
  'supabase.auth.users.list':'supabase:auth-read','supabase.storage.buckets.list':'supabase:storage-read','supabase.storage.objects.list':'supabase:storage-read','supabase.storage.object.read':'supabase:storage-read',
@@ -2736,7 +2789,15 @@ class H(BaseHTTPRequestHandler):
                     if code not in {200,422} or not data.get('ok'):
                         error=data.get('error') or {};raise ValueError(str(error.get('message') if isinstance(error,dict) else error or 'normalization_plan_failed'))
                     content=data.get('result') or data
-                elif name in {'workspace.artifact.upload.start','workspace.artifact.upload.chunk','workspace.artifact.upload.complete'}:
+                elif name=='workspace.artifact.import':
+                    required={'slug','file_id','filename','expected_size','expected_sha256'};allowed=required|{'ttl_seconds'}
+                    if not required.issubset(args) or not set(args).issubset(allowed):raise ValueError('Informe slug, file_id, filename, expected_size e expected_sha256.')
+                    slug=str(args.get('slug') or '').strip();file_id=str(args.get('file_id') or '').strip();filename=str(args.get('filename') or '').strip();size=int(args.get('expected_size'));digest=str(args.get('expected_sha256') or '').strip().lower();ttl=int(args.get('ttl_seconds') or 3600)
+                    if not re.fullmatch(r'[a-z0-9][a-z0-9-]*',slug) or not re.fullmatch(r'[A-Za-z0-9_-]{6,192}',file_id) or not filename or len(filename)>240 or not (0<=size<=67108864) or not re.fullmatch(r'[a-f0-9]{64}',digest) or not (300<=ttl<=86400):raise ValueError('Metadados da importação são inválidos.')
+                    control('/v1/projects/'+urllib.parse.quote(slug,safe=''))
+                    raw=session_file_resolve(file_id,size,digest,trace_id)
+                    content=workspace_artifact_import_bytes(slug,filename,raw,digest,ttl,trace_id);content['file_id']=file_id
+                elif name in {'workspace.artifact.upload.start','workspace.artifact.upload.chunk','workspace.artifact.upload.batch','workspace.artifact.upload.complete'}:
                     slug=str(args.get('slug') or '').strip()
                     if not re.fullmatch(r'[a-z0-9][a-z0-9-]*',slug):raise ValueError('O campo slug é obrigatório e deve ser válido.')
                     control('/v1/projects/'+urllib.parse.quote(slug,safe=''))
@@ -2752,6 +2813,14 @@ class H(BaseHTTPRequestHandler):
                         artifact_id=str(args.get('artifact_id') or '').strip();index=int(args.get('chunk_index'));encoded=str(args.get('content_base64') or '');chunk_sha=str(args.get('chunk_sha256') or '').strip().lower()
                         if not re.fullmatch(r'art_[a-f0-9]{24}',artifact_id) or index<0 or len(encoded)>262144 or not re.fullmatch(r'[a-f0-9]{64}',chunk_sha):raise ValueError('Metadados do chunk inválidos.')
                         payload={'project_slug':slug,'trace_id':trace_id,'artifact_id':artifact_id,'chunk_index':index,'content_base64':encoded,'chunk_sha256':chunk_sha};endpoint='/v1/artifact/chunk'
+                    elif name=='workspace.artifact.upload.batch':
+                        allowed={'slug','artifact_id','chunks'}
+                        if not {'slug','artifact_id','chunks'}.issubset(args) or not set(args).issubset(allowed):raise ValueError('Informe slug, artifact_id e chunks.')
+                        artifact_id=str(args.get('artifact_id') or '').strip();chunks=args.get('chunks')
+                        if not re.fullmatch(r'art_[a-f0-9]{24}',artifact_id) or not isinstance(chunks,list) or not (1<=len(chunks)<=16):raise ValueError('Metadados do batch inválidos.')
+                        for item in chunks:
+                            if not isinstance(item,dict) or set(item)!={'chunk_index','content_base64','chunk_sha256'} or int(item.get('chunk_index',-1))<0 or len(str(item.get('content_base64') or ''))>11000 or not re.fullmatch(r'[a-f0-9]{64}',str(item.get('chunk_sha256') or '').lower()):raise ValueError('Chunk do batch inválido.')
+                        payload={'project_slug':slug,'trace_id':trace_id,'artifact_id':artifact_id,'chunks':chunks};endpoint='/v1/artifact/batch'
                     else:
                         allowed={'slug','artifact_id'}
                         if not {'slug','artifact_id'}.issubset(args) or not set(args).issubset(allowed):raise ValueError('Informe slug e artifact_id.')

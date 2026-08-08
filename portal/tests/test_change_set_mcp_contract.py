@@ -21,7 +21,7 @@ READ_TOOLS = {
     'forgejo.proposal.change-set.plan',
 }
 WRITE_TOOLS = {
-    'workspace.artifact.upload.start', 'workspace.artifact.upload.chunk', 'workspace.artifact.upload.complete',
+    'workspace.artifact.upload.start', 'workspace.artifact.upload.chunk', 'workspace.artifact.upload.batch', 'workspace.artifact.import', 'workspace.artifact.upload.complete',
     'approval.request-change-set-proposal', 'approval.cancel',
     'forgejo.proposal.change-set.create',
 }
@@ -39,7 +39,7 @@ class ChangeSetMCPContractTests(unittest.TestCase):
         cls.guide = GUIDE.read_text()
 
     def test_workspace_profiles_are_internal_and_sealed(self):
-        for route in ('/v1/artifact/start','/v1/artifact/chunk','/v1/artifact/complete','/v1/artifact/read','/v1/normalize-plan', '/v1/change-set/validate', '/v1/change-set/resolve'):
+        for route in ('/v1/artifact/start','/v1/artifact/chunk','/v1/artifact/batch','/v1/artifact/complete','/v1/artifact/read','/v1/normalize-plan', '/v1/change-set/validate', '/v1/change-set/resolve'):
             self.assertIn(route, self.broker)
         for marker in (
             'seal_change_set', 'load_sealed', 'source_changed',
@@ -81,7 +81,7 @@ class ChangeSetMCPContractTests(unittest.TestCase):
         ast.parse(self.gateway)
 
     def test_approval_stores_no_file_contents_and_uses_transaction(self):
-        block = self.gateway[self.gateway.index('def approval_create_change_set'):self.gateway.index('def forgejo_change_set_create')]
+        block = self.gateway[self.gateway.index('def approval_create_change_set'):self.gateway.index('def session_file_resolve')]
         self.assertIn("'content_stored':False", block)
         self.assertIn("'secret_values_in_metadata':False", block)
         self.assertNotIn('content_base64', block)
@@ -96,8 +96,10 @@ class ChangeSetMCPContractTests(unittest.TestCase):
             self.assertIn(marker, execute)
 
     def test_artifact_transport_stays_out_of_change_set_json(self):
-        for marker in ('workspace.artifact.upload.start','workspace.artifact.upload.chunk','workspace.artifact.upload.complete',"'artifact_id':{'type':'string'",'def workspace_artifact_read','application/octet-stream','def forgejo_artifact_stage','def stage_change_set_artifacts'):
+        for marker in ('workspace.artifact.upload.start','workspace.artifact.upload.chunk','workspace.artifact.upload.batch','workspace.artifact.import','workspace.artifact.upload.complete',"'artifact_id':{'type':'string'",'def session_file_resolve','CLOUDIF_SESSION_FILE_RESOLVER_URL','def workspace_artifact_import_bytes','def workspace_artifact_read','application/octet-stream','def forgejo_artifact_stage','def stage_change_set_artifacts'):
             self.assertIn(marker,self.gateway)
+        self.assertIn('/v1/artifact/batch',self.broker)
+        self.assertIn('MAX_BATCH_CHUNK_BYTES = 8 * 1024',(ROOT/'components/control-plane/current-apps/workspace-broker-current/cloudif_workspace_artifact.py').read_text())
         for marker in ('/project/proposal/artifact/stage','def _change_set_artifact_stage','def _change_set_artifact_load','def _change_set_put_bytes','_CHANGESET_ARTIFACT_MAX_BYTES = 64 * 1024 * 1024',"if len(raw)>1024*1024",'def _change_set_git_commit_bytes'):
             self.assertIn(marker,self.forja)
         self.assertIn("'content_stored':False",self.gateway)
