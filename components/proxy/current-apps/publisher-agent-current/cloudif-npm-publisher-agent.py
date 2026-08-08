@@ -40,23 +40,16 @@ def cert_covers(name, domains):
  out=p.stdout.lower()
  return all(('dns:'+d.lower()) in out for d in domains)
 
-def cert_uses_rsa(name):
- path=f'/srv/cloudif/proxy/npm/letsencrypt/live/{name}/privkey.pem'
- if not Path(path).exists(): return False
- p=subprocess.run(['openssl','pkey','-in',path,'-text','-noout'],text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
- return p.returncode == 0 and 'Private-Key: (2048 bit' in p.stdout
-
 def ensure_cert(name,domains):
  domains=sorted(set(str(d).strip().lower() for d in domains if d))
  with CERT_LOCK:
-  if cert_exists(name) and cert_covers(name,domains) and cert_uses_rsa(name): return name
-  cmd=['docker','exec','cloudif-nginx-proxy-manager','certbot','certonly','--webroot','-w','/data/letsencrypt-acme-challenge','--cert-name',name,'--key-type','rsa','--rsa-key-size','2048','--preferred-chain','ISRG Root X1']
+  if cert_exists(name) and cert_covers(name,domains): return name
+  cmd=['docker','exec','cloudif-nginx-proxy-manager','certbot','certonly','--webroot','-w','/data/letsencrypt-acme-challenge','--cert-name',name]
   for d in domains: cmd += ['-d',d]
   cmd += ['--non-interactive','--agree-tos','--register-unsafely-without-email','--keep-until-expiring']
   if cert_exists(name): cmd += ['--force-renewal']
   run(cmd,timeout=300)
   if not cert_covers(name,domains): raise RuntimeError('certificate_san_mismatch:'+name)
-  if not cert_uses_rsa(name): raise RuntimeError('certificate_key_type_mismatch:'+name)
   return name
 
 def render(state):
