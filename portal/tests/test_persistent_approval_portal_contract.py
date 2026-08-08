@@ -38,6 +38,28 @@ class PersistentApprovalPortalContractTests(unittest.TestCase):
             self.assertIn("'_prod_csrf_equal'".strip("'"),block)
             self.assertLess(block.index('_prod_csrf_equal'),block.index("operation=='revoke_policy'"))
 
+    def test_approval_post_returns_to_canonical_v2_route_with_post_redirect_get(self):
+        for path in (BASE,LEGACY_BASE):
+            source=path.read_text()
+            start=source.index('# CloudIF human approvals BEGIN')
+            end=source.index('# CloudIF human approvals END',start)
+            block=source[start:end]
+            self.assertIn("target='/cloudiff/portal/?tab='+('agentes' if return_to=='agentes' else 'aprovacoes')",block)
+            self.assertIn('self.send_response(303)',block)
+            self.assertIn("self.send_header('Cache-Control','no-store')",block)
+            self.assertIn("self.send_header('Pragma','no-cache')",block)
+            self.assertNotIn("self.redirect('/cloudiff/portal/?tab='",block)
+
+    def test_redirect_helper_is_idempotent_for_public_portal_paths(self):
+        for path in (BASE,LEGACY_BASE):
+            source=path.read_text()
+            start=source.index('    def redirect(self, path=None):')
+            end=source.index('\n    def do_GET(self):',start)
+            block=source[start:end]
+            self.assertIn('path.startswith(("/cloudiff/portal", "/cloudif/portal"))',block)
+            self.assertLess(block.index('path.startswith(("/cloudiff/portal"'),block.index('path.startswith("/?")'))
+            self.assertIn('bypass the v2 shell',block)
+
     def test_agents_tab_offers_same_persistent_choice(self):
         for path in (GUIDE,LEGACY_GUIDE):
             source=path.read_text()

@@ -1,6 +1,6 @@
 # Inventário de arquivos
 
-Este catálogo descreve **1150 arquivos versionados**. Ele é regenerado pelo script de documentação.
+Este catálogo descreve **1151 arquivos versionados**. Ele é regenerado pelo script de documentação.
 
 | Caminho | Finalidade |
 |---|---|
@@ -890,6 +890,7 @@ Este catálogo descreve **1150 arquivos versionados**. Ele é regenerado pelo sc
 | [`portal/tests/test_platform_backup_progress_modal.py`](../portal/tests/test_platform_backup_progress_modal.py) | Implementa `PlatformBackupProgressModalTests`. |
 | [`portal/tests/test_platform_guide_canonical.py`](../portal/tests/test_platform_guide_canonical.py) | Implementa `CanonicalPlatformGuideTests`. |
 | [`portal/tests/test_platform_guide_github.py`](../portal/tests/test_platform_guide_github.py) | Implementa `PlatformGuideGithubTests`. |
+| [`portal/tests/test_portal_approval_redirect_v2.py`](../portal/tests/test_portal_approval_redirect_v2.py) | Implementa `PortalApprovalRedirectV2Tests`. |
 | [`portal/tests/test_portal_artifact_upload_bridge.py`](../portal/tests/test_portal_artifact_upload_bridge.py) | Implementa `Response`, `Handler`, `PortalArtifactUploadBridgeTests`. |
 | [`portal/tests/test_portal_artifact_upload_routes.py`](../portal/tests/test_portal_artifact_upload_routes.py) | Implementa `PortalArtifactUploadRoutesTests`. |
 | [`portal/tests/test_portal_launcher_base_compatibility.py`](../portal/tests/test_portal_launcher_base_compatibility.py) | Implementa `PortalLauncherBaseCompatibilityTests`. |

@@ -82,6 +82,7 @@ Arquitetura modular, interface, configuração e testes do Portal.
 | [`test_platform_backup_progress_modal.py`](test_platform_backup_progress_modal.py) | `.py` | Implementa `PlatformBackupProgressModalTests`. |
 | [`test_platform_guide_canonical.py`](test_platform_guide_canonical.py) | `.py` | Implementa `CanonicalPlatformGuideTests`. |
 | [`test_platform_guide_github.py`](test_platform_guide_github.py) | `.py` | Implementa `PlatformGuideGithubTests`. |
+| [`test_portal_approval_redirect_v2.py`](test_portal_approval_redirect_v2.py) | `.py` | Implementa `PortalApprovalRedirectV2Tests`. |
 | [`test_portal_artifact_upload_bridge.py`](test_portal_artifact_upload_bridge.py) | `.py` | Implementa `Response`, `Handler`, `PortalArtifactUploadBridgeTests`. |
 | [`test_portal_artifact_upload_routes.py`](test_portal_artifact_upload_routes.py) | `.py` | Implementa `PortalArtifactUploadRoutesTests`. |
 | [`test_portal_launcher_base_compatibility.py`](test_portal_launcher_base_compatibility.py) | `.py` | Implementa `PortalLauncherBaseCompatibilityTests`. |

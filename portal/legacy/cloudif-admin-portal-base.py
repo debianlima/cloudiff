@@ -1369,6 +1369,10 @@ class Portal(BaseHTTPRequestHandler):
     def redirect(self, path=None):
         if not path:
             path = BASE_PATH + "/"
+        elif path.startswith(("/cloudiff/portal", "/cloudif/portal")):
+            # Already canonical. Prefixing BASE_PATH again would create
+            # /cloudiff/portal/cloudiff/portal/... and bypass the v2 shell.
+            pass
         elif path.startswith("/?"):
             path = BASE_PATH + path
         elif path.startswith("?"):
@@ -5681,7 +5685,13 @@ if 'Portal' in globals() and not globals().get('_ap_portal_wrapped'):
                 if code!=200 or not data.get('ok'):return _cloudif_security_reject(self,'A decisão não pôde ser registrada.',409)
                 log_action(user['username'],'approval_'+operation,aid,0,item['project_slug'],'always_allow='+('1' if always_allow else '0'))
             return_to=val('return_to').strip()
-            return self.redirect('/cloudiff/portal/?tab='+('agentes' if return_to=='agentes' else 'aprovacoes'))
+            target='/cloudiff/portal/?tab='+('agentes' if return_to=='agentes' else 'aprovacoes')
+            self.send_response(303)
+            self.send_header('Location',target)
+            self.send_header('Cache-Control','no-store')
+            self.send_header('Pragma','no-cache')
+            self.end_headers()
+            return
         return _ap_prev_post(self)
     Portal.do_GET=_ap_get;Portal.do_POST=_ap_post;_ap_portal_wrapped=True
 # CloudIF human approvals END
