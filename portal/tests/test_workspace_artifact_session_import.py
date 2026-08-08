@@ -36,6 +36,28 @@ class WorkspaceArtifactSessionImportTests(unittest.TestCase):
    with self.assertRaises(ValueError) as ctx:M._session_file_url_allowed('https://files.oaiusercontent.com/signed')
   self.assertEqual(str(ctx.exception),'session_file_download_private_address')
 
+ def test_session_resolver_accepts_actions_alias_shape(self):
+  raw=b'alias-shape';digest=hashlib.sha256(raw).hexdigest()
+  ref={'id':'file_0000000013bc820e9585c8554326a64d','download_link':'https://files.oaiusercontent.com/signed?sig=secret','name':'archive.zip','mime_type':'application/zip'}
+  with patch.object(M,'_session_file_download',return_value=(raw,{})):
+   loaded,meta=M.session_file_resolve(ref,len(raw),digest,'archive.zip')
+  self.assertEqual(loaded,raw);self.assertEqual(meta['file_id'],ref['id']);self.assertEqual(meta['file_name'],'archive.zip')
+
+ def test_url_rejection_logs_only_sanitized_shape(self):
+  import contextlib,io,json
+  secret='signed'+chr(45)+'token'+chr(45)+('x'*24)
+  out=io.StringIO()
+  with contextlib.redirect_stdout(out):
+   with self.assertRaises(ValueError) as ctx:M._session_file_url_allowed('file-service://file_123?sig='+secret)
+  self.assertEqual(str(ctx.exception),'session_file_download_url_invalid')
+  log=out.getvalue();self.assertNotIn(secret,log);self.assertNotIn('file_123',log)
+  event=json.loads(log.strip());self.assertEqual(event['event'],'session_file_url_rejected');self.assertEqual(event['url_shape']['scheme'],'file-service');self.assertEqual(event['url_shape']['host'],'');self.assertTrue(event['url_shape']['has_query'])
+
+ def test_mcp_and_actions_file_ref_aliases_normalize_to_same_shape(self):
+  mcp={'file_id':'file_123456','download_url':'https://files.oaiusercontent.com/x','file_name':'a.zip','mime_type':'application/zip'}
+  action={'id':'file_123456','download_link':'https://files.oaiusercontent.com/x','name':'a.zip','mime_type':'application/zip'}
+  self.assertEqual(M._normalize_session_file_ref(mcp),M._normalize_session_file_ref(action))
+
  def test_file_param_validates_id_filename_size_and_digest(self):
   raw=b'hello-session-file';digest=hashlib.sha256(raw).hexdigest();ref={'download_url':'https://files.oaiusercontent.com/signed','file_id':'file_0000000012345678','mime_type':'application/zip','file_name':'archive.zip'}
   with patch.object(M,'_session_file_download',return_value=(raw,{})):

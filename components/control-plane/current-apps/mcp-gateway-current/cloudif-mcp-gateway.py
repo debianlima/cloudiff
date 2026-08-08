@@ -1106,25 +1106,71 @@ class _SessionFileNoRedirect(urllib.request.HTTPRedirectHandler):
         return None
 
 
+def _session_file_url_shape(url: str) -> dict:
+    raw=str(url or '').strip()
+    try:
+        parsed=urlparse(raw)
+        scheme=str(parsed.scheme or '').lower()
+        host=str(parsed.hostname or '').rstrip('.').lower() if scheme=='https' else ''
+        try: port=parsed.port
+        except ValueError: port='invalid'
+        return {
+            'scheme':scheme,
+            'host':host,
+            'port':port,
+            'has_userinfo':bool(parsed.username or parsed.password),
+            'has_query':bool(parsed.query),
+            'length':len(raw),
+        }
+    except Exception:
+        return {'scheme':'','host':'','port':'invalid','has_userinfo':False,'has_query':False,'length':len(raw)}
+
+
+def _session_file_reject(code: str, url: str):
+    event={'event':'session_file_url_rejected','code':str(code),'url_shape':_session_file_url_shape(url)}
+    print(json.dumps(event,separators=(',',':')),flush=True)
+    raise ValueError(str(code))
+
+
+def _normalize_session_file_ref(file_ref):
+    if not isinstance(file_ref,dict):
+        raise ValueError('session_file_param_invalid')
+    keys=set(file_ref)
+    action_keys={'id','name','mime_type','download_link'}
+    mcp_keys={'file_id','file_name','mime_type','download_url'}
+    if keys <= action_keys and ('id' in keys or 'download_link' in keys):
+        return _normalize_action_file_ref(file_ref)
+    if keys <= mcp_keys:
+        return {
+            'file_id':str(file_ref.get('file_id') or '').strip(),
+            'download_url':str(file_ref.get('download_url') or '').strip(),
+            'file_name':str(file_ref.get('file_name') or '').strip(),
+            'mime_type':str(file_ref.get('mime_type') or '').strip(),
+        }
+    raise ValueError('session_file_param_invalid')
+
+
 def _session_file_url_allowed(url: str) -> str:
-    parsed=urlparse(str(url or '').strip())
+    raw=str(url or '').strip();parsed=urlparse(raw)
     host=str(parsed.hostname or '').rstrip('.').lower()
-    if parsed.scheme!='https' or not host or parsed.username or parsed.password or (parsed.port not in {None,443}):
-        raise ValueError('session_file_download_url_invalid')
+    try: port=parsed.port
+    except ValueError: _session_file_reject('session_file_download_url_invalid',raw)
+    if parsed.scheme!='https' or not host or parsed.username or parsed.password or (port not in {None,443}):
+        _session_file_reject('session_file_download_url_invalid',raw)
     if not SESSION_FILE_DOWNLOAD_SUFFIXES or not any(host==suffix or host.endswith('.'+suffix) for suffix in SESSION_FILE_DOWNLOAD_SUFFIXES):
-        raise ValueError('session_file_download_host_not_allowed')
+        _session_file_reject('session_file_download_host_not_allowed',raw)
     try:
         answers=socket.getaddrinfo(host,443,type=socket.SOCK_STREAM)
-    except OSError as exc:
-        raise ValueError('session_file_download_dns_failed') from exc
+    except OSError:
+        _session_file_reject('session_file_download_dns_failed',raw)
     if not answers:
-        raise ValueError('session_file_download_dns_failed')
+        _session_file_reject('session_file_download_dns_failed',raw)
     for answer in answers:
         address=str(answer[4][0]).split('%',1)[0]
         try: ip=ipaddress.ip_address(address)
-        except ValueError as exc: raise ValueError('session_file_download_dns_invalid') from exc
+        except ValueError: _session_file_reject('session_file_download_dns_invalid',raw)
         if not ip.is_global:
-            raise ValueError('session_file_download_private_address')
+            _session_file_reject('session_file_download_private_address',raw)
     return parsed.geturl()
 
 
@@ -1155,9 +1201,8 @@ def _session_file_download(download_url: str, expected_size: int):
 
 
 def session_file_resolve(file_ref,expected_size,expected_sha256,expected_filename=''):
-    if not isinstance(file_ref,dict) or set(file_ref)-{'download_url','file_id','mime_type','file_name'}:
-        raise ValueError('session_file_param_invalid')
-    file_id=str(file_ref.get('file_id') or '').strip();download_url=str(file_ref.get('download_url') or '').strip();file_name=str(file_ref.get('file_name') or '').strip()
+    normalized=_normalize_session_file_ref(file_ref)
+    file_id=str(normalized.get('file_id') or '').strip();download_url=str(normalized.get('download_url') or '').strip();file_name=str(normalized.get('file_name') or '').strip()
     if not re.fullmatch(r'[A-Za-z0-9_-]{6,192}',file_id) or not download_url:
         raise ValueError('session_file_param_invalid')
     if file_name and expected_filename and file_name!=expected_filename:
@@ -1166,7 +1211,7 @@ def session_file_resolve(file_ref,expected_size,expected_sha256,expected_filenam
     if len(raw)!=int(expected_size) or len(raw)>64*1024*1024:raise ValueError('session_file_size_mismatch')
     digest=hashlib.sha256(raw).hexdigest()
     if not hmac.compare_digest(digest,str(expected_sha256).lower()):raise ValueError('session_file_sha256_mismatch')
-    return raw,{'file_id':file_id,'file_name':file_name,'mime_type':str(file_ref.get('mime_type') or ''),'size':len(raw),'sha256':digest}
+    return raw,{'file_id':file_id,'file_name':file_name,'mime_type':str(normalized.get('mime_type') or ''),'size':len(raw),'sha256':digest}
 
 def workspace_artifact_import_bytes(slug,filename,raw,expected_sha256,ttl_seconds,trace_id):
     start_payload={'project_slug':slug,'trace_id':trace_id,'filename':filename,'expected_size':len(raw),'expected_sha256':expected_sha256,'ttl_seconds':ttl_seconds}
