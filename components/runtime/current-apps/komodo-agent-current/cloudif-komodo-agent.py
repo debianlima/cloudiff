@@ -3872,6 +3872,238 @@ def cloudif_project_terminal_ensure(handler):
     url=(f"https://komodoiff.duckdns.org/stacks/{audit['resolved_stack_id']}/service/{audit['service']}/terminal/{terminal}" if use_stack else f"https://komodoiff.duckdns.org/servers/{audit['server_id']}/container/{audit['container_name']}/terminal/{terminal}")
     return send(handler,200,{"ok":True,"created":created,"terminal":terminal,"target":target,"server_id":audit["server_id"],"container_name":audit["container_name"],"url":url,"actor_username":actor,"project_owner":owner,"active_publication":active,"stack_metadata":metadata,"target_mode":"stack" if use_stack else "container","audit":audit})
 
+def _cloudif_stage_env_root(public_number,stage,number):
+    root=Path(f'/srv/cloudif/stage-runtime/p{int(public_number)}/{stage}{int(number)}')
+    root.mkdir(parents=True,exist_ok=True);root.chmod(0o700)
+    return root
+
+
+def _cloudif_stage_write_environment(public_number,stage,number,values):
+    root=_cloudif_stage_env_root(public_number,stage,number);path=root/'runtime.env';lines=[]
+    for name,value in sorted((values or {}).items()):
+        if not re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*',str(name)):raise ValueError('invalid_environment_name')
+        lines.append(str(name)+'='+json.dumps(str(value),ensure_ascii=False))
+    tmp=root/'.runtime.env.tmp';tmp.write_text('\n'.join(lines)+('\n' if lines else ''),encoding='utf-8');tmp.chmod(0o600);os.replace(tmp,path);path.chmod(0o600)
+    return path
+
+
+def _cloudif_image_config(image):
+    proc=subprocess.run(['docker','image','inspect',str(image)],text=True,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,timeout=30)
+    if proc.returncode:return {'ok':False,'error':'image_not_found'}
+    try:row=(json.loads(proc.stdout or '[]') or [{}])[0];cfg=row.get('Config') or {}
+    except Exception:return {'ok':False,'error':'image_inspect_invalid'}
+    entry=cfg.get('Entrypoint') or [];cmd=cfg.get('Cmd') or []
+    if isinstance(entry,str):entry=[entry]
+    if isinstance(cmd,str):cmd=[cmd]
+    startup=[str(x) for x in [*entry,*cmd] if str(x)];iid=str(row.get('Id') or '')
+    return {'ok':bool(startup) and bool(re.fullmatch(r'sha256:[a-f0-9]{64}',iid)),'image_id':iid,'entrypoint':[str(x) for x in entry],'cmd':[str(x) for x in cmd],'startup':startup}
+
+
+def _cloudif_preview_launcher(root):
+    launcher=root/'preview-launcher.js'
+    code="""'use strict';
+const fs=require('fs');const {spawn}=require('child_process');
+for(const p of ['/run/apache2/apache2.pid','/var/run/apache2/apache2.pid','/run/supervisord.pid','/var/run/supervisord.pid']){try{fs.unlinkSync(p)}catch(_){}}
+const env={...process.env};const file='/run/cloudif/runtime.env';
+try{if(fs.existsSync(file)){for(const raw of fs.readFileSync(file,'utf8').split(/\\r?\\n/)){if(!raw)continue;const pos=raw.indexOf('=');if(pos<=0)throw new Error();const name=raw.slice(0,pos);if(!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name))throw new Error();env[name]=String(JSON.parse(raw.slice(pos+1)));}}}catch(_){console.error('CloudIFF: falha ao carregar configuração do Preview.');process.exit(78)}
+const argv=process.argv.slice(2);if(!argv.length){console.error('CloudIFF: comando base ausente.');process.exit(127)}
+const child=spawn(argv[0],argv.slice(1),{stdio:'inherit',env});for(const sig of ['SIGTERM','SIGINT','SIGHUP','SIGQUIT'])process.on(sig,()=>{try{child.kill(sig)}catch(_){}});child.on('error',()=>process.exit(127));child.on('exit',code=>process.exit(Number.isInteger(code)?code:1));
+"""
+    launcher.write_text(code,encoding='utf-8');launcher.chmod(0o644)
+    apache=root/'preview-security.conf';apache.write_text('RedirectMatch 404 (?i)(^|/)\\.(git|env)(/|$)\n<FilesMatch "(?i)^\\.(git|env)$">\n  Require all denied\n</FilesMatch>\n',encoding='utf-8');apache.chmod(0o644)
+    return launcher,apache
+
+
+def _cloudif_preview_git_sync(workspace,allow_fast_forward=True,remote_timeout=8):
+    workspace=Path(workspace)
+    if not (workspace/'.git').exists():return {'ok':False,'remoteAvailable':False,'status':'missing','message':'Workspace Git local indisponível.'}
+    fetch=subprocess.run(['git','-C',str(workspace),'fetch','--quiet','origin','main'],text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=int(remote_timeout))
+    remote=fetch.returncode==0
+    head=subprocess.run(['git','-C',str(workspace),'rev-parse','HEAD'],text=True,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL).stdout.strip()
+    origin=subprocess.run(['git','-C',str(workspace),'rev-parse','origin/main'],text=True,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL).stdout.strip() if remote else ''
+    dirty=bool(subprocess.run(['git','-C',str(workspace),'status','--porcelain'],text=True,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL).stdout.strip());ahead=behind=0
+    if remote and len(head)==40 and len(origin)==40:
+        counts=subprocess.run(['git','-C',str(workspace),'rev-list','--left-right','--count','HEAD...origin/main'],text=True,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL).stdout.strip().split()
+        if len(counts)==2:
+            try:ahead,behind=map(int,counts)
+            except Exception:ahead=behind=0
+        if allow_fast_forward and not dirty and ahead==0 and behind>0:
+            merge=subprocess.run(['git','-C',str(workspace),'merge','--ff-only','origin/main'],text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=max(8,int(remote_timeout)))
+            if merge.returncode==0:head=subprocess.run(['git','-C',str(workspace),'rev-parse','HEAD'],text=True,stdout=subprocess.PIPE).stdout.strip();behind=0
+    if not remote:return {'ok':True,'remoteAvailable':False,'status':'degraded','message':'Estamos com dificuldade de conexão com o repositório Git. O Preview continua usando a cópia local. Tente novamente em alguns instantes ou procure o administrador.','head':head,'dirty':dirty,'ahead':ahead,'behind':behind}
+    if dirty and behind>0:return {'ok':True,'remoteAvailable':True,'status':'conflict','message':'Há alterações locais e remotas pendentes. Sincronize o código antes de enviar para homologação.','head':head,'origin':origin,'dirty':dirty,'ahead':ahead,'behind':behind}
+    return {'ok':True,'remoteAvailable':True,'status':'local_changes' if dirty else 'synced','message':'Alterações locais ainda não sincronizadas.' if dirty else 'Repositório sincronizado.','head':head,'origin':origin,'dirty':dirty,'ahead':ahead,'behind':behind}
+
+
+def _cloudif_preview_row(project):
+    rows=db_query('select * from project_preview_state where project=?',(safe_slug(project),));return rows[0] if rows else None
+
+
+def _cloudif_wait_health(container,timeout=60):
+    deadline=time.time()+int(timeout);last=''
+    while time.time()<deadline:
+        proc=subprocess.run(['docker','inspect',container,'--format','{{.State.Status}}|{{if .State.Health}}{{.State.Health.Status}}{{end}}'],text=True,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL)
+        last=proc.stdout.strip() if proc.returncode==0 else ''
+        if last=='running|healthy':return {'ok':True,'state':last}
+        if last.startswith('exited|') or last.startswith('dead|'):break
+        time.sleep(2)
+    return {'ok':False,'state':last}
+
+
+def _cloudif_preview_create(project,public_number,actor,environment_values,environment_revision,environment_digest,source='current'):
+    _cloudif_v143_ensure_schema();project=safe_slug(project);public_number=int(public_number);base_dir=Path('/etc/komodo/stacks')/('cloudif-'+project);checkout=_cloudif_v143_ensure_checkout(project,base_dir)
+    if not checkout.get('ok'):return {'ok':False,'error':'preview_workspace_unavailable','message':'Não foi possível montar o repositório local do projeto. Tente novamente em alguns instantes ou procure o administrador.'}
+    old=_cloudif_preview_row(project);generation=int((old or {}).get('generation') or 0)+1;source_image=''
+    if source=='production':
+        releases=db_query("select * from stage_production_releases where project=? and is_active=1 and status='ready' order by publication_number desc limit 1",(project,))
+        if releases:source_image=str(releases[0].get('image') or '')
+        if not source_image:
+            legacy_releases=db_query("select * from publication_runtimes where project=? and is_active=1 and status='ready' order by deploy_number desc limit 1",(project,))
+            if legacy_releases:
+                legacy_container=str(legacy_releases[0].get('container') or '')
+                proc=subprocess.run(['docker','inspect',legacy_container,'--format','{{.Config.Image}}'],text=True,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,timeout=15)
+                if proc.returncode==0:source_image=proc.stdout.strip()
+    if not source_image and source!='template':
+        legacy=f'cloudif-p{public_number}-base-editor';inspect=subprocess.run(['docker','inspect',legacy],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=15)
+        if inspect.returncode==0:
+            source_image=f'cloudif/preview-p{public_number}-w{generation}:runtime';commit=subprocess.run(['docker','commit','--pause=true',legacy,source_image],text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=300)
+            if commit.returncode!=0:return {'ok':False,'error':'preview_runtime_snapshot_failed','message':'Não foi possível preparar o runtime atual para o Preview.'}
+    if not source_image:
+        runtime=_cloudif_v143_runtime_settings(project);base=_cloudif_v143_ensure_base_image(runtime['php'],runtime['node'])
+        if not base.get('ok'):return {'ok':False,'error':'preview_runtime_base_failed','message':'Não foi possível preparar o runtime padrão do Preview.'}
+        source_image=str(base.get('image') or '')
+    cfg=_cloudif_image_config(source_image)
+    if not cfg.get('ok'):return {'ok':False,'error':'preview_runtime_invalid','message':'O runtime selecionado para o Preview não possui inicialização válida.'}
+    root=_cloudif_stage_env_root(public_number,'w',generation);env_path=_cloudif_stage_write_environment(public_number,'w',generation,environment_values);launcher,apache=_cloudif_preview_launcher(root);container=f'cloudif-p{public_number}-w{generation}-preview-web'
+    if old and old.get('container'):subprocess.run(['docker','rm','-f',str(old['container'])],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+    subprocess.run(['docker','rm','-f',container],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+    cmd=['docker','run','-d','--name',container,'--restart','unless-stopped','--network','cloudif-publications','--label','cloudif.project='+project,'--label','cloudif.stage=preview','--label','cloudif.stage-number='+str(generation),'--health-cmd','curl -fsS http://127.0.0.1/.cloudif-health >/dev/null','--health-interval','5s','--health-timeout','4s','--health-retries','18','--health-start-period','15s','--mount',f'type=bind,src={base_dir},dst=/var/www/html','--mount',f'type=bind,src={env_path},dst=/run/cloudif/runtime.env,readonly','--mount',f'type=bind,src={launcher},dst=/opt/cloudif/preview-launcher.js,readonly','--mount',f'type=bind,src={apache},dst=/etc/apache2/conf-enabled/cloudif-preview-security.conf,readonly','--entrypoint','node',source_image,'/opt/cloudif/preview-launcher.js',*cfg['startup']]
+    proc=subprocess.run(cmd,text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=120)
+    if proc.returncode!=0:return {'ok':False,'error':'preview_container_create_failed','message':'Não foi possível iniciar o container de Preview.','detail':(proc.stderr or proc.stdout)[-500:]}
+    health=_cloudif_wait_health(container,60);git=_cloudif_preview_git_sync(base_dir,True);status='online' if health.get('ok') else 'unhealthy'
+    db_exec('''insert into project_preview_state(project,public_number,generation,container,source_image,source_image_id,startup_json,workspace_path,status,git_sync_status,git_sync_message,git_head,environment_revision,environment_digest,updated_at,updated_by) values(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) on conflict(project) do update set public_number=excluded.public_number,generation=excluded.generation,container=excluded.container,source_image=excluded.source_image,source_image_id=excluded.source_image_id,startup_json=excluded.startup_json,workspace_path=excluded.workspace_path,status=excluded.status,git_sync_status=excluded.git_sync_status,git_sync_message=excluded.git_sync_message,git_head=excluded.git_head,environment_revision=excluded.environment_revision,environment_digest=excluded.environment_digest,updated_at=excluded.updated_at,updated_by=excluded.updated_by''',(project,public_number,generation,container,source_image,str(cfg['image_id']),json.dumps({'entrypoint':cfg['entrypoint'],'cmd':cfg['cmd']},separators=(',',':')),str(base_dir),status,str(git.get('status') or ''),str(git.get('message') or ''),str(git.get('head') or ''),int(environment_revision or 0),str(environment_digest or ''),now(),str(actor or 'portal')[:128]))
+    return {'ok':bool(health.get('ok')),'project':project,'public_number':public_number,'generation':generation,'stage':'preview','stageCode':'W'+str(generation),'container':container,'sourceImage':source_image,'sourceImageId':str(cfg['image_id']),'workspace':str(base_dir),'healthy':bool(health.get('ok')),'git':git,'environmentRevision':int(environment_revision or 0),'environmentDigest':str(environment_digest or ''),'secretValuesIncluded':False}
+
+
+def cloudif_preview_request(handler,operation):
+    if not _cloudif_pub_auth(handler):return send(handler,403,{'ok':False,'error':'forbidden'})
+    payload=_cloudif_pub_json(handler);project=safe_slug(payload.get('project') or '')
+    try:num=int(payload.get('public_number'));env_rev=int(payload.get('environment_revision') or 0)
+    except Exception:return send(handler,400,{'ok':False,'error':'invalid_preview_request'})
+    values=payload.get('environment_variables') if isinstance(payload.get('environment_variables'),dict) else {};digest=str(payload.get('environment_digest') or '')
+    if not project or num<1:return send(handler,400,{'ok':False,'error':'invalid_preview_request'})
+    _cloudif_v143_ensure_schema()
+    if operation=='status':
+        row=_cloudif_preview_row(project)
+        if not row:return send(handler,200,{'ok':True,'project':project,'configured':False,'secretValuesIncluded':False})
+        health=_cloudif_wait_health(str(row.get('container') or ''),1);generation=int(row.get('generation') or 1);git_status=str(row.get('git_sync_status') or 'unknown');git={'ok':git_status!='missing','remoteAvailable':git_status not in {'degraded','missing'},'status':git_status,'message':str(row.get('git_sync_message') or ''),'head':str(row.get('git_head') or '')}
+        return send(handler,200,{'ok':True,'project':project,'configured':True,'public_number':int(row.get('public_number') or num),'generation':generation,'stageCode':'W'+str(generation),'container':str(row.get('container') or ''),'healthy':bool(health.get('ok')),'git':git,'environmentRevision':int(row.get('environment_revision') or 0),'environmentDigest':str(row.get('environment_digest') or ''),'secretValuesIncluded':False})
+    if operation=='ensure':
+        row=_cloudif_preview_row(project)
+        if row and subprocess.run(['docker','inspect',str(row.get('container') or '')],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL).returncode==0:
+            generation=int(row.get('generation') or 1);_cloudif_stage_write_environment(num,'w',generation,values)
+            if int(row.get('environment_revision') or 0)!=env_rev or str(row.get('environment_digest') or '')!=digest:subprocess.run(['docker','restart',str(row.get('container'))],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=45)
+            git=_cloudif_preview_git_sync(row.get('workspace_path') or '',True);health=_cloudif_wait_health(str(row.get('container')),45);db_exec('update project_preview_state set status=?,git_sync_status=?,git_sync_message=?,git_head=?,environment_revision=?,environment_digest=?,updated_at=?,updated_by=? where project=?',('online' if health.get('ok') else 'unhealthy',str(git.get('status') or ''),str(git.get('message') or ''),str(git.get('head') or ''),env_rev,digest,now(),str(payload.get('actor') or 'portal')[:128],project))
+            return send(handler,200 if health.get('ok') else 422,{'ok':bool(health.get('ok')),'project':project,'public_number':num,'generation':generation,'stageCode':'W'+str(generation),'container':str(row.get('container')),'healthy':bool(health.get('ok')),'git':git,'environmentRevision':env_rev,'secretValuesIncluded':False})
+        result=_cloudif_preview_create(project,num,payload.get('actor') or 'portal',values,env_rev,digest,'current');return send(handler,200 if result.get('ok') else 422,result)
+    if operation=='recreate':
+        source=str(payload.get('source') or '').strip().lower()
+        if source not in {'production','template'}:return send(handler,400,{'ok':False,'error':'invalid_preview_source'})
+        result=_cloudif_preview_create(project,num,payload.get('actor') or 'portal',values,env_rev,digest,source);return send(handler,200 if result.get('ok') else 422,result)
+    return send(handler,400,{'ok':False,'error':'invalid_preview_operation'})
+
+
+def cloudif_preview_snapshot(handler):
+    if not _cloudif_pub_auth(handler):return send(handler,403,{'ok':False,'error':'forbidden'})
+    payload=_cloudif_pub_json(handler);project=safe_slug(payload.get('project') or '')
+    try:num=int(payload.get('public_number'));candidate=int(payload.get('candidate_number'))
+    except Exception:return send(handler,400,{'ok':False,'error':'invalid_candidate_request'})
+    row=_cloudif_preview_row(project)
+    if not row:return send(handler,422,{'ok':False,'error':'preview_not_ready','message':'O Preview ainda não foi preparado.'})
+    container=str(row.get('container') or '')
+    if not _cloudif_wait_health(container,2).get('ok'):return send(handler,422,{'ok':False,'error':'preview_not_healthy','message':'O Preview não está saudável para homologação.'})
+    workspace=Path(str(row.get('workspace_path') or ''));git=_cloudif_preview_git_sync(workspace,True,45)
+    if not git.get('remoteAvailable'):return send(handler,503,{'ok':False,'error':'git_remote_unavailable','message':'Estamos com dificuldade de conexão com o repositório Git. O Preview continua disponível, mas o envio para homologação está temporariamente bloqueado. Tente novamente em alguns instantes ou procure o administrador.','git':git})
+    if git.get('status')=='conflict':return send(handler,409,{'ok':False,'error':'git_sync_conflict','message':git.get('message'),'git':git})
+    parent=subprocess.run(['git','-C',str(workspace),'rev-parse','HEAD'],text=True,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL).stdout.strip();index=Path(f'/tmp/cloudif-stage-index-{os.getpid()}-{time.time_ns()}');env={**os.environ,'GIT_INDEX_FILE':str(index),'GIT_AUTHOR_NAME':'CloudIFF Candidate','GIT_AUTHOR_EMAIL':'cloudiff@local','GIT_COMMITTER_NAME':'CloudIFF Candidate','GIT_COMMITTER_EMAIL':'cloudiff@local'}
+    try:
+        if subprocess.run(['git','-C',str(workspace),'read-tree','HEAD'],env=env,stdout=subprocess.DEVNULL,stderr=subprocess.PIPE).returncode:raise RuntimeError('candidate_index_init_failed')
+        if subprocess.run(['git','-C',str(workspace),'add','-A','--','.'],env=env,stdout=subprocess.DEVNULL,stderr=subprocess.PIPE).returncode:raise RuntimeError('candidate_index_add_failed')
+        tree=subprocess.run(['git','-C',str(workspace),'write-tree'],env=env,text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE).stdout.strip();commit=subprocess.run(['git','-C',str(workspace),'commit-tree',tree,'-p',parent],env=env,input=f'CloudIFF homologation H{candidate}\n',text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE).stdout.strip()
+    finally:index.unlink(missing_ok=True)
+    if not re.fullmatch(r'[a-f0-9]{40}',commit):return send(handler,422,{'ok':False,'error':'candidate_git_snapshot_failed','message':'Não foi possível congelar o código atual para homologação.'})
+    numstat=subprocess.run(['git','-C',str(workspace),'diff','--numstat',parent,commit],text=True,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL).stdout.splitlines();files=[];added=removed=0
+    for line in numstat:
+        parts=line.split('\t',2)
+        if len(parts)!=3:continue
+        a=int(parts[0]) if parts[0].isdigit() else 0;r=int(parts[1]) if parts[1].isdigit() else 0;added+=a;removed+=r;files.append({'path':parts[2][:300],'added':a,'removed':r})
+    runtime_changes=[]
+    diff_proc=subprocess.run(['docker','diff',container],text=True,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,timeout=30)
+    if diff_proc.returncode==0:
+        for raw in diff_proc.stdout.splitlines():
+            raw=raw.strip();parts=raw.split(' ',1)
+            if len(parts)!=2:continue
+            kind,path=parts[0],parts[1]
+            if path.startswith('/var/www/html') or path.startswith('/run/') or path.startswith('/var/run/'):continue
+            if path.startswith('/tmp/') or path.startswith('/var/log/'):continue
+            runtime_changes.append({'kind':kind,'path':path[:300]})
+    try:startup=json.loads(str(row.get('startup_json') or '{}'))
+    except Exception:startup={}
+    generation=int(row.get('generation') or 1);tag=f'cloudif/project-{num}:preview-w{generation}-h{candidate}-runtime';change=[]
+    if isinstance(startup.get('entrypoint'),list):change+=['--change','ENTRYPOINT '+json.dumps(startup['entrypoint'],separators=(',',':'))]
+    if isinstance(startup.get('cmd'),list):change+=['--change','CMD '+json.dumps(startup['cmd'],separators=(',',':'))]
+    proc=subprocess.run(['docker','commit','--pause=true',*change,container,tag],text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=300)
+    if proc.returncode!=0:return send(handler,422,{'ok':False,'error':'candidate_runtime_snapshot_failed','message':'Não foi possível congelar o runtime atual do Preview.'})
+    cfg=_cloudif_image_config(tag)
+    if not cfg.get('ok'):return send(handler,422,{'ok':False,'error':'candidate_runtime_snapshot_invalid'})
+    return send(handler,200,{'ok':True,'project':project,'public_number':num,'candidate_number':candidate,'stageCode':'H'+str(candidate),'previewGeneration':generation,'commit':commit,'parentCommit':parent,'baseImage':tag,'baseImageId':cfg['image_id'],'baseRevision':generation,'diff':{'files':files[:300],'fileCount':len(files),'added':added,'removed':removed},'runtimeDiff':{'changes':runtime_changes[:200],'changeCount':len(runtime_changes)},'git':git,'secretValuesIncluded':False})
+
+
+def cloudif_publication_release(handler):
+    if not _cloudif_pub_auth(handler):return send(handler,403,{'ok':False,'error':'forbidden'})
+    payload=_cloudif_pub_json(handler);project=safe_slug(payload.get('project') or '')
+    try:num=int(payload.get('public_number'));dep=int(payload.get('deploy_number'));candidate=int(payload.get('candidate_number'));publication=int(payload.get('publication_number'));env_rev=int(payload.get('environment_revision') or 0)
+    except Exception:return send(handler,400,{'ok':False,'error':'invalid_release_request'})
+    if not project or min(num,dep,candidate,publication)<1:return send(handler,400,{'ok':False,'error':'invalid_release_request'})
+    source=f'cloudif-p{num}-d{dep}-web';chk=subprocess.run(['docker','inspect',source,'--format','{{.State.Status}}|{{if .State.Health}}{{.State.Health.Status}}{{end}}|{{.Config.Image}}|{{.Image}}'],text=True,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL);parts=chk.stdout.strip().split('|',3) if chk.returncode==0 else []
+    if len(parts)!=4 or parts[0]!='running' or parts[1]!='healthy':return send(handler,422,{'ok':False,'error':'homologation_candidate_not_healthy','message':'O candidato homologado não está saudável.'})
+    image,image_id=parts[2],parts[3];expected=str(payload.get('artifact_image_id') or '')
+    if expected and not hmac.compare_digest(expected,image_id):return send(handler,409,{'ok':False,'error':'homologated_artifact_changed','message':'O artefato homologado não corresponde mais ao digest aprovado.'})
+    env_path=_cloudif_stage_write_environment(num,'p',publication,payload.get('environment_variables') if isinstance(payload.get('environment_variables'),dict) else {});container=f'cloudif-p{num}-p{publication}-publication-web';subprocess.run(['docker','rm','-f',container],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+    cmd=['docker','run','-d','--name',container,'--restart','unless-stopped','--network','cloudif-publications','--label','cloudif.project='+project,'--label','cloudif.stage=publication','--label','cloudif.stage-number='+str(publication),'--label','cloudif.candidate-number='+str(candidate),'--health-cmd','curl -fsS http://127.0.0.1/.cloudif-health >/dev/null','--health-interval','5s','--health-timeout','4s','--health-retries','18','--health-start-period','15s','--mount',f'type=bind,src={env_path},dst=/run/cloudif/runtime.env,readonly',image];run=subprocess.run(cmd,text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=120)
+    if run.returncode!=0:return send(handler,422,{'ok':False,'error':'production_container_create_failed','message':'Não foi possível iniciar a publicação em Produção.','detail':(run.stderr or run.stdout)[-500:]})
+    if not _cloudif_wait_health(container,75).get('ok'):return send(handler,422,{'ok':False,'error':'production_container_not_healthy','message':'A publicação foi criada, mas o container de Produção não ficou saudável.'})
+    network='cloudif-publications';active=f'cloudif-p{num}-active-web';names=subprocess.check_output(['docker','ps','-a','--format','{{.Names}}'],text=True).splitlines();production_containers=[n for n in names if re.match(rf'^cloudif-p{num}-p\d+-publication-web$',n)]
+    def aliases(name):
+        try:return json.loads(subprocess.check_output(['docker','inspect',name,'--format','{{json (index .NetworkSettings.Networks "cloudif-publications").Aliases}}'],text=True).strip() or '[]')
+        except Exception:return []
+    previous=next((n for n in production_containers if active in aliases(n)),'')
+    try:
+        for name in production_containers:
+            subprocess.run(['docker','network','disconnect',network,name],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL);c=['docker','network','connect','--alias',name]
+            if name==container:c+=['--alias',active]
+            c+=[network,name];subprocess.check_call(c)
+    except Exception as exc:return send(handler,422,{'ok':False,'error':'production_activation_failed','message':'A publicação ficou pronta, mas não foi possível ativar o endereço de Produção.','detail':str(exc)[:300]})
+    _cloudif_v143_ensure_schema();db_exec('update stage_production_releases set is_active=0,updated_at=? where project=?',(now(),project));db_exec('''insert into stage_production_releases(project,public_number,publication_number,candidate_number,deploy_number,image,image_id,container,status,is_active,environment_revision,environment_digest,created_at,created_by,updated_at) values(?,?,?,?,?,?,?,?,?,1,?,?,?,?,?) on conflict(project,publication_number) do update set candidate_number=excluded.candidate_number,deploy_number=excluded.deploy_number,image=excluded.image,image_id=excluded.image_id,container=excluded.container,status=excluded.status,is_active=1,environment_revision=excluded.environment_revision,environment_digest=excluded.environment_digest,updated_at=excluded.updated_at''',(project,num,publication,candidate,dep,image,image_id,container,'ready',env_rev,str(payload.get('environment_digest') or ''),now(),str(payload.get('actor') or 'portal')[:128],now()))
+    return send(handler,200,{'ok':True,'project':project,'public_number':num,'candidate_number':candidate,'publication_number':publication,'stageCode':'P'+str(publication),'deploy_number':dep,'container':container,'image':image,'artifactImageId':image_id,'healthy':True,'previous':previous,'activeAlias':active,'environmentRevision':env_rev,'environmentDigest':str(payload.get('environment_digest') or ''),'secretValuesIncluded':False})
+
+
+def cloudif_publication_release_activate(handler):
+    if not _cloudif_pub_auth(handler):return send(handler,403,{'ok':False,'error':'forbidden'})
+    payload=_cloudif_pub_json(handler);project=safe_slug(payload.get('project') or '')
+    try:num=int(payload.get('public_number'));publication=int(payload.get('publication_number'))
+    except Exception:return send(handler,400,{'ok':False,'error':'invalid_release_request'})
+    rows=db_query("select * from stage_production_releases where project=? and publication_number=? and status='ready'",(project,publication))
+    if not rows:return send(handler,404,{'ok':False,'error':'production_release_not_found'})
+    target=str(rows[0].get('container') or '')
+    if not _cloudif_wait_health(target,2).get('ok'):return send(handler,422,{'ok':False,'error':'production_release_not_healthy'})
+    network='cloudif-publications';active=f'cloudif-p{num}-active-web';names=subprocess.check_output(['docker','ps','-a','--format','{{.Names}}'],text=True).splitlines();candidates=[n for n in names if re.match(rf'^cloudif-p{num}-p\d+-publication-web$',n)]
+    for name in candidates:
+        subprocess.run(['docker','network','disconnect',network,name],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL);cmd=['docker','network','connect','--alias',name]
+        if name==target:cmd+=['--alias',active]
+        cmd+=[network,name];subprocess.check_call(cmd)
+    db_exec('update stage_production_releases set is_active=case when publication_number=? then 1 else 0 end,updated_at=? where project=?',(publication,now(),project));return send(handler,200,{'ok':True,'project':project,'publication_number':publication,'stageCode':'P'+str(publication),'container':target,'activeAlias':active,'secretValuesIncluded':False})
+
 def cloudif_publication_deploy(handler):
     import shutil
     if not _cloudif_pub_auth(handler):
@@ -4442,6 +4674,14 @@ class H(BaseHTTPRequestHandler):
             return _cloudif_project_base_request(self,'ensure')
         if _cloudif_pub_path == "/komodo/project/base/snapshot":
             return _cloudif_project_base_request(self,'snapshot')
+        if _cloudif_pub_path == "/komodo/project/preview/status":
+            return cloudif_preview_request(self,'status')
+        if _cloudif_pub_path == "/komodo/project/preview/ensure":
+            return cloudif_preview_request(self,'ensure')
+        if _cloudif_pub_path == "/komodo/project/preview/recreate":
+            return cloudif_preview_request(self,'recreate')
+        if _cloudif_pub_path == "/komodo/project/preview/snapshot":
+            return cloudif_preview_snapshot(self)
         if _cloudif_pub_path == "/komodo/project/authz-sync":
             return cloudif_project_authz_sync(self)
         if _cloudif_pub_path == "/komodo/project/membership/reconcile":
@@ -4454,6 +4694,10 @@ class H(BaseHTTPRequestHandler):
             return cloudif_publication_deploy(self)
         if _cloudif_pub_path == "/komodo/publication/promote":
             return cloudif_publication_promote(self)
+        if _cloudif_pub_path == "/komodo/publication/release":
+            return cloudif_publication_release(self)
+        if _cloudif_pub_path == "/komodo/publication/release/activate":
+            return cloudif_publication_release_activate(self)
 
         _cloudif_v132_path = self.path.split("?", 1)[0]
         if _cloudif_v132_path in ["/komodo/project/status", "/komodo/status"]:
@@ -4552,6 +4796,19 @@ def _cloudif_v143_ensure_schema():
       project text not null,revision integer not null,image text not null,image_id text not null,
       runtime_template text not null default '',php_version text not null default '',created_at text not null,created_by text not null default '',
       primary key(project,revision));
+    create table if not exists project_preview_state(
+      project text primary key,public_number integer not null,generation integer not null default 1,
+      container text not null default '',source_image text not null default '',source_image_id text not null default '',
+      startup_json text not null default '{}',workspace_path text not null default '',status text not null default '',
+      git_sync_status text not null default '',git_sync_message text not null default '',git_head text not null default '',
+      environment_revision integer not null default 0,environment_digest text not null default '',
+      updated_at text not null,updated_by text not null default '');
+    create table if not exists stage_production_releases(
+      project text not null,public_number integer not null,publication_number integer not null,candidate_number integer not null,
+      deploy_number integer not null,image text not null,image_id text not null,container text not null,status text not null default '',
+      is_active integer not null default 0,environment_revision integer not null default 0,environment_digest text not null default '',
+      created_at text not null,created_by text not null default '',updated_at text not null,
+      primary key(project,publication_number));
     ''')
     con.commit();con.close()
 

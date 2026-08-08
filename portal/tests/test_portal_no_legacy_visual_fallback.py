@@ -9,14 +9,16 @@ PUB_SHARED=ROOT/'components/control-plane/srv/cloudif/lib/cloudif_ui_publication
 
 
 class PortalNoLegacyVisualFallbackTests(unittest.TestCase):
-    def test_base_workspace_uses_dedicated_get_route(self):
+    def test_base_workspace_remains_compatibility_only_and_uses_dedicated_get_route(self):
         portal=PORTAL.read_text();current=PUB_CURRENT.read_text();shared=PUB_SHARED.read_text();coexist=COEXIST.read_text()
         for source in (current,shared):
-            self.assertIn('/cloudiff/portal/publication/base/',source)
+            self.assertNotIn('/cloudiff/portal/publication/base/',source)
+            self.assertIn('data-release-flow-open',source)
             self.assertNotIn('name="op" value="open_base_workspace"',source)
             self.assertNotIn('target="_blank" action="/cloudiff/portal/action/publication"',source)
         renderer=portal[portal.index('def _pm197_render'):portal.index('render_projects=_pm197_render')]
-        self.assertIn('href="/cloudiff/portal/publication/base/{h(slug)}"',renderer)
+        self.assertNotIn('href="/cloudiff/portal/publication/base/{h(slug)}"',renderer)
+        self.assertIn('data-release-flow-open',renderer)
         self.assertNotIn('name="op" value="open_base_workspace"',renderer)
         self.assertIn('publication_base_workspace_prepare_redirect',portal)
         self.assertIn('/cloudiff/portal/publication/base/"+_cloudif_pub_urlparse.quote(slug,safe="")',portal)

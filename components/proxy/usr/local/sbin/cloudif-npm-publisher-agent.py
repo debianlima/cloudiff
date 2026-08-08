@@ -97,11 +97,45 @@ server {{
     }}
 }}''')
  for num_s,p in sorted(state.get('projects',{}).items(),key=lambda x:int(x[0])):
-  num=int(num_s); active=int(p['active_deploy']); stable=f'{num}.cloudiff.duckdns.org'; scert=p['stable_cert']
-  blocks.append(f'''server {{\n    listen 80;\n    listen [::]:80;\n    server_name {stable};\n    location ^~ /.well-known/acme-challenge/ {{ root /data/letsencrypt-acme-challenge; default_type text/plain; }}\n    location / {{ return 301 https://$host$request_uri; }}\n}}\nserver {{\n    listen 443 ssl;\n    listen [::]:443 ssl;\n    http2 on;\n    server_name {stable};\n    ssl_certificate /etc/letsencrypt/live/{scert}/fullchain.pem;\n    ssl_certificate_key /etc/letsencrypt/live/{scert}/privkey.pem;\n    include conf.d/include/ssl-ciphers.conf;\n    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;\n    add_header X-Content-Type-Options nosniff always;\n    add_header X-Frame-Options SAMEORIGIN always;\n    location / {{\n        proxy_http_version 1.1;\n        proxy_set_header Host $host;\n        proxy_set_header X-Real-IP $remote_addr;\n        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n        proxy_set_header X-Forwarded-Proto https;\n        proxy_set_header X-Forwarded-Host $host;\n        proxy_set_header Upgrade $http_upgrade;\n        proxy_set_header Connection "upgrade";\n        proxy_pass http://10.62.91.2:18150;\n    }}\n}}''')
+  num=int(num_s); active=int(p.get('active_deploy') or 0); stable=f'{num}.cloudiff.duckdns.org'; scert=str(p.get('stable_cert') or '')
+  if active and scert:
+   blocks.append(f'''server {{\n    listen 80;\n    listen [::]:80;\n    server_name {stable};\n    location ^~ /.well-known/acme-challenge/ {{ root /data/letsencrypt-acme-challenge; default_type text/plain; }}\n    location / {{ return 301 https://$host$request_uri; }}\n}}\nserver {{\n    listen 443 ssl;\n    listen [::]:443 ssl;\n    http2 on;\n    server_name {stable};\n    ssl_certificate /etc/letsencrypt/live/{scert}/fullchain.pem;\n    ssl_certificate_key /etc/letsencrypt/live/{scert}/privkey.pem;\n    include conf.d/include/ssl-ciphers.conf;\n    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;\n    add_header X-Content-Type-Options nosniff always;\n    add_header X-Frame-Options SAMEORIGIN always;\n    location / {{\n        proxy_http_version 1.1;\n        proxy_set_header Host $host;\n        proxy_set_header X-Real-IP $remote_addr;\n        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n        proxy_set_header X-Forwarded-Proto https;\n        proxy_set_header X-Forwarded-Host $host;\n        proxy_set_header Upgrade $http_upgrade;\n        proxy_set_header Connection "upgrade";\n        proxy_pass http://10.62.91.2:18150;\n    }}\n}}''')
   for dep_s,v in sorted(p.get('versions',{}).items(),key=lambda x:int(x[0])):
    dep=int(dep_s); host=f'{num}-d{dep}.cloudiff.duckdns.org'; cert=v['cert']
    blocks.append(f'''server {{\n    listen 80;\n    listen [::]:80;\n    server_name {host};\n    location ^~ /.well-known/acme-challenge/ {{ root /data/letsencrypt-acme-challenge; default_type text/plain; }}\n    location / {{ return 301 https://$host$request_uri; }}\n}}\nserver {{\n    listen 443 ssl;\n    listen [::]:443 ssl;\n    http2 on;\n    server_name {host};\n    ssl_certificate /etc/letsencrypt/live/{cert}/fullchain.pem;\n    ssl_certificate_key /etc/letsencrypt/live/{cert}/privkey.pem;\n    include conf.d/include/ssl-ciphers.conf;\n    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;\n    add_header X-Content-Type-Options nosniff always;\n    add_header X-Frame-Options SAMEORIGIN always;\n    location / {{\n        proxy_http_version 1.1;\n        proxy_set_header Host $host;\n        proxy_set_header X-Real-IP $remote_addr;\n        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n        proxy_set_header X-Forwarded-Proto https;\n        proxy_set_header X-Forwarded-Host $host;\n        proxy_set_header Upgrade $http_upgrade;\n        proxy_set_header Connection "upgrade";\n        proxy_pass http://10.62.91.2:18150;\n    }}\n}}''')
+ for stage_name,stage in sorted(state.get('stages',{}).items()):
+  host=f'{stage_name}.cloudiff.duckdns.org';cert=str(stage.get('cert') or '')
+  if not cert: continue
+  blocks.append(f'''server {{
+    listen 80;
+    listen [::]:80;
+    server_name {host};
+    location ^~ /.well-known/acme-challenge/ {{ root /data/letsencrypt-acme-challenge; default_type text/plain; }}
+    location / {{ return 301 https://$host$request_uri; }}
+}}
+server {{
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    http2 on;
+    server_name {host};
+    ssl_certificate /etc/letsencrypt/live/{cert}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/{cert}/privkey.pem;
+    include conf.d/include/ssl-ciphers.conf;
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+    add_header X-Content-Type-Options nosniff always;
+    add_header X-Frame-Options SAMEORIGIN always;
+    location / {{
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_pass http://10.62.91.2:18150;
+    }}
+}}''')
  for alias,a in sorted(state.get('aliases',{}).items()):
   num=int(a['public_number']); dep=int(a['active_deploy'])
   stable_host=f'{alias}.cloudiff.duckdns.org'; stable_target=f'{num}.cloudiff.duckdns.org'
@@ -163,6 +197,27 @@ def ensure_alias(state,num,dep,alias):
  item['public_number']=int(num);item['active_deploy']=int(dep);item['cert']=cert;item.setdefault('versions',{})[str(dep)]={'cert':version_cert};item['updated_at']=time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime())
  return {'ok':True,'alias':alias,'stable_url':'https://'+stable+'/','version_url':'https://'+version+'/'}
 
+def ensure_version(state,num,dep):
+ num=int(num);dep=int(dep)
+ if not (1 <= num <= 999999999 and 1 <= dep <= 999999): raise ValueError('invalid_number')
+ version=f'{num}-d{dep}.cloudiff.duckdns.org';p=state.setdefault('projects',{}).setdefault(str(num),{'active_deploy':0,'versions':{}})
+ cert=p.setdefault('versions',{}).get(str(dep),{}).get('cert') or ensure_cert(f'cloudif-p{num}-d{dep}',[version])
+ p.setdefault('versions',{})[str(dep)]={'cert':cert,'created_at':time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime())}
+ return {'ok':True,'public_number':num,'deploy_number':dep,'version_url':'https://'+version+'/'}
+
+def version_publish(payload):
+ state=load_state();result=ensure_version(state,int(payload.get('public_number')),int(payload.get('deploy_number')));render(state);save_state(state);return result
+
+def ensure_stage(state,num,stage,number):
+ num=int(num);number=int(number);stage=str(stage or '').strip().lower();labels={'preview':('w','preview'),'homologation':('h','homologation'),'publication':('p','publication')}
+ if stage not in labels or not (1 <= num <= 999999999 and 1 <= number <= 999999):raise ValueError('invalid_stage')
+ letter,label=labels[stage];name=f'{num}-{letter}{number}-{label}';host=name+'.cloudiff.duckdns.org';cert=state.setdefault('stages',{}).get(name,{}).get('cert') or ensure_cert(f'cloudif-stage-{name}',[host])
+ state.setdefault('stages',{})[name]={'public_number':num,'stage':stage,'number':number,'cert':cert,'updated_at':time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime())}
+ return {'ok':True,'public_number':num,'stage':stage,'number':number,'stage_code':letter.upper()+str(number),'hostname':host,'url':'https://'+host+'/'}
+
+def stage_publish(payload):
+ state=load_state();result=ensure_stage(state,int(payload.get('public_number')),payload.get('stage'),int(payload.get('number')));render(state);save_state(state);return result
+
 def alias_publish(payload):
  num=int(payload.get('public_number')); dep=int(payload.get('deploy_number')); alias=str(payload.get('alias') or '').strip().lower()
  state=load_state(); result=ensure_alias(state,num,dep,alias); render(state); save_state(state); return result
@@ -171,7 +226,7 @@ def publish(payload):
  num=int(payload.get('public_number')); dep=int(payload.get('deploy_number'))
  if not (1 <= num <= 999999999 and 1 <= dep <= 999999): raise ValueError('invalid_number')
  stable=f'{num}.cloudiff.duckdns.org'; version=f'{num}-d{dep}.cloudiff.duckdns.org'
- state=load_state(); p=state.setdefault('projects',{}).setdefault(str(num),{'active_deploy':dep,'versions':{}})
+ state=load_state(); ensure_version(state,num,dep); p=state.setdefault('projects',{}).setdefault(str(num),{'active_deploy':dep,'versions':{}})
  # Reuse the combined pilot certificate when present, otherwise use separate certificates.
  if num==1006 and cert_exists('cloudif-p1006'):
   stable_cert='cloudif-p1006'
@@ -231,6 +286,8 @@ class H(BaseHTTPRequestHandler):
   try:
    n=int(self.headers.get('Content-Length','0')); payload=json.loads(self.rfile.read(n) or b'{}')
    if self.path=='/publish': return self._json(200,publish(payload))
+   if self.path=='/version': return self._json(200,version_publish(payload))
+   if self.path=='/stage': return self._json(200,stage_publish(payload))
    if self.path=='/alias': return self._json(200,alias_publish(payload))
    if self.path=='/unpublish': return self._json(200,unpublish(payload))
    if self.path=='/tenant': return self._json(200,ensure_tenant(payload))

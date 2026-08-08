@@ -588,6 +588,23 @@ def _install() -> None:
                         print(f'cloudif_project_terminal_page_failed slug={slug} type={type(exc).__name__}',flush=True)
                         body=recovery_page('Não foi possível preparar o terminal','A CloudIFF interrompeu o fluxo antes de qualquer redirecionamento.',self.path)
                         return send(self,503,'text/html; charset=utf-8',body)
+                release_flow_match = re.fullmatch(r'/cloudiff?/portal/api/projects/([a-z0-9][a-z0-9-]{0,62})/release-flow(?:/(approval/status))?', path)
+                if release_flow_match:
+                    try:
+                        actor=identity(self.headers);groups=[str(group) for group in actor.groups];lower={group.strip().lower() for group in groups}
+                        user={'username':actor.username,'email':actor.email,'groups':groups,'admin':bool(lower.intersection({'cloudif-tenants-admin','cloudif-professor'}))}
+                        import cloudif_portal_publications as publications
+                        slug=release_flow_match.group(1);operation=release_flow_match.group(2) or ''
+                        if operation=='approval/status':
+                            approval_id=(route_query.get('approvalId') or route_query.get('approval_id') or [''])[0]
+                            payload=publications.production_approval_status(slug,approval_id,user)
+                        else:
+                            payload=publications.release_flow_status(slug,user);owner=sys.modules.get(handler_class.__module__);payload['csrfToken']=getattr(owner,'_prod_csrf_token')(user)
+                        return send_json(self,200,payload)
+                    except PermissionError as exc:return send_json(self,403,{'ok':False,'error':{'code':str(exc),'message':'Acesso negado.'}})
+                    except ValueError as exc:return send_json(self,400,{'ok':False,'error':{'code':str(exc),'message':str(exc)}})
+                    except RuntimeError as exc:return send_json(self,409,{'ok':False,'error':{'code':'release_flow_state','message':str(exc)}})
+                    except Exception as exc:return send_json(self,503,{'ok':False,'error':{'code':'release_flow_unavailable','message':'O fluxo de publicação está temporariamente indisponível.','detail':type(exc).__name__},'secretValuesIncluded':False})
                 environments_match = re.fullmatch(r'/cloudiff?/portal/api/projects/([a-z0-9][a-z0-9-]{0,62})/environments-overview', path)
                 if environments_match:
                     try:
@@ -821,6 +838,37 @@ def _install() -> None:
                 if handle_preview_request(self):
                     return
                 parsed = urllib.parse.urlparse(self.path)
+                release_flow_match = re.fullmatch(r'/cloudiff?/portal/api/projects/([a-z0-9][a-z0-9-]{0,62})/release-flow/(preview/ensure|preview/recreate|homologation/enqueue|homologation/approve|homologation/reject|homologation/homologate-and-publish|homologators|production/approval/request|production/enqueue|rollback|job/acknowledge)', parsed.path)
+                if release_flow_match:
+                    try:
+                        content_length=int(self.headers.get('Content-Length','0') or 0)
+                        if content_length<0 or content_length>262144:return send_json(self,413,{'ok':False,'error':{'code':'payload_too_large'}})
+                        if 'application/json' not in (self.headers.get('Content-Type') or '').lower():return send_json(self,415,{'ok':False,'error':{'code':'json_required','message':'Use Content-Type application/json.'}})
+                        payload=json.loads(self.rfile.read(content_length) or b'{}')
+                        if not isinstance(payload,dict):return send_json(self,400,{'ok':False,'error':{'code':'invalid_json_object'}})
+                        actor=identity(self.headers);groups=[str(group) for group in actor.groups];lower={group.strip().lower() for group in groups};user={'username':actor.username,'email':actor.email,'groups':groups,'admin':bool(lower.intersection({'cloudif-tenants-admin','cloudif-professor'}))}
+                        owner=sys.modules.get(handler_class.__module__);provided=str(self.headers.get('X-CSRF-Token') or payload.pop('csrfToken',payload.pop('csrf_token','')))
+                        if not getattr(owner,'_prod_csrf_equal')(provided,getattr(owner,'_prod_csrf_token')(user)):return send_json(self,403,{'ok':False,'error':{'code':'invalid_csrf','message':'Token CSRF inválido ou ausente.'}})
+                        import cloudif_portal_publications as publications
+                        slug=release_flow_match.group(1);operation=release_flow_match.group(2)
+                        if operation=='preview/ensure':result=publications.ensure_preview(slug,user)
+                        elif operation=='preview/recreate':result=publications.recreate_preview(slug,user,str(payload.get('source') or 'production'))
+                        elif operation=='homologation/enqueue':result=publications.enqueue_homologation(slug,user)
+                        elif operation=='homologation/approve':result=publications.homologate_candidate(slug,int(payload.get('candidateNumber') or 0),user,'approved',str(payload.get('note') or ''))
+                        elif operation=='homologation/reject':result=publications.homologate_candidate(slug,int(payload.get('candidateNumber') or 0),user,'rejected',str(payload.get('note') or ''))
+                        elif operation=='homologation/homologate-and-publish':result=publications.homologate_and_enqueue(slug,int(payload.get('candidateNumber') or 0),user,str(payload.get('note') or ''))
+                        elif operation=='homologators':result=publications.set_homologators(slug,user,payload.get('usernames') if isinstance(payload.get('usernames'),list) else [])
+                        elif operation=='production/approval/request':result=publications.request_production_activation(slug,int(payload.get('candidateNumber') or 0),user,str(payload.get('reason') or 'Publicar candidato homologado em Produção'))
+                        elif operation=='production/enqueue':result=publications.enqueue_candidate_publication(slug,int(payload.get('candidateNumber') or 0),user,str(payload.get('approvalId') or ''),str(payload.get('activationDigest') or ''))
+                        elif operation=='rollback':result=publications.rollback_publication(slug,int(payload.get('publicationNumber') or 0),user)
+                        elif operation=='job/acknowledge':result=publications.acknowledge_job(slug,int(payload.get('jobId') or 0),user)
+                        else:raise ValueError('Operação inválida.')
+                        return send_json(self,202 if result.get('queued') else 200,{'ok':True,**result})
+                    except json.JSONDecodeError:return send_json(self,400,{'ok':False,'error':{'code':'invalid_json','message':'O corpo JSON é inválido.'}})
+                    except PermissionError as exc:return send_json(self,403,{'ok':False,'error':{'code':str(exc),'message':str(exc)}})
+                    except ValueError as exc:return send_json(self,400,{'ok':False,'error':{'code':'invalid_release_flow_request','message':str(exc)}})
+                    except RuntimeError as exc:return send_json(self,409,{'ok':False,'error':{'code':'release_flow_state','message':str(exc)}})
+                    except Exception as exc:return send_json(self,503,{'ok':False,'error':{'code':'release_flow_unavailable','message':'Não foi possível concluir esta etapa agora.','detail':type(exc).__name__}})
                 terminal_prepare_match = re.fullmatch(r'/cloudiff?/portal/api/projects/([a-z0-9][a-z0-9-]{0,62})/terminal/prepare', parsed.path)
                 if terminal_prepare_match:
                     slug=terminal_prepare_match.group(1)

@@ -119,122 +119,48 @@ def _publication_snapshot_from_rows(rows):
     return snapshot
 
 def _configuration_controls(slug,rows):
-    snapshot=_publication_snapshot_from_rows(rows)
-    base_revision=int(snapshot.get('baseRevision') or 0);environment_revision=int(snapshot.get('environmentRevision') or 0)
-    base_label=('Base r'+str(base_revision)) if base_revision else 'Base editável pronta para versionar'
-    env_label=('Produção · revisão '+str(environment_revision)) if environment_revision else 'Produção · configuração atual'
     return (
-      '<section class="publication-configuration" data-publication-config="'+h(slug)+'">'
-      '<article><span>Base da publicação</span><strong>'+h(base_label)+'</strong><p>Abrir no Komodo permite instalar ferramentas e ajustar a base. Ao publicar, a CloudIFF congela uma nova revisão imutável.</p>'
-      '<a class="btn light" target="_blank" rel="noopener" href="/cloudiff/portal/publication/base/'+h(slug)+'">Abrir base no Komodo</a></article>'
-      '<article><span>Ambientes de publicação</span><strong>Preview · Homologação · Produção</strong><p>Consulte um ambiente por vez e gerencie suas variáveis dentro do próprio wizard.</p>'
-      '<button class="btn light" type="button" data-publication-environments data-project-slug="'+h(slug)+'">Ambientes de publicação</button></article>'
-      '</section>'
+      '<section class="publication-release-flow" data-release-flow-summary="'+h(slug)+'">'
+      '<div class="publication-release-flow__head"><div><span>Fluxo de publicação</span><strong>Preview → Homologação → Publicação</strong><p>Desenvolva no Preview vivo, homologue um candidato imutável e publique exatamente o mesmo artefato.</p></div>'
+      '<button class="btn" type="button" data-release-flow-open data-project-slug="'+h(slug)+'">Gerenciar publicação</button></div>'
+      '<div class="publication-release-flow__stages" aria-label="Estágios da publicação">'
+      '<article><span class="publication-stage-code">W</span><div><strong>Preview</strong><small>Workspace vivo</small></div><span class="publication-stage-state" data-release-summary-w>Consultar</span></article>'
+      '<article><span class="publication-stage-code">H</span><div><strong>Homologação</strong><small>Candidato imutável</small></div><span class="publication-stage-state" data-release-summary-h>Consultar</span></article>'
+      '<article><span class="publication-stage-code">P</span><div><strong>Publicação</strong><small>Produção aprovada</small></div><span class="publication-stage-state" data-release-summary-p>Consultar</span></article>'
+      '</div><div class="publication-release-flow__tools"><button class="btn light" type="button" data-publication-environments data-project-slug="'+h(slug)+'">Variáveis por ambiente</button></div></section>'
     )
 
 def publication_panel(slug, framework_hint=''):
-    rows=_rows(slug)
-    context=_project_context(slug,framework_hint)
-    information=_project_information(context)
-    configuration=_configuration_controls(slug,rows)
+    rows=_rows(slug);context=_project_context(slug,framework_hint);information=_project_information(context);configuration=_configuration_controls(slug,rows)
     try:
         from cloudif_portal_publications import latest_job
         job=latest_job(slug)
-    except Exception:
-        job=None
+    except Exception:job=None
     con=sqlite3.connect(DB);con.row_factory=sqlite3.Row
     try:
-        alias_row=con.execute('select alias from project_publication_aliases where project_slug=?',(slug,)).fetchone()
-        alias=str(alias_row['alias']) if alias_row else ''
-    except Exception:
-        alias=''
-    finally:
-        con.close()
-
+        alias_row=con.execute('select alias from project_publication_aliases where project_slug=?',(slug,)).fetchone();alias=str(alias_row['alias']) if alias_row else ''
+    except Exception:alias=''
+    finally:con.close()
     job_html=''
-    if job:
-        states={'queued':'Na fila','running':'Publicando','succeeded':'Concluída','failed':'Falhou'}
-        status=states.get(job.get('status'),job.get('status') or '')
-        progress_values={'queued':1,'preparing':2,'deploying':3,'https':4,'promoting':5,'validating':5,'completed':6}
-        progress_value=progress_values.get(job.get('step'),0)
-        acknowledge=''
-        if job.get('status') in ('succeeded','failed'):
-            acknowledge=(
-                '<form method="post" action="/cloudiff/portal/action/publication">'
-                f'<input type="hidden" name="slug" value="{h(slug)}">'
-                f'<input type="hidden" name="job_id" value="{int(job.get("id") or 0)}">'
-                '<button class="btn light" name="op" value="acknowledge_job">OK</button></form>'
-            )
-        job_html=(f'<div class="publication-job is-{h(job.get("status"))}" data-publication-job="{int(job.get("id") or 0)}">'
-                  f'<div class="publication-job-copy"><div><strong>{h(status)}</strong><span>{h(job.get("message") or "")}</span></div>{acknowledge}</div>'
-                  f'<progress max="6" value="{progress_value}"></progress></div>')
-
+    if job and job.get('status') in ('queued','running','failed'):
+        labels={'queued':'Na fila','running':'Em andamento','failed':'Atenção'};progress={'queued':1,'preparing':2,'snapshot':2,'deploying':3,'https':4,'production':4,'completed':5}.get(job.get('step'),1)
+        job_html=(f'<div class="publication-job is-{h(job.get("status"))}" data-publication-job="{int(job.get("id") or 0)}"><div class="publication-job-copy"><div><strong>{h(labels.get(job.get("status"),job.get("status") or ""))}</strong><span>{h(job.get("message") or "")}</span></div></div><progress max="5" value="{progress}"></progress></div>')
     if alias:
-        alias_host=alias+'.cloudiff.duckdns.org'
-        alias_html=(
-            '<div class="publication-alias is-saved">'
-            '<div class="publication-alias-view"><div><span>Endereço ativo</span>'
-            f'<a href="https://{h(alias_host)}/" target="_blank" rel="noopener">{h(alias_host)}</a></div>'
-            '<button class="btn light" type="button" data-alias-edit>Editar endereço</button></div>'
-            '<form class="publication-alias-form" hidden method="post" action="/cloudiff/portal/action/publication">'
-            f'<input type="hidden" name="slug" value="{h(slug)}">'
-            f'<label><span>Novo endereço</span><div><input name="alias" value="{h(alias)}" pattern="[a-z0-9][a-z0-9-]{{0,62}}"><span>.cloudiff.duckdns.org</span></div></label>'
-            '<div class="publication-alias-actions"><button class="btn" name="op" value="set_alias">Salvar</button><button class="btn light" type="button" data-alias-cancel>Cancelar</button></div>'
-            '</form></div>'
-        )
+        alias_host=alias+'.cloudiff.duckdns.org';alias_html=('<div class="publication-alias is-saved"><div class="publication-alias-view"><div><span>Endereço amigável</span><a href="https://'+h(alias_host)+'/" target="_blank" rel="noopener">'+h(alias_host)+'</a></div><button class="btn light" type="button" data-alias-edit>Editar endereço</button></div><form class="publication-alias-form" hidden method="post" action="/cloudiff/portal/action/publication"><input type="hidden" name="slug" value="'+h(slug)+'"><label><span>Novo endereço</span><div><input name="alias" value="'+h(alias)+'" pattern="[a-z0-9][a-z0-9-]{0,62}"><span>.cloudiff.duckdns.org</span></div></label><div class="publication-alias-actions"><button class="btn" name="op" value="set_alias">Salvar</button><button class="btn light" type="button" data-alias-cancel>Cancelar</button></div></form></div>')
     else:
-        alias_html=(
-            '<div class="publication-alias"><div><strong>Endereço amigável</strong><p>Escolha um nome curto para o endereço ativo do site.</p></div>'
-            '<form method="post" action="/cloudiff/portal/action/publication">'
-            f'<input type="hidden" name="slug" value="{h(slug)}">'
-            '<label><span>Nome</span><div><input name="alias" placeholder="ex.: lima" pattern="[a-z0-9][a-z0-9-]{0,62}"><span>.cloudiff.duckdns.org</span></div></label>'
-            '<button class="btn" name="op" value="set_alias">Salvar endereço</button></form></div>'
-        )
-
-    if not rows:
-        return (
-            '<div class="cm-resource publication-manager-resource">'+information+configuration+job_html+alias_html+
-            '<div class="publication-active-card"><div><span>Estado</span><strong>Ainda não publicado</strong></div></div>'
-            '<div class="cm-actions"><form method="post" action="/cloudiff/portal/action/publication">'
-            f'<input type="hidden" name="slug" value="{h(slug)}">'
-            '<button class="btn" name="op" value="publish_version">Publicar site</button></form></div></div>'
-        )
-
-    active=next((x for x in rows if int(x.get('is_active') or 0)==1),rows[0])
-    active_dep=int(active.get('deploy_number') or 0)
-    numeric_host=active.get('stable_hostname') or f"{int(active.get('public_number') or 0)}.cloudiff.duckdns.org"
-    active_host=(alias+'.cloudiff.duckdns.org') if alias else numeric_host
-    trs=[]
-    for r in rows:
-        dep=int(r.get('deploy_number') or 0)
-        if int(r.get('is_active') or 0)==1:
-            action='<span class="pill ok">Ativa</span>'
-        else:
-            action=(
-                '<form method="post" action="/cloudiff/portal/action/publication" style="display:inline">'
-                f'<input type="hidden" name="slug" value="{h(slug)}">'
-                f'<input type="hidden" name="deploy_number" value="{dep}">'
-                '<button class="btn light" name="op" value="activate_version">Ativar esta versão</button></form>'
-            )
-        trs.append(
-            f'<tr><td>d{dep}</td><td><code>{h((r.get("commit_sha") or "")[:12])}</code></td>'
-            f'<td><a href="https://{h(r.get("version_hostname") or "")}/" target="_blank" rel="noopener">Abrir</a></td><td>{action}</td></tr>'
-        )
-    return (
-        '<div class="cm-resource publication-manager-resource">'+information+configuration+job_html+alias_html+
-        '<div class="publication-active-card"><div><span>Site publicado</span>'
-        f'<a href="https://{h(active_host)}/" target="_blank" rel="noopener">{h(active_host)}</a></div><span class="pill ok">d{active_dep} ativa</span></div>'
-        '<div class="cm-actions publication-site-actions">'
-        f'<a class="btn light" href="https://{h(active_host)}/" target="_blank" rel="noopener">Abrir site</a></div>'
-        '<div class="publication-versions"><div class="cm-resource-title"><strong>Versões publicadas</strong></div>'
-        '<div style="overflow:auto"><table><tr><th>Versão</th><th>Commit</th><th>URL</th><th>Ação</th></tr>'
-        + ''.join(trs) + '</table></div>'
-        '<form class="publication-new-version" method="post" action="/cloudiff/portal/action/publication">'
-        f'<input type="hidden" name="slug" value="{h(slug)}">'
-        '<button class="btn" name="op" value="publish_version">Publicar nova versão</button></form></div>'
-        '</div>'
-    )
-
+        alias_html=('<div class="publication-alias"><div><strong>Endereço amigável de Produção</strong><p>Opcional. O alias sempre acompanha a publicação P ativa.</p></div><form method="post" action="/cloudiff/portal/action/publication"><input type="hidden" name="slug" value="'+h(slug)+'"><label><span>Nome</span><div><input name="alias" placeholder="ex.: meu-site" pattern="[a-z0-9][a-z0-9-]{0,62}"><span>.cloudiff.duckdns.org</span></div></label><button class="btn light" name="op" value="set_alias">Salvar endereço</button></form></div>')
+    active=next((x for x in rows if int(x.get('is_active') or 0)==1),rows[0] if rows else None)
+    if active:
+        stable=active.get('stable_hostname') or f"{int(active.get('public_number') or 0)}.cloudiff.duckdns.org";active_host=(alias+'.cloudiff.duckdns.org') if alias else stable
+        production=('<div class="publication-active-card"><div><span>Produção atual</span><a href="https://'+h(active_host)+'/" target="_blank" rel="noopener">'+h(active_host)+'</a></div><span class="pill ok">Online</span></div>')
+    else:production='<div class="publication-active-card"><div><span>Produção atual</span><strong>Ainda não publicada</strong></div><span class="pill warn">Sem P ativa</span></div>'
+    history=''
+    if rows:
+        trs=[]
+        for r in rows:
+            dep=int(r.get('deploy_number') or 0);trs.append(f'<tr><td>d{dep}</td><td><code>{h((r.get("commit_sha") or "")[:12])}</code></td><td><a href="https://{h(r.get("version_hostname") or "")}/" target="_blank" rel="noopener">Abrir</a></td><td>{"ativa" if int(r.get("is_active") or 0)==1 else h(r.get("status") or "")}</td></tr>')
+        history='<details class="publication-technical-history"><summary>Detalhes técnicos e versões legadas</summary><div style="overflow:auto"><table><tr><th>Artefato</th><th>Commit</th><th>URL técnica</th><th>Estado</th></tr>'+''.join(trs)+'</table></div></details>'
+    return '<div class="cm-resource publication-manager-resource">'+configuration+job_html+production+alias_html+history+information+'</div>'
 
 def admin_publications():
     try:

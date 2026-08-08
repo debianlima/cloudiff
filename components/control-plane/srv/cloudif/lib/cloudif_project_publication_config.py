@@ -40,15 +40,20 @@ def _komodo_headers()->dict[str,str]:
     if not token:raise RuntimeError('komodo_publication_token_missing')
     return {'X-CloudIF-Token':token,'Authorization':'Bearer '+token}
 
-def _effective(slug:str,internal:bool=False)->dict:
-    suffix='/effective-internal' if internal else '/effective'
-    code,data=_json('GET',CONFIG_URL+'/v1/projects/'+urllib.parse.quote(slug,safe='')+'/environment'+suffix+'?environment=production',_config_headers(),timeout=30)
+def _environment_name(environment:str)->str:
+    environment=str(environment or '').strip().lower()
+    if environment not in {'preview','homologation','production'}:raise ValueError('invalid_publication_environment')
+    return environment
+
+def _effective(slug:str,internal:bool=False,environment:str='production')->dict:
+    suffix='/effective-internal' if internal else '/effective';environment=_environment_name(environment)
+    code,data=_json('GET',CONFIG_URL+'/v1/projects/'+urllib.parse.quote(slug,safe='')+'/environment'+suffix+'?'+urllib.parse.urlencode({'environment':environment}),_config_headers(),timeout=30)
     if code!=200 or not data.get('ok'):raise RuntimeError('publication_environment_unavailable')
     return data
 
-def environment_summary(slug:str)->dict:
-    data=_effective(slug,False)
-    return {'environment':'production','environmentRevision':int(data.get('environmentRevision') or 0),'environmentDigest':str(data.get('environmentDigest') or ''),'valid':bool(data.get('valid')),'missingRequired':data.get('missingRequired') or [],'publicNames':data.get('publicRuntimeNames') or {},'secretNames':data.get('secretRuntimeNames') or {},'secretValuesIncluded':False,'secretReferencesIncluded':False}
+def environment_summary(slug:str,environment:str='production')->dict:
+    environment=_environment_name(environment);data=_effective(slug,False,environment)
+    return {'environment':environment,'environmentRevision':int(data.get('environmentRevision') or 0),'environmentDigest':str(data.get('environmentDigest') or ''),'valid':bool(data.get('valid')),'missingRequired':data.get('missingRequired') or [],'publicNames':data.get('publicRuntimeNames') or {},'secretNames':data.get('secretRuntimeNames') or {},'secretValuesIncluded':False,'secretReferencesIncluded':False}
 
 def base_status(slug:str,public_number:int)->dict:
     code,data=_json('POST',KOMODO_URL+'/komodo/project/base/status',_komodo_headers(),{'project':slug,'public_number':int(public_number)},30)
@@ -66,13 +71,13 @@ def snapshot_base(slug:str,public_number:int,actor:str)->dict:
     if int(data.get('base_revision') or 0)<1 or not IMAGE_ID_RE.fullmatch(str(data.get('base_image_id') or '')):raise RuntimeError('project_base_snapshot_contract_invalid')
     return data
 
-def capture_snapshot(slug:str,public_number:int,actor:str)->dict:
-    environment=environment_summary(slug)
-    if not environment.get('valid'):raise RuntimeError('publication_environment_missing_required')
+def capture_snapshot(slug:str,public_number:int,actor:str,environment:str='production')->dict:
+    environment=_environment_name(environment);environment_state=environment_summary(slug,environment)
+    if not environment_state.get('valid'):raise RuntimeError('publication_environment_missing_required')
     base=snapshot_base(slug,public_number,actor)
-    digest=str(environment.get('environmentDigest') or '')
+    digest=str(environment_state.get('environmentDigest') or '')
     if digest and not SHA256_RE.fullmatch(digest):raise RuntimeError('publication_environment_digest_invalid')
-    return {'baseRevision':int(base['base_revision']),'baseImage':str(base.get('base_image') or ''),'baseImageId':str(base['base_image_id']),'environment':'production','environmentRevision':int(environment['environmentRevision']),'environmentDigest':digest,'secretValuesIncluded':False,'secretReferencesIncluded':False}
+    return {'baseRevision':int(base['base_revision']),'baseImage':str(base.get('base_image') or ''),'baseImageId':str(base['base_image_id']),'environment':environment,'environmentRevision':int(environment_state['environmentRevision']),'environmentDigest':digest,'secretValuesIncluded':False,'secretReferencesIncluded':False}
 
 def _flatten(named:dict)->dict[str,str]:
     if not isinstance(named,dict):raise RuntimeError('publication_environment_contract_invalid')
@@ -88,8 +93,8 @@ def _flatten(named:dict)->dict[str,str]:
             out[name]=value
     return out
 
-def execution_environment(slug:str,expected_revision:int,expected_digest:str)->dict:
-    data=_effective(slug,True)
+def execution_environment(slug:str,expected_revision:int,expected_digest:str,environment:str='production')->dict:
+    environment=_environment_name(environment);data=_effective(slug,True,environment)
     revision=int(data.get('environmentRevision') or 0);digest=str(data.get('environmentDigest') or '')
     if revision!=int(expected_revision) or digest!=str(expected_digest or ''):raise RuntimeError('publication_environment_changed')
     if not data.get('valid'):raise RuntimeError('publication_environment_missing_required')
@@ -99,7 +104,7 @@ def execution_environment(slug:str,expected_revision:int,expected_digest:str)->d
     if any(bool(v) for v in references.values() if isinstance(v,dict)):
         cfg=_env(CONFIG_ENV);resolver=cfg.get('CLOUDIF_SECRET_RESOLVER_TOKEN','')
         if not resolver:raise RuntimeError('secret_resolver_unavailable')
-        code,secret_data=_json('POST',CONFIG_URL+'/v1/projects/'+urllib.parse.quote(slug,safe='')+'/environment/secrets/resolve-internal',_config_headers({'X-CloudIF-Secret-Resolver-Token':resolver}),{'environment':'production','references':references,'actor':'portal-publication'},30)
+        code,secret_data=_json('POST',CONFIG_URL+'/v1/projects/'+urllib.parse.quote(slug,safe='')+'/environment/secrets/resolve-internal',_config_headers({'X-CloudIF-Secret-Resolver-Token':resolver}),{'environment':environment,'references':references,'actor':'portal-publication'},30)
         if code!=200 or secret_data.get('ok') is not True or secret_data.get('internal') is not True or secret_data.get('secretValuesIncluded') is not True:raise RuntimeError('publication_secret_resolution_failed')
         raw_resolved=secret_data.get('resolvedSecrets')
         if not isinstance(raw_resolved,dict) or set(raw_resolved)!=set(references):raise RuntimeError('publication_secret_resolution_scope_mismatch')
@@ -110,4 +115,4 @@ def execution_environment(slug:str,expected_revision:int,expected_digest:str)->d
     conflict=set(public).intersection(resolved)
     if conflict:raise RuntimeError('publication_environment_public_secret_conflict:'+sorted(conflict)[0])
     values={**public,**resolved}
-    return {'environment':'production','environmentRevision':revision,'environmentDigest':digest,'values':values,'variableNames':sorted(values),'secretValuesIncluded':True,'metadataSafe':False}
+    return {'environment':environment,'environmentRevision':revision,'environmentDigest':digest,'values':values,'variableNames':sorted(values),'secretValuesIncluded':True,'metadataSafe':False}

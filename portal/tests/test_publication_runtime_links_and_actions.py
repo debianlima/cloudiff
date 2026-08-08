@@ -21,15 +21,15 @@ class PublicationRuntimeLinksAndActionsTests(unittest.TestCase):
         for marker in ('kind not in {"php","node"}','php -v','php -m','process.versions','package.json'):
             self.assertIn(marker,self.agent)
         self.assertNotIn('payload.get("command")',self.agent)
-    def test_publish_new_version_is_below_versions_table(self):
-        panel=self.pub[self.pub.index('def publication_panel'):self.pub.index('def admin_publications')]
-        table=panel.index('Versões publicadas')
-        button=panel.index('Publicar nova versão')
-        self.assertGreater(button,table)
-        self.assertIn('publication-new-version',panel)
-        self.assertIn('publication-site-actions',panel)
-    def test_existing_publication_actions_remain(self):
-        for marker in ('value="publish_version"','value="activate_version"','Abrir site'):
-            self.assertIn(marker,self.pub)
+    def test_release_wizard_replaces_direct_publish_controls(self):
+        panel=self.pub[self.pub.index('def _configuration_controls'):self.pub.index('def admin_publications')]
+        self.assertIn('data-release-flow-open',panel)
+        self.assertIn('Detalhes técnicos e versões legadas',panel)
+        self.assertNotIn('Publicar nova versão',panel)
+        self.assertNotIn('publication-new-version',panel)
+    def test_direct_publish_and_activation_actions_are_not_rendered(self):
+        self.assertNotIn('value="publish_version"',self.pub)
+        self.assertNotIn('value="activate_version"',self.pub)
+        self.assertIn('Produção atual',self.pub)
 
 if __name__=='__main__': unittest.main()
