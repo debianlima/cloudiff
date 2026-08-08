@@ -18,6 +18,7 @@ import uuid
 import yaml
 from cloudif_multitech_detector import detect_components
 from cloudif_change_set import (ChangeSetError, apply_changes, change_set_digest, clean_expired, load_sealed, normalize_changes, seal_change_set)
+from cloudif_workspace_artifact import (ArtifactError, append_chunk, complete_artifact, read_artifact, resolve_artifact, start_artifact)
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse
 
@@ -351,8 +352,13 @@ def validate_change_set_workspace(slug: str, ref: str, trace: str, title: str, d
     try:
         raw, archive_digest = fetch_archive(slug, ref)
         files, total = safe_extract(raw, run_dir)
-        normalized, content_bytes = normalize_changes(changes)
-        applied, diff_lines = apply_changes(run_dir, normalized)
+        hold_until = int(time.time()) + max(300, min(int(ttl_seconds), 86400))
+        def artifact_resolver(artifact_id):
+            return resolve_artifact(WORKROOT, slug, artifact_id, hold_until=hold_until)
+        def artifact_reader(artifact_id, expected_sha256, expected_size):
+            return read_artifact(WORKROOT, slug, artifact_id, expected_sha256, expected_size)[1]
+        normalized, content_bytes = normalize_changes(changes, artifact_resolver)
+        applied, diff_lines = apply_changes(run_dir, normalized, artifact_reader)
         after_files = workspace_files(run_dir)
         detection = detect_components(run_dir, after_files)
         manifest_validation = validate_result_manifest(run_dir, after_files)
@@ -370,6 +376,7 @@ def validate_change_set_workspace(slug: str, ref: str, trace: str, title: str, d
             'updateCount': sum(x['operation'] == 'update' for x in normalized),
             'deleteCount': sum(x['operation'] == 'delete' for x in normalized),
             'contentBytes': content_bytes,
+            'artifactCount': sum(bool(x.get('artifact_id')) for x in normalized),
             'filesAfter': len(after_files),
             'projectType': detection.get('projectType'),
             'componentCount': detection.get('componentCount'),
@@ -1040,6 +1047,18 @@ class H(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def sendb(self, code: int, raw: bytes, metadata: dict) -> None:
+        self.send_response(code)
+        self.send_header('Content-Type', 'application/octet-stream')
+        self.send_header('Cache-Control', 'no-store')
+        self.send_header('X-Content-Type-Options', 'nosniff')
+        self.send_header('X-CloudIF-Artifact-Id', str(metadata.get('artifact_id') or ''))
+        self.send_header('X-CloudIF-Artifact-Sha256', str(metadata.get('sha256') or ''))
+        self.send_header('X-CloudIF-Artifact-Size', str(metadata.get('size') or len(raw)))
+        self.send_header('X-CloudIF-Artifact-Expires', str(metadata.get('expires_at') or 0))
+        self.send_header('Content-Length', str(len(raw)))
+        self.end_headers(); self.wfile.write(raw)
+
     def auth(self) -> bool:
         return bool(TOKEN) and hmac.compare_digest(self.headers.get('Authorization', ''), 'Bearer ' + TOKEN)
 
@@ -1047,7 +1066,7 @@ class H(BaseHTTPRequestHandler):
         if urlparse(self.path).path == '/health':
             try:
                 docker('version', '--format', '{{.Server.Version}}', timeout=4)
-                self.sendj(200, {'ok': True, 'service': 'cloudif-workspace-broker', 'profiles': ['probe', 'prepare', 'detect-multiservice', 'normalize-plan', 'change-set-validate', 'change-set-resolve', 'validate', 'test-static', 'preview-static', 'edit-preview']})
+                self.sendj(200, {'ok': True, 'service': 'cloudif-workspace-broker', 'profiles': ['probe', 'prepare', 'detect-multiservice', 'normalize-plan', 'artifact-upload', 'change-set-validate', 'change-set-resolve', 'validate', 'test-static', 'preview-static', 'edit-preview']})
             except Exception:
                 self.sendj(503, {'ok': False, 'error': 'docker_unavailable'})
         else:
@@ -1055,7 +1074,7 @@ class H(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:
         path = urlparse(self.path).path
-        if path not in {'/v1/probe', '/v1/prepare', '/v1/detect-multiservice', '/v1/normalize-plan', '/v1/change-set/validate', '/v1/change-set/resolve', '/v1/validate', '/v1/test-static', '/v1/preview-static', '/v1/edit-preview'}:
+        if path not in {'/v1/artifact/start','/v1/artifact/chunk','/v1/artifact/complete','/v1/artifact/read','/v1/probe', '/v1/prepare', '/v1/detect-multiservice', '/v1/normalize-plan', '/v1/change-set/validate', '/v1/change-set/resolve', '/v1/validate', '/v1/test-static', '/v1/preview-static', '/v1/edit-preview'}:
             self.sendj(404, {'ok': False, 'error': 'not_found'})
             return
         if not self.auth():
@@ -1063,12 +1082,20 @@ class H(BaseHTTPRequestHandler):
             return
         try:
             n = int(self.headers.get('Content-Length', '0'))
-            maximum = 3 * 1024 * 1024 if path == '/v1/change-set/validate' else 256 * 1024
+            maximum = 3 * 1024 * 1024 if path == '/v1/change-set/validate' else (384 * 1024 if path == '/v1/artifact/chunk' else 256 * 1024)
             assert 0 < n <= maximum
             data = json.loads(self.rfile.read(n))
             if not isinstance(data, dict):
                 raise ValueError('invalid_request')
-            if path == '/v1/probe':
+            if path == '/v1/artifact/start':
+                required={'project_slug','trace_id','filename','expected_size','expected_sha256'}; allowed=required|{'ttl_seconds'}
+            elif path == '/v1/artifact/chunk':
+                required={'project_slug','trace_id','artifact_id','chunk_index','content_base64','chunk_sha256'}; allowed=required
+            elif path == '/v1/artifact/complete':
+                required={'project_slug','trace_id','artifact_id'}; allowed=required
+            elif path == '/v1/artifact/read':
+                required={'project_slug','trace_id','artifact_id','expected_sha256','expected_size'}; allowed=required
+            elif path == '/v1/probe':
                 required = {'project_slug', 'trace_id'}; allowed = required
             elif path == '/v1/edit-preview':
                 required = {'project_slug','ref','trace_id','path','expected_sha256','find','replace'}; allowed = required
@@ -1096,14 +1123,22 @@ class H(BaseHTTPRequestHandler):
             ttl_seconds = int(data.get('ttl_seconds') or 3600)
             workspace_id = str(data.get('workspace_id') or '')
             expected_digest = str(data.get('change_set_digest') or '')
-            if path != '/v1/change-set/resolve':
+            artifact_id = str(data.get('artifact_id') or '')
+            filename = str(data.get('filename') or '')
+            artifact_expected_size = int(data.get('expected_size') or 0)
+            artifact_expected_sha256 = str(data.get('expected_sha256') or '')
+            chunk_index = int(data.get('chunk_index') or 0)
+            chunk_content = data.get('content_base64')
+            chunk_sha256 = str(data.get('chunk_sha256') or '')
+            if path not in {'/v1/change-set/resolve','/v1/artifact/start','/v1/artifact/chunk','/v1/artifact/complete','/v1/artifact/read'}:
                 assert REF.fullmatch(ref) and '..' not in ref and not ref.startswith('/') and not ref.endswith('/')
-            assert 300 <= ttl_seconds <= 86400
+            if path in {'/v1/artifact/start','/v1/normalize-plan','/v1/change-set/validate'}: assert 300 <= ttl_seconds <= 86400
         except Exception:
             self.sendj(400, {'ok': False, 'error': {'code': 'invalid_request', 'message': 'A solicitação contém campos ausentes ou incompatíveis.'}})
             return
         started = time.monotonic()
         event_map = {
+            '/v1/artifact/start':'workspace.artifact.start','/v1/artifact/chunk':'workspace.artifact.chunk','/v1/artifact/complete':'workspace.artifact.complete','/v1/artifact/read':'workspace.artifact.read',
             '/v1/probe':'workspace.probe','/v1/prepare':'workspace.prepare',
             '/v1/detect-multiservice':'workspace.detect-multiservice','/v1/normalize-plan':'workspace.normalize-plan',
             '/v1/change-set/validate':'workspace.change-set.validate','/v1/change-set/resolve':'workspace.change-set.resolve',
@@ -1112,7 +1147,17 @@ class H(BaseHTTPRequestHandler):
         }
         event = event_map[path]
         try:
-            if path == '/v1/probe':
+            if path == '/v1/artifact/start':
+                result=start_artifact(WORKROOT,slug,filename,artifact_expected_size,artifact_expected_sha256,ttl_seconds);run_dir='';name='';removed=True
+            elif path == '/v1/artifact/chunk':
+                result=append_chunk(WORKROOT,slug,artifact_id,chunk_index,chunk_content,chunk_sha256);run_dir='';name='';removed=True
+            elif path == '/v1/artifact/complete':
+                result=complete_artifact(WORKROOT,slug,artifact_id);run_dir='';name='';removed=True
+            elif path == '/v1/artifact/read':
+                meta,raw=read_artifact(WORKROOT,slug,artifact_id,artifact_expected_sha256,artifact_expected_size)
+                print(json.dumps({'event': event, 'project_slug': slug, 'trace_id': trace, 'result':'success','artifact_id':artifact_id,'bytes':len(raw),'duration_ms':round((time.monotonic()-started)*1000,2)},separators=(',',':')),flush=True)
+                self.sendb(200,raw,meta);return
+            elif path == '/v1/probe':
                 result, name = probe(slug, trace)
                 run_dir = ''
                 removed = subprocess.run(['/usr/bin/docker', 'inspect', name], capture_output=True).returncode != 0
@@ -1152,6 +1197,8 @@ class H(BaseHTTPRequestHandler):
             self.sendj(200, {'ok': True, 'result': result, 'container_removed': removed, 'temp_removed': temp_removed})
         except FileNotFoundError:
             self.sendj(404, {'ok': False, 'error': {'code': 'project_or_ref_not_found', 'message': 'O projeto ou a referência não foi encontrado.'}})
+        except ArtifactError as e:
+            self.sendj(422, {'ok': False, 'error': e.as_dict()})
         except ChangeSetError as e:
             self.sendj(422, {'ok': False, 'error': e.as_dict()})
         except ValueError as e:

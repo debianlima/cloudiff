@@ -10,7 +10,7 @@ def c():
 def init():
  os.makedirs(os.path.dirname(DB),exist_ok=True);x=c();x.execute('pragma journal_mode=delete');x.executescript('''create table if not exists approvals(approval_id text primary key,project_slug text not null,action text not null,requested_by text not null,approved_by text,status text not null,reason text,created_at integer not null,expires_at integer not null,approved_at integer,consumed_at integer,trace_id text,metadata_json text not null default '{}');create index if not exists idx_approvals_status on approvals(status,expires_at);create unique index if not exists idx_approval_active on approvals(project_slug,action,requested_by) where status in ('pending','approved');''')
  cols={r[1] for r in x.execute('pragma table_info(approvals)')}
- for name,kind in [('rejected_by','text'),('rejected_at','integer'),('rejection_reason','text'),('reservation_id','text'),('reserved_by','text'),('reserved_at','integer'),('reservation_expires_at','integer'),('finalized_at','integer'),('finalize_result','text'),('requester_role','text'),('approver_role','text'),('authorization_mode','text'),('second_approved_by','text'),('second_approved_at','integer'),('second_approver_role','text'),('two_approvers_required','integer'),('approval_policy_id','text')]:
+ for name,kind in [('rejected_by','text'),('rejected_at','integer'),('rejection_reason','text'),('cancelled_by','text'),('cancelled_at','integer'),('cancellation_reason','text'),('reservation_id','text'),('reserved_by','text'),('reserved_at','integer'),('reservation_expires_at','integer'),('finalized_at','integer'),('finalize_result','text'),('requester_role','text'),('approver_role','text'),('authorization_mode','text'),('second_approved_by','text'),('second_approved_at','integer'),('second_approver_role','text'),('two_approvers_required','integer'),('approval_policy_id','text')]:
   if name not in cols:x.execute(f'alter table approvals add column {name} {kind}')
  approval_policy.init_tables(x)
  x.execute('drop index if exists idx_approval_active')
@@ -99,6 +99,15 @@ class H(BaseHTTPRequestHandler):
      x.commit();x.close();self.out(200,{'ok':True,'approval_id':aid,'status':'consumed','idempotent':True});return
     if r['status']!='reserved' or r['reservation_id']!=reservation_id:raise ValueError('reservation_mismatch')
     x.execute("update approvals set status='consumed',consumed_at=?,finalized_at=?,finalize_result=? where approval_id=? and status='reserved' and reservation_id=?",(now,now,result,aid,reservation_id));assert x.total_changes==1;x.commit();x.close();self.out(200,{'ok':True,'approval_id':aid,'status':'consumed','idempotent':False});return
+   if p.endswith('/cancel'):
+    aid=p.split('/')[-2];requester=str(d.get('requested_by')or'').strip();reason=str(d.get('cancellation_reason')or'').strip();assert requester and 4<=len(reason)<=500
+    r=x.execute('select * from approvals where approval_id=?',(aid,)).fetchone();assert r
+    if r['requested_by']!=requester:raise ValueError('approval_requester_mismatch')
+    if r['status']=='cancelled':
+     x.commit();x.close();self.out(200,{'ok':True,'approval_id':aid,'status':'cancelled','cancelled':True,'idempotent':True,'cancelled_at':r['cancelled_at']});return
+    if r['status'] not in ('pending','pending_second'):raise ValueError('approval_not_cancellable')
+    x.execute("update approvals set status='cancelled',cancelled_by=?,cancelled_at=?,cancellation_reason=? where approval_id=? and status in ('pending','pending_second')",(requester,now,reason,aid));assert x.total_changes==1
+    x.execute('delete from approval_policy_requests where approval_id=?',(aid,));x.commit();x.close();self.out(200,{'ok':True,'approval_id':aid,'status':'cancelled','cancelled':True,'idempotent':False,'cancelled_at':now});return
    if p.endswith('/reject'):
     aid=p.split('/')[-2];rejector=str(d.get('rejected_by')or'').strip();reason=str(d.get('rejection_reason')or'').strip();assert rejector and 4<=len(reason)<=500
     r=x.execute('select * from approvals where approval_id=?',(aid,)).fetchone();assert r

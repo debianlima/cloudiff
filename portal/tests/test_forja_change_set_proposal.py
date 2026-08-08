@@ -14,12 +14,12 @@ from pathlib import Path
 SOURCE = Path('components/runtime/current-apps/forja-agent-current/cloudif-forja-agent.py').read_text()
 TREE = ast.parse(SOURCE)
 WANTED_FUNCS = {
-    '_change_set_canonical_digest', '_change_set_validate_payload',
+    '_change_set_canonical_digest', '_change_set_validate_payload', '_change_set_current_bytes',
     '_change_set_existing_pr', 'cloudif_proposal_change_set_create',
 }
 WANTED_ASSIGNS = {
-    '_CHANGESET_WORKSPACE_RE', '_CHANGESET_DIGEST_RE', '_CHANGESET_PATH_RE',
-    '_CHANGESET_MAX_FILES', '_CHANGESET_MAX_FILE_BYTES', '_CHANGESET_MAX_TOTAL_BYTES',
+    '_CHANGESET_WORKSPACE_RE', '_CHANGESET_DIGEST_RE', '_CHANGESET_PATH_RE', '_CHANGESET_ARTIFACT_RE',
+    '_CHANGESET_MAX_FILES', '_CHANGESET_MAX_FILE_BYTES', '_CHANGESET_MAX_TOTAL_BYTES', '_CHANGESET_ARTIFACT_MAX_BYTES',
 }
 NODES = []
 for node in TREE.body:
@@ -70,13 +70,20 @@ class FakeForgejo:
         self.branch_files[path] = {'content': content, 'sha': 'new-sha-' + path}
         return 201, {'commit': {'sha': hashlib.sha1(path.encode()).hexdigest()}}
 
+    def put_bytes(self, owner, repo, path, branch, raw, message, sha=''):
+        if self.fail_on_put:
+            return 500, {'error': 'forced'}
+        self.branch_files[path] = {'content': raw, 'sha': 'new-sha-' + path}
+        return 201, {'commit': {'sha': hashlib.sha1(path.encode()).hexdigest()}}
+
     def delete_file(self, owner, repo, path, branch, message, sha):
         self.branch_files.pop(path, None)
         return 200, {'commit': {'sha': hashlib.sha1(('delete:' + path).encode()).hexdigest()}}
 
 
-def namespace(fake):
+def namespace(fake, artifacts=None):
     events = []
+    ns_artifacts = artifacts or {}
     ns = {
         're': re, 'base64': base64, 'hashlib': hashlib, 'hmac': hmac,
         'json': json, 'urllib': types.SimpleNamespace(parse=urllib.parse),
@@ -87,6 +94,8 @@ def namespace(fake):
         '_proposal_api': fake.api,
         '_v118_get_file': fake.get_file,
         '_v118_put_file': fake.put_file,
+        '_change_set_put_bytes': fake.put_bytes,
+        '_change_set_artifact_load': lambda slug, aid, digest, size: ns_artifacts[(slug, aid, digest, size)],
         '_v118_delete_file': fake.delete_file,
         'save_event': lambda *args: events.append(args),
         'now': lambda: '2026-08-06T18:00:00',
@@ -155,6 +164,15 @@ class ForjaChangeSetProposalTests(unittest.TestCase):
         self.assertEqual(code, 409)
         self.assertEqual(result['error'], 'hash_mismatch')
         self.assertIsNone(fake.branch)
+
+    def test_binary_artifact_is_committed_without_inline_base64(self):
+        binary=b'PK\x03\x04\x00binary-docx\x00'+bytes(range(64));digest=hashlib.sha256(binary).hexdigest();aid='art_'+'3'*24
+        fake=FakeForgejo();artifacts={('project-a',aid,digest,len(binary)):binary};ns,_=namespace(fake,artifacts)
+        data=payload(ns);data['changes'].append({'operation':'create','path':'Documentos Anonimizados/acervo.zip','artifact_id':aid,'content_sha256':digest,'size':len(binary)})
+        data['change_set_digest']=ns['_change_set_canonical_digest']('project-a','main','a'*64,'Normalize project','Validated changes',data['changes'])
+        code,result=ns['cloudif_proposal_change_set_create'](None,data)
+        self.assertEqual(code,201);self.assertTrue(result['ok']);self.assertEqual(fake.branch_files['Documentos Anonimizados/acervo.zip']['content'],binary)
+        self.assertNotIn('content_base64',data['changes'][-1])
 
     def test_route_and_mirrors_are_present(self):
         self.assertIn('/project/proposal/change-set/create', SOURCE)

@@ -18,6 +18,7 @@ Arquitetura modular, interface, configuração e testes do Portal.
 | [`test_admin_project_delete_contract.py`](test_admin_project_delete_contract.py) | `.py` | Implementa `AdminProjectDeleteContractTest`. |
 | [`test_admin_project_delete_runtime_contract.py`](test_admin_project_delete_runtime_contract.py) | `.py` | Implementa `AdminProjectDeleteRuntimeContractTest`. |
 | [`test_ai_connectors_hub.py`](test_ai_connectors_hub.py) | `.py` | Implementa `AIConnectorsHubTests`. |
+| [`test_approval_cancel.py`](test_approval_cancel.py) | `.py` | Implementa `load_api`, `ApprovalCancelTests`. |
 | [`test_authz_gate_tenant_allowlist.py`](test_authz_gate_tenant_allowlist.py) | `.py` | Implementa `load_module`, `AuthzGateTenantAllowlistTests`. |
 | [`test_backup_console_json_and_sections.py`](test_backup_console_json_and_sections.py) | `.py` | Implementa `BackupConsoleJsonAndSectionsTests`. |
 | [`test_backup_progress_modal.py`](test_backup_progress_modal.py) | `.py` | Implementa `BackupProgressModalTests`. |
@@ -179,6 +180,7 @@ Arquitetura modular, interface, configuração e testes do Portal.
 | [`test_user_owned_forgejo_and_komodo_acl.py`](test_user_owned_forgejo_and_komodo_acl.py) | `.py` | Implementa `UserOwnedForgejoAndKomodoAclTests`. |
 | [`test_versioned_unified_runtime_publication.py`](test_versioned_unified_runtime_publication.py) | `.py` | Implementa `VersionedUnifiedRuntimePublicationTests`. |
 | [`test_w_h_p_release_flow.py`](test_w_h_p_release_flow.py) | `.py` | Implementa `WHPReleaseFlowTests`. |
+| [`test_workspace_artifact_upload.py`](test_workspace_artifact_upload.py) | `.py` | Implementa `WorkspaceArtifactUploadTests`. |
 | [`test_workspace_change_set.py`](test_workspace_change_set.py) | `.py` | Implementa `b64`, `WorkspaceChangeSetTests`. |
 
 > Esta seção é gerada por `scripts/generate-directory-readmes.py`. Conteúdo manual fora dos marcadores é preservado.

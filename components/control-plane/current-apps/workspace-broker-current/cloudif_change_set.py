@@ -10,7 +10,7 @@ import re
 import secrets
 import time
 from pathlib import Path, PurePosixPath
-from typing import Any
+from typing import Any, Callable
 
 from cloudif_multitech_detector import IGNORED_TECH_DIRS, PRIVATE_FILE_RE
 
@@ -18,7 +18,8 @@ WORKSPACE_RE = re.compile(r'^ws_[a-f0-9]{24}$')
 SHA_RE = re.compile(r'^[a-f0-9]{64}$')
 MAX_CHANGES = 100
 MAX_FILE_BYTES = 256 * 1024
-MAX_TOTAL_BYTES = 2 * 1024 * 1024
+MAX_TOTAL_BYTES = 128 * 1024 * 1024
+MAX_EXISTING_FILE_BYTES = 64 * 1024 * 1024
 MAX_PATH = 240
 MAX_DIFF_LINES = 4000
 DEFAULT_TTL = 3600
@@ -97,7 +98,7 @@ def decode_content(value: Any, field: str) -> bytes:
     return raw
 
 
-def normalize_changes(changes: Any) -> tuple[list[dict[str, Any]], int]:
+def normalize_changes(changes: Any, artifact_resolver: Callable[[str], dict[str, Any]] | None = None) -> tuple[list[dict[str, Any]], int]:
     if not isinstance(changes, list) or not changes:
         raise ChangeSetError(
             'required_field_missing',
@@ -129,13 +130,32 @@ def normalize_changes(changes: Any) -> tuple[list[dict[str, Any]], int]:
             raise ChangeSetError('incompatible_field', 'Create e mkdir não aceitam expected_sha256.', field + '.expected_sha256')
         item: dict[str, Any] = {'operation': operation, 'path': path}
         if operation in {'create', 'update'}:
-            content = decode_content(raw_change.get('content_base64'), field + '.content_base64')
-            total += len(content)
+            encoded = raw_change.get('content_base64')
+            artifact_id = str(raw_change.get('artifact_id') or '').strip()
+            if bool(encoded) == bool(artifact_id):
+                raise ChangeSetError('content_source_required', 'Create e update exigem exatamente um de content_base64 ou artifact_id.', field, {'content_base64':'... ou ...','artifact_id':'art_...'} )
+            if artifact_id:
+                if artifact_resolver is None:
+                    raise ChangeSetError('artifact_resolver_unavailable', 'artifact_id não está disponível neste contexto.', field + '.artifact_id')
+                try: artifact = artifact_resolver(artifact_id)
+                except ChangeSetError: raise
+                except Exception as exc:
+                    code = getattr(exc, 'code', 'artifact_invalid')
+                    message = getattr(exc, 'message', 'O artifact_id não pôde ser validado.')
+                    raise ChangeSetError(str(code), str(message), field + '.artifact_id') from exc
+                size = int(artifact.get('size') or 0); digest = str(artifact.get('sha256') or '')
+                if not SHA_RE.fullmatch(digest) or size < 0:
+                    raise ChangeSetError('artifact_metadata_invalid', 'O artefato selado retornou metadados inválidos.', field + '.artifact_id')
+                total += size
+                item.update({'artifact_id':artifact_id,'content_sha256':digest,'size':size})
+            else:
+                content = decode_content(encoded, field + '.content_base64')
+                total += len(content)
+                item['content_base64'] = base64.b64encode(content).decode()
+                item['content_sha256'] = sha256(content)
+                item['size'] = len(content)
             if total > MAX_TOTAL_BYTES:
-                raise ChangeSetError('change_set_too_large', 'O conteúdo total do change set pode ter no máximo 2 MiB.', 'changes')
-            item['content_base64'] = base64.b64encode(content).decode()
-            item['content_sha256'] = sha256(content)
-            item['size'] = len(content)
+                raise ChangeSetError('change_set_too_large', 'O conteúdo total referenciado pelo change set pode ter no máximo 128 MiB.', 'changes')
         elif operation == 'mkdir':
             content = b''
             item['effective_path'] = effective_path
@@ -157,10 +177,8 @@ def _read_file(root: str, rel: str) -> bytes | None:
     if not path.is_file() or path.is_symlink():
         raise ChangeSetError('invalid_target_type', 'O caminho deve apontar para um arquivo regular.', rel)
     raw = path.read_bytes()
-    if len(raw) > MAX_FILE_BYTES:
-        raise ChangeSetError('existing_file_too_large', 'O arquivo existente excede 256 KiB.', rel)
-    if b'\x00' in raw:
-        raise ChangeSetError('binary_content_not_allowed', 'A primeira versão aceita somente arquivos textuais.', rel)
+    if len(raw) > MAX_EXISTING_FILE_BYTES:
+        raise ChangeSetError('existing_file_too_large', 'O arquivo existente excede 64 MiB.', rel)
     return raw
 
 
@@ -170,7 +188,7 @@ def _write_file(root: str, rel: str, content: bytes) -> None:
     path.write_bytes(content)
 
 
-def apply_changes(root: str, changes: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], list[str]]:
+def apply_changes(root: str, changes: list[dict[str, Any]], artifact_reader: Callable[[str, str, int], bytes] | None = None) -> tuple[list[dict[str, Any]], list[str]]:
     applied: list[dict[str, Any]] = []
     diff_lines: list[str] = []
     for item in changes:
@@ -181,7 +199,11 @@ def apply_changes(root: str, changes: list[dict[str, Any]]) -> tuple[list[dict[s
         if operation in {'create', 'mkdir'}:
             if before is not None:
                 raise ChangeSetError('path_already_exists', f'O caminho {path} já existe.', requested_path)
-            after = base64.b64decode(item.get('content_base64') or '')
+            if item.get('artifact_id'):
+                if artifact_reader is None: raise ChangeSetError('artifact_reader_unavailable', 'O conteúdo do artefato não está disponível.', requested_path)
+                after = artifact_reader(str(item['artifact_id']), str(item['content_sha256']), int(item['size']))
+            else:
+                after = base64.b64decode(item.get('content_base64') or '')
             _write_file(root, path, after)
         elif operation == 'update':
             if before is None:
@@ -189,7 +211,11 @@ def apply_changes(root: str, changes: list[dict[str, Any]]) -> tuple[list[dict[s
             actual = sha256(before)
             if actual != item['expected_sha256']:
                 raise ChangeSetError('hash_mismatch', f'O arquivo {path} mudou desde o snapshot.', requested_path, {'actual_sha256': actual})
-            after = base64.b64decode(item['content_base64'])
+            if item.get('artifact_id'):
+                if artifact_reader is None: raise ChangeSetError('artifact_reader_unavailable', 'O conteúdo do artefato não está disponível.', requested_path)
+                after = artifact_reader(str(item['artifact_id']), str(item['content_sha256']), int(item['size']))
+            else:
+                after = base64.b64decode(item['content_base64'])
             _write_file(root, path, after)
         else:
             if before is None:
@@ -199,12 +225,14 @@ def apply_changes(root: str, changes: list[dict[str, Any]]) -> tuple[list[dict[s
                 raise ChangeSetError('hash_mismatch', f'O arquivo {path} mudou desde o snapshot.', requested_path, {'actual_sha256': actual})
             after = None
             (Path(root) / path).unlink()
-        before_text = (before or b'').decode('utf-8')
-        after_text = (after or b'').decode('utf-8')
-        unified = list(difflib.unified_diff(
-            before_text.splitlines(), after_text.splitlines(),
-            fromfile='a/' + path, tofile='b/' + path, lineterm='', n=3,
-        ))
+        if item.get('artifact_id'):
+            unified = [f'Binary artifact a/{path} -> b/{path}', f'Before-SHA256: {sha256(before) if before is not None else "none"}', f'After-SHA256: {sha256(after) if after is not None else "none"}', f'After-Bytes: {len(after) if after is not None else 0}']
+        else:
+            try:
+                before_text = (before or b'').decode('utf-8'); after_text = (after or b'').decode('utf-8')
+                unified = list(difflib.unified_diff(before_text.splitlines(), after_text.splitlines(), fromfile='a/' + path, tofile='b/' + path, lineterm='', n=3))
+            except UnicodeDecodeError:
+                unified = [f'Binary files a/{path} and b/{path} differ', f'Before-SHA256: {sha256(before) if before is not None else "none"}', f'After-SHA256: {sha256(after) if after is not None else "none"}']
         remaining = max(0, MAX_DIFF_LINES - len(diff_lines))
         diff_lines.extend(unified[:remaining])
         applied.append({

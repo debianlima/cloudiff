@@ -113,5 +113,27 @@ class WorkspaceChangeSetTests(unittest.TestCase):
             self.assertFalse(path.exists())
 
 
+    def test_binary_artifact_is_referenced_not_inlined_and_applies_by_reader(self):
+        binary=b'PK\x03\x04\x00docx-or-zip\x00'+bytes(range(32));digest=MODULE.sha256(binary);artifact_id='art_'+'a'*24
+        def resolver(aid):
+            self.assertEqual(aid,artifact_id);return {'artifact_id':aid,'status':'sealed','sha256':digest,'size':len(binary)}
+        changes,total=MODULE.normalize_changes([{'operation':'create','path':'Documentos Anonimizados/acervo.zip','artifact_id':artifact_id}],resolver)
+        self.assertEqual(total,len(binary));self.assertEqual(changes[0]['artifact_id'],artifact_id);self.assertNotIn('content_base64',changes[0]);self.assertEqual(changes[0]['content_sha256'],digest)
+        with tempfile.TemporaryDirectory() as directory:
+            applied,diff=MODULE.apply_changes(directory,changes,lambda aid,sha,size: binary)
+            self.assertEqual((Path(directory)/'Documentos Anonimizados/acervo.zip').read_bytes(),binary)
+            self.assertIn('Binary artifact', '\n'.join(diff));self.assertEqual(applied[0]['after_sha256'],digest)
+
+    def test_inline_binary_remains_rejected(self):
+        with self.assertRaises(MODULE.ChangeSetError) as ctx:
+            MODULE.normalize_changes([{'operation':'create','path':'x.bin','content_base64':base64.b64encode(b'a\x00b').decode()}])
+        self.assertEqual(ctx.exception.code,'binary_content_not_allowed')
+
+    def test_content_source_is_exclusive(self):
+        with self.assertRaises(MODULE.ChangeSetError) as ctx:
+            MODULE.normalize_changes([{'operation':'create','path':'x.txt','content_base64':b64('x'),'artifact_id':'art_'+'a'*24}],lambda aid:{})
+        self.assertEqual(ctx.exception.code,'content_source_required')
+
+
 if __name__ == '__main__':
     unittest.main()

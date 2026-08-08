@@ -18,7 +18,7 @@ def sanitize(row):
  try:meta=json.loads(row.get('metadata_json') or '{}')
  except Exception:meta={}
  safe_meta={k:meta[k] for k in META_KEYS if k in meta}
- return {k:row.get(k) for k in ('approval_id','project_slug','action','requested_by','requester_role','approved_by','approver_role','second_approved_by','second_approver_role','two_approvers_required','authorization_mode','rejected_by','status','reason','created_at','expires_at','approved_at','rejected_at','consumed_at','rejection_reason','trace_id')}|{'action_label':ACTION_LABELS.get(row.get('action'),row.get('action')),'metadata':safe_meta}
+ return {k:row.get(k) for k in ('approval_id','project_slug','action','requested_by','requester_role','approved_by','approver_role','second_approved_by','second_approver_role','two_approvers_required','authorization_mode','rejected_by','cancelled_by','status','reason','created_at','expires_at','approved_at','rejected_at','cancelled_at','consumed_at','rejection_reason','cancellation_reason','trace_id')}|{'action_label':ACTION_LABELS.get(row.get('action'),row.get('action')),'metadata':safe_meta}
 def filter_rows(rows,slugs):return [sanitize(x) for x in rows if x.get('project_slug') in slugs]
 def sanitize_policy(row):
  return {k:row.get(k) for k in ('policy_id','project_slug','action','requested_by','created_by','creator_role','source_approval_id','created_at','revoked_at','revoked_by','revoke_reason')}|{'action_label':ACTION_LABELS.get(row.get('action'),row.get('action')),'active':not bool(row.get('revoked_at'))}
@@ -28,7 +28,7 @@ def fmt_epoch(v):
  try:return time.strftime('%d/%m/%Y %H:%M:%S',time.localtime(int(v)))
  except Exception:return '—'
 def badge(status):
- cls={'pending':'pending','pending_second':'pending','approved':'ok','consumed':'muted','rejected':'bad','expired':'muted'}.get(status,'muted')
+ cls={'pending':'pending','pending_second':'pending','approved':'ok','consumed':'muted','rejected':'bad','cancelled':'muted','expired':'muted'}.get(status,'muted')
  return '<span class="backup-status '+cls+'">'+html.escape(str(status))+'</span>'
 def render(rows,csrf,can_decide,policies=None):
  policies=policies or [];pending=sum(1 for x in rows if x['status'] in ('pending','pending_second'));approved=sum(1 for x in rows if x['status']=='approved');history=len(rows)-pending-approved

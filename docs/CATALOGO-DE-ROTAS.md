@@ -1,6 +1,6 @@
 # Catálogo de rotas e endpoints
 
-Catálogo estático de **588 referências de rota** encontradas nos serviços e módulos. Uma rota pode aparecer em mais de um adaptador por compatibilidade.
+Catálogo estático de **598 referências de rota** encontradas nos serviços e módulos. Uma rota pode aparecer em mais de um adaptador por compatibilidade.
 
 | Componente | Método observado | Rota |
 |---|---|---|
@@ -126,6 +126,7 @@ Catálogo estático de **588 referências de rota** encontradas nos serviços e 
 | [`components/control-plane/current-apps/mcp-gateway-current/cloudif-mcp-gateway.py`](../components/control-plane/current-apps/mcp-gateway-current/cloudif-mcp-gateway.py) | GET/POST | `/oauth/token` |
 | [`components/control-plane/current-apps/mcp-gateway-current/cloudif-mcp-gateway.py`](../components/control-plane/current-apps/mcp-gateway-current/cloudif-mcp-gateway.py) | GET/POST | `/project` |
 | [`components/control-plane/current-apps/mcp-gateway-current/cloudif-mcp-gateway.py`](../components/control-plane/current-apps/mcp-gateway-current/cloudif-mcp-gateway.py) | GET/POST | `/project/proposal/` |
+| [`components/control-plane/current-apps/mcp-gateway-current/cloudif-mcp-gateway.py`](../components/control-plane/current-apps/mcp-gateway-current/cloudif-mcp-gateway.py) | GET/POST | `/project/proposal/artifact/stage` |
 | [`components/control-plane/current-apps/mcp-gateway-current/cloudif-mcp-gateway.py`](../components/control-plane/current-apps/mcp-gateway-current/cloudif-mcp-gateway.py) | GET/POST | `/project/proposal/change-set/create` |
 | [`components/control-plane/current-apps/mcp-gateway-current/cloudif-mcp-gateway.py`](../components/control-plane/current-apps/mcp-gateway-current/cloudif-mcp-gateway.py) | GET/POST | `/project/proposal/create` |
 | [`components/control-plane/current-apps/mcp-gateway-current/cloudif-mcp-gateway.py`](../components/control-plane/current-apps/mcp-gateway-current/cloudif-mcp-gateway.py) | GET/POST | `/project/proposal/merge` |
@@ -134,6 +135,10 @@ Catálogo estático de **588 referências de rota** encontradas nos serviços e 
 | [`components/control-plane/current-apps/mcp-gateway-current/cloudif-mcp-gateway.py`](../components/control-plane/current-apps/mcp-gateway-current/cloudif-mcp-gateway.py) | GET/POST | `/v1/alerts` |
 | [`components/control-plane/current-apps/mcp-gateway-current/cloudif-mcp-gateway.py`](../components/control-plane/current-apps/mcp-gateway-current/cloudif-mcp-gateway.py) | GET/POST | `/v1/approvals` |
 | [`components/control-plane/current-apps/mcp-gateway-current/cloudif-mcp-gateway.py`](../components/control-plane/current-apps/mcp-gateway-current/cloudif-mcp-gateway.py) | GET/POST | `/v1/approvals/` |
+| [`components/control-plane/current-apps/mcp-gateway-current/cloudif-mcp-gateway.py`](../components/control-plane/current-apps/mcp-gateway-current/cloudif-mcp-gateway.py) | GET/POST | `/v1/artifact/chunk` |
+| [`components/control-plane/current-apps/mcp-gateway-current/cloudif-mcp-gateway.py`](../components/control-plane/current-apps/mcp-gateway-current/cloudif-mcp-gateway.py) | GET/POST | `/v1/artifact/complete` |
+| [`components/control-plane/current-apps/mcp-gateway-current/cloudif-mcp-gateway.py`](../components/control-plane/current-apps/mcp-gateway-current/cloudif-mcp-gateway.py) | GET/POST | `/v1/artifact/read` |
+| [`components/control-plane/current-apps/mcp-gateway-current/cloudif-mcp-gateway.py`](../components/control-plane/current-apps/mcp-gateway-current/cloudif-mcp-gateway.py) | GET/POST | `/v1/artifact/start` |
 | [`components/control-plane/current-apps/mcp-gateway-current/cloudif-mcp-gateway.py`](../components/control-plane/current-apps/mcp-gateway-current/cloudif-mcp-gateway.py) | GET/POST | `/v1/authorize` |
 | [`components/control-plane/current-apps/mcp-gateway-current/cloudif-mcp-gateway.py`](../components/control-plane/current-apps/mcp-gateway-current/cloudif-mcp-gateway.py) | GET/POST | `/v1/authorize-public` |
 | [`components/control-plane/current-apps/mcp-gateway-current/cloudif-mcp-gateway.py`](../components/control-plane/current-apps/mcp-gateway-current/cloudif-mcp-gateway.py) | GET/POST | `/v1/builds` |
@@ -437,13 +442,17 @@ Catálogo estático de **588 referências de rota** encontradas nos serviços e 
 | [`components/control-plane/current-apps/transaction-reconciler-current/cloudif-transaction-reconciler.py`](../components/control-plane/current-apps/transaction-reconciler-current/cloudif-transaction-reconciler.py) | GET/POST | `/v1/approvals?status=all` |
 | [`components/control-plane/current-apps/workspace-broker-current/cloudif-workspace-broker.py`](../components/control-plane/current-apps/workspace-broker-current/cloudif-workspace-broker.py) | GET | `/health` |
 | [`components/control-plane/current-apps/workspace-broker-current/cloudif-workspace-broker.py`](../components/control-plane/current-apps/workspace-broker-current/cloudif-workspace-broker.py) | GET/POST | `/project/archive?` |
+| [`components/control-plane/current-apps/workspace-broker-current/cloudif-workspace-broker.py`](../components/control-plane/current-apps/workspace-broker-current/cloudif-workspace-broker.py) | POST | `/v1/artifact/chunk` |
+| [`components/control-plane/current-apps/workspace-broker-current/cloudif-workspace-broker.py`](../components/control-plane/current-apps/workspace-broker-current/cloudif-workspace-broker.py) | POST | `/v1/artifact/complete` |
+| [`components/control-plane/current-apps/workspace-broker-current/cloudif-workspace-broker.py`](../components/control-plane/current-apps/workspace-broker-current/cloudif-workspace-broker.py) | POST | `/v1/artifact/read` |
+| [`components/control-plane/current-apps/workspace-broker-current/cloudif-workspace-broker.py`](../components/control-plane/current-apps/workspace-broker-current/cloudif-workspace-broker.py) | POST | `/v1/artifact/start` |
 | [`components/control-plane/current-apps/workspace-broker-current/cloudif-workspace-broker.py`](../components/control-plane/current-apps/workspace-broker-current/cloudif-workspace-broker.py) | GET/POST | `/v1/change-set/resolve` |
-| [`components/control-plane/current-apps/workspace-broker-current/cloudif-workspace-broker.py`](../components/control-plane/current-apps/workspace-broker-current/cloudif-workspace-broker.py) | POST | `/v1/change-set/validate` |
-| [`components/control-plane/current-apps/workspace-broker-current/cloudif-workspace-broker.py`](../components/control-plane/current-apps/workspace-broker-current/cloudif-workspace-broker.py) | POST | `/v1/detect-multiservice` |
+| [`components/control-plane/current-apps/workspace-broker-current/cloudif-workspace-broker.py`](../components/control-plane/current-apps/workspace-broker-current/cloudif-workspace-broker.py) | GET/POST | `/v1/change-set/validate` |
+| [`components/control-plane/current-apps/workspace-broker-current/cloudif-workspace-broker.py`](../components/control-plane/current-apps/workspace-broker-current/cloudif-workspace-broker.py) | GET/POST | `/v1/detect-multiservice` |
 | [`components/control-plane/current-apps/workspace-broker-current/cloudif-workspace-broker.py`](../components/control-plane/current-apps/workspace-broker-current/cloudif-workspace-broker.py) | GET/POST | `/v1/edit-preview` |
 | [`components/control-plane/current-apps/workspace-broker-current/cloudif-workspace-broker.py`](../components/control-plane/current-apps/workspace-broker-current/cloudif-workspace-broker.py) | GET/POST | `/v1/manifest/validate` |
-| [`components/control-plane/current-apps/workspace-broker-current/cloudif-workspace-broker.py`](../components/control-plane/current-apps/workspace-broker-current/cloudif-workspace-broker.py) | POST | `/v1/normalize-plan` |
-| [`components/control-plane/current-apps/workspace-broker-current/cloudif-workspace-broker.py`](../components/control-plane/current-apps/workspace-broker-current/cloudif-workspace-broker.py) | POST | `/v1/prepare` |
+| [`components/control-plane/current-apps/workspace-broker-current/cloudif-workspace-broker.py`](../components/control-plane/current-apps/workspace-broker-current/cloudif-workspace-broker.py) | GET/POST | `/v1/normalize-plan` |
+| [`components/control-plane/current-apps/workspace-broker-current/cloudif-workspace-broker.py`](../components/control-plane/current-apps/workspace-broker-current/cloudif-workspace-broker.py) | GET/POST | `/v1/prepare` |
 | [`components/control-plane/current-apps/workspace-broker-current/cloudif-workspace-broker.py`](../components/control-plane/current-apps/workspace-broker-current/cloudif-workspace-broker.py) | GET/POST | `/v1/preview-static` |
 | [`components/control-plane/current-apps/workspace-broker-current/cloudif-workspace-broker.py`](../components/control-plane/current-apps/workspace-broker-current/cloudif-workspace-broker.py) | POST | `/v1/probe` |
 | [`components/control-plane/current-apps/workspace-broker-current/cloudif-workspace-broker.py`](../components/control-plane/current-apps/workspace-broker-current/cloudif-workspace-broker.py) | GET/POST | `/v1/test-static` |
@@ -479,6 +488,7 @@ Catálogo estático de **588 referências de rota** encontradas nos serviços e 
 | [`components/runtime/current-apps/forja-agent-current/cloudif-forja-agent.py`](../components/runtime/current-apps/forja-agent-current/cloudif-forja-agent.py) | GET/POST | `/project/file/rollback` |
 | [`components/runtime/current-apps/forja-agent-current/cloudif-forja-agent.py`](../components/runtime/current-apps/forja-agent-current/cloudif-forja-agent.py) | GET/POST | `/project/membership/reconcile` |
 | [`components/runtime/current-apps/forja-agent-current/cloudif-forja-agent.py`](../components/runtime/current-apps/forja-agent-current/cloudif-forja-agent.py) | GET/POST | `/project/proposal/action` |
+| [`components/runtime/current-apps/forja-agent-current/cloudif-forja-agent.py`](../components/runtime/current-apps/forja-agent-current/cloudif-forja-agent.py) | GET/POST | `/project/proposal/artifact/stage` |
 | [`components/runtime/current-apps/forja-agent-current/cloudif-forja-agent.py`](../components/runtime/current-apps/forja-agent-current/cloudif-forja-agent.py) | GET/POST | `/project/proposal/change-set/create` |
 | [`components/runtime/current-apps/forja-agent-current/cloudif-forja-agent.py`](../components/runtime/current-apps/forja-agent-current/cloudif-forja-agent.py) | GET/POST | `/project/proposal/close` |
 | [`components/runtime/current-apps/forja-agent-current/cloudif-forja-agent.py`](../components/runtime/current-apps/forja-agent-current/cloudif-forja-agent.py) | GET/POST | `/project/proposal/create` |

@@ -22,8 +22,10 @@ from pathlib import Path
 ENVFILE = Path("/etc/cloudif/forja-agent.env")
 STATE_DIR = Path("/var/lib/cloudif/forja-agent/projects")
 EVENT_DIR = Path("/var/lib/cloudif/forja-agent/events")
+ARTIFACT_STAGE_DIR = Path("/var/lib/cloudif/forja-agent/artifacts")
 STATE_DIR.mkdir(parents=True, exist_ok=True)
 EVENT_DIR.mkdir(parents=True, exist_ok=True)
+ARTIFACT_STAGE_DIR.mkdir(parents=True, exist_ok=True)
 
 SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{1,62}$")
 
@@ -2561,9 +2563,123 @@ def cloudif_proposal_create(handler, data):
         return json_response(handler,502,{'ok':False,'error':str(e)[:120],'branch_cleaned':created and not pr})
 
 
+_CHANGESET_ARTIFACT_RE = re.compile(r'^art_[a-f0-9]{24}$')
+_CHANGESET_ARTIFACT_MAX_BYTES = 64 * 1024 * 1024
+
+
+def _change_set_artifact_paths(artifact_id):
+    return ARTIFACT_STAGE_DIR/(artifact_id+'.bin'), ARTIFACT_STAGE_DIR/(artifact_id+'.json')
+
+
+def _change_set_artifact_clean_expired():
+    now_i=int(time.time());removed=0
+    for meta in ARTIFACT_STAGE_DIR.glob('art_*.json'):
+        artifact_id=meta.stem
+        if not _CHANGESET_ARTIFACT_RE.fullmatch(artifact_id):continue
+        try:data=json.loads(meta.read_text())
+        except Exception:data={}
+        if int(data.get('expires_at') or 0)<=now_i:
+            payload,_=_change_set_artifact_paths(artifact_id)
+            for q in (payload,meta):
+                try:q.unlink()
+                except FileNotFoundError:pass
+            removed+=1
+    return removed
+
+
+def _change_set_current_bytes(current):
+    data=current.get('data') if isinstance(current,dict) and isinstance(current.get('data'),dict) else {}
+    encoded=data.get('content')
+    if isinstance(encoded,str) and encoded:
+        try:return base64.b64decode(encoded,validate=False)
+        except Exception:pass
+    return str((current or {}).get('content') or '').encode('utf-8')
+
+
+def _change_set_artifact_stage(handler, raw):
+    _change_set_artifact_clean_expired()
+    artifact_id=str(handler.headers.get('X-CloudIF-Artifact-Id') or '').strip();slug=str(handler.headers.get('X-CloudIF-Project-Slug') or '').strip();digest=str(handler.headers.get('X-CloudIF-Artifact-Sha256') or '').strip().lower()
+    try:size=int(handler.headers.get('X-CloudIF-Artifact-Size') or '-1');expires=int(handler.headers.get('X-CloudIF-Artifact-Expires') or '0')
+    except Exception:return json_response(handler,400,{'ok':False,'error':'invalid_artifact_headers'})
+    if not _CHANGESET_ARTIFACT_RE.fullmatch(artifact_id) or not SLUG_RE.fullmatch(slug) or not _CHANGESET_DIGEST_RE.fullmatch(digest) or size<0 or size>_CHANGESET_ARTIFACT_MAX_BYTES or size!=len(raw):return json_response(handler,400,{'ok':False,'error':'invalid_artifact_metadata'})
+    now_i=int(time.time())
+    if expires<=now_i or expires>now_i+86400:return json_response(handler,400,{'ok':False,'error':'invalid_artifact_expiry'})
+    actual=hashlib.sha256(raw).hexdigest()
+    if not hmac.compare_digest(actual,digest):return json_response(handler,422,{'ok':False,'error':'artifact_sha256_mismatch'})
+    if not load_project(slug):return json_response(handler,404,{'ok':False,'error':'project_not_found'})
+    payload,meta=_change_set_artifact_paths(artifact_id)
+    if payload.is_file() and meta.is_file():
+        try:old=json.loads(meta.read_text())
+        except Exception:old={}
+        if old.get('project_slug')==slug and old.get('sha256')==digest and int(old.get('size') or -1)==size and hashlib.sha256(payload.read_bytes()).hexdigest()==digest:
+            return json_response(handler,200,{'ok':True,'artifact_id':artifact_id,'status':'staged','idempotent':True,'size':size,'sha256':digest})
+        return json_response(handler,409,{'ok':False,'error':'artifact_stage_conflict'})
+    tmp_payload=ARTIFACT_STAGE_DIR/('.'+artifact_id+'.tmp-'+secrets.token_hex(4));tmp_meta=ARTIFACT_STAGE_DIR/('.'+artifact_id+'.json.tmp-'+secrets.token_hex(4))
+    try:
+        fd=os.open(tmp_payload,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)
+        with os.fdopen(fd,'wb') as h:h.write(raw);h.flush();os.fsync(h.fileno())
+        metadata={'version':1,'artifact_id':artifact_id,'project_slug':slug,'sha256':digest,'size':size,'expires_at':expires,'staged_at':now_i}
+        fd=os.open(tmp_meta,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)
+        with os.fdopen(fd,'w',encoding='utf-8') as h:json.dump(metadata,h,separators=(',',':'));h.flush();os.fsync(h.fileno())
+        os.replace(tmp_payload,payload);os.replace(tmp_meta,meta)
+        return json_response(handler,201,{'ok':True,'artifact_id':artifact_id,'status':'staged','idempotent':False,'size':size,'sha256':digest})
+    except Exception:
+        for q in (tmp_payload,tmp_meta):
+            try:q.unlink()
+            except FileNotFoundError:pass
+        return json_response(handler,503,{'ok':False,'error':'artifact_stage_failed'})
+
+
+def _change_set_artifact_load(slug,artifact_id,digest,size):
+    _change_set_artifact_clean_expired()
+    if not _CHANGESET_ARTIFACT_RE.fullmatch(str(artifact_id or '')):raise ValueError('invalid_artifact_id')
+    payload,meta=_change_set_artifact_paths(artifact_id)
+    if not payload.is_file() or payload.is_symlink() or not meta.is_file() or meta.is_symlink():raise ValueError('artifact_not_staged')
+    try:data=json.loads(meta.read_text())
+    except Exception:raise ValueError('artifact_metadata_invalid')
+    if data.get('project_slug')!=slug or data.get('sha256')!=digest or int(data.get('size') or -1)!=int(size):raise ValueError('artifact_binding_mismatch')
+    if int(data.get('expires_at') or 0)<=int(time.time()):raise ValueError('artifact_stage_expired')
+    raw=payload.read_bytes()
+    if len(raw)!=int(size) or not hmac.compare_digest(hashlib.sha256(raw).hexdigest(),digest):raise ValueError('artifact_integrity_failed')
+    return raw
+
+
+def _change_set_git_commit_bytes(owner,repo,path,branch,raw,message):
+    token=_v118_cfg('FORGEJO_TOKEN','')
+    if not token:return 0,{'error':'forgejo_token_missing'}
+    tmp=tempfile.mkdtemp(prefix='cloudif-artifact-commit-')
+    try:
+        url=_v119_forgejo_repo_git_url(owner,repo);clone=_v119_run(['git','clone','--depth','1','--branch',branch,url,tmp],timeout=120)
+        if clone['returncode']!=0:clone=_v119_run(['git','clone',url,tmp],timeout=120)
+        if clone['returncode']!=0:return 0,{'error':'git_clone_failed','detail':clone}
+        _v119_run(['git','config','user.name','CloudIF Bot'],cwd=tmp);_v119_run(['git','config','user.email','cloudif-bot@cloudiff.local'],cwd=tmp)
+        checkout=_v119_run(['git','checkout','-B',branch],cwd=tmp)
+        if checkout['returncode']!=0:return 0,{'error':'git_checkout_failed','detail':checkout}
+        target=Path(tmp)/path;target.parent.mkdir(parents=True,exist_ok=True);target.write_bytes(raw)
+        add=_v119_run(['git','add','--',path],cwd=tmp)
+        if add['returncode']!=0:return 0,{'error':'git_add_failed','detail':add}
+        commit=_v119_run(['git','commit','-m',message],cwd=tmp,timeout=120)
+        if commit['returncode']!=0:return 0,{'error':'git_commit_failed','detail':commit}
+        push=_v119_run(['git','push','origin',f'HEAD:{branch}'],cwd=tmp,timeout=180)
+        if push['returncode']!=0:return 0,{'error':'git_push_failed','detail':push}
+        head=_v119_run(['git','rev-parse','HEAD'],cwd=tmp);return 201,{'ok':True,'git_binary':True,'commit':{'sha':(head.get('stdout') or '').strip()}}
+    finally:shutil.rmtree(tmp,ignore_errors=True)
+
+
+def _change_set_put_bytes(owner,repo,path,branch,raw,message,sha=''):
+    # Keep large artifacts out of JSON/Base64 even on the backend path.
+    if len(raw)>1024*1024:
+        return _change_set_git_commit_bytes(owner,repo,path,branch,raw,message)
+    token=_v118_cfg('FORGEJO_TOKEN','');url=_v120_forgejo_contents_url(owner,repo,path);payload={'branch':branch,'message':message,'content':base64.b64encode(raw).decode('ascii')}
+    method='POST'
+    if sha:payload['sha']=sha;method='PUT'
+    st,data=_v118_forgejo_api(method,url,token,payload=payload,timeout=120)
+    if st in (200,201):return st,data
+    return _change_set_git_commit_bytes(owner,repo,path,branch,raw,message)
+
 _CHANGESET_WORKSPACE_RE = re.compile(r'^ws_[a-f0-9]{24}$')
 _CHANGESET_DIGEST_RE = re.compile(r'^[a-f0-9]{64}$')
-_CHANGESET_PATH_RE = re.compile(r'^(?!/)(?!.*(?:^|/)\.\.(?:/|$))(?!\.git(?:/|$))[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)*$')
+_CHANGESET_PATH_RE = re.compile(r'^(?!/)(?!.*(?:^|/)\.\.(?:/|$))(?!.*(?:^|/)\.git(?:/|$))[^\x00-\x1f/\\]+(?:/[^\x00-\x1f/\\]+)*$')
 _CHANGESET_MAX_FILES = 100
 _CHANGESET_MAX_FILE_BYTES = 256 * 1024
 _CHANGESET_MAX_TOTAL_BYTES = 2 * 1024 * 1024
@@ -2614,7 +2730,7 @@ def _change_set_validate_payload(data):
         operation = str(item.get('operation') or '')
         path = str(item.get('path') or '')
         effective_path = str(item.get('effective_path') or path)
-        if operation not in {'create','update','delete','mkdir'} or not _CHANGESET_PATH_RE.fullmatch(path) or not _CHANGESET_PATH_RE.fullmatch(effective_path):
+        if operation not in {'create','update','delete','mkdir'} or not _CHANGESET_PATH_RE.fullmatch(path) or not _CHANGESET_PATH_RE.fullmatch(effective_path) or any(part in {'','.','..','.git'} for part in path.split('/')) or any(part in {'','.','..','.git'} for part in effective_path.split('/')):
             raise ValueError('invalid_change_path_or_operation')
         if effective_path in seen:
             raise ValueError('duplicate_change_path')
@@ -2626,20 +2742,32 @@ def _change_set_validate_payload(data):
         if effective_path != path:
             clean['effective_path'] = effective_path
         if operation in {'create','update','mkdir'}:
-            encoded = item.get('content_base64')
-            if not isinstance(encoded,str):raise ValueError('content_base64_required')
-            try:raw = base64.b64decode(encoded,validate=True)
-            except Exception:raise ValueError('invalid_content_base64')
-            if len(raw) > _CHANGESET_MAX_FILE_BYTES or b'\x00' in raw:
-                raise ValueError('invalid_content')
-            try:raw.decode('utf-8')
-            except UnicodeDecodeError:raise ValueError('invalid_content_utf8')
-            total += len(raw)
-            if total > _CHANGESET_MAX_TOTAL_BYTES:raise ValueError('change_set_too_large')
-            content_sha = hashlib.sha256(raw).hexdigest()
-            if str(item.get('content_sha256') or '') != content_sha or int(item.get('size') or 0) != len(raw):
-                raise ValueError('content_metadata_mismatch')
-            clean.update({'content_base64':base64.b64encode(raw).decode(),'content_sha256':content_sha,'size':len(raw)})
+            artifact_id=str(item.get('artifact_id') or '').strip();encoded=item.get('content_base64')
+            if operation=='mkdir':
+                if artifact_id or not isinstance(encoded,str):raise ValueError('invalid_mkdir_content')
+                raw=base64.b64decode(encoded or '',validate=True)
+                if raw:raise ValueError('invalid_mkdir_content')
+                content_sha=hashlib.sha256(raw).hexdigest();clean.update({'content_base64':'','content_sha256':content_sha,'size':0})
+            elif artifact_id:
+                if encoded not in (None,''):raise ValueError('multiple_content_sources')
+                content_sha=str(item.get('content_sha256') or '').strip().lower();size=int(item.get('size') or -1)
+                if not _CHANGESET_ARTIFACT_RE.fullmatch(artifact_id) or not _CHANGESET_DIGEST_RE.fullmatch(content_sha) or size<0 or size>_CHANGESET_ARTIFACT_MAX_BYTES:raise ValueError('invalid_artifact_metadata')
+                _change_set_artifact_load(slug,artifact_id,content_sha,size)
+                total+=size
+                if total>128*1024*1024:raise ValueError('change_set_too_large')
+                clean.update({'artifact_id':artifact_id,'content_sha256':content_sha,'size':size})
+            else:
+                if not isinstance(encoded,str):raise ValueError('content_base64_required')
+                try:raw=base64.b64decode(encoded,validate=True)
+                except Exception:raise ValueError('invalid_content_base64')
+                if len(raw)>_CHANGESET_MAX_FILE_BYTES or b'\x00' in raw:raise ValueError('invalid_content')
+                try:raw.decode('utf-8')
+                except UnicodeDecodeError:raise ValueError('invalid_content_utf8')
+                total+=len(raw)
+                if total>128*1024*1024:raise ValueError('change_set_too_large')
+                content_sha=hashlib.sha256(raw).hexdigest()
+                if str(item.get('content_sha256') or '')!=content_sha or int(item.get('size') or 0)!=len(raw):raise ValueError('content_metadata_mismatch')
+                clean.update({'content_base64':base64.b64encode(raw).decode(),'content_sha256':content_sha,'size':len(raw)})
         if operation in {'update','delete'}:
             clean['expected_sha256'] = expected
         normalized.append(clean)
@@ -2702,7 +2830,7 @@ def cloudif_proposal_change_set_create(handler, data):
         if operation in {'update','delete'}:
             if not current.get('exists'):
                 return json_response(handler,404,{'ok':False,'error':'file_not_found','path':path})
-            actual=hashlib.sha256(str(current.get('content') or '').encode()).hexdigest()
+            actual=hashlib.sha256(_change_set_current_bytes(current)).hexdigest()
             if not hmac.compare_digest(actual,item['expected_sha256']):
                 return json_response(handler,409,{'ok':False,'error':'hash_mismatch','path':path,'actual_sha256':actual})
         preflight.append({'path':path,'operation':operation,'exists':bool(current.get('exists'))})
@@ -2721,8 +2849,12 @@ def cloudif_proposal_change_set_create(handler, data):
                 if not current.get('exists'):raise RuntimeError('branch_file_not_found')
                 status,response=_v118_delete_file(owner,repo,path,branch,message,current.get('sha') or '')
             else:
-                content=base64.b64decode(item.get('content_base64') or '').decode('utf-8')
-                status,response=_v118_put_file(owner,repo,path,branch,content,message,sha=(current.get('sha') or ''))
+                if item.get('artifact_id'):
+                    raw=_change_set_artifact_load(slug,str(item['artifact_id']),str(item['content_sha256']),int(item['size']))
+                    status,response=_change_set_put_bytes(owner,repo,path,branch,raw,message,sha=(current.get('sha') or ''))
+                else:
+                    content=base64.b64decode(item.get('content_base64') or '').decode('utf-8')
+                    status,response=_v118_put_file(owner,repo,path,branch,content,message,sha=(current.get('sha') or ''))
             if status not in (200,201,204):raise RuntimeError('change_commit_failed')
             commit_sha=((response.get('commit') or {}).get('sha') if isinstance(response,dict) else '') or ''
             commits.append({'path':path,'operation':operation,'commit_sha':commit_sha})
@@ -2847,6 +2979,8 @@ class Handler(BaseHTTPRequestHandler):
         path = parsed.path
 
         length = int(self.headers.get("Content-Length", "0"))
+        if path == "/project/proposal/artifact/stage" and (length < 0 or length > _CHANGESET_ARTIFACT_MAX_BYTES):
+            return json_response(self, 413, {"ok": False, "error": "artifact_too_large"})
         raw = self.rfile.read(length) if length else b"{}"
 
         if path.startswith("/webhook/forgejo/"):
@@ -2892,6 +3026,9 @@ class Handler(BaseHTTPRequestHandler):
 
         if not (_cloudif_v114_is_webhook_path(self.path) or self.authorized()):
             return json_response(self, 403, {"ok": False, "error": "invalid_token"})
+
+        if path == "/project/proposal/artifact/stage":
+            return _change_set_artifact_stage(self, raw)
 
         try:
             data = json.loads(raw.decode() or "{}")

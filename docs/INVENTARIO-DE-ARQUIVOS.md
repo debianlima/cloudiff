@@ -1,6 +1,6 @@
 # Inventário de arquivos
 
-Este catálogo descreve **1139 arquivos versionados**. Ele é regenerado pelo script de documentação.
+Este catálogo descreve **1142 arquivos versionados**. Ele é regenerado pelo script de documentação.
 
 | Caminho | Finalidade |
 |---|---|
@@ -97,6 +97,7 @@ Este catálogo descreve **1139 arquivos versionados**. Ele é regenerado pelo sc
 | [`components/control-plane/current-apps/workspace-broker-current/cloudif-workspace-broker.py`](../components/control-plane/current-apps/workspace-broker-current/cloudif-workspace-broker.py) | Implementa `docker`, `base_container_args`, `probe`, `fetch_archive`, `safe_extract`, `detect_technologies` e outros componentes. |
 | [`components/control-plane/current-apps/workspace-broker-current/cloudif_change_set.py`](../components/control-plane/current-apps/workspace-broker-current/cloudif_change_set.py) | Implementa `ChangeSetError`, `sha256`, `canonical`, `change_set_digest`, `normalize_path`, `decode_content` e outros componentes. |
 | [`components/control-plane/current-apps/workspace-broker-current/cloudif_multitech_detector.py`](../components/control-plane/current-apps/workspace-broker-current/cloudif_multitech_detector.py) | Implementa `path_allowed`, `safe_json_file`, `safe_yaml_file`, `service_name`, `node_version`, `node_component` e outros componentes. |
+| [`components/control-plane/current-apps/workspace-broker-current/cloudif_workspace_artifact.py`](../components/control-plane/current-apps/workspace-broker-current/cloudif_workspace_artifact.py) | Implementa `_artifact_lock`, `ArtifactError`, `_root`, `_dir`, `_meta_path`, `_payload_path` e outros componentes. |
 | [`components/control-plane/etc/README.md`](../components/control-plane/etc/README.md) | Documentação deste diretório. |
 | [`components/control-plane/etc/cloudif-multiservice-preview.env.example`](../components/control-plane/etc/cloudif-multiservice-preview.env.example) | Modelo de variáveis de ambiente; não deve conter segredos reais. |
 | [`components/control-plane/etc/cloudif-project-config-controller.env.example`](../components/control-plane/etc/cloudif-project-config-controller.env.example) | Modelo de variáveis de ambiente; não deve conter segredos reais. |
@@ -824,6 +825,7 @@ Este catálogo descreve **1139 arquivos versionados**. Ele é regenerado pelo sc
 | [`portal/tests/test_admin_project_delete_contract.py`](../portal/tests/test_admin_project_delete_contract.py) | Implementa `AdminProjectDeleteContractTest`. |
 | [`portal/tests/test_admin_project_delete_runtime_contract.py`](../portal/tests/test_admin_project_delete_runtime_contract.py) | Implementa `AdminProjectDeleteRuntimeContractTest`. |
 | [`portal/tests/test_ai_connectors_hub.py`](../portal/tests/test_ai_connectors_hub.py) | Implementa `AIConnectorsHubTests`. |
+| [`portal/tests/test_approval_cancel.py`](../portal/tests/test_approval_cancel.py) | Implementa `load_api`, `ApprovalCancelTests`. |
 | [`portal/tests/test_authz_gate_tenant_allowlist.py`](../portal/tests/test_authz_gate_tenant_allowlist.py) | Implementa `load_module`, `AuthzGateTenantAllowlistTests`. |
 | [`portal/tests/test_backup_console_json_and_sections.py`](../portal/tests/test_backup_console_json_and_sections.py) | Implementa `BackupConsoleJsonAndSectionsTests`. |
 | [`portal/tests/test_backup_progress_modal.py`](../portal/tests/test_backup_progress_modal.py) | Implementa `BackupProgressModalTests`. |
@@ -985,6 +987,7 @@ Este catálogo descreve **1139 arquivos versionados**. Ele é regenerado pelo sc
 | [`portal/tests/test_user_owned_forgejo_and_komodo_acl.py`](../portal/tests/test_user_owned_forgejo_and_komodo_acl.py) | Implementa `UserOwnedForgejoAndKomodoAclTests`. |
 | [`portal/tests/test_versioned_unified_runtime_publication.py`](../portal/tests/test_versioned_unified_runtime_publication.py) | Implementa `VersionedUnifiedRuntimePublicationTests`. |
 | [`portal/tests/test_w_h_p_release_flow.py`](../portal/tests/test_w_h_p_release_flow.py) | Implementa `WHPReleaseFlowTests`. |
+| [`portal/tests/test_workspace_artifact_upload.py`](../portal/tests/test_workspace_artifact_upload.py) | Implementa `WorkspaceArtifactUploadTests`. |
 | [`portal/tests/test_workspace_change_set.py`](../portal/tests/test_workspace_change_set.py) | Implementa `b64`, `WorkspaceChangeSetTests`. |
 | [`portal/ui/README.md`](../portal/ui/README.md) | Documentação deste diretório. |
 | [`portal/ui/__init__.py`](../portal/ui/__init__.py) | Portal v2 UI primitives. |

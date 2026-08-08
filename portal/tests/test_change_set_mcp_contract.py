@@ -21,7 +21,8 @@ READ_TOOLS = {
     'forgejo.proposal.change-set.plan',
 }
 WRITE_TOOLS = {
-    'approval.request-change-set-proposal',
+    'workspace.artifact.upload.start', 'workspace.artifact.upload.chunk', 'workspace.artifact.upload.complete',
+    'approval.request-change-set-proposal', 'approval.cancel',
     'forgejo.proposal.change-set.create',
 }
 
@@ -38,7 +39,7 @@ class ChangeSetMCPContractTests(unittest.TestCase):
         cls.guide = GUIDE.read_text()
 
     def test_workspace_profiles_are_internal_and_sealed(self):
-        for route in ('/v1/normalize-plan', '/v1/change-set/validate', '/v1/change-set/resolve'):
+        for route in ('/v1/artifact/start','/v1/artifact/chunk','/v1/artifact/complete','/v1/artifact/read','/v1/normalize-plan', '/v1/change-set/validate', '/v1/change-set/resolve'):
             self.assertIn(route, self.broker)
         for marker in (
             'seal_change_set', 'load_sealed', 'source_changed',
@@ -59,8 +60,8 @@ class ChangeSetMCPContractTests(unittest.TestCase):
     def test_change_set_security_limits_are_explicit(self):
         for marker in (
             'MAX_CHANGES = 100', 'MAX_FILE_BYTES = 256 * 1024',
-            'MAX_TOTAL_BYTES = 2 * 1024 * 1024', 'PRIVATE_FILE_RE',
-            'binary_content_not_allowed', 'expected_sha256_required',
+            'MAX_TOTAL_BYTES = 128 * 1024 * 1024', 'MAX_EXISTING_FILE_BYTES = 64 * 1024 * 1024', 'PRIVATE_FILE_RE',
+            'binary_content_not_allowed', 'artifact_id', 'expected_sha256_required',
             'hash_mismatch', 'workspace_expired', 'workspace_project_mismatch',
         ):
             self.assertIn(marker, self.change_set)
@@ -93,6 +94,19 @@ class ChangeSetMCPContractTests(unittest.TestCase):
             'approval_binding_mismatch', 'change_set_resolve',
         ):
             self.assertIn(marker, execute)
+
+    def test_artifact_transport_stays_out_of_change_set_json(self):
+        for marker in ('workspace.artifact.upload.start','workspace.artifact.upload.chunk','workspace.artifact.upload.complete',"'artifact_id':{'type':'string'",'def workspace_artifact_read','application/octet-stream','def forgejo_artifact_stage','def stage_change_set_artifacts'):
+            self.assertIn(marker,self.gateway)
+        for marker in ('/project/proposal/artifact/stage','def _change_set_artifact_stage','def _change_set_artifact_load','def _change_set_put_bytes','_CHANGESET_ARTIFACT_MAX_BYTES = 64 * 1024 * 1024',"if len(raw)>1024*1024",'def _change_set_git_commit_bytes'):
+            self.assertIn(marker,self.forja)
+        self.assertIn("'content_stored':False",self.gateway)
+
+    def test_approval_cancel_is_own_pending_request_only_contract(self):
+        self.assertIn("'name':'approval.cancel'",self.gateway)
+        self.assertIn("'approval.cancel':'approval:read-own'",self.gateway)
+        read_block=self.gateway[self.gateway.index('READ_ONLY_TOOLS='):self.gateway.index('DESTRUCTIVE_TOOLS=')]
+        self.assertNotIn("'approval.cancel'",read_block)
 
     def test_agent_preflights_all_files_and_rolls_back_branch(self):
         for marker in (
