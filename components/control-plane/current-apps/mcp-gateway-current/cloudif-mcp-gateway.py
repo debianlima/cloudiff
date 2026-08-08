@@ -330,12 +330,14 @@ TOOLS=[
  {'name':'approval.request-proposal','description':'Cria uma aprovação pendente vinculada ao digest canônico de uma proposta Forgejo','inputSchema':{'type':'object','properties':{'slug':{'type':'string','minLength':1,'maxLength':63,'pattern':'^[a-z0-9][a-z0-9-]*$'},'path':{'type':'string','minLength':10,'maxLength':240,'pattern':'^site/(?:[A-Za-z0-9_.-]+/)*[A-Za-z0-9_.-]+[.]html$'},'expected_sha256':{'type':'string','pattern':'^[a-f0-9]{64}$'},'find':{'type':'string','minLength':1,'maxLength':512},'replace':{'type':'string','maxLength':1024},'title':{'type':'string','minLength':4,'maxLength':160},'body':{'type':'string','maxLength':4000},'reason':{'type':'string','minLength':4,'maxLength':500},'ttl_seconds':{'type':'integer','minimum':60,'maximum':86400}},'required':['slug','path','expected_sha256','find','replace','title','body','reason'],'additionalProperties':False}},
  {'name':'approval.get','description':'Consulta uma aprovação própria vinculada ao projeto autorizado','inputSchema':{'type':'object','properties':{'slug':{'type':'string','minLength':1,'maxLength':63,'pattern':'^[a-z0-9][a-z0-9-]*$'},'approval_id':{'type':'string','pattern':'^apr_[a-f0-9]{20}$'}},'required':['slug','approval_id'],'additionalProperties':False}},
  {'name':'approval.cancel','description':'Cancela uma aprovação pendente solicitada pelo próprio cliente e libera uma nova solicitação corrigida','inputSchema':{'type':'object','properties':{'slug':{'type':'string','minLength':1,'maxLength':63,'pattern':'^[a-z0-9][a-z0-9-]*$'},'approval_id':{'type':'string','pattern':'^apr_[a-f0-9]{20}$'},'reason':{'type':'string','minLength':4,'maxLength':500}},'required':['slug','approval_id','reason'],'additionalProperties':False}},
- {'name':'forgejo.proposal.list','description':'Lista pull requests do projeto autorizado por meio do agente da forja, sem efeitos persistentes','inputSchema':{'type':'object','properties':{'slug':{'type':'string','minLength':1,'maxLength':63,'pattern':'^[a-z0-9][a-z0-9-]*$'},'state':{'type':'string','enum':['open','closed','all']},'limit':{'type':'integer','minimum':1,'maximum':50}},'required':['slug'],'additionalProperties':False}},
+ {'name':'forgejo.proposal.list','description':'Lista pull requests com head_sha, base_sha e motivo de bloqueio de merge, sem efeitos persistentes','inputSchema':{'type':'object','properties':{'slug':{'type':'string','minLength':1,'maxLength':63,'pattern':'^[a-z0-9][a-z0-9-]*$'},'state':{'type':'string','enum':['open','closed','all']},'limit':{'type':'integer','minimum':1,'maximum':50}},'required':['slug'],'additionalProperties':False}},
+ {'name':'forgejo.proposal.get','description':'Consulta um pull request e retorna head_sha, base_sha, draft, mergeable_state e merge_block_reason','inputSchema':{'type':'object','properties':{'slug':{'type':'string','minLength':1,'maxLength':63,'pattern':'^[a-z0-9][a-z0-9-]*$'},'number':{'type':'integer','minimum':1,'maximum':2147483647}},'required':['slug','number'],'additionalProperties':False}},
+ {'name':'forgejo.proposal.ready-for-review','description':'Transforma um PR CloudIFF rascunho em pronto para revisão sem mesclar ou alterar main','inputSchema':{'type':'object','properties':{'slug':{'type':'string','minLength':1,'maxLength':63,'pattern':'^[a-z0-9][a-z0-9-]*$'},'number':{'type':'integer','minimum':1,'maximum':2147483647}},'required':['slug','number'],'additionalProperties':False}},
  {'name':'forgejo.proposal.close','description':'Fecha um pull request CloudIFF controlado sem excluir a branch','inputSchema':{'type':'object','properties':{'slug':{'type':'string','minLength':1,'maxLength':63,'pattern':'^[a-z0-9][a-z0-9-]*$'},'number':{'type':'integer','minimum':1,'maximum':2147483647}},'required':['slug','number'],'additionalProperties':False}},
  {'name':'forgejo.proposal.delete-branch','description':'Exclui a branch cloudif-proposal de um pull request já fechado ou mesclado','inputSchema':{'type':'object','properties':{'slug':{'type':'string','minLength':1,'maxLength':63,'pattern':'^[a-z0-9][a-z0-9-]*$'},'number':{'type':'integer','minimum':1,'maximum':2147483647}},'required':['slug','number'],'additionalProperties':False}},
- {'name':'forgejo.proposal.merge.plan','description':'Calcula o digest canônico para merge aprovado de um PR CloudIFF','inputSchema':{'type':'object','properties':{'slug':{'type':'string','minLength':1,'maxLength':63,'pattern':'^[a-z0-9][a-z0-9-]*$'},'number':{'type':'integer','minimum':1,'maximum':2147483647},'expected_head_sha':{'type':'string','pattern':'^[a-f0-9]{40}$'}},'required':['slug','number','expected_head_sha'],'additionalProperties':False}},
- {'name':'approval.request-merge','description':'Cria aprovação pendente vinculada ao merge de um PR e SHA específicos','inputSchema':{'type':'object','properties':{'slug':{'type':'string','minLength':1,'maxLength':63,'pattern':'^[a-z0-9][a-z0-9-]*$'},'number':{'type':'integer','minimum':1,'maximum':2147483647},'expected_head_sha':{'type':'string','pattern':'^[a-f0-9]{40}$'},'reason':{'type':'string','minLength':4,'maxLength':500},'ttl_seconds':{'type':'integer','minimum':60,'maximum':86400}},'required':['slug','number','expected_head_sha','reason'],'additionalProperties':False}},
- {'name':'forgejo.proposal.merge','description':'Mescla PR CloudIFF após aprovação humana persistente de uso único','inputSchema':{'type':'object','properties':{'slug':{'type':'string','minLength':1,'maxLength':63,'pattern':'^[a-z0-9][a-z0-9-]*$'},'number':{'type':'integer','minimum':1,'maximum':2147483647},'expected_head_sha':{'type':'string','pattern':'^[a-f0-9]{40}$'},'approval_id':{'type':'string','pattern':'^apr_[a-f0-9]{20}$'}},'required':['slug','number','expected_head_sha','approval_id'],'additionalProperties':False}},
+ {'name':'forgejo.proposal.merge.plan','description':'Resolve o head_sha atual no servidor e calcula o digest canônico para merge aprovado','inputSchema':{'type':'object','properties':{'slug':{'type':'string','minLength':1,'maxLength':63,'pattern':'^[a-z0-9][a-z0-9-]*$'},'number':{'type':'integer','minimum':1,'maximum':2147483647},'expected_head_sha':{'type':'string','pattern':'^[a-f0-9]{40}$'}},'required':['slug','number'],'additionalProperties':False}},
+ {'name':'approval.request-merge','description':'Resolve e congela server-side o head_sha atual do PR dentro da aprovação humana','inputSchema':{'type':'object','properties':{'slug':{'type':'string','minLength':1,'maxLength':63,'pattern':'^[a-z0-9][a-z0-9-]*$'},'number':{'type':'integer','minimum':1,'maximum':2147483647},'expected_head_sha':{'type':'string','pattern':'^[a-f0-9]{40}$'},'reason':{'type':'string','minLength':4,'maxLength':500},'ttl_seconds':{'type':'integer','minimum':60,'maximum':86400}},'required':['slug','number','reason'],'additionalProperties':False}},
+ {'name':'forgejo.proposal.merge','description':'Mescla o PR após aprovação humana; o SHA aprovado pode ser resolvido diretamente da aprovação','inputSchema':{'type':'object','properties':{'slug':{'type':'string','minLength':1,'maxLength':63,'pattern':'^[a-z0-9][a-z0-9-]*$'},'number':{'type':'integer','minimum':1,'maximum':2147483647},'expected_head_sha':{'type':'string','pattern':'^[a-f0-9]{40}$'},'approval_id':{'type':'string','pattern':'^apr_[a-f0-9]{20}$'}},'required':['slug','number','approval_id'],'additionalProperties':False}},
  {'name':'supabase.tables.list','description':'Lista tabelas e views do banco Supabase vinculado ao projeto','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'schemas':{'type':'array','items':{'type':'string','pattern':'^[A-Za-z_][A-Za-z0-9_$]*$'},'maxItems':20},'include_system':{'type':'boolean'}},'required':['slug'],'additionalProperties':False}},
  {'name':'supabase.records.select','description':'Consulta registros de uma tabela com colunas, filtros, ordenação e limite estruturados','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'schema':{'type':'string','default':'public','pattern':'^[A-Za-z_][A-Za-z0-9_$]*$'},'table':{'type':'string','pattern':'^[A-Za-z_][A-Za-z0-9_$]*$'},'columns':{'type':'array','items':{'type':'string'},'maxItems':64},'filters':{'type':'object','properties':{},'additionalProperties':True},'order_by':{'type':'array','items':{'type':'string'},'maxItems':8},'limit':{'type':'integer','minimum':1,'maximum':500},'offset':{'type':'integer','minimum':0,'maximum':100000},'timeout_ms':{'type':'integer','minimum':500,'maximum':30000}},'required':['slug','table'],'additionalProperties':False}},
  {'name':'supabase.sql.query','description':'Executa SQL somente leitura em transação read-only com timeout e limite de linhas','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'sql':{'type':'string','minLength':1,'maxLength':65536},'max_rows':{'type':'integer','minimum':1,'maximum':500},'timeout_ms':{'type':'integer','minimum':500,'maximum':30000}},'required':['slug','sql'],'additionalProperties':False}},
@@ -578,7 +580,7 @@ def enrich_tool_error(tool_name,args,error_payload=None,message='Parâmetros inv
 READ_ONLY_TOOLS={
  'project.list','project.get','project.connectors','project.technologies.detect','project.manifest.validate','project.configuration.get','project.configuration.status','project.configuration.drift','project.configuration.reconcile.plan','project.observability.get','project.observability.alerts','project.environment.list','project.environment.get','project.environment.validate','project.environment.change.plan','project.environment.promote.plan','project.environment.history','project.environment.import.plan','project.environment.export','project.environment.secret.list','project.environment.secret.history','project.environment.secret.rotate.plan','project.environment.secret.revoke.plan','project.environment.secret.promote.plan','project.environment.secret.read.plan','workspace.normalize.plan','workspace.change-set.validate','forgejo.proposal.change-set.plan','runtime.catalog','runtime.detect','runtime.plan','runtime.validate',
  'build.plan','build.status','build.logs.read','build.artifact.get','deployment.preview.plan','deployment.preview.status',
- 'approval.get','forgejo.proposal.list','forgejo.proposal.merge.plan','supabase.migrations.inspect','supabase.migrations.plan',
+ 'approval.get','forgejo.proposal.list','forgejo.proposal.get','forgejo.proposal.merge.plan','supabase.migrations.inspect','supabase.migrations.plan',
  'deployment.production.activation.plan','deployment.production.readiness','deployment.production.homologation.plan',
  'deployment.multiservice.plan','deployment.multiservice.status','deployment.production.plan','deployment.plan','deployment.promote-test.plan','deployment.promote-test.status','deployment.rollback-test.plan',
  'supabase.tables.list','supabase.records.select','supabase.sql.query','supabase.auth.users.list',
@@ -587,7 +589,7 @@ READ_ONLY_TOOLS={
  'supabase.records.change.plan','supabase.sql.change.plan','supabase.rls.change.plan','supabase.schema.change.plan','supabase.secrets.read.plan'
 ,'project.toolchain.get','project.toolchain.validate','project.toolchain.plan','project.toolchain.build.plan','project.toolchain.build.status','project.toolchain.logs.read','project.toolchain.image.list','project.toolchain.image.get','project.toolchain.image.activate.plan','build.multiservice.plan','build.multiservice.status','preview.multiservice.plan','preview.multiservice.status'}
 DESTRUCTIVE_TOOLS={
- 'forgejo.proposal.delete-branch','forgejo.proposal.merge','deployment.production.homologation.deploy',
+ 'forgejo.proposal.delete-branch','forgejo.proposal.ready-for-review','forgejo.proposal.merge','deployment.production.homologation.deploy',
  'deployment.production.homologation.rollback','deployment.promote-test','deployment.rollback-test','supabase.operation.execute','forgejo.proposal.change-set.create'
 ,'build.multiservice.execute','deployment.multiservice.execute','preview.multiservice.create','preview.multiservice.delete','project.environment.change.execute','project.environment.promote.execute','project.environment.secret.stage','project.environment.secret.rotate.execute','project.environment.secret.revoke.execute','project.environment.secret.promote.execute','project.environment.secret.read.execute','project.toolchain.build.execute','project.toolchain.image.activate'}
 OPEN_WORLD_PREFIXES=('forgejo.','supabase.','deployment.','approval.','build.')
@@ -1392,6 +1394,36 @@ def forgejo_proposal_list(slug,state,limit):
         try:data=json.load(e)
         except Exception:data={}
         raise ValueError(str(data.get('error') or 'forgejo_proposal_list_failed')) from e
+def forgejo_proposal_get(slug,number):
+    query=urllib.parse.urlencode({'slug':slug,'number':int(number)})
+    req=urllib.request.Request(FORJA_URL+'/project/proposal?'+query,headers={'X-CloudIF-Token':FORJA_TOKEN,'Authorization':'Bearer '+FORJA_TOKEN,'Accept':'application/json'})
+    try:
+        with urllib.request.urlopen(req,timeout=20) as x:return json.load(x)
+    except urllib.error.HTTPError as e:
+        try:data=json.load(e)
+        except Exception:data={}
+        raise ValueError(str(data.get('error') or 'forgejo_proposal_get_failed')) from e
+
+def forgejo_proposal_ready(slug,number,requested_by,trace_id):
+    payload={'project_slug':slug,'number':int(number),'requested_by':requested_by,'trace_id':trace_id}
+    req=urllib.request.Request(FORJA_URL+'/project/proposal/ready-for-review',data=json.dumps(payload,separators=(',',':')).encode(),method='POST',headers={'X-CloudIF-Token':FORJA_TOKEN,'Authorization':'Bearer '+FORJA_TOKEN,'Content-Type':'application/json','Accept':'application/json'})
+    try:
+        with urllib.request.urlopen(req,timeout=45) as x:return json.load(x)
+    except urllib.error.HTTPError as e:
+        try:data=json.load(e)
+        except Exception:data={}
+        raise ValueError(str(data.get('error') or 'forgejo_proposal_ready_failed')) from e
+
+def resolve_proposal_head(slug,number,provided_sha=''):
+    data=forgejo_proposal_get(slug,number)
+    if not data.get('ok') or data.get('read_only') is not True:raise ValueError('forgejo_proposal_get_failed')
+    proposal=data.get('proposal') or {}
+    sha=str(proposal.get('head_sha') or '').strip().lower()
+    if not re.fullmatch(r'[a-f0-9]{40}',sha):raise ValueError('proposal_head_sha_unavailable')
+    provided=str(provided_sha or '').strip().lower()
+    if provided and (not re.fullmatch(r'[a-f0-9]{40}',provided) or not hmac.compare_digest(provided,sha)):
+        raise ValueError('head_sha_mismatch')
+    return proposal,sha
 def merge_digest(client_id,slug,number,expected_head_sha):
     canonical={'action':'forgejo.proposal.merge','client_id':client_id,'project_slug':slug,'proposal_number':number,'expected_head_sha':expected_head_sha}
     return hashlib.sha256(json.dumps(canonical,sort_keys=True,separators=(',',':')).encode()).hexdigest()
@@ -1612,7 +1644,7 @@ SCOPE_BY_TOOL={
  'project.toolchain.get':'project:toolchain-read','project.toolchain.validate':'project:toolchain-plan','project.toolchain.plan':'project:toolchain-plan','project.toolchain.build.plan':'project:toolchain-plan','approval.request-toolchain-build':'approval:request-toolchain-build','project.toolchain.build.execute':'project:toolchain-build-execute','project.toolchain.build.status':'project:toolchain-read','project.toolchain.logs.read':'project:toolchain-read','project.toolchain.image.list':'project:toolchain-read','project.toolchain.image.get':'project:toolchain-read','project.toolchain.image.activate.plan':'project:toolchain-activate-plan','approval.request-toolchain-activation':'approval:request-toolchain-activation','project.toolchain.image.activate':'project:toolchain-activate-execute',
  'runtime.catalog':'project:read','runtime.detect':'project:read','runtime.plan':'project:read','runtime.validate':'project:read','project.technologies.detect':'workspace:detect-multiservice','project.manifest.validate':'project:configuration-read','project.configuration.get':'project:configuration-read','project.configuration.status':'project:runtime-status-read','project.configuration.drift':'project:runtime-status-read','project.configuration.reconcile.plan':'project:runtime-reconcile-plan','project.observability.get':'project:observability-read','project.observability.alerts':'project:observability-read','build.plan':'project:read','build.multiservice.plan':'build:multiservice-plan','build.multiservice.status':'build:multiservice-plan','approval.request-multiservice-build':'approval:request-multiservice-build','build.multiservice.execute':'build:multiservice-execute','preview.multiservice.plan':'preview:multiservice-plan','preview.multiservice.status':'preview:multiservice-plan','approval.request-multiservice-preview':'approval:request-multiservice-preview','preview.multiservice.create':'preview:multiservice-execute','preview.multiservice.delete':'preview:multiservice-delete','build.request':'workspace:test-static','build.status':'project:read','build.logs.read':'project:read','build.artifact.get':'project:read','deployment.multiservice.plan':'deployment:multiservice-plan','deployment.multiservice.status':'deployment:multiservice-plan','approval.request-multiservice-deployment':'approval:request-multiservice-deployment','deployment.multiservice.execute':'deployment:multiservice-execute','deployment.preview.plan':'project:read','deployment.preview.status':'project:read','approval.request-preview':'approval:request-preview','deployment.preview':'deployment:preview',
  'workspace.probe':'workspace:probe','workspace.prepare':'workspace:prepare','workspace.validate':'workspace:validate','workspace.test-static':'workspace:test-static','workspace.preview-static':'workspace:preview-static','workspace.edit-preview':'workspace:edit-preview',
- 'forgejo.propose-edit':'forgejo:propose-edit','forgejo.propose-edit.plan':'forgejo:plan-edit','approval.request-proposal':'approval:request-proposal','workspace.normalize.plan':'workspace:change-set-plan','workspace.artifact.upload.start':'workspace:change-set-plan','workspace.artifact.upload.chunk':'workspace:change-set-plan','workspace.artifact.upload.batch':'workspace:change-set-plan','workspace.artifact.import':'workspace:change-set-plan','workspace.artifact.upload.ticket':'workspace:change-set-plan','workspace.artifact.upload.status':'workspace:change-set-plan','workspace.artifact.upload.complete':'workspace:change-set-plan','workspace.change-set.validate':'workspace:change-set-plan','forgejo.proposal.change-set.plan':'workspace:change-set-plan','approval.request-change-set-proposal':'approval:request-change-set','forgejo.proposal.change-set.create':'forgejo:propose-change-set','approval.get':'approval:read-own','approval.cancel':'approval:read-own','forgejo.proposal.list':'forgejo:proposal-read','forgejo.proposal.close':'forgejo:proposal-close','forgejo.proposal.delete-branch':'forgejo:proposal-delete-branch','forgejo.proposal.merge.plan':'forgejo:proposal-merge-plan','approval.request-merge':'approval:request-merge','forgejo.proposal.merge':'forgejo:proposal-merge',
+ 'forgejo.propose-edit':'forgejo:propose-edit','forgejo.propose-edit.plan':'forgejo:plan-edit','approval.request-proposal':'approval:request-proposal','workspace.normalize.plan':'workspace:change-set-plan','workspace.artifact.upload.start':'workspace:change-set-plan','workspace.artifact.upload.chunk':'workspace:change-set-plan','workspace.artifact.upload.batch':'workspace:change-set-plan','workspace.artifact.import':'workspace:change-set-plan','workspace.artifact.upload.ticket':'workspace:change-set-plan','workspace.artifact.upload.status':'workspace:change-set-plan','workspace.artifact.upload.complete':'workspace:change-set-plan','workspace.change-set.validate':'workspace:change-set-plan','forgejo.proposal.change-set.plan':'workspace:change-set-plan','approval.request-change-set-proposal':'approval:request-change-set','forgejo.proposal.change-set.create':'forgejo:propose-change-set','approval.get':'approval:read-own','approval.cancel':'approval:read-own','forgejo.proposal.list':'forgejo:proposal-read','forgejo.proposal.get':'forgejo:proposal-read','forgejo.proposal.ready-for-review':'forgejo:proposal-merge','forgejo.proposal.close':'forgejo:proposal-close','forgejo.proposal.delete-branch':'forgejo:proposal-delete-branch','forgejo.proposal.merge.plan':'forgejo:proposal-merge-plan','approval.request-merge':'approval:request-merge','forgejo.proposal.merge':'forgejo:proposal-merge',
  'deployment.production.homologation.plan':'deployment:production-plan','approval.request-production-homologation':'approval:request-deploy','deployment.production.homologation.deploy':'deployment:production-plan','deployment.production.homologation.rollback':'deployment:production-plan','deployment.production.activation.plan':'deployment:production-plan','approval.request-production-activation':'approval:request-deploy','deployment.production.readiness':'project:read','deployment.production.plan':'deployment:production-plan','supabase.migrations.inspect':'supabase:migration-inspect','supabase.migrations.plan':'supabase:migration-plan','deployment.plan':'deployment:plan','approval.request-deploy':'approval:request-deploy','deployment.validate':'deployment:validate','deployment.promote-test.plan':'deployment:promote-test-plan','approval.request-promote-test':'approval:request-promote-test','deployment.promote-test':'deployment:promote-test','deployment.promote-test.status':'deployment:promote-test-status','deployment.rollback-test.plan':'deployment:rollback-test-plan','approval.request-rollback-test':'approval:request-rollback-test','deployment.rollback-test':'deployment:rollback-test',
  'supabase.tables.list':'supabase:database-read','supabase.records.select':'supabase:database-read','supabase.sql.query':'supabase:database-read','supabase.rls.inspect':'supabase:database-read','supabase.schema.inspect':'supabase:database-read',
  'supabase.auth.users.list':'supabase:auth-read','supabase.storage.buckets.list':'supabase:storage-read','supabase.storage.objects.list':'supabase:storage-read','supabase.storage.object.read':'supabase:storage-read',
@@ -2870,30 +2902,49 @@ class H(BaseHTTPRequestHandler):
                     if code!=200 or result.get('status')!='cancelled':raise ValueError(str(result.get('error') or 'approval_cancel_failed'))
                     content={'ok':True,'approval_id':approval_id,'project_slug':slug,'status':'cancelled','cancelled':True,'idempotent':bool(result.get('idempotent')),'cancelled_at':result.get('cancelled_at'),'side_effects':{'forgejo':False,'runtime':False,'database':False}}
                 elif name in {'forgejo.proposal.merge.plan','approval.request-merge'}:
-                    required={'slug','number','expected_head_sha'}
-                    allowed=required|({'reason','ttl_seconds'} if name=='approval.request-merge' else set())
+                    required={'slug','number'}|({'reason'} if name=='approval.request-merge' else set())
+                    allowed={'slug','number','expected_head_sha'}|({'reason','ttl_seconds'} if name=='approval.request-merge' else set())
                     if not required.issubset(args) or not set(args).issubset(allowed):raise ValueError('argumentos inválidos')
                     client_id=self.headers.get('X-CloudIF-Client','').strip()
                     if not client_id:raise ValueError('identified_client_required')
-                    slug=str(args.get('slug') or '').strip();number=int(args.get('number'));sha=str(args.get('expected_head_sha') or '').strip()
-                    if not slug or not (1<=number<=2147483647) or len(sha)!=40 or any(c not in '0123456789abcdef' for c in sha):raise ValueError('argumentos inválidos')
-                    control('/v1/projects/'+urllib.parse.quote(slug,safe=''));digest=merge_digest(client_id,slug,number,sha)
-                    if name=='forgejo.proposal.merge.plan':content={'ok':True,'side_effect_free':True,'merge_digest':digest,'operation':{'action':'forgejo.proposal.merge','project_slug':slug,'proposal_number':number,'expected_head_sha':sha},'approval_requirements':{'action':'forgejo.proposal.merge','requested_by':client_id,'metadata':{'merge_digest':digest,'proposal_number':number,'expected_head_sha':sha}}}
+                    slug=str(args.get('slug') or '').strip()
+                    try:number=int(args.get('number'))
+                    except Exception:raise ValueError('argumentos inválidos')
+                    if not slug or not (1<=number<=2147483647):raise ValueError('argumentos inválidos')
+                    control('/v1/projects/'+urllib.parse.quote(slug,safe=''))
+                    proposal,sha=resolve_proposal_head(slug,number,args.get('expected_head_sha') or '')
+                    digest=merge_digest(client_id,slug,number,sha)
+                    operation={'action':'forgejo.proposal.merge','project_slug':slug,'proposal_number':number,'expected_head_sha':sha}
+                    merge_state=str(proposal.get('mergeable_state') or 'unknown');block_reason=proposal.get('merge_block_reason')
+                    if name=='forgejo.proposal.merge.plan':
+                        content={'ok':True,'side_effect_free':True,'merge_digest':digest,'operation':operation,'proposal':proposal,'mergeable_state':merge_state,'merge_block_reason':block_reason,'approval_requirements':{'action':'forgejo.proposal.merge','requested_by':client_id,'metadata':{'merge_digest':digest,'proposal_number':number,'expected_head_sha':sha}}}
                     else:
                         reason=str(args.get('reason') or '').strip();ttl=int(args.get('ttl_seconds') or 900)
                         if not (4<=len(reason)<=500) or not (60<=ttl<=86400):raise ValueError('aprovação inválida')
+                        if proposal.get('draft') is True:raise ValueError('proposal_is_draft')
+                        if proposal.get('state')!='open' or proposal.get('merged') is True:raise ValueError('proposal_not_open')
+                        if block_reason in {'proposal_has_conflicts','proposal_not_mergeable'}:raise ValueError(str(block_reason))
                         created=approval_create_merge(slug,client_id,reason,ttl,trace_id,digest,number,sha)
                         if created.get('status') not in {'pending','approved'}:raise ValueError('approval_create_failed')
-                        content={'ok':True,'approval_id':created['approval_id'],'status':created.get('status'),'expires_at':created['expires_at'],'policy_applied':bool(created.get('policy_applied')),'approval_policy_id':created.get('approval_policy_id'),'merge_digest':digest,'side_effects':{'forgejo':False,'main_modified':False}}
+                        content={'ok':True,'approval_id':created['approval_id'],'proposal_number':number,'expected_head_sha':sha,'status':created.get('status'),'expires_at':created['expires_at'],'policy_applied':bool(created.get('policy_applied')),'approval_policy_id':created.get('approval_policy_id'),'merge_digest':digest,'sha_source':'forgejo_current_head','side_effects':{'forgejo':False,'main_modified':False}}
                 elif name=='forgejo.proposal.merge':
-                    if set(args)!={'slug','number','expected_head_sha','approval_id'}:raise ValueError('argumentos inválidos')
+                    required={'slug','number','approval_id'};allowed=required|{'expected_head_sha'}
+                    if not required.issubset(args) or not set(args).issubset(allowed):raise ValueError('argumentos inválidos')
                     client_id=self.headers.get('X-CloudIF-Client','').strip()
                     if not client_id:raise ValueError('identified_client_required')
-                    slug=str(args['slug']).strip();number=int(args['number']);sha=str(args['expected_head_sha']).strip();approval_id=str(args['approval_id']).strip()
-                    if not slug or not (1<=number<=2147483647) or len(sha)!=40 or len(approval_id)!=24:raise ValueError('argumentos inválidos')
-                    control('/v1/projects/'+urllib.parse.quote(slug,safe=''));digest=merge_digest(client_id,slug,number,sha);row=approval_get(approval_id)
+                    slug=str(args['slug']).strip()
+                    try:number=int(args['number'])
+                    except Exception:raise ValueError('argumentos inválidos')
+                    approval_id=str(args['approval_id']).strip()
+                    if not slug or not (1<=number<=2147483647) or not re.fullmatch(r'apr_[a-f0-9]{20}',approval_id):raise ValueError('argumentos inválidos')
+                    control('/v1/projects/'+urllib.parse.quote(slug,safe=''));row=approval_get(approval_id)
                     try:meta=json.loads(row.get('metadata_json') or '{}') if row else {}
                     except Exception:meta={}
+                    sha=str(meta.get('expected_head_sha') or '').strip().lower()
+                    provided=str(args.get('expected_head_sha') or '').strip().lower()
+                    if not re.fullmatch(r'[a-f0-9]{40}',sha):raise ValueError('approval_mismatch')
+                    if provided and (not re.fullmatch(r'[a-f0-9]{40}',provided) or not hmac.compare_digest(provided,sha)):raise ValueError('approval_mismatch')
+                    digest=merge_digest(client_id,slug,number,sha)
                     expected_meta={'merge_digest':digest,'proposal_number':number,'expected_head_sha':sha}
                     reservation_id,execution_id=transaction_ids('forgejo.proposal.merge',approval_id,client_id,digest)
                     valid_status=bool(row and (row.get('status')=='approved' or (row.get('status') in {'reserved','consumed'} and row.get('reservation_id')==reservation_id)))
@@ -2908,11 +2959,35 @@ class H(BaseHTTPRequestHandler):
                         if current and current.get('status')!='consumed':
                             fc,finalized=approval_transition(approval_id,'finalize',{'reservation_id':reservation_id,'result':'success'})
                             if fc!=200 or finalized.get('status')!='consumed':raise ValueError('approval_finalize_failed')
+                        data['expected_head_sha']=sha
                         data['transaction']={'reservation_id':reservation_id,'execution_id':execution_id,'approval_status':'consumed'}
                         content=data
                     else:
                         if code==409 and current and current.get('status')=='reserved':approval_transition(approval_id,'release',{'reservation_id':reservation_id})
                         raise ValueError(str(data.get('error') or 'proposal_merge_failed'))
+                elif name=='forgejo.proposal.get':
+                    if set(args)!={'slug','number'}:raise ValueError('argumentos inválidos')
+                    client_id=self.headers.get('X-CloudIF-Client','').strip()
+                    if not client_id:raise ValueError('identified_client_required')
+                    slug=str(args.get('slug') or '').strip()
+                    try:number=int(args.get('number'))
+                    except Exception:raise ValueError('argumentos inválidos')
+                    if not slug or not (1<=number<=2147483647):raise ValueError('argumentos inválidos')
+                    control('/v1/projects/'+urllib.parse.quote(slug,safe=''))
+                    data=forgejo_proposal_get(slug,number)
+                    if not data.get('ok') or data.get('read_only') is not True:raise ValueError('forgejo_proposal_get_failed')
+                    content=data
+                elif name=='forgejo.proposal.ready-for-review':
+                    if set(args)!={'slug','number'}:raise ValueError('argumentos inválidos')
+                    client_id=self.headers.get('X-CloudIF-Client','').strip()
+                    if not client_id:raise ValueError('identified_client_required')
+                    slug=str(args.get('slug') or '').strip()
+                    try:number=int(args.get('number'))
+                    except Exception:raise ValueError('argumentos inválidos')
+                    if not slug or not (1<=number<=2147483647):raise ValueError('argumentos inválidos')
+                    control('/v1/projects/'+urllib.parse.quote(slug,safe=''))
+                    content=forgejo_proposal_ready(slug,number,client_id,trace_id)
+                    if not content.get('ok'):raise ValueError(str(content.get('error') or 'forgejo_proposal_ready_failed'))
                 elif name in {'forgejo.proposal.close','forgejo.proposal.delete-branch'}:
                     if set(args)!={'slug','number'}:raise ValueError('argumentos inválidos')
                     client_id=self.headers.get('X-CloudIF-Client','').strip()

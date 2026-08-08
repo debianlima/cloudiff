@@ -35,6 +35,7 @@ Arquitetura modular, interface, configuração e testes do Portal.
 | [`test_database_active_mode_fallback.py`](test_database_active_mode_fallback.py) | `.py` | Implementa `DatabaseActiveModeFallbackTests`. |
 | [`test_deployment_sensitive_runtime_security.py`](test_deployment_sensitive_runtime_security.py) | `.py` | Implementa `load`, `DeploymentSecretInjectionSecurityTests`. |
 | [`test_effective_environment_build_contract.py`](test_effective_environment_build_contract.py) | `.py` | Implementa `load_artifact`, `EffectiveEnvironmentBuildContractTests`. |
+| [`test_forgejo_merge_sha_resolution.py`](test_forgejo_merge_sha_resolution.py) | `.py` | Implementa `FakeForgejo`, `forja_namespace`, `ForgejoMergeShaResolutionTests`. |
 | [`test_forgejo_webhook_automation_contract.py`](test_forgejo_webhook_automation_contract.py) | `.py` | Implementa `ForgejoWebhookAutomationContractTest`. |
 | [`test_forja_agent_only_provisioning.py`](test_forja_agent_only_provisioning.py) | `.py` | Implementa `ForjaAgentOnlyProvisioningTests`. |
 | [`test_forja_change_set_proposal.py`](test_forja_change_set_proposal.py) | `.py` | Implementa `FakeForgejo`, `namespace`, `payload`, `ForjaChangeSetProposalTests`. |

@@ -2333,13 +2333,8 @@ def cloudif_proposal_list(handler, qs):
         return json_response(handler,502,{'ok':False,'error':'forgejo_unavailable','upstream_status':upstream.get('status')})
     rows=[]
     for pr in (upstream.get('data') or [])[:limit]:
-        rows.append({
-            'number':pr.get('number'),'title':pr.get('title'),'state':pr.get('state'),
-            'draft':bool(pr.get('draft')),'head':(pr.get('head') or {}).get('ref'),
-            'base':(pr.get('base') or {}).get('ref'),'author':(pr.get('user') or {}).get('login'),
-            'created_at':pr.get('created_at'),'updated_at':pr.get('updated_at'),
-            'html_url':pr.get('html_url'),'mergeable':pr.get('mergeable'),
-        })
+        controlled,_,_=_controlled_pr(pr)
+        rows.append(_proposal_public(pr,controlled))
     return json_response(handler,200,{'ok':True,'project_slug':slug,'repo':f'{owner}/{repo}','state':state,'count':len(rows),'proposals':rows,'read_only':True})
 
 def _proposal_number(data):
@@ -2358,6 +2353,50 @@ def _proposal_detail(slug, number):
         return owner,repo,None,{'ok':False,'status':404 if r.get('status')==404 else 502,'error':'proposal_not_found' if r.get('status')==404 else 'forgejo_unavailable'}
     return owner,repo,r.get('data') or {},None
 
+def cloudif_proposal_get(handler, qs):
+    if set(qs)-{'slug','number'}:
+        return json_response(handler,400,{'ok':False,'error':'invalid_query'})
+    slug=str((qs.get('slug') or [''])[0]).strip()
+    try:number=int(str((qs.get('number') or [''])[0]).strip())
+    except Exception:return json_response(handler,400,{'ok':False,'error':'invalid_query'})
+    if not SLUG_RE.fullmatch(slug) or not (1<=number<=2147483647):
+        return json_response(handler,400,{'ok':False,'error':'invalid_query'})
+    owner,repo,pr,err=_proposal_detail(slug,number)
+    if err:return json_response(handler,err['status'],{'ok':False,'error':err['error']})
+    controlled,_,_=_controlled_pr(pr)
+    return json_response(handler,200,{'ok':True,'project_slug':slug,'repo':f'{owner}/{repo}','proposal':_proposal_public(pr,controlled),'read_only':True})
+
+
+def cloudif_proposal_ready_for_review(handler,data):
+    expected={'project_slug','number','requested_by','trace_id'}
+    if set(data)!=expected:
+        return json_response(handler,400,{'ok':False,'error':'invalid_request'})
+    slug=str(data.get('project_slug') or '').strip();requested_by=str(data.get('requested_by') or '').strip();trace=str(data.get('trace_id') or '').strip()
+    try:number=_proposal_number(data)
+    except ValueError:return json_response(handler,400,{'ok':False,'error':'invalid_request'})
+    if not SLUG_RE.fullmatch(slug) or not requested_by or not trace:
+        return json_response(handler,400,{'ok':False,'error':'invalid_request'})
+    owner,repo,pr,err=_proposal_detail(slug,number)
+    if err:return json_response(handler,err['status'],{'ok':False,'error':err['error']})
+    controlled,head,base=_controlled_pr(pr)
+    if not controlled:return json_response(handler,409,{'ok':False,'error':'proposal_not_controlled'})
+    if bool(pr.get('merged')):return json_response(handler,409,{'ok':False,'error':'proposal_already_merged'})
+    if str(pr.get('state') or '')!='open':return json_response(handler,409,{'ok':False,'error':'proposal_not_open'})
+    if not bool(pr.get('draft')):
+        result={'ok':True,'project_slug':slug,'repo':f'{owner}/{repo}','proposal':_proposal_public(pr,True),'already_ready':True,'requested_by':requested_by,'trace_id':trace,'main_modified':False}
+        return json_response(handler,200,result)
+    original_title=str(pr.get('title') or '')
+    if not original_title.startswith('WIP: '):return json_response(handler,409,{'ok':False,'error':'proposal_not_controlled'})
+    qo=urllib.parse.quote(owner,safe='');qr=urllib.parse.quote(repo,safe='')
+    ready_title=original_title[5:].strip()
+    updated=_proposal_api('PATCH',f'/repos/{qo}/{qr}/pulls/{number}',{'title':ready_title})
+    ready=updated.get('data') or {}
+    if not updated.get('ok') or bool(ready.get('draft')) or ready.get('state')!='open':
+        return json_response(handler,502,{'ok':False,'error':'proposal_ready_failed','upstream_status':updated.get('status')})
+    result={'ok':True,'project_slug':slug,'repo':f'{owner}/{repo}','proposal':_proposal_public(ready,True),'already_ready':False,'requested_by':requested_by,'trace_id':trace,'main_modified':False}
+    save_event('proposal-ready-for-review',slug,{**result,'head':head,'base':base,'time':now()})
+    return json_response(handler,200,result)
+
 def _controlled_pr(pr):
     head_obj=pr.get('head') or {}
     head_ref=str(head_obj.get('ref') or '')
@@ -2365,6 +2404,34 @@ def _controlled_pr(pr):
     head=head_ref if head_ref.startswith('cloudif-proposal-') else head_label
     base=str((pr.get('base') or {}).get('ref') or '')
     return base=='main' and head.startswith('cloudif-proposal-'),head,base
+
+def _proposal_merge_status(pr):
+    state=str(pr.get('state') or '')
+    draft=bool(pr.get('draft'))
+    merged=bool(pr.get('merged'))
+    conflict=pr.get('has_conflicting_files') is True
+    mergeable=pr.get('mergeable')
+    if merged:return 'merged','already_merged'
+    if state!='open':return 'closed','proposal_not_open'
+    if draft:return 'draft','proposal_is_draft'
+    if conflict:return 'conflict','proposal_has_conflicts'
+    if mergeable is False:return 'blocked','proposal_not_mergeable'
+    if mergeable is True:return 'ready',None
+    return 'unknown','mergeability_unknown'
+
+
+def _proposal_public(pr, controlled=None):
+    head_obj=pr.get('head') or {};base_obj=pr.get('base') or {}
+    if controlled is None:controlled,_,_=_controlled_pr(pr)
+    mergeable_state,block_reason=_proposal_merge_status(pr)
+    return {
+        'number':pr.get('number'),'title':pr.get('title'),'state':pr.get('state'),'draft':bool(pr.get('draft')),
+        'merged':bool(pr.get('merged')),'head':head_obj.get('ref'),'head_branch':head_obj.get('ref'),'head_sha':head_obj.get('sha'),
+        'base':base_obj.get('ref'),'base_branch':base_obj.get('ref'),'base_sha':base_obj.get('sha'),
+        'author':(pr.get('user') or {}).get('login'),'created_at':pr.get('created_at'),'updated_at':pr.get('updated_at'),
+        'html_url':pr.get('html_url'),'mergeable':pr.get('mergeable'),'mergeable_state':mergeable_state,
+        'merge_block_reason':block_reason,'controlled':bool(controlled),
+    }
 
 def cloudif_proposal_close(handler,data):
     if set(data)!={'project_slug','number','trace_id','requested_by'}:
@@ -2492,19 +2559,10 @@ def cloudif_proposal_action(handler, data):
         if merged:
             return json_response(handler,200,{'ok':True,'action':'merge','project_slug':slug,'proposal_number':number,'state':'closed','merged':True,'already_merged':True,'draft':draft,'head':head,'base':base,'head_sha':head_sha,'branch_deleted':False,'main_modified':True,'approval_id':approval_id,'requested_by':requested_by,'trace_id':trace})
         if state!='open':return json_response(handler,409,{'ok':False,'error':'proposal_not_open'})
-        if not draft:return json_response(handler,409,{'ok':False,'error':'proposal_not_draft'})
-        original_title=str(pr.get('title') or '')
-        if not original_title.startswith('WIP: '):return json_response(handler,409,{'ok':False,'error':'proposal_not_controlled'})
-        ready_title=original_title[5:].strip() if original_title.startswith('WIP: ') else original_title
-        updated=_proposal_api('PATCH',f'/repos/{qowner}/{qrepo}/pulls/{number}',{'title':ready_title})
-        ready=updated.get('data') or {}
-        if not updated.get('ok') or bool(ready.get('draft')) or ready.get('state')!='open':
-            _proposal_api('PATCH',f'/repos/{qowner}/{qrepo}/pulls/{number}',{'title':original_title})
-            return json_response(handler,502,{'ok':False,'error':'proposal_ready_failed','upstream_status':updated.get('status')})
+        if draft:return json_response(handler,409,{'ok':False,'error':'proposal_is_draft'})
         merged_res=_proposal_api('POST',f'/repos/{qowner}/{qrepo}/pulls/{number}/merge',{'Do':'merge','head_commit_id':expected,'delete_branch_after_merge':False,'force_merge':False,'merge_when_checks_succeed':False},timeout=60)
         if not merged_res.get('ok'):
-            _proposal_api('PATCH',f'/repos/{qowner}/{qrepo}/pulls/{number}',{'title':original_title})
-            return json_response(handler,409 if merged_res.get('status') in {405,409,423} else 502,{'ok':False,'error':'proposal_merge_failed','upstream_status':merged_res.get('status'),'draft_restored':True})
+            return json_response(handler,409 if merged_res.get('status') in {405,409,423} else 502,{'ok':False,'error':'proposal_merge_failed','upstream_status':merged_res.get('status')})
         merged_check=_proposal_api('GET',f'/repos/{qowner}/{qrepo}/pulls/{number}/merge')
         detail=_proposal_api('GET',f'/repos/{qowner}/{qrepo}/pulls/{number}')
         vpr=detail.get('data') or {}
@@ -2936,6 +2994,8 @@ class Handler(BaseHTTPRequestHandler):
 
         if parsed.path == "/project/proposals":
             return cloudif_proposal_list(self, qs)
+        if parsed.path == "/project/proposal":
+            return cloudif_proposal_get(self, qs)
 
         if parsed.path == "/health":
             return json_response(self, 200, {"ok": True, "service": "cloudif-forja-agent-v4", "time": now()})
@@ -3037,6 +3097,8 @@ class Handler(BaseHTTPRequestHandler):
 
         if path == "/project/proposal/merge":
             return cloudif_proposal_merge_route(self, data)
+        if path == "/project/proposal/ready-for-review":
+            return cloudif_proposal_ready_for_review(self, data)
         if path == "/project/proposal/close":
             return cloudif_proposal_close(self, data)
         if path == "/project/proposal/delete-branch":

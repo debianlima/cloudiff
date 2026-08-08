@@ -1,6 +1,6 @@
 # Catálogo de rotas e endpoints
 
-Catálogo estático de **609 referências de rota** encontradas nos serviços e módulos. Uma rota pode aparecer em mais de um adaptador por compatibilidade.
+Catálogo estático de **613 referências de rota** encontradas nos serviços e módulos. Uma rota pode aparecer em mais de um adaptador por compatibilidade.
 
 | Componente | Método observado | Rota |
 |---|---|---|
@@ -132,6 +132,8 @@ Catálogo estático de **609 referências de rota** encontradas nos serviços e 
 | [`components/control-plane/current-apps/mcp-gateway-current/cloudif-mcp-gateway.py`](../components/control-plane/current-apps/mcp-gateway-current/cloudif-mcp-gateway.py) | GET/POST | `/project/proposal/change-set/create` |
 | [`components/control-plane/current-apps/mcp-gateway-current/cloudif-mcp-gateway.py`](../components/control-plane/current-apps/mcp-gateway-current/cloudif-mcp-gateway.py) | GET/POST | `/project/proposal/create` |
 | [`components/control-plane/current-apps/mcp-gateway-current/cloudif-mcp-gateway.py`](../components/control-plane/current-apps/mcp-gateway-current/cloudif-mcp-gateway.py) | GET/POST | `/project/proposal/merge` |
+| [`components/control-plane/current-apps/mcp-gateway-current/cloudif-mcp-gateway.py`](../components/control-plane/current-apps/mcp-gateway-current/cloudif-mcp-gateway.py) | GET/POST | `/project/proposal/ready-for-review` |
+| [`components/control-plane/current-apps/mcp-gateway-current/cloudif-mcp-gateway.py`](../components/control-plane/current-apps/mcp-gateway-current/cloudif-mcp-gateway.py) | GET/POST | `/project/proposal?` |
 | [`components/control-plane/current-apps/mcp-gateway-current/cloudif-mcp-gateway.py`](../components/control-plane/current-apps/mcp-gateway-current/cloudif-mcp-gateway.py) | GET/POST | `/project/proposals?` |
 | [`components/control-plane/current-apps/mcp-gateway-current/cloudif-mcp-gateway.py`](../components/control-plane/current-apps/mcp-gateway-current/cloudif-mcp-gateway.py) | GET/POST | `/v1/` |
 | [`components/control-plane/current-apps/mcp-gateway-current/cloudif-mcp-gateway.py`](../components/control-plane/current-apps/mcp-gateway-current/cloudif-mcp-gateway.py) | GET/POST | `/v1/alerts` |
@@ -498,6 +500,7 @@ Catálogo estático de **609 referências de rota** encontradas nos serviços e 
 | [`components/runtime/current-apps/forja-agent-current/cloudif-forja-agent.py`](../components/runtime/current-apps/forja-agent-current/cloudif-forja-agent.py) | GET/POST | `/project/file/history` |
 | [`components/runtime/current-apps/forja-agent-current/cloudif-forja-agent.py`](../components/runtime/current-apps/forja-agent-current/cloudif-forja-agent.py) | GET/POST | `/project/file/rollback` |
 | [`components/runtime/current-apps/forja-agent-current/cloudif-forja-agent.py`](../components/runtime/current-apps/forja-agent-current/cloudif-forja-agent.py) | GET/POST | `/project/membership/reconcile` |
+| [`components/runtime/current-apps/forja-agent-current/cloudif-forja-agent.py`](../components/runtime/current-apps/forja-agent-current/cloudif-forja-agent.py) | GET/POST | `/project/proposal` |
 | [`components/runtime/current-apps/forja-agent-current/cloudif-forja-agent.py`](../components/runtime/current-apps/forja-agent-current/cloudif-forja-agent.py) | GET/POST | `/project/proposal/action` |
 | [`components/runtime/current-apps/forja-agent-current/cloudif-forja-agent.py`](../components/runtime/current-apps/forja-agent-current/cloudif-forja-agent.py) | GET/POST | `/project/proposal/artifact/stage` |
 | [`components/runtime/current-apps/forja-agent-current/cloudif-forja-agent.py`](../components/runtime/current-apps/forja-agent-current/cloudif-forja-agent.py) | GET/POST | `/project/proposal/change-set/create` |
@@ -505,6 +508,7 @@ Catálogo estático de **609 referências de rota** encontradas nos serviços e 
 | [`components/runtime/current-apps/forja-agent-current/cloudif-forja-agent.py`](../components/runtime/current-apps/forja-agent-current/cloudif-forja-agent.py) | GET/POST | `/project/proposal/create` |
 | [`components/runtime/current-apps/forja-agent-current/cloudif-forja-agent.py`](../components/runtime/current-apps/forja-agent-current/cloudif-forja-agent.py) | GET/POST | `/project/proposal/delete-branch` |
 | [`components/runtime/current-apps/forja-agent-current/cloudif-forja-agent.py`](../components/runtime/current-apps/forja-agent-current/cloudif-forja-agent.py) | GET/POST | `/project/proposal/merge` |
+| [`components/runtime/current-apps/forja-agent-current/cloudif-forja-agent.py`](../components/runtime/current-apps/forja-agent-current/cloudif-forja-agent.py) | GET/POST | `/project/proposal/ready-for-review` |
 | [`components/runtime/current-apps/forja-agent-current/cloudif-forja-agent.py`](../components/runtime/current-apps/forja-agent-current/cloudif-forja-agent.py) | GET/POST | `/project/proposals` |
 | [`components/runtime/current-apps/forja-agent-current/cloudif-forja-agent.py`](../components/runtime/current-apps/forja-agent-current/cloudif-forja-agent.py) | GET/POST | `/project/release/finalize` |
 | [`components/runtime/current-apps/forja-agent-current/cloudif-forja-agent.py`](../components/runtime/current-apps/forja-agent-current/cloudif-forja-agent.py) | GET/POST | `/project/release/prepare` |
