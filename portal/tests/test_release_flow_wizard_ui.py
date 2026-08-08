@@ -4,6 +4,7 @@ ROOT=Path(__file__).resolve().parents[2]
 BASE=(ROOT/'components/control-plane/current-apps/portal-current/cloudif-admin-portal-base.py').read_text()
 UI=(ROOT/'components/control-plane/current-apps/portal-current/cloudif_ui_publications.py').read_text()
 COEXIST=(ROOT/'components/control-plane/srv/cloudif/lib/cloudif_portal_v2_coexist.py').read_text()
+CSS=(ROOT/'portal/design/components.css').read_text()
 
 class ReleaseFlowWizardUITests(unittest.TestCase):
     def test_primary_ui_uses_w_h_p_and_no_direct_publish_button(self):
@@ -43,9 +44,14 @@ class ReleaseFlowWizardUITests(unittest.TestCase):
 
     def test_wizard_has_dark_theme_safe_tokens_and_mobile_layout(self):
         self.assertIn('_WHP_RELEASE_ASSETS',BASE)
-        self.assertIn('var(--c-surface)',BASE)
-        self.assertIn('var(--c-border)',BASE)
-        self.assertIn('@media(max-width:700px)',BASE)
+        self.assertIn('cloudif-whp-release-script',BASE)
+        self.assertNotIn('cloudif-whp-release-style',BASE)
+        self.assertIn('/* CloudIFF W/H/P release wizard */',CSS)
+        self.assertIn('var(--surface)',CSS)
+        self.assertIn('var(--rule)',CSS)
+        self.assertIn('var(--overlay)',CSS)
+        self.assertIn('@media(max-width:700px)',CSS)
+        self.assertNotIn('!important',CSS)
         self.assertIn('W = Workspace Preview · H = Homologation · P = Publication',BASE)
 
 if __name__=='__main__':unittest.main()

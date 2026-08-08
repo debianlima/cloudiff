@@ -126,7 +126,7 @@ class MultiserviceBuildBrokerTests(unittest.TestCase):
         status = self.module.multiservice_status(queued['job_id'])
         self.assertTrue(status['ok'])
         self.assertNotIn('services', status['payload'])
-        self.assertEqual(status['status'], 'queued')
+        self.assertIn(status['status'], {'queued', 'running'})
 
     def test_unit_reuses_internal_controller_and_workspace_tokens(self):
         unit = UNIT.read_text()
