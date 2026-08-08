@@ -73,7 +73,7 @@ class FakeAgent(BaseHTTPRequestHandler):
             return self.reply(200, {'ok': True, 'clients': [{
                 'client_id': CLIENT_ID, 'status': 'active', 'owner_user': 'iff1742962',
                 'project_slugs_json': json.dumps([SLUG]),
-                'scopes_json': json.dumps(['project:read', 'workspace:prepare']),
+                'scopes_json': json.dumps(['project:read', 'workspace:prepare', 'workspace:change-set-plan']),
             }]})
         return self.reply(404, {'ok': False})
 
@@ -199,6 +199,15 @@ class MCPPublicOAuthFlowTest(unittest.TestCase):
         self.assertFalse(paths['/cloudiff/mcp/actions/v1/project']['get']['x-openai-isConsequential'])
         self.assertFalse(paths['/cloudiff/mcp/actions/v1/read']['post']['x-openai-isConsequential'])
         self.assertTrue(paths['/cloudiff/mcp/actions/v1/write']['post']['x-openai-isConsequential'])
+        self.assertTrue(paths['/cloudiff/mcp/actions/v1/artifact/import']['post']['x-openai-isConsequential'])
+        self.assertEqual(paths['/cloudiff/mcp/actions/v1/artifact/import']['post']['operationId'],'importCloudIFFArtifact')
+        import_ref=paths['/cloudiff/mcp/actions/v1/artifact/import']['post']['requestBody']['content']['application/json']['schema']['$ref']
+        import_schema=schema['components']['schemas'][import_ref.rsplit('/',1)[-1]]
+        self.assertIn('openaiFileIdRefs',import_schema['properties'])
+        self.assertEqual(import_schema['properties']['openaiFileIdRefs']['items'],{'type':'string'})
+        self.assertEqual(import_schema['properties']['openaiFileIdRefs']['minItems'],1)
+        self.assertEqual(import_schema['properties']['openaiFileIdRefs']['maxItems'],1)
+        self.assertEqual(schema['info']['version'],'1.1.0')
         schemas = schema['components']['schemas']
         self.assertIsInstance(schemas, dict)
         read_ref = paths['/cloudiff/mcp/actions/v1/read']['post']['requestBody']['content']['application/json']['schema']['$ref']
@@ -262,6 +271,18 @@ class MCPPublicOAuthFlowTest(unittest.TestCase):
         })
         self.assertEqual(status, 403, raw)
         self.assertEqual(json.loads(raw)['error'], 'read_tool_not_allowed_on_write_endpoint')
+
+    def test_actions_artifact_import_is_dedicated_and_requires_runtime_download_link(self):
+        token=self.oauth_token();auth={'Authorization':'Bearer '+token}
+        status,_,raw=self.request('GET',f'/cloudiff/mcp/openapi/{CLIENT_ID}.json')
+        self.assertEqual(status,200,raw);schema=json.loads(raw)
+        write_ref=schema['paths']['/cloudiff/mcp/actions/v1/write']['post']['requestBody']['content']['application/json']['schema']['$ref']
+        write_schema=schema['components']['schemas'][write_ref.rsplit('/',1)[-1]]
+        self.assertNotIn('workspace.artifact.import',write_schema['properties']['tool']['enum'])
+        payload=json.dumps({'openaiFileIdRefs':[{'id':'file_0000000013bc820e9585c8554326a64d'}],'filename':'archive.zip','expected_size':1390970,'expected_sha256':'e078c5854d04d0e134f17737e014f8e7eaf9f09e4443c3a2ce9f414e6f1dc18e'})
+        status,_,raw=self.request('POST','/cloudiff/mcp/actions/v1/artifact/import',payload,{**auth,'Content-Type':'application/json','Content-Length':str(len(payload))})
+        self.assertEqual(status,422,raw)
+        self.assertEqual(json.loads(raw)['error'],'actions_file_download_link_missing')
 
     def test_chatgpt_actions_callback_works_without_pkce_or_client_secret(self):
         callback = 'https://chat.openai.com/aip/g-0cb65526ddbc077875f764dc4f38a73fc1f6edc6/oauth/callback'

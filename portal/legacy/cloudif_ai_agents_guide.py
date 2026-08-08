@@ -60,7 +60,7 @@ TOOL_DOC={
 'workspace.artifact.upload.batch':('Enviar lote de chunks','Envia até 16 chunks pequenos de até 8 KiB em uma chamada; mantém SHA-256 por parte e retoma pelo próximo índice esperado.','Nenhuma','Workspace efêmero'),
 'workspace.artifact.upload.ticket':('Gerar link de upload direto','Cria URL HTTPS temporária do Portal para enviar o binário pelo navegador sem Base64; o ticket fica preso ao artifact_id e ao projeto.','Nenhuma','Portal + Workspace Broker'),
 'workspace.artifact.upload.status':('Acompanhar upload direto','Consulta pelo MCP se o artifact continua aguardando o usuário ou já foi selado; o agente nunca precisa abrir a URL autenticada do Portal.','Nenhuma','Workspace Broker'),
-'workspace.artifact.import':('Importar arquivo anexado','Usa o file param oficial do ChatGPT: recebe file_id + download_url temporária, baixa server-side, valida tamanho/SHA-256 e sela o artifact sem Base64.','Nenhuma','Workspace efêmero'),
+'workspace.artifact.import':('Importar arquivo anexado','Plugin/MCP usa openai/fileParams; GPT Actions usa a operação importCloudIFFArtifact com openaiFileIdRefs. Ambos normalizam a URL temporária, validam tamanho/SHA-256 e selam o artifact sem Base64.','Nenhuma','Workspace efêmero'),
 'workspace.artifact.upload.complete':('Selar artefato','Confere tamanho e SHA-256 integrais e sela o artifact_id para uso no change set.','Nenhuma','Workspace efêmero'),
 'workspace.change-set.validate':('Validar conjunto de arquivos','Aplica create, update, delete e mkdir temporariamente, executa validações e sela o digest completo.','Nenhuma','Workspace efêmero'),
 'forgejo.proposal.change-set.plan':('Planejar proposta multifarquivo','Confirma que o snapshot e o digest continuam válidos sem criar branch ou PR.','Nenhuma','Forgejo'),

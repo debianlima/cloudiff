@@ -67,6 +67,15 @@ class WorkspaceArtifactSessionImportTests(unittest.TestCase):
   with patch.object(M,'workspace_broker_post',side_effect=broker):result=M.workspace_artifact_import_bytes('demo','archive.zip',raw,digest,3600,'trace')
   self.assertEqual(bytes(state['raw']),raw);self.assertEqual(result['sha256'],digest);self.assertEqual(result['size'],size);self.assertLessEqual(state['batch_calls'],11);self.assertLessEqual(state['max_scalar'],11000)
 
+ def test_gpt_actions_file_ref_normalizes_official_runtime_shape(self):
+  ref={'name':'archive.zip','id':'file_0000000013bc820e9585c8554326a64d','mime_type':'application/zip','download_link':'https://files.oaiusercontent.com/signed'}
+  normalized=M._normalize_action_file_ref(ref)
+  self.assertEqual(normalized,{'download_url':ref['download_link'],'file_id':ref['id'],'mime_type':'application/zip','file_name':'archive.zip'})
+
+ def test_gpt_actions_file_ref_rejects_id_without_download_link(self):
+  with self.assertRaises(ValueError) as ctx:M._normalize_action_file_ref({'id':'file_0000000013bc820e9585c8554326a64d'})
+  self.assertEqual(str(ctx.exception),'actions_file_download_link_missing')
+
  def test_dispatch_never_persists_download_url(self):
   source=GATEWAY.read_text();start=source.index("elif name=='workspace.artifact.import':");end=source.index("elif name in {'workspace.artifact.upload.start'",start);block=source[start:end]
   self.assertIn("content['download_url_persisted']=False",block);self.assertIn("content['source']='chatgpt_file_param'",block)

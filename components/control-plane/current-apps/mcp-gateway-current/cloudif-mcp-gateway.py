@@ -616,12 +616,29 @@ def _client_tool_names(row):
         name=str(tool.get('name') or '');scope=SCOPE_BY_TOOL.get(name,'project:read')
         if '*' in scopes or scope in scopes:out.append(name)
     return out
+def _normalize_action_file_ref(value):
+    if not isinstance(value,dict):
+        raise ValueError('actions_file_reference_not_expanded')
+    allowed={'id','name','mime_type','download_link','file_id','file_name','download_url'}
+    if set(value)-allowed:
+        raise ValueError('actions_file_reference_invalid')
+    file_id=str(value.get('id') or value.get('file_id') or '').strip()
+    download_url=str(value.get('download_link') or value.get('download_url') or '').strip()
+    file_name=str(value.get('name') or value.get('file_name') or '').strip()
+    mime_type=str(value.get('mime_type') or '').strip()
+    if not re.fullmatch(r'[A-Za-z0-9_-]{6,192}',file_id):
+        raise ValueError('actions_file_id_invalid')
+    if not download_url:
+        raise ValueError('actions_file_download_link_missing')
+    return {'download_url':download_url,'file_id':file_id,**({'mime_type':mime_type} if mime_type else {}),**({'file_name':file_name} if file_name else {})}
+
 def _action_schema(client_id):
     row=_oauth_client(client_id);projects=_client_projects(row)
     if not row or len(projects)!=1:return None
     slug=projects[0];available=_client_tool_names(row)
     read_tools=[x for x in available if x in READ_ONLY_TOOLS]
-    write_tools=[x for x in available if x not in READ_ONLY_TOOLS]
+    action_file_tools={x for x in available if x=='workspace.artifact.import'}
+    write_tools=[x for x in available if x not in READ_ONLY_TOOLS and x not in action_file_tools]
     base='/cloudiff/mcp/actions/v1';security=[{'cloudiffOAuth':['mcp']}]
     responses={
       '200':{'description':'Resposta do conector CloudIFF','content':{'application/json':{'schema':{'$ref':'#/components/schemas/ActionResponse'}}}},
@@ -638,12 +655,29 @@ def _action_schema(client_id):
         paths[base+'/read']={'post':{'operationId':'callCloudIFFReadTool','summary':'Executar ferramenta de consulta','description':'Executa somente ferramentas classificadas pelo servidor como leitura, plano ou inspeção sem efeito persistente. O projeto é imposto pelo token OAuth.','security':security,'x-openai-isConsequential':False,'requestBody':{'required':True,'content':{'application/json':{'schema':{'$ref':'#/components/schemas/ReadToolRequest'}}}},'responses':responses}}
     if write_tools:
         paths[base+'/write']={'post':{'operationId':'callCloudIFFProjectTool','summary':'Executar operação controlada do projeto','description':'Executa uma ferramenta com efeito ou solicitação de aprovação. Aprovações humanas e políticas da CloudIFF continuam obrigatórias.','security':security,'x-openai-isConsequential':True,'requestBody':{'required':True,'content':{'application/json':{'schema':{'$ref':'#/components/schemas/WriteToolRequest'}}}},'responses':responses}}
+    if 'workspace.artifact.import' in action_file_tools:
+        paths[base+'/artifact/import']={'post':{'operationId':'importCloudIFFArtifact','summary':'Importar arquivo anexado para um artifact CloudIFF','description':'Importa exatamente um arquivo anexado nesta conversa. O ChatGPT deve preencher openaiFileIdRefs automaticamente com id, nome, MIME type e download_link temporário. Não invente URLs nem envie somente o file id.','security':security,'x-openai-isConsequential':True,'requestBody':{'required':True,'content':{'application/json':{'schema':{'$ref':'#/components/schemas/ArtifactImportActionRequest'}}}},'responses':responses}}
     schemas={
       'ActionArguments':{
         'type':'object',
         'description':'Parâmetros da ferramenta. O slug do projeto é sempre imposto pelo servidor.',
         'properties':{},
         'additionalProperties':True,
+      },
+      'ArtifactImportActionRequest':{
+        'type':'object',
+        'properties':{
+          'openaiFileIdRefs':{
+            'type':'array','minItems':1,'maxItems':1,'items':{'type':'string'},
+            'description':'Exatamente um arquivo anexado pelo usuário nesta conversa. Este campo é preenchido automaticamente pelo ChatGPT Actions com objetos contendo name, id, mime_type e download_link temporário.',
+          },
+          'filename':{'type':'string','minLength':1,'maxLength':240,'description':'Nome exato esperado para o arquivo.'},
+          'expected_size':{'type':'integer','minimum':0,'maximum':67108864,'description':'Tamanho exato esperado em bytes.'},
+          'expected_sha256':{'type':'string','pattern':'^[a-f0-9]{64}$','description':'SHA-256 esperado em hexadecimal minúsculo.'},
+          'ttl_seconds':{'type':'integer','minimum':300,'maximum':86400,'default':3600},
+        },
+        'required':['openaiFileIdRefs','filename','expected_size','expected_sha256'],
+        'additionalProperties':False,
       },
       'ActionResponse':{
         'type':'object',
@@ -679,7 +713,7 @@ def _action_schema(client_id):
       'openapi':'3.1.0',
       'info':{
         'title':'CloudIFF Actions — '+slug,
-        'version':'1.0.1',
+        'version':'1.1.0',
         'description':'Ações do projeto '+slug+' com OAuth público, PKCE, ACL por projeto e aprovações humanas server-side.',
         'termsOfService':PUBLIC_ORIGIN+'/cloudiff/mcp/privacy',
         'x-privacy-policy-url':PUBLIC_ORIGIN+'/cloudiff/mcp/privacy',
@@ -1708,6 +1742,27 @@ class H(BaseHTTPRequestHandler):
         else:self.sendj(404,{'ok':False,'error':'not_found'})
     def do_POST(self):
         path=urlparse(self.path).path
+        if path=='/cloudiff/mcp/actions/v1/artifact/import':
+            identity=self._action_identity()
+            if not identity:return
+            try:
+                if 'workspace.artifact.import' not in identity['tools']:raise PermissionError('tool_denied')
+                n=int(self.headers.get('Content-Length','0') or 0)
+                if not (0<n<=65536):raise ValueError('invalid_request')
+                payload=json.loads(self.rfile.read(n) or b'{}')
+                if not isinstance(payload,dict):raise ValueError('invalid_request')
+                allowed={'openaiFileIdRefs','filename','expected_size','expected_sha256','ttl_seconds'}
+                if set(payload)-allowed:raise ValueError('invalid_request')
+                refs=payload.get('openaiFileIdRefs')
+                if not isinstance(refs,list) or len(refs)!=1:raise ValueError('actions_exactly_one_file_required')
+                file_ref=_normalize_action_file_ref(refs[0])
+                filename=str(payload.get('filename') or '').strip();size=int(payload.get('expected_size'));digest=str(payload.get('expected_sha256') or '').strip().lower();ttl=int(payload.get('ttl_seconds') or 3600)
+                if not filename or len(filename)>240 or not (0<=size<=67108864) or not re.fullmatch(r'[a-f0-9]{64}',digest) or not (300<=ttl<=86400):raise ValueError('invalid_request')
+                args={'file':file_ref,'filename':filename,'expected_size':size,'expected_sha256':digest,'ttl_seconds':ttl}
+                result=self._action_rpc(identity,'workspace.artifact.import',args)
+                return self.sendj(200,{'ok':True,'project_slug':identity['project_slug'],'tool':'workspace.artifact.import','result':result})
+            except PermissionError as e:return self.sendj(403,{'ok':False,'error':str(e)})
+            except Exception as e:return self.sendj(422,{'ok':False,'error':str(e)})
         if path in {'/cloudiff/mcp/actions/v1/read','/cloudiff/mcp/actions/v1/write'}:
             identity=self._action_identity()
             if not identity:return
