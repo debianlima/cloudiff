@@ -10,6 +10,7 @@ Componentes implantados no host de runtime, Forgejo, Komodo e executores.
 
 | Item | Tipo | Finalidade |
 |---|---|---|
+| [`publication-gateway/`](publication-gateway/) | Diretório | Componentes implantados no host de runtime, Forgejo, Komodo e executores. |
 | [`scanners/`](scanners/) | Diretório | Componentes implantados no host de runtime, Forgejo, Komodo e executores. |
 | [`test-fixtures/`](test-fixtures/) | Diretório | Componentes implantados no host de runtime, Forgejo, Komodo e executores. |
 

@@ -18,4 +18,4 @@ Cada tenant Supabase utiliza templates versionáveis. Dados e credenciais do ten
 
 ## Estado operacional vigente
 
-Os fluxos implementados de provisionamento, ACL, publicação versionada, terminal compartilhado e exclusão derivada estão consolidados em [Arquitetura operacional atual](manual-tecnico/12-ARQUITETURA-OPERACIONAL-ATUAL.md).
+Os fluxos implementados de provisionamento, ACL, entrega **W → H → P**, terminal do Preview e exclusão derivada estão consolidados em [Arquitetura operacional atual](manual-tecnico/12-ARQUITETURA-OPERACIONAL-ATUAL.md). O contrato de publicação está detalhado em [Fluxo W → H → P](FLUXO-WHP-PUBLICACAO.md).

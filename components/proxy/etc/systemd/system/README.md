@@ -10,6 +10,7 @@ Componentes implantados no host de proxy e publicação.
 
 | Item | Tipo | Finalidade |
 |---|---|---|
+| [`cloudif-access-push.service.d/`](cloudif-access-push.service.d/) | Diretório | Componentes implantados no host de proxy e publicação. |
 | [`cloudif-access-api.service`](cloudif-access-api.service) | `.service` | Unidade systemd que inicia e protege um serviço CloudIFF. |
 | [`cloudif-access-collector.service`](cloudif-access-collector.service) | `.service` | Unidade systemd que inicia e protege um serviço CloudIFF. |
 | [`cloudif-access-collector.timer`](cloudif-access-collector.timer) | `.timer` | Timer systemd que agenda a unidade correspondente. |

@@ -97,3 +97,19 @@ Planejamento e execução:
 A API persiste valores públicos, metadados e referências opacas de segredo. Valores secretos diretos são rejeitados. A aplicação registra revisão e histórico, mas não reinicia containers nesta fase; a resposta informa `requiredAction`, `affectedServices` e `reconciliationPending`.
 
 A API Web do Portal usa as rotas equivalentes sob `/cloudiff/portal/api/projects/<slug>/environment`. Planejamento, aprovação e execução aplicam a mesma ACL e o mesmo vínculo de aprovação utilizado pelas ferramentas MCP.
+
+<!-- CLOUDIFF-AUTO-DOC:BEGIN -->
+
+## Inventário automático de `components/control-plane/current-apps/project-config-controller-current`
+
+Componentes implantados no plano de controle e no host de hospedagem.
+
+| Item | Tipo | Finalidade |
+|---|---|---|
+| [`cloudif-project-config-controller.py`](cloudif-project-config-controller.py) | `.py` | Implementa `ManifestResult`, `canonical`, `digest`, `now`, `load_schema`, `db_conn` e outros componentes. |
+| [`cloudif_project_environment.py`](cloudif_project_environment.py) | `.py` | Implementa `environment_request_contract`, `actionable_request_error`, `now`, `canonical`, `digest`, `db` e outros componentes. |
+| [`cloudif_project_secret_store.py`](cloudif_project_secret_store.py) | `.py` | Implementa `now`, `canonical`, `digest`, `db`, `init_db`, `_secure_key` e outros componentes. |
+
+> Esta seção é gerada por `scripts/generate-directory-readmes.py`. Conteúdo manual fora dos marcadores é preservado.
+
+<!-- CLOUDIFF-AUTO-DOC:END -->

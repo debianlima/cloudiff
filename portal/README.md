@@ -11,6 +11,16 @@ Esta árvore implementa as Fases 0 e 1 do plano de migração.
 Não adicione novas camadas ao CSS legado. Mudanças visuais novas pertencem a
 `design/`, e toda rota nova deve declarar permissão antes do registro.
 
+## Publicação W → H → P
+
+O Portal expõe o fluxo de entrega pelo wizard **Preview → Homologação → Publicação**. A interface principal usa W/H/P; artefatos `dN` aparecem somente como compatibilidade técnica em detalhes legados.
+
+- **W** mostra estado do Preview vivo, sincronização Git, variáveis e terminal do próprio container Preview;
+- **H** apresenta o candidato congelado, diff de código/runtime e ações de homologação;
+- **P** apresenta autorização crítica, publicação do mesmo digest homologado e rollback entre releases P.
+
+O contrato funcional está em [`docs/FLUXO-WHP-PUBLICACAO.md`](../docs/FLUXO-WHP-PUBLICACAO.md).
+
 <!-- CLOUDIFF-AUTO-DOC:BEGIN -->
 
 ## Inventário automático de `portal`

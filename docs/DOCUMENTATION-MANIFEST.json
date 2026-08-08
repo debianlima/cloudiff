@@ -1,6 +1,6 @@
 {
-  "files": 939,
-  "directories": 165,
+  "files": 1139,
+  "directories": 180,
   "generator": "scripts/generate-directory-readmes.py",
   "manual": "docs/manual-tecnico/README.md"
 }

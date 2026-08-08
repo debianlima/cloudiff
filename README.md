@@ -20,7 +20,7 @@ Ela foi projetada para:
 | Código | Repositório privado no Forgejo, acessível por Git HTTPS. |
 | Runtime | Runtime gerado fora do Git, com Apache, PHP e Node.js nas versões escolhidas. |
 | Dados | Tenant Supabase com Postgres, Auth, REST, Storage, Realtime e Studio. |
-| Publicação | Cada `dN` possui stack, imagem, container, URL e terminais próprios, com promoção e rollback pelo Komodo. |
+| Publicação | Fluxo **W → H → P**: Preview vivo, Homologação imutável e Publicação do mesmo artefato aprovado, com rollback. |
 | Agentes de IA | Identidade MCP própria, OAuth, escopos, ACL, aprovação humana e auditoria. |
 | Governança | Permissões por projeto, backups, logs, monitoramento e reconciliação idempotente. |
 
@@ -38,17 +38,21 @@ README.md
 
 Arquivos operacionais da CloudIFF não são enviados ao Forgejo. Dockerfile, Compose, configuração de Apache e Supervisor, healthcheck, imagens, `.env`, segredos e metadados são gerados fora do repositório.
 
-Cada publicação é um runtime imutável e independente:
+O ciclo de entrega é dividido em três estágios:
 
 ```text
-d1 → stack + imagem + container + URL + terminais
-d2 → stack + imagem + container + URL + terminais
-dN → stack + imagem + container + URL + terminais
+W · Preview       → workspace vivo para desenvolver e visualizar alterações
+H · Homologação   → snapshot imutável de código + runtime para validação
+P · Publicação    → Produção com exatamente o mesmo digest homologado em H
 ```
 
-A ativação troca somente o alias da versão estável depois do healthcheck. Se o runtime de uma versão registrada não existir mais, a plataforma reconstrói o commit daquela `dN` antes de promovê-la.
+![Fluxo W → H → P da CloudIFF](docs/assets/cloudiff-fluxo-whp.svg)
 
-Quando uma pessoa é adicionada ou removida de um projeto ou banco, o reconciliador reaplica o estado completo: colaboradores do Forgejo, permissões do Komodo, terminais das publicações, integrações MCP e acesso ao tenant Supabase. Operações pendentes permanecem na fila e são repetidas até a convergência.
+W pode mudar continuamente sem criar release. H congela o estado exato que será validado. P **não faz rebuild**: sobe uma nova release a partir do mesmo artefato homologado, aplica a configuração de Production e só então atualiza o endereço estável. `dN` permanece apenas como identificador técnico/legado durante a migração e o rollback de versões históricas.
+
+O contrato completo está em [Fluxo W → H → P de publicação](docs/FLUXO-WHP-PUBLICACAO.md).
+
+Quando uma pessoa é adicionada ou removida de um projeto ou banco, o reconciliador reaplica o estado completo: colaboradores do Forgejo, permissões do Komodo, terminais autorizados do Preview/publicações, integrações MCP e acesso ao tenant Supabase. Operações pendentes permanecem na fila e são repetidas até a convergência.
 
 ### Conclusão do provisionamento
 
@@ -56,8 +60,8 @@ O job não termina quando os containers apenas aparecem. Para concluir, ele exig
 
 - serviços críticos do tenant presentes, em execução e saudáveis;
 - certificado e rota HTTPS do tenant válidos;
-- stack, imagem e container próprios da `d1` saudáveis;
-- URL imutável da `d1` e URL estável respondendo;
+- runtime/publicação inicial compatível (`d1` técnico, apresentado como P legado quando aplicável) saudável;
+- URL técnica inicial e URL estável respondendo;
 - terminal e associações do projeto reconciliados.
 
 Projetos novos recebem uma página inicial que ensina a publicar, clonar o Forgejo por HTTPS no Linux e Windows e consumir o Supabase em aplicações desktop por `supabase-js` ou REST HTTPS. O Portal também oferece tema **Claro**, **Escuro** ou **Sistema**, persistido no navegador.
@@ -68,8 +72,8 @@ Projetos novos recebem uma página inicial que ensina a publicar, clonar o Forge
 
 O diagrama resume os quatro algoritmos centrais da plataforma:
 
-1. **Provisionamento:** valida a solicitação, cria o repositório somente com código na raiz e permanece em execução até o tenant, a rota HTTPS e a publicação inicial `d1` estarem realmente prontos.
-2. **Publicação:** transforma um commit em uma nova `dN`, com imagem, container, URL e terminais independentes, pronta para promoção ou rollback.
+1. **Provisionamento:** valida a solicitação, cria o repositório somente com código na raiz e permanece em execução até o tenant, a rota HTTPS e o runtime/publicação inicial compatível (`d1` técnico/P legado) estarem realmente prontos.
+2. **Publicação:** mantém um Preview W vivo, congela candidatos H imutáveis e promove para P exatamente o mesmo digest homologado, sem rebuild entre H e P.
 3. **Agentes MCP:** autentica o cliente, aplica escopos e ACL, solicita aprovação quando necessário e audita a execução.
 4. **Reconciliação:** reage a mudanças de projeto, banco e membresia, compara o estado desejado com o observado e repete correções idempotentes até convergir.
 
@@ -147,6 +151,7 @@ Este repositório funciona também como uma apostila técnica da plataforma:
 - [Acesso externo e conexões](docs/manual-tecnico/13-ACESSO-EXTERNO.md)
 - [Arquitetura e diagramas](docs/manual-tecnico/01-ARQUITETURA.md)
 - [Runtime unificado de projetos](docs/manual-tecnico/11-RUNTIME-UNIFICADO.md)
+- [Fluxo W → H → P de publicação](docs/FLUXO-WHP-PUBLICACAO.md)
 - [Arquitetura operacional atual](docs/manual-tecnico/12-ARQUITETURA-OPERACIONAL-ATUAL.md)
 - [Fluxos de processo](docs/manual-tecnico/02-FLUXOS.md)
 - [Agentes e funções](docs/manual-tecnico/03-AGENTES.md)

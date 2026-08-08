@@ -12,7 +12,7 @@ Componentes implantados no plano de controle e no host de hospedagem.
 |---|---|---|
 | [`cloudif-admin-portal.py`](cloudif-admin-portal.py) | `.py` | Implementa `now_iso`, `h`, `norm`, `slugify`, `parse_groups`, `db` e outros componentes. |
 | [`cloudif-agent-pki.py`](cloudif-agent-pki.py) | `.py` | Implementa `now`, `run`, `audit`, `refresh_crls`, `create_token`, `enroll` e outros componentes. |
-| [`cloudif-authz-gate.py`](cloudif-authz-gate.py) | `.py` | Implementa `NoRedirect`, `clean_host`, `tenant_from_request`, `groups_to_set`, `cache_key`, `cache_get` e outros componentes. |
+| [`cloudif-authz-gate.py`](cloudif-authz-gate.py) | `.py` | Implementa `NoRedirect`, `clean_host`, `tenant_from_request`, `groups_to_set`, `load_tenant_access`, `authorize_tenant` e outros componentes. |
 | [`cloudif-certificate-alert-dispatcher.py`](cloudif-certificate-alert-dispatcher.py) | `.py` | Implementa `utcnow`, `iso`, `parse`, `env`, `should_dispatch`, `main`. |
 | [`cloudif-config-backup.sh`](cloudif-config-backup.sh) | `.sh` | Script Shell de backup, retenção ou sincronização. |
 | [`cloudif-control-plane-api.py`](cloudif-control-plane-api.py) | `.py` | Implementa `rows`, `H`. |
@@ -49,14 +49,14 @@ Componentes implantados no plano de controle e no host de hospedagem.
 | [`cloudif-project-backup-sync.sh`](cloudif-project-backup-sync.sh) | `.sh` | Script Shell de backup, retenção ou sincronização. |
 | [`cloudif-project-backup.py`](cloudif-project-backup.py) | `.py` | Implementa `now`, `stamp`, `safe`, `load_state`, `save_state`, `db_rows` e outros componentes. |
 | [`cloudif-project-ensure.py`](cloudif-project-ensure.py) | `.py` | Implementa `load_env_file`, `now`, `db`, `http_json`, `audit`, `save_project` e outros componentes. |
-| [`cloudif-project-initial-publish.py`](cloudif-project-initial-publish.py) | `.py` | Implementa `envfile`, `request`, `public_number`, `seed_db`, `update_db`, `atomic_job` e outros componentes. |
+| [`cloudif-project-initial-publish.py`](cloudif-project-initial-publish.py) | `.py` | Implementa `envfile`, `request`, `public_number`, `next_recorded_deploy_number`, `immutable_deploy_conflict`, `project_access` e outros componentes. |
 | [`cloudif-project-provision.sh`](cloudif-project-provision.sh) | `.sh` | Automação Shell operacional da plataforma. |
 | [`cloudif-project-template-apply.py`](cloudif-project-template-apply.py) | `.py` | Implementa `read_env`, `post`, `public_number`, `build`, `project_readme`, `runtime_overlay` e outros componentes. |
 | [`cloudif-project-template-seed.py`](cloudif-project-template-seed.py) | `.py` | Implementa `load_env`, `req`, `svg`, `files_for`, `seed_db`, `main`. |
 | [`cloudif-publication-worker.py`](cloudif-publication-worker.py) | `.py` | Implementa `stop`. |
 | [`cloudif-publish-1009-once.py`](cloudif-publish-1009-once.py) | `.py` | Módulo Python da plataforma. |
 | [`cloudif-reconcile-tenant-certificates.py`](cloudif-reconcile-tenant-certificates.py) | `.py` | Implementa `tenants`, `main`. |
-| [`cloudif-reconcile-worker.py`](cloudif-reconcile-worker.py) | `.py` | Implementa `read_env`, `forja_project`, `db_container`, `update_request`, `process`, `drain` e outros componentes. |
+| [`cloudif-reconcile-worker.py`](cloudif-reconcile-worker.py) | `.py` | Implementa `read_env`, `forja_project`, `reconcile_project_runtime`, `db_container`, `internal_post`, `project_membership_snapshot` e outros componentes. |
 | [`cloudif-refresh-komodo-status-cache.py`](cloudif-refresh-komodo-status-cache.py) | `.py` | Implementa `now_iso`, `add_seconds_iso`, `read_env`, `komodo_agent_config`, `http_json`, `ensure_table` e outros componentes. |
 | [`cloudif-release-cycle`](cloudif-release-cycle) | `arquivo` | Arquivo de suporte da plataforma. |
 | [`cloudif-release-dispatch.py`](cloudif-release-dispatch.py) | `.py` | Implementa `main`. |
@@ -71,6 +71,7 @@ Componentes implantados no plano de controle e no host de hospedagem.
 | [`cloudif-tenant-db-backup.sh`](cloudif-tenant-db-backup.sh) | `.sh` | Script Shell de backup, retenção ou sincronização. |
 | [`cloudif-tenant-ensure-bg.sh`](cloudif-tenant-ensure-bg.sh) | `.sh` | Script Shell de criação, manutenção ou reconciliação de tenant. |
 | [`cloudif-tenant-guard.py`](cloudif-tenant-guard.py) | `.py` | Implementa `NoRedirect`, `log`, `clean_host`, `valid_tenant`, `tenant_from_request`, `env_value` e outros componentes. |
+| [`cloudif-tenant-policy-ensure.py`](cloudif-tenant-policy-ensure.py) | `.py` | Apply and verify the initial availability policy of a newly-created tenant. |
 | [`cloudif-test-cross-subdomain-publish-once.py`](cloudif-test-cross-subdomain-publish-once.py) | `.py` | Implementa `NR`. |
 | [`cloudif-test-d2-deploy.sh`](cloudif-test-d2-deploy.sh) | `.sh` | Automação Shell operacional da plataforma. |
 | [`cloudif-test-mobile-null-origin-publish-once.py`](cloudif-test-mobile-null-origin-publish-once.py) | `.py` | Implementa `NR`. |

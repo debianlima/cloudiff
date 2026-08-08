@@ -75,6 +75,47 @@ def agents_catalog() -> None:
     (ROOT/'docs/CATALOGO-DE-AGENTES.md').write_text('\n'.join(out)+'\n')
 
 
+def extract_create_table_snippet(text: str, table: str) -> str:
+    """Return only the balanced CREATE TABLE statement, never following fixtures/code."""
+    pattern = re.compile(
+        r'CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?["`\[]?' + re.escape(table) + r'["`\]]?\s*\(',
+        re.I,
+    )
+    match = pattern.search(text)
+    if not match:
+        return ''
+    start = match.start()
+    open_pos = text.find('(', match.start(), match.end() + 1)
+    if open_pos < 0:
+        return ''
+    depth = 0
+    quote = None
+    escaped = False
+    end = min(len(text), start + 4000)
+    for pos in range(open_pos, end):
+        ch = text[pos]
+        if quote:
+            if escaped:
+                escaped = False
+                continue
+            if ch == '\\':
+                escaped = True
+                continue
+            if ch == quote:
+                quote = None
+            continue
+        if ch in {"'", '"'}:
+            quote = ch
+            continue
+        if ch == '(':
+            depth += 1
+        elif ch == ')':
+            depth -= 1
+            if depth == 0:
+                return re.sub(r'\s+', ' ', text[start:pos + 1]).strip()[:1200]
+    return re.sub(r'\s+', ' ', text[start:min(end, open_pos + 1200)]).strip()[:1200]
+
+
 def schema_catalog() -> None:
     rows=[]
     create_re=re.compile(r'CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?["`\[]?([A-Za-z0-9_]+)',re.I)
@@ -82,11 +123,7 @@ def schema_catalog() -> None:
         if not path.is_file() or '.git' in path.parts or path.suffix.lower() not in {'.py','.sql','.sh'}: continue
         text=path.read_text(errors='ignore')
         for table in sorted(set(create_re.findall(text))):
-            # Best-effort nearby statement, deliberately static and sanitized.
-            pos=text.lower().find('create table',max(0,text.lower().find(table.lower())-80))
-            snippet=''
-            if pos>=0:
-                snippet=re.sub(r'\s+',' ',text[pos:pos+600]).strip()
+            snippet=extract_create_table_snippet(text,table)
             rows.append((table,path.relative_to(ROOT).as_posix(),snippet[:500]))
     out=['# Dicionário de dados estático','',f'Foram encontradas **{len(rows)} declarações de tabela** no código versionado. Este catálogo é estático; o schema efetivo de produção deve ser confirmado por migração e `PRAGMA table_info`.','','| Tabela | Definida em | DDL observado |','|---|---|---|']
     out += [f'| `{t}` | [`{p}`](../{p}) | `{esc(s)}` |' for t,p,s in sorted(rows,key=lambda x:(x[0],x[1]))]

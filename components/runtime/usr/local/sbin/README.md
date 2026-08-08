@@ -14,6 +14,7 @@ Componentes implantados no host de runtime, Forgejo, Komodo e executores.
 | [`cloudif-komodo-agent.py`](cloudif-komodo-agent.py) | `.py` | Implementa `now`, `init_db`, `db_exec`, `db_query`, `record_deployment`, `load_env` e outros componentes. |
 | [`cloudif-komodo-api-call.py`](cloudif-komodo-api-call.py) | `.py` | Implementa `load_env`, `headers`, `call`. |
 | [`cloudif-komodo-authz-sync.py`](cloudif-komodo-authz-sync.py) | `.py` | Implementa `run`. |
+| [`cloudif-komodo-project-authz.py`](cloudif-komodo-project-authz.py) | `.py` | Implementa `main`. |
 | [`cloudif-machine-certificate-renew.py`](cloudif-machine-certificate-renew.py) | `.py` | Implementa `load_env`, `run`, `serial`, `cert_expiring`, `opener`, `post` e outros componentes. |
 | [`cloudif-machine-executor.py`](cloudif-machine-executor.py) | `.py` | Módulo Python da plataforma. |
 | [`cloudif-machine-guardian.py`](cloudif-machine-guardian.py) | `.py` | Implementa `send`, `main`. |

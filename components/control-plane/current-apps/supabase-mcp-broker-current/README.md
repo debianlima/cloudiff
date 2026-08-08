@@ -1,16 +1,16 @@
-# Mcp Gateway Current
+# Supabase Mcp Broker Current
 
 Componentes implantados no plano de controle e no host de hospedagem.
 
 <!-- CLOUDIFF-AUTO-DOC:BEGIN -->
 
-## Inventário automático de `components/control-plane/current-apps/mcp-gateway-current`
+## Inventário automático de `components/control-plane/current-apps/supabase-mcp-broker-current`
 
 Componentes implantados no plano de controle e no host de hospedagem.
 
 | Item | Tipo | Finalidade |
 |---|---|---|
-| [`cloudif-mcp-gateway.py`](cloudif-mcp-gateway.py) | `.py` | Implementa `_agent_clients`, `_oauth_client`, `_client_projects`, `_header_groups`, `_public_oauth_client`, `_callback_mode` e outros componentes. |
+| [`cloudif-supabase-mcp-broker.py`](cloudif-supabase-mcp-broker.py) | `.py` | Implementa `db_conn`, `init_state`, `read_env`, `is_secret_name`, `mask_secret`, `project_context` e outros componentes. |
 
 > Esta seção é gerada por `scripts/generate-directory-readmes.py`. Conteúdo manual fora dos marcadores é preservado.
 

@@ -5,6 +5,7 @@ Documentação técnica, inventários e evidências.
 
 ## Guias operacionais
 
+- [Fluxo W → H → P de publicação](FLUXO-WHP-PUBLICACAO.md)
 - [Acesso externo e conexões](manual-tecnico/13-ACESSO-EXTERNO.md)
 
 <!-- CLOUDIFF-AUTO-DOC:BEGIN -->
@@ -15,6 +16,7 @@ Documentação técnica, inventários e evidências.
 
 | Item | Tipo | Finalidade |
 |---|---|---|
+| [`assets/`](assets/) | Diretório | Documentação técnica, inventários e evidências. |
 | [`manual-tecnico/`](manual-tecnico/) | Diretório | Documentação técnica, inventários e evidências. |
 | [`portal-v2/`](portal-v2/) | Diretório | Documentação técnica, inventários e evidências. |
 | [`ARCHITECTURE.md`](ARCHITECTURE.md) | `.md` | Documento técnico ou operacional. |
@@ -24,6 +26,7 @@ Documentação técnica, inventários e evidências.
 | [`COVERAGE_AUDIT.json`](COVERAGE_AUDIT.json) | `.json` | Configuração, inventário, evidência ou estado serializado em JSON. |
 | [`DICIONARIO-DE-DADOS-ESTATICO.md`](DICIONARIO-DE-DADOS-ESTATICO.md) | `.md` | Documento técnico ou operacional. |
 | [`DOCUMENTATION-MANIFEST.json`](DOCUMENTATION-MANIFEST.json) | `.json` | Configuração, inventário, evidência ou estado serializado em JSON. |
+| [`FLUXO-WHP-PUBLICACAO.md`](FLUXO-WHP-PUBLICACAO.md) | `.md` | Documento técnico ou operacional. |
 | [`GUIA-DE-MIGRACAO.md`](GUIA-DE-MIGRACAO.md) | `.md` | Documento técnico ou operacional. |
 | [`INVENTARIO-DE-ARQUIVOS.md`](INVENTARIO-DE-ARQUIVOS.md) | `.md` | Documento técnico ou operacional. |
 | [`INVENTORY.json`](INVENTORY.json) | `.json` | Configuração, inventário, evidência ou estado serializado em JSON. |

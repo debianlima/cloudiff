@@ -79,23 +79,28 @@ flowchart TD
   K --> M[Modal recupera succeeded mesmo durante reload]
 ```
 
-## Publicação
+## Publicação W → H → P
+
+A entrega agora separa desenvolvimento, validação e Produção em três estágios. W é vivo; H congela o estado atual; P promove exatamente o artefato homologado.
 
 ```mermaid
-stateDiagram-v2
-  [*] --> Planejada
-  Planejada --> Construindo: template aplicado
-  Construindo --> Iniciando: docker compose build
-  Iniciando --> Saudavel: healthcheck aprovado
-  Saudavel --> Homologada: smoke HTTP 200
-  Homologada --> Ativa: promoção aprovada
-  Ativa --> Revertendo: rollback
-  Revertendo --> Ativa: versão anterior restaurada
-  Construindo --> Falha: build real falhou
-  Iniciando --> Falha: runtime não estabilizou
-  Homologada --> Falha: proxy ou smoke falhou
+flowchart LR
+  G[Workspace Git local] --> W[W · Preview vivo]
+  W -->|alterar e visualizar| W
+  W -->|snapshot código + runtime| H[H · Homologação imutável]
+  H -->|rejeitar| W
+  H -->|homologar| A[Aprovação crítica de Produção]
+  A -->|aprovada| P[P · Publication]
+  P --> S[URL estável]
+  P -->|rollback| R[P anterior]
+  R --> S
 ```
+
+O Preview continua operacional com a cópia Git local quando o remoto fica temporariamente indisponível, mas a criação de H exige nova validação da procedência/sincronização. Produção não recompila o candidato: o digest executado em P deve ser o mesmo homologado em H.
+
+`dN` permanece apenas como identificador técnico/legado para compatibilidade com artefatos anteriores. O contrato completo está em [Fluxo W → H → P de publicação](../FLUXO-WHP-PUBLICACAO.md).
+
 
 ## Fluxos atuais complementares
 
-Os fluxos de ACL, terminal compartilhado, publicação versionada e exclusão derivada estão detalhados em [Arquitetura operacional atual](12-ARQUITETURA-OPERACIONAL-ATUAL.md). Esse capítulo deve ser considerado o contrato vigente para integrações entre Portal, Forja Agent, Komodo Agent, Publisher e Tenant Guard.
+Os fluxos de ACL, terminal do Preview, publicação W/H/P e exclusão derivada estão detalhados em [Arquitetura operacional atual](12-ARQUITETURA-OPERACIONAL-ATUAL.md). Esse capítulo deve ser considerado o contrato vigente para integrações entre Portal, Forja Agent, Komodo Agent, Publisher e Tenant Guard.

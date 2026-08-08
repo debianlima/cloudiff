@@ -77,6 +77,7 @@ Componentes implantados no plano de controle e no host de hospedagem.
 | [`cloudif-monitor-collector.timer`](cloudif-monitor-collector.timer) | `.timer` | Timer systemd que agenda a unidade correspondente. |
 | [`cloudif-monthly-restore-test.service`](cloudif-monthly-restore-test.service) | `.service` | Unidade systemd que inicia e protege um serviço CloudIFF. |
 | [`cloudif-monthly-restore-test.timer`](cloudif-monthly-restore-test.timer) | `.timer` | Timer systemd que agenda a unidade correspondente. |
+| [`cloudif-multiservice-preview-broker.service`](cloudif-multiservice-preview-broker.service) | `.service` | Unidade systemd que inicia e protege um serviço CloudIFF. |
 | [`cloudif-node-metrics.service`](cloudif-node-metrics.service) | `.service` | Unidade systemd que inicia e protege um serviço CloudIFF. |
 | [`cloudif-notification-api.service`](cloudif-notification-api.service) | `.service` | Unidade systemd que inicia e protege um serviço CloudIFF. |
 | [`cloudif-notification-evaluator.service`](cloudif-notification-evaluator.service) | `.service` | Unidade systemd que inicia e protege um serviço CloudIFF. |
@@ -100,9 +101,15 @@ Componentes implantados no plano de controle e no host de hospedagem.
 | [`cloudif-project-capabilities.path`](cloudif-project-capabilities.path) | `.path` | Arquivo de suporte da plataforma. |
 | [`cloudif-project-capabilities.service`](cloudif-project-capabilities.service) | `.service` | Unidade systemd que inicia e protege um serviço CloudIFF. |
 | [`cloudif-project-capabilities.timer`](cloudif-project-capabilities.timer) | `.timer` | Timer systemd que agenda a unidade correspondente. |
+| [`cloudif-project-config-controller.service`](cloudif-project-config-controller.service) | `.service` | Unidade systemd que inicia e protege um serviço CloudIFF. |
+| [`cloudif-project-config-reconciler.service`](cloudif-project-config-reconciler.service) | `.service` | Unidade systemd que inicia e protege um serviço CloudIFF. |
+| [`cloudif-project-observability.service`](cloudif-project-observability.service) | `.service` | Unidade systemd que inicia e protege um serviço CloudIFF. |
 | [`cloudif-project-onboarding-reconcile.service`](cloudif-project-onboarding-reconcile.service) | `.service` | Unidade systemd que inicia e protege um serviço CloudIFF. |
 | [`cloudif-project-onboarding-reconcile.timer`](cloudif-project-onboarding-reconcile.timer) | `.timer` | Timer systemd que agenda a unidade correspondente. |
 | [`cloudif-project-onboarding.service`](cloudif-project-onboarding.service) | `.service` | Unidade systemd que inicia e protege um serviço CloudIFF. |
+| [`cloudif-project-provision-recover.service`](cloudif-project-provision-recover.service) | `.service` | Unidade systemd que inicia e protege um serviço CloudIFF. |
+| [`cloudif-project-provision-recover.timer`](cloudif-project-provision-recover.timer) | `.timer` | Timer systemd que agenda a unidade correspondente. |
+| [`cloudif-project-runtime-reconciler.service`](cloudif-project-runtime-reconciler.service) | `.service` | Unidade systemd que inicia e protege um serviço CloudIFF. |
 | [`cloudif-project-state-reconcile.path`](cloudif-project-state-reconcile.path) | `.path` | Arquivo de suporte da plataforma. |
 | [`cloudif-project-state-reconcile.service`](cloudif-project-state-reconcile.service) | `.service` | Unidade systemd que inicia e protege um serviço CloudIFF. |
 | [`cloudif-project-state-reconcile.timer`](cloudif-project-state-reconcile.timer) | `.timer` | Timer systemd que agenda a unidade correspondente. |
@@ -111,12 +118,14 @@ Componentes implantados no plano de controle e no host de hospedagem.
 | [`cloudif-qa-ui-smoke.timer`](cloudif-qa-ui-smoke.timer) | `.timer` | Timer systemd que agenda a unidade correspondente. |
 | [`cloudif-reconcile-worker.path`](cloudif-reconcile-worker.path) | `.path` | Arquivo de suporte da plataforma. |
 | [`cloudif-reconcile-worker.service`](cloudif-reconcile-worker.service) | `.service` | Unidade systemd que inicia e protege um serviço CloudIFF. |
+| [`cloudif-reconcile-worker.timer`](cloudif-reconcile-worker.timer) | `.timer` | Timer systemd que agenda a unidade correspondente. |
 | [`cloudif-release-dispatch.service`](cloudif-release-dispatch.service) | `.service` | Unidade systemd que inicia e protege um serviço CloudIFF. |
 | [`cloudif-release-dispatch.timer`](cloudif-release-dispatch.timer) | `.timer` | Timer systemd que agenda a unidade correspondente. |
 | [`cloudif-runtime-policy.service`](cloudif-runtime-policy.service) | `.service` | Unidade systemd que inicia e protege um serviço CloudIFF. |
 | [`cloudif-storage-guard.service`](cloudif-storage-guard.service) | `.service` | Unidade systemd que inicia e protege um serviço CloudIFF. |
 | [`cloudif-storage-guard.timer`](cloudif-storage-guard.timer) | `.timer` | Timer systemd que agenda a unidade correspondente. |
 | [`cloudif-supabase-launch-api.service`](cloudif-supabase-launch-api.service) | `.service` | Unidade systemd que inicia e protege um serviço CloudIFF. |
+| [`cloudif-supabase-mcp-broker.service`](cloudif-supabase-mcp-broker.service) | `.service` | Unidade systemd que inicia e protege um serviço CloudIFF. |
 | [`cloudif-supabase-onboarding-broker.service`](cloudif-supabase-onboarding-broker.service) | `.service` | Unidade systemd que inicia e protege um serviço CloudIFF. |
 | [`cloudif-supabase-release-agent.service`](cloudif-supabase-release-agent.service) | `.service` | Unidade systemd que inicia e protege um serviço CloudIFF. |
 | [`cloudif-supabase-session-broker.service`](cloudif-supabase-session-broker.service) | `.service` | Unidade systemd que inicia e protege um serviço CloudIFF. |

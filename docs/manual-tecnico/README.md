@@ -18,6 +18,8 @@ Este manual descreve a CloudIFF como plataforma de ensino, provisionamento, publ
 12. [Arquitetura operacional atual](12-ARQUITETURA-OPERACIONAL-ATUAL.md)
 13. [Acesso externo, Git, PostgreSQL, Supabase, MCP e OAuth](13-ACESSO-EXTERNO.md)
 
+Guia transversal: [Fluxo W → H → P de publicação](../FLUXO-WHP-PUBLICACAO.md)
+
 ## Catálogos gerados do código
 
 - [Agentes e aplicações](../CATALOGO-DE-AGENTES.md)
@@ -53,6 +55,8 @@ Documentação técnica, inventários e evidências.
 | [`09-SERVICOS.md`](09-SERVICOS.md) | `.md` | Documento técnico ou operacional. |
 | [`10-DESENVOLVIMENTO.md`](10-DESENVOLVIMENTO.md) | `.md` | Documento técnico ou operacional. |
 | [`11-RUNTIME-UNIFICADO.md`](11-RUNTIME-UNIFICADO.md) | `.md` | Documento técnico ou operacional. |
+| [`12-ARQUITETURA-OPERACIONAL-ATUAL.md`](12-ARQUITETURA-OPERACIONAL-ATUAL.md) | `.md` | Documento técnico ou operacional. |
+| [`13-ACESSO-EXTERNO.md`](13-ACESSO-EXTERNO.md) | `.md` | Documento técnico ou operacional. |
 
 > Esta seção é gerada por `scripts/generate-directory-readmes.py`. Conteúdo manual fora dos marcadores é preservado.
 

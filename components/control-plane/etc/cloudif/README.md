@@ -1,16 +1,17 @@
-# Mcp Gateway Current
+# Cloudif
 
 Componentes implantados no plano de controle e no host de hospedagem.
 
 <!-- CLOUDIFF-AUTO-DOC:BEGIN -->
 
-## Inventário automático de `components/control-plane/current-apps/mcp-gateway-current`
+## Inventário automático de `components/control-plane/etc/cloudif`
 
 Componentes implantados no plano de controle e no host de hospedagem.
 
 | Item | Tipo | Finalidade |
 |---|---|---|
-| [`cloudif-mcp-gateway.py`](cloudif-mcp-gateway.py) | `.py` | Implementa `_agent_clients`, `_oauth_client`, `_client_projects`, `_header_groups`, `_public_oauth_client`, `_callback_mode` e outros componentes. |
+| [`schemas/`](schemas/) | Diretório | Componentes implantados no plano de controle e no host de hospedagem. |
+| [`toolchain-catalog-v1.json`](toolchain-catalog-v1.json) | `.json` | Configuração, inventário, evidência ou estado serializado em JSON. |
 
 > Esta seção é gerada por `scripts/generate-directory-readmes.py`. Conteúdo manual fora dos marcadores é preservado.
 

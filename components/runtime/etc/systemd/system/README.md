@@ -23,6 +23,8 @@ Componentes implantados no host de runtime, Forgejo, Komodo e executores.
 | [`cloudif-machine-guardian.timer`](cloudif-machine-guardian.timer) | `.timer` | Timer systemd que agenda a unidade correspondente. |
 | [`cloudif-machine-harvester.service`](cloudif-machine-harvester.service) | `.service` | Unidade systemd que inicia e protege um serviço CloudIFF. |
 | [`cloudif-machine-harvester.timer`](cloudif-machine-harvester.timer) | `.timer` | Timer systemd que agenda a unidade correspondente. |
+| [`cloudif-multiservice-deployment-executor.service`](cloudif-multiservice-deployment-executor.service) | `.service` | Unidade systemd que inicia e protege um serviço CloudIFF. |
+| [`cloudif-multiservice-preview-executor.service`](cloudif-multiservice-preview-executor.service) | `.service` | Unidade systemd que inicia e protege um serviço CloudIFF. |
 | [`cloudif-node-metrics.service`](cloudif-node-metrics.service) | `.service` | Unidade systemd que inicia e protege um serviço CloudIFF. |
 | [`cloudif-node24-pipeline.service`](cloudif-node24-pipeline.service) | `.service` | Unidade systemd que inicia e protege um serviço CloudIFF. |
 | [`cloudif-node24-pipeline.timer`](cloudif-node24-pipeline.timer) | `.timer` | Timer systemd que agenda a unidade correspondente. |

@@ -13,6 +13,8 @@ Componentes implantados no host de runtime, Forgejo, Komodo e executores.
 | [`artifact-executor-current/`](artifact-executor-current/) | Diretório | Componentes implantados no host de runtime, Forgejo, Komodo e executores. |
 | [`forja-agent-current/`](forja-agent-current/) | Diretório | Componentes implantados no host de runtime, Forgejo, Komodo e executores. |
 | [`komodo-agent-current/`](komodo-agent-current/) | Diretório | Componentes implantados no host de runtime, Forgejo, Komodo e executores. |
+| [`multiservice-deployment-executor-current/`](multiservice-deployment-executor-current/) | Diretório | Componentes implantados no host de runtime, Forgejo, Komodo e executores. |
+| [`multiservice-preview-executor-current/`](multiservice-preview-executor-current/) | Diretório | Componentes implantados no host de runtime, Forgejo, Komodo e executores. |
 | [`node24-pipeline-current/`](node24-pipeline-current/) | Diretório | Componentes implantados no host de runtime, Forgejo, Komodo e executores. |
 | [`preview-executor-current/`](preview-executor-current/) | Diretório | Componentes implantados no host de runtime, Forgejo, Komodo e executores. |
 | [`production-canary-executor-current/`](production-canary-executor-current/) | Diretório | Componentes implantados no host de runtime, Forgejo, Komodo e executores. |

@@ -98,26 +98,47 @@ A sincronização aplica permissões a:
 - stack do tenant/Supabase;
 - terminais autorizados.
 
-## Publicação versionada
+## Publicação W → H → P
 
-Cada publicação cria uma versão `dN`. Projetos PHP/Node reutilizam o runtime unificado Apache + PHP + Node, em vez de Nginx estático. A promoção só termina depois que a operação do Komodo conclui, a imagem correta está saudável e o alias de rede ativo foi confirmado.
+O ciclo vigente usa três estágios explícitos:
+
+- **W · Preview:** workspace Git local montado em um container vivo. Alterações aparecem sem criar release.
+- **H · Homologação:** snapshot imutável de código + runtime, com diff, digest e homologadores do projeto.
+- **P · Publicação:** novo container criado a partir do mesmo digest de H, com configuração Production e ativação controlada.
 
 ```mermaid
 flowchart LR
-  C[Commit] --> S[Snapshot imutável]
-  S --> I[Imagem versionada]
-  I --> D[Stack dN]
-  D --> H{Health + imagem correta?}
-  H -- não --> F[Falha explícita]
-  H -- sim --> V[URL versionada]
-  V --> P[Promoção]
-  P --> A[Alias ativo]
-  A --> E[URL estável]
+  W[W · Preview] -->|congelar| H[H · Homologação]
+  H --> D{Homologado?}
+  D -- não --> W
+  D -- sim --> A[deployment.production.activate]
+  A --> P[P · Publication]
+  P --> E[URL estável]
 ```
 
-## Terminal compartilhado
+A propriedade de segurança/qualidade do fluxo é:
 
-O Portal envia ao Komodo o usuário autenticado, seus grupos, owner e ACL. O terminal tem nome por usuário e é aberto na stack da publicação ativa. Isso evita reutilizar a identidade do owner e evita conceder leitura global do servidor.
+```text
+imagem/digest homologado em H == imagem/digest executado em P
+```
+
+Não há rebuild entre H e P. A Produção continua sujeita à autorização crítica e, quando aplicável, à dupla aprovação. O rollback reativa uma P anterior saudável em vez de reconstruí-la.
+
+Os hostnames públicos seguem os formatos:
+
+```text
+<numero>-w<N>-preview.cloudiff.duckdns.org
+<numero>-h<N>-homologation.cloudiff.duckdns.org
+<numero>-p<N>-publication.cloudiff.duckdns.org
+<numero>.cloudiff.duckdns.org              # P ativa
+```
+
+`dN` permanece como identificador técnico/legado para compatibilidade com publicações históricas e detalhes internos. Veja o contrato completo em [Fluxo W → H → P de publicação](../FLUXO-WHP-PUBLICACAO.md).
+
+
+## Terminal do projeto
+
+O Portal envia ao Komodo o usuário autenticado, seus grupos, owner e ACL. Quando W existe e está saudável, o terminal padrão é aberto no **container Preview W**; projetos ainda não migrados usam o fluxo legado de compatibilidade. Isso mantém desenvolvimento, personalização de runtime e visualização no mesmo ambiente sem reutilizar a identidade do owner nem conceder leitura global do servidor.
 
 A tela global **Containers** permanece restrita porque o Komodo 2.2.0 exige leitura do servidor inteiro. Recursos autorizados aparecem em **Stacks** e **Terminals**.
 
@@ -150,9 +171,13 @@ São removidos terminais, publicações, builds, imagens específicas, snapshots
 | `project/rollback` | Exclusão administrativa | Forja Agent | Remover repositório e automação |
 | `komodo/project/audit` | Portal | Komodo Agent | Estado real de stack/container |
 | `komodo/project/runtime-info` | Portal | Komodo Agent | Diagnóstico PHP e Node |
-| `komodo/project/terminal/ensure` | Portal | Komodo Agent | Terminal do usuário autenticado |
+| `komodo/project/terminal/ensure` | Portal | Komodo Agent | Terminal legado/compatível do usuário autenticado |
+| `komodo/project/preview/terminal` | Portal | Komodo Agent | Terminal do Preview W saudável |
+| `komodo/project/preview/snapshot` | Portal | Komodo Agent | Congelar W em candidato H |
 | `komodo/publication/deploy` | Publicador | Komodo Agent | Criar versão imutável |
-| `komodo/publication/promote` | Publicador | Komodo Agent | Trocar alias ativo com verificação |
+| `komodo/publication/promote` | Publicador | Komodo Agent | Promoção técnica legada `dN` |
+| `komodo/publication/release` | Portal/Publicador | Komodo Agent | Criar P a partir do mesmo digest homologado em H |
+| `komodo/publication/release/activate` | Portal/Publicador | Komodo Agent | Reativar P imutável em rollback |
 | `komodo/stack/destroy` | Exclusão | Komodo Agent | Limpeza principal e derivada |
 
 ## Princípios de segurança
