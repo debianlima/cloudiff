@@ -100,8 +100,8 @@ def _project_information(context):
         database_value=f'<strong>{h(database or "Nenhum banco vinculado")}</strong>'
     return (
         '<div class="publication-information">'
-        f'<div class="publication-info-card publication-runtime-card"><span>PHP</span><strong>Configuração do PHP</strong><small>Versão, módulos e parâmetros ativos</small><a class="publication-runtime-text" href="/cloudiff/portal/action/project-runtime-info?slug={h(context.get("slug") or "")}&amp;kind=php" target="_blank" rel="noopener">Ver informações do PHP</a></div>'
-        f'<div class="publication-info-card publication-runtime-card"><span>Node.js</span><strong>Runtime do Node.js</strong><small>Versões, npm e dependências da API</small><a class="publication-runtime-text" href="/cloudiff/portal/action/project-runtime-info?slug={h(context.get("slug") or "")}&amp;kind=node" target="_blank" rel="noopener">Ver informações do Node.js</a></div>'
+        f'<div class="publication-info-card publication-runtime-card"><span>PHP</span><strong>Configuração do PHP</strong><small>Versão, módulos e parâmetros ativos</small><a class="publication-runtime-text" data-publication-environments data-publication-tool="php" data-project-slug="{h(context.get("slug") or "")}" href="/cloudiff/portal/action/project-runtime-info?slug={h(context.get("slug") or "")}&amp;kind=php" target="_blank" rel="noopener">Ver informações do PHP</a></div>'
+        f'<div class="publication-info-card publication-runtime-card"><span>Node.js</span><strong>Runtime do Node.js</strong><small>Versões, npm e dependências da API</small><a class="publication-runtime-text" data-publication-environments data-publication-tool="node" data-project-slug="{h(context.get("slug") or "")}" href="/cloudiff/portal/action/project-runtime-info?slug={h(context.get("slug") or "")}&amp;kind=node" target="_blank" rel="noopener">Ver informações do Node.js</a></div>'
         f'<div class="publication-info-card"><span>Versões</span><strong>{h((context.get("runtime") or {}).get("versions") or "Não identificadas")}</strong><small>Runtime provisionado</small></div>'
         f'<div class="publication-info-card"><span>Serviço web</span><strong>{h(context.get("service_status"))}</strong><small>Estado real do container</small></div>'
         f'<div class="publication-info-card"><span>Banco vinculado</span>{database_value}<small>Tenant da aplicação</small></div>'
@@ -127,7 +127,7 @@ def _configuration_controls(slug,rows):
       '<article><span class="publication-stage-code">W</span><div><strong>Preview</strong><small>Workspace vivo</small></div><span class="publication-stage-state" data-release-summary-w>Consultar</span></article>'
       '<article><span class="publication-stage-code">H</span><div><strong>Homologação</strong><small>Candidato imutável</small></div><span class="publication-stage-state" data-release-summary-h>Consultar</span></article>'
       '<article><span class="publication-stage-code">P</span><div><strong>Publicação</strong><small>Produção aprovada</small></div><span class="publication-stage-state" data-release-summary-p>Consultar</span></article>'
-      '</div><div class="publication-release-flow__tools"><button class="btn light" type="button" data-publication-environments data-project-slug="'+h(slug)+'">Variáveis por ambiente</button></div></section>'
+      '</div><div class="publication-release-flow__tools"><button class="btn light" type="button" data-publication-environments data-publication-tool="variables" data-project-slug="'+h(slug)+'">Variáveis por ambiente</button></div></section>'
     )
 
 def publication_panel(slug, framework_hint=''):
