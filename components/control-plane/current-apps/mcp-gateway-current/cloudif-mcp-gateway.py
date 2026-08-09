@@ -659,6 +659,49 @@ def _action_visible_tool_names(names):
     return [name for name in names if name not in MCP_ONLY_TOOLS]
 
 
+def _project_tool_catalog(names):
+    rows=[]
+    for name in names:
+        tool=_tool_row(name) or {};mcp_only=name in MCP_ONLY_TOOLS
+        row={
+          'name':name,
+          'description':tool.get('description',''),
+          'annotations':tool.get('annotations',{}),
+          'transport':'mcp' if mcp_only else 'actions_and_mcp',
+          'callable_via_actions':not mcp_only,
+          'callable_via_mcp':True,
+        }
+        if mcp_only:
+            row.update({
+              'mcp_endpoint':MCP_RESOURCE,
+              'inputSchema':tool.get('inputSchema') or {},
+              '_meta':tool.get('_meta') or {},
+              'reason':'requires_mcp_host_file_hydration',
+            })
+        rows.append(row)
+    return rows
+
+
+def _project_connector_catalog(identity,result):
+    data=dict(result or {}) if isinstance(result,dict) else {'connectors':result}
+    file_import='workspace.artifact.import' in identity['tools']
+    data['mcp']={
+      'status':'ready',
+      'endpoint':MCP_RESOURCE,
+      'client_id':identity['client_id'],
+      'authentication':'oauth2_pkce',
+      'authorized_tools':len(identity['tools']),
+      'file_import':{
+        'tool':'workspace.artifact.import',
+        'authorized':file_import,
+        'transport':'mcp',
+        'file_param':'file',
+        'host_hydration':'openai/fileParams',
+      },
+    }
+    return data
+
+
 def _action_schema(client_id):
     row=_oauth_client(client_id);projects=_client_projects(row)
     if not row or len(projects)!=1:return None
@@ -675,7 +718,7 @@ def _action_schema(client_id):
     paths={
       base+'/project':{'get':{'operationId':'getCloudIFFProject','summary':'Consultar o projeto CloudIFF vinculado','description':'Retorna somente o projeto associado ao Client ID autenticado.','security':security,'x-openai-isConsequential':False,'responses':responses}},
       base+'/connectors':{'get':{'operationId':'getCloudIFFProjectConnectors','summary':'Consultar conectores do projeto','description':'Retorna Forgejo, Supabase, Komodo, MCP e ACL sanitizada do projeto vinculado.','security':security,'x-openai-isConsequential':False,'responses':responses}},
-      base+'/tools':{'get':{'operationId':'listCloudIFFProjectTools','summary':'Listar ferramentas autorizadas','description':'Lista as ferramentas realmente liberadas para a identidade deste projeto.','security':security,'x-openai-isConsequential':False,'responses':responses}},
+      base+'/tools':{'get':{'operationId':'listCloudIFFProjectTools','summary':'Listar ferramentas autorizadas','description':'Lista todas as ferramentas liberadas para a identidade do projeto e informa o transporte correto. Ferramentas MCP-only aparecem no catálogo, mas não entram no endpoint genérico de Actions.','security':security,'x-openai-isConsequential':False,'responses':responses}},
     }
     if read_tools:
         paths[base+'/read']={'post':{'operationId':'callCloudIFFReadTool','summary':'Executar ferramenta de consulta','description':'Executa somente ferramentas classificadas pelo servidor como leitura, plano ou inspeção sem efeito persistente. O projeto é imposto pelo token OAuth.','security':security,'x-openai-isConsequential':False,'requestBody':{'required':True,'content':{'application/json':{'schema':{'$ref':'#/components/schemas/ReadToolRequest'}}}},'responses':responses}}
@@ -722,7 +765,7 @@ def _action_schema(client_id):
       'openapi':'3.1.0',
       'info':{
         'title':'CloudIFF Actions — '+slug,
-        'version':'1.3.0',
+        'version':'1.4.0',
         'description':'Ações do projeto '+slug+' com OAuth público, PKCE, ACL por projeto e aprovações humanas server-side. Arquivos anexados são importados exclusivamente pelo MCP workspace.artifact.import via openai/fileParams.',
         'termsOfService':PUBLIC_ORIGIN+'/cloudiff/mcp/privacy',
         'x-privacy-policy-url':PUBLIC_ORIGIN+'/cloudiff/mcp/privacy',
@@ -1937,8 +1980,8 @@ class H(BaseHTTPRequestHandler):
             if not identity:return
             try:
                 if path.endswith('/project'):result=self._action_rpc(identity,'project.get',{})
-                elif path.endswith('/connectors'):result=self._action_rpc(identity,'project.connectors',{})
-                else:result=[{'name':name,'description':(_tool_row(name) or {}).get('description',''),'annotations':(_tool_row(name) or {}).get('annotations',{})} for name in _action_visible_tool_names(identity['tools'])]
+                elif path.endswith('/connectors'):result=_project_connector_catalog(identity,self._action_rpc(identity,'project.connectors',{}))
+                else:result=_project_tool_catalog(identity['tools'])
                 return self.sendj(200,{'ok':True,'project_slug':identity['project_slug'],'result':result})
             except PermissionError as e:return self.sendj(403,{'ok':False,'error':str(e)})
             except Exception as e:return self.sendj(422,{'ok':False,'error':str(e)})

@@ -142,11 +142,14 @@ class MCPOAuthContractTests(unittest.TestCase):
         ):
             self.assertIn(marker,self.gateway)
         schema_block=self.gateway[self.gateway.index('def _action_schema'):self.gateway.index('def _privacy_html')]
-        self.assertIn("'version':'1.3.0'",schema_block)
+        self.assertIn("'version':'1.4.0'",schema_block)
         self.assertNotIn("base+'/artifact/import'",schema_block)
         self.assertNotIn("'operationId':'importCloudIFFArtifact'",schema_block)
         self.assertIn("Arquivos anexados são importados exclusivamente pelo MCP workspace.artifact.import",schema_block)
-        self.assertIn("_action_visible_tool_names(identity['tools'])",self.gateway)
+        self.assertIn("result=_project_tool_catalog(identity['tools'])",self.gateway)
+        self.assertIn("def _project_tool_catalog(names):",self.gateway)
+        self.assertIn("'callable_via_actions':not mcp_only",self.gateway)
+        self.assertIn("'reason':'requires_mcp_host_file_hydration'",self.gateway)
 
     def test_project_list_is_filtered_by_agent_projects(self):
         self.assertIn("allowed=set(authz.get('project_slugs') or [])", self.gateway)

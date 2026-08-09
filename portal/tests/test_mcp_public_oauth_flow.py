@@ -231,7 +231,7 @@ class MCPPublicOAuthFlowTest(unittest.TestCase):
         self.assertFalse(paths['/cloudiff/mcp/actions/v1/read']['post']['x-openai-isConsequential'])
         self.assertTrue(paths['/cloudiff/mcp/actions/v1/write']['post']['x-openai-isConsequential'])
         self.assertNotIn('/cloudiff/mcp/actions/v1/artifact/import',paths)
-        self.assertEqual(schema['info']['version'],'1.3.0')
+        self.assertEqual(schema['info']['version'],'1.4.0')
         self.assertIn('Arquivos anexados são importados exclusivamente pelo MCP workspace.artifact.import',schema['info']['description'])
         schemas = schema['components']['schemas']
         self.assertIsInstance(schemas, dict)
@@ -246,8 +246,14 @@ class MCPPublicOAuthFlowTest(unittest.TestCase):
         self.assertNotIn('workspace.artifact.import',write_enum)
         status,_,raw=self.request('GET','/cloudiff/mcp/actions/v1/tools',headers={'Authorization':'Bearer '+self.oauth_token()})
         self.assertEqual(status,200,raw)
-        action_names={row['name'] for row in json.loads(raw)['result']}
-        self.assertNotIn('workspace.artifact.import',action_names)
+        action_rows={row['name']:row for row in json.loads(raw)['result']}
+        self.assertIn('workspace.artifact.import',action_rows)
+        file_import=action_rows['workspace.artifact.import']
+        self.assertEqual(file_import['transport'],'mcp')
+        self.assertFalse(file_import['callable_via_actions'])
+        self.assertTrue(file_import['callable_via_mcp'])
+        self.assertEqual(file_import['_meta']['openai/fileParams'],['file'])
+        self.assertEqual(file_import['mcp_endpoint'],'https://cloudiff.duckdns.org/cloudiff/mcp')
         self.assertIn('workspace.prepare', write_enum)
         for name, item in schemas.items():
             if item.get('type') == 'object':
@@ -278,11 +284,19 @@ class MCPPublicOAuthFlowTest(unittest.TestCase):
         data = json.loads(raw)
         self.assertEqual(data['project_slug'], SLUG)
         self.assertEqual(data['result']['slug'], SLUG)
+        status, _, raw = self.request('GET', '/cloudiff/mcp/actions/v1/connectors', headers=auth)
+        self.assertEqual(status, 200, raw)
+        connector_result=json.loads(raw)['result']
+        self.assertEqual(connector_result['mcp']['status'],'ready')
+        self.assertEqual(connector_result['mcp']['endpoint'],'https://cloudiff.duckdns.org/cloudiff/mcp')
+        self.assertTrue(connector_result['mcp']['file_import']['authorized'])
+        self.assertEqual(connector_result['mcp']['file_import']['host_hydration'],'openai/fileParams')
         status, _, raw = self.request('GET', '/cloudiff/mcp/actions/v1/tools', headers=auth)
         self.assertEqual(status, 200, raw)
         names = [item['name'] for item in json.loads(raw)['result']]
         self.assertIn('project.get', names)
         self.assertIn('workspace.prepare', names)
+        self.assertIn('workspace.artifact.import', names)
         payload = json.dumps({'tool': 'project.get', 'arguments': {'slug': 'outro-projeto'}})
         status, _, raw = self.request('POST', '/cloudiff/mcp/actions/v1/read', payload, {
             **auth, 'Content-Type': 'application/json', 'Content-Length': str(len(payload)),
