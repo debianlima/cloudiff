@@ -12,7 +12,7 @@ class MCPOAuthContractTests(unittest.TestCase):
         cls.router = Path("components/control-plane/srv/cloudif/bin/cloudif-render-router-sso.sh").read_text()
 
     def test_discovery_and_oauth_endpoints(self):
-        for value in ("oauth-authorization-server", "oauth-protected-resource", "/cloudiff/mcp/oauth/authorize", "/cloudiff/mcp/oauth/token", "/cloudiff/mcp/oauth/revoke"):
+        for value in ("oauth-authorization-server", "oauth-protected-resource", "/cloudiff/mcp/oauth/authorize", "/cloudiff/mcp/oauth/resume", "/cloudiff/mcp/oauth/token", "/cloudiff/mcp/oauth/revoke"):
             self.assertIn(value, self.gateway)
 
     def test_public_client_pkce_and_confidential_compatibility(self):
@@ -21,12 +21,17 @@ class MCPOAuthContractTests(unittest.TestCase):
         self.assertIn("row if row.get('public_client')", self.gateway)
         self.assertIn("saved) if saved and saved.get('client_id')", self.gateway)
 
-    def test_authorization_is_bound_to_authentik_and_project_acl(self):
-        for value in ("X-authentik-username", "X-authentik-groups", "_public_oauth_client", "project.get('owner')", "subject_type", "project_denied"):
+    def test_authorization_uses_nonce_before_authentik_and_acl_after_resume(self):
+        for value in ("X-authentik-username", "X-authentik-groups", "_public_oauth_client", "project.get('owner')", "subject_type", "project_denied", "OAUTH_LOGIN_REQUESTS", "OAUTH_LOGIN_TTL=300", "_oauth_authorize_preflight"):
             self.assertIn(value, self.gateway)
-        self.assertIn("auth_request /cloudiff/portal-auth", self.router)
         self.assertIn("location = /cloudiff/mcp/oauth/authorize", self.router)
-        self.assertIn("proxy_set_header X-authentik-username", self.router)
+        self.assertIn("location = /cloudiff/mcp/oauth/resume", self.router)
+        authorize=self.router[self.router.index("location = /cloudiff/mcp/oauth/authorize"):self.router.index("location = /cloudiff/mcp/oauth/resume")]
+        self.assertNotIn("auth_request /cloudiff/portal-auth",authorize)
+        resume=self.router[self.router.index("location = /cloudiff/mcp/oauth/resume"):self.router.index("location = /cloudiff/mcp {",self.router.index("location = /cloudiff/mcp/oauth/resume"))]
+        self.assertIn("auth_request /cloudiff/portal-auth",resume)
+        self.assertIn("error_page 401 = @cloudif_authentik_signin_v244",resume)
+        self.assertIn("proxy_set_header X-authentik-username",resume)
 
     def test_public_oauth_never_requires_or_reconstructs_project_secret(self):
         self.assertIn("if not oauth.get('public_client')", self.gateway)
@@ -45,7 +50,7 @@ class MCPOAuthContractTests(unittest.TestCase):
         for marker in (
             "return 'chatgpt_actions'",
             "flow=='chatgpt_actions' and not challenge and not method",
-            "ttl=180 if flow=='chatgpt_actions' else 300",
+            "ttl=180 if request['oauth_flow']=='chatgpt_actions' else 300",
             "_callback_mode(redirect)!='chatgpt_actions'",
         ):
             self.assertIn(marker, self.gateway)

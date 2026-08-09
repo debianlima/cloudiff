@@ -40,8 +40,8 @@ PROJECT_OBSERVABILITY_TOKEN=os.environ.get('CLOUDIF_PROJECT_OBSERVABILITY_TOKEN'
 PUBLIC_ORIGIN=os.environ.get('CLOUDIF_MCP_PUBLIC_ORIGIN','https://cloudiff.duckdns.org').rstrip('/')
 MCP_RESOURCE=PUBLIC_ORIGIN+'/cloudiff/mcp'
 OAUTH_ISSUER=PUBLIC_ORIGIN
-OAUTH_CODES={};OAUTH_ACCESS={};OAUTH_REFRESH={};OAUTH_LOCK=threading.Lock()
-OAUTH_ACCESS_TTL=3600;OAUTH_REFRESH_TTL=2592000
+OAUTH_LOGIN_REQUESTS={};OAUTH_CODES={};OAUTH_ACCESS={};OAUTH_REFRESH={};OAUTH_LOCK=threading.Lock()
+OAUTH_LOGIN_TTL=300;OAUTH_ACCESS_TTL=3600;OAUTH_REFRESH_TTL=2592000
 
 def _agent_clients():
     req=urllib.request.Request(AGENT_URL+'/v1/clients',headers={'Authorization':'Bearer '+AGENT_ADMIN_TOKEN,'Accept':'application/json'})
@@ -95,6 +95,13 @@ def _pkce_ok(verifier,challenge):
     if not challenge:return True
     digest=base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).rstrip(b'=').decode()
     return hmac.compare_digest(digest,challenge)
+def _oauth_authorize_preflight(query):
+    client_id=(query.get('client_id') or [''])[0];redirect_uri=(query.get('redirect_uri') or [''])[0];state=(query.get('state') or [''])[0];challenge=(query.get('code_challenge') or [''])[0];method=(query.get('code_challenge_method') or [''])[0]
+    row=_oauth_client(client_id);projects=_client_projects(row);flow=_callback_mode(redirect_uri)
+    pkce_valid=flow=='pkce' and method=='S256' and bool(challenge)
+    actions_valid=flow=='chatgpt_actions' and not challenge and not method
+    if (query.get('response_type') or [''])[0]!='code' or not row or len(projects)!=1 or not (pkce_valid or actions_valid):return None
+    return {'client_id':client_id,'project_slug':projects[0],'redirect_uri':redirect_uri,'state':state,'code_challenge':challenge,'oauth_flow':flow}
 def _oauth_token(client):
     now=int(time.time());access=secrets.token_urlsafe(36);refresh=secrets.token_urlsafe(36)
     with OAUTH_LOCK:
@@ -104,7 +111,7 @@ def _oauth_token(client):
 def _oauth_cleanup():
     now=time.time()
     with OAUTH_LOCK:
-        for store in (OAUTH_CODES,OAUTH_ACCESS,OAUTH_REFRESH):
+        for store in (OAUTH_LOGIN_REQUESTS,OAUTH_CODES,OAUTH_ACCESS,OAUTH_REFRESH):
             for key in [k for k,v in store.items() if float(v.get('expires_at') or 0)<=now]:store.pop(key,None)
 
 def _oauth_metadata(resource=False):
@@ -1889,15 +1896,29 @@ class H(BaseHTTPRequestHandler):
             except PermissionError as e:return self.sendj(403,{'ok':False,'error':str(e)})
             except Exception as e:return self.sendj(422,{'ok':False,'error':str(e)})
         if path in {'/authorize','/oauth/authorize','/cloudiff/mcp/oauth/authorize'}:
-            q=parse_qs(parsed.query);client_id=(q.get('client_id') or [''])[0];redirect_uri=(q.get('redirect_uri') or [''])[0];state=(q.get('state') or [''])[0];challenge=(q.get('code_challenge') or [''])[0];method=(q.get('code_challenge_method') or [''])[0]
+            request=_oauth_authorize_preflight(parse_qs(parsed.query))
+            if not request:return self.sendj(400,{'error':'invalid_request'})
+            _oauth_cleanup();login=secrets.token_urlsafe(32)
+            with OAUTH_LOCK:OAUTH_LOGIN_REQUESTS[login]={**request,'expires_at':time.time()+OAUTH_LOGIN_TTL}
+            return self.redirect('/cloudiff/mcp/oauth/resume?'+urlencode({'login':login}))
+        if path=='/cloudiff/mcp/oauth/resume':
+            login=(parse_qs(parsed.query).get('login') or [''])[0]
+            if not re.fullmatch(r'[A-Za-z0-9_-]{32,96}',login):return self.sendj(400,{'error':'invalid_request'})
+            _oauth_cleanup()
+            with OAUTH_LOCK:request=OAUTH_LOGIN_REQUESTS.get(login)
+            if not request:return self.sendj(400,{'error':'invalid_request'})
             username=self.headers.get('X-authentik-username','').strip();groups=self.headers.get('X-authentik-groups','')
-            client=_public_oauth_client(client_id,username,groups);flow=_callback_mode(redirect_uri)
-            pkce_valid=flow=='pkce' and method=='S256' and bool(challenge)
-            actions_valid=flow=='chatgpt_actions' and not challenge and not method
-            if (q.get('response_type') or [''])[0]!='code' or not client or not (pkce_valid or actions_valid):return self.sendj(400,{'error':'invalid_request'})
-            ttl=180 if flow=='chatgpt_actions' else 300
-            code=secrets.token_urlsafe(32);OAUTH_CODES[code]={**client,'redirect_uri':redirect_uri,'code_challenge':challenge,'oauth_flow':flow,'expires_at':time.time()+ttl}
-            return self.redirect(redirect_uri+('&' if '?' in redirect_uri else '?')+urlencode({'code':code,**({'state':state} if state else {})}))
+            if not username:return self.sendj(401,{'error':'authentication_required'})
+            client=_public_oauth_client(request['client_id'],username,groups)
+            if not client:
+                with OAUTH_LOCK:OAUTH_LOGIN_REQUESTS.pop(login,None)
+                return self.sendj(403,{'error':'access_denied'})
+            with OAUTH_LOCK:
+                request=OAUTH_LOGIN_REQUESTS.pop(login,None)
+                if not request:return self.sendj(400,{'error':'invalid_request'})
+                ttl=180 if request['oauth_flow']=='chatgpt_actions' else 300
+                code=secrets.token_urlsafe(32);OAUTH_CODES[code]={**client,'redirect_uri':request['redirect_uri'],'code_challenge':request['code_challenge'],'oauth_flow':request['oauth_flow'],'expires_at':time.time()+ttl}
+            return self.redirect(request['redirect_uri']+('&' if '?' in request['redirect_uri'] else '?')+urlencode({'code':code,**({'state':request['state']} if request['state'] else {})}))
         if path=='/health':
             try: h=control('/health');self.sendj(200,{'ok':True,'service':'cloudif-mcp-gateway','control_plane':bool(h.get('ok')),'oauth':True})
             except Exception:self.sendj(503,{'ok':False,'error':'control_plane_unavailable'})

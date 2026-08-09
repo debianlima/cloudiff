@@ -145,7 +145,12 @@ class MCPPublicOAuthFlowTest(unittest.TestCase):
             'response_type': 'code', 'client_id': CLIENT_ID, 'redirect_uri': callback,
             'state': 'state-test', 'code_challenge': challenge, 'code_challenge_method': 'S256',
         })
-        status, headers, _ = self.request('GET', '/cloudiff/mcp/oauth/authorize?' + query, headers={
+        status, headers, _ = self.request('GET', '/cloudiff/mcp/oauth/authorize?' + query)
+        self.assertEqual(status, 302)
+        resume = headers['Location']; parsed_resume = urlparse(resume)
+        self.assertEqual(parsed_resume.path, '/cloudiff/mcp/oauth/resume')
+        self.assertEqual(set(parse_qs(parsed_resume.query)), {'login'})
+        status, headers, _ = self.request('GET', resume, headers={
             'X-authentik-username': 'iff1742962', 'X-authentik-groups': 'CloudIF-Lab-Hardware|Domain Users',
         })
         self.assertEqual(status, 302)
@@ -300,7 +305,11 @@ class MCPPublicOAuthFlowTest(unittest.TestCase):
             'response_type': 'code', 'client_id': CLIENT_ID, 'redirect_uri': callback,
             'state': 'actions-state', 'scope': 'mcp offline_access',
         })
-        status, headers, raw = self.request('GET', '/cloudiff/mcp/oauth/authorize?' + query, headers={
+        status, headers, raw = self.request('GET', '/cloudiff/mcp/oauth/authorize?' + query)
+        self.assertEqual(status, 302, raw)
+        resume = headers['Location'];self.assertEqual(urlparse(resume).path,'/cloudiff/mcp/oauth/resume')
+        self.assertEqual(set(parse_qs(urlparse(resume).query)),{'login'})
+        status, headers, raw = self.request('GET', resume, headers={
             'X-authentik-username': 'iff1742962', 'X-authentik-groups': 'CloudIF-Lab-Hardware|Domain Users',
         })
         self.assertEqual(status, 302, raw)
@@ -338,13 +347,27 @@ class MCPPublicOAuthFlowTest(unittest.TestCase):
             })
             self.assertEqual(status, 400, callback)
 
-    def test_authorize_requires_authenticated_user_and_s256(self):
+    def test_authorize_preflight_then_resume_requires_authenticated_user_and_s256(self):
         callback = 'http://127.0.0.1:53682/callback'
-        base = {'response_type':'code','client_id':CLIENT_ID,'redirect_uri':callback,'code_challenge':'abc'}
-        status, _, _ = self.request('GET', '/cloudiff/mcp/oauth/authorize?' + urlencode(base))
+        invalid = {'response_type':'code','client_id':CLIENT_ID,'redirect_uri':callback,'code_challenge':'abc'}
+        status, _, _ = self.request('GET', '/cloudiff/mcp/oauth/authorize?' + urlencode(invalid))
         self.assertEqual(status, 400)
-        status, _, _ = self.request('GET', '/cloudiff/mcp/oauth/authorize?' + urlencode(base), headers={'X-authentik-username':'iff1742962'})
-        self.assertEqual(status, 400)
+        valid = {**invalid,'code_challenge_method':'S256'}
+        status, headers, _ = self.request('GET', '/cloudiff/mcp/oauth/authorize?' + urlencode(valid))
+        self.assertEqual(status,302)
+        resume=headers['Location'];self.assertEqual(urlparse(resume).path,'/cloudiff/mcp/oauth/resume')
+        status, _, raw = self.request('GET', resume)
+        self.assertEqual(status,401,raw);self.assertEqual(json.loads(raw)['error'],'authentication_required')
+
+    def test_oauth_login_nonce_is_one_shot_and_preserves_state(self):
+        verifier='b'*64;challenge=base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).rstrip(b'=').decode();callback='http://127.0.0.1:53682/callback'
+        query=urlencode({'response_type':'code','client_id':CLIENT_ID,'redirect_uri':callback,'state':'first-login-state','code_challenge':challenge,'code_challenge_method':'S256'})
+        status,headers,raw=self.request('GET','/cloudiff/mcp/oauth/authorize?'+query);self.assertEqual(status,302,raw)
+        resume=headers['Location'];parts=parse_qs(urlparse(resume).query);self.assertEqual(set(parts),{'login'});self.assertEqual(len(parts['login'][0])>=32,True)
+        identity={'X-authentik-username':'iff1742962','X-authentik-groups':'CloudIF-Lab-Hardware|Domain Users'}
+        status,headers,raw=self.request('GET',resume,headers=identity);self.assertEqual(status,302,raw)
+        callback_query=parse_qs(urlparse(headers['Location']).query);self.assertEqual(callback_query['state'],['first-login-state']);self.assertIn('code',callback_query)
+        status,_,raw=self.request('GET',resume,headers=identity);self.assertEqual(status,400,raw);self.assertEqual(json.loads(raw)['error'],'invalid_request')
 
 
 if __name__ == '__main__':

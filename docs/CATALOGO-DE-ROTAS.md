@@ -1,6 +1,6 @@
 # Catálogo de rotas e endpoints
 
-Catálogo estático de **620 referências de rota** encontradas nos serviços e módulos. Uma rota pode aparecer em mais de um adaptador por compatibilidade.
+Catálogo estático de **623 referências de rota** encontradas nos serviços e módulos. Uma rota pode aparecer em mais de um adaptador por compatibilidade.
 
 | Componente | Método observado | Rota |
 |---|---|---|
@@ -117,6 +117,8 @@ Catálogo estático de **620 referências de rota** encontradas nos serviços e 
 | [`components/control-plane/current-apps/mcp-gateway-current/cloudif-mcp-gateway.py`](../components/control-plane/current-apps/mcp-gateway-current/cloudif-mcp-gateway.py) | GET/POST | `/cloudiff/mcp/actions/v1/tools` |
 | [`components/control-plane/current-apps/mcp-gateway-current/cloudif-mcp-gateway.py`](../components/control-plane/current-apps/mcp-gateway-current/cloudif-mcp-gateway.py) | GET/POST | `/cloudiff/mcp/actions/v1/write` |
 | [`components/control-plane/current-apps/mcp-gateway-current/cloudif-mcp-gateway.py`](../components/control-plane/current-apps/mcp-gateway-current/cloudif-mcp-gateway.py) | GET/POST | `/cloudiff/mcp/oauth/authorize` |
+| [`components/control-plane/current-apps/mcp-gateway-current/cloudif-mcp-gateway.py`](../components/control-plane/current-apps/mcp-gateway-current/cloudif-mcp-gateway.py) | GET/POST | `/cloudiff/mcp/oauth/resume` |
+| [`components/control-plane/current-apps/mcp-gateway-current/cloudif-mcp-gateway.py`](../components/control-plane/current-apps/mcp-gateway-current/cloudif-mcp-gateway.py) | GET/POST | `/cloudiff/mcp/oauth/resume?` |
 | [`components/control-plane/current-apps/mcp-gateway-current/cloudif-mcp-gateway.py`](../components/control-plane/current-apps/mcp-gateway-current/cloudif-mcp-gateway.py) | GET/POST | `/cloudiff/mcp/oauth/revoke` |
 | [`components/control-plane/current-apps/mcp-gateway-current/cloudif-mcp-gateway.py`](../components/control-plane/current-apps/mcp-gateway-current/cloudif-mcp-gateway.py) | GET/POST | `/cloudiff/mcp/oauth/token` |
 | [`components/control-plane/current-apps/mcp-gateway-current/cloudif-mcp-gateway.py`](../components/control-plane/current-apps/mcp-gateway-current/cloudif-mcp-gateway.py) | GET/POST | `/cloudiff/mcp/openapi/` |
@@ -238,6 +240,7 @@ Catálogo estático de **620 referências de rota** encontradas nos serviços e 
 | [`components/control-plane/current-apps/portal-current/cloudif-admin-portal-base.py`](../components/control-plane/current-apps/portal-current/cloudif-admin-portal-base.py) | GET/POST | `/api/reconciliation` |
 | [`components/control-plane/current-apps/portal-current/cloudif-admin-portal-base.py`](../components/control-plane/current-apps/portal-current/cloudif-admin-portal-base.py) | GET/POST | `/api/repair-dashboard` |
 | [`components/control-plane/current-apps/portal-current/cloudif-admin-portal-base.py`](../components/control-plane/current-apps/portal-current/cloudif-admin-portal-base.py) | GET/POST | `/api/transactions` |
+| [`components/control-plane/current-apps/portal-current/cloudif-admin-portal-base.py`](../components/control-plane/current-apps/portal-current/cloudif-admin-portal-base.py) | GET/POST | `/auth/oidc/login` |
 | [`components/control-plane/current-apps/portal-current/cloudif-admin-portal-base.py`](../components/control-plane/current-apps/portal-current/cloudif-admin-portal-base.py) | GET/POST | `/cloudif/internal/access-ingest` |
 | [`components/control-plane/current-apps/portal-current/cloudif-admin-portal-base.py`](../components/control-plane/current-apps/portal-current/cloudif-admin-portal-base.py) | GET | `/cloudif/internal/access-latest` |
 | [`components/control-plane/current-apps/portal-current/cloudif-admin-portal-base.py`](../components/control-plane/current-apps/portal-current/cloudif-admin-portal-base.py) | GET/POST | `/cloudif/portal` |
