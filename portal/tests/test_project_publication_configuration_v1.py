@@ -90,7 +90,7 @@ class ProjectPublicationConfigurationV1Tests(unittest.TestCase):
         self.assertIn('def _cloudif_pub_base_preparing_page',portal)
         self.assertIn('Preparando a imagem-base',portal)
         self.assertIn("op:'prepare_base_workspace'",portal)
-        self.assertIn("status.textContent='Terminal pronto. Abrindo o Komodo…'",portal)
+        self.assertIn("status.textContent='Terminal pronto. Autenticando no Komodo…'",portal);self.assertIn("auth/oidc/login?redirect='+encodeURIComponent(data.terminalUrl)",portal)
         self.assertIn('_cloudif_pub_redirect(self,"/cloudiff/portal/publication/base/"+_cloudif_pub_urlparse.quote(slug,safe=""))',portal)
         coexist=(ROOT/'components/control-plane/srv/cloudif/lib/cloudif_portal_v2_coexist.py').read_text()
         self.assertIn("base_workspace_match = re.fullmatch(r'/cloudiff?/portal/publication/base/",coexist)

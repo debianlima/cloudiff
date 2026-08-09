@@ -49,6 +49,8 @@ class ProjectTerminalDedicatedFlowTests(unittest.TestCase):
         self.assertIn("'terminalSource':'base_workspace'",source)
         self.assertIn("data.terminalSource==='base_workspace'",source)
         self.assertIn('Runtime da publicação indisponível. Abrindo o container-base',source)
+        self.assertIn("https://komodoiff.duckdns.org/auth/oidc/login?redirect='+encodeURIComponent(data.terminalUrl)",source)
+        self.assertIn("encodeURIComponent(data.terminalUrl)",source)
 
     def test_normal_project_terminal_prefers_live_preview_and_preserves_legacy_fallback(self):
         source=COEXIST.read_text()

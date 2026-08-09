@@ -33,7 +33,7 @@ class PublicationSiteTerminalWorkspaceTests(unittest.TestCase):
         self.assertIn("target.hostname.endsWith('.cloudiff.duckdns.org')",BASE)
         self.assertIn('class="stage-site-preview"',BASE)
         self.assertIn('sandbox="allow-forms allow-modals allow-popups allow-popups-to-escape-sandbox allow-same-origin allow-scripts allow-downloads"',BASE)
-        self.assertIn("frame-src 'self' https://*.cloudiff.duckdns.org https://komodoiff.duckdns.org",BASE)
+        self.assertIn("frame-src 'self' https://*.cloudiff.duckdns.org https://komodoiff.duckdns.org https://authiff.duckdns.org",BASE)
         self.assertIn('.stage-site-preview iframe{',CSS)
 
     def test_terminal_is_embedded_and_keeps_external_fallback(self):
@@ -60,14 +60,38 @@ class PublicationSiteTerminalWorkspaceTests(unittest.TestCase):
         self.assertIn('nginx -t',KOMODO_EMBED)
         self.assertIn('rollback()',KOMODO_EMBED)
 
-    def test_komodo_core_auto_redirects_oidc_inside_the_embed(self):
-        self.assertIn('KOMODO_OIDC_AUTO_REDIRECT',KOMODO_EMBED_AUTH)
-        self.assertIn('OIDC_AUTO_REDIRECT',KOMODO_EMBED_AUTH)
-        self.assertIn("pattern.sub(f'{key}=true',s)",KOMODO_EMBED_AUTH)
+    def test_komodo_core_uses_native_embed_and_cross_site_oidc_settings(self):
+        for key in ('KOMODO_OIDC_AUTO_REDIRECT','OIDC_AUTO_REDIRECT','KOMODO_OIDC_REDIRECT_HOST','KOMODO_SESSION_ALLOW_CROSS_SITE','KOMODO_X_FRAME_OPTIONS','KOMODO_CONTENT_SECURITY_POLICY'):
+            self.assertIn(key,KOMODO_EMBED_AUTH)
+        self.assertIn("'KOMODO_OIDC_REDIRECT_HOST':'https://authiff.duckdns.org'",KOMODO_EMBED_AUTH)
+        self.assertIn("'KOMODO_SESSION_ALLOW_CROSS_SITE':'true'",KOMODO_EMBED_AUTH)
+        self.assertIn("'KOMODO_X_FRAME_OPTIONS':''",KOMODO_EMBED_AUTH)
+        self.assertIn("frame-ancestors 'self' https://cloudiff.duckdns.org",KOMODO_EMBED_AUTH)
         self.assertIn('docker compose --env-file',KOMODO_EMBED_AUTH)
         self.assertIn('compose up -d core',KOMODO_EMBED_AUTH)
-        self.assertIn("grep -qx 'KOMODO_OIDC_AUTO_REDIRECT=true'",KOMODO_EMBED_AUTH)
+        self.assertIn("SameSite=None",KOMODO_EMBED_AUTH)
+        self.assertIn("komodo_native_x_frame_options_present",KOMODO_EMBED_AUTH)
+        self.assertIn("location: https://authiff",KOMODO_EMBED_AUTH)
         self.assertIn('rollback()',KOMODO_EMBED_AUTH)
+
+    def test_every_portal_komodo_navigation_starts_direct_oidc_and_preserves_destination(self):
+        self.assertIn("function cloudifKomodoLoginUrl(value)",BASE)
+        self.assertIn("login.searchParams.set('redirect',target.href)",BASE)
+        self.assertIn("document.addEventListener('click'",BASE)
+        self.assertIn("const embedLogin=cloudifKomodoLoginUrl(embed.href),externalLogin=cloudifKomodoLoginUrl(target.href)",BASE)
+        self.assertIn("CLOUDIF_KOMODO_OIDC_URL",BASE)
+        self.assertIn("_cpx_parse.urlencode({'redirect':target})",BASE)
+        self.assertIn("auth/oidc/login?redirect=https%3A%2F%2Fkomodoiff.duckdns.org%2Fservers",BASE)
+        self.assertIn("auth/oidc/login?redirect=https%3A%2F%2Fkomodoiff.duckdns.org%2Fcontainers",COEXIST)
+        self.assertIn("auth/oidc/login?redirect='+encodeURIComponent(data.terminalUrl)",COEXIST)
+
+    def test_active_portal_has_no_raw_hardcoded_komodo_links(self):
+        for source in (BASE,COEXIST):
+            for fragment in source.split('href=\"https://komodoiff.duckdns.org') [1:]:
+                href=fragment.split('\"',1)[0]
+                self.assertTrue(href.startswith('/auth/oidc/login'),href)
+        self.assertNotIn('location.replace(data.terminalUrl)',BASE)
+        self.assertNotIn('location.replace(data.terminalUrl)',COEXIST)
 
     def test_terminal_tabs_prepare_the_session_automatically(self):
         workspace=BASE[BASE.index('function publicationTerminalRender'):BASE.index('async function publicationVariablesLoad')]
