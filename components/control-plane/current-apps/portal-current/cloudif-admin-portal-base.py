@@ -5756,15 +5756,18 @@ if 'Portal' in globals() and not globals().get('_oi_portal_wrapped'):
     def _oi_post(self):
         path=urllib.parse.urlparse(self.path).path.rstrip('/')
         if path in ('/cloudiff/portal/action/rotate-project-credential','/cloudif/portal/action/rotate-project-credential'):
-            if not _cloudif_security_valid_origin(self):return _oi_send_json(self,{'ok':False,'error':'origin_denied'},403)
+            def rotation_denied(reason):
+                print(_oi_json.dumps({'event':'project_credential_rotation_denied','reason':reason},separators=(',',':')),flush=True)
+                return _oi_send_json(self,{'ok':False,'error':reason},403)
+            if not _cloudif_security_valid_origin(self):return rotation_denied('origin_denied')
             length=int(self.headers.get('Content-Length','0') or '0')
             if length<0 or length>200000:return _oi_send_json(self,{'ok':False,'error':'invalid_body'},413)
             try:form=urllib.parse.parse_qs(self.rfile.read(length).decode('utf-8','ignore'))
             except Exception:return _oi_send_json(self,{'ok':False,'error':'invalid_form'},400)
             val=lambda k,d='':(form.get(k) or [d])[0]
             user=self.user();slug=val('slug').strip();reason=val('reason').strip()
-            if not _prod_csrf_equal(val('csrf_token'),_prod_csrf_token(user)):return _oi_send_json(self,{'ok':False,'error':'csrf_denied'},403)
-            if not _oi_can_rotate(user,slug):return _oi_send_json(self,{'ok':False,'error':'project_denied'},403)
+            if not _prod_csrf_equal(val('csrf_token'),_prod_csrf_token(user)):return rotation_denied('csrf_denied')
+            if not _oi_can_rotate(user,slug):return rotation_denied('project_denied')
             payload=_oi_json.dumps({'requested_by':user['username'],'reason':reason or 'Rotação solicitada pelo painel do projeto'},separators=(',',':')).encode()
             req=_oi_request.Request(_oi_cfg('CLOUDIF_ONBOARDING_URL','http://127.0.0.1:18208')+'/v1/projects/'+urllib.parse.quote(slug,safe='')+'/rotate-credential',data=payload,method='POST',headers={'Authorization':'Bearer '+_oi_cfg('CLOUDIF_ONBOARDING_API_TOKEN',''),'Content-Type':'application/json','Accept':'application/json'})
             try:
@@ -6005,9 +6008,10 @@ if 'Portal' in globals() and not globals().get('_aig_wrapped'):
         if path in ('','/cloudiff/portal','/cloudif/portal') and tab=='agentes':
             user=self.user();return self.send_html(page(user,'agentes',_aig_render(user)))
         if path in ('/cloudiff/portal/api/agent-guide','/cloudif/portal/api/agent-guide','/api/agent-guide'):
-            try:data=_aig_data(self.user());code=200
+            user=self.user()
+            try:data=_aig_data(user);code=200
             except Exception:data={'ok':False,'error':'agent_guide_unavailable','secrets_exposed':False};code=503
-            raw=json.dumps(data,ensure_ascii=False,separators=(',',':')).encode();self.send_response(code);self.send_header('Content-Type','application/json');self.send_header('Cache-Control','no-store');self.send_header('Content-Length',str(len(raw)));self.end_headers();self.wfile.write(raw);return
+            raw=json.dumps(data,ensure_ascii=False,separators=(',',':')).encode();self.send_response(code);self.send_header('Content-Type','application/json');self.send_header('Cache-Control','no-store');self.send_header('Pragma','no-cache');self.send_header('X-CSRF-Token',_prod_csrf_token(user));self.send_header('Content-Length',str(len(raw)));self.end_headers();self.wfile.write(raw);return
         return _aig_prev_get(self)
     Portal.do_GET=_aig_get;_aig_wrapped=True
 # CloudIF AI agents guide END
