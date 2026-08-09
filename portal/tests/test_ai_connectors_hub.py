@@ -1,6 +1,10 @@
 import importlib.util
 from pathlib import Path
 import unittest
+import re
+import shutil
+import subprocess
+import tempfile
 
 
 class AIConnectorsHubTests(unittest.TestCase):
@@ -16,6 +20,28 @@ class AIConnectorsHubTests(unittest.TestCase):
         for text in ('Portal e agentes funcionam de forma independente', 'ChatGPT', 'Claude', 'Llama / Ollama', 'Nenhum projeto disponível para conexão'):
             self.assertIn(text, html)
         self.assertNotIn('details open', html)
+
+    def test_rendered_agent_javascript_is_syntax_valid(self):
+        import importlib.util,sys
+        root=Path(__file__).resolve().parents[2]
+        guide_path=root/'components/control-plane/current-apps/portal-current/cloudif_ai_agents_guide.py'
+        spec=importlib.util.spec_from_file_location('agent_guide_js_syntax_test',guide_path)
+        guide=importlib.util.module_from_spec(spec);sys.modules[spec.name]=guide;spec.loader.exec_module(guide)
+        rows=[{'project_slug':'laboratorio-de-hardware','client_id':'project-test','owner_user':'owner','tenant':'tenant','role_profile':'project-admin','environment':'project','scopes':['workspace:change-set-plan'],'instructions':{'mcp_endpoint':'https://cloudiff.duckdns.org/cloudiff/mcp'}}]
+        html=guide.render(rows,'a'*64,[],True)
+        scripts=re.findall(r'<script[^>]*>(.*?)</script>',html,re.S|re.I)
+        rotate=[script for script in scripts if 'agent-rotate' in script]
+        self.assertEqual(len(rotate),1)
+        self.assertIn('String.fromCharCode(10)',rotate[0])
+        node=shutil.which('node')
+        if not node:self.skipTest('node unavailable for rendered JavaScript syntax check')
+        with tempfile.NamedTemporaryFile('w',suffix='.js',delete=False) as fh:
+            fh.write(rotate[0]);name=fh.name
+        try:
+            proc=subprocess.run([node,'--jitless','--check',name],capture_output=True,text=True,timeout=20)
+            self.assertEqual(proc.returncode,0,proc.stderr)
+        finally:
+            Path(name).unlink(missing_ok=True)
 
     def test_rotation_route_refreshes_csrf_and_logs_sanitized_denials(self):
         root=Path(__file__).resolve().parents[2]
