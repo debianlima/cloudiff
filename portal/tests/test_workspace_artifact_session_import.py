@@ -13,7 +13,9 @@ class WorkspaceArtifactSessionImportTests(unittest.TestCase):
   self.assertIn("'_meta':{'openai/fileParams':['file']}",block)
   for field in ('download_url','file_id','mime_type','file_name'):self.assertIn("'"+field+"'",block)
   self.assertIn("'required':['download_url','file_id']",block)
-  self.assertIn("'required':['slug','file','filename','expected_size','expected_sha256']",block)
+  self.assertIn("'required':['slug','filename','expected_size','expected_sha256']",block)
+  self.assertIn("'file_url'",block)
+  self.assertNotIn("'anyOf'",block)
   self.assertIn("'maximum':1073741824",block)
   self.assertIn("'maximum':7200",source[source.index("'name':'workspace.artifact.upload.ticket'"):source.index("'name':'workspace.artifact.upload.status'")])
 
@@ -55,10 +57,31 @@ class WorkspaceArtifactSessionImportTests(unittest.TestCase):
   log=out.getvalue();self.assertNotIn(secret,log);self.assertNotIn('file_123',log)
   event=json.loads(log.strip());self.assertEqual(event['event'],'session_file_url_rejected');self.assertEqual(event['url_shape']['scheme'],'file-service');self.assertEqual(event['url_shape']['host'],'');self.assertTrue(event['url_shape']['has_query'])
 
+ def test_scalar_and_wrapper_file_refs_are_compatibly_normalized(self):
+  url='https://files.oaiusercontent.com/signed?token=secret'
+  scalar=M._normalize_session_file_ref(url)
+  self.assertEqual(scalar['download_url'],url);self.assertTrue(scalar['file_id'].startswith('compat_'));self.assertEqual(scalar['reference_mode'],'scalar_https')
+  wrapped=M._normalize_session_file_ref([{'file_id':'file_123456','download_url':url}])
+  self.assertEqual(wrapped['download_url'],url);self.assertEqual(wrapped['reference_mode'],'single_item_array')
+  encoded=M._normalize_session_file_ref('{"file_id":"file_123456","download_url":"https://files.oaiusercontent.com/signed"}')
+  self.assertEqual(encoded['file_id'],'file_123456');self.assertEqual(encoded['reference_mode'],'json_string')
+
+ def test_scalar_file_id_and_local_path_fail_actionably(self):
+  for value,code in (('file_1234567890','session_file_download_url_missing'),('/mnt/data/archive.zip','host_file_path_not_resolved'),('sandbox:/mnt/data/archive.zip','host_file_path_not_resolved')):
+   with self.assertRaises(ValueError) as ctx:M._normalize_session_file_ref(value)
+   self.assertEqual(str(ctx.exception),code)
+
+ def test_file_shape_telemetry_never_contains_scalar_value(self):
+  url='https://files.oaiusercontent.com/signed?token='+'x'*32
+  shape=M._session_file_ref_shape(url)
+  self.assertEqual(shape['classification'],'https_url');self.assertEqual(shape['value_type'],'str');self.assertEqual(shape['length'],len(url));self.assertNotIn(url,str(shape));self.assertNotIn('token=',str(shape))
+
  def test_mcp_and_actions_file_ref_aliases_normalize_to_same_shape(self):
   mcp={'file_id':'file_123456','download_url':'https://files.oaiusercontent.com/x','file_name':'a.zip','mime_type':'application/zip'}
   action={'id':'file_123456','download_link':'https://files.oaiusercontent.com/x','name':'a.zip','mime_type':'application/zip'}
-  self.assertEqual(M._normalize_session_file_ref(mcp),M._normalize_session_file_ref(action))
+  nm=M._normalize_session_file_ref(mcp);na=M._normalize_session_file_ref(action)
+  for key in ('file_id','download_url','file_name','mime_type'):self.assertEqual(nm[key],na[key])
+  self.assertEqual(nm['reference_mode'],'mcp_object');self.assertEqual(na['reference_mode'],'actions_object')
 
  def test_file_param_validates_id_filename_size_and_digest(self):
   raw=b'hello-session-file';digest=hashlib.sha256(raw).hexdigest();ref={'download_url':'https://files.oaiusercontent.com/signed','file_id':'file_0000000012345678','mime_type':'application/zip','file_name':'archive.zip'}

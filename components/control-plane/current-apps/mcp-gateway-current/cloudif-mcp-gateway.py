@@ -328,7 +328,7 @@ TOOLS=[
  {'name':'workspace.artifact.upload.start','description':'Inicia upload temporário de artefato binário vinculado ao projeto, tamanho e SHA-256 esperados','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'filename':{'type':'string','minLength':1,'maxLength':240},'expected_size':{'type':'integer','minimum':0,'maximum':1073741824},'expected_sha256':{'type':'string','pattern':'^[a-f0-9]{64}$'},'ttl_seconds':{'type':'integer','minimum':300,'maximum':86400}},'required':['slug','filename','expected_size','expected_sha256'],'additionalProperties':False,'examples':[{'slug':'meu-projeto','filename':'documentos-anonimizados.zip','expected_size':1390970,'expected_sha256':'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa','ttl_seconds':3600}]}},
  {'name':'workspace.artifact.upload.chunk','description':'Envia um chunk Base64 pequeno e sequencial para um artifact_id; retries idênticos são idempotentes','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'artifact_id':{'type':'string','pattern':'^art_[a-f0-9]{24}$'},'chunk_index':{'type':'integer','minimum':0,'maximum':65535},'content_base64':{'type':'string','minLength':1,'maxLength':262144},'chunk_sha256':{'type':'string','pattern':'^[a-f0-9]{64}$'}},'required':['slug','artifact_id','chunk_index','content_base64','chunk_sha256'],'additionalProperties':False,'examples':[{'slug':'meu-projeto','artifact_id':'art_111111111111111111111111','chunk_index':0,'content_base64':'eA==','chunk_sha256':'2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881'}]}},
  {'name':'workspace.artifact.upload.batch','description':'Envia até 16 chunks pequenos de até 8 KiB raw cada em uma chamada; ideal quando strings Base64 maiores são truncadas pelo cliente','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'artifact_id':{'type':'string','pattern':'^art_[a-f0-9]{24}$'},'chunks':{'type':'array','minItems':1,'maxItems':16,'items':{'type':'object','properties':{'chunk_index':{'type':'integer','minimum':0,'maximum':65535},'content_base64':{'type':'string','minLength':1,'maxLength':11000},'chunk_sha256':{'type':'string','pattern':'^[a-f0-9]{64}$'}},'required':['chunk_index','content_base64','chunk_sha256'],'additionalProperties':False}}},'required':['slug','artifact_id','chunks'],'additionalProperties':False,'examples':[{'slug':'meu-projeto','artifact_id':'art_111111111111111111111111','chunks':[{'chunk_index':0,'content_base64':'eA==','chunk_sha256':'2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881'}]}]}},
- {'name':'workspace.artifact.import','description':'CAMINHO CANÔNICO para arquivo anexado ao ChatGPT: usa MCP openai/fileParams, recebe download_url e file_id autorizados pelo host, transfere por HTTPS streaming, valida tamanho/SHA-256 e retorna artifact_id selado. Não use GPT Actions para anexos.','inputSchema':{'type':'object','$defs':{'OpenAIFile':{'type':'object','properties':{'download_url':{'type':'string'},'file_id':{'type':'string'},'mime_type':{'type':'string'},'file_name':{'type':'string'}},'required':['download_url','file_id'],'additionalProperties':False}},'properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'file':{'$ref':'#/$defs/OpenAIFile'},'filename':{'type':'string','minLength':1,'maxLength':240},'expected_size':{'type':'integer','minimum':0,'maximum':1073741824},'expected_sha256':{'type':'string','pattern':'^[a-f0-9]{64}$'},'ttl_seconds':{'type':'integer','minimum':300,'maximum':86400}},'required':['slug','file','filename','expected_size','expected_sha256'],'additionalProperties':False,'examples':[{'slug':'meu-projeto','file':{'download_url':'https://files.oaiusercontent.com/...','file_id':'file_1111111111111111'},'filename':'documentos-anonimizados.zip','expected_size':1390970,'expected_sha256':'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa','ttl_seconds':3600}]},'_meta':{'openai/fileParams':['file']}},
+ {'name':'workspace.artifact.import','description':'CAMINHO CANÔNICO para arquivo anexado ao ChatGPT. Preferencialmente usa MCP openai/fileParams no campo file. Compatibilidade: se o host não injetar o objeto e fornecer a referência do anexo como valor escalar, envie essa referência sem alterá-la em file_url; nunca invente URL. A CloudIFF transfere por HTTPS streaming, valida tamanho/SHA-256 e retorna artifact_id selado.','inputSchema':{'type':'object','$defs':{'OpenAIFile':{'type':'object','properties':{'download_url':{'type':'string'},'file_id':{'type':'string'},'mime_type':{'type':'string'},'file_name':{'type':'string'}},'required':['download_url','file_id'],'additionalProperties':False}},'properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'file':{'$ref':'#/$defs/OpenAIFile'},'file_url':{'type':'string','minLength':1,'maxLength':8192,'description':'Fallback de compatibilidade. Use somente quando o host não injetar file como objeto. Passe a referência do anexo fornecida pelo host exatamente como recebida; não invente URL.'},'filename':{'type':'string','minLength':1,'maxLength':240},'expected_size':{'type':'integer','minimum':0,'maximum':1073741824},'expected_sha256':{'type':'string','pattern':'^[a-f0-9]{64}$'},'ttl_seconds':{'type':'integer','minimum':300,'maximum':86400}},'required':['slug','filename','expected_size','expected_sha256'],'additionalProperties':False,'examples':[{'slug':'meu-projeto','file':{'download_url':'https://files.oaiusercontent.com/...','file_id':'file_1111111111111111'},'filename':'documentos-anonimizados.zip','expected_size':1390970,'expected_sha256':'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa','ttl_seconds':3600}]},'_meta':{'openai/fileParams':['file']}},
  {'name':'workspace.artifact.upload.ticket','description':'Gera um link HTTPS temporário do Portal para o usuário enviar o binário pelo navegador, sem Base64. Não abra a upload_url do Portal como agente; entregue-a ao usuário e acompanhe por workspace.artifact.upload.status.','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'artifact_id':{'type':'string','pattern':'^art_[a-f0-9]{24}$'},'ttl_seconds':{'type':'integer','minimum':60,'maximum':7200}},'required':['slug','artifact_id'],'additionalProperties':False,'examples':[{'slug':'meu-projeto','artifact_id':'art_111111111111111111111111','ttl_seconds':3600}]}},
  {'name':'workspace.artifact.upload.status','description':'Consulta pelo MCP o estado do upload de um artifact. Use esta ferramenta para acompanhar o usuário; não abra a upload_url do Portal, pois ela é destinada à sessão humana autenticada.','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'artifact_id':{'type':'string','pattern':'^art_[a-f0-9]{24}$'}},'required':['slug','artifact_id'],'additionalProperties':False,'examples':[{'slug':'meu-projeto','artifact_id':'art_111111111111111111111111'}]}},
  {'name':'workspace.artifact.upload.complete','description':'Conclui o upload, verifica tamanho e SHA-256 integrais e sela o artefato para uso por artifact_id','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'artifact_id':{'type':'string','pattern':'^art_[a-f0-9]{24}$'}},'required':['slug','artifact_id'],'additionalProperties':False,'examples':[{'slug':'meu-projeto','artifact_id':'art_111111111111111111111111'}]}},
@@ -1134,20 +1134,53 @@ def _session_file_reject(code: str, url: str):
     raise ValueError(str(code))
 
 
+def _session_file_ref_shape(file_ref):
+    shape={'value_type':type(file_ref).__name__}
+    if isinstance(file_ref,dict):
+        shape['keys']=sorted(str(k) for k in file_ref.keys())[:16]
+    elif isinstance(file_ref,list):
+        shape['count']=len(file_ref);shape['item_types']=sorted({type(item).__name__ for item in file_ref})[:8]
+    elif isinstance(file_ref,str):
+        raw=file_ref.strip();shape['length']=len(raw)
+        if raw.startswith('https://'):shape['classification']='https_url'
+        elif re.fullmatch(r'file_[A-Za-z0-9_-]{6,192}',raw):shape['classification']='file_id'
+        elif raw.startswith(('/','sandbox:/','file://')) or '/mnt/data/' in raw:shape['classification']='path_like'
+        elif raw.startswith('{') and raw.endswith('}'):shape['classification']='json_object_string'
+        elif raw.startswith('[') and raw.endswith(']'):shape['classification']='json_array_string'
+        else:shape['classification']='other_string'
+    return shape
+
+
 def _normalize_session_file_ref(file_ref):
-    if not isinstance(file_ref,dict):
-        raise ValueError('session_file_param_invalid')
+    if isinstance(file_ref,list):
+        if len(file_ref)!=1:raise ValueError('session_file_exactly_one_required')
+        normalized=_normalize_session_file_ref(file_ref[0]);normalized['reference_mode']='single_item_array';return normalized
+    if isinstance(file_ref,str):
+        raw=file_ref.strip()
+        if not raw:raise ValueError('session_file_param_invalid')
+        if raw[:1] in {'{','['}:
+            try:decoded=json.loads(raw)
+            except Exception:decoded=None
+            if isinstance(decoded,(dict,list)):
+                normalized=_normalize_session_file_ref(decoded);normalized['reference_mode']='json_string';return normalized
+        if raw.startswith('https://'):
+            return {'file_id':'compat_'+hashlib.sha256(raw.encode()).hexdigest()[:32],'download_url':raw,'file_name':'','mime_type':'','reference_mode':'scalar_https'}
+        if re.fullmatch(r'file_[A-Za-z0-9_-]{6,192}',raw):raise ValueError('session_file_download_url_missing')
+        if raw.startswith(('/','sandbox:/','file://')) or '/mnt/data/' in raw:raise ValueError('host_file_path_not_resolved')
+        raise ValueError('session_file_scalar_unsupported')
+    if not isinstance(file_ref,dict):raise ValueError('session_file_param_invalid')
     keys=set(file_ref)
     action_keys={'id','name','mime_type','download_link'}
     mcp_keys={'file_id','file_name','mime_type','download_url'}
     if keys <= action_keys and ('id' in keys or 'download_link' in keys):
-        return _normalize_action_file_ref(file_ref)
+        normalized=_normalize_action_file_ref(file_ref);normalized['reference_mode']='actions_object';return normalized
     if keys <= mcp_keys:
         return {
             'file_id':str(file_ref.get('file_id') or '').strip(),
             'download_url':str(file_ref.get('download_url') or '').strip(),
             'file_name':str(file_ref.get('file_name') or '').strip(),
             'mime_type':str(file_ref.get('mime_type') or '').strip(),
+            'reference_mode':'mcp_object',
         }
     raise ValueError('session_file_param_invalid')
 
@@ -1283,8 +1316,9 @@ def workspace_artifact_import_https(slug,filename,file_ref,expected_size,expecte
         code,ticket=workspace_broker_post('/v1/artifact/ticket',{'project_slug':slug,'trace_id':trace_id,'artifact_id':artifact_id,'requested_by':'mcp-session-import','ttl_seconds':ticket_ttl},timeout=30)
         if code not in {200,201} or not ticket.get('ok'):raise ValueError('artifact_import_ticket_failed')
         result=_workspace_direct_upload_stream(artifact_id,source,expected_size,expected_sha256)
-    result.update({'imported':True,'transport':'https_stream','source':'chatgpt_file_param','file_id':file_id,'download_url_persisted':False,'secrets_exposed':False})
-    return result,{'file_id':file_id,'file_name':file_name,'mime_type':str(normalized.get('mime_type') or ''),'size':expected_size,'sha256':expected_sha256}
+    mode=str(normalized.get('reference_mode') or 'unknown')
+    result.update({'imported':True,'transport':'https_stream','source':'chatgpt_file_param','file_id':file_id,'file_reference_mode':mode,'download_url_persisted':False,'secrets_exposed':False})
+    return result,{'file_id':file_id,'file_name':file_name,'mime_type':str(normalized.get('mime_type') or ''),'reference_mode':mode,'size':expected_size,'sha256':expected_sha256}
 
 
 def session_file_resolve(file_ref,expected_size,expected_sha256,expected_filename=''):
@@ -3137,13 +3171,14 @@ class H(BaseHTTPRequestHandler):
                         error=data.get('error') or {};raise ValueError(str(error.get('message') if isinstance(error,dict) else error or 'normalization_plan_failed'))
                     content=data.get('result') or data
                 elif name=='workspace.artifact.import':
-                    required={'slug','file','filename','expected_size','expected_sha256'};allowed=required|{'ttl_seconds'}
-                    if not required.issubset(args) or not set(args).issubset(allowed):raise ValueError('Informe slug, file, filename, expected_size e expected_sha256. O campo file é preenchido pelo ChatGPT via openai/fileParams.')
-                    slug=str(args.get('slug') or '').strip();file_ref=args.get('file');filename=str(args.get('filename') or '').strip();size=int(args.get('expected_size'));digest=str(args.get('expected_sha256') or '').strip().lower();ttl=int(args.get('ttl_seconds') or 7200)
-                    if not re.fullmatch(r'[a-z0-9][a-z0-9-]*',slug) or not isinstance(file_ref,dict) or not filename or len(filename)>240 or not (0<=size<=1073741824) or not re.fullmatch(r'[a-f0-9]{64}',digest) or not (300<=ttl<=86400):raise ValueError('Metadados da importação são inválidos.')
+                    required={'slug','filename','expected_size','expected_sha256'};allowed=required|{'file','file_url','ttl_seconds'}
+                    if not required.issubset(args) or not set(args).issubset(allowed) or (('file' in args)+('file_url' in args))!=1:raise ValueError('Informe slug, filename, expected_size, expected_sha256 e exatamente um entre file ou file_url. file é preenchido por openai/fileParams; file_url é fallback escalar do host.')
+                    slug=str(args.get('slug') or '').strip();file_ref=args.get('file') if 'file' in args else args.get('file_url');filename=str(args.get('filename') or '').strip();size=int(args.get('expected_size'));digest=str(args.get('expected_sha256') or '').strip().lower();ttl=int(args.get('ttl_seconds') or 7200)
+                    if not re.fullmatch(r'[a-z0-9][a-z0-9-]*',slug) or not filename or len(filename)>240 or not (0<=size<=1073741824) or not re.fullmatch(r'[a-f0-9]{64}',digest) or not (300<=ttl<=86400):raise ValueError('Metadados da importação são inválidos.')
+                    print(json.dumps({'event':'mcp_file_param_shape','tool':'workspace.artifact.import',**_session_file_ref_shape(file_ref)},separators=(',',':')),flush=True)
                     control('/v1/projects/'+urllib.parse.quote(slug,safe=''))
                     content,file_meta=workspace_artifact_import_https(slug,filename,file_ref,size,digest,ttl,trace_id)
-                    content['file_id']=file_meta['file_id'];content['source']='chatgpt_file_param';content['download_url_persisted']=False;content['secrets_exposed']=False
+                    content['file_id']=file_meta['file_id'];content['source']='chatgpt_file_param' if 'file' in args else 'chatgpt_file_scalar_fallback';content['input_field']='file' if 'file' in args else 'file_url';content['download_url_persisted']=False;content['secrets_exposed']=False
                 elif name in {'workspace.artifact.upload.start','workspace.artifact.upload.chunk','workspace.artifact.upload.batch','workspace.artifact.upload.ticket','workspace.artifact.upload.complete'}:
                     slug=str(args.get('slug') or '').strip()
                     if not re.fullmatch(r'[a-z0-9][a-z0-9-]*',slug):raise ValueError('O campo slug é obrigatório e deve ser válido.')
