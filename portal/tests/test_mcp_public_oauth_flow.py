@@ -201,13 +201,15 @@ class MCPPublicOAuthFlowTest(unittest.TestCase):
         self.assertTrue(paths['/cloudiff/mcp/actions/v1/write']['post']['x-openai-isConsequential'])
         self.assertTrue(paths['/cloudiff/mcp/actions/v1/artifact/import']['post']['x-openai-isConsequential'])
         self.assertEqual(paths['/cloudiff/mcp/actions/v1/artifact/import']['post']['operationId'],'importCloudIFFArtifact')
-        import_ref=paths['/cloudiff/mcp/actions/v1/artifact/import']['post']['requestBody']['content']['application/json']['schema']['$ref']
-        import_schema=schema['components']['schemas'][import_ref.rsplit('/',1)[-1]]
+        import_schema=paths['/cloudiff/mcp/actions/v1/artifact/import']['post']['requestBody']['content']['application/json']['schema']
+        self.assertNotIn('$ref',import_schema)
         self.assertIn('openaiFileIdRefs',import_schema['properties'])
         self.assertEqual(import_schema['properties']['openaiFileIdRefs']['items'],{'type':'string'})
-        self.assertEqual(import_schema['properties']['openaiFileIdRefs']['minItems'],1)
-        self.assertEqual(import_schema['properties']['openaiFileIdRefs']['maxItems'],1)
-        self.assertEqual(schema['info']['version'],'1.1.0')
+        self.assertNotIn('minItems',import_schema['properties']['openaiFileIdRefs'])
+        self.assertNotIn('maxItems',import_schema['properties']['openaiFileIdRefs'])
+        self.assertNotIn('openaiFileIdRefs',import_schema['required'])
+        self.assertEqual(import_schema['required'],['filename','expected_size','expected_sha256'])
+        self.assertEqual(schema['info']['version'],'1.2.0')
         schemas = schema['components']['schemas']
         self.assertIsInstance(schemas, dict)
         read_ref = paths['/cloudiff/mcp/actions/v1/read']['post']['requestBody']['content']['application/json']['schema']['$ref']
@@ -272,10 +274,21 @@ class MCPPublicOAuthFlowTest(unittest.TestCase):
         self.assertEqual(status, 403, raw)
         self.assertEqual(json.loads(raw)['error'], 'read_tool_not_allowed_on_write_endpoint')
 
+    def test_actions_artifact_import_reports_missing_runtime_file_injection(self):
+        token=self.oauth_token();auth={'Authorization':'Bearer '+token}
+        payload=json.dumps({'filename':'archive.zip','expected_size':1390970,'expected_sha256':'e078c5854d04d0e134f17737e014f8e7eaf9f09e4443c3a2ce9f414e6f1dc18e'})
+        status,_,raw=self.request('POST','/cloudiff/mcp/actions/v1/artifact/import',payload,{**auth,'Content-Type':'application/json','Content-Length':str(len(payload))})
+        self.assertEqual(status,422,raw);self.assertEqual(json.loads(raw)['error'],'actions_file_reference_not_injected')
+        payload=json.dumps({'openaiFileIdRefs':[],'filename':'archive.zip','expected_size':1390970,'expected_sha256':'e078c5854d04d0e134f17737e014f8e7eaf9f09e4443c3a2ce9f414e6f1dc18e'})
+        status,_,raw=self.request('POST','/cloudiff/mcp/actions/v1/artifact/import',payload,{**auth,'Content-Type':'application/json','Content-Length':str(len(payload))})
+        self.assertEqual(status,422,raw);self.assertEqual(json.loads(raw)['error'],'actions_file_reference_not_injected')
+
     def test_actions_artifact_import_is_dedicated_and_requires_runtime_download_link(self):
         token=self.oauth_token();auth={'Authorization':'Bearer '+token}
-        status,_,raw=self.request('GET',f'/cloudiff/mcp/openapi/{CLIENT_ID}.json')
+        status,headers,raw=self.request('GET',f'/cloudiff/mcp/openapi/{CLIENT_ID}.json')
         self.assertEqual(status,200,raw);schema=json.loads(raw)
+        self.assertEqual(headers.get('Cache-Control'),'no-store, max-age=0')
+        self.assertEqual(headers.get('Pragma'),'no-cache')
         write_ref=schema['paths']['/cloudiff/mcp/actions/v1/write']['post']['requestBody']['content']['application/json']['schema']['$ref']
         write_schema=schema['components']['schemas'][write_ref.rsplit('/',1)[-1]]
         self.assertNotIn('workspace.artifact.import',write_schema['properties']['tool']['enum'])

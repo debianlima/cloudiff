@@ -146,6 +146,8 @@ Arquitetura modular, interface, configuração e testes do Portal.
 | [`test_publication_personal_owner_base_project.py`](test_publication_personal_owner_base_project.py) | `.py` | Implementa `PublicationPersonalOwnerBaseProjectTests`. |
 | [`test_publication_runtime_fallback.py`](test_publication_runtime_fallback.py) | `.py` | Implementa `PublicationRuntimeFallbackTest`. |
 | [`test_publication_runtime_links_and_actions.py`](test_publication_runtime_links_and_actions.py) | `.py` | Implementa `PublicationRuntimeLinksAndActionsTests`. |
+| [`test_publication_site_terminal_workspace.py`](test_publication_site_terminal_workspace.py) | `.py` | Implementa `PublicationSiteTerminalWorkspaceTests`. |
+| [`test_publication_workspace_tools.py`](test_publication_workspace_tools.py) | `.py` | Implementa `PublicationWorkspaceToolsTests`. |
 | [`test_recreate_owner_and_initial_terminal.py`](test_recreate_owner_and_initial_terminal.py) | `.py` | Implementa `RecreateOwnerAndInitialTerminalTests`. |
 | [`test_registry.py`](test_registry.py) | `.py` | Implementa `_identity`, `_req`, `RegistryTest`. |
 | [`test_release_flow_wizard_ui.py`](test_release_flow_wizard_ui.py) | `.py` | Implementa `ReleaseFlowWizardUITests`. |

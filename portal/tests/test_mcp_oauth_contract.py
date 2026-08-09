@@ -124,9 +124,13 @@ class MCPOAuthContractTests(unittest.TestCase):
         ):
             self.assertIn(marker,self.gateway)
         schema_block=self.gateway[self.gateway.index('def _action_schema'):self.gateway.index('def _privacy_html')]
-        self.assertIn("'version':'1.1.0'",schema_block)
+        self.assertIn("'version':'1.2.0'",schema_block)
         self.assertIn("'items':{'type':'string'}",schema_block)
-        self.assertIn("'required':['openaiFileIdRefs','filename','expected_size','expected_sha256']",schema_block)
+        self.assertIn("'required':['filename','expected_size','expected_sha256']",schema_block)
+        self.assertIn("'schema':artifact_import_action_schema",schema_block)
+        self.assertNotIn("'ArtifactImportActionRequest'",schema_block)
+        self.assertIn("actions_file_reference_not_injected",self.gateway)
+        self.assertIn("actions_file_reference_shape",self.gateway)
 
     def test_project_list_is_filtered_by_agent_projects(self):
         self.assertIn("allowed=set(authz.get('project_slugs') or [])", self.gateway)

@@ -662,28 +662,28 @@ def _action_schema(client_id):
     if write_tools:
         paths[base+'/write']={'post':{'operationId':'callCloudIFFProjectTool','summary':'Executar operação controlada do projeto','description':'Executa uma ferramenta com efeito ou solicitação de aprovação. Aprovações humanas e políticas da CloudIFF continuam obrigatórias.','security':security,'x-openai-isConsequential':True,'requestBody':{'required':True,'content':{'application/json':{'schema':{'$ref':'#/components/schemas/WriteToolRequest'}}}},'responses':responses}}
     if 'workspace.artifact.import' in action_file_tools:
-        paths[base+'/artifact/import']={'post':{'operationId':'importCloudIFFArtifact','summary':'Importar arquivo anexado para um artifact CloudIFF','description':'Importa exatamente um arquivo anexado nesta conversa. O ChatGPT deve preencher openaiFileIdRefs automaticamente com id, nome, MIME type e download_link temporário. Não invente URLs nem envie somente o file id.','security':security,'x-openai-isConsequential':True,'requestBody':{'required':True,'content':{'application/json':{'schema':{'$ref':'#/components/schemas/ArtifactImportActionRequest'}}}},'responses':responses}}
+        artifact_import_action_schema={
+          'type':'object',
+          'properties':{
+            'openaiFileIdRefs':{
+              'type':'array','items':{'type':'string'},
+              'description':'Inclua exatamente um arquivo anexado pelo usuário nesta conversa. O GPT Actions deve preencher este campo automaticamente com o arquivo selecionado; em runtime cada item vira um objeto com name, id, mime_type e download_link temporário.',
+            },
+            'filename':{'type':'string','minLength':1,'maxLength':240,'description':'Nome exato esperado para o arquivo.'},
+            'expected_size':{'type':'integer','minimum':0,'maximum':1073741824,'description':'Tamanho exato esperado em bytes.'},
+            'expected_sha256':{'type':'string','pattern':'^[a-f0-9]{64}$','description':'SHA-256 esperado em hexadecimal minúsculo.'},
+            'ttl_seconds':{'type':'integer','minimum':300,'maximum':86400,'default':3600},
+          },
+          'required':['filename','expected_size','expected_sha256'],
+          'additionalProperties':False,
+        }
+        paths[base+'/artifact/import']={'post':{'operationId':'importCloudIFFArtifact','summary':'Importar exatamente um arquivo anexado para um artifact CloudIFF','description':'Use exatamente um arquivo anexado nesta conversa. O parâmetro especial openaiFileIdRefs deve ser preenchido pelo GPT Actions com a referência do arquivo e download_link temporário. Não invente URLs, não envie somente file_id e não chame esta operação sem selecionar o anexo.','security':security,'x-openai-isConsequential':True,'requestBody':{'required':True,'content':{'application/json':{'schema':artifact_import_action_schema}}},'responses':responses}}
     schemas={
       'ActionArguments':{
         'type':'object',
         'description':'Parâmetros da ferramenta. O slug do projeto é sempre imposto pelo servidor.',
         'properties':{},
         'additionalProperties':True,
-      },
-      'ArtifactImportActionRequest':{
-        'type':'object',
-        'properties':{
-          'openaiFileIdRefs':{
-            'type':'array','minItems':1,'maxItems':1,'items':{'type':'string'},
-            'description':'Exatamente um arquivo anexado pelo usuário nesta conversa. Este campo é preenchido automaticamente pelo ChatGPT Actions com objetos contendo name, id, mime_type e download_link temporário.',
-          },
-          'filename':{'type':'string','minLength':1,'maxLength':240,'description':'Nome exato esperado para o arquivo.'},
-          'expected_size':{'type':'integer','minimum':0,'maximum':1073741824,'description':'Tamanho exato esperado em bytes.'},
-          'expected_sha256':{'type':'string','pattern':'^[a-f0-9]{64}$','description':'SHA-256 esperado em hexadecimal minúsculo.'},
-          'ttl_seconds':{'type':'integer','minimum':300,'maximum':86400,'default':3600},
-        },
-        'required':['openaiFileIdRefs','filename','expected_size','expected_sha256'],
-        'additionalProperties':False,
       },
       'ActionResponse':{
         'type':'object',
@@ -719,7 +719,7 @@ def _action_schema(client_id):
       'openapi':'3.1.0',
       'info':{
         'title':'CloudIFF Actions — '+slug,
-        'version':'1.1.0',
+        'version':'1.2.0',
         'description':'Ações do projeto '+slug+' com OAuth público, PKCE, ACL por projeto e aprovações humanas server-side.',
         'termsOfService':PUBLIC_ORIGIN+'/cloudiff/mcp/privacy',
         'x-privacy-policy-url':PUBLIC_ORIGIN+'/cloudiff/mcp/privacy',
@@ -1873,7 +1873,11 @@ class H(BaseHTTPRequestHandler):
             if schema:
                 raw=json.dumps(schema,ensure_ascii=False,separators=(',',':')).encode();content_type='application/json';length=len(raw)
         if not content_type:self.send_response(404);self.send_header('Cache-Control','no-store');self.end_headers();return
-        self.send_response(200);self.send_header('Content-Type',content_type);self.send_header('Content-Length',str(length));self.send_header('Cache-Control','public, max-age=300');self.send_header('X-Content-Type-Options','nosniff');self.end_headers()
+        self.send_response(200);self.send_header('Content-Type',content_type);self.send_header('Content-Length',str(length))
+        if path.startswith('/cloudiff/mcp/openapi/'):
+            self.send_header('Cache-Control','no-store, max-age=0');self.send_header('Pragma','no-cache')
+        else:self.send_header('Cache-Control','public, max-age=300')
+        self.send_header('X-Content-Type-Options','nosniff');self.end_headers()
     def do_GET(self):
         parsed=urlparse(self.path);path=parsed.path
         if path in {'/.well-known/oauth-authorization-server','/cloudiff/mcp/.well-known/oauth-authorization-server','/oauth/.well-known/oauth-authorization-server'}:return self.sendj(200,_oauth_metadata())
@@ -1881,7 +1885,10 @@ class H(BaseHTTPRequestHandler):
         if path=='/cloudiff/mcp/privacy':return self.sendhtml(200,_privacy_html())
         match=re.fullmatch(r'/cloudiff/mcp/openapi/([A-Za-z0-9._-]{3,160})[.]json',path)
         if match:
-            schema=_action_schema(match.group(1));return self.sendj(200,schema) if schema else self.sendj(404,{'ok':False,'error':'schema_not_found'})
+            schema=_action_schema(match.group(1))
+            if not schema:return self.sendj(404,{'ok':False,'error':'schema_not_found'})
+            raw=json.dumps(schema,ensure_ascii=False,separators=(',',':')).encode()
+            self.send_response(200);self.send_header('Content-Type','application/json; charset=utf-8');self.send_header('Content-Length',str(len(raw)));self.send_header('Cache-Control','no-store, max-age=0');self.send_header('Pragma','no-cache');self.send_header('X-Content-Type-Options','nosniff');self.end_headers();self.wfile.write(raw);return
         if path in {'/cloudiff/mcp/actions/v1/project','/cloudiff/mcp/actions/v1/connectors','/cloudiff/mcp/actions/v1/tools'}:
             identity=self._action_identity()
             if not identity:return
@@ -1920,7 +1927,12 @@ class H(BaseHTTPRequestHandler):
                 allowed={'openaiFileIdRefs','filename','expected_size','expected_sha256','ttl_seconds'}
                 if set(payload)-allowed:raise ValueError('invalid_request')
                 refs=payload.get('openaiFileIdRefs')
-                if not isinstance(refs,list) or len(refs)!=1:raise ValueError('actions_exactly_one_file_required')
+                ref_count=len(refs) if isinstance(refs,list) else None
+                ref_item_types=sorted({type(item).__name__ for item in refs}) if isinstance(refs,list) else []
+                print(json.dumps({'event':'actions_file_reference_shape','operation':'importCloudIFFArtifact','present':'openaiFileIdRefs' in payload,'value_type':type(refs).__name__,'count':ref_count,'item_types':ref_item_types,'payload_keys':sorted(payload.keys())},separators=(',',':')),flush=True)
+                if not isinstance(refs,list) or len(refs)!=1:
+                    code='actions_file_reference_not_injected' if refs is None or refs==[] else 'actions_exactly_one_file_required'
+                    raise ValueError(code)
                 file_ref=_normalize_action_file_ref(refs[0])
                 filename=str(payload.get('filename') or '').strip();size=int(payload.get('expected_size'));digest=str(payload.get('expected_sha256') or '').strip().lower();ttl=int(payload.get('ttl_seconds') or 3600)
                 if not filename or len(filename)>240 or not (0<=size<=1073741824) or not re.fullmatch(r'[a-f0-9]{64}',digest) or not (300<=ttl<=86400):raise ValueError('invalid_request')

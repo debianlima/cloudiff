@@ -1,6 +1,6 @@
 # Inventário de arquivos
 
-Este catálogo descreve **1153 arquivos versionados**. Ele é regenerado pelo script de documentação.
+Este catálogo descreve **1156 arquivos versionados**. Ele é regenerado pelo script de documentação.
 
 | Caminho | Finalidade |
 |---|---|
@@ -484,6 +484,7 @@ Este catálogo descreve **1153 arquivos versionados**. Ele é regenerado pelo sc
 | [`components/proxy/usr/README.md`](../components/proxy/usr/README.md) | Documentação deste diretório. |
 | [`components/proxy/usr/local/README.md`](../components/proxy/usr/local/README.md) | Documentação deste diretório. |
 | [`components/proxy/usr/local/sbin/README.md`](../components/proxy/usr/local/sbin/README.md) | Documentação deste diretório. |
+| [`components/proxy/usr/local/sbin/cloudif-configure-komodo-embed.sh`](../components/proxy/usr/local/sbin/cloudif-configure-komodo-embed.sh) | Automação Shell operacional da plataforma. |
 | [`components/proxy/usr/local/sbin/cloudif-configure-main-artifact-upload.sh`](../components/proxy/usr/local/sbin/cloudif-configure-main-artifact-upload.sh) | Automação Shell operacional da plataforma. |
 | [`components/proxy/usr/local/sbin/cloudif-machine-certificate-renew.py`](../components/proxy/usr/local/sbin/cloudif-machine-certificate-renew.py) | Implementa `load_env`, `run`, `serial`, `cert_expiring`, `opener`, `post` e outros componentes. |
 | [`components/proxy/usr/local/sbin/cloudif-machine-executor.py`](../components/proxy/usr/local/sbin/cloudif-machine-executor.py) | Módulo Python da plataforma. |
@@ -955,6 +956,8 @@ Este catálogo descreve **1153 arquivos versionados**. Ele é regenerado pelo sc
 | [`portal/tests/test_publication_personal_owner_base_project.py`](../portal/tests/test_publication_personal_owner_base_project.py) | Implementa `PublicationPersonalOwnerBaseProjectTests`. |
 | [`portal/tests/test_publication_runtime_fallback.py`](../portal/tests/test_publication_runtime_fallback.py) | Implementa `PublicationRuntimeFallbackTest`. |
 | [`portal/tests/test_publication_runtime_links_and_actions.py`](../portal/tests/test_publication_runtime_links_and_actions.py) | Implementa `PublicationRuntimeLinksAndActionsTests`. |
+| [`portal/tests/test_publication_site_terminal_workspace.py`](../portal/tests/test_publication_site_terminal_workspace.py) | Implementa `PublicationSiteTerminalWorkspaceTests`. |
+| [`portal/tests/test_publication_workspace_tools.py`](../portal/tests/test_publication_workspace_tools.py) | Implementa `PublicationWorkspaceToolsTests`. |
 | [`portal/tests/test_recreate_owner_and_initial_terminal.py`](../portal/tests/test_recreate_owner_and_initial_terminal.py) | Implementa `RecreateOwnerAndInitialTerminalTests`. |
 | [`portal/tests/test_registry.py`](../portal/tests/test_registry.py) | Implementa `_identity`, `_req`, `RegistryTest`. |
 | [`portal/tests/test_release_flow_wizard_ui.py`](../portal/tests/test_release_flow_wizard_ui.py) | Implementa `ReleaseFlowWizardUITests`. |
