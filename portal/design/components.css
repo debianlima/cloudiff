@@ -528,6 +528,13 @@ html[data-theme="dark"] body .legacy-content .db96-mode.inactive .db96-mode-badg
   background:var(--rule-soft);
   color:var(--ink-2);
 }
+html[data-theme="dark"] body .legacy-content .db96-eyebrow{
+  color:var(--iff-dark);
+}
+html[data-theme="dark"] body .legacy-content .db96-mode.active .db96-check{
+  background:var(--iff);
+  color:var(--on-iff);
+}
 
 
 /* Final dark-surface guard for page-local legacy CSS. */

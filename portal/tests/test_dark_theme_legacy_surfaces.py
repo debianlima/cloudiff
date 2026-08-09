@@ -88,6 +88,16 @@ class DarkThemeLegacySurfacesTest(unittest.TestCase):
             )
             self.assertIn('html[data-theme=\"dark\"]{color-scheme:dark;--c-bg:#0d1320;', source)
 
+    def test_dark_semantic_buttons_and_database_labels_keep_contrast(self):
+        current = (ROOT / "components/control-plane/current-apps/portal-current/cloudif-admin-portal-base.py").read_text()
+        self.assertIn('html[data-theme="dark"] .btn:not(.light):not(.gray)', current)
+        self.assertIn('color:var(--on-iff,#061009)!important', current)
+        css = (ROOT / "portal/design/components.css").read_text()
+        self.assertIn('html[data-theme="dark"] body .legacy-content .db96-eyebrow{', css)
+        self.assertIn('html[data-theme="dark"] body .legacy-content .db96-mode.active .db96-check{', css)
+        coexist = (ROOT / "components/control-plane/srv/cloudif/lib/cloudif_portal_v2_coexist.py").read_text()
+        self.assertIn('button[aria-selected="true"]{{border-color:var(--iff)!important;background:var(--iff-wash)!important;color:var(--ink)!important}}', coexist)
+
     def test_admin_and_guide_local_css_use_theme_surfaces(self):
         source = (ROOT / "components/control-plane/srv/cloudif/lib/cloudif_portal_v2_coexist.py").read_text()
         admin = source[source.index('.admin-operation-center'):source.index('</style>', source.index('.admin-operation-center'))]
