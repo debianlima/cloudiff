@@ -4043,6 +4043,43 @@ def cloudif_preview_terminal(handler):
     return send(handler,200,{'ok':True,'project':project,'public_number':num,'generation':generation,'stageCode':'W'+str(generation),'container':container,'server_id':server_id,'terminal':str(target.get('terminal') or ''),'terminalReady':True,'secretValuesIncluded':False})
 
 
+
+def cloudif_stage_terminal(handler):
+    if not _cloudif_pub_auth(handler):return send(handler,403,{'ok':False,'error':'forbidden'})
+    payload=_cloudif_pub_json(handler);project=safe_slug(payload.get('project') or '')
+    environment=str(payload.get('environment') or '').strip().lower();legacy=payload.get('legacy') is True
+    try:num=int(payload.get('public_number') or 0);dep=int(payload.get('deploy_number') or 0);publication=int(payload.get('publication_number') or 0);candidate=int(payload.get('candidate_number') or 0)
+    except Exception:return send(handler,400,{'ok':False,'error':'invalid_stage_terminal_request','terminalReady':False})
+    if not project or num<1 or environment not in {'homologation','production'}:return send(handler,400,{'ok':False,'error':'invalid_stage_terminal_request','terminalReady':False})
+    _cloudif_v143_ensure_schema();container='';stage_code=''
+    if environment=='homologation':
+        if dep<1 or candidate<1:return send(handler,400,{'ok':False,'error':'invalid_homologation_terminal_request','terminalReady':False})
+        rows=db_query("select * from publication_runtimes where project=? and public_number=? and deploy_number=? and status='ready'",(project,num,dep))
+        if not rows:return send(handler,409,{'ok':False,'error':'homologation_runtime_not_ready','message':'O container da Homologação não está pronto para terminal.','terminalReady':False})
+        container=str(rows[0].get('container') or '');expected=f'cloudif-p{num}-d{dep}-web';stage_code='H'+str(candidate)
+        if container!=expected:return send(handler,409,{'ok':False,'error':'homologation_container_identity_invalid','terminalReady':False})
+    elif legacy:
+        if dep<1:return send(handler,400,{'ok':False,'error':'invalid_production_terminal_request','terminalReady':False})
+        rows=db_query("select * from publication_runtimes where project=? and public_number=? and deploy_number=? and status='ready' and is_active=1",(project,num,dep))
+        if not rows:return send(handler,409,{'ok':False,'error':'production_runtime_not_ready','message':'O container ativo de Produção não está pronto para terminal.','terminalReady':False})
+        container=str(rows[0].get('container') or '');expected=f'cloudif-p{num}-d{dep}-web';stage_code='P'+str(dep)
+        if container!=expected:return send(handler,409,{'ok':False,'error':'production_container_identity_invalid','terminalReady':False})
+    else:
+        if publication<1:return send(handler,400,{'ok':False,'error':'invalid_production_terminal_request','terminalReady':False})
+        rows=db_query("select * from stage_production_releases where project=? and public_number=? and publication_number=? and status='ready' and is_active=1",(project,num,publication))
+        if not rows:return send(handler,409,{'ok':False,'error':'production_release_not_ready','message':'A publicação ativa não está pronta para terminal.','terminalReady':False})
+        row=rows[0]
+        if candidate and int(row.get('candidate_number') or 0)!=candidate:return send(handler,409,{'ok':False,'error':'production_candidate_identity_invalid','terminalReady':False})
+        if dep and int(row.get('deploy_number') or 0)!=dep:return send(handler,409,{'ok':False,'error':'production_deploy_identity_invalid','terminalReady':False})
+        container=str(row.get('container') or '');expected=f'cloudif-p{num}-p{publication}-publication-web';stage_code='P'+str(publication)
+        if container!=expected:return send(handler,409,{'ok':False,'error':'production_container_identity_invalid','terminalReady':False})
+    if not _cloudif_wait_health(container,2).get('ok'):return send(handler,409,{'ok':False,'error':'stage_container_not_healthy','message':'O container deste ambiente não está saudável para abrir o terminal.','terminalReady':False})
+    server_id=_cloudif_v143_server_id(project)
+    if not server_id:return send(handler,422,{'ok':False,'error':'stage_server_missing','message':'O servidor Komodo deste ambiente não foi localizado.','terminalReady':False})
+    target=_cloudif_ensure_container_terminal(server_id,container)
+    if not target.get('ok') or not target.get('terminal'):return send(handler,422,{'ok':False,'error':'stage_terminal_create_failed','message':'O Komodo não conseguiu preparar o terminal deste ambiente.','terminalReady':False})
+    return send(handler,200,{'ok':True,'project':project,'public_number':num,'environment':environment,'stageCode':stage_code,'container':container,'server_id':server_id,'terminal':str(target.get('terminal') or ''),'terminalReady':True,'secretValuesIncluded':False,'secretReferencesIncluded':False})
+
 def cloudif_preview_snapshot(handler):
     if not _cloudif_pub_auth(handler):return send(handler,403,{'ok':False,'error':'forbidden'})
     payload=_cloudif_pub_json(handler);project=safe_slug(payload.get('project') or '')
@@ -4712,6 +4749,8 @@ class H(BaseHTTPRequestHandler):
             return cloudif_preview_request(self,'recreate')
         if _cloudif_pub_path == "/komodo/project/preview/terminal":
             return cloudif_preview_terminal(self)
+        if _cloudif_pub_path == "/komodo/project/stage/terminal":
+            return cloudif_stage_terminal(self)
         if _cloudif_pub_path == "/komodo/project/preview/snapshot":
             return cloudif_preview_snapshot(self)
         if _cloudif_pub_path == "/komodo/project/authz-sync":

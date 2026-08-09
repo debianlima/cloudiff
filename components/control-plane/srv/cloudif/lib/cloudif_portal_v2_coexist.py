@@ -908,7 +908,7 @@ def _install() -> None:
                         self.close_connection=True
                         print(f'cloudif_artifact_upload_content_failed type={type(exc).__name__}',flush=True)
                         return send_json(self,503,{'ok':False,'error':{'message':'O upload foi interrompido antes de ser selado. Você pode tentar novamente.','detail':type(exc).__name__}})
-                release_flow_match = re.fullmatch(r'/cloudiff?/portal/api/projects/([a-z0-9][a-z0-9-]{0,62})/release-flow/(preview/ensure|preview/recreate|preview/terminal|homologation/enqueue|homologation/approve|homologation/reject|homologation/homologate-and-publish|homologators|production/approval/request|production/enqueue|rollback|job/acknowledge)', parsed.path)
+                release_flow_match = re.fullmatch(r'/cloudiff?/portal/api/projects/([a-z0-9][a-z0-9-]{0,62})/release-flow/(preview/ensure|preview/recreate|preview/terminal|stage/terminal|homologation/enqueue|homologation/approve|homologation/reject|homologation/homologate-and-publish|homologators|production/approval/request|production/enqueue|rollback|job/acknowledge)', parsed.path)
                 if release_flow_match:
                     try:
                         content_length=int(self.headers.get('Content-Length','0') or 0)
@@ -924,6 +924,7 @@ def _install() -> None:
                         if operation=='preview/ensure':result=publications.ensure_preview(slug,user)
                         elif operation=='preview/recreate':result=publications.recreate_preview(slug,user,str(payload.get('source') or 'production'))
                         elif operation=='preview/terminal':result=publications.preview_terminal(slug,user)
+                        elif operation=='stage/terminal':result=publications.stage_terminal(slug,user,str(payload.get('environment') or 'preview'))
                         elif operation=='homologation/enqueue':result=publications.enqueue_homologation(slug,user)
                         elif operation=='homologation/approve':result=publications.homologate_candidate(slug,int(payload.get('candidateNumber') or 0),user,'approved',str(payload.get('note') or ''))
                         elif operation=='homologation/reject':result=publications.homologate_candidate(slug,int(payload.get('candidateNumber') or 0),user,'rejected',str(payload.get('note') or ''))

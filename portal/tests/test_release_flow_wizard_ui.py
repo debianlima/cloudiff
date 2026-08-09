@@ -28,7 +28,7 @@ class ReleaseFlowWizardUITests(unittest.TestCase):
 
     def test_release_flow_api_is_csrf_protected(self):
         self.assertIn('/release-flow(?:/(approval/status))?',COEXIST)
-        self.assertIn('/release-flow/(preview/ensure|preview/recreate|preview/terminal|homologation/enqueue',COEXIST)
+        self.assertIn('/release-flow/(preview/ensure|preview/recreate|preview/terminal|stage/terminal|homologation/enqueue',COEXIST)
         self.assertIn("getattr(owner,'_prod_csrf_equal')",COEXIST)
         self.assertIn("'production/approval/request'",COEXIST)
         self.assertIn("'production/enqueue'",COEXIST)

@@ -299,6 +299,43 @@ def preview_terminal(slug,user):
     return {'ok':True,'project':slug,'public_number':num,'generation':generation,'stageCode':'W'+str(generation),'container':container,'terminalUrl':target,'terminalReady':True,'terminalSource':'preview_workspace','secretValuesIncluded':False,'secretReferencesIncluded':False}
 
 
+
+def stage_terminal(slug,user,environment='preview'):
+    environment=str(environment or '').strip().lower()
+    if environment not in {'preview','homologation','production'}:raise ValueError('Ambiente de terminal inválido.')
+    if environment=='preview':return preview_terminal(slug,user)
+    con=sqlite3.connect(DB);con.row_factory=sqlite3.Row;_ensure_schema(con);project=_project_allowed(con,slug,user)
+    if not project:con.close();raise PermissionError('Projeto não encontrado ou sem permissão.')
+    from cloudif_project_environment_web import authorization
+    auth=authorization(slug,user.get('username') or '',user.get('groups') or [])
+    if not auth.get('canWrite'):con.close();raise PermissionError('O terminal exige permissão de escrita no projeto.')
+    if environment=='production' and not _owner_or_admin(con,slug,user):con.close();raise PermissionError('O terminal de Produção exige o responsável pelo projeto ou administrador.')
+    num=_number(con,slug);payload={'project':slug,'public_number':num,'environment':environment,'actor':user.get('username') or 'portal'};expected=''
+    if environment=='homologation':
+        row=con.execute("select candidate_number,deploy_number,stage_code,status from publication_candidates where project_slug=? order by candidate_number desc limit 1",(slug,)).fetchone()
+        if not row:con.close();raise RuntimeError('Nenhum candidato de Homologação está disponível para abrir o terminal.')
+        dep=int(row['deploy_number'] or 0);candidate=int(row['candidate_number'] or 0)
+        if dep<1 or candidate<1:con.close();raise RuntimeError('O candidato de Homologação não possui runtime válido.')
+        payload.update({'deploy_number':dep,'candidate_number':candidate});expected=f'cloudif-p{num}-d{dep}-web';stage_code=str(row['stage_code'] or ('H'+str(candidate)))
+    else:
+        release=con.execute("select publication_number,candidate_number,deploy_number,stage_code,status from production_releases where project_slug=? and is_active=1 and status='published' order by publication_number desc limit 1",(slug,)).fetchone()
+        if release:
+            publication=int(release['publication_number'] or 0);dep=int(release['deploy_number'] or 0);candidate=int(release['candidate_number'] or 0)
+            if publication<1:con.close();raise RuntimeError('A Produção ativa não possui runtime válido.')
+            payload.update({'publication_number':publication,'deploy_number':dep,'candidate_number':candidate,'legacy':False});expected=f'cloudif-p{num}-p{publication}-publication-web';stage_code=str(release['stage_code'] or ('P'+str(publication)))
+        else:
+            legacy=con.execute("select deploy_number from project_publications where project_slug=? and status='published' and is_active=1 order by id desc limit 1",(slug,)).fetchone()
+            if not legacy:con.close();raise RuntimeError('Nenhuma Produção ativa está disponível para abrir o terminal.')
+            dep=int(legacy['deploy_number'] or 0)
+            if dep<1:con.close();raise RuntimeError('A Produção ativa não possui runtime válido.')
+            payload.update({'deploy_number':dep,'legacy':True});expected=f'cloudif-p{num}-d{dep}-web';stage_code='P'+str(dep)
+    con.close();ku,kt,_=_clients();status,data=_post(ku+'/komodo/project/stage/terminal',payload,kt,timeout=60)
+    if status//100!=2 or data.get('ok') is not True:raise RuntimeError(str(data.get('message') or 'O terminal deste ambiente está temporariamente indisponível.'))
+    container=str(data.get('container') or '');server_id=str(data.get('server_id') or '');terminal=str(data.get('terminal') or '')
+    if container!=expected or not server_id or not terminal:raise RuntimeError('stage_terminal_contract_invalid')
+    target='https://komodoiff.duckdns.org/servers/'+urllib.parse.quote(server_id,safe='')+'/container/'+urllib.parse.quote(container,safe='')+'/terminal/'+urllib.parse.quote(terminal,safe='')
+    return {'ok':True,'project':slug,'public_number':num,'environment':environment,'stageCode':stage_code,'container':container,'terminalUrl':target,'terminalReady':True,'terminalSource':'publication_stage','secretValuesIncluded':False,'secretReferencesIncluded':False}
+
 def recreate_preview(slug,user,source='production'):
     source=str(source or '').strip().lower()
     if source not in {'production','template'}:raise ValueError('Origem de Preview inválida.')
@@ -402,6 +439,11 @@ def release_flow_status(slug,user):
     con=sqlite3.connect(DB);con.row_factory=sqlite3.Row;_ensure_schema(con)
     if not (_project_allowed(con,slug,user) or _can_homologate(con,slug,user)):con.close();raise PermissionError('Projeto não encontrado ou sem permissão.')
     num=_number(con,slug);candidates=[dict(x) for x in con.execute('select * from publication_candidates where project_slug=? order by candidate_number desc limit 20',(slug,)).fetchall()];releases=[dict(x) for x in con.execute('select * from production_releases where project_slug=? order by publication_number desc limit 20',(slug,)).fetchall()];activations=[dict(x) for x in con.execute('select * from production_activation_requests where project_slug=? order by publication_number desc limit 20',(slug,)).fetchall()];hom=[str(x['username']) for x in con.execute('select username from project_homologators where project_slug=? order by username',(slug,)).fetchall()];owner=_project_owner(con,slug)
+    try:
+        from cloudif_project_environment_web import authorization
+        can_write=bool(authorization(slug,user.get('username') or '',user.get('groups') or []).get('canWrite'))
+    except Exception:
+        can_write=bool(user.get('admin') or (user.get('username') or '').strip().lower()==owner)
     jobrow=con.execute("select id,status,step,message,operation,candidate_number,publication_number,approval_id,created_at,started_at,finished_at from publication_jobs where project_slug=? order by id desc limit 1",(slug,)).fetchone();legacy=con.execute("select * from project_publications where project_slug=? and status='published' and is_active=1 order by id desc limit 1",(slug,)).fetchone();con.close()
     preview={}
     try:preview=preview_status(slug,user)
@@ -413,7 +455,7 @@ def release_flow_status(slug,user):
         try:out['runtimeDiff']=json.loads(row.get('runtime_diff_json') or '{}')
         except Exception:out['runtimeDiff']={}
         return out
-    result={'ok':True,'project':slug,'publicNumber':num,'preview':preview,'candidates':[safe_candidate(x) for x in candidates],'releases':[{**{k:x.get(k) for k in ('publication_number','candidate_number','deploy_number','stage_code','hostname','stable_hostname','artifact_image_id','status','is_active','environment_revision','created_by','created_at','published_at')},'url':'https://'+str(x.get('hostname') or '')+'/' if x.get('hostname') else '','stableUrl':'https://'+str(x.get('stable_hostname') or '')+'/' if x.get('stable_hostname') else ''} for x in releases],'activationRequests':[{k:x.get(k) for k in ('candidate_number','publication_number','activation_digest','approval_id','requested_by','status','created_at','updated_at')} for x in activations],'job':dict(jobrow) if jobrow else None,'homologators':hom,'owner':owner,'canHomologate':bool(user.get('admin') or (user.get('username') or '').strip().lower()==owner or (user.get('username') or '').strip().lower() in set(hom)),'canPublish':bool(user.get('admin') or (user.get('username') or '').strip().lower()==owner),'secretValuesIncluded':False}
+    result={'ok':True,'project':slug,'publicNumber':num,'preview':preview,'candidates':[safe_candidate(x) for x in candidates],'releases':[{**{k:x.get(k) for k in ('publication_number','candidate_number','deploy_number','stage_code','hostname','stable_hostname','artifact_image_id','status','is_active','environment_revision','created_by','created_at','published_at')},'url':'https://'+str(x.get('hostname') or '')+'/' if x.get('hostname') else '','stableUrl':'https://'+str(x.get('stable_hostname') or '')+'/' if x.get('stable_hostname') else ''} for x in releases],'activationRequests':[{k:x.get(k) for k in ('candidate_number','publication_number','activation_digest','approval_id','requested_by','status','created_at','updated_at')} for x in activations],'job':dict(jobrow) if jobrow else None,'homologators':hom,'owner':owner,'canHomologate':bool(user.get('admin') or (user.get('username') or '').strip().lower()==owner or (user.get('username') or '').strip().lower() in set(hom)),'canPublish':bool(user.get('admin') or (user.get('username') or '').strip().lower()==owner),'canWrite':can_write,'secretValuesIncluded':False}
     if not releases and legacy:result['legacyProduction']={'publication_number':int(legacy['deploy_number']),'stage_code':'P'+str(int(legacy['deploy_number'])),'stableUrl':'https://'+str(legacy['stable_hostname'])+'/','artifact_image_id':'','status':'published','is_active':1}
     return result
 

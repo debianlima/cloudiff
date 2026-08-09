@@ -32,11 +32,13 @@ class PublicationWorkspaceToolsTests(unittest.TestCase):
 
     def test_runtime_preview_uses_authenticated_json_without_iframe(self):
         workspace=self.portal[self.portal.index("const publicationTools="):self.portal.index("const backdrop=document.createElement('div');")]
-        self.assertIn('/cloudiff/portal/api/project-runtime-info?slug=',workspace)
-        self.assertIn('publication-runtime-preview',workspace)
-        self.assertIn("envEsc(data.output||'')",workspace)
-        self.assertNotIn('<iframe',workspace)
-        self.assertNotIn('innerHTML=data.output',workspace)
+        runtime=workspace[workspace.index('async function publicationRuntimeLoad'):workspace.index('function publicationTerminalRender')]
+        self.assertIn('/cloudiff/portal/api/project-runtime-info?slug=',runtime)
+        self.assertIn('publication-runtime-preview',runtime)
+        self.assertIn("envEsc(data.output||'')",runtime)
+        self.assertNotIn('<iframe',runtime)
+        self.assertNotIn('innerHTML=data.output',runtime)
+        self.assertIn('<iframe',workspace)  # Site is the only intentionally framed tool.
 
     def test_variables_are_previewed_without_exposing_secrets(self):
         workspace=self.portal[self.portal.index("const publicationTools="):self.portal.index("const backdrop=document.createElement('div');")]
