@@ -39,6 +39,7 @@ PROJECT_OBSERVABILITY_URL=os.environ.get('CLOUDIF_PROJECT_OBSERVABILITY_URL','ht
 PROJECT_OBSERVABILITY_TOKEN=os.environ.get('CLOUDIF_PROJECT_OBSERVABILITY_TOKEN','')
 PUBLIC_ORIGIN=os.environ.get('CLOUDIF_MCP_PUBLIC_ORIGIN','https://cloudiff.duckdns.org').rstrip('/')
 MCP_RESOURCE=PUBLIC_ORIGIN+'/cloudiff/mcp'
+RESOURCE_METADATA_URL=PUBLIC_ORIGIN+'/.well-known/oauth-protected-resource'
 OAUTH_ISSUER=PUBLIC_ORIGIN
 OAUTH_LOGIN_REQUESTS={};OAUTH_CODES={};OAUTH_ACCESS={};OAUTH_REFRESH={};OAUTH_LOCK=threading.Lock()
 OAUTH_LOGIN_TTL=300;OAUTH_ACCESS_TTL=3600;OAUTH_REFRESH_TTL=2592000
@@ -97,13 +98,14 @@ def _pkce_ok(verifier,challenge):
     return hmac.compare_digest(digest,challenge)
 def _oauth_authorize_preflight(query):
     client_id=(query.get('client_id') or [''])[0];redirect_uri=(query.get('redirect_uri') or [''])[0];state=(query.get('state') or [''])[0];challenge=(query.get('code_challenge') or [''])[0];method=(query.get('code_challenge_method') or [''])[0]
+    resource=(query.get('resource') or [MCP_RESOURCE])[0]
     row=_oauth_client(client_id);projects=_client_projects(row);flow=_callback_mode(redirect_uri)
     pkce_valid=flow=='pkce' and method=='S256' and bool(challenge)
     actions_valid=flow=='chatgpt_actions' and not challenge and not method
-    if (query.get('response_type') or [''])[0]!='code' or not row or len(projects)!=1 or not (pkce_valid or actions_valid):return None
-    return {'client_id':client_id,'project_slug':projects[0],'redirect_uri':redirect_uri,'state':state,'code_challenge':challenge,'oauth_flow':flow}
+    if (query.get('response_type') or [''])[0]!='code' or not row or len(projects)!=1 or resource!=MCP_RESOURCE or not (pkce_valid or actions_valid):return None
+    return {'client_id':client_id,'project_slug':projects[0],'redirect_uri':redirect_uri,'state':state,'code_challenge':challenge,'oauth_flow':flow,'resource':resource}
 def _oauth_token(client):
-    now=int(time.time());access=secrets.token_urlsafe(36);refresh=secrets.token_urlsafe(36)
+    now=int(time.time());access=secrets.token_urlsafe(36);refresh=secrets.token_urlsafe(36);client={**client,'resource':str(client.get('resource') or MCP_RESOURCE)}
     with OAUTH_LOCK:
         OAUTH_ACCESS[access]={**client,'expires_at':now+OAUTH_ACCESS_TTL}
         OAUTH_REFRESH[refresh]={**client,'expires_at':now+OAUTH_REFRESH_TTL}
@@ -115,8 +117,12 @@ def _oauth_cleanup():
             for key in [k for k,v in store.items() if float(v.get('expires_at') or 0)<=now]:store.pop(key,None)
 
 def _oauth_metadata(resource=False):
-    if resource:return {'resource':MCP_RESOURCE,'authorization_servers':[OAUTH_ISSUER],'bearer_methods_supported':['header'],'scopes_supported':['mcp','offline_access']}
+    if resource:return {'resource':MCP_RESOURCE,'authorization_servers':[OAUTH_ISSUER],'bearer_methods_supported':['header'],'scopes_supported':['mcp','offline_access'],'resource_documentation':PUBLIC_ORIGIN+'/cloudiff/mcp/privacy'}
     return {'issuer':OAUTH_ISSUER,'authorization_endpoint':OAUTH_ISSUER+'/cloudiff/mcp/oauth/authorize','token_endpoint':OAUTH_ISSUER+'/cloudiff/mcp/oauth/token','revocation_endpoint':OAUTH_ISSUER+'/cloudiff/mcp/oauth/revoke','response_types_supported':['code'],'grant_types_supported':['authorization_code','refresh_token'],'code_challenge_methods_supported':['S256'],'token_endpoint_auth_methods_supported':['none','client_secret_post','client_secret_basic'],'scopes_supported':['mcp','offline_access'],'resource':MCP_RESOURCE}
+def _oauth_challenge(error='invalid_token',description='Authentication required to use this CloudIFF tool.'):
+    clean_error=re.sub(r'[^A-Za-z0-9_.-]','_',str(error or 'invalid_token'))[:64]
+    clean_description=str(description or 'Authentication required.').replace(chr(92),' ').replace(chr(34),' ').replace(chr(13),' ').replace(chr(10),' ')[:240]
+    return f'Bearer resource_metadata="{RESOURCE_METADATA_URL}", scope="mcp", error="{clean_error}", error_description="{clean_description}"'
 
 class ToolInputError(ValueError):
     def __init__(self, payload):
@@ -614,6 +620,7 @@ for _tool in TOOLS:
         'idempotentHint':_readonly,
         'openWorldHint':_name.startswith(OPEN_WORLD_PREFIXES),
     }
+    _tool['securitySchemes']=[{'type':'oauth2','scopes':['mcp']}]
 def control(path):
     r=urllib.request.Request(CONTROL+path,headers={'Authorization':'Bearer '+CONTROL_TOKEN,'Accept':'application/json'})
     with urllib.request.urlopen(r,timeout=8) as x:return json.loads(x.read().decode())
@@ -1832,8 +1839,13 @@ class H(BaseHTTPRequestHandler):
         raw=json.dumps(data,ensure_ascii=False,separators=(',',':')).encode();self.send_response(code);self.send_header('Content-Type','application/json');self.send_header('Cache-Control','no-store');self.send_header('X-Content-Type-Options','nosniff');self.send_header('Content-Length',str(len(raw)));self.end_headers();self.wfile.write(raw)
     def sendhtml(self,code,text):
         raw=str(text).encode();self.send_response(code);self.send_header('Content-Type','text/html; charset=utf-8');self.send_header('Cache-Control','public, max-age=300');self.send_header('X-Content-Type-Options','nosniff');self.send_header('Content-Security-Policy',"default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; frame-ancestors 'none'");self.send_header('Content-Length',str(len(raw)));self.end_headers();self.wfile.write(raw)
+    def send_oauth_unauthorized(self,error='invalid_token',description='Authentication required to use CloudIFF.'):
+        raw=json.dumps({'ok':False,'error':'unauthorized'},separators=(',',':')).encode();self.send_response(401);self.send_header('Content-Type','application/json');self.send_header('Cache-Control','no-store');self.send_header('WWW-Authenticate',_oauth_challenge(error,description));self.send_header('X-Content-Type-Options','nosniff');self.send_header('Content-Length',str(len(raw)));self.end_headers();self.wfile.write(raw)
+    def send_mcp_auth_required(self,rid,description='Authentication required to use this CloudIFF tool.'):
+        challenge=_oauth_challenge('insufficient_scope',description)
+        return self.sendj(200,{'jsonrpc':'2.0','id':rid,'result':{'content':[{'type':'text','text':'Authentication required: connect your CloudIFF account to continue.'}],'_meta':{'mcp/www_authenticate':[challenge]},'isError':True}})
     def _action_identity(self):
-        if not self.auth():self.sendj(401,{'ok':False,'error':'unauthorized'});return None
+        if not self.auth():self.send_oauth_unauthorized();return None
         client_id=self.headers.get('X-CloudIF-Client','').strip();row=_oauth_client(client_id);projects=_client_projects(row)
         if not row or len(projects)!=1:self.sendj(403,{'ok':False,'error':'project_identity_invalid'});return None
         oauth=getattr(self,'_oauth',None) or {};slug=str(oauth.get('project_slug') or projects[0])
@@ -1864,6 +1876,7 @@ class H(BaseHTTPRequestHandler):
         got=self.headers.get('Authorization','');raw=got[7:] if got.startswith('Bearer ') else ''
         _oauth_cleanup();oauth=OAUTH_ACCESS.get(raw)
         if oauth:
+            if str(oauth.get('resource') or MCP_RESOURCE)!=MCP_RESOURCE:return False
             self._oauth=oauth
             if not self.headers.get('X-CloudIF-Client'):self.headers['X-CloudIF-Client']=oauth['client_id']
             if not oauth.get('public_client'):
@@ -1951,7 +1964,7 @@ class H(BaseHTTPRequestHandler):
                 request=OAUTH_LOGIN_REQUESTS.pop(login,None)
                 if not request:return self.sendj(400,{'error':'invalid_request'})
                 ttl=180 if request['oauth_flow']=='chatgpt_actions' else 300
-                code=secrets.token_urlsafe(32);OAUTH_CODES[code]={**client,'redirect_uri':request['redirect_uri'],'code_challenge':request['code_challenge'],'oauth_flow':request['oauth_flow'],'expires_at':time.time()+ttl}
+                code=secrets.token_urlsafe(32);OAUTH_CODES[code]={**client,'redirect_uri':request['redirect_uri'],'code_challenge':request['code_challenge'],'oauth_flow':request['oauth_flow'],'resource':request['resource'],'expires_at':time.time()+ttl}
             return self.redirect(request['redirect_uri']+('&' if '?' in request['redirect_uri'] else '?')+urlencode({'code':code,**({'state':request['state']} if request['state'] else {})}))
         if path=='/health':
             try: h=control('/health');self.sendj(200,{'ok':True,'service':'cloudif-mcp-gateway','control_plane':bool(h.get('ok')),'oauth':True})
@@ -2004,27 +2017,32 @@ class H(BaseHTTPRequestHandler):
             if basic.startswith('Basic '):
                 try:client_id,secret=base64.b64decode(basic[6:]).decode().split(':',1)
                 except Exception:return self.sendj(401,{'error':'invalid_client'})
-            grant=(form.get('grant_type') or [''])[0]
+            grant=(form.get('grant_type') or [''])[0];resource=(form.get('resource') or [''])[0]
             if grant=='authorization_code':
                 code=(form.get('code') or [''])[0];row=OAUTH_CODES.pop(code,None);redirect=(form.get('redirect_uri') or [''])[0]
-                if not row or row['client_id']!=client_id or row['redirect_uri']!=redirect:return self.sendj(400,{'error':'invalid_grant'})
+                if not row or row['client_id']!=client_id or row['redirect_uri']!=redirect or (resource and resource!=row.get('resource')):return self.sendj(400,{'error':'invalid_grant'})
                 flow=row.get('oauth_flow') or 'pkce'
                 if flow=='pkce' and not _pkce_ok((form.get('code_verifier') or [''])[0],row.get('code_challenge')):return self.sendj(400,{'error':'invalid_grant'})
                 if flow=='chatgpt_actions' and _callback_mode(redirect)!='chatgpt_actions':return self.sendj(400,{'error':'invalid_grant'})
                 client=_validate_client_secret(client_id,secret) if secret else (row if row.get('public_client') else None)
             elif grant=='refresh_token':
                 ref=(form.get('refresh_token') or [''])[0];saved=OAUTH_REFRESH.pop(ref,None)
-                client=(_validate_client_secret(client_id,secret) if secret else saved) if saved and saved.get('client_id')==client_id else None
+                client=(_validate_client_secret(client_id,secret) if secret else saved) if saved and saved.get('client_id')==client_id and (not resource or resource==saved.get('resource')) else None
             else:return self.sendj(400,{'error':'unsupported_grant_type'})
             return self.sendj(200,_oauth_token(client)) if client else self.sendj(401,{'error':'invalid_client'})
         if path in {'/revoke','/oauth/revoke','/cloudiff/mcp/oauth/revoke'}:
             n=int(self.headers.get('Content-Length','0'));form=parse_qs(self.rfile.read(min(n,65536)).decode());token=(form.get('token') or [''])[0]
             OAUTH_ACCESS.pop(token,None);OAUTH_REFRESH.pop(token,None);return self.sendj(200,{'ok':True})
         if path!='/mcp':self.sendj(404,{'ok':False,'error':'not_found'});return
-        if not self.auth():self.sendj(401,{'ok':False,'error':'unauthorized'});return
         try:
-            n=int(self.headers.get('Content-Length','0')); raw=self.rfile.read(min(n,1048576)); req=json.loads(raw or b'{}')
-            rid=req.get('id'); method=req.get('method'); params=req.get('params') or {}
+            n=int(self.headers.get('Content-Length','0'));raw=self.rfile.read(min(n,1048576));req=json.loads(raw or b'{}')
+        except Exception:return self.sendj(400,{'ok':False,'error':'invalid_request'})
+        rid=req.get('id');method=req.get('method');params=req.get('params') or {}
+        authenticated=self.auth()
+        if not authenticated and method=='initialize':return self.sendj(200,{'jsonrpc':'2.0','id':rid,'result':{'protocolVersion':'2025-03-26','serverInfo':{'name':'cloudif-mcp-gateway','version':'0.2.0'},'capabilities':{'tools':{},'resources':{},'prompts':{}},'instructions':AGENT_INSTRUCTIONS}})
+        if not authenticated and method=='tools/list':return self.sendj(200,{'jsonrpc':'2.0','id':rid,'result':{'tools':TOOLS}})
+        if not authenticated:return self.send_mcp_auth_required(rid)
+        try:
             raw_args=params.get('arguments') or {};tool=params.get('name') if method=='tools/call' else method
             args,input_wrappers=_unwrap_tool_arguments(raw_args)
             validate_tool_arguments(tool,args)

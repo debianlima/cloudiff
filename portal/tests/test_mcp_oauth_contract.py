@@ -12,8 +12,21 @@ class MCPOAuthContractTests(unittest.TestCase):
         cls.router = Path("components/control-plane/srv/cloudif/bin/cloudif-render-router-sso.sh").read_text()
 
     def test_discovery_and_oauth_endpoints(self):
-        for value in ("oauth-authorization-server", "oauth-protected-resource", "/cloudiff/mcp/oauth/authorize", "/cloudiff/mcp/oauth/resume", "/cloudiff/mcp/oauth/token", "/cloudiff/mcp/oauth/revoke"):
+        for value in ("oauth-authorization-server", "oauth-protected-resource", "/cloudiff/mcp/oauth/authorize", "/cloudiff/mcp/oauth/resume", "/cloudiff/mcp/oauth/token", "/cloudiff/mcp/oauth/revoke", "RESOURCE_METADATA_URL"):
             self.assertIn(value, self.gateway)
+        self.assertIn("location = /.well-known/oauth-protected-resource", self.router)
+        self.assertIn("proxy_pass http://127.0.0.1:18198/.well-known/oauth-protected-resource", self.router)
+
+    def test_mcp_tools_advertise_oauth_and_runtime_emits_standard_challenge(self):
+        for marker in ("_tool['securitySchemes']=[{'type':'oauth2','scopes':['mcp']}]", "mcp/www_authenticate", "WWW-Authenticate", "resource_metadata=", "send_mcp_auth_required", "send_oauth_unauthorized"):
+            self.assertIn(marker,self.gateway)
+        self.assertIn("if not authenticated and method=='initialize'",self.gateway)
+        self.assertIn("if not authenticated and method=='tools/list'",self.gateway)
+        self.assertIn("if not authenticated:return self.send_mcp_auth_required(rid)",self.gateway)
+
+    def test_oauth_resource_indicator_is_bound_to_code_and_token(self):
+        for marker in ("resource=(query.get('resource') or [MCP_RESOURCE])[0]", "resource!=MCP_RESOURCE", "'resource':request['resource']", "resource=(form.get('resource') or [''])[0]", "resource!=row.get('resource')", "resource==saved.get('resource')"):
+            self.assertIn(marker,self.gateway)
 
     def test_public_client_pkce_and_confidential_compatibility(self):
         for value in ("'none'", "client_secret_post", "client_secret_basic", "code_challenge_methods_supported", "pkce_valid=flow=='pkce'", "_pkce_ok", "refresh_token"):

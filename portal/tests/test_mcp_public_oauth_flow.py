@@ -144,6 +144,7 @@ class MCPPublicOAuthFlowTest(unittest.TestCase):
         query = urlencode({
             'response_type': 'code', 'client_id': CLIENT_ID, 'redirect_uri': callback,
             'state': 'state-test', 'code_challenge': challenge, 'code_challenge_method': 'S256',
+            'resource': 'https://cloudiff.duckdns.org/cloudiff/mcp',
         })
         status, headers, _ = self.request('GET', '/cloudiff/mcp/oauth/authorize?' + query)
         self.assertEqual(status, 302)
@@ -158,6 +159,7 @@ class MCPPublicOAuthFlowTest(unittest.TestCase):
         form = urlencode({
             'grant_type': 'authorization_code', 'client_id': CLIENT_ID, 'code': code,
             'redirect_uri': callback, 'code_verifier': verifier,
+            'resource': 'https://cloudiff.duckdns.org/cloudiff/mcp',
         })
         status, _, raw = self.request('POST', '/cloudiff/mcp/oauth/token', form, {
             'Content-Type': 'application/x-www-form-urlencoded', 'Content-Length': str(len(form)),
@@ -176,6 +178,25 @@ class MCPPublicOAuthFlowTest(unittest.TestCase):
         self.assertEqual(status, expected_status, body)
         return json.loads(body)
 
+    def test_anonymous_mcp_discovery_and_tool_level_oauth_challenge(self):
+        def anon_rpc(method,params=None,rid=90):
+            raw=json.dumps({'jsonrpc':'2.0','id':rid,'method':method,'params':params or {}})
+            status,headers,body=self.request('POST','/mcp',raw,{'Content-Type':'application/json','Content-Length':str(len(raw))})
+            self.assertEqual(status,200,body);return headers,json.loads(body)
+        _,initialized=anon_rpc('initialize',rid=91)
+        self.assertEqual(initialized['result']['serverInfo']['name'],'cloudif-mcp-gateway')
+        _,listed=anon_rpc('tools/list',rid=92);tools=listed['result']['tools'];self.assertTrue(tools)
+        self.assertTrue(all(t.get('securitySchemes')==[{'type':'oauth2','scopes':['mcp']}] for t in tools))
+        _,challenged=anon_rpc('tools/call',{'name':'project.get','arguments':{'slug':SLUG}},93)
+        result=challenged['result'];self.assertTrue(result['isError']);challenge=result['_meta']['mcp/www_authenticate'][0]
+        self.assertIn('Bearer resource_metadata="https://cloudiff.duckdns.org/.well-known/oauth-protected-resource"',challenge)
+        self.assertIn('error="insufficient_scope"',challenge);self.assertIn('error_description=',challenge)
+        status,headers,raw=self.request('GET','/.well-known/oauth-protected-resource');self.assertEqual(status,200,raw)
+        metadata=json.loads(raw);self.assertEqual(metadata['resource'],'https://cloudiff.duckdns.org/cloudiff/mcp');self.assertEqual(metadata['authorization_servers'],['https://cloudiff.duckdns.org'])
+        self.assertEqual(metadata['resource_documentation'],'https://cloudiff.duckdns.org/cloudiff/mcp/privacy')
+        status,headers,raw=self.request('GET','/cloudiff/mcp/actions/v1/project');self.assertEqual(status,401,raw)
+        self.assertIn('resource_metadata="https://cloudiff.duckdns.org/.well-known/oauth-protected-resource"',headers.get('WWW-Authenticate',''))
+
     def test_public_oauth_pkce_tools_and_project_isolation(self):
         token = self.oauth_token()
         initialized = self.rpc(token, 'initialize')
@@ -183,6 +204,7 @@ class MCPPublicOAuthFlowTest(unittest.TestCase):
         tools = self.rpc(token, 'tools/list', request_id=2)['result']['tools']
         self.assertTrue(tools)
         self.assertTrue(all(set(('readOnlyHint','destructiveHint','idempotentHint','openWorldHint')) <= set(t['annotations']) for t in tools))
+        self.assertTrue(all(t.get('securitySchemes')==[{'type':'oauth2','scopes':['mcp']}] for t in tools))
         project = self.rpc(token, 'tools/call', {'name': 'project.get', 'arguments': {'slug': SLUG}}, 3)
         self.assertNotIn('error', project)
         denied = self.rpc(token, 'tools/call', {'name': 'project.get', 'arguments': {'slug': 'outro-projeto'}}, 4, expected_status=403)
@@ -346,6 +368,11 @@ class MCPPublicOAuthFlowTest(unittest.TestCase):
                 'X-authentik-username': 'iff1742962', 'X-authentik-groups': 'CloudIF-Lab-Hardware',
             })
             self.assertEqual(status, 400, callback)
+
+    def test_authorize_rejects_wrong_resource_indicator(self):
+        callback='http://127.0.0.1:53682/callback';challenge='A'*43
+        query=urlencode({'response_type':'code','client_id':CLIENT_ID,'redirect_uri':callback,'code_challenge':challenge,'code_challenge_method':'S256','resource':'https://example.invalid/mcp'})
+        status,_,raw=self.request('GET','/cloudiff/mcp/oauth/authorize?'+query);self.assertEqual(status,400,raw);self.assertEqual(json.loads(raw)['error'],'invalid_request')
 
     def test_authorize_preflight_then_resume_requires_authenticated_user_and_s256(self):
         callback = 'http://127.0.0.1:53682/callback'
