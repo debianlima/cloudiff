@@ -253,6 +253,8 @@ class MCPPublicOAuthFlowTest(unittest.TestCase):
         self.assertFalse(file_import['callable_via_actions'])
         self.assertTrue(file_import['callable_via_mcp'])
         self.assertEqual(file_import['_meta']['openai/fileParams'],['file'])
+        self.assertEqual(file_import['inputSchema']['properties']['file']['type'],'object')
+        self.assertNotIn('$ref',file_import['inputSchema']['properties']['file'])
         self.assertEqual(file_import['mcp_endpoint'],'https://cloudiff.duckdns.org/cloudiff/mcp')
         self.assertIn('workspace.prepare', write_enum)
         for name, item in schemas.items():
@@ -291,6 +293,8 @@ class MCPPublicOAuthFlowTest(unittest.TestCase):
         self.assertEqual(connector_result['mcp']['endpoint'],'https://cloudiff.duckdns.org/cloudiff/mcp')
         self.assertTrue(connector_result['mcp']['file_import']['authorized'])
         self.assertEqual(connector_result['mcp']['file_import']['host_hydration'],'openai/fileParams')
+        self.assertEqual(connector_result['mcp']['file_import']['schema_mode'],'inline_openai_file_object')
+        self.assertFalse(connector_result['mcp']['file_import']['local_paths_supported'])
         status, _, raw = self.request('GET', '/cloudiff/mcp/actions/v1/tools', headers=auth)
         self.assertEqual(status, 200, raw)
         names = [item['name'] for item in json.loads(raw)['result']]

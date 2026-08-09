@@ -334,7 +334,7 @@ TOOLS=[
  {'name':'workspace.artifact.upload.start','description':'Inicia upload temporário de artefato binário vinculado ao projeto, tamanho e SHA-256 esperados','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'filename':{'type':'string','minLength':1,'maxLength':240},'expected_size':{'type':'integer','minimum':0,'maximum':1073741824},'expected_sha256':{'type':'string','pattern':'^[a-f0-9]{64}$'},'ttl_seconds':{'type':'integer','minimum':300,'maximum':86400}},'required':['slug','filename','expected_size','expected_sha256'],'additionalProperties':False,'examples':[{'slug':'meu-projeto','filename':'documentos-anonimizados.zip','expected_size':1390970,'expected_sha256':'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa','ttl_seconds':3600}]}},
  {'name':'workspace.artifact.upload.chunk','description':'Envia um chunk Base64 pequeno e sequencial para um artifact_id; retries idênticos são idempotentes','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'artifact_id':{'type':'string','pattern':'^art_[a-f0-9]{24}$'},'chunk_index':{'type':'integer','minimum':0,'maximum':65535},'content_base64':{'type':'string','minLength':1,'maxLength':262144},'chunk_sha256':{'type':'string','pattern':'^[a-f0-9]{64}$'}},'required':['slug','artifact_id','chunk_index','content_base64','chunk_sha256'],'additionalProperties':False,'examples':[{'slug':'meu-projeto','artifact_id':'art_111111111111111111111111','chunk_index':0,'content_base64':'eA==','chunk_sha256':'2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881'}]}},
  {'name':'workspace.artifact.upload.batch','description':'Envia até 16 chunks pequenos de até 8 KiB raw cada em uma chamada; ideal quando strings Base64 maiores são truncadas pelo cliente','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'artifact_id':{'type':'string','pattern':'^art_[a-f0-9]{24}$'},'chunks':{'type':'array','minItems':1,'maxItems':16,'items':{'type':'object','properties':{'chunk_index':{'type':'integer','minimum':0,'maximum':65535},'content_base64':{'type':'string','minLength':1,'maxLength':11000},'chunk_sha256':{'type':'string','pattern':'^[a-f0-9]{64}$'}},'required':['chunk_index','content_base64','chunk_sha256'],'additionalProperties':False}}},'required':['slug','artifact_id','chunks'],'additionalProperties':False,'examples':[{'slug':'meu-projeto','artifact_id':'art_111111111111111111111111','chunks':[{'chunk_index':0,'content_base64':'eA==','chunk_sha256':'2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881'}]}]}},
- {'name':'workspace.artifact.import','description':'CAMINHO CANÔNICO para arquivo anexado ao ChatGPT: usa MCP openai/fileParams no campo file obrigatório, recebe download_url e file_id autorizados pelo host, transfere por HTTPS streaming, valida tamanho/SHA-256 e retorna artifact_id selado.','inputSchema':{'type':'object','$defs':{'OpenAIFile':{'type':'object','properties':{'download_url':{'type':'string'},'file_id':{'type':'string'},'mime_type':{'type':'string'},'file_name':{'type':'string'}},'required':['download_url','file_id'],'additionalProperties':False}},'properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'file':{'$ref':'#/$defs/OpenAIFile'},'filename':{'type':'string','minLength':1,'maxLength':240},'expected_size':{'type':'integer','minimum':0,'maximum':1073741824},'expected_sha256':{'type':'string','pattern':'^[a-f0-9]{64}$'},'ttl_seconds':{'type':'integer','minimum':300,'maximum':86400}},'required':['slug','file','filename','expected_size','expected_sha256'],'additionalProperties':False,'examples':[{'slug':'meu-projeto','file':{'download_url':'https://files.oaiusercontent.com/...','file_id':'file_1111111111111111'},'filename':'documentos-anonimizados.zip','expected_size':1390970,'expected_sha256':'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa','ttl_seconds':3600}]},'_meta':{'openai/fileParams':['file']}},
+ {'name':'workspace.artifact.import','title':'Importar arquivo da conversa','description':'CAMINHO CANÔNICO para arquivo anexado ao ChatGPT. O campo file é um file param MCP e deve ser hidratado pelo host como objeto {download_url,file_id,mime_type?,file_name?}; nunca envie caminho local /mnt/data, sandbox: ou file://. A CloudIFF transfere por HTTPS streaming, valida tamanho/SHA-256 e retorna artifact_id selado.','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'file':{'type':'object','description':'Arquivo anexado/selecionado no ChatGPT. Este valor é preenchido pelo host MCP, não pelo modelo como caminho local.','properties':{'download_url':{'type':'string'},'file_id':{'type':'string'},'mime_type':{'type':'string'},'file_name':{'type':'string'}},'required':['download_url','file_id'],'additionalProperties':False},'filename':{'type':'string','minLength':1,'maxLength':240},'expected_size':{'type':'integer','minimum':0,'maximum':1073741824},'expected_sha256':{'type':'string','pattern':'^[a-f0-9]{64}$'},'ttl_seconds':{'type':'integer','minimum':300,'maximum':86400}},'required':['slug','file','filename','expected_size','expected_sha256'],'additionalProperties':False,'examples':[{'slug':'meu-projeto','file':{'download_url':'https://files.oaiusercontent.com/...','file_id':'file_1111111111111111'},'filename':'documentos-anonimizados.zip','expected_size':1390970,'expected_sha256':'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa','ttl_seconds':3600}]},'_meta':{'openai/fileParams':['file']}},
  {'name':'workspace.artifact.upload.ticket','description':'Gera um link HTTPS temporário do Portal para o usuário enviar o binário pelo navegador, sem Base64. Não abra a upload_url do Portal como agente; entregue-a ao usuário e acompanhe por workspace.artifact.upload.status.','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'artifact_id':{'type':'string','pattern':'^art_[a-f0-9]{24}$'},'ttl_seconds':{'type':'integer','minimum':60,'maximum':7200}},'required':['slug','artifact_id'],'additionalProperties':False,'examples':[{'slug':'meu-projeto','artifact_id':'art_111111111111111111111111','ttl_seconds':3600}]}},
  {'name':'workspace.artifact.upload.status','description':'Consulta pelo MCP o estado do upload de um artifact. Use esta ferramenta para acompanhar o usuário; não abra a upload_url do Portal, pois ela é destinada à sessão humana autenticada.','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'artifact_id':{'type':'string','pattern':'^art_[a-f0-9]{24}$'}},'required':['slug','artifact_id'],'additionalProperties':False,'examples':[{'slug':'meu-projeto','artifact_id':'art_111111111111111111111111'}]}},
  {'name':'workspace.artifact.upload.complete','description':'Conclui o upload, verifica tamanho e SHA-256 integrais e sela o artefato para uso por artifact_id','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'artifact_id':{'type':'string','pattern':'^art_[a-f0-9]{24}$'}},'required':['slug','artifact_id'],'additionalProperties':False,'examples':[{'slug':'meu-projeto','artifact_id':'art_111111111111111111111111'}]}},
@@ -697,6 +697,8 @@ def _project_connector_catalog(identity,result):
         'transport':'mcp',
         'file_param':'file',
         'host_hydration':'openai/fileParams',
+        'schema_mode':'inline_openai_file_object',
+        'local_paths_supported':False,
       },
     }
     return data
@@ -1199,6 +1201,34 @@ def _session_file_ref_shape(file_ref):
         elif raw.startswith('[') and raw.endswith(']'):shape['classification']='json_array_string'
         else:shape['classification']='other_string'
     return shape
+
+
+def _prepare_openai_file_param(tool_name, args):
+    if tool_name!='workspace.artifact.import' or not isinstance(args,dict) or 'file' not in args:
+        return args
+    value=args.get('file');shape=_session_file_ref_shape(value)
+    event={'event':'mcp_file_param_prevalidation','tool':tool_name,**shape}
+    print(json.dumps(event,separators=(',',':')),flush=True)
+    if isinstance(value,dict):
+        return args
+    try:
+        normalized=_normalize_session_file_ref(value)
+    except ValueError as error:
+        if str(error)=='host_file_path_not_resolved':
+            raise ToolInputError({
+              'code':'host_file_param_not_hydrated',
+              'field':'file',
+              'path':'$.file',
+              'message':'O anexo chegou como caminho local, não como file object do ChatGPT. A CloudIFF não consegue ler /mnt/data do host. Atualize/recaneie o app MCP e deixe o host preencher file via openai/fileParams.',
+              'receivedFields':sorted(str(k) for k in args),
+              'usage':tool_usage(tool_name),
+              'fileShape':shape,
+              'hostHydrationRequired':True,
+            }) from error
+        raise
+    clean={k:normalized.get(k) for k in ('download_url','file_id','mime_type','file_name') if normalized.get(k) not in {None,''}}
+    prepared=dict(args);prepared['file']=clean
+    return prepared
 
 
 def _normalize_session_file_ref(file_ref):
@@ -2086,12 +2116,13 @@ class H(BaseHTTPRequestHandler):
         except Exception:return self.sendj(400,{'ok':False,'error':'invalid_request'})
         rid=req.get('id');method=req.get('method');params=req.get('params') or {}
         authenticated=self.auth()
-        if not authenticated and method=='initialize':return self.sendj(200,{'jsonrpc':'2.0','id':rid,'result':{'protocolVersion':'2025-03-26','serverInfo':{'name':'cloudif-mcp-gateway','version':'0.2.0'},'capabilities':{'tools':{},'resources':{},'prompts':{}},'instructions':AGENT_INSTRUCTIONS}})
+        if not authenticated and method=='initialize':return self.sendj(200,{'jsonrpc':'2.0','id':rid,'result':{'protocolVersion':'2025-03-26','serverInfo':{'name':'cloudif-mcp-gateway','version':'0.3.0'},'capabilities':{'tools':{},'resources':{},'prompts':{}},'instructions':AGENT_INSTRUCTIONS}})
         if not authenticated and method=='tools/list':return self.sendj(200,{'jsonrpc':'2.0','id':rid,'result':{'tools':TOOLS}})
         if not authenticated:return self.send_mcp_auth_required(rid)
         try:
             raw_args=params.get('arguments') or {};tool=params.get('name') if method=='tools/call' else method
             args,input_wrappers=_unwrap_tool_arguments(raw_args)
+            args=_prepare_openai_file_param(tool,args)
             validate_tool_arguments(tool,args)
             auth_args=args
             slug=str(auth_args.get('slug') or auth_args.get('project_slug') or '')
@@ -2107,7 +2138,7 @@ class H(BaseHTTPRequestHandler):
             if not authz.get('ok'):
                 reason=authz.get('reason','denied');self.sendj(429 if reason in {'rate_limit','daily_quota'} else 403,{'jsonrpc':'2.0','id':rid,'error':{'code':-32029 if reason in {'rate_limit','daily_quota'} else -32003,'message':reason}});return
             self._audit_ctx={'event_id':uuid.uuid4().hex,'source':'mcp','action':str(tool or method or 'unknown'),'actor_type':'agent' if self.headers.get('X-CloudIF-Client') else 'api_client','actor_id':self.headers.get('X-CloudIF-User','') or authz.get('owner_user',''),'delegated_user_id':self.headers.get('X-CloudIF-Delegated-User',''),'client_id':self.headers.get('X-CloudIF-Client','internal'),'project_slug':slug,'trace_id':trace_id,'attrs':{'rpc_method':method,'quota':{'minute_calls':authz.get('minute_calls'),'daily_calls':authz.get('daily_calls')}},'_start':time.monotonic()}
-            if method=='initialize':result={'protocolVersion':'2025-03-26','serverInfo':{'name':'cloudif-mcp-gateway','version':'0.2.0'},'capabilities':{'tools':{},'resources':{},'prompts':{}},'instructions':AGENT_INSTRUCTIONS}
+            if method=='initialize':result={'protocolVersion':'2025-03-26','serverInfo':{'name':'cloudif-mcp-gateway','version':'0.3.0'},'capabilities':{'tools':{},'resources':{},'prompts':{}},'instructions':AGENT_INSTRUCTIONS}
             elif method=='resources/list':result={'resources':[{'uri':AGENT_GUIDE_URI,'name':'Guia do agente CloudIFF','description':'Como usar ferramentas, aprovações, portais e limites de segurança.','mimeType':'application/json'},{'uri':'cloudiff://guide/project/{slug}','name':'Guia do projeto','description':'Fluxo recomendado para um projeto autorizado.','mimeType':'application/json'}]}
             elif method=='resources/read':
                 uri=str(params.get('uri') or '')

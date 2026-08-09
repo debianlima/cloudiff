@@ -22,14 +22,33 @@ class WorkspaceArtifactSessionImportTests(unittest.TestCase):
   file_tools=[tool for tool in M.TOOLS if (tool.get('_meta') or {}).get('openai/fileParams')]
   self.assertGreaterEqual(len(file_tools),1)
   for tool in file_tools:
-   schema=tool.get('inputSchema') or {};required=set(schema.get('required') or []);defs=schema.get('$defs') or {};props=schema.get('properties') or {}
+   schema=tool.get('inputSchema') or {};required=set(schema.get('required') or []);props=schema.get('properties') or {}
    for field in tool['_meta']['openai/fileParams']:
     self.assertIn(field,props,tool['name']);self.assertIn(field,required,tool['name'])
-    ref=(props[field] or {}).get('$ref');self.assertTrue(ref and ref.startswith('#/$defs/'),tool['name'])
-    file_schema=defs[ref.rsplit('/',1)[-1]]
+    file_schema=props[field]
+    self.assertEqual(file_schema.get('type'),'object',tool['name'])
+    self.assertNotIn('$ref',file_schema,tool['name'])
     self.assertEqual(set((file_schema.get('properties') or {}).keys()),{'download_url','file_id','mime_type','file_name'},tool['name'])
     self.assertEqual(file_schema.get('required'),['download_url','file_id'],tool['name'])
     self.assertFalse(file_schema.get('additionalProperties',True),tool['name'])
+
+ def test_prevalidation_reports_unhydrated_local_path_before_json_schema(self):
+  args={'slug':'laboratorio-de-hardware','file':'/mnt/data/archive.zip','filename':'archive.zip','expected_size':1,'expected_sha256':'a'*64}
+  with self.assertRaises(M.ToolInputError) as ctx:M._prepare_openai_file_param('workspace.artifact.import',args)
+  self.assertEqual(ctx.exception.payload['code'],'host_file_param_not_hydrated')
+  self.assertEqual(ctx.exception.payload['field'],'file')
+  self.assertEqual(ctx.exception.payload['fileShape']['classification'],'path_like')
+  self.assertTrue(ctx.exception.payload['hostHydrationRequired'])
+  self.assertNotIn('/mnt/data/archive.zip',str(ctx.exception.payload))
+
+ def test_prevalidation_accepts_json_stringified_openai_file_object(self):
+  import json
+  args={'file':json.dumps({'download_url':'https://files.oaiusercontent.com/signed','file_id':'file_123456','mime_type':'application/zip','file_name':'archive.zip'})}
+  prepared=M._prepare_openai_file_param('workspace.artifact.import',args)
+  self.assertIsInstance(prepared['file'],dict)
+  self.assertEqual(prepared['file']['file_id'],'file_123456')
+  self.assertEqual(prepared['file']['file_name'],'archive.zip')
+  M.validate_tool_arguments('workspace.artifact.import',{'slug':'laboratorio-de-hardware',**prepared,'filename':'archive.zip','expected_size':1,'expected_sha256':'a'*64})
 
  def test_download_url_rejects_non_https_and_untrusted_hosts(self):
   for url,code in (

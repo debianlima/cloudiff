@@ -137,6 +137,9 @@ class MCPOAuthContractTests(unittest.TestCase):
         for marker in (
             "MCP_ONLY_TOOLS={'workspace.artifact.import'}",
             "'_meta':{'openai/fileParams':['file']}",
+            "'title':'Importar arquivo da conversa'",
+            "'file':{'type':'object'",
+            "'schema_mode':'inline_openai_file_object'",
             "path=='/cloudiff/mcp/actions/v1/artifact/import'",
             "_action_rpc(identity,'workspace.artifact.import',args)",
         ):
