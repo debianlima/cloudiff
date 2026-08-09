@@ -231,8 +231,8 @@ class MCPPublicOAuthFlowTest(unittest.TestCase):
         self.assertFalse(paths['/cloudiff/mcp/actions/v1/read']['post']['x-openai-isConsequential'])
         self.assertTrue(paths['/cloudiff/mcp/actions/v1/write']['post']['x-openai-isConsequential'])
         self.assertNotIn('/cloudiff/mcp/actions/v1/artifact/import',paths)
-        self.assertEqual(schema['info']['version'],'1.4.0')
-        self.assertIn('Arquivos anexados são importados exclusivamente pelo MCP workspace.artifact.import',schema['info']['description'])
+        self.assertEqual(schema['info']['version'],'1.5.0')
+        self.assertIn('workspace.artifact.import e workspace.artifact.upload.file são ferramentas MCP de primeira classe',schema['info']['description'])
         schemas = schema['components']['schemas']
         self.assertIsInstance(schemas, dict)
         read_ref = paths['/cloudiff/mcp/actions/v1/read']['post']['requestBody']['content']['application/json']['schema']['$ref']
@@ -257,6 +257,9 @@ class MCPPublicOAuthFlowTest(unittest.TestCase):
         self.assertEqual(file_import['inputSchema']['properties']['file']['type'],'object')
         self.assertNotIn('$ref',file_import['inputSchema']['properties']['file'])
         self.assertEqual(file_import['mcp_endpoint'],'https://cloudiff.duckdns.org/cloudiff/mcp')
+        self.assertEqual(file_import['mcp_tool_name'],'workspace.artifact.import')
+        self.assertEqual(file_import['mcp_call_shape'],'top_level_arguments')
+        self.assertFalse(file_import['actions_dispatcher_allowed'])
         self.assertIn('workspace.artifact.upload.file',action_rows)
         file_upload=action_rows['workspace.artifact.upload.file']
         self.assertEqual(file_upload['transport'],'mcp')
@@ -301,6 +304,9 @@ class MCPPublicOAuthFlowTest(unittest.TestCase):
         self.assertTrue(connector_result['mcp']['file_import']['authorized'])
         self.assertEqual(connector_result['mcp']['file_import']['host_hydration'],'openai/fileParams')
         self.assertEqual(connector_result['mcp']['file_import']['schema_mode'],'inline_openai_file_object')
+        self.assertTrue(connector_result['mcp']['file_import']['first_class_tool'])
+        self.assertFalse(connector_result['mcp']['file_import']['generic_actions_dispatcher_allowed'])
+        self.assertEqual(connector_result['mcp']['file_import']['file_param_level'],'top_level')
         self.assertFalse(connector_result['mcp']['file_import']['local_paths_supported'])
         self.assertTrue(connector_result['mcp']['file_upload']['authorized'])
         self.assertEqual(connector_result['mcp']['file_upload']['authentication'],'oauth_identity_reused_server_side')
@@ -332,28 +338,19 @@ class MCPPublicOAuthFlowTest(unittest.TestCase):
         self.assertEqual(status, 403, raw)
         self.assertEqual(json.loads(raw)['error'], 'read_tool_not_allowed_on_write_endpoint')
 
-    def test_actions_artifact_import_reports_missing_runtime_file_injection(self):
+    def test_actions_file_import_route_is_removed(self):
         token=self.oauth_token();auth={'Authorization':'Bearer '+token}
-        payload=json.dumps({'filename':'archive.zip','expected_size':1390970,'expected_sha256':'e078c5854d04d0e134f17737e014f8e7eaf9f09e4443c3a2ce9f414e6f1dc18e'})
+        payload=json.dumps({'filename':'archive.zip'})
         status,_,raw=self.request('POST','/cloudiff/mcp/actions/v1/artifact/import',payload,{**auth,'Content-Type':'application/json','Content-Length':str(len(payload))})
-        self.assertEqual(status,422,raw);self.assertEqual(json.loads(raw)['error'],'actions_file_reference_not_injected')
-        payload=json.dumps({'openaiFileIdRefs':[],'filename':'archive.zip','expected_size':1390970,'expected_sha256':'e078c5854d04d0e134f17737e014f8e7eaf9f09e4443c3a2ce9f414e6f1dc18e'})
-        status,_,raw=self.request('POST','/cloudiff/mcp/actions/v1/artifact/import',payload,{**auth,'Content-Type':'application/json','Content-Length':str(len(payload))})
-        self.assertEqual(status,422,raw);self.assertEqual(json.loads(raw)['error'],'actions_file_reference_not_injected')
+        self.assertEqual(status,404,raw)
+        self.assertEqual(json.loads(raw)['error'],'not_found')
 
-    def test_actions_artifact_import_is_dedicated_and_requires_runtime_download_link(self):
+    def test_generic_actions_dispatcher_rejects_mcp_only_file_tool_even_if_enum_is_bypassed(self):
         token=self.oauth_token();auth={'Authorization':'Bearer '+token}
-        status,headers,raw=self.request('GET',f'/cloudiff/mcp/openapi/{CLIENT_ID}.json')
-        self.assertEqual(status,200,raw);schema=json.loads(raw)
-        self.assertEqual(headers.get('Cache-Control'),'no-store, max-age=0')
-        self.assertEqual(headers.get('Pragma'),'no-cache')
-        write_ref=schema['paths']['/cloudiff/mcp/actions/v1/write']['post']['requestBody']['content']['application/json']['schema']['$ref']
-        write_schema=schema['components']['schemas'][write_ref.rsplit('/',1)[-1]]
-        self.assertNotIn('workspace.artifact.import',write_schema['properties']['tool']['enum'])
-        payload=json.dumps({'openaiFileIdRefs':[{'id':'file_0000000013bc820e9585c8554326a64d'}],'filename':'archive.zip','expected_size':1390970,'expected_sha256':'e078c5854d04d0e134f17737e014f8e7eaf9f09e4443c3a2ce9f414e6f1dc18e'})
-        status,_,raw=self.request('POST','/cloudiff/mcp/actions/v1/artifact/import',payload,{**auth,'Content-Type':'application/json','Content-Length':str(len(payload))})
-        self.assertEqual(status,422,raw)
-        self.assertEqual(json.loads(raw)['error'],'actions_file_download_link_missing')
+        payload=json.dumps({'tool':'workspace.artifact.import','arguments':{'file':{'download_url':'https://files.oaiusercontent.com/example','file_id':'file_123456'},'filename':'archive.zip','expected_size':1,'expected_sha256':'a'*64}})
+        status,_,raw=self.request('POST','/cloudiff/mcp/actions/v1/write',payload,{**auth,'Content-Type':'application/json','Content-Length':str(len(payload))})
+        self.assertEqual(status,403,raw)
+        self.assertEqual(json.loads(raw)['error'],'mcp_only_tool_requires_direct_connection')
 
     def test_chatgpt_actions_callback_requires_client_secret_and_works_without_pkce(self):
         callback = 'https://chat.openai.com/aip/g-0cb65526ddbc077875f764dc4f38a73fc1f6edc6/oauth/callback'

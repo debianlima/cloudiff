@@ -14,15 +14,15 @@ class ArtifactUploadAgentHandoffTests(unittest.TestCase):
         self.assertIn("'workspace.artifact.upload.status'",GATEWAY)
         self.assertIn('credencial temporária de upload do Portal',GATEWAY)
         self.assertIn('não exige cookie/login do Portal',GATEWAY)
-    def test_import_path_like_input_is_automatically_rewritten_to_browser_upload(self):
-        self.assertIn("artifact_import_upload_fallback=False",GATEWAY)
-        self.assertIn("payload.get('code')=='host_file_param_not_hydrated'",GATEWAY)
-        self.assertIn("tool='workspace.artifact.upload.start';artifact_import_upload_fallback=True",GATEWAY)
-        self.assertIn("name=call_tool;args=call_args",GATEWAY)
-        self.assertIn("content['automatic_fallback']=True",GATEWAY)
-        self.assertIn("content['fallback_reason']='host_file_param_not_hydrated'",GATEWAY)
+    def test_import_path_like_input_is_not_masked_by_browser_upload_fallback(self):
+        self.assertIn("payload=error.payload if isinstance(getattr(error,'payload',None),dict) else {}",GATEWAY)
+        self.assertNotIn("tool=='workspace.artifact.import' and payload.get('code')=='host_file_param_not_hydrated'",GATEWAY)
+        self.assertNotIn("tool='workspace.artifact.upload.start';artifact_import_upload_fallback=True",GATEWAY)
+        self.assertNotIn("content['automatic_fallback']=True",GATEWAY)
+        self.assertNotIn("mcp_file_param_auto_fallback",GATEWAY)
+        self.assertIn("workspace.artifact.import exige file top-level hidratado por openai/fileParams",GATEWAY)
+        self.assertIn("content['file_params_hydrated']=True",GATEWAY)
         self.assertIn("content['filesystem_access_attempted']=False",GATEWAY)
-        self.assertIn("mcp_file_param_auto_fallback",GATEWAY)
 
     def test_start_creates_browser_upload_handoff_in_one_mcp_call(self):
         response=GATEWAY.index("content=data.get('result') or data",GATEWAY.index("elif name in {'workspace.artifact.upload.start'"))

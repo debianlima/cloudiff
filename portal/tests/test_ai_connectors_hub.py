@@ -95,11 +95,11 @@ class AIConnectorsHubTests(unittest.TestCase):
             self.assertIn(marker, html)
         self.assertIn('Gerar/rotacionar Client Secret para GPT Actions', html)
         self.assertIn('Client Secret obrigatório no token exchange', html)
-        self.assertIn('workspace.artifact.import via MCP openai/fileParams', html)
-        self.assertIn('se fileParams falhar, use o seletor MCP Apps integrado', html)
-        self.assertIn('seletor MCP Apps integrado', html)
+        self.assertIn('workspace.artifact.import como tool MCP direta', html)
+        self.assertIn('workspace.artifact.upload.file como tool MCP direta', html)
+        self.assertIn('nunca via callCloudIFFProjectTool', html)
         self.assertIn('Scan Tools/Refresh', html)
-        self.assertIn('não use o importador legado de Actions', html)
+        self.assertIn('deve ser top-level e hidratado pelo host', html)
 
     def test_chatgpt_actions_card_exposes_schema_and_privacy(self):
         row = {

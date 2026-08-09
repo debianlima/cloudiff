@@ -106,21 +106,36 @@ class WorkspaceArtifactSessionImportTests(unittest.TestCase):
   self.assertTrue(ctx.exception.payload['hostHydrationRequired'])
   self.assertNotIn('/mnt/data/archive.zip',str(ctx.exception.payload))
 
- def test_rpc_dispatcher_converts_prevalidation_path_signal_into_upload_start(self):
-  source=GATEWAY.read_text();start=source.index("raw_args=params.get('arguments') or {}") ;end=source.index("if method=='resources/read':",start);block=source[start:end]
+ def test_workspace_artifact_import_does_not_mask_unhydrated_file_with_portal_fallback(self):
+  source=GATEWAY.read_text();start=source.index("raw_args=params.get('arguments') or {}") ;end=source.index("validate_tool_arguments(tool,args)",start);block=source[start:end]
   self.assertIn("requested_tool=params.get('name')",block)
-  self.assertIn("payload.get('code')=='host_file_param_not_hydrated'",block)
-  self.assertIn("args={k:v for k,v in args.items() if k!='file'}",block)
-  self.assertIn("tool='workspace.artifact.upload.start'",block)
-  self.assertIn("validate_tool_arguments(tool,args)",block)
+  self.assertNotIn("tool=='workspace.artifact.import' and payload.get('code')=='host_file_param_not_hydrated'",block)
+  self.assertNotIn("tool='workspace.artifact.upload.start'",block)
+  self.assertNotIn("mcp_file_param_auto_fallback",block)
+  self.assertIn("tool=='workspace.artifact.upload.file'",block)
 
- def test_prevalidation_accepts_json_stringified_openai_file_object(self):
+ def test_import_handler_accepts_only_top_level_hydrated_file_object(self):
+  source=GATEWAY.read_text();start=source.index("elif name=='workspace.artifact.import':");end=source.index("elif name=='workspace.artifact.upload.file':",start);block=source[start:end]
+  self.assertIn("required={'slug','file','filename','expected_size','expected_sha256'}",block)
+  self.assertIn("not isinstance(args.get('file'),dict)",block)
+  self.assertIn("{'download_url','file_id'}.issubset(file_ref)",block)
+  self.assertIn("content['file_params_hydrated']=True",block)
+  self.assertIn("content['filesystem_access_attempted']=False",block)
+  self.assertNotIn("file_url",block)
+  self.assertNotIn("chatgpt_file_scalar_fallback",block)
+
+ def test_prevalidation_rejects_json_string_and_scalar_url_instead_of_masking_host_shape(self):
   import json
-  args={'file':json.dumps({'download_url':'https://files.oaiusercontent.com/signed','file_id':'file_123456','mime_type':'application/zip','file_name':'archive.zip'})}
+  for value in (json.dumps({'download_url':'https://files.oaiusercontent.com/signed','file_id':'file_123456'}),'https://files.oaiusercontent.com/signed'):
+   with self.assertRaises(M.ToolInputError) as ctx:M._prepare_openai_file_param('workspace.artifact.import',{'file':value})
+   self.assertEqual(ctx.exception.payload['code'],'openai_file_param_object_required')
+   self.assertTrue(ctx.exception.payload['hostHydrationRequired'])
+
+ def test_prevalidation_accepts_real_openai_file_object_unchanged(self):
+  file_obj={'download_url':'https://files.oaiusercontent.com/signed','file_id':'file_123456','mime_type':'application/zip','file_name':'archive.zip'}
+  args={'file':file_obj}
   prepared=M._prepare_openai_file_param('workspace.artifact.import',args)
-  self.assertIsInstance(prepared['file'],dict)
-  self.assertEqual(prepared['file']['file_id'],'file_123456')
-  self.assertEqual(prepared['file']['file_name'],'archive.zip')
+  self.assertIs(prepared['file'],file_obj)
   M.validate_tool_arguments('workspace.artifact.import',{'slug':'laboratorio-de-hardware',**prepared,'filename':'archive.zip','expected_size':1,'expected_sha256':'a'*64})
 
  def test_download_url_rejects_non_https_and_untrusted_hosts(self):

@@ -22,7 +22,7 @@ class MCPOAuthContractTests(unittest.TestCase):
             self.assertIn(marker,self.gateway)
         self.assertIn("if not authenticated and method=='initialize'",self.gateway)
         self.assertIn("if not authenticated and method=='tools/list'",self.gateway)
-        self.assertEqual(self.gateway.count("'serverInfo':{'name':'cloudif-mcp-gateway','version':'0.9.0'}"),2)
+        self.assertEqual(self.gateway.count("'serverInfo':{'name':'cloudif-mcp-gateway','version':'1.0.0'}"),2)
         self.assertIn("if not authenticated:return self.send_mcp_auth_required(rid)",self.gateway)
 
     def test_oauth_resource_indicator_is_bound_to_code_and_token(self):
@@ -148,7 +148,7 @@ class MCPOAuthContractTests(unittest.TestCase):
         ):
             self.assertIn(marker, self.gateway)
 
-    def test_file_import_is_mcp_only_and_legacy_actions_handler_is_not_advertised(self):
+    def test_file_tools_are_first_class_mcp_and_never_actions_dispatched(self):
         for marker in (
             "MCP_ONLY_TOOLS={'workspace.artifact.import','workspace.artifact.upload.file','workspace.artifact.upload.file.select','workspace.artifact.upload.file.resolve'}",
             "'openai/fileParams':['file']",
@@ -157,20 +157,20 @@ class MCPOAuthContractTests(unittest.TestCase):
             "'schema_mode':'inline_openai_file_object'",
             "'name':'workspace.artifact.upload.file'",
             "'requires_portal_cookie':False",
-            "path=='/cloudiff/mcp/actions/v1/artifact/import'",
-            "_action_rpc(identity,'workspace.artifact.import',args)",
+            "if tool in MCP_ONLY_TOOLS:raise PermissionError('mcp_only_tool_requires_direct_connection')",
+            "'mcp_call_shape':'top_level_arguments'",
+            "'actions_dispatcher_allowed':False",
+            "'reason':'first_class_mcp_file_tool'",
         ):
             self.assertIn(marker,self.gateway)
         schema_block=self.gateway[self.gateway.index('def _action_schema'):self.gateway.index('def _privacy_html')]
-        self.assertIn("'version':'1.4.0'",schema_block)
+        self.assertIn("'version':'1.5.0'",schema_block)
         self.assertNotIn("base+'/artifact/import'",schema_block)
         self.assertNotIn("'operationId':'importCloudIFFArtifact'",schema_block)
-        self.assertIn("Arquivos anexados são importados exclusivamente pelo MCP workspace.artifact.import",schema_block)
-        self.assertIn("'workspace.artifact.upload.file'",self.gateway)
+        self.assertIn("workspace.artifact.import e workspace.artifact.upload.file são ferramentas MCP de primeira classe",schema_block)
+        self.assertNotIn("path=='/cloudiff/mcp/actions/v1/artifact/import'",self.gateway)
+        self.assertNotIn("_action_rpc(identity,'workspace.artifact.import',args)",self.gateway)
         self.assertIn("result=_project_tool_catalog(identity['tools'])",self.gateway)
-        self.assertIn("def _project_tool_catalog(names):",self.gateway)
-        self.assertIn("'callable_via_actions':not mcp_only",self.gateway)
-        self.assertIn("'reason':'requires_mcp_host_file_hydration'",self.gateway)
 
     def test_project_list_is_filtered_by_agent_projects(self):
         self.assertIn("allowed=set(authz.get('project_slugs') or [])", self.gateway)

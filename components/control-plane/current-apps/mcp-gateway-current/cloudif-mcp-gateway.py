@@ -684,9 +684,12 @@ def _project_tool_catalog(names):
         if mcp_only:
             row.update({
               'mcp_endpoint':MCP_RESOURCE,
+              'mcp_tool_name':name,
+              'mcp_call_shape':'top_level_arguments',
+              'actions_dispatcher_allowed':False,
               'inputSchema':tool.get('inputSchema') or {},
               '_meta':tool.get('_meta') or {},
-              'reason':'requires_mcp_host_file_hydration' if name in {'workspace.artifact.import','workspace.artifact.upload.file'} else ('chatgpt_file_picker_ui' if name=='workspace.artifact.upload.file.select' else 'chatgpt_widget_private_helper'),
+              'reason':'first_class_mcp_file_tool' if name in {'workspace.artifact.import','workspace.artifact.upload.file'} else ('chatgpt_file_picker_ui' if name=='workspace.artifact.upload.file.select' else 'chatgpt_widget_private_helper'),
             })
         rows.append(row)
     return rows
@@ -705,7 +708,11 @@ def _project_connector_catalog(identity,result):
         'tool':'workspace.artifact.import',
         'authorized':file_import,
         'transport':'mcp',
+        'first_class_tool':True,
+        'generic_actions_dispatcher_allowed':False,
+        'mcp_endpoint':MCP_RESOURCE,
         'file_param':'file',
+        'file_param_level':'top_level',
         'host_hydration':'openai/fileParams',
         'schema_mode':'inline_openai_file_object',
         'local_paths_supported':False,
@@ -714,8 +721,12 @@ def _project_connector_catalog(identity,result):
         'tool':'workspace.artifact.upload.file',
         'authorized':'workspace.artifact.upload.file' in identity['tools'],
         'transport':'mcp',
+        'first_class_tool':True,
+        'generic_actions_dispatcher_allowed':False,
+        'mcp_endpoint':MCP_RESOURCE,
         'authentication':'oauth_identity_reused_server_side',
         'file_param':'file',
+        'file_param_level':'top_level',
         'host_hydration':'openai/fileParams',
         'requires_portal_cookie':False,
         'requires_browser_session':False,
@@ -750,12 +761,12 @@ def _action_schema(client_id):
     paths={
       base+'/project':{'get':{'operationId':'getCloudIFFProject','summary':'Consultar o projeto CloudIFF vinculado','description':'Retorna somente o projeto associado ao Client ID autenticado.','security':security,'x-openai-isConsequential':False,'responses':responses}},
       base+'/connectors':{'get':{'operationId':'getCloudIFFProjectConnectors','summary':'Consultar conectores do projeto','description':'Retorna Forgejo, Supabase, Komodo, MCP e ACL sanitizada do projeto vinculado.','security':security,'x-openai-isConsequential':False,'responses':responses}},
-      base+'/tools':{'get':{'operationId':'listCloudIFFProjectTools','summary':'Listar ferramentas autorizadas','description':'Lista todas as ferramentas liberadas para a identidade do projeto e informa o transporte correto. Ferramentas MCP-only aparecem no catálogo, mas não entram no endpoint genérico de Actions.','security':security,'x-openai-isConsequential':False,'responses':responses}},
+      base+'/tools':{'get':{'operationId':'listCloudIFFProjectTools','summary':'Listar ferramentas autorizadas','description':'Lista todas as ferramentas liberadas para a identidade do projeto e informa o transporte correto. workspace.artifact.import e workspace.artifact.upload.file são ferramentas MCP de primeira classe e nunca são executadas por callCloudIFFProjectTool.','security':security,'x-openai-isConsequential':False,'responses':responses}},
     }
     if read_tools:
         paths[base+'/read']={'post':{'operationId':'callCloudIFFReadTool','summary':'Executar ferramenta de consulta','description':'Executa somente ferramentas classificadas pelo servidor como leitura, plano ou inspeção sem efeito persistente. O projeto é imposto pelo token OAuth.','security':security,'x-openai-isConsequential':False,'requestBody':{'required':True,'content':{'application/json':{'schema':{'$ref':'#/components/schemas/ReadToolRequest'}}}},'responses':responses}}
     if write_tools:
-        paths[base+'/write']={'post':{'operationId':'callCloudIFFProjectTool','summary':'Executar operação controlada do projeto','description':'Executa uma ferramenta com efeito ou solicitação de aprovação. Aprovações humanas e políticas da CloudIFF continuam obrigatórias.','security':security,'x-openai-isConsequential':True,'requestBody':{'required':True,'content':{'application/json':{'schema':{'$ref':'#/components/schemas/WriteToolRequest'}}}},'responses':responses}}
+        paths[base+'/write']={'post':{'operationId':'callCloudIFFProjectTool','summary':'Executar operação controlada do projeto','description':'Executa somente operações compatíveis com GPT Actions. Ferramentas MCP-only e fileParams são recusadas server-side; use a conexão MCP direta para workspace.artifact.import e workspace.artifact.upload.file.','security':security,'x-openai-isConsequential':True,'requestBody':{'required':True,'content':{'application/json':{'schema':{'$ref':'#/components/schemas/WriteToolRequest'}}}},'responses':responses}}
     schemas={
       'ActionArguments':{
         'type':'object',
@@ -797,8 +808,8 @@ def _action_schema(client_id):
       'openapi':'3.1.0',
       'info':{
         'title':'CloudIFF Actions — '+slug,
-        'version':'1.4.0',
-        'description':'Ações do projeto '+slug+' com OAuth público, PKCE, ACL por projeto e aprovações humanas server-side. Arquivos anexados são importados exclusivamente pelo MCP workspace.artifact.import via openai/fileParams.',
+        'version':'1.5.0',
+        'description':'Compatibilidade GPT Actions do projeto '+slug+'. Este schema não transporta arquivos: workspace.artifact.import e workspace.artifact.upload.file são ferramentas MCP de primeira classe, com file top-level e openai/fileParams, disponíveis somente no endpoint MCP direto.',
         'termsOfService':PUBLIC_ORIGIN+'/cloudiff/mcp/privacy',
         'x-privacy-policy-url':PUBLIC_ORIGIN+'/cloudiff/mcp/privacy',
       },
@@ -1241,24 +1252,27 @@ def _prepare_openai_file_param(tool_name, args):
     print(json.dumps(event,separators=(',',':')),flush=True)
     if isinstance(value,dict):
         return args
-    try:
-        normalized=_normalize_session_file_ref(value)
-    except ValueError as error:
-        if str(error)=='host_file_path_not_resolved':
-            raise ToolInputError({
-              'code':'host_file_param_not_hydrated',
-              'field':'file',
-              'path':'$.file',
-              'message':'O anexo chegou como caminho local, não como file object do ChatGPT. A CloudIFF não consegue ler /mnt/data do host. Atualize/recaneie o app MCP e deixe o host preencher file via openai/fileParams.',
-              'receivedFields':sorted(str(k) for k in args),
-              'usage':tool_usage(tool_name),
-              'fileShape':shape,
-              'hostHydrationRequired':True,
-            }) from error
-        raise
-    clean={k:normalized.get(k) for k in ('download_url','file_id','mime_type','file_name') if normalized.get(k) not in {None,''}}
-    prepared=dict(args);prepared['file']=clean
-    return prepared
+    if shape.get('classification')=='path_like':
+        raise ToolInputError({
+          'code':'host_file_param_not_hydrated',
+          'field':'file',
+          'path':'$.file',
+          'message':'O anexo chegou como caminho local, não como file object do ChatGPT. workspace.artifact.import é uma ferramenta MCP de primeira classe e exige file top-level hidratado via openai/fileParams.',
+          'receivedFields':sorted(str(k) for k in args),
+          'usage':tool_usage(tool_name),
+          'fileShape':shape,
+          'hostHydrationRequired':True,
+        })
+    raise ToolInputError({
+      'code':'openai_file_param_object_required',
+      'field':'file',
+      'path':'$.file',
+      'message':'file deve chegar como objeto MCP hidratado com download_url e file_id; strings, URLs escalares e JSON serializado não são aceitos.',
+      'receivedFields':sorted(str(k) for k in args),
+      'usage':tool_usage(tool_name),
+      'fileShape':shape,
+      'hostHydrationRequired':True,
+    })
 
 
 def _normalize_session_file_ref(file_ref):
@@ -1862,10 +1876,10 @@ def migration_call(path,slug,commit_sha,version,trace_id):
 
 AGENT_GUIDE_URI='cloudiff://guide/agent'
 PROJECT_GUIDE_URI='cloudiff://guide/project/{slug}'
-AGENT_INSTRUCTIONS="""Você está conectado ao MCP CloudIFF. Trabalhe somente nos projetos autorizados para esta identidade. Comece por project.list, project.get e project.connectors. Para arquivo anexado, tente workspace.artifact.import. Para artifact_id já criado, prefira workspace.artifact.upload.file. Se openai/fileParams funcionar, o upload é server-side. Se o host enviar /mnt/data como string, a mesma chamada abre o seletor MCP Apps; o componente usa selectFiles/getFileDownloadUrl e workspace.artifact.upload.file.resolve, sem depender do binding do modelo e sem cookie do Portal. Após o artifact ficar sealed, use workspace.artifact.commit.plan para preparar diretamente o commit de um único upload, depois approval.request-change-set-proposal e forgejo.proposal.change-set.create. Antes de qualquer efeito, gere plano e prévia. Aprovações humanas acontecem exclusivamente no Portal CloudIFF. Forgejo serve para revisão de código e Pull Requests; Supabase Studio para banco; Komodo para execução e deploy. Nunca solicite, revele ou grave tokens. Nunca faça push direto em main. Produção exige decisão de um administrador ou professor e permanece indisponível enquanto não houver alvo de produção configurado."""
+AGENT_INSTRUCTIONS="""Você está conectado ao MCP CloudIFF. Trabalhe somente nos projetos autorizados para esta identidade. Comece por project.list, project.get e project.connectors. Para arquivo anexado, chame workspace.artifact.import diretamente como ferramenta MCP de primeira classe, com file no nível superior de arguments; nunca encapsule essa operação em callCloudIFFProjectTool ou em arguments.file de um dispatcher genérico. Para artifact_id já criado, chame workspace.artifact.upload.file diretamente. Se openai/fileParams funcionar, o upload é server-side. Se o host enviar /mnt/data como string, a mesma chamada abre o seletor MCP Apps; o componente usa selectFiles/getFileDownloadUrl e workspace.artifact.upload.file.resolve, sem depender do binding do modelo e sem cookie do Portal. Após o artifact ficar sealed, use workspace.artifact.commit.plan para preparar diretamente o commit de um único upload, depois approval.request-change-set-proposal e forgejo.proposal.change-set.create. Antes de qualquer efeito, gere plano e prévia. Aprovações humanas acontecem exclusivamente no Portal CloudIFF. Forgejo serve para revisão de código e Pull Requests; Supabase Studio para banco; Komodo para execução e deploy. Nunca solicite, revele ou grave tokens. Nunca faça push direto em main. Produção exige decisão de um administrador ou professor e permanece indisponível enquanto não houver alvo de produção configurado."""
 
 def agent_guide_payload(slug=''):
-    return {'version':'92A','language':'pt-BR','project_slug':slug,'workflow':['project.list','project.get','project.connectors','workspace.artifact.import','workspace.artifact.upload.file','workspace.artifact.upload.start','workspace.artifact.upload.status','workspace.artifact.commit.plan','approval.request-change-set-proposal','forgejo.proposal.change-set.create','workspace.prepare','workspace.validate','workspace.test-static','workspace.preview-static','forgejo.propose-edit.plan','approval.request-proposal','forgejo.propose-edit'],'approvals':{'decided_in':'Portal CloudIFF','forgejo':'revisão de código e Pull Requests','supabase':'dados e banco','komodo':'execução, containers e deploys'},'security':{'direct_infrastructure_access':False,'arbitrary_terminal':False,'direct_main_push':False,'credentials_must_not_be_requested':True,'production_requires_one_admin_or_professor':True,'two_approvers_required':False,'production_target_configured':False},'instructions':AGENT_INSTRUCTIONS}
+    return {'version':'93A','language':'pt-BR','project_slug':slug,'workflow':['project.list','project.get','project.connectors','workspace.artifact.import','workspace.artifact.upload.file','workspace.artifact.upload.start','workspace.artifact.upload.status','workspace.artifact.commit.plan','approval.request-change-set-proposal','forgejo.proposal.change-set.create','workspace.prepare','workspace.validate','workspace.test-static','workspace.preview-static','forgejo.propose-edit.plan','approval.request-proposal','forgejo.propose-edit'],'approvals':{'decided_in':'Portal CloudIFF','forgejo':'revisão de código e Pull Requests','supabase':'dados e banco','komodo':'execução, containers e deploys'},'security':{'direct_infrastructure_access':False,'arbitrary_terminal':False,'direct_main_push':False,'credentials_must_not_be_requested':True,'production_requires_one_admin_or_professor':True,'two_approvers_required':False,'production_target_configured':False},'instructions':AGENT_INSTRUCTIONS}
 
 def production_info_call(path,payload,timeout=120):
     req=urllib.request.Request(DEPLOYMENT_URL+path,data=json.dumps(payload,separators=(',',':')).encode(),method='POST',headers={'Authorization':'Bearer '+DEPLOYMENT_TOKEN,'Content-Type':'application/json','Accept':'application/json'})
@@ -1981,6 +1995,7 @@ class H(BaseHTTPRequestHandler):
     def _action_rpc(self,identity,tool,args):
         toolrow=_tool_row(tool)
         if not toolrow or tool not in identity['tools']:raise PermissionError('tool_denied')
+        if tool in MCP_ONLY_TOOLS:raise PermissionError('mcp_only_tool_requires_direct_connection')
         clean=dict(args or {});props=(toolrow.get('inputSchema') or {}).get('properties') or {}
         if 'slug' in props:clean['slug']=identity['project_slug']
         body=json.dumps({'jsonrpc':'2.0','id':'action-'+uuid.uuid4().hex,'method':'tools/call','params':{'name':tool,'arguments':clean}},ensure_ascii=False,separators=(',',':')).encode()
@@ -2099,32 +2114,6 @@ class H(BaseHTTPRequestHandler):
         else:self.sendj(404,{'ok':False,'error':'not_found'})
     def do_POST(self):
         path=urlparse(self.path).path
-        if path=='/cloudiff/mcp/actions/v1/artifact/import':
-            identity=self._action_identity()
-            if not identity:return
-            try:
-                if 'workspace.artifact.import' not in identity['tools']:raise PermissionError('tool_denied')
-                n=int(self.headers.get('Content-Length','0') or 0)
-                if not (0<n<=65536):raise ValueError('invalid_request')
-                payload=json.loads(self.rfile.read(n) or b'{}')
-                if not isinstance(payload,dict):raise ValueError('invalid_request')
-                allowed={'openaiFileIdRefs','filename','expected_size','expected_sha256','ttl_seconds'}
-                if set(payload)-allowed:raise ValueError('invalid_request')
-                refs=payload.get('openaiFileIdRefs')
-                ref_count=len(refs) if isinstance(refs,list) else None
-                ref_item_types=sorted({type(item).__name__ for item in refs}) if isinstance(refs,list) else []
-                print(json.dumps({'event':'actions_file_reference_shape','operation':'importCloudIFFArtifact','present':'openaiFileIdRefs' in payload,'value_type':type(refs).__name__,'count':ref_count,'item_types':ref_item_types,'payload_keys':sorted(payload.keys())},separators=(',',':')),flush=True)
-                if not isinstance(refs,list) or len(refs)!=1:
-                    code='actions_file_reference_not_injected' if refs is None or refs==[] else 'actions_exactly_one_file_required'
-                    raise ValueError(code)
-                file_ref=_normalize_action_file_ref(refs[0])
-                filename=str(payload.get('filename') or '').strip();size=int(payload.get('expected_size'));digest=str(payload.get('expected_sha256') or '').strip().lower();ttl=int(payload.get('ttl_seconds') or 3600)
-                if not filename or len(filename)>240 or not (0<=size<=1073741824) or not re.fullmatch(r'[a-f0-9]{64}',digest) or not (300<=ttl<=86400):raise ValueError('invalid_request')
-                args={'file':file_ref,'filename':filename,'expected_size':size,'expected_sha256':digest,'ttl_seconds':ttl}
-                result=self._action_rpc(identity,'workspace.artifact.import',args)
-                return self.sendj(200,{'ok':True,'project_slug':identity['project_slug'],'tool':'workspace.artifact.import','result':result})
-            except PermissionError as e:return self.sendj(403,{'ok':False,'error':str(e)})
-            except Exception as e:return self.sendj(422,{'ok':False,'error':str(e)})
         if path in {'/cloudiff/mcp/actions/v1/read','/cloudiff/mcp/actions/v1/write'}:
             identity=self._action_identity()
             if not identity:return
@@ -2170,23 +2159,17 @@ class H(BaseHTTPRequestHandler):
         except Exception:return self.sendj(400,{'ok':False,'error':'invalid_request'})
         rid=req.get('id');method=req.get('method');params=req.get('params') or {}
         authenticated=self.auth()
-        if not authenticated and method=='initialize':return self.sendj(200,{'jsonrpc':'2.0','id':rid,'result':{'protocolVersion':'2025-03-26','serverInfo':{'name':'cloudif-mcp-gateway','version':'0.9.0'},'capabilities':{'tools':{},'resources':{},'prompts':{}},'instructions':AGENT_INSTRUCTIONS}})
+        if not authenticated and method=='initialize':return self.sendj(200,{'jsonrpc':'2.0','id':rid,'result':{'protocolVersion':'2025-03-26','serverInfo':{'name':'cloudif-mcp-gateway','version':'1.0.0'},'capabilities':{'tools':{},'resources':{},'prompts':{}},'instructions':AGENT_INSTRUCTIONS}})
         if not authenticated and method=='tools/list':return self.sendj(200,{'jsonrpc':'2.0','id':rid,'result':{'tools':TOOLS}})
         if not authenticated:return self.send_mcp_auth_required(rid)
         try:
             raw_args=params.get('arguments') or {};requested_tool=params.get('name') if method=='tools/call' else method;tool=requested_tool
-            args,input_wrappers=_unwrap_tool_arguments(raw_args);artifact_import_upload_fallback=False;artifact_file_picker_fallback=False
+            args,input_wrappers=_unwrap_tool_arguments(raw_args);artifact_file_picker_fallback=False
             try:
                 args=_prepare_openai_file_param(tool,args)
             except ToolInputError as error:
                 payload=error.payload if isinstance(getattr(error,'payload',None),dict) else {}
-                if tool=='workspace.artifact.import' and payload.get('code')=='host_file_param_not_hydrated':
-                    fallback_allowed={'slug','file','filename','expected_size','expected_sha256','ttl_seconds'}
-                    if not {'slug','file','filename','expected_size','expected_sha256'}.issubset(args) or not set(args).issubset(fallback_allowed):raise
-                    args={k:v for k,v in args.items() if k!='file'}
-                    tool='workspace.artifact.upload.start';artifact_import_upload_fallback=True
-                    print(json.dumps({'event':'mcp_file_param_auto_fallback','requested_tool':requested_tool,'effective_tool':tool,'reason':'host_file_param_not_hydrated','filename':str(args.get('filename') or '')[:240]},separators=(',',':')),flush=True)
-                elif tool=='workspace.artifact.upload.file' and payload.get('code')=='host_file_param_not_hydrated':
+                if tool=='workspace.artifact.upload.file' and payload.get('code')=='host_file_param_not_hydrated':
                     if not {'slug','artifact_id','file'}.issubset(args) or not set(args).issubset({'slug','artifact_id','file'}):raise
                     args={'slug':args['slug'],'artifact_id':args['artifact_id']};tool='workspace.artifact.upload.file.select';artifact_file_picker_fallback=True
                     print(json.dumps({'event':'mcp_file_param_picker_fallback','requested_tool':requested_tool,'effective_tool':tool,'reason':'host_file_param_not_hydrated'},separators=(',',':')),flush=True)
@@ -2205,8 +2188,8 @@ class H(BaseHTTPRequestHandler):
             client_id=self.headers.get('X-CloudIF-Client','').strip() or 'internal'
             if not authz.get('ok'):
                 reason=authz.get('reason','denied');self.sendj(429 if reason in {'rate_limit','daily_quota'} else 403,{'jsonrpc':'2.0','id':rid,'error':{'code':-32029 if reason in {'rate_limit','daily_quota'} else -32003,'message':reason}});return
-            self._audit_ctx={'event_id':uuid.uuid4().hex,'source':'mcp','action':str(tool or method or 'unknown'),'actor_type':'agent' if self.headers.get('X-CloudIF-Client') else 'api_client','actor_id':self.headers.get('X-CloudIF-User','') or authz.get('owner_user',''),'delegated_user_id':self.headers.get('X-CloudIF-Delegated-User',''),'client_id':self.headers.get('X-CloudIF-Client','internal'),'project_slug':slug,'trace_id':trace_id,'attrs':{'rpc_method':method,'requested_tool':requested_tool if method=='tools/call' else None,'effective_tool':tool if method=='tools/call' else None,'automatic_upload_fallback':artifact_import_upload_fallback,'file_picker_fallback':artifact_file_picker_fallback,'quota':{'minute_calls':authz.get('minute_calls'),'daily_calls':authz.get('daily_calls')}},'_start':time.monotonic()}
-            if method=='initialize':result={'protocolVersion':'2025-03-26','serverInfo':{'name':'cloudif-mcp-gateway','version':'0.9.0'},'capabilities':{'tools':{},'resources':{},'prompts':{}},'instructions':AGENT_INSTRUCTIONS}
+            self._audit_ctx={'event_id':uuid.uuid4().hex,'source':'mcp','action':str(tool or method or 'unknown'),'actor_type':'agent' if self.headers.get('X-CloudIF-Client') else 'api_client','actor_id':self.headers.get('X-CloudIF-User','') or authz.get('owner_user',''),'delegated_user_id':self.headers.get('X-CloudIF-Delegated-User',''),'client_id':self.headers.get('X-CloudIF-Client','internal'),'project_slug':slug,'trace_id':trace_id,'attrs':{'rpc_method':method,'requested_tool':requested_tool if method=='tools/call' else None,'effective_tool':tool if method=='tools/call' else None,'automatic_upload_fallback':False,'file_picker_fallback':artifact_file_picker_fallback,'quota':{'minute_calls':authz.get('minute_calls'),'daily_calls':authz.get('daily_calls')}},'_start':time.monotonic()}
+            if method=='initialize':result={'protocolVersion':'2025-03-26','serverInfo':{'name':'cloudif-mcp-gateway','version':'1.0.0'},'capabilities':{'tools':{},'resources':{},'prompts':{}},'instructions':AGENT_INSTRUCTIONS}
             elif method=='resources/list':result={'resources':[{'uri':AGENT_GUIDE_URI,'name':'Guia do agente CloudIFF','description':'Como usar ferramentas, aprovações, portais e limites de segurança.','mimeType':'application/json'},{'uri':'cloudiff://guide/project/{slug}','name':'Guia do projeto','description':'Fluxo recomendado para um projeto autorizado.','mimeType':'application/json'},{'uri':ARTIFACT_UPLOAD_WIDGET_URI,'name':'Seletor de arquivo CloudIFF','description':'Componente MCP Apps que resolve arquivos diretamente pelas APIs do ChatGPT.','mimeType':'text/html;profile=mcp-app'}]}
             elif method=='resources/read':
                 uri=str(params.get('uri') or '')
@@ -3338,14 +3321,15 @@ class H(BaseHTTPRequestHandler):
                         error=data.get('error') or {};raise ValueError(str(error.get('message') if isinstance(error,dict) else error or 'normalization_plan_failed'))
                     content=data.get('result') or data
                 elif name=='workspace.artifact.import':
-                    required={'slug','filename','expected_size','expected_sha256'};allowed=required|{'file','file_url','ttl_seconds'}
-                    if not required.issubset(args) or not set(args).issubset(allowed) or (('file' in args)+('file_url' in args))!=1:raise ValueError('Informe slug, filename, expected_size, expected_sha256 e exatamente um entre file ou file_url. file é preenchido por openai/fileParams; file_url é fallback escalar do host.')
-                    slug=str(args.get('slug') or '').strip();file_ref=args.get('file') if 'file' in args else args.get('file_url');filename=str(args.get('filename') or '').strip();size=int(args.get('expected_size'));digest=str(args.get('expected_sha256') or '').strip().lower();ttl=int(args.get('ttl_seconds') or 7200)
+                    required={'slug','file','filename','expected_size','expected_sha256'};allowed=required|{'ttl_seconds'}
+                    if not required.issubset(args) or not set(args).issubset(allowed) or not isinstance(args.get('file'),dict):raise ValueError('workspace.artifact.import exige file top-level hidratado por openai/fileParams.')
+                    slug=str(args.get('slug') or '').strip();file_ref=args.get('file') or {};filename=str(args.get('filename') or '').strip();size=int(args.get('expected_size'));digest=str(args.get('expected_sha256') or '').strip().lower();ttl=int(args.get('ttl_seconds') or 7200)
                     if not re.fullmatch(r'[a-z0-9][a-z0-9-]*',slug) or not filename or len(filename)>240 or not (0<=size<=1073741824) or not re.fullmatch(r'[a-f0-9]{64}',digest) or not (300<=ttl<=86400):raise ValueError('Metadados da importação são inválidos.')
-                    print(json.dumps({'event':'mcp_file_param_shape','tool':'workspace.artifact.import',**_session_file_ref_shape(file_ref)},separators=(',',':')),flush=True)
+                    if not {'download_url','file_id'}.issubset(file_ref) or not set(file_ref).issubset({'download_url','file_id','mime_type','file_name'}):raise ValueError('file deve conter download_url e file_id, com mime_type e file_name opcionais.')
+                    print(json.dumps({'event':'mcp_file_param_shape','tool':'workspace.artifact.import',**_session_file_ref_shape(file_ref),'file_params_hydrated':True},separators=(',',':')),flush=True)
                     control('/v1/projects/'+urllib.parse.quote(slug,safe=''))
                     content,file_meta=workspace_artifact_import_https(slug,filename,file_ref,size,digest,ttl,trace_id)
-                    content['file_id']=file_meta['file_id'];content['source']='chatgpt_file_param' if 'file' in args else 'chatgpt_file_scalar_fallback';content['input_field']='file' if 'file' in args else 'file_url';content['download_url_persisted']=False;content['secrets_exposed']=False
+                    content['file_id']=file_meta['file_id'];content['source']='chatgpt_file_param';content['input_field']='file';content['file_params_hydrated']=True;content['filesystem_access_attempted']=False;content['download_url_persisted']=False;content['secrets_exposed']=False
                 elif name=='workspace.artifact.upload.file':
                     required={'slug','artifact_id','file'};allowed=required
                     if not required.issubset(args) or not set(args).issubset(allowed):raise ValueError('Informe slug, artifact_id e file.')
@@ -3426,8 +3410,6 @@ class H(BaseHTTPRequestHandler):
                                     content['upload_url']=PUBLIC_ORIGIN+'/cloudiff/portal/artifact-upload-capability#'+urllib.parse.quote(token,safe='')
                                     content['upload_method']='portal_capability_direct';content['upload_ticket_created']=True;content['user_action_required']=True;content['browser_secret_required']=False;content['secrets_exposed']=False;content['upload_url_audience']='human_user';content['human_portal_authentication_required']=False;content['portal_cookie_required']=False;content['csrf_required']=False;content['authentication']='mcp_delegated_one_time_portal_capability';content['credential_in_fragment']=True
                                     content['agent_must_not_open_upload_url']=True;content['agent_followup_tool']='workspace.artifact.commit.plan';content['next_action']='Entregue upload_url ao usuário. A credencial temporária é de uso único e dispensa login no Portal. Após o artifact ser selado, chame workspace.artifact.commit.plan.'
-                                    if artifact_import_upload_fallback:
-                                        content['requested_tool']='workspace.artifact.import';content['effective_tool']='workspace.artifact.upload.start';content['automatic_fallback']=True;content['fallback_reason']='host_file_param_not_hydrated';content['file_params_hydrated']=False;content['filesystem_access_attempted']=False;content['message']='O host enviou um caminho local em file. A CloudIFF criou automaticamente um upload HTTPS equivalente; envie o arquivo pela upload_url e depois use workspace.artifact.commit.plan.'
                                 else:content['upload_ticket_created']=False;content['next_tool']='workspace.artifact.upload.ticket'
                             else:content['upload_ticket_created']=False;content['next_tool']='workspace.artifact.upload.ticket'
                     if name=='workspace.artifact.upload.ticket':
