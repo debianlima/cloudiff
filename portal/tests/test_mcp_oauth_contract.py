@@ -22,7 +22,7 @@ class MCPOAuthContractTests(unittest.TestCase):
             self.assertIn(marker,self.gateway)
         self.assertIn("if not authenticated and method=='initialize'",self.gateway)
         self.assertIn("if not authenticated and method=='tools/list'",self.gateway)
-        self.assertEqual(self.gateway.count("'serverInfo':{'name':'cloudif-mcp-gateway','version':'0.7.0'}"),2)
+        self.assertEqual(self.gateway.count("'serverInfo':{'name':'cloudif-mcp-gateway','version':'0.8.0'}"),2)
         self.assertIn("if not authenticated:return self.send_mcp_auth_required(rid)",self.gateway)
 
     def test_oauth_resource_indicator_is_bound_to_code_and_token(self):
@@ -88,6 +88,20 @@ class MCPOAuthContractTests(unittest.TestCase):
         self.assertIn("'deployment.rollback-test'", destructive)
         self.assertIsNotNone(tree)
 
+    def test_chatgpt_file_picker_bridge_is_registered_as_mcp_app(self):
+        for marker in (
+            "ARTIFACT_UPLOAD_WIDGET_URI='ui://cloudiff/artifact-upload-v1.html'",
+            "'mimeType':'text/html;profile=mcp-app'",
+            "'ui':{'resourceUri':ARTIFACT_UPLOAD_WIDGET_URI}",
+            "'name':'workspace.artifact.upload.file.select'",
+            "'name':'workspace.artifact.upload.file.resolve'",
+            "'ui':{'visibility':['app']}",
+            "window.openai.selectFiles",
+            "window.openai.getFileDownloadUrl",
+            "window.openai.callTool('workspace.artifact.upload.file.resolve'",
+        ):
+            self.assertIn(marker,self.gateway)
+
     def test_resources_and_prompts_are_bound_to_the_requested_project(self):
         self.assertIn("if method=='resources/read'", self.gateway)
         self.assertIn("resource_uri.startswith('cloudiff://guide/project/')", self.gateway)
@@ -136,8 +150,8 @@ class MCPOAuthContractTests(unittest.TestCase):
 
     def test_file_import_is_mcp_only_and_legacy_actions_handler_is_not_advertised(self):
         for marker in (
-            "MCP_ONLY_TOOLS={'workspace.artifact.import','workspace.artifact.upload.file'}",
-            "'_meta':{'openai/fileParams':['file']}",
+            "MCP_ONLY_TOOLS={'workspace.artifact.import','workspace.artifact.upload.file','workspace.artifact.upload.file.select','workspace.artifact.upload.file.resolve'}",
+            "'openai/fileParams':['file']",
             "'title':'Importar arquivo da conversa'",
             "'file':{'type':'object'",
             "'schema_mode':'inline_openai_file_object'",

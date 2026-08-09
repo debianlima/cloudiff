@@ -20,12 +20,50 @@ class WorkspaceArtifactSessionImportTests(unittest.TestCase):
 
  def test_existing_artifact_file_upload_descriptor_is_oauth_mcp_only(self):
   source=GATEWAY.read_text();start=source.index("'name':'workspace.artifact.upload.file'");end=source.index("'name':'workspace.artifact.upload.ticket'",start);block=source[start:end]
-  self.assertIn("'_meta':{'openai/fileParams':['file']}",block)
+  self.assertIn("'openai/fileParams':['file']",block)
+  self.assertIn("'ui':{'resourceUri':ARTIFACT_UPLOAD_WIDGET_URI}",block)
+  self.assertIn("'openai/outputTemplate':ARTIFACT_UPLOAD_WIDGET_URI",block)
   self.assertIn("'required':['slug','artifact_id','file']",block)
   self.assertIn("'artifact_id':{'type':'string','pattern':'^art_[a-f0-9]{24}$'}",block)
   self.assertIn('sem cookie do Portal',block)
   self.assertNotIn('expected_size',block)
   self.assertNotIn('expected_sha256',block)
+
+ def test_upload_file_path_like_input_falls_back_to_chatgpt_file_picker(self):
+  source=GATEWAY.read_text();start=source.index("raw_args=params.get('arguments') or {}") ;end=source.index("validate_tool_arguments(tool,args)",start);block=source[start:end]
+  self.assertIn("tool=='workspace.artifact.upload.file'",block)
+  self.assertIn("payload.get('code')=='host_file_param_not_hydrated'",block)
+  self.assertIn("tool='workspace.artifact.upload.file.select'",block)
+  self.assertIn("artifact_file_picker_fallback=True",block)
+  self.assertIn("args={'slug':args['slug'],'artifact_id':args['artifact_id']}",block)
+  self.assertNotIn("open('/mnt/data",block)
+  self.assertNotIn("Path('/mnt/data",block)
+
+ def test_file_picker_widget_uses_host_native_file_apis(self):
+  html=M.ARTIFACT_UPLOAD_WIDGET_HTML
+  for marker in ('window.openai.selectFiles','window.openai.uploadFile','window.openai.getFileDownloadUrl',"window.openai.callTool('workspace.artifact.upload.file.resolve'",'fileId','downloadUrl'):
+   self.assertIn(marker,html)
+  self.assertNotIn('/mnt/data',html)
+  self.assertNotIn('Authorization: Bearer',html)
+  self.assertNotIn('document.cookie',html)
+
+ def test_file_picker_resource_is_mcp_apps_html_and_helper_is_app_only(self):
+  source=GATEWAY.read_text()
+  self.assertIn("ARTIFACT_UPLOAD_WIDGET_URI='ui://cloudiff/artifact-upload-v1.html'",source)
+  self.assertIn("'mimeType':'text/html;profile=mcp-app'",source)
+  self.assertIn("'ui':{'visibility':['app']}",source)
+  self.assertIn("'openai/widgetAccessible':True",source)
+  self.assertIn("'openai/visibility':'private'",source)
+
+ def test_picker_select_tool_is_side_effect_free_and_resolve_reuses_streaming_validator(self):
+  source=GATEWAY.read_text()
+  readonly=source[source.index('READ_ONLY_TOOLS='):source.index('DESTRUCTIVE_TOOLS=')]
+  self.assertIn("'workspace.artifact.upload.file.select'",readonly)
+  start=source.index("elif name=='workspace.artifact.upload.file.resolve':");end=source.index("elif name in {'workspace.artifact.upload.start'",start);block=source[start:end]
+  self.assertIn('workspace_artifact_upload_existing_https(',block)
+  self.assertIn("content['file_resolution']='window.openai.getFileDownloadUrl'",block)
+  self.assertIn("content['download_url_persisted']=False",block)
+  self.assertIn("content['secrets_exposed']=False",block)
 
  def test_every_openai_file_param_descriptor_is_scan_tools_compliant(self):
   file_tools=[tool for tool in M.TOOLS if (tool.get('_meta') or {}).get('openai/fileParams')]
