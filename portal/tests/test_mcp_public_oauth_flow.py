@@ -17,6 +17,7 @@ import unittest
 ROOT = Path(__file__).resolve().parents[2]
 GATEWAY = ROOT / 'components/control-plane/current-apps/mcp-gateway-current/cloudif-mcp-gateway.py'
 CLIENT_ID = 'project-laboratorio-de-hardware'
+CLIENT_SECRET = 'actions-test-secret'
 SLUG = 'laboratorio-de-hardware'
 
 
@@ -88,6 +89,9 @@ class FakeAgent(BaseHTTPRequestHandler):
                 'authorized_user': data.get('authorized_user'), 'project_slugs': [SLUG],
                 'minute_calls': 1, 'daily_calls': 1,
             })
+        if urlparse(self.path).path == '/v1/validate':
+            ok = data.get('client_id') == CLIENT_ID and data.get('token') == CLIENT_SECRET and data.get('project_slug') == SLUG
+            return self.reply(200, {'ok': ok})
         return self.reply(404, {'ok': False})
 
 
@@ -321,7 +325,7 @@ class MCPPublicOAuthFlowTest(unittest.TestCase):
         self.assertEqual(status,422,raw)
         self.assertEqual(json.loads(raw)['error'],'actions_file_download_link_missing')
 
-    def test_chatgpt_actions_callback_works_without_pkce_or_client_secret(self):
+    def test_chatgpt_actions_callback_requires_client_secret_and_works_without_pkce(self):
         callback = 'https://chat.openai.com/aip/g-0cb65526ddbc077875f764dc4f38a73fc1f6edc6/oauth/callback'
         query = urlencode({
             'response_type': 'code', 'client_id': CLIENT_ID, 'redirect_uri': callback,
@@ -347,7 +351,14 @@ class MCPPublicOAuthFlowTest(unittest.TestCase):
         status, _, raw = self.request('POST', '/cloudiff/mcp/oauth/token', form, {
             'Content-Type': 'application/x-www-form-urlencoded', 'Content-Length': str(len(form)),
         })
-        self.assertEqual(status, 200, raw)
+        self.assertEqual(status, 401, raw);self.assertEqual(json.loads(raw)['error'],'invalid_client')
+        # Request a fresh one-shot code and exchange it with the confidential GPT Actions secret.
+        status, headers, raw = self.request('GET', '/cloudiff/mcp/oauth/authorize?' + query);self.assertEqual(status,302,raw)
+        resume=headers['Location'];status,headers,raw=self.request('GET',resume,headers={'X-authentik-username':'iff1742962','X-authentik-groups':'CloudIF-Lab-Hardware|Domain Users'});self.assertEqual(status,302,raw)
+        code=parse_qs(urlparse(headers['Location']).query)['code'][0]
+        form = urlencode({'grant_type':'authorization_code','client_id':CLIENT_ID,'client_secret':CLIENT_SECRET,'code':code,'redirect_uri':callback})
+        status, _, raw = self.request('POST','/cloudiff/mcp/oauth/token',form,{'Content-Type':'application/x-www-form-urlencoded','Content-Length':str(len(form))})
+        self.assertEqual(status,200,raw)
         token = json.loads(raw)['access_token']
         project = self.rpc(token, 'tools/call', {'name': 'project.get', 'arguments': {'slug': SLUG}}, 21)
         self.assertNotIn('error', project)

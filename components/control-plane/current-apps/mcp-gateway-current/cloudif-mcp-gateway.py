@@ -2023,8 +2023,12 @@ class H(BaseHTTPRequestHandler):
                 if not row or row['client_id']!=client_id or row['redirect_uri']!=redirect or (resource and resource!=row.get('resource')):return self.sendj(400,{'error':'invalid_grant'})
                 flow=row.get('oauth_flow') or 'pkce'
                 if flow=='pkce' and not _pkce_ok((form.get('code_verifier') or [''])[0],row.get('code_challenge')):return self.sendj(400,{'error':'invalid_grant'})
-                if flow=='chatgpt_actions' and _callback_mode(redirect)!='chatgpt_actions':return self.sendj(400,{'error':'invalid_grant'})
-                client=_validate_client_secret(client_id,secret) if secret else (row if row.get('public_client') else None)
+                if flow=='chatgpt_actions':
+                    if _callback_mode(redirect)!='chatgpt_actions' or not secret:return self.sendj(401,{'error':'invalid_client'})
+                    validated=_validate_client_secret(client_id,secret)
+                    client={**row,**validated} if validated else None
+                else:
+                    client=_validate_client_secret(client_id,secret) if secret else (row if row.get('public_client') else None)
             elif grant=='refresh_token':
                 ref=(form.get('refresh_token') or [''])[0];saved=OAUTH_REFRESH.pop(ref,None)
                 client=(_validate_client_secret(client_id,secret) if secret else saved) if saved and saved.get('client_id')==client_id and (not resource or resource==saved.get('resource')) else None

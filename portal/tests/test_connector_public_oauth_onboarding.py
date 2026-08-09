@@ -14,7 +14,7 @@ class ConnectorPublicOAuthOnboardingTest(unittest.TestCase):
             "'legacy_bearer'",
             "'openapi_schema_url':'https://cloudiff.duckdns.org/cloudiff/mcp/openapi/'",
             "'privacy_policy_url':'https://cloudiff.duckdns.org/cloudiff/mcp/privacy'",
-            "'chatgpt_actions_oauth':{'client_secret':'','pkce':False",
+            "'chatgpt_actions_oauth':{'client_secret_required':True,'client_secret_delivery':'portal_one_time_rotation','token_endpoint_auth_method':'client_secret_post','pkce':False",
             "'callback_policy':'official_chat_openai_aip_callback'",
             "'authorization_code_ttl_seconds':180",
             "'database_connector':{'same_mcp_endpoint':True",
@@ -25,6 +25,7 @@ class ConnectorPublicOAuthOnboardingTest(unittest.TestCase):
             self.assertIn(marker, source)
         primary = source[source.index('def instructions'):source.index('def write_secret')]
         self.assertNotIn("'client_secret':'Use a chave", primary)
+        self.assertIn("'client_secret_required':True", primary)
 
     def test_control_registry_includes_project_and_tenant_acl(self):
         source = Path('components/control-plane/usr/local/sbin/cloudif-control-plane-sync.py').read_text()

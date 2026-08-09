@@ -32,6 +32,8 @@ class MCPOAuthContractTests(unittest.TestCase):
         for value in ("'none'", "client_secret_post", "client_secret_basic", "code_challenge_methods_supported", "pkce_valid=flow=='pkce'", "_pkce_ok", "refresh_token"):
             self.assertIn(value, self.gateway)
         self.assertIn("row if row.get('public_client')", self.gateway)
+        self.assertIn("if _callback_mode(redirect)!='chatgpt_actions' or not secret", self.gateway)
+        self.assertIn("client={**row,**validated} if validated else None", self.gateway)
         self.assertIn("saved) if saved and saved.get('client_id')", self.gateway)
 
     def test_authorization_uses_nonce_before_authentik_and_acl_after_resume(self):

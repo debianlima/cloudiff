@@ -27,11 +27,11 @@ class AIConnectorsHubTests(unittest.TestCase):
             'instructions': {'mcp_endpoint': 'https://cloudiff.example/mcp'},
         }
         html = self.module.render([row], 'csrf-test')
-        self.assertIn('Modo legado: gerar token', html)
+        self.assertIn('Gerar/rotacionar Client Secret para GPT Actions', html)
         self.assertIn('/cloudiff/portal/action/rotate-project-credential', html)
         self.assertIn('Exibição única', html)
-        self.assertIn('OAuth público com PKCE', html)
-        self.assertIn('Client Secret vazio', html)
+        self.assertIn('MCP público + GPT Actions confidencial', html)
+        self.assertIn('Client Secret', html)
         self.assertIn('Configuração pronta para copiar', html)
 
 
@@ -52,8 +52,8 @@ class AIConnectorsHubTests(unittest.TestCase):
             'https://cloudiff.duckdns.org/git/iff0001/cloudif-projeto-teste.git',
         ):
             self.assertIn(marker, html)
-        self.assertNotIn('Use a chave gerada no Portal', html)
-        self.assertNotIn('Client Secret OAuth', html)
+        self.assertIn('Gerar/rotacionar Client Secret para GPT Actions', html)
+        self.assertIn('Client Secret obrigatório no token exchange', html)
 
     def test_chatgpt_actions_card_exposes_schema_and_privacy(self):
         row = {
@@ -67,7 +67,7 @@ class AIConnectorsHubTests(unittest.TestCase):
             'GPT personalizado — Actions', 'Schema OpenAPI:', 'Copiar URL do schema', 'Abrir schema',
             'https://cloudiff.duckdns.org/cloudiff/mcp/openapi/client-projeto-teste.json',
             'https://cloudiff.duckdns.org/cloudiff/mcp/privacy', 'ChatGPT — MCP',
-            'GPT Actions sem PKCE', 'Callback: use exatamente a URL fornecida pelo editor do GPT',
+            'GPT Actions sem PKCE', 'Client Secret obrigatório no token exchange', 'Callback: use exatamente a URL fornecida pelo editor do GPT',
         ):
             self.assertIn(marker, html)
         guide = self.module.guide_data([row])
