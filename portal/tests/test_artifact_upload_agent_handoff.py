@@ -13,6 +13,16 @@ class ArtifactUploadAgentHandoffTests(unittest.TestCase):
         self.assertIn("'agent_followup_tool'",GATEWAY)
         self.assertIn("'workspace.artifact.upload.status'",GATEWAY)
         self.assertIn('Não abra a upload_url do Portal',GATEWAY)
+    def test_import_path_like_input_is_automatically_rewritten_to_browser_upload(self):
+        self.assertIn("artifact_import_upload_fallback=False",GATEWAY)
+        self.assertIn("payload.get('code')=='host_file_param_not_hydrated'",GATEWAY)
+        self.assertIn("tool='workspace.artifact.upload.start';artifact_import_upload_fallback=True",GATEWAY)
+        self.assertIn("name=call_tool;args=call_args",GATEWAY)
+        self.assertIn("content['automatic_fallback']=True",GATEWAY)
+        self.assertIn("content['fallback_reason']='host_file_param_not_hydrated'",GATEWAY)
+        self.assertIn("content['filesystem_access_attempted']=False",GATEWAY)
+        self.assertIn("mcp_file_param_auto_fallback",GATEWAY)
+
     def test_start_creates_browser_upload_handoff_in_one_mcp_call(self):
         response=GATEWAY.index("content=data.get('result') or data",GATEWAY.index("elif name in {'workspace.artifact.upload.start'"))
         start=GATEWAY.index("if name=='workspace.artifact.upload.start':",response)

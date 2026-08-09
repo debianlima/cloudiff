@@ -41,6 +41,14 @@ class WorkspaceArtifactSessionImportTests(unittest.TestCase):
   self.assertTrue(ctx.exception.payload['hostHydrationRequired'])
   self.assertNotIn('/mnt/data/archive.zip',str(ctx.exception.payload))
 
+ def test_rpc_dispatcher_converts_prevalidation_path_signal_into_upload_start(self):
+  source=GATEWAY.read_text();start=source.index("raw_args=params.get('arguments') or {}") ;end=source.index("if method=='resources/read':",start);block=source[start:end]
+  self.assertIn("requested_tool=params.get('name')",block)
+  self.assertIn("payload.get('code')=='host_file_param_not_hydrated'",block)
+  self.assertIn("args={k:v for k,v in args.items() if k!='file'}",block)
+  self.assertIn("tool='workspace.artifact.upload.start'",block)
+  self.assertIn("validate_tool_arguments(tool,args)",block)
+
  def test_prevalidation_accepts_json_stringified_openai_file_object(self):
   import json
   args={'file':json.dumps({'download_url':'https://files.oaiusercontent.com/signed','file_id':'file_123456','mime_type':'application/zip','file_name':'archive.zip'})}
