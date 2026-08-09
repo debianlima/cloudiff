@@ -16,10 +16,12 @@ class PortalArtifactUploadBridgeTests(unittest.TestCase):
   aid='art_'+'1'*24;page=M.render_page('csrf-token',aid).decode()
   self.assertIn('artifactId="'+aid+'"',page)
   self.assertIn("artifactId?{artifact_id:artifactId}",page)
-  self.assertIn("headers['X-CloudIF-Artifact-Id']=artifactId",page)
+  self.assertIn("xhr.setRequestHeader('X-CloudIF-Artifact-Id',artifactId)",page)
   self.assertIn('/cloudiff/portal/api/artifact-upload/status',page);self.assertIn('/cloudiff/portal/api/artifact-upload/content',page)
   self.assertIn('csrf-token',page)
   self.assertNotIn('upt_111111111111111111111111_',page)
+  self.assertIn('new XMLHttpRequest()',page);self.assertIn('xhr.upload.onprogress',page);self.assertIn('1024 MiB',page)
+  self.assertEqual(M.MAX_UPLOAD_BYTES,1024*1024*1024);self.assertEqual(M.UPLOAD_TIMEOUT_SECONDS,7200)
  def test_legacy_fragment_mode_is_kept_only_as_compatibility(self):
   page=M.render_page('csrf-token').decode()
   self.assertIn('location.hash',page);self.assertIn('sessionStorage.setItem',page);self.assertIn('history.replaceState',page)

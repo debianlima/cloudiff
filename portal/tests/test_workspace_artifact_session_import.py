@@ -1,5 +1,5 @@
 from __future__ import annotations
-import base64,hashlib,importlib.util,socket,sys,unittest
+import base64,hashlib,importlib.util,socket,sys,unittest,io
 from pathlib import Path
 from unittest.mock import patch
 ROOT=Path(__file__).resolve().parents[2]
@@ -14,6 +14,8 @@ class WorkspaceArtifactSessionImportTests(unittest.TestCase):
   for field in ('download_url','file_id','mime_type','file_name'):self.assertIn("'"+field+"'",block)
   self.assertIn("'required':['download_url','file_id']",block)
   self.assertIn("'required':['slug','file','filename','expected_size','expected_sha256']",block)
+  self.assertIn("'maximum':1073741824",block)
+  self.assertIn("'maximum':7200",source[source.index("'name':'workspace.artifact.upload.ticket'"):source.index("'name':'workspace.artifact.upload.status'")])
 
  def test_download_url_rejects_non_https_and_untrusted_hosts(self):
   for url,code in (
@@ -88,6 +90,31 @@ class WorkspaceArtifactSessionImportTests(unittest.TestCase):
    self.fail(path)
   with patch.object(M,'workspace_broker_post',side_effect=broker):result=M.workspace_artifact_import_bytes('demo','archive.zip',raw,digest,3600,'trace')
   self.assertEqual(bytes(state['raw']),raw);self.assertEqual(result['sha256'],digest);self.assertEqual(result['size'],size);self.assertLessEqual(state['batch_calls'],11);self.assertLessEqual(state['max_scalar'],11000)
+
+ def test_public_import_dispatch_uses_https_streaming_path(self):
+  source=GATEWAY.read_text();start=source.index("elif name=='workspace.artifact.import':");end=source.index("elif name in {'workspace.artifact.upload.start'",start);block=source[start:end]
+  self.assertIn('workspace_artifact_import_https(',block)
+  self.assertNotIn('workspace_artifact_import_bytes(',block)
+  self.assertNotIn('session_file_resolve(',block)
+
+ def test_stream_transport_rejects_trailing_bytes_by_contract(self):
+  source=GATEWAY.read_text();start=source.index('def _workspace_direct_upload_stream');end=source.index('def workspace_artifact_import_https',start);block=source[start:end]
+  self.assertIn("if source.read(1):raise ValueError('session_file_size_mismatch')",block)
+
+ def test_https_import_starts_ticket_and_streams_without_materializing_file(self):
+  raw=b'https-stream-payload';digest=hashlib.sha256(raw).hexdigest();aid='art_'+'1'*24
+  calls=[]
+  def broker(path,payload,timeout=0):
+   calls.append((path,payload,timeout))
+   if path=='/v1/artifact/start':return 200,{'ok':True,'result':{'artifact_id':aid}}
+   if path=='/v1/artifact/ticket':return 200,{'ok':True,'result':{'artifact_id':aid}}
+   self.fail(path)
+  result={'artifact_id':aid,'status':'sealed','size':len(raw),'sha256':digest}
+  ref={'download_url':'https://files.oaiusercontent.com/signed','file_id':'file_123456','file_name':'archive.zip'}
+  with patch.object(M,'_session_file_open',return_value=io.BytesIO(raw)),patch.object(M,'workspace_broker_post',side_effect=broker),patch.object(M,'_workspace_direct_upload_stream',return_value=result) as stream:
+   imported,meta=M.workspace_artifact_import_https('demo','archive.zip',ref,len(raw),digest,7200,'trace')
+  self.assertEqual(imported['transport'],'https_stream');self.assertEqual(imported['size'],len(raw));self.assertEqual(meta['file_id'],'file_123456')
+  self.assertEqual([x[0] for x in calls],['/v1/artifact/start','/v1/artifact/ticket']);stream.assert_called_once()
 
  def test_gpt_actions_file_ref_normalizes_official_runtime_shape(self):
   ref={'name':'archive.zip','id':'file_0000000013bc820e9585c8554326a64d','mime_type':'application/zip','download_link':'https://files.oaiusercontent.com/signed'}

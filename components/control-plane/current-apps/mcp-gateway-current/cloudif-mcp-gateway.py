@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import os,json,hmac,urllib.request,urllib.error,threading,time,uuid,hashlib,secrets,base64,re,socket,ipaddress
+import os,json,hmac,urllib.request,urllib.error,threading,time,uuid,hashlib,secrets,base64,re,socket,ipaddress,http.client
 import jsonschema
 from http.server import BaseHTTPRequestHandler,ThreadingHTTPServer
 from urllib.parse import urlparse,parse_qs,urlencode,urljoin
@@ -11,6 +11,10 @@ AGENT_URL=os.environ.get('CLOUDIF_AGENT_URL','http://127.0.0.1:18203').rstrip('/
 AGENT_ADMIN_TOKEN=os.environ.get('CLOUDIF_AGENT_ADMIN_TOKEN','')
 WORKSPACE_URL=os.environ.get('CLOUDIF_WORKSPACE_URL','http://127.0.0.1:18206').rstrip('/')
 WORKSPACE_TOKEN=os.environ.get('CLOUDIF_WORKSPACE_TOKEN','')
+ARTIFACT_MAX_BYTES=1024*1024*1024
+ARTIFACT_STREAM_CHUNK_BYTES=1024*1024
+ARTIFACT_STREAM_TIMEOUT_SECONDS=7200
+LEGACY_IN_MEMORY_IMPORT_MAX_BYTES=64*1024*1024
 SESSION_FILE_DOWNLOAD_SUFFIXES=tuple(x.strip().lower().lstrip('.') for x in os.environ.get('CLOUDIF_SESSION_FILE_DOWNLOAD_SUFFIXES','oaiusercontent.com,openai.com,chatgpt.com').split(',') if x.strip())
 APPROVAL_URL=os.environ.get('CLOUDIF_APPROVAL_URL','http://127.0.0.1:18204').rstrip('/')
 APPROVAL_TOKEN=os.environ.get('CLOUDIF_APPROVAL_TOKEN','')
@@ -314,11 +318,11 @@ TOOLS=[
  {'name':'workspace.preview-static','description':'Executa preview HTTP descartável dentro de container isolado, sem publicar porta ou URL','inputSchema':{'type':'object','properties':{'slug':{'type':'string','minLength':1,'maxLength':63,'pattern':'^[a-z0-9][a-z0-9-]*$'},'ref':{'type':'string','minLength':1,'maxLength':128,'pattern':'^[A-Za-z0-9._/-]+$'}},'required':['slug'],'additionalProperties':False}},
  {'name':'workspace.edit-preview','description':'Aplica substituição textual única em HTML temporário, valida e executa preview sem persistir','inputSchema':{'type':'object','properties':{'slug':{'type':'string','minLength':1,'maxLength':63,'pattern':'^[a-z0-9][a-z0-9-]*$'},'ref':{'type':'string','minLength':1,'maxLength':128,'pattern':'^[A-Za-z0-9._/-]+$'},'path':{'type':'string','minLength':10,'maxLength':240,'pattern':'^site/(?:[A-Za-z0-9_.-]+/)*[A-Za-z0-9_.-]+[.]html$'},'expected_sha256':{'type':'string','pattern':'^[a-f0-9]{64}$'},'find':{'type':'string','minLength':1,'maxLength':512},'replace':{'type':'string','maxLength':1024}},'required':['slug','path','expected_sha256','find','replace'],'additionalProperties':False}},
  {'name':'workspace.normalize.plan','description':'Analisa o snapshot e propõe cloudiff.yaml como change set revisável, sem alterar o repositório','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'ref':{'type':'string','pattern':'^[A-Za-z0-9._/-]+$'},'title':{'type':'string','minLength':4,'maxLength':160},'description':{'type':'string','maxLength':4000},'ttl_seconds':{'type':'integer','minimum':300,'maximum':86400}},'required':['slug'],'additionalProperties':False}},
- {'name':'workspace.artifact.upload.start','description':'Inicia upload temporário de artefato binário vinculado ao projeto, tamanho e SHA-256 esperados','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'filename':{'type':'string','minLength':1,'maxLength':240},'expected_size':{'type':'integer','minimum':0,'maximum':67108864},'expected_sha256':{'type':'string','pattern':'^[a-f0-9]{64}$'},'ttl_seconds':{'type':'integer','minimum':300,'maximum':86400}},'required':['slug','filename','expected_size','expected_sha256'],'additionalProperties':False,'examples':[{'slug':'meu-projeto','filename':'documentos-anonimizados.zip','expected_size':1390970,'expected_sha256':'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa','ttl_seconds':3600}]}},
+ {'name':'workspace.artifact.upload.start','description':'Inicia upload temporário de artefato binário vinculado ao projeto, tamanho e SHA-256 esperados','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'filename':{'type':'string','minLength':1,'maxLength':240},'expected_size':{'type':'integer','minimum':0,'maximum':1073741824},'expected_sha256':{'type':'string','pattern':'^[a-f0-9]{64}$'},'ttl_seconds':{'type':'integer','minimum':300,'maximum':86400}},'required':['slug','filename','expected_size','expected_sha256'],'additionalProperties':False,'examples':[{'slug':'meu-projeto','filename':'documentos-anonimizados.zip','expected_size':1390970,'expected_sha256':'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa','ttl_seconds':3600}]}},
  {'name':'workspace.artifact.upload.chunk','description':'Envia um chunk Base64 pequeno e sequencial para um artifact_id; retries idênticos são idempotentes','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'artifact_id':{'type':'string','pattern':'^art_[a-f0-9]{24}$'},'chunk_index':{'type':'integer','minimum':0,'maximum':65535},'content_base64':{'type':'string','minLength':1,'maxLength':262144},'chunk_sha256':{'type':'string','pattern':'^[a-f0-9]{64}$'}},'required':['slug','artifact_id','chunk_index','content_base64','chunk_sha256'],'additionalProperties':False,'examples':[{'slug':'meu-projeto','artifact_id':'art_111111111111111111111111','chunk_index':0,'content_base64':'eA==','chunk_sha256':'2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881'}]}},
  {'name':'workspace.artifact.upload.batch','description':'Envia até 16 chunks pequenos de até 8 KiB raw cada em uma chamada; ideal quando strings Base64 maiores são truncadas pelo cliente','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'artifact_id':{'type':'string','pattern':'^art_[a-f0-9]{24}$'},'chunks':{'type':'array','minItems':1,'maxItems':16,'items':{'type':'object','properties':{'chunk_index':{'type':'integer','minimum':0,'maximum':65535},'content_base64':{'type':'string','minLength':1,'maxLength':11000},'chunk_sha256':{'type':'string','pattern':'^[a-f0-9]{64}$'}},'required':['chunk_index','content_base64','chunk_sha256'],'additionalProperties':False}}},'required':['slug','artifact_id','chunks'],'additionalProperties':False,'examples':[{'slug':'meu-projeto','artifact_id':'art_111111111111111111111111','chunks':[{'chunk_index':0,'content_base64':'eA==','chunk_sha256':'2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881'}]}]}},
- {'name':'workspace.artifact.import','description':'Importa automaticamente um arquivo anexado ao ChatGPT via file param oficial, baixa a URL temporária server-side, valida tamanho e SHA-256 e retorna artifact_id selado','inputSchema':{'type':'object','$defs':{'OpenAIFile':{'type':'object','properties':{'download_url':{'type':'string'},'file_id':{'type':'string'},'mime_type':{'type':'string'},'file_name':{'type':'string'}},'required':['download_url','file_id'],'additionalProperties':False}},'properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'file':{'$ref':'#/$defs/OpenAIFile'},'filename':{'type':'string','minLength':1,'maxLength':240},'expected_size':{'type':'integer','minimum':0,'maximum':67108864},'expected_sha256':{'type':'string','pattern':'^[a-f0-9]{64}$'},'ttl_seconds':{'type':'integer','minimum':300,'maximum':86400}},'required':['slug','file','filename','expected_size','expected_sha256'],'additionalProperties':False,'examples':[{'slug':'meu-projeto','file':{'download_url':'https://files.oaiusercontent.com/...','file_id':'file_1111111111111111'},'filename':'documentos-anonimizados.zip','expected_size':1390970,'expected_sha256':'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa','ttl_seconds':3600}]},'_meta':{'openai/fileParams':['file']}},
- {'name':'workspace.artifact.upload.ticket','description':'Gera um link HTTPS temporário do Portal para o usuário enviar o binário pelo navegador, sem Base64. Não abra a upload_url do Portal como agente; entregue-a ao usuário e acompanhe por workspace.artifact.upload.status.','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'artifact_id':{'type':'string','pattern':'^art_[a-f0-9]{24}$'},'ttl_seconds':{'type':'integer','minimum':60,'maximum':1800}},'required':['slug','artifact_id'],'additionalProperties':False,'examples':[{'slug':'meu-projeto','artifact_id':'art_111111111111111111111111','ttl_seconds':900}]}},
+ {'name':'workspace.artifact.import','description':'Importa automaticamente um arquivo anexado ao ChatGPT via file param oficial, baixa a URL temporária server-side, valida tamanho e SHA-256 e retorna artifact_id selado','inputSchema':{'type':'object','$defs':{'OpenAIFile':{'type':'object','properties':{'download_url':{'type':'string'},'file_id':{'type':'string'},'mime_type':{'type':'string'},'file_name':{'type':'string'}},'required':['download_url','file_id'],'additionalProperties':False}},'properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'file':{'$ref':'#/$defs/OpenAIFile'},'filename':{'type':'string','minLength':1,'maxLength':240},'expected_size':{'type':'integer','minimum':0,'maximum':1073741824},'expected_sha256':{'type':'string','pattern':'^[a-f0-9]{64}$'},'ttl_seconds':{'type':'integer','minimum':300,'maximum':86400}},'required':['slug','file','filename','expected_size','expected_sha256'],'additionalProperties':False,'examples':[{'slug':'meu-projeto','file':{'download_url':'https://files.oaiusercontent.com/...','file_id':'file_1111111111111111'},'filename':'documentos-anonimizados.zip','expected_size':1390970,'expected_sha256':'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa','ttl_seconds':3600}]},'_meta':{'openai/fileParams':['file']}},
+ {'name':'workspace.artifact.upload.ticket','description':'Gera um link HTTPS temporário do Portal para o usuário enviar o binário pelo navegador, sem Base64. Não abra a upload_url do Portal como agente; entregue-a ao usuário e acompanhe por workspace.artifact.upload.status.','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'artifact_id':{'type':'string','pattern':'^art_[a-f0-9]{24}$'},'ttl_seconds':{'type':'integer','minimum':60,'maximum':7200}},'required':['slug','artifact_id'],'additionalProperties':False,'examples':[{'slug':'meu-projeto','artifact_id':'art_111111111111111111111111','ttl_seconds':3600}]}},
  {'name':'workspace.artifact.upload.status','description':'Consulta pelo MCP o estado do upload de um artifact. Use esta ferramenta para acompanhar o usuário; não abra a upload_url do Portal, pois ela é destinada à sessão humana autenticada.','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'artifact_id':{'type':'string','pattern':'^art_[a-f0-9]{24}$'}},'required':['slug','artifact_id'],'additionalProperties':False,'examples':[{'slug':'meu-projeto','artifact_id':'art_111111111111111111111111'}]}},
  {'name':'workspace.artifact.upload.complete','description':'Conclui o upload, verifica tamanho e SHA-256 integrais e sela o artefato para uso por artifact_id','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'artifact_id':{'type':'string','pattern':'^art_[a-f0-9]{24}$'}},'required':['slug','artifact_id'],'additionalProperties':False,'examples':[{'slug':'meu-projeto','artifact_id':'art_111111111111111111111111'}]}},
  {'name':'workspace.change-set.validate','description':'Aplica temporariamente create, update, delete e mkdir, valida o resultado e sela o conjunto completo por digest','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'ref':{'type':'string','pattern':'^[A-Za-z0-9._/-]+$'},'title':{'type':'string','minLength':4,'maxLength':160},'description':{'type':'string','maxLength':4000},'ttl_seconds':{'type':'integer','minimum':300,'maximum':86400},'changes':{'type':'array','minItems':1,'maxItems':100,'items':{'type':'object','properties':{'operation':{'type':'string','enum':['create','update','delete','mkdir']},'path':{'type':'string','minLength':1,'maxLength':240},'content_base64':{'type':'string','maxLength':349528},'artifact_id':{'type':'string','pattern':'^art_[a-f0-9]{24}$'},'expected_sha256':{'type':'string','pattern':'^[a-f0-9]{64}$'}},'required':['operation','path'],'additionalProperties':False}}},'required':['slug','title','description','changes'],'additionalProperties':False}},
@@ -674,7 +678,7 @@ def _action_schema(client_id):
             'description':'Exatamente um arquivo anexado pelo usuário nesta conversa. Este campo é preenchido automaticamente pelo ChatGPT Actions com objetos contendo name, id, mime_type e download_link temporário.',
           },
           'filename':{'type':'string','minLength':1,'maxLength':240,'description':'Nome exato esperado para o arquivo.'},
-          'expected_size':{'type':'integer','minimum':0,'maximum':67108864,'description':'Tamanho exato esperado em bytes.'},
+          'expected_size':{'type':'integer','minimum':0,'maximum':1073741824,'description':'Tamanho exato esperado em bytes.'},
           'expected_sha256':{'type':'string','pattern':'^[a-f0-9]{64}$','description':'SHA-256 esperado em hexadecimal minúsculo.'},
           'ttl_seconds':{'type':'integer','minimum':300,'maximum':86400,'default':3600},
         },
@@ -1202,6 +1206,91 @@ def _session_file_download(download_url: str, expected_size: int):
     raise ValueError('session_file_too_many_redirects')
 
 
+def _session_file_open(download_url: str, expected_size: int):
+    current=str(download_url or '').strip()
+    opener=urllib.request.build_opener(urllib.request.ProxyHandler({}),_SessionFileNoRedirect())
+    for redirects in range(4):
+        _session_file_url_allowed(current)
+        request=urllib.request.Request(current,headers={'Accept':'application/octet-stream,*/*;q=0.8','User-Agent':'CloudIFF-Artifact-Importer/2.0'})
+        try:
+            response=opener.open(request,timeout=600)
+            if int(response.getcode() or 0)!=200:
+                response.close();raise ValueError('session_file_download_rejected')
+            _session_file_url_allowed(response.geturl())
+            header_length=response.headers.get('Content-Length')
+            if header_length is not None and int(header_length)!=int(expected_size):
+                response.close();raise ValueError('session_file_size_mismatch')
+            return response
+        except urllib.error.HTTPError as error:
+            if error.code in {301,302,303,307,308}:
+                location=str(error.headers.get('Location') or '').strip();error.close()
+                if not location:raise ValueError('session_file_redirect_invalid')
+                current=urljoin(current,location);continue
+            try:error.close()
+            except Exception:pass
+            raise ValueError('session_file_download_rejected') from error
+        except urllib.error.URLError as error:
+            raise ValueError('session_file_download_unavailable') from error
+    raise ValueError('session_file_too_many_redirects')
+
+
+def _workspace_direct_upload_stream(artifact_id: str, source, expected_size: int, expected_sha256: str):
+    parsed=urlparse(WORKSPACE_URL)
+    if parsed.scheme!='http' or parsed.hostname not in {'127.0.0.1','localhost','::1'}:
+        raise ValueError('workspace_stream_transport_invalid')
+    port=parsed.port or 80;prefix=(parsed.path or '').rstrip('/')
+    path=prefix+'/v1/artifact/direct-upload-by-id'
+    conn=http.client.HTTPConnection(parsed.hostname,port,timeout=ARTIFACT_STREAM_TIMEOUT_SECONDS)
+    digest=hashlib.sha256();remaining=int(expected_size);sent=0
+    try:
+        conn.putrequest('POST',path)
+        conn.putheader('Content-Type','application/octet-stream')
+        conn.putheader('Content-Length',str(expected_size))
+        conn.putheader('X-CloudIF-Artifact-Id',artifact_id)
+        conn.putheader('Accept','application/json')
+        conn.endheaders()
+        while remaining:
+            chunk=source.read(min(ARTIFACT_STREAM_CHUNK_BYTES,remaining))
+            if not chunk:raise ValueError('session_file_download_incomplete')
+            conn.send(chunk);digest.update(chunk);sent+=len(chunk);remaining-=len(chunk)
+        if source.read(1):raise ValueError('session_file_size_mismatch')
+        response=conn.getresponse();raw=response.read(65536)
+        try:data=json.loads(raw or b'{}')
+        except Exception:raise ValueError('workspace_stream_invalid_response')
+    finally:
+        conn.close()
+    actual=digest.hexdigest()
+    if sent!=int(expected_size) or not hmac.compare_digest(actual,str(expected_sha256).lower()):
+        raise ValueError('session_file_sha256_mismatch')
+    if response.status not in {200,201} or not data.get('ok'):
+        error=data.get('error') if isinstance(data,dict) else None
+        raise ValueError(str((error or {}).get('code') if isinstance(error,dict) else error or 'artifact_stream_upload_failed'))
+    result=data.get('result') or data
+    if int(result.get('size') or -1)!=sent or not hmac.compare_digest(str(result.get('sha256') or ''),actual):
+        raise ValueError('artifact_import_integrity_failed')
+    return result
+
+
+def workspace_artifact_import_https(slug,filename,file_ref,expected_size,expected_sha256,ttl_seconds,trace_id):
+    normalized=_normalize_session_file_ref(file_ref)
+    file_id=str(normalized.get('file_id') or '').strip();download_url=str(normalized.get('download_url') or '').strip();file_name=str(normalized.get('file_name') or '').strip()
+    if not re.fullmatch(r'[A-Za-z0-9_-]{6,192}',file_id) or not download_url:raise ValueError('session_file_param_invalid')
+    if file_name and filename and file_name!=filename:raise ValueError('session_file_name_mismatch')
+    expected_size=int(expected_size)
+    if not (0<=expected_size<=ARTIFACT_MAX_BYTES):raise ValueError('artifact_too_large')
+    with _session_file_open(download_url,expected_size) as source:
+        start_payload={'project_slug':slug,'trace_id':trace_id,'filename':filename,'expected_size':expected_size,'expected_sha256':expected_sha256,'ttl_seconds':ttl_seconds}
+        code,data=workspace_broker_post('/v1/artifact/start',start_payload,timeout=90)
+        if code not in {200,201} or not data.get('ok'):raise ValueError('artifact_import_start_failed')
+        started=data.get('result') or data;artifact_id=str(started.get('artifact_id') or '')
+        ticket_ttl=max(60,min(7200,int(ttl_seconds)))
+        code,ticket=workspace_broker_post('/v1/artifact/ticket',{'project_slug':slug,'trace_id':trace_id,'artifact_id':artifact_id,'requested_by':'mcp-session-import','ttl_seconds':ticket_ttl},timeout=30)
+        if code not in {200,201} or not ticket.get('ok'):raise ValueError('artifact_import_ticket_failed')
+        result=_workspace_direct_upload_stream(artifact_id,source,expected_size,expected_sha256)
+    result.update({'imported':True,'transport':'https_stream','source':'chatgpt_file_param','file_id':file_id,'download_url_persisted':False,'secrets_exposed':False})
+    return result,{'file_id':file_id,'file_name':file_name,'mime_type':str(normalized.get('mime_type') or ''),'size':expected_size,'sha256':expected_sha256}
+
+
 def session_file_resolve(file_ref,expected_size,expected_sha256,expected_filename=''):
     normalized=_normalize_session_file_ref(file_ref)
     file_id=str(normalized.get('file_id') or '').strip();download_url=str(normalized.get('download_url') or '').strip();file_name=str(normalized.get('file_name') or '').strip()
@@ -1210,7 +1299,7 @@ def session_file_resolve(file_ref,expected_size,expected_sha256,expected_filenam
     if file_name and expected_filename and file_name!=expected_filename:
         raise ValueError('session_file_name_mismatch')
     raw,headers=_session_file_download(download_url,int(expected_size))
-    if len(raw)!=int(expected_size) or len(raw)>64*1024*1024:raise ValueError('session_file_size_mismatch')
+    if len(raw)!=int(expected_size) or len(raw)>LEGACY_IN_MEMORY_IMPORT_MAX_BYTES:raise ValueError('session_file_size_mismatch')
     digest=hashlib.sha256(raw).hexdigest()
     if not hmac.compare_digest(digest,str(expected_sha256).lower()):raise ValueError('session_file_sha256_mismatch')
     return raw,{'file_id':file_id,'file_name':file_name,'mime_type':str(normalized.get('mime_type') or ''),'size':len(raw),'sha256':digest}
@@ -1834,7 +1923,7 @@ class H(BaseHTTPRequestHandler):
                 if not isinstance(refs,list) or len(refs)!=1:raise ValueError('actions_exactly_one_file_required')
                 file_ref=_normalize_action_file_ref(refs[0])
                 filename=str(payload.get('filename') or '').strip();size=int(payload.get('expected_size'));digest=str(payload.get('expected_sha256') or '').strip().lower();ttl=int(payload.get('ttl_seconds') or 3600)
-                if not filename or len(filename)>240 or not (0<=size<=67108864) or not re.fullmatch(r'[a-f0-9]{64}',digest) or not (300<=ttl<=86400):raise ValueError('invalid_request')
+                if not filename or len(filename)>240 or not (0<=size<=1073741824) or not re.fullmatch(r'[a-f0-9]{64}',digest) or not (300<=ttl<=86400):raise ValueError('invalid_request')
                 args={'file':file_ref,'filename':filename,'expected_size':size,'expected_sha256':digest,'ttl_seconds':ttl}
                 result=self._action_rpc(identity,'workspace.artifact.import',args)
                 return self.sendj(200,{'ok':True,'project_slug':identity['project_slug'],'tool':'workspace.artifact.import','result':result})
@@ -3028,11 +3117,11 @@ class H(BaseHTTPRequestHandler):
                 elif name=='workspace.artifact.import':
                     required={'slug','file','filename','expected_size','expected_sha256'};allowed=required|{'ttl_seconds'}
                     if not required.issubset(args) or not set(args).issubset(allowed):raise ValueError('Informe slug, file, filename, expected_size e expected_sha256. O campo file é preenchido pelo ChatGPT via openai/fileParams.')
-                    slug=str(args.get('slug') or '').strip();file_ref=args.get('file');filename=str(args.get('filename') or '').strip();size=int(args.get('expected_size'));digest=str(args.get('expected_sha256') or '').strip().lower();ttl=int(args.get('ttl_seconds') or 3600)
-                    if not re.fullmatch(r'[a-z0-9][a-z0-9-]*',slug) or not isinstance(file_ref,dict) or not filename or len(filename)>240 or not (0<=size<=67108864) or not re.fullmatch(r'[a-f0-9]{64}',digest) or not (300<=ttl<=86400):raise ValueError('Metadados da importação são inválidos.')
+                    slug=str(args.get('slug') or '').strip();file_ref=args.get('file');filename=str(args.get('filename') or '').strip();size=int(args.get('expected_size'));digest=str(args.get('expected_sha256') or '').strip().lower();ttl=int(args.get('ttl_seconds') or 7200)
+                    if not re.fullmatch(r'[a-z0-9][a-z0-9-]*',slug) or not isinstance(file_ref,dict) or not filename or len(filename)>240 or not (0<=size<=1073741824) or not re.fullmatch(r'[a-f0-9]{64}',digest) or not (300<=ttl<=86400):raise ValueError('Metadados da importação são inválidos.')
                     control('/v1/projects/'+urllib.parse.quote(slug,safe=''))
-                    raw,file_meta=session_file_resolve(file_ref,size,digest,filename)
-                    content=workspace_artifact_import_bytes(slug,filename,raw,digest,ttl,trace_id);content['file_id']=file_meta['file_id'];content['source']='chatgpt_file_param';content['download_url_persisted']=False;content['secrets_exposed']=False
+                    content,file_meta=workspace_artifact_import_https(slug,filename,file_ref,size,digest,ttl,trace_id)
+                    content['file_id']=file_meta['file_id'];content['source']='chatgpt_file_param';content['download_url_persisted']=False;content['secrets_exposed']=False
                 elif name in {'workspace.artifact.upload.start','workspace.artifact.upload.chunk','workspace.artifact.upload.batch','workspace.artifact.upload.ticket','workspace.artifact.upload.complete'}:
                     slug=str(args.get('slug') or '').strip()
                     if not re.fullmatch(r'[a-z0-9][a-z0-9-]*',slug):raise ValueError('O campo slug é obrigatório e deve ser válido.')
@@ -3040,8 +3129,8 @@ class H(BaseHTTPRequestHandler):
                     if name=='workspace.artifact.upload.start':
                         allowed={'slug','filename','expected_size','expected_sha256','ttl_seconds'}
                         if not {'slug','filename','expected_size','expected_sha256'}.issubset(args) or not set(args).issubset(allowed):raise ValueError('Informe slug, filename, expected_size e expected_sha256.')
-                        filename=str(args.get('filename') or '').strip();digest=str(args.get('expected_sha256') or '').strip().lower();size=int(args.get('expected_size'));ttl=int(args.get('ttl_seconds') or 3600)
-                        if not filename or len(filename)>240 or not re.fullmatch(r'[a-f0-9]{64}',digest) or not (0<=size<=67108864) or not (300<=ttl<=86400):raise ValueError('Metadados do artefato inválidos.')
+                        filename=str(args.get('filename') or '').strip();digest=str(args.get('expected_sha256') or '').strip().lower();size=int(args.get('expected_size'));ttl=int(args.get('ttl_seconds') or 7200)
+                        if not filename or len(filename)>240 or not re.fullmatch(r'[a-f0-9]{64}',digest) or not (0<=size<=1073741824) or not (300<=ttl<=86400):raise ValueError('Metadados do artefato inválidos.')
                         payload={'project_slug':slug,'trace_id':trace_id,'filename':filename,'expected_size':size,'expected_sha256':digest,'ttl_seconds':ttl};endpoint='/v1/artifact/start'
                     elif name=='workspace.artifact.upload.chunk':
                         allowed={'slug','artifact_id','chunk_index','content_base64','chunk_sha256'}
@@ -3060,8 +3149,8 @@ class H(BaseHTTPRequestHandler):
                     elif name=='workspace.artifact.upload.ticket':
                         allowed={'slug','artifact_id','ttl_seconds'}
                         if not {'slug','artifact_id'}.issubset(args) or not set(args).issubset(allowed):raise ValueError('Informe slug e artifact_id.')
-                        artifact_id=str(args.get('artifact_id') or '').strip();ttl=int(args.get('ttl_seconds') or 900);client_id=self.headers.get('X-CloudIF-Client','').strip()
-                        if not re.fullmatch(r'art_[a-f0-9]{24}',artifact_id) or not (60<=ttl<=1800) or not client_id:raise ValueError('Metadados do ticket inválidos.')
+                        artifact_id=str(args.get('artifact_id') or '').strip();ttl=int(args.get('ttl_seconds') or 3600);client_id=self.headers.get('X-CloudIF-Client','').strip()
+                        if not re.fullmatch(r'art_[a-f0-9]{24}',artifact_id) or not (60<=ttl<=7200) or not client_id:raise ValueError('Metadados do ticket inválidos.')
                         payload={'project_slug':slug,'trace_id':trace_id,'artifact_id':artifact_id,'requested_by':client_id,'ttl_seconds':ttl};endpoint='/v1/artifact/ticket'
                     else:
                         allowed={'slug','artifact_id'}

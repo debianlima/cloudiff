@@ -37,6 +37,8 @@ SLUG = re.compile(r'^[a-z0-9][a-z0-9-]{0,62}$')
 TRACE = re.compile(r'^[A-Za-z0-9._:-]{1,128}$')
 REF = re.compile(r'^[A-Za-z0-9._/-]{1,128}$')
 ARCHIVE_MAX = 20 * 1024 * 1024
+ARTIFACT_MAX_BYTES = 1024 * 1024 * 1024
+ARTIFACT_STREAM_CHUNK_BYTES = 1024 * 1024
 UNPACK_MAX = 50 * 1024 * 1024
 FILE_MAX = 10 * 1024 * 1024
 ENTRY_MAX = 5000
@@ -1061,6 +1063,27 @@ class H(BaseHTTPRequestHandler):
         self.send_header('Content-Length', str(len(raw)))
         self.end_headers(); self.wfile.write(raw)
 
+    def send_artifact_file(self, code: int, path: str, metadata: dict) -> None:
+        size=int(metadata.get('size') or 0)
+        self.send_response(code)
+        self.send_header('Content-Type','application/octet-stream')
+        self.send_header('Cache-Control','no-store')
+        self.send_header('X-Content-Type-Options','nosniff')
+        self.send_header('X-CloudIF-Artifact-Id',str(metadata.get('artifact_id') or ''))
+        self.send_header('X-CloudIF-Artifact-Sha256',str(metadata.get('sha256') or ''))
+        self.send_header('X-CloudIF-Artifact-Size',str(size))
+        self.send_header('X-CloudIF-Artifact-Expires',str(metadata.get('expires_at') or 0))
+        self.send_header('Content-Length',str(size))
+        self.end_headers()
+        sent=0;digest=hashlib.sha256()
+        with open(path,'rb',buffering=0) as handle:
+            while sent<size:
+                chunk=handle.read(min(ARTIFACT_STREAM_CHUNK_BYTES,size-sent))
+                if not chunk:raise IOError('artifact_stream_incomplete')
+                digest.update(chunk);self.wfile.write(chunk);sent+=len(chunk)
+        if sent!=size or not hmac.compare_digest(digest.hexdigest(),str(metadata.get('sha256') or '')):
+            raise IOError('artifact_stream_integrity_failed')
+
     def auth(self) -> bool:
         return bool(TOKEN) and hmac.compare_digest(self.headers.get('Authorization', ''), 'Bearer ' + TOKEN)
 
@@ -1095,7 +1118,7 @@ class H(BaseHTTPRequestHandler):
                 ctype=(self.headers.get('Content-Type') or '').split(';',1)[0].strip().lower();n=int(self.headers.get('Content-Length','0') or 0)
                 if ctype!='application/octet-stream':
                     self.sendj(415,{'ok':False,'error':{'code':'octet_stream_required'}});return
-                if not (0<=n<=64*1024*1024):raise ValueError('invalid_direct_upload')
+                if not (0<=n<=ARTIFACT_MAX_BYTES):raise ValueError('invalid_direct_upload')
                 if path == '/v1/artifact/direct-upload':
                     ticket=str(self.headers.get('X-CloudIF-Upload-Ticket') or '').strip()
                     if not ticket:raise ValueError('invalid_direct_upload')
@@ -1175,7 +1198,7 @@ class H(BaseHTTPRequestHandler):
             if path not in {'/v1/change-set/resolve','/v1/artifact/start','/v1/artifact/chunk','/v1/artifact/batch','/v1/artifact/ticket','/v1/artifact/complete','/v1/artifact/read'}:
                 assert REF.fullmatch(ref) and '..' not in ref and not ref.startswith('/') and not ref.endswith('/')
             if path in {'/v1/artifact/start','/v1/normalize-plan','/v1/change-set/validate'}: assert 300 <= ttl_seconds <= 86400
-            if path == '/v1/artifact/ticket': assert 60 <= ttl_seconds <= 1800
+            if path == '/v1/artifact/ticket': assert 60 <= ttl_seconds <= 7200
         except Exception:
             self.sendj(400, {'ok': False, 'error': {'code': 'invalid_request', 'message': 'A solicitação contém campos ausentes ou incompatíveis.'}})
             return
@@ -1201,9 +1224,10 @@ class H(BaseHTTPRequestHandler):
             elif path == '/v1/artifact/complete':
                 result=complete_artifact(ARTIFACT_ROOT,slug,artifact_id);run_dir='';name='';removed=True
             elif path == '/v1/artifact/read':
-                meta,raw=read_artifact(ARTIFACT_ROOT,slug,artifact_id,artifact_expected_sha256,artifact_expected_size)
-                print(json.dumps({'event': event, 'project_slug': slug, 'trace_id': trace, 'result':'success','artifact_id':artifact_id,'bytes':len(raw),'duration_ms':round((time.monotonic()-started)*1000,2)},separators=(',',':')),flush=True)
-                self.sendb(200,raw,meta);return
+                resolved=resolve_artifact(ARTIFACT_ROOT,slug,artifact_id,expected_sha256=artifact_expected_sha256,expected_size=artifact_expected_size)
+                payload_path=str(resolved.pop('payload_path'))
+                print(json.dumps({'event': event, 'project_slug': slug, 'trace_id': trace, 'result':'success','artifact_id':artifact_id,'bytes':int(resolved.get('size') or 0),'duration_ms':round((time.monotonic()-started)*1000,2)},separators=(',',':')),flush=True)
+                self.send_artifact_file(200,payload_path,resolved);return
             elif path == '/v1/probe':
                 result, name = probe(slug, trace)
                 run_dir = ''

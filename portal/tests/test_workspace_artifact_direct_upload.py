@@ -41,11 +41,28 @@ class WorkspaceArtifactDirectUploadTests(unittest.TestCase):
    result=A.direct_upload_artifact_by_id(td,aid,io.BytesIO(raw),len(raw));self.assertEqual(result['status'],'sealed');self.assertEqual(result['sha256'],digest)
    self.assertEqual(A.inspect_upload_artifact(td,aid)['upload_ticket_status'],'used')
 
+ def test_artifact_limit_is_exactly_one_gib(self):
+  digest='0'*64
+  with tempfile.TemporaryDirectory() as td:
+   original=A._ensure_artifact_capacity
+   try:
+    A._ensure_artifact_capacity=lambda root,size:None
+    started=A.start_artifact(td,'demo','one-gib.bin',1024*1024*1024,digest,900)
+    self.assertEqual(started['expected_size'],1024*1024*1024)
+    with self.assertRaises(A.ArtifactError) as ctx:A.start_artifact(td,'demo','too-large.bin',1024*1024*1024+1,digest,900)
+    self.assertEqual(ctx.exception.code,'artifact_too_large')
+   finally:A._ensure_artifact_capacity=original
+
+ def test_complete_hashes_payload_as_stream_not_read_bytes(self):
+  source=PATH.read_text();start=source.index('def _complete_artifact_unlocked');end=source.index('def complete_artifact',start);block=source[start:end]
+  self.assertIn('_sha256_file(payload)',block);self.assertNotIn('payload.read_bytes()',block)
+
  def test_ticket_is_project_scoped_and_short_lived(self):
   raw=b'x';digest=hashlib.sha256(raw).hexdigest()
   with tempfile.TemporaryDirectory() as td:
    aid=A.start_artifact(td,'demo','x.bin',1,digest,900)['artifact_id']
    with self.assertRaises(A.ArtifactError):A.create_upload_ticket(td,'other',aid,'client',300)
-   with self.assertRaises(A.ArtifactError):A.create_upload_ticket(td,'demo',aid,'client',1801)
+   A.create_upload_ticket(td,'demo',aid,'client',7200)
+   with self.assertRaises(A.ArtifactError):A.create_upload_ticket(td,'demo',aid,'client',7201)
 
 if __name__=='__main__':unittest.main()

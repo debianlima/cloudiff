@@ -119,6 +119,17 @@ class ChangeSetMCPContractTests(unittest.TestCase):
         router_apply=(ROOT/'components/control-plane/srv/cloudif/bin/cloudif-apply-router-portal-v1.sh').read_text()
         self.assertIn('client_max_body_size 70m;',router)
         self.assertIn('client_max_body_size 70m;',router_apply)
+        for text in (router,router_apply):
+            self.assertIn('location = /cloudiff/portal/api/artifact-upload/content',text)
+            self.assertIn('client_max_body_size 1024m;',text)
+            self.assertIn('client_body_timeout 7200s;',text)
+            self.assertIn('proxy_request_buffering off;',text)
+            self.assertIn('proxy_read_timeout 7200s;',text)
+            self.assertIn('proxy_send_timeout 7200s;',text)
+        npm_upload=(ROOT/'components/proxy/usr/local/sbin/cloudif-configure-main-artifact-upload.sh').read_text()
+        self.assertIn('client_max_body_size 1024m;',npm_upload)
+        self.assertIn('proxy_request_buffering off;',npm_upload)
+        self.assertIn('database.sqlite',npm_upload)
         for marker in ('/project/proposal/artifact/stage','def _change_set_artifact_stage','def _change_set_artifact_load','def _change_set_put_bytes','_CHANGESET_ARTIFACT_MAX_BYTES = 64 * 1024 * 1024',"if len(raw)>1024*1024",'def _change_set_git_commit_bytes'):
             self.assertIn(marker,self.forja)
         self.assertIn("'content_stored':False",self.gateway)

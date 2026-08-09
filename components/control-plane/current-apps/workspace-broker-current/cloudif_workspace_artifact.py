@@ -9,18 +9,21 @@ import re
 import secrets
 import time
 import threading
+import shutil
 from pathlib import Path
 from typing import Any
 
 ARTIFACT_RE = re.compile(r'^art_[a-f0-9]{24}$')
 SHA_RE = re.compile(r'^[a-f0-9]{64}$')
-MAX_ARTIFACT_BYTES = 64 * 1024 * 1024
+MAX_ARTIFACT_BYTES = 1024 * 1024 * 1024
+MIN_FREE_RESERVE_BYTES = 1024 * 1024 * 1024
+STREAM_CHUNK_BYTES = 1024 * 1024
 MAX_CHUNK_BYTES = 192 * 1024
 MAX_BATCH_CHUNK_BYTES = 8 * 1024
 MAX_BATCH_CHUNKS = 16
 DEFAULT_TTL = 3600
 MAX_TTL = 86400
-MAX_UPLOAD_TICKET_TTL = 1800
+MAX_UPLOAD_TICKET_TTL = 7200
 UPLOAD_TICKET_RE = re.compile(r'^upt_([a-f0-9]{24})_([a-f0-9]{48})$')
 _LOCKS: dict[str, threading.RLock] = {}
 _LOCKS_GUARD = threading.Lock()
@@ -110,6 +113,24 @@ def clean_expired_artifacts(artifact_root: str) -> int:
     return removed
 
 
+def _sha256_file(path: Path) -> str:
+    digest=hashlib.sha256()
+    with path.open('rb',buffering=0) as handle:
+        while True:
+            chunk=handle.read(STREAM_CHUNK_BYTES)
+            if not chunk:break
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _ensure_artifact_capacity(artifact_root: str, expected_size: int) -> None:
+    root=_root(artifact_root);root.mkdir(parents=True,exist_ok=True);os.chmod(root,0o700)
+    free=int(shutil.disk_usage(root).free)
+    required=int(expected_size)+MIN_FREE_RESERVE_BYTES
+    if free < required:
+        raise ArtifactError('artifact_storage_pressure','Não há espaço livre suficiente para receber o artefato com a reserva operacional exigida.','expected_size')
+
+
 def start_artifact(artifact_root: str, project_slug: str, filename: str, expected_size: int, expected_sha256: str, ttl_seconds: int = DEFAULT_TTL) -> dict[str, Any]:
     project_slug = str(project_slug or '').strip()
     filename = str(filename or '').replace('\\', '/').split('/')[-1].strip()
@@ -122,14 +143,15 @@ def start_artifact(artifact_root: str, project_slug: str, filename: str, expecte
     if not filename or len(filename) > 240 or '\x00' in filename:
         raise ArtifactError('invalid_filename', 'O nome do arquivo é inválido.', 'filename')
     if not (0 <= expected_size <= MAX_ARTIFACT_BYTES):
-        raise ArtifactError('artifact_too_large', 'O artefato pode ter no máximo 64 MiB.', 'expected_size')
+        raise ArtifactError('artifact_too_large', 'O artefato pode ter no máximo 1024 MiB.', 'expected_size')
     if not SHA_RE.fullmatch(expected_sha256):
         raise ArtifactError('invalid_sha256', 'expected_sha256 deve conter 64 caracteres hexadecimais.', 'expected_sha256')
     if not (300 <= ttl_seconds <= MAX_TTL):
         raise ArtifactError('invalid_ttl', 'ttl_seconds deve ficar entre 300 e 86400.', 'ttl_seconds')
     clean_expired_artifacts(artifact_root)
+    _ensure_artifact_capacity(artifact_root,expected_size)
     artifact_id = 'art_' + secrets.token_hex(12)
-    root = _root(artifact_root); root.mkdir(parents=True, exist_ok=True); os.chmod(root, 0o700)
+    root = _root(artifact_root)
     directory = _dir(artifact_root, artifact_id); directory.mkdir(mode=0o700)
     payload = _payload_path(artifact_root, artifact_id)
     fd = os.open(payload, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600); os.close(fd)
@@ -175,7 +197,7 @@ def create_upload_ticket(artifact_root: str, project_slug: str, artifact_id: str
     try: ttl_seconds=int(ttl_seconds or 900)
     except Exception as exc: raise ArtifactError('invalid_ticket_ttl','ttl_seconds deve ser inteiro.','ttl_seconds') from exc
     if not (60<=ttl_seconds<=MAX_UPLOAD_TICKET_TTL):
-        raise ArtifactError('invalid_ticket_ttl','O ticket pode durar entre 60 e 1800 segundos.','ttl_seconds')
+        raise ArtifactError('invalid_ticket_ttl','O ticket pode durar entre 60 e 7200 segundos.','ttl_seconds')
     with _artifact_lock(artifact_id):
         data=_load(artifact_root,artifact_id)
         if data.get('project_slug')!=project_slug:
@@ -240,6 +262,7 @@ def _direct_upload_unlocked(artifact_root: str, artifact_id: str, data: dict[str
     expected_size=int(data.get('expected_size') or -1)
     if content_length!=expected_size:
         raise ArtifactError('artifact_size_mismatch','O tamanho enviado não confere com expected_size.','content_length')
+    _ensure_artifact_capacity(artifact_root,content_length)
     directory=_dir(artifact_root,artifact_id)
     tmp=directory/('.direct-upload-'+secrets.token_hex(8)+'.tmp')
     fd=os.open(tmp,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)
@@ -247,7 +270,7 @@ def _direct_upload_unlocked(artifact_root: str, artifact_id: str, data: dict[str
     try:
         with os.fdopen(fd,'wb',buffering=0) as handle:
             while remaining:
-                chunk=stream.read(min(1024*1024,remaining))
+                chunk=stream.read(min(STREAM_CHUNK_BYTES,remaining))
                 if not chunk:
                     raise ArtifactError('upload_incomplete','O upload terminou antes do tamanho esperado.','content')
                 handle.write(chunk);digest.update(chunk);written+=len(chunk);remaining-=len(chunk)
@@ -397,7 +420,7 @@ def _complete_artifact_unlocked(artifact_root: str, project_slug: str, artifact_
     size = payload.stat().st_size
     if size != int(data.get('expected_size') or -1) or size != int(data.get('received_bytes') or -2):
         raise ArtifactError('artifact_size_mismatch', 'O tamanho recebido não confere com expected_size.', 'artifact_id')
-    digest = hashlib.sha256(payload.read_bytes()).hexdigest()
+    digest = _sha256_file(payload)
     if digest != data.get('expected_sha256'):
         raise ArtifactError('artifact_sha256_mismatch', 'O SHA-256 final do artefato não confere.', 'artifact_id')
     data.update({'status': 'sealed', 'size': size, 'sha256': digest, 'sealed_at': int(time.time()), 'updated_at': int(time.time())})
@@ -440,7 +463,7 @@ def read_artifact(artifact_root: str, project_slug: str, artifact_id: str, expec
     data = resolve_artifact(artifact_root, project_slug, artifact_id, expected_sha256=expected_sha256, expected_size=expected_size)
     payload = Path(data['payload_path'])
     raw = payload.read_bytes()
-    if len(raw) != int(data.get('size') or -1) or hashlib.sha256(raw).hexdigest() != data.get('sha256'):
+    if len(raw) != int(data.get('size') or -1) or not secrets.compare_digest(hashlib.sha256(raw).hexdigest(),str(data.get('sha256') or '')):
         raise ArtifactError('artifact_integrity_failed', 'A integridade do artefato armazenado falhou.', 'artifact_id')
     data.pop('payload_path', None)
     return data, raw

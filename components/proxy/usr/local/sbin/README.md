@@ -10,6 +10,7 @@ Componentes implantados no host de proxy e publicação.
 
 | Item | Tipo | Finalidade |
 |---|---|---|
+| [`cloudif-configure-main-artifact-upload.sh`](cloudif-configure-main-artifact-upload.sh) | `.sh` | Automação Shell operacional da plataforma. |
 | [`cloudif-machine-certificate-renew.py`](cloudif-machine-certificate-renew.py) | `.py` | Implementa `load_env`, `run`, `serial`, `cert_expiring`, `opener`, `post` e outros componentes. |
 | [`cloudif-machine-executor.py`](cloudif-machine-executor.py) | `.py` | Módulo Python da plataforma. |
 | [`cloudif-machine-guardian.py`](cloudif-machine-guardian.py) | `.py` | Implementa `send`, `main`. |

@@ -64,6 +64,36 @@ portal_auth = r'''
 
 portal = r'''
     # CloudIF portal v1 BEGIN
+    location = /cloudiff/portal/api/artifact-upload/content {
+        client_max_body_size 1024m;
+        client_body_timeout 7200s;
+        auth_request /cloudiff/portal-auth;
+        error_page 401 = @cloudif_authentik_signin_v244;
+        error_page 403 = @cloudif_forbidden_v244;
+        proxy_intercept_errors off;
+
+        auth_request_set $auth_cookie $upstream_http_set_cookie;
+        add_header Set-Cookie $auth_cookie always;
+        auth_request_set $authentik_username $upstream_http_x_authentik_username;
+        auth_request_set $authentik_email $upstream_http_x_authentik_email;
+        auth_request_set $authentik_groups $upstream_http_x_authentik_groups;
+
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-authentik-username $authentik_username;
+        proxy_set_header X-authentik-email $authentik_email;
+        proxy_set_header X-authentik-groups $authentik_groups;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_request_buffering off;
+        proxy_buffering off;
+        proxy_connect_timeout 15s;
+        proxy_read_timeout 7200s;
+        proxy_send_timeout 7200s;
+        proxy_pass http://10.62.92.7:18094;
+    }
+
     location ^~ /cloudiff/portal/ {
         client_max_body_size 70m;
         auth_request /cloudiff/portal-auth;

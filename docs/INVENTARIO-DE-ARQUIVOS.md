@@ -1,6 +1,6 @@
 # Inventário de arquivos
 
-Este catálogo descreve **1152 arquivos versionados**. Ele é regenerado pelo script de documentação.
+Este catálogo descreve **1153 arquivos versionados**. Ele é regenerado pelo script de documentação.
 
 | Caminho | Finalidade |
 |---|---|
@@ -484,6 +484,7 @@ Este catálogo descreve **1152 arquivos versionados**. Ele é regenerado pelo sc
 | [`components/proxy/usr/README.md`](../components/proxy/usr/README.md) | Documentação deste diretório. |
 | [`components/proxy/usr/local/README.md`](../components/proxy/usr/local/README.md) | Documentação deste diretório. |
 | [`components/proxy/usr/local/sbin/README.md`](../components/proxy/usr/local/sbin/README.md) | Documentação deste diretório. |
+| [`components/proxy/usr/local/sbin/cloudif-configure-main-artifact-upload.sh`](../components/proxy/usr/local/sbin/cloudif-configure-main-artifact-upload.sh) | Automação Shell operacional da plataforma. |
 | [`components/proxy/usr/local/sbin/cloudif-machine-certificate-renew.py`](../components/proxy/usr/local/sbin/cloudif-machine-certificate-renew.py) | Implementa `load_env`, `run`, `serial`, `cert_expiring`, `opener`, `post` e outros componentes. |
 | [`components/proxy/usr/local/sbin/cloudif-machine-executor.py`](../components/proxy/usr/local/sbin/cloudif-machine-executor.py) | Módulo Python da plataforma. |
 | [`components/proxy/usr/local/sbin/cloudif-machine-guardian.py`](../components/proxy/usr/local/sbin/cloudif-machine-guardian.py) | Implementa `send`, `main`. |
