@@ -22,7 +22,7 @@ class MCPOAuthContractTests(unittest.TestCase):
             self.assertIn(marker,self.gateway)
         self.assertIn("if not authenticated and method=='initialize'",self.gateway)
         self.assertIn("if not authenticated and method=='tools/list'",self.gateway)
-        self.assertEqual(self.gateway.count("'serverInfo':{'name':'cloudif-mcp-gateway','version':'0.8.0'}"),2)
+        self.assertEqual(self.gateway.count("'serverInfo':{'name':'cloudif-mcp-gateway','version':'0.9.0'}"),2)
         self.assertIn("if not authenticated:return self.send_mcp_auth_required(rid)",self.gateway)
 
     def test_oauth_resource_indicator_is_bound_to_code_and_token(self):
@@ -92,13 +92,13 @@ class MCPOAuthContractTests(unittest.TestCase):
         for marker in (
             "ARTIFACT_UPLOAD_WIDGET_URI='ui://cloudiff/artifact-upload-v1.html'",
             "'mimeType':'text/html;profile=mcp-app'",
-            "'ui':{'resourceUri':ARTIFACT_UPLOAD_WIDGET_URI}",
+            "'ui':{'resourceUri':ARTIFACT_UPLOAD_WIDGET_URI,'visibility':['model','app']}",
             "'name':'workspace.artifact.upload.file.select'",
             "'name':'workspace.artifact.upload.file.resolve'",
             "'ui':{'visibility':['app']}",
-            "window.openai.selectFiles",
-            "window.openai.getFileDownloadUrl",
-            "window.openai.callTool('workspace.artifact.upload.file.resolve'",
+            "selectFiles",
+            "getFileDownloadUrl",
+            "callTool('workspace.artifact.upload.file.resolve'",
         ):
             self.assertIn(marker,self.gateway)
 
