@@ -103,7 +103,7 @@ docker exec "$CONTAINER" nginx -s reload
 sleep 1
 
 verify_host() {
-  local domain="$1" conf="$2" marker="$3" host_id="$4"
+  local domain="$1" conf="$2" marker="$3" host_id="$4" path="$5"
   grep -q "more_clear_headers 'X-Frame-Options';" "$conf"
   grep -Fq "frame-ancestors 'self' $PORTAL_ORIGIN" "$conf"
   grep -Fq 'Cache-Control: no-store' "$conf"
@@ -118,15 +118,15 @@ assert 'Cache-Control: no-store' in s
 PY
   local headers
   headers=$(mktemp)
-  curl -fsSI --max-time 15 "https://$domain/" >"$headers"
+  curl -fsSI --max-time 15 "https://$domain$path" >"$headers"
   if grep -qi '^x-frame-options:' "$headers"; then echo "${marker,,}_x_frame_options_still_present" >&2; rm -f "$headers"; return 1; fi
   grep -Fqi "content-security-policy: frame-ancestors 'self' $PORTAL_ORIGIN" "$headers" || { echo "${marker,,}_frame_ancestors_missing" >&2; rm -f "$headers"; return 1; }
   grep -Fqi 'cache-control: no-store' "$headers" || { echo "${marker,,}_html_no_store_missing" >&2; rm -f "$headers"; return 1; }
   rm -f "$headers"
 }
 
-verify_host "$KOMODO_DOMAIN" "$KOMODO_CONF" 'Komodo' "$KOMODO_HOST_ID"
-verify_host "$AUTH_DOMAIN" "$AUTH_CONF" 'Authentik' "$AUTH_HOST_ID"
+verify_host "$KOMODO_DOMAIN" "$KOMODO_CONF" 'Komodo' "$KOMODO_HOST_ID" '/'
+verify_host "$AUTH_DOMAIN" "$AUTH_CONF" 'Authentik' "$AUTH_HOST_ID" '/if/flow/default-authentication-flow/'
 
 trap - EXIT
 printf 'configured|komodo=%s|auth=%s|frame_ancestor=%s|backup=%s\n' "$KOMODO_DOMAIN" "$AUTH_DOMAIN" "$PORTAL_ORIGIN" "$BACKUP_DIR"
