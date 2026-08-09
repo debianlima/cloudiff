@@ -12,6 +12,18 @@ class PortalArtifactUploadRoutesTests(unittest.TestCase):
   block=COEX[COEX.index("'/cloudiff/portal/api/artifact-upload/content'"):COEX.index('release_flow_match =',COEX.index("'/cloudiff/portal/api/artifact-upload/content'"))]
   for marker in ('_prod_csrf_equal','artifact_project_allowed','artifact_forward_upload_by_id','X-CloudIF-Artifact-Id'):
    self.assertIn(marker,block)
+ def test_capability_routes_use_ticket_auth_without_portal_session_or_csrf(self):
+  start=COEX.index("'/cloudiff/portal/api/artifact-upload/capability/status'")
+  end=COEX.index("if parsed.path in {'/cloudiff/portal/api/artifact-upload/status'",start)
+  block=COEX[start:end]
+  self.assertIn('artifact_ticket_status(ticket)',block)
+  self.assertIn('artifact_forward_upload(self,ticket,expected)',block)
+  self.assertIn("'authentication':'one_time_upload_capability'",block)
+  self.assertIn("'portal_cookie_required':False",block)
+  self.assertIn("'csrf_required':False",block)
+  self.assertNotIn('_prod_csrf_equal',block)
+  self.assertNotIn('artifact_project_allowed',block)
+  self.assertNotIn('self.user()',block)
  def test_legacy_ticket_route_remains_supported(self):
   self.assertIn('artifact_ticket_status',COEX);self.assertIn('artifact_forward_upload(self,ticket,expected)',COEX)
 

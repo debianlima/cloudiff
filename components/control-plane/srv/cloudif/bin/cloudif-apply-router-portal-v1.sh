@@ -64,6 +64,45 @@ portal_auth = r'''
 
 portal = r'''
     # CloudIF portal v1 BEGIN
+    location = /cloudiff/portal/artifact-upload-capability {
+        client_max_body_size 8k;
+        proxy_intercept_errors off;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_pass http://10.62.92.7:18094;
+    }
+
+    location = /cloudiff/portal/api/artifact-upload/capability/status {
+        client_max_body_size 8k;
+        proxy_intercept_errors off;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_pass http://10.62.92.7:18094;
+    }
+
+    location = /cloudiff/portal/api/artifact-upload/capability/content {
+        client_max_body_size 1024m;
+        client_body_timeout 7200s;
+        proxy_intercept_errors off;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_request_buffering off;
+        proxy_buffering off;
+        proxy_connect_timeout 15s;
+        proxy_read_timeout 7200s;
+        proxy_send_timeout 7200s;
+        proxy_pass http://10.62.92.7:18094;
+    }
+
     location = /cloudiff/portal/api/artifact-upload/content {
         client_max_body_size 1024m;
         client_body_timeout 7200s;

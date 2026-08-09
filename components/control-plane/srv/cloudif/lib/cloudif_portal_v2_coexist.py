@@ -522,6 +522,8 @@ def _install() -> None:
             route_query = urllib.parse.parse_qs(parsed.query)
             query_api = (route_query.get("api") or [""])[0].strip()
             try:
+                if path in {'/cloudiff/portal/artifact-upload-capability','/cloudif/portal/artifact-upload-capability'}:
+                    return send(self,200,'text/html; charset=utf-8',artifact_upload_page('', '', True),[('Referrer-Policy','no-referrer'),('X-Content-Type-Options','nosniff')])
                 artifact_upload_match=re.fullmatch(r'/cloudiff?/portal/artifact-upload/(art_[a-f0-9]{24})',path)
                 if path in {'/cloudiff/portal/artifact-upload','/cloudif/portal/artifact-upload'} or artifact_upload_match:
                     try:
@@ -852,6 +854,42 @@ def _install() -> None:
                 if handle_preview_request(self):
                     return
                 parsed = urllib.parse.urlparse(self.path)
+                if parsed.path in {'/cloudiff/portal/api/artifact-upload/capability/status','/cloudif/portal/api/artifact-upload/capability/status'}:
+                    try:
+                        content_length=int(self.headers.get('Content-Length','0') or 0)
+                        if not (0<content_length<=4096) or 'application/json' not in (self.headers.get('Content-Type') or '').lower():
+                            return send_json(self,400,{'ok':False,'error':{'message':'Solicitação de credencial inválida.'}})
+                        payload=json.loads(self.rfile.read(content_length) or b'{}')
+                        ticket=str(payload.get('upload_ticket') or '').strip() if isinstance(payload,dict) else ''
+                        if not ticket:return send_json(self,400,{'ok':False,'error':{'message':'Credencial de upload ausente.'}})
+                        meta=artifact_ticket_status(ticket)
+                        return send_json(self,200,{'ok':True,'artifact':artifact_safe_metadata(meta),'authentication':'one_time_upload_capability','portal_cookie_required':False,'csrf_required':False,'secrets_exposed':False})
+                    except ValueError as exc:
+                        return send_json(self,422,{'ok':False,'error':{'message':'A credencial de upload é inválida, usada ou expirou.','code':str(exc)}})
+                    except json.JSONDecodeError:
+                        return send_json(self,400,{'ok':False,'error':{'message':'JSON inválido.'}})
+                    except Exception as exc:
+                        print(f'cloudif_artifact_capability_status_failed type={type(exc).__name__}',flush=True)
+                        return send_json(self,503,{'ok':False,'error':{'message':'Não foi possível validar a credencial agora.','detail':type(exc).__name__}})
+                if parsed.path in {'/cloudiff/portal/api/artifact-upload/capability/content','/cloudif/portal/api/artifact-upload/capability/content'}:
+                    try:
+                        ticket=str(self.headers.get('X-CloudIF-Upload-Ticket') or '').strip()
+                        if not ticket:return send_json(self,401,{'ok':False,'error':{'message':'Credencial de upload ausente.'}})
+                        meta=artifact_ticket_status(ticket);expected=int(meta.get('expected_size') or -1)
+                        try:status,data=artifact_forward_upload(self,ticket,expected)
+                        except TypeError:return send_json(self,415,{'ok':False,'error':{'message':'Use application/octet-stream.'}})
+                        except ValueError:return send_json(self,422,{'ok':False,'error':{'message':'O tamanho enviado não corresponde ao artifact.'}})
+                        if status!=200 or not data.get('ok'):
+                            error=data.get('error') if isinstance(data,dict) else None;message=(error.get('message') if isinstance(error,dict) else str(error or '')) or 'O arquivo não passou na validação de integridade.'
+                            return send_json(self,422 if status<500 else 503,{'ok':False,'error':{'message':message}})
+                        result=data.get('result') or {}
+                        return send_json(self,200,{'ok':True,'artifact':artifact_safe_metadata(result),'authentication':'one_time_upload_capability','portal_cookie_required':False,'csrf_required':False,'secrets_exposed':False})
+                    except ValueError as exc:
+                        return send_json(self,422,{'ok':False,'error':{'message':'A credencial de upload é inválida, usada ou expirou.','code':str(exc)}})
+                    except Exception as exc:
+                        self.close_connection=True
+                        print(f'cloudif_artifact_capability_content_failed type={type(exc).__name__}',flush=True)
+                        return send_json(self,503,{'ok':False,'error':{'message':'O upload foi interrompido antes de ser selado. Você pode tentar novamente.','detail':type(exc).__name__}})
                 if parsed.path in {'/cloudiff/portal/api/artifact-upload/status','/cloudif/portal/api/artifact-upload/status'}:
                     try:
                         content_length=int(self.headers.get('Content-Length','0') or 0)

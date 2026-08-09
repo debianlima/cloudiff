@@ -6,13 +6,14 @@ GUIDE=(ROOT/'components/control-plane/current-apps/portal-current/cloudif_ai_age
 ONBOARDING=(ROOT/'components/control-plane/current-apps/project-onboarding-current/cloudif-project-onboarding.py').read_text()
 
 class ArtifactUploadAgentHandoffTests(unittest.TestCase):
-    def test_ticket_is_explicitly_human_only_and_status_is_agent_followup(self):
+    def test_ticket_is_scoped_human_upload_capability_and_status_is_agent_followup(self):
         self.assertIn("'upload_url_audience'",GATEWAY)
         self.assertIn("'human_user'",GATEWAY)
         self.assertIn("'agent_must_not_open_upload_url'",GATEWAY)
         self.assertIn("'agent_followup_tool'",GATEWAY)
         self.assertIn("'workspace.artifact.upload.status'",GATEWAY)
-        self.assertIn('Não abra a upload_url do Portal',GATEWAY)
+        self.assertIn('credencial temporária de upload do Portal',GATEWAY)
+        self.assertIn('não exige cookie/login do Portal',GATEWAY)
     def test_import_path_like_input_is_automatically_rewritten_to_browser_upload(self):
         self.assertIn("artifact_import_upload_fallback=False",GATEWAY)
         self.assertIn("payload.get('code')=='host_file_param_not_hydrated'",GATEWAY)
@@ -29,7 +30,7 @@ class ArtifactUploadAgentHandoffTests(unittest.TestCase):
         end=GATEWAY.index("if name=='workspace.artifact.upload.ticket':",start)
         block=GATEWAY[start:end]
         self.assertIn("workspace_broker_post('/v1/artifact/ticket'",block)
-        self.assertIn("content['upload_url']=PUBLIC_ORIGIN+'/cloudiff/portal/artifact-upload/'",block)
+        self.assertIn("content['upload_url']=PUBLIC_ORIGIN+'/cloudiff/portal/artifact-upload-capability#'",block)
         self.assertIn("content['upload_ticket_created']=True",block)
         self.assertIn("content['agent_followup_tool']='workspace.artifact.commit.plan'",block)
         self.assertIn("content['user_action_required']=True",block)
@@ -47,6 +48,15 @@ class ArtifactUploadAgentHandoffTests(unittest.TestCase):
         self.assertIn("'next_tool':'approval.request-change-set-proposal'",block)
         self.assertIn("'after_approval_tool':'forgejo.proposal.change-set.create'",block)
         self.assertNotIn('content_base64',block)
+
+    def test_portal_upload_ticket_is_one_time_capability_not_browser_session(self):
+        self.assertIn("'/cloudiff/portal/artifact-upload-capability#'+urllib.parse.quote(token,safe='')",GATEWAY)
+        self.assertIn("content['upload_method']='portal_capability_direct'",GATEWAY)
+        self.assertIn("content['human_portal_authentication_required']=False",GATEWAY)
+        self.assertIn("content['portal_cookie_required']=False",GATEWAY)
+        self.assertIn("content['csrf_required']=False",GATEWAY)
+        self.assertIn("content['authentication']='mcp_delegated_one_time_portal_capability'",GATEWAY)
+        self.assertIn("content['credential_in_fragment']=True",GATEWAY)
 
     def test_status_tool_uses_mcp_broker_path_not_portal_url(self):
         start=GATEWAY.index("elif name=='workspace.artifact.upload.status':")

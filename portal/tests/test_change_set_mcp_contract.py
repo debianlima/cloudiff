@@ -104,8 +104,8 @@ class ChangeSetMCPContractTests(unittest.TestCase):
         self.assertIn('MAX_BATCH_CHUNK_BYTES = 8 * 1024',artifact_source)
         self.assertIn('def create_upload_ticket',artifact_source)
         self.assertIn('def direct_upload_artifact',artifact_source)
-        self.assertIn("'/cloudiff/portal/artifact-upload/'",self.gateway)
-        self.assertNotIn("'/cloudiff/portal/artifact-upload#'",self.gateway)
+        self.assertIn("'/cloudiff/portal/artifact-upload-capability#'",self.gateway)
+        self.assertNotIn("'/cloudiff/portal/artifact-upload-capability?'",self.gateway)
         self.assertIn('browser_secret_required',self.gateway)
         self.assertIn("content['upload_url_audience']='human_user'",self.gateway)
         self.assertIn("content['agent_must_not_open_upload_url']=True",self.gateway)
@@ -129,9 +129,17 @@ class ChangeSetMCPContractTests(unittest.TestCase):
             self.assertIn('proxy_request_buffering off;',text)
             self.assertIn('proxy_read_timeout 7200s;',text)
             self.assertIn('proxy_send_timeout 7200s;',text)
+        for text in (router,router_apply):
+            self.assertIn('location = /cloudiff/portal/artifact-upload-capability',text)
+            self.assertIn('location = /cloudiff/portal/api/artifact-upload/capability/status',text)
+            self.assertIn('location = /cloudiff/portal/api/artifact-upload/capability/content',text)
+            cap=text[text.index('location = /cloudiff/portal/artifact-upload-capability'):text.index('location = /cloudiff/portal/api/artifact-upload/content')]
+            self.assertNotIn('auth_request /cloudiff/portal-auth',cap)
         npm_upload=(ROOT/'components/proxy/usr/local/sbin/cloudif-configure-main-artifact-upload.sh').read_text()
         self.assertIn('client_max_body_size 1024m;',npm_upload)
         self.assertIn('proxy_request_buffering off;',npm_upload)
+        self.assertIn('/cloudiff/portal/artifact-upload-capability',npm_upload)
+        self.assertIn('/cloudiff/portal/api/artifact-upload/capability/content',npm_upload)
         self.assertIn('database.sqlite',npm_upload)
         for marker in ('/project/proposal/artifact/stage','def _change_set_artifact_stage','def _change_set_artifact_load','def _change_set_put_bytes','_CHANGESET_ARTIFACT_MAX_BYTES = 64 * 1024 * 1024',"if len(raw)>1024*1024",'def _change_set_git_commit_bytes'):
             self.assertIn(marker,self.forja)

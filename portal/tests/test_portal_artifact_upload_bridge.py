@@ -22,6 +22,16 @@ class PortalArtifactUploadBridgeTests(unittest.TestCase):
   self.assertNotIn('upt_111111111111111111111111_',page)
   self.assertIn('new XMLHttpRequest()',page);self.assertIn('xhr.upload.onprogress',page);self.assertIn('1024 MiB',page)
   self.assertEqual(M.MAX_UPLOAD_BYTES,1024*1024*1024);self.assertEqual(M.UPLOAD_TIMEOUT_SECONDS,7200)
+ def test_capability_page_uses_fragment_ticket_without_portal_cookie_or_csrf(self):
+  page=M.render_page('',capability_mode=True).decode()
+  self.assertIn('capabilityMode=true',page)
+  self.assertIn('/cloudiff/portal/api/artifact-upload/capability/status',page)
+  self.assertIn('/cloudiff/portal/api/artifact-upload/capability/content',page)
+  self.assertIn("credentials:capabilityMode?'omit':'same-origin'",page)
+  self.assertIn("if(capabilityMode)xhr.setRequestHeader('X-CloudIF-Upload-Ticket',ticket)",page)
+  self.assertIn('<meta name="referrer" content="no-referrer">',page)
+  self.assertNotIn('upt_111111111111111111111111_',page)
+
  def test_legacy_fragment_mode_is_kept_only_as_compatibility(self):
   page=M.render_page('csrf-token').decode()
   self.assertIn('location.hash',page);self.assertIn('sessionStorage.setItem',page);self.assertIn('history.replaceState',page)
