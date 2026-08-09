@@ -28,12 +28,31 @@ class ReleaseFlowWizardUITests(unittest.TestCase):
         self.assertNotIn('result=publications.enqueue_publish(slug,user)',BASE)
         self.assertIn('A ativação direta de artefatos dN foi desativada',BASE)
 
-    def test_project_card_points_to_release_wizard_not_base_editor(self):
+    def test_project_card_redirects_to_publications_and_deep_links_requested_view(self):
         block=BASE[BASE.index('<section class="project-final__section project-final__publication">'):]
         block=block[:block.index('</section>')+10]
         self.assertIn('W Preview · H Homologation · P Publication',block)
-        self.assertIn('data-release-flow-open',block)
+        self.assertNotIn('data-release-flow-open',block)
+        self.assertNotIn('data-publication-environments',block)
+        self.assertIn('?tab=publicacao&amp;project={urllib.parse.quote(slug,safe=',block)
+        self.assertIn('&amp;open=release',block)
+        self.assertIn('&amp;open=variables',block)
+        self.assertIn('Gerenciar publicação</a>',block)
+        self.assertIn('Variáveis por ambiente</a>',block)
         self.assertNotIn('/publication/base/',block)
+
+    def test_publications_page_auto_opens_release_deep_link(self):
+        self.assertIn("const releaseDeepLink=new URLSearchParams(location.search)",BASE)
+        self.assertIn("releaseDeepLink.get('open')==='release'",BASE)
+        self.assertIn("x.dataset.projectSlug===releaseDeepLinkProject",BASE)
+        self.assertIn("setTimeout(()=>open(button),0)",BASE)
+
+    def test_publications_page_auto_opens_variables_deep_link(self):
+        self.assertIn("const publicationDeepLink=new URLSearchParams(location.search)",BASE)
+        self.assertIn("publicationDeepLinkOpen==='variables'",BASE)
+        self.assertIn('[data-publication-environments][data-publication-tool="variables"]',BASE)
+        self.assertIn("x.dataset.projectSlug===publicationDeepLinkProject",BASE)
+        self.assertIn("setTimeout(()=>publicationEnvironmentOpen(button),0)",BASE)
 
     def test_release_flow_api_is_csrf_protected(self):
         self.assertIn('/release-flow(?:/(approval/status))?',COEXIST)

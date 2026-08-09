@@ -81,9 +81,11 @@ class ProjectPublicationConfigurationV1Tests(unittest.TestCase):
         self.assertIn('open_base_workspace',portal);self.assertIn('canWrite',PUBLICATIONS.read_text())
         final_renderer=portal[portal.index('def _pm197_render'):portal.index('render_projects=_pm197_render')]
         self.assertIn('W Preview · H Homologation · P Publication',final_renderer)
-        self.assertNotIn('href=\"/cloudiff/portal/publication/base/{h(slug)}\"',final_renderer);self.assertIn('data-release-flow-open',final_renderer)
+        self.assertNotIn('href=\"/cloudiff/portal/publication/base/{h(slug)}\"',final_renderer);self.assertNotIn('data-release-flow-open',final_renderer);self.assertIn('&amp;open=release',final_renderer)
         self.assertNotIn('name=\"op\" value=\"open_base_workspace\"',final_renderer)
-        self.assertIn('data-publication-environments data-publication-tool=\"variables\" data-project-slug=\"{h(slug)}\"',final_renderer)
+        self.assertNotIn('data-publication-environments data-publication-tool=\"variables\"',final_renderer)
+        self.assertIn('&amp;open=variables',final_renderer)
+        self.assertIn('Variáveis por ambiente',final_renderer)
         self.assertNotIn('>Gerenciar variáveis</button>',final_renderer)
         self.assertNotIn('project-environments-shell',final_renderer)
         self.assertIn('name=\"csrf_token\" value=\"{h(csrf_token)}\"',final_renderer)
