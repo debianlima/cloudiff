@@ -188,6 +188,16 @@ class WorkspaceArtifactSessionImportTests(unittest.TestCase):
   self.assertEqual(meta['sha256'],digest);self.assertEqual(meta['size'],len(raw));self.assertEqual(meta['file_id'],'file_123456')
   self.assertEqual([x[0] for x in calls],['/v1/artifact/upload/status']);stream.assert_called_once_with(aid,unittest.mock.ANY,len(raw),digest)
 
+ def test_upload_file_response_reports_mcp_auth_context_without_exposing_secret(self):
+  source=GATEWAY.read_text();start=source.index("elif name=='workspace.artifact.upload.file':");end=source.index("elif name in {'workspace.artifact.upload.start'",start);block=source[start:end]
+  self.assertIn("content['mcp_identity_reused']=True",block)
+  self.assertIn("content['oauth_identity_reused']=bool(getattr(self,'_oauth',None))",block)
+  self.assertIn("content['authentication_context']='oauth_mcp'",block)
+  self.assertIn("content['portal_cookie_required']=False",block)
+  self.assertIn("content['secrets_exposed']=False",block)
+  self.assertNotIn("content['token']",block)
+  self.assertNotIn("content['cookie']",block)
+
  def test_existing_artifact_file_upload_rejects_project_mismatch_before_download(self):
   aid='art_'+'3'*24;ref={'download_url':'https://files.oaiusercontent.com/signed','file_id':'file_123456'}
   status={'artifact_id':aid,'project_slug':'other','filename':'archive.zip','status':'uploading','expected_size':1,'expected_sha256':'a'*64}

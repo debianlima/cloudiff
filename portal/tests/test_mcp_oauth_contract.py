@@ -22,6 +22,7 @@ class MCPOAuthContractTests(unittest.TestCase):
             self.assertIn(marker,self.gateway)
         self.assertIn("if not authenticated and method=='initialize'",self.gateway)
         self.assertIn("if not authenticated and method=='tools/list'",self.gateway)
+        self.assertEqual(self.gateway.count("'serverInfo':{'name':'cloudif-mcp-gateway','version':'0.6.0'}"),2)
         self.assertIn("if not authenticated:return self.send_mcp_auth_required(rid)",self.gateway)
 
     def test_oauth_resource_indicator_is_bound_to_code_and_token(self):
