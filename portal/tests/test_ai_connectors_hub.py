@@ -17,6 +17,17 @@ class AIConnectorsHubTests(unittest.TestCase):
             self.assertIn(text, html)
         self.assertNotIn('details open', html)
 
+    def test_rotation_route_refreshes_csrf_and_logs_sanitized_denials(self):
+        root=Path(__file__).resolve().parents[2]
+        portal=(root/'components/control-plane/current-apps/portal-current/cloudif-admin-portal-base.py').read_text()
+        api=portal[portal.index("if path in ('/cloudiff/portal/api/agent-guide'"):portal.index("return _aig_prev_get(self)",portal.index("if path in ('/cloudiff/portal/api/agent-guide'"))]
+        self.assertIn("self.send_header('X-CSRF-Token',_prod_csrf_token(user))",api)
+        self.assertIn("self.send_header('Cache-Control','no-store')",api)
+        rotate=portal[portal.index("if path in ('/cloudiff/portal/action/rotate-project-credential'"):portal.index("return _oi_prev_post(self)",portal.index("if path in ('/cloudiff/portal/action/rotate-project-credential'"))]
+        for marker in ('project_credential_rotation_denied','origin_denied','csrf_denied','project_denied'):
+            self.assertIn(marker,rotate)
+        self.assertNotIn("csrf_token':",rotate)
+
     def test_project_hub_uses_real_rotation_endpoint(self):
         row = {
             'project_slug': 'projeto-teste',
