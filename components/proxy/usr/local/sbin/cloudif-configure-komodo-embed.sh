@@ -38,9 +38,8 @@ import re,sqlite3,sys
 p,host_id,portal=sys.argv[1],int(sys.argv[2]),sys.argv[3]
 begin='# CloudIF Komodo Portal Embed BEGIN';end='# CloudIF Komodo Portal Embed END'
 block=f'''# CloudIF Komodo Portal Embed BEGIN
-proxy_hide_header X-Frame-Options;
-proxy_hide_header Content-Security-Policy;
-add_header Content-Security-Policy "frame-ancestors 'self' {portal}" always;
+more_clear_headers 'X-Frame-Options';
+more_set_headers "Content-Security-Policy: frame-ancestors 'self' {portal}";
 # CloudIF Komodo Portal Embed END'''
 c=sqlite3.connect(p)
 row=c.execute('select advanced_config from proxy_host where id=?',(host_id,)).fetchone()
@@ -58,9 +57,8 @@ import re,sys
 p=Path(sys.argv[1]);portal=sys.argv[2];s=p.read_text()
 begin='# CloudIF Komodo Portal Embed BEGIN';end='# CloudIF Komodo Portal Embed END'
 block=f'''  # CloudIF Komodo Portal Embed BEGIN
-  proxy_hide_header X-Frame-Options;
-  proxy_hide_header Content-Security-Policy;
-  add_header Content-Security-Policy "frame-ancestors 'self' {portal}" always;
+  more_clear_headers 'X-Frame-Options';
+  more_set_headers "Content-Security-Policy: frame-ancestors 'self' {portal}";
   # CloudIF Komodo Portal Embed END'''
 pattern=re.compile(r'\s*'+re.escape(begin)+r'.*?'+re.escape(end)+r'\s*',re.S)
 if pattern.search(s):s=pattern.sub('\n'+block+'\n',s,count=1)
@@ -83,14 +81,14 @@ docker exec "$CONTAINER" nginx -t
 docker exec "$CONTAINER" nginx -s reload
 sleep 1
 
-grep -q 'proxy_hide_header X-Frame-Options;' "$HOST_CONF"
+grep -q "more_clear_headers 'X-Frame-Options';" "$HOST_CONF"
 grep -Fq "frame-ancestors 'self' $PORTAL_ORIGIN" "$HOST_CONF"
 python3 - "$DB" "$HOST_ID" "$PORTAL_ORIGIN" <<'PY'
 import sqlite3,sys
 c=sqlite3.connect(sys.argv[1]);row=c.execute('select advanced_config from proxy_host where id=?',(int(sys.argv[2]),)).fetchone();c.close()
 s=(row[0] or '') if row else ''
 assert '# CloudIF Komodo Portal Embed BEGIN' in s
-assert 'proxy_hide_header X-Frame-Options;' in s
+assert "more_clear_headers 'X-Frame-Options';" in s
 assert f"frame-ancestors 'self' {sys.argv[3]}" in s
 PY
 

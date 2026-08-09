@@ -48,8 +48,8 @@ class PublicationSiteTerminalWorkspaceTests(unittest.TestCase):
     def test_komodo_proxy_allows_only_cloudiff_portal_as_frame_ancestor(self):
         self.assertIn('DOMAIN=komodoiff.duckdns.org',KOMODO_EMBED)
         self.assertIn('PORTAL_ORIGIN=https://cloudiff.duckdns.org',KOMODO_EMBED)
-        self.assertIn('proxy_hide_header X-Frame-Options;',KOMODO_EMBED)
-        self.assertIn('proxy_hide_header Content-Security-Policy;',KOMODO_EMBED)
+        self.assertIn("more_clear_headers 'X-Frame-Options';",KOMODO_EMBED)
+        self.assertIn('more_set_headers',KOMODO_EMBED)
         self.assertIn("frame-ancestors 'self' {portal}",KOMODO_EMBED)
         self.assertIn('nginx -t',KOMODO_EMBED)
         self.assertIn('rollback()',KOMODO_EMBED)
