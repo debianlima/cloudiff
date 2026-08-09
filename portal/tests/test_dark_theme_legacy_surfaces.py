@@ -74,6 +74,40 @@ class DarkThemeLegacySurfacesTest(unittest.TestCase):
             css,
         )
 
+    def test_playwright_regressions_do_not_force_legacy_details_white(self):
+        current = (ROOT / "components/control-plane/current-apps/portal-current/cloudif-admin-portal-base.py").read_text()
+        legacy = (ROOT / "portal/legacy/cloudif-admin-portal-base.py").read_text()
+        for source in (current, legacy):
+            self.assertIn(
+                'details:not(.enterprise-nav details){border-color:var(--ui141-border)!important;background:var(--ui141-surface)!important}',
+                source,
+            )
+            self.assertNotIn(
+                'details:not(.enterprise-nav details){border-color:var(--ui141-border)!important;background:#fff!important}',
+                source,
+            )
+            self.assertIn('html[data-theme=\"dark\"]{color-scheme:dark;--c-bg:#0d1320;', source)
+
+    def test_admin_and_guide_local_css_use_theme_surfaces(self):
+        source = (ROOT / "components/control-plane/srv/cloudif/lib/cloudif_portal_v2_coexist.py").read_text()
+        admin = source[source.index('.admin-operation-center'):source.index('</style>', source.index('.admin-operation-center'))]
+        self.assertIn('background:var(--surface)!important', admin)
+        self.assertIn('background:var(--surface);color:var(--ink)', admin)
+        self.assertIn('background:var(--rule-soft);color:var(--ink)', admin)
+        global_css = source[source.index('.global-admin-hub'):source.index('</style>', source.index('.global-admin-hub'))]
+        self.assertNotIn('background:#fff', global_css)
+        self.assertIn('color:var(--iff-dark)', global_css)
+        guide_css = source[source.index('.platform-guide'):source.index('</style>', source.index('.platform-guide'))]
+        self.assertIn('.guide-repository-kicker', guide_css)
+        self.assertIn('color:var(--iff-dark)', guide_css)
+
+    def test_code_blocks_keep_a_dark_terminal_surface_in_both_themes(self):
+        css = (ROOT / "portal/design/components.css").read_text()
+        self.assertIn(
+            '.legacy-content pre{padding:var(--s4);border-radius:var(--r-md);background:var(--terminal-bg);color:var(--terminal-ink)',
+            css,
+        )
+
     def test_canonical_help_uses_theme_tokens_for_connection_surfaces(self):
         source = (
             ROOT
