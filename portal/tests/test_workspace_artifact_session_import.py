@@ -13,11 +13,23 @@ class WorkspaceArtifactSessionImportTests(unittest.TestCase):
   self.assertIn("'_meta':{'openai/fileParams':['file']}",block)
   for field in ('download_url','file_id','mime_type','file_name'):self.assertIn("'"+field+"'",block)
   self.assertIn("'required':['download_url','file_id']",block)
-  self.assertIn("'required':['slug','filename','expected_size','expected_sha256']",block)
-  self.assertIn("'file_url'",block)
-  self.assertNotIn("'anyOf'",block)
+  self.assertIn("'required':['slug','file','filename','expected_size','expected_sha256']",block)
+  self.assertNotIn("'file_url'",block)
   self.assertIn("'maximum':1073741824",block)
   self.assertIn("'maximum':7200",source[source.index("'name':'workspace.artifact.upload.ticket'"):source.index("'name':'workspace.artifact.upload.status'")])
+
+ def test_every_openai_file_param_descriptor_is_scan_tools_compliant(self):
+  file_tools=[tool for tool in M.TOOLS if (tool.get('_meta') or {}).get('openai/fileParams')]
+  self.assertGreaterEqual(len(file_tools),1)
+  for tool in file_tools:
+   schema=tool.get('inputSchema') or {};required=set(schema.get('required') or []);defs=schema.get('$defs') or {};props=schema.get('properties') or {}
+   for field in tool['_meta']['openai/fileParams']:
+    self.assertIn(field,props,tool['name']);self.assertIn(field,required,tool['name'])
+    ref=(props[field] or {}).get('$ref');self.assertTrue(ref and ref.startswith('#/$defs/'),tool['name'])
+    file_schema=defs[ref.rsplit('/',1)[-1]]
+    self.assertEqual(set((file_schema.get('properties') or {}).keys()),{'download_url','file_id','mime_type','file_name'},tool['name'])
+    self.assertEqual(file_schema.get('required'),['download_url','file_id'],tool['name'])
+    self.assertFalse(file_schema.get('additionalProperties',True),tool['name'])
 
  def test_download_url_rejects_non_https_and_untrusted_hosts(self):
   for url,code in (

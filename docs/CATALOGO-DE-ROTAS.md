@@ -1,6 +1,6 @@
 # Catálogo de rotas e endpoints
 
-Catálogo estático de **623 referências de rota** encontradas nos serviços e módulos. Uma rota pode aparecer em mais de um adaptador por compatibilidade.
+Catálogo estático de **621 referências de rota** encontradas nos serviços e módulos. Uma rota pode aparecer em mais de um adaptador por compatibilidade.
 
 | Componente | Método observado | Rota |
 |---|---|---|
@@ -303,7 +303,6 @@ Catálogo estático de **623 referências de rota** encontradas nos serviços e 
 | [`components/control-plane/current-apps/portal-current/cloudif-admin-portal-base.py`](../components/control-plane/current-apps/portal-current/cloudif-admin-portal-base.py) | GET/POST | `/cloudiff/portal/?tab=projetos` |
 | [`components/control-plane/current-apps/portal-current/cloudif-admin-portal-base.py`](../components/control-plane/current-apps/portal-current/cloudif-admin-portal-base.py) | GET/POST | `/cloudiff/portal/?tab=projetos&msg=` |
 | [`components/control-plane/current-apps/portal-current/cloudif-admin-portal-base.py`](../components/control-plane/current-apps/portal-current/cloudif-admin-portal-base.py) | GET/POST | `/cloudiff/portal/?tab=projetos&project=` |
-| [`components/control-plane/current-apps/portal-current/cloudif-admin-portal-base.py`](../components/control-plane/current-apps/portal-current/cloudif-admin-portal-base.py) | GET/POST | `/cloudiff/portal/?tab=publicacao` |
 | [`components/control-plane/current-apps/portal-current/cloudif-admin-portal-base.py`](../components/control-plane/current-apps/portal-current/cloudif-admin-portal-base.py) | GET/POST | `/cloudiff/portal/?tab=publicacao&project=` |
 | [`components/control-plane/current-apps/portal-current/cloudif-admin-portal-base.py`](../components/control-plane/current-apps/portal-current/cloudif-admin-portal-base.py) | GET/POST | `/cloudiff/portal/action/admin-delete-project` |
 | [`components/control-plane/current-apps/portal-current/cloudif-admin-portal-base.py`](../components/control-plane/current-apps/portal-current/cloudif-admin-portal-base.py) | GET/POST | `/cloudiff/portal/action/open-project-terminal` |
@@ -408,7 +407,6 @@ Catálogo estático de **623 referências de rota** encontradas nos serviços e 
 | [`components/control-plane/current-apps/portal-current/cloudif_project_identity_panel.py`](../components/control-plane/current-apps/portal-current/cloudif_project_identity_panel.py) | GET/POST | `/v1/projects` |
 | [`components/control-plane/current-apps/portal-current/cloudif_promotion_panel.py`](../components/control-plane/current-apps/portal-current/cloudif_promotion_panel.py) | GET/POST | `/v1/promotions?project=sistema-de-biblioteca-teste` |
 | [`components/control-plane/current-apps/portal-current/cloudif_transaction_panel.py`](../components/control-plane/current-apps/portal-current/cloudif_transaction_panel.py) | GET/POST | `/v1/transactions?project=` |
-| [`components/control-plane/current-apps/portal-current/cloudif_ui_publications.py`](../components/control-plane/current-apps/portal-current/cloudif_ui_publications.py) | GET/POST | `/cloudiff/portal/?tab=publicacao` |
 | [`components/control-plane/current-apps/portal-current/cloudif_ui_publications.py`](../components/control-plane/current-apps/portal-current/cloudif_ui_publications.py) | GET/POST | `/cloudiff/portal/action/publication` |
 | [`components/control-plane/current-apps/portal-current/cloudif_ui_publications.py`](../components/control-plane/current-apps/portal-current/cloudif_ui_publications.py) | GET/POST | `/komodo/project/audit` |
 | [`components/control-plane/current-apps/portal-current/cloudif_unique_pages98.py`](../components/control-plane/current-apps/portal-current/cloudif_unique_pages98.py) | GET/POST | `/cloudiff/portal/?tab=projetos` |
