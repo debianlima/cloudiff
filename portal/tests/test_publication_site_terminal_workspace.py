@@ -10,6 +10,7 @@ RUNTIME=(ROOT/'components/runtime/current-apps/komodo-agent-current/cloudif-komo
 PUBLISHER=(ROOT/'components/proxy/current-apps/publisher-agent-current/cloudif-npm-publisher-agent.py').read_text()
 CSS=(ROOT/'portal/design/components.css').read_text()
 KOMODO_EMBED=(ROOT/'components/proxy/usr/local/sbin/cloudif-configure-komodo-embed.sh').read_text()
+KOMODO_EMBED_AUTH=(ROOT/'components/runtime/usr/local/sbin/cloudif-configure-komodo-embed-auth.sh').read_text()
 
 
 class PublicationSiteTerminalWorkspaceTests(unittest.TestCase):
@@ -46,15 +47,27 @@ class PublicationSiteTerminalWorkspaceTests(unittest.TestCase):
         terminal_block=BASE[BASE.index('async function publicationTerminalOpen'):BASE.index('async function publicationVariablesLoad')]
         self.assertNotIn('window.open(',terminal_block)
 
-    def test_komodo_proxy_allows_only_cloudiff_portal_as_frame_ancestor(self):
-        self.assertIn('DOMAIN=komodoiff.duckdns.org',KOMODO_EMBED)
+    def test_komodo_and_authentik_proxy_allow_only_cloudiff_portal_as_frame_ancestor(self):
+        self.assertIn('KOMODO_DOMAIN=komodoiff.duckdns.org',KOMODO_EMBED)
+        self.assertIn('AUTH_DOMAIN=authiff.duckdns.org',KOMODO_EMBED)
         self.assertIn('PORTAL_ORIGIN=https://cloudiff.duckdns.org',KOMODO_EMBED)
         self.assertIn("more_clear_headers 'X-Frame-Options';",KOMODO_EMBED)
         self.assertIn('more_set_headers',KOMODO_EMBED)
         self.assertIn("frame-ancestors 'self' {portal}",KOMODO_EMBED)
-        self.assertIn('nginx -t',KOMODO_EMBED)
         self.assertIn("more_set_headers -t 'text/html' 'Cache-Control: no-store';",KOMODO_EMBED)
+        self.assertIn('patch_db_host "$AUTH_HOST_ID" \'Authentik\'',KOMODO_EMBED)
+        self.assertIn('verify_host "$AUTH_DOMAIN"',KOMODO_EMBED)
+        self.assertIn('nginx -t',KOMODO_EMBED)
         self.assertIn('rollback()',KOMODO_EMBED)
+
+    def test_komodo_core_auto_redirects_oidc_inside_the_embed(self):
+        self.assertIn('KOMODO_OIDC_AUTO_REDIRECT',KOMODO_EMBED_AUTH)
+        self.assertIn('OIDC_AUTO_REDIRECT',KOMODO_EMBED_AUTH)
+        self.assertIn("pattern.sub(f'{key}=true',s)",KOMODO_EMBED_AUTH)
+        self.assertIn('docker compose --env-file',KOMODO_EMBED_AUTH)
+        self.assertIn('compose up -d core',KOMODO_EMBED_AUTH)
+        self.assertIn("grep -qx 'KOMODO_OIDC_AUTO_REDIRECT=true'",KOMODO_EMBED_AUTH)
+        self.assertIn('rollback()',KOMODO_EMBED_AUTH)
 
     def test_terminal_tabs_prepare_the_session_automatically(self):
         workspace=BASE[BASE.index('function publicationTerminalRender'):BASE.index('async function publicationVariablesLoad')]
