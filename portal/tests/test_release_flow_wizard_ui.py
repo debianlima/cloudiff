@@ -12,7 +12,16 @@ class ReleaseFlowWizardUITests(unittest.TestCase):
         self.assertIn('data-release-flow-open',UI)
         self.assertNotIn('>Publicar site<',UI)
         self.assertNotIn('>Publicar nova versão<',UI)
-        self.assertIn('Detalhes técnicos e versões legadas',UI)
+        self.assertIn('Alternar entre Publicações',UI);self.assertNotIn('Detalhes técnicos e versões legadas',UI)
+
+    def test_primary_actions_are_grouped_side_by_side(self):
+        controls=UI[UI.index('def _configuration_controls'):UI.index('def publication_panel')]
+        tools=controls[controls.index('publication-release-flow__tools'):]
+        self.assertIn('Gerenciar publicação',tools)
+        self.assertIn('Variáveis por ambiente',tools)
+        self.assertLess(tools.index('Gerenciar publicação'),tools.index('Variáveis por ambiente'))
+        head=controls[controls.index('publication-release-flow__head'):controls.index('publication-release-flow__stages')]
+        self.assertNotIn('Gerenciar publicação',head)
 
     def test_cached_legacy_publish_is_redirected_to_homologation(self):
         self.assertIn('publications.enqueue_homologation(slug,user)',BASE)

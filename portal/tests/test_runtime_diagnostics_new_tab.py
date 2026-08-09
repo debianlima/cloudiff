@@ -6,10 +6,13 @@ class RuntimeDiagnosticsNewTabTests(unittest.TestCase):
     def setUpClass(cls):
         cls.pub=Path('components/control-plane/current-apps/portal-current/cloudif_ui_publications.py').read_text()
         cls.base=Path('components/control-plane/current-apps/portal-current/cloudif-admin-portal-base.py').read_text()
-    def test_links_open_isolated_page(self):
-        self.assertIn('target="_blank" rel="noopener"',self.pub)
-        self.assertIn('Ver informações do PHP',self.pub)
-        self.assertIn('Ver informações do Node.js',self.pub)
+    def test_standalone_runtime_page_remains_available_from_workspace(self):
+        info=self.pub[self.pub.index('def _project_information'):self.pub.index('def _publication_snapshot_from_rows')]
+        self.assertNotIn('Ver informações do PHP',info)
+        self.assertNotIn('Ver informações do Node.js',info)
+        self.assertIn("standalone='/cloudiff/portal/action/project-runtime-info?slug='",self.base)
+        self.assertIn('target="_blank" rel="noopener"',self.base)
+
     def test_inline_modal_is_removed(self):
         for marker in ('runtime-modal-backdrop','data-runtime-modal','document.body.appendChild(modal)','runtime_script ='):
             self.assertNotIn(marker,self.pub)

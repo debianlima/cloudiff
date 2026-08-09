@@ -14,12 +14,12 @@ KOMODO_EMBED_AUTH=(ROOT/'components/runtime/usr/local/sbin/cloudif-configure-kom
 
 
 class PublicationSiteTerminalWorkspaceTests(unittest.TestCase):
-    def test_information_cards_match_runtime_tool_pattern(self):
-        self.assertIn('<span>Site</span><strong>Preview do site</strong>',UI)
-        self.assertIn('data-publication-tool="site"',UI)
-        self.assertIn('<span>Terminal</span><strong>Terminal do ambiente</strong>',UI)
-        self.assertIn('data-publication-tool="terminal"',UI)
-        self.assertIn('publication-card-action',UI)
+    def test_publication_summary_does_not_repeat_site_terminal_or_runtime_tools(self):
+        info=UI[UI.index('def _project_information'):UI.index('def _publication_snapshot_from_rows')]
+        for marker in ('Preview do site','Terminal do ambiente','Configuração do PHP','Runtime do Node.js','Serviço web','publication-card-action'):
+            self.assertNotIn(marker,info)
+        self.assertIn('data-publication-tool="site"',BASE)
+        self.assertIn('data-publication-tool="terminal"',BASE)
 
     def test_environment_workspace_has_site_and_terminal_tools(self):
         self.assertIn("const publicationTools=['overview','site','php','node','terminal','variables']",BASE)

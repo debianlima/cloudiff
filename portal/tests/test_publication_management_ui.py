@@ -57,9 +57,11 @@ class PublicationManagementUITest(unittest.TestCase):
 
 
 
-    def test_information_uses_real_project_links(self):
+    def test_information_keeps_only_nonduplicated_project_facts(self):
         markup=ui.publication_panel('demo','Django')
-        self.assertIn('Configuração do PHP',markup);self.assertIn('Runtime do Node.js',markup)
+        for duplicate in ('Configuração do PHP','Runtime do Node.js','Preview do site','Terminal do ambiente','Serviço web'):
+            self.assertNotIn(duplicate,markup)
+        self.assertIn('<span>Versões</span>',markup)
         self.assertIn('Banco vinculado',markup);self.assertIn('demo-db',markup)
         self.assertIn('publication-database-link',markup)
         self.assertIn('https://demo-db.cloudiff.duckdns.org/project/default',markup)

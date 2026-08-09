@@ -100,15 +100,10 @@ def _project_information(context):
         database_value=f'<strong>{h(database or "Nenhum banco vinculado")}</strong>'
     return (
         '<div class="publication-information">'
-        f'<div class="publication-info-card publication-runtime-card"><span>PHP</span><strong>Configuração do PHP</strong><small>Versão, módulos e parâmetros ativos</small><a class="publication-runtime-text" data-publication-environments data-publication-tool="php" data-project-slug="{h(context.get("slug") or "")}" href="/cloudiff/portal/action/project-runtime-info?slug={h(context.get("slug") or "")}&amp;kind=php" target="_blank" rel="noopener">Ver informações do PHP</a></div>'
-        f'<div class="publication-info-card publication-runtime-card"><span>Node.js</span><strong>Runtime do Node.js</strong><small>Versões, npm e dependências da API</small><a class="publication-runtime-text" data-publication-environments data-publication-tool="node" data-project-slug="{h(context.get("slug") or "")}" href="/cloudiff/portal/action/project-runtime-info?slug={h(context.get("slug") or "")}&amp;kind=node" target="_blank" rel="noopener">Ver informações do Node.js</a></div>'
-        f'<div class="publication-info-card publication-runtime-card"><span>Site</span><strong>Preview do site</strong><small>Visualize Preview, Homologação e Produção pela URL real</small><a class="publication-runtime-text publication-card-action" data-publication-environments data-publication-tool="site" data-project-slug="{h(context.get("slug") or "")}" href="/cloudiff/portal/?tab=publicacao">Visualizar sites</a></div>'
-        f'<div class="publication-info-card publication-runtime-card"><span>Terminal</span><strong>Terminal do ambiente</strong><small>Abra o container correspondente no Komodo</small><a class="publication-runtime-text publication-card-action" data-publication-environments data-publication-tool="terminal" data-project-slug="{h(context.get("slug") or "")}" href="/cloudiff/portal/?tab=publicacao">Abrir terminal</a></div>'
         f'<div class="publication-info-card"><span>Versões</span><strong>{h((context.get("runtime") or {}).get("versions") or "Não identificadas")}</strong><small>Runtime provisionado</small></div>'
-        f'<div class="publication-info-card"><span>Serviço web</span><strong>{h(context.get("service_status"))}</strong><small>Estado real do container</small></div>'
         f'<div class="publication-info-card"><span>Banco vinculado</span>{database_value}<small>Tenant da aplicação</small></div>'
         f'<div class="publication-info-card"><span>Segurança</span><strong>{h(context.get("security"))}</strong><small>HTTPS e healthcheck</small></div>'
-        f'<div class="publication-info-card publication-info-wide"><span>Repositório Forge</span>{repo_value}<small>Código-fonte do projeto</small></div>'
+        f'<div class="publication-info-card"><span>Repositório Forge</span>{repo_value}<small>Código-fonte do projeto</small></div>'
         '</div>'
     )
 
@@ -123,13 +118,12 @@ def _publication_snapshot_from_rows(rows):
 def _configuration_controls(slug,rows):
     return (
       '<section class="publication-release-flow" data-release-flow-summary="'+h(slug)+'">'
-      '<div class="publication-release-flow__head"><div><span>Fluxo de publicação</span><strong>Preview → Homologação → Publicação</strong><p>Desenvolva no Preview vivo, homologue um candidato imutável e publique exatamente o mesmo artefato.</p></div>'
-      '<button class="btn" type="button" data-release-flow-open data-project-slug="'+h(slug)+'">Gerenciar publicação</button></div>'
+      '<div class="publication-release-flow__head"><div><span>Fluxo de publicação</span><strong>Preview → Homologação → Publicação</strong><p>Desenvolva no Preview vivo, homologue um candidato imutável e publique exatamente o mesmo artefato.</p></div></div>'
       '<div class="publication-release-flow__stages" aria-label="Estágios da publicação">'
       '<article><span class="publication-stage-code">W</span><div><strong>Preview</strong><small>Workspace vivo</small></div><span class="publication-stage-state" data-release-summary-w>Consultar</span></article>'
       '<article><span class="publication-stage-code">H</span><div><strong>Homologação</strong><small>Candidato imutável</small></div><span class="publication-stage-state" data-release-summary-h>Consultar</span></article>'
       '<article><span class="publication-stage-code">P</span><div><strong>Publicação</strong><small>Produção aprovada</small></div><span class="publication-stage-state" data-release-summary-p>Consultar</span></article>'
-      '</div><div class="publication-release-flow__tools"><button class="btn light" type="button" data-publication-environments data-publication-tool="variables" data-project-slug="'+h(slug)+'">Variáveis por ambiente</button></div></section>'
+      '</div><div class="publication-release-flow__tools"><button class="btn" type="button" data-release-flow-open data-project-slug="'+h(slug)+'">Gerenciar publicação</button><button class="btn light" type="button" data-publication-environments data-publication-tool="variables" data-project-slug="'+h(slug)+'">Variáveis por ambiente</button></div></section>'
     )
 
 def publication_panel(slug, framework_hint=''):
@@ -161,7 +155,7 @@ def publication_panel(slug, framework_hint=''):
         trs=[]
         for r in rows:
             dep=int(r.get('deploy_number') or 0);trs.append(f'<tr><td>d{dep}</td><td><code>{h((r.get("commit_sha") or "")[:12])}</code></td><td><a href="https://{h(r.get("version_hostname") or "")}/" target="_blank" rel="noopener">Abrir</a></td><td>{"ativa" if int(r.get("is_active") or 0)==1 else h(r.get("status") or "")}</td></tr>')
-        history='<details class="publication-technical-history"><summary>Detalhes técnicos e versões legadas</summary><div style="overflow:auto"><table><tr><th>Artefato</th><th>Commit</th><th>URL técnica</th><th>Estado</th></tr>'+''.join(trs)+'</table></div></details>'
+        history='<details class="publication-technical-history"><summary>Alternar entre Publicações</summary><div style="overflow:auto"><table><tr><th>Publicação</th><th>Commit</th><th>Endereço</th><th>Estado</th></tr>'+''.join(trs)+'</table></div></details>'
     return '<div class="cm-resource publication-manager-resource">'+configuration+job_html+production+alias_html+history+information+'</div>'
 
 def admin_publications():

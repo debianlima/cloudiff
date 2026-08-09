@@ -14,11 +14,13 @@ class PublicationWorkspaceToolsTests(unittest.TestCase):
         cls.pub=PUB_UI.read_text()
         cls.design=DESIGN.read_text()
 
-    def test_runtime_cards_progressively_open_the_workspace(self):
+    def test_runtime_tools_live_only_in_the_workspace(self):
+        info=self.pub[self.pub.index('def _project_information'):self.pub.index('def _publication_snapshot_from_rows')]
         for kind in ('php','node'):
-            self.assertIn(f'data-publication-tool="{kind}"',self.pub)
-            self.assertIn(f'&amp;kind={kind}',self.pub)
-        self.assertIn('target="_blank" rel="noopener"',self.pub)
+            self.assertNotIn(f'data-publication-tool="{kind}"',info)
+            self.assertIn(f'data-publication-tool="{kind}"',self.portal)
+        self.assertNotIn('project-runtime-info?slug=',info)
+        self.assertIn('/cloudiff/portal/api/project-runtime-info?slug=',self.portal)
         self.assertIn('event.preventDefault();publicationEnvironmentOpen(button)',self.portal)
 
     def test_workspace_keeps_environment_and_tool_navigation_together(self):

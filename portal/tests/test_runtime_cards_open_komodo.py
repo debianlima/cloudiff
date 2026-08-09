@@ -7,14 +7,13 @@ class RuntimeCardsOpenKomodoTests(unittest.TestCase):
         cls.pub=Path('components/control-plane/current-apps/portal-current/cloudif_ui_publications.py').read_text()
         cls.base=Path('components/control-plane/current-apps/portal-current/cloudif-admin-portal-base.py').read_text()
         cls.coexist=Path('components/control-plane/srv/cloudif/lib/cloudif_portal_v2_coexist.py').read_text()
-    def test_cards_use_internal_buttons(self):
-        for marker in ('publication-runtime-card','Configuração do PHP','Runtime do Node.js','Ver informações do PHP'):
-            self.assertIn(marker,self.pub)
-        self.assertNotIn('class="publication-info-card publication-runtime-link"',self.pub)
-    def test_links_open_dedicated_terminal(self):
-        self.assertIn('project-runtime-info?slug=',self.pub)
-        self.assertIn('&amp;kind=php',self.pub)
-        self.assertIn('&amp;kind=node',self.pub)
+    def test_runtime_diagnostics_moved_out_of_summary_cards(self):
+        info=self.pub[self.pub.index('def _project_information'):self.pub.index('def _publication_snapshot_from_rows')]
+        for marker in ('publication-runtime-card','Configuração do PHP','Runtime do Node.js','Ver informações do PHP','project-runtime-info?slug='):
+            self.assertNotIn(marker,info)
+        for marker in ('data-publication-tool=\"php\"','data-publication-tool=\"node\"','project-runtime-info?slug='):
+            self.assertIn(marker,self.base)
+
     def test_runtime_action_is_standalone_and_not_terminal_redirect(self):
         route=self.base[self.base.index("project-runtime-info'"):self.base.index("open-project-terminal'",self.base.index("project-runtime-info'"))]
         self.assertIn('<!doctype html>',route)

@@ -10,8 +10,10 @@ class ProjectRuntimeStatusUITests(unittest.TestCase):
     def test_publication_detects_runtime_from_project_job(self):
         for marker in ('def _runtime_from_job','Apache 2.4 · PHP','Node.js','runtime_template','php_version'):
             self.assertIn(marker,self.pub)
-    def test_publication_shows_web_service_and_versions(self):
-        for marker in ('Serviço web','Versões','Rodando e saudável','/komodo/project/audit'):
+    def test_publication_keeps_versions_but_hides_duplicate_web_service_card(self):
+        self.assertIn('<span>Versões</span>',self.pub)
+        self.assertNotIn('<span>Serviço web</span>',self.pub)
+        for marker in ('Rodando e saudável','/komodo/project/audit'):
             self.assertIn(marker,self.pub)
     def test_project_and_publication_do_not_auto_reload(self):
         self.assertNotIn("setTimeout(function(){location.reload()},2500)",self.pub)
