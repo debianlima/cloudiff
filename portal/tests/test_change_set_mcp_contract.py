@@ -17,7 +17,7 @@ APPROVAL = ROOT / 'components/control-plane/current-apps/portal-current/cloudif_
 APPROVAL_LEGACY = ROOT / 'portal/legacy/cloudif_approval_panel.py'
 
 READ_TOOLS = {
-    'workspace.normalize.plan', 'workspace.change-set.validate',
+    'workspace.normalize.plan', 'workspace.change-set.validate', 'workspace.artifact.commit.plan',
     'forgejo.proposal.change-set.plan',
 }
 WRITE_TOOLS = {
@@ -96,7 +96,7 @@ class ChangeSetMCPContractTests(unittest.TestCase):
             self.assertIn(marker, execute)
 
     def test_artifact_transport_stays_out_of_change_set_json(self):
-        for marker in ('workspace.artifact.upload.start','workspace.artifact.upload.chunk','workspace.artifact.upload.batch','workspace.artifact.import','workspace.artifact.upload.ticket','workspace.artifact.upload.status','workspace.artifact.upload.complete',"'artifact_id':{'type':'string'",'def session_file_resolve','openai/fileParams','SESSION_FILE_DOWNLOAD_SUFFIXES','def workspace_artifact_import_bytes','def workspace_artifact_read','application/octet-stream','def forgejo_artifact_stage','def stage_change_set_artifacts'):
+        for marker in ('workspace.artifact.upload.start','workspace.artifact.upload.chunk','workspace.artifact.upload.batch','workspace.artifact.import','workspace.artifact.upload.ticket','workspace.artifact.upload.status','workspace.artifact.commit.plan','workspace.artifact.upload.complete',"'artifact_id':{'type':'string'",'def session_file_resolve','openai/fileParams','SESSION_FILE_DOWNLOAD_SUFFIXES','def workspace_artifact_import_bytes','def workspace_artifact_read','application/octet-stream','def forgejo_artifact_stage','def stage_change_set_artifacts'):
             self.assertIn(marker,self.gateway)
         self.assertIn('/v1/artifact/batch',self.broker)
         self.assertIn('/v1/artifact/ticket',self.broker)
@@ -110,6 +110,9 @@ class ChangeSetMCPContractTests(unittest.TestCase):
         self.assertIn("content['upload_url_audience']='human_user'",self.gateway)
         self.assertIn("content['agent_must_not_open_upload_url']=True",self.gateway)
         self.assertIn("content['agent_followup_tool']='workspace.artifact.upload.status'",self.gateway)
+        self.assertIn("content['agent_followup_tool']='workspace.artifact.commit.plan'",self.gateway)
+        self.assertIn("'next_tool':'approval.request-change-set-proposal'",self.gateway)
+        self.assertIn("'after_approval_tool':'forgejo.proposal.change-set.create'",self.gateway)
         self.assertIn("name=='workspace.artifact.upload.status'",self.gateway)
         self.assertIn("'/v1/artifact/upload/status'",self.gateway)
         self.assertIn("'_meta':{'openai/fileParams':['file']}",self.gateway)
@@ -171,7 +174,7 @@ class ChangeSetMCPContractTests(unittest.TestCase):
     def test_portal_documents_and_labels_change_set_flow(self):
         for tool in READ_TOOLS | WRITE_TOOLS:
             self.assertIn("'" + tool + "':", self.guide)
-        self.assertIn("'documentation_version':'130A'", self.guide)
+        self.assertIn("'documentation_version':'135A'", self.guide)
         self.assertIn('Criar proposta multifarquivo no Forgejo', APPROVAL.read_text())
         self.assertEqual(GUIDE.read_bytes(), GUIDE_LEGACY.read_bytes())
         self.assertEqual(APPROVAL.read_bytes(), APPROVAL_LEGACY.read_bytes())

@@ -13,6 +13,31 @@ class ArtifactUploadAgentHandoffTests(unittest.TestCase):
         self.assertIn("'agent_followup_tool'",GATEWAY)
         self.assertIn("'workspace.artifact.upload.status'",GATEWAY)
         self.assertIn('Não abra a upload_url do Portal',GATEWAY)
+    def test_start_creates_browser_upload_handoff_in_one_mcp_call(self):
+        response=GATEWAY.index("content=data.get('result') or data",GATEWAY.index("elif name in {'workspace.artifact.upload.start'"))
+        start=GATEWAY.index("if name=='workspace.artifact.upload.start':",response)
+        end=GATEWAY.index("if name=='workspace.artifact.upload.ticket':",start)
+        block=GATEWAY[start:end]
+        self.assertIn("workspace_broker_post('/v1/artifact/ticket'",block)
+        self.assertIn("content['upload_url']=PUBLIC_ORIGIN+'/cloudiff/portal/artifact-upload/'",block)
+        self.assertIn("content['upload_ticket_created']=True",block)
+        self.assertIn("content['agent_followup_tool']='workspace.artifact.commit.plan'",block)
+        self.assertIn("content['user_action_required']=True",block)
+
+    def test_direct_commit_plan_reuses_sealed_artifact_without_base64(self):
+        start=GATEWAY.index("elif name=='workspace.artifact.commit.plan':")
+        end=GATEWAY.index("elif name=='workspace.change-set.validate':",start)
+        block=GATEWAY[start:end]
+        self.assertIn("workspace_broker_post('/v1/artifact/upload/status'",block)
+        self.assertIn("'artifact_not_sealed'",block)
+        self.assertIn("'artifact_too_large_for_forgejo_commit'",block)
+        self.assertIn("'artifact_id':artifact_id",block)
+        self.assertIn("workspace_broker_post('/v1/change-set/validate'",block)
+        self.assertIn("change_set_resolve(slug,workspace_id,digest_value,trace_id)",block)
+        self.assertIn("'next_tool':'approval.request-change-set-proposal'",block)
+        self.assertIn("'after_approval_tool':'forgejo.proposal.change-set.create'",block)
+        self.assertNotIn('content_base64',block)
+
     def test_status_tool_uses_mcp_broker_path_not_portal_url(self):
         start=GATEWAY.index("elif name=='workspace.artifact.upload.status':")
         end=GATEWAY.index("elif name=='workspace.change-set.validate':",start)
@@ -24,6 +49,7 @@ class ArtifactUploadAgentHandoffTests(unittest.TestCase):
     def test_role_catalogs_expose_status_tool_under_existing_scope(self):
         for text in (GUIDE,ONBOARDING):
             self.assertIn('workspace.artifact.upload.status',text)
+            self.assertIn('workspace.artifact.commit.plan',text)
             self.assertIn('workspace:change-set-plan',text)
 
 if __name__=='__main__': unittest.main()
