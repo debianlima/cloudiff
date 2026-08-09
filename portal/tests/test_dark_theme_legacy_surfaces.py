@@ -97,6 +97,8 @@ class DarkThemeLegacySurfacesTest(unittest.TestCase):
         self.assertIn('html[data-theme="dark"] body .legacy-content .db96-mode.active .db96-check{', css)
         coexist = (ROOT / "components/control-plane/srv/cloudif/lib/cloudif_portal_v2_coexist.py").read_text()
         self.assertIn('button[aria-selected="true"]{{border-color:var(--iff)!important;background:var(--iff-wash)!important;color:var(--ink)!important}}', coexist)
+        self.assertIn('.admin-operation-center .admin-action-card{{display:grid;', coexist)
+        self.assertIn('background:var(--iff,#168821)!important;color:var(--on-iff,#fff)!important', current)
 
     def test_admin_and_guide_local_css_use_theme_surfaces(self):
         source = (ROOT / "components/control-plane/srv/cloudif/lib/cloudif_portal_v2_coexist.py").read_text()
