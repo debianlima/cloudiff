@@ -55,7 +55,7 @@ TOOL_DOC={
 'workspace.preview-static':('Gerar prévia','Cria uma visualização temporária antes de propor mudanças.','Nenhuma','Portal CloudIFF'),
 'workspace.edit-preview':('Pré-visualizar edição','Aplica a edição somente na prévia isolada.','Nenhuma','Portal CloudIFF'),
 'workspace.normalize.plan':('Planejar normalização','Detecta a estrutura e propõe cloudiff.yaml sem mover ou apagar arquivos.','Nenhuma','Workspace efêmero'),
-'workspace.artifact.upload.start':('Iniciar upload de artefato','Cria artifact_id temporário de até 1024 MiB, vinculado ao projeto, nome, tamanho e SHA-256 esperados; políticas de Git/change set continuam independentes.','Nenhuma','Workspace efêmero'),
+'workspace.artifact.upload.start':('Iniciar upload direto','Cria artifact_id temporário e já retorna upload_url HTTPS do Portal para clientes identificados. É o fallback sem Base64 quando o host entrega /mnt/data em vez de openai/fileParams; até 1024 MiB.','Nenhuma','Portal + Workspace Broker'),
 'workspace.artifact.upload.chunk':('Enviar chunk de artefato','Envia partes pequenas e sequenciais; repetição idêntica do mesmo chunk é idempotente.','Nenhuma','Workspace efêmero'),
 'workspace.artifact.upload.batch':('Enviar lote de chunks','Envia até 16 chunks pequenos de até 8 KiB em uma chamada; mantém SHA-256 por parte e retoma pelo próximo índice esperado.','Nenhuma','Workspace efêmero'),
 'workspace.artifact.upload.ticket':('Gerar link de upload direto','Cria URL HTTPS temporária do Portal para upload streaming de até 1024 MiB, sem Base64, com progresso real e janela de até 2 horas.','Nenhuma','Portal + Workspace Broker'),
