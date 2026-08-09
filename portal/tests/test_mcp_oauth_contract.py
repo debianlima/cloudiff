@@ -86,12 +86,12 @@ class MCPOAuthContractTests(unittest.TestCase):
         ):
             self.assertIn(marker, self.gateway)
         schema_block = self.gateway[self.gateway.index('def _action_schema'):self.gateway.index('def _privacy_html')]
-        self.assertIn("read_tools=[x for x in available if x in READ_ONLY_TOOLS]", schema_block)
-        self.assertIn("action_file_tools={x for x in available if x=='workspace.artifact.import'}", schema_block)
-        self.assertIn("write_tools=[x for x in available if x not in READ_ONLY_TOOLS and x not in action_file_tools]", schema_block)
-        self.assertIn("base+'/artifact/import'", schema_block)
-        self.assertIn("'operationId':'importCloudIFFArtifact'", schema_block)
-        self.assertIn("'openaiFileIdRefs'", schema_block)
+        self.assertIn("action_available=_action_visible_tool_names(available)", schema_block)
+        self.assertIn("read_tools=[x for x in action_available if x in READ_ONLY_TOOLS]", schema_block)
+        self.assertIn("write_tools=[x for x in action_available if x not in READ_ONLY_TOOLS]", schema_block)
+        self.assertNotIn("base+'/artifact/import'", schema_block)
+        self.assertNotIn("'operationId':'importCloudIFFArtifact'", schema_block)
+        self.assertNotIn("'openaiFileIdRefs'", schema_block)
         self.assertNotIn("'x-openai-isConsequential':False", schema_block[schema_block.index("base+'/write'"):])
 
     def test_actions_components_define_object_properties(self):
@@ -113,24 +113,20 @@ class MCPOAuthContractTests(unittest.TestCase):
         ):
             self.assertIn(marker, self.gateway)
 
-    def test_actions_file_import_uses_official_openai_file_refs(self):
+    def test_file_import_is_mcp_only_and_legacy_actions_handler_is_not_advertised(self):
         for marker in (
-            "def _normalize_action_file_ref(value):",
-            "actions_file_download_link_missing",
-            "'download_url':download_url",
-            "'file_id':file_id",
+            "MCP_ONLY_TOOLS={'workspace.artifact.import'}",
+            "'_meta':{'openai/fileParams':['file']}",
             "path=='/cloudiff/mcp/actions/v1/artifact/import'",
             "_action_rpc(identity,'workspace.artifact.import',args)",
         ):
             self.assertIn(marker,self.gateway)
         schema_block=self.gateway[self.gateway.index('def _action_schema'):self.gateway.index('def _privacy_html')]
-        self.assertIn("'version':'1.2.0'",schema_block)
-        self.assertIn("'items':{'type':'string'}",schema_block)
-        self.assertIn("'required':['filename','expected_size','expected_sha256']",schema_block)
-        self.assertIn("'schema':artifact_import_action_schema",schema_block)
-        self.assertNotIn("'ArtifactImportActionRequest'",schema_block)
-        self.assertIn("actions_file_reference_not_injected",self.gateway)
-        self.assertIn("actions_file_reference_shape",self.gateway)
+        self.assertIn("'version':'1.3.0'",schema_block)
+        self.assertNotIn("base+'/artifact/import'",schema_block)
+        self.assertNotIn("'operationId':'importCloudIFFArtifact'",schema_block)
+        self.assertIn("Arquivos anexados são importados exclusivamente pelo MCP workspace.artifact.import",schema_block)
+        self.assertIn("_action_visible_tool_names(identity['tools'])",self.gateway)
 
     def test_project_list_is_filtered_by_agent_projects(self):
         self.assertIn("allowed=set(authz.get('project_slugs') or [])", self.gateway)

@@ -321,7 +321,7 @@ TOOLS=[
  {'name':'workspace.artifact.upload.start','description':'Inicia upload temporário de artefato binário vinculado ao projeto, tamanho e SHA-256 esperados','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'filename':{'type':'string','minLength':1,'maxLength':240},'expected_size':{'type':'integer','minimum':0,'maximum':1073741824},'expected_sha256':{'type':'string','pattern':'^[a-f0-9]{64}$'},'ttl_seconds':{'type':'integer','minimum':300,'maximum':86400}},'required':['slug','filename','expected_size','expected_sha256'],'additionalProperties':False,'examples':[{'slug':'meu-projeto','filename':'documentos-anonimizados.zip','expected_size':1390970,'expected_sha256':'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa','ttl_seconds':3600}]}},
  {'name':'workspace.artifact.upload.chunk','description':'Envia um chunk Base64 pequeno e sequencial para um artifact_id; retries idênticos são idempotentes','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'artifact_id':{'type':'string','pattern':'^art_[a-f0-9]{24}$'},'chunk_index':{'type':'integer','minimum':0,'maximum':65535},'content_base64':{'type':'string','minLength':1,'maxLength':262144},'chunk_sha256':{'type':'string','pattern':'^[a-f0-9]{64}$'}},'required':['slug','artifact_id','chunk_index','content_base64','chunk_sha256'],'additionalProperties':False,'examples':[{'slug':'meu-projeto','artifact_id':'art_111111111111111111111111','chunk_index':0,'content_base64':'eA==','chunk_sha256':'2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881'}]}},
  {'name':'workspace.artifact.upload.batch','description':'Envia até 16 chunks pequenos de até 8 KiB raw cada em uma chamada; ideal quando strings Base64 maiores são truncadas pelo cliente','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'artifact_id':{'type':'string','pattern':'^art_[a-f0-9]{24}$'},'chunks':{'type':'array','minItems':1,'maxItems':16,'items':{'type':'object','properties':{'chunk_index':{'type':'integer','minimum':0,'maximum':65535},'content_base64':{'type':'string','minLength':1,'maxLength':11000},'chunk_sha256':{'type':'string','pattern':'^[a-f0-9]{64}$'}},'required':['chunk_index','content_base64','chunk_sha256'],'additionalProperties':False}}},'required':['slug','artifact_id','chunks'],'additionalProperties':False,'examples':[{'slug':'meu-projeto','artifact_id':'art_111111111111111111111111','chunks':[{'chunk_index':0,'content_base64':'eA==','chunk_sha256':'2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881'}]}]}},
- {'name':'workspace.artifact.import','description':'Importa automaticamente um arquivo anexado ao ChatGPT via file param oficial, baixa a URL temporária server-side, valida tamanho e SHA-256 e retorna artifact_id selado','inputSchema':{'type':'object','$defs':{'OpenAIFile':{'type':'object','properties':{'download_url':{'type':'string'},'file_id':{'type':'string'},'mime_type':{'type':'string'},'file_name':{'type':'string'}},'required':['download_url','file_id'],'additionalProperties':False}},'properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'file':{'$ref':'#/$defs/OpenAIFile'},'filename':{'type':'string','minLength':1,'maxLength':240},'expected_size':{'type':'integer','minimum':0,'maximum':1073741824},'expected_sha256':{'type':'string','pattern':'^[a-f0-9]{64}$'},'ttl_seconds':{'type':'integer','minimum':300,'maximum':86400}},'required':['slug','file','filename','expected_size','expected_sha256'],'additionalProperties':False,'examples':[{'slug':'meu-projeto','file':{'download_url':'https://files.oaiusercontent.com/...','file_id':'file_1111111111111111'},'filename':'documentos-anonimizados.zip','expected_size':1390970,'expected_sha256':'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa','ttl_seconds':3600}]},'_meta':{'openai/fileParams':['file']}},
+ {'name':'workspace.artifact.import','description':'CAMINHO CANÔNICO para arquivo anexado ao ChatGPT: usa MCP openai/fileParams, recebe download_url e file_id autorizados pelo host, transfere por HTTPS streaming, valida tamanho/SHA-256 e retorna artifact_id selado. Não use GPT Actions para anexos.','inputSchema':{'type':'object','$defs':{'OpenAIFile':{'type':'object','properties':{'download_url':{'type':'string'},'file_id':{'type':'string'},'mime_type':{'type':'string'},'file_name':{'type':'string'}},'required':['download_url','file_id'],'additionalProperties':False}},'properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'file':{'$ref':'#/$defs/OpenAIFile'},'filename':{'type':'string','minLength':1,'maxLength':240},'expected_size':{'type':'integer','minimum':0,'maximum':1073741824},'expected_sha256':{'type':'string','pattern':'^[a-f0-9]{64}$'},'ttl_seconds':{'type':'integer','minimum':300,'maximum':86400}},'required':['slug','file','filename','expected_size','expected_sha256'],'additionalProperties':False,'examples':[{'slug':'meu-projeto','file':{'download_url':'https://files.oaiusercontent.com/...','file_id':'file_1111111111111111'},'filename':'documentos-anonimizados.zip','expected_size':1390970,'expected_sha256':'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa','ttl_seconds':3600}]},'_meta':{'openai/fileParams':['file']}},
  {'name':'workspace.artifact.upload.ticket','description':'Gera um link HTTPS temporário do Portal para o usuário enviar o binário pelo navegador, sem Base64. Não abra a upload_url do Portal como agente; entregue-a ao usuário e acompanhe por workspace.artifact.upload.status.','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'artifact_id':{'type':'string','pattern':'^art_[a-f0-9]{24}$'},'ttl_seconds':{'type':'integer','minimum':60,'maximum':7200}},'required':['slug','artifact_id'],'additionalProperties':False,'examples':[{'slug':'meu-projeto','artifact_id':'art_111111111111111111111111','ttl_seconds':3600}]}},
  {'name':'workspace.artifact.upload.status','description':'Consulta pelo MCP o estado do upload de um artifact. Use esta ferramenta para acompanhar o usuário; não abra a upload_url do Portal, pois ela é destinada à sessão humana autenticada.','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'artifact_id':{'type':'string','pattern':'^art_[a-f0-9]{24}$'}},'required':['slug','artifact_id'],'additionalProperties':False,'examples':[{'slug':'meu-projeto','artifact_id':'art_111111111111111111111111'}]}},
  {'name':'workspace.artifact.upload.complete','description':'Conclui o upload, verifica tamanho e SHA-256 integrais e sela o artefato para uso por artifact_id','inputSchema':{'type':'object','properties':{'slug':{'type':'string','pattern':'^[a-z0-9][a-z0-9-]*$'},'artifact_id':{'type':'string','pattern':'^art_[a-f0-9]{24}$'}},'required':['slug','artifact_id'],'additionalProperties':False,'examples':[{'slug':'meu-projeto','artifact_id':'art_111111111111111111111111'}]}},
@@ -638,13 +638,19 @@ def _normalize_action_file_ref(value):
         raise ValueError('actions_file_download_link_missing')
     return {'download_url':download_url,'file_id':file_id,**({'mime_type':mime_type} if mime_type else {}),**({'file_name':file_name} if file_name else {})}
 
+MCP_ONLY_TOOLS={'workspace.artifact.import'}
+
+
+def _action_visible_tool_names(names):
+    return [name for name in names if name not in MCP_ONLY_TOOLS]
+
+
 def _action_schema(client_id):
     row=_oauth_client(client_id);projects=_client_projects(row)
     if not row or len(projects)!=1:return None
-    slug=projects[0];available=_client_tool_names(row)
-    read_tools=[x for x in available if x in READ_ONLY_TOOLS]
-    action_file_tools={x for x in available if x=='workspace.artifact.import'}
-    write_tools=[x for x in available if x not in READ_ONLY_TOOLS and x not in action_file_tools]
+    slug=projects[0];available=_client_tool_names(row);action_available=_action_visible_tool_names(available)
+    read_tools=[x for x in action_available if x in READ_ONLY_TOOLS]
+    write_tools=[x for x in action_available if x not in READ_ONLY_TOOLS]
     base='/cloudiff/mcp/actions/v1';security=[{'cloudiffOAuth':['mcp']}]
     responses={
       '200':{'description':'Resposta do conector CloudIFF','content':{'application/json':{'schema':{'$ref':'#/components/schemas/ActionResponse'}}}},
@@ -661,23 +667,6 @@ def _action_schema(client_id):
         paths[base+'/read']={'post':{'operationId':'callCloudIFFReadTool','summary':'Executar ferramenta de consulta','description':'Executa somente ferramentas classificadas pelo servidor como leitura, plano ou inspeção sem efeito persistente. O projeto é imposto pelo token OAuth.','security':security,'x-openai-isConsequential':False,'requestBody':{'required':True,'content':{'application/json':{'schema':{'$ref':'#/components/schemas/ReadToolRequest'}}}},'responses':responses}}
     if write_tools:
         paths[base+'/write']={'post':{'operationId':'callCloudIFFProjectTool','summary':'Executar operação controlada do projeto','description':'Executa uma ferramenta com efeito ou solicitação de aprovação. Aprovações humanas e políticas da CloudIFF continuam obrigatórias.','security':security,'x-openai-isConsequential':True,'requestBody':{'required':True,'content':{'application/json':{'schema':{'$ref':'#/components/schemas/WriteToolRequest'}}}},'responses':responses}}
-    if 'workspace.artifact.import' in action_file_tools:
-        artifact_import_action_schema={
-          'type':'object',
-          'properties':{
-            'openaiFileIdRefs':{
-              'type':'array','items':{'type':'string'},
-              'description':'Inclua exatamente um arquivo anexado pelo usuário nesta conversa. O GPT Actions deve preencher este campo automaticamente com o arquivo selecionado; em runtime cada item vira um objeto com name, id, mime_type e download_link temporário.',
-            },
-            'filename':{'type':'string','minLength':1,'maxLength':240,'description':'Nome exato esperado para o arquivo.'},
-            'expected_size':{'type':'integer','minimum':0,'maximum':1073741824,'description':'Tamanho exato esperado em bytes.'},
-            'expected_sha256':{'type':'string','pattern':'^[a-f0-9]{64}$','description':'SHA-256 esperado em hexadecimal minúsculo.'},
-            'ttl_seconds':{'type':'integer','minimum':300,'maximum':86400,'default':3600},
-          },
-          'required':['filename','expected_size','expected_sha256'],
-          'additionalProperties':False,
-        }
-        paths[base+'/artifact/import']={'post':{'operationId':'importCloudIFFArtifact','summary':'Importar exatamente um arquivo anexado para um artifact CloudIFF','description':'Use exatamente um arquivo anexado nesta conversa. O parâmetro especial openaiFileIdRefs deve ser preenchido pelo GPT Actions com a referência do arquivo e download_link temporário. Não invente URLs, não envie somente file_id e não chame esta operação sem selecionar o anexo.','security':security,'x-openai-isConsequential':True,'requestBody':{'required':True,'content':{'application/json':{'schema':artifact_import_action_schema}}},'responses':responses}}
     schemas={
       'ActionArguments':{
         'type':'object',
@@ -719,8 +708,8 @@ def _action_schema(client_id):
       'openapi':'3.1.0',
       'info':{
         'title':'CloudIFF Actions — '+slug,
-        'version':'1.2.0',
-        'description':'Ações do projeto '+slug+' com OAuth público, PKCE, ACL por projeto e aprovações humanas server-side.',
+        'version':'1.3.0',
+        'description':'Ações do projeto '+slug+' com OAuth público, PKCE, ACL por projeto e aprovações humanas server-side. Arquivos anexados são importados exclusivamente pelo MCP workspace.artifact.import via openai/fileParams.',
         'termsOfService':PUBLIC_ORIGIN+'/cloudiff/mcp/privacy',
         'x-privacy-policy-url':PUBLIC_ORIGIN+'/cloudiff/mcp/privacy',
       },
@@ -1895,7 +1884,7 @@ class H(BaseHTTPRequestHandler):
             try:
                 if path.endswith('/project'):result=self._action_rpc(identity,'project.get',{})
                 elif path.endswith('/connectors'):result=self._action_rpc(identity,'project.connectors',{})
-                else:result=[{'name':name,'description':(_tool_row(name) or {}).get('description',''),'annotations':(_tool_row(name) or {}).get('annotations',{})} for name in identity['tools']]
+                else:result=[{'name':name,'description':(_tool_row(name) or {}).get('description',''),'annotations':(_tool_row(name) or {}).get('annotations',{})} for name in _action_visible_tool_names(identity['tools'])]
                 return self.sendj(200,{'ok':True,'project_slug':identity['project_slug'],'result':result})
             except PermissionError as e:return self.sendj(403,{'ok':False,'error':str(e)})
             except Exception as e:return self.sendj(422,{'ok':False,'error':str(e)})

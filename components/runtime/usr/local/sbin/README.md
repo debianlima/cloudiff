@@ -10,6 +10,7 @@ Componentes implantados no host de runtime, Forgejo, Komodo e executores.
 
 | Item | Tipo | Finalidade |
 |---|---|---|
+| [`cloudif-configure-komodo-embed-auth.sh`](cloudif-configure-komodo-embed-auth.sh) | `.sh` | Automação Shell operacional da plataforma. |
 | [`cloudif-forja-agent.py`](cloudif-forja-agent.py) | `.py` | Implementa `read_env`, `now`, `clean_url`, `bool_value`, `jdump`, `json_response` e outros componentes. |
 | [`cloudif-komodo-agent.py`](cloudif-komodo-agent.py) | `.py` | Implementa `now`, `init_db`, `db_exec`, `db_query`, `record_deployment`, `load_env` e outros componentes. |
 | [`cloudif-komodo-api-call.py`](cloudif-komodo-api-call.py) | `.py` | Implementa `load_env`, `headers`, `call`. |

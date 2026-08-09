@@ -1,6 +1,6 @@
 # Inventário de arquivos
 
-Este catálogo descreve **1156 arquivos versionados**. Ele é regenerado pelo script de documentação.
+Este catálogo descreve **1157 arquivos versionados**. Ele é regenerado pelo script de documentação.
 
 | Caminho | Finalidade |
 |---|---|
@@ -642,6 +642,7 @@ Este catálogo descreve **1156 arquivos versionados**. Ele é regenerado pelo sc
 | [`components/runtime/usr/README.md`](../components/runtime/usr/README.md) | Documentação deste diretório. |
 | [`components/runtime/usr/local/README.md`](../components/runtime/usr/local/README.md) | Documentação deste diretório. |
 | [`components/runtime/usr/local/sbin/README.md`](../components/runtime/usr/local/sbin/README.md) | Documentação deste diretório. |
+| [`components/runtime/usr/local/sbin/cloudif-configure-komodo-embed-auth.sh`](../components/runtime/usr/local/sbin/cloudif-configure-komodo-embed-auth.sh) | Automação Shell operacional da plataforma. |
 | [`components/runtime/usr/local/sbin/cloudif-forja-agent.py`](../components/runtime/usr/local/sbin/cloudif-forja-agent.py) | Implementa `read_env`, `now`, `clean_url`, `bool_value`, `jdump`, `json_response` e outros componentes. |
 | [`components/runtime/usr/local/sbin/cloudif-komodo-agent.py`](../components/runtime/usr/local/sbin/cloudif-komodo-agent.py) | Implementa `now`, `init_db`, `db_exec`, `db_query`, `record_deployment`, `load_env` e outros componentes. |
 | [`components/runtime/usr/local/sbin/cloudif-komodo-api-call.py`](../components/runtime/usr/local/sbin/cloudif-komodo-api-call.py) | Implementa `load_env`, `headers`, `call`. |

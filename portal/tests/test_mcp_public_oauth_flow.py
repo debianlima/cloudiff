@@ -199,17 +199,9 @@ class MCPPublicOAuthFlowTest(unittest.TestCase):
         self.assertFalse(paths['/cloudiff/mcp/actions/v1/project']['get']['x-openai-isConsequential'])
         self.assertFalse(paths['/cloudiff/mcp/actions/v1/read']['post']['x-openai-isConsequential'])
         self.assertTrue(paths['/cloudiff/mcp/actions/v1/write']['post']['x-openai-isConsequential'])
-        self.assertTrue(paths['/cloudiff/mcp/actions/v1/artifact/import']['post']['x-openai-isConsequential'])
-        self.assertEqual(paths['/cloudiff/mcp/actions/v1/artifact/import']['post']['operationId'],'importCloudIFFArtifact')
-        import_schema=paths['/cloudiff/mcp/actions/v1/artifact/import']['post']['requestBody']['content']['application/json']['schema']
-        self.assertNotIn('$ref',import_schema)
-        self.assertIn('openaiFileIdRefs',import_schema['properties'])
-        self.assertEqual(import_schema['properties']['openaiFileIdRefs']['items'],{'type':'string'})
-        self.assertNotIn('minItems',import_schema['properties']['openaiFileIdRefs'])
-        self.assertNotIn('maxItems',import_schema['properties']['openaiFileIdRefs'])
-        self.assertNotIn('openaiFileIdRefs',import_schema['required'])
-        self.assertEqual(import_schema['required'],['filename','expected_size','expected_sha256'])
-        self.assertEqual(schema['info']['version'],'1.2.0')
+        self.assertNotIn('/cloudiff/mcp/actions/v1/artifact/import',paths)
+        self.assertEqual(schema['info']['version'],'1.3.0')
+        self.assertIn('Arquivos anexados são importados exclusivamente pelo MCP workspace.artifact.import',schema['info']['description'])
         schemas = schema['components']['schemas']
         self.assertIsInstance(schemas, dict)
         read_ref = paths['/cloudiff/mcp/actions/v1/read']['post']['requestBody']['content']['application/json']['schema']['$ref']
@@ -220,6 +212,11 @@ class MCPPublicOAuthFlowTest(unittest.TestCase):
         write_enum = write_schema['properties']['tool']['enum']
         self.assertIn('project.get', read_enum)
         self.assertNotIn('workspace.prepare', read_enum)
+        self.assertNotIn('workspace.artifact.import',write_enum)
+        status,_,raw=self.request('GET','/cloudiff/mcp/actions/v1/tools',headers={'Authorization':'Bearer '+self.oauth_token()})
+        self.assertEqual(status,200,raw)
+        action_names={row['name'] for row in json.loads(raw)['result']}
+        self.assertNotIn('workspace.artifact.import',action_names)
         self.assertIn('workspace.prepare', write_enum)
         for name, item in schemas.items():
             if item.get('type') == 'object':
