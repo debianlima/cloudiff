@@ -118,7 +118,7 @@ def _publication_snapshot_from_rows(rows):
 def _configuration_controls(slug,rows):
     return (
       '<section class="publication-release-flow" data-release-flow-summary="'+h(slug)+'">'
-      '<div class="publication-release-flow__head"><div><span>Fluxo de publicação</span><strong>Preview → Homologação → Publicação</strong><p>Desenvolva no Preview vivo, homologue um candidato imutável e publique exatamente o mesmo artefato.</p></div></div>'
+      '<div class="publication-release-flow__head"><div><strong>Preview → Homologação → Publicação</strong><p>Desenvolva no Preview vivo, homologue um candidato imutável e publique exatamente o mesmo artefato.</p></div></div>'
       '<div class="publication-release-flow__stages" aria-label="Estágios da publicação">'
       '<article><span class="publication-stage-code">W</span><div><strong>Preview</strong><small>Workspace vivo</small></div><span class="publication-stage-state" data-release-summary-w>Consultar</span></article>'
       '<article><span class="publication-stage-code">H</span><div><strong>Homologação</strong><small>Candidato imutável</small></div><span class="publication-stage-state" data-release-summary-h>Consultar</span></article>'

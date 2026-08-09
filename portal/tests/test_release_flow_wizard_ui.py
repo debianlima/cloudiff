@@ -82,6 +82,18 @@ class ReleaseFlowWizardUITests(unittest.TestCase):
         embedded=BASE[BASE.index('function renderEmbeddedTerminal'):BASE.index('async function openStageTerminal')]
         self.assertNotIn('sandbox=',embedded)
 
+    def test_impeccable_polish_reduces_nested_cards_and_improves_touch_targets(self):
+        self.assertNotIn('Fluxo de publicação</span>',UI)
+        self.assertNotIn('Publicação controlada</span>',BASE)
+        self.assertIn('.publication-information{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:0;border-block:1px solid var(--rule)}',CSS)
+        self.assertIn('.publication-information>div{display:grid;align-content:start;gap:5px;padding:var(--s3) var(--s4);border:0;border-right:1px solid var(--rule-soft);border-radius:0;min-width:0}',CSS)
+        self.assertIn('.publication-release-flow__stages{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0;border-block:1px solid var(--rule-soft)}',CSS)
+        self.assertIn('.publication-release-flow__stages article{display:flex;align-items:center;gap:10px;padding:12px 14px;border:0;border-right:1px solid var(--rule-soft);border-radius:0;background:transparent}',CSS)
+        self.assertIn('.publication-release-flow__tools .btn{min-height:44px}',CSS)
+        self.assertIn('#cloudif-release-flow .release-tabs button,#cloudif-release-flow .release-tools button{min-height:44px}',CSS)
+        self.assertIn('.nav-link{min-height:44px}',CSS)
+        self.assertIn('.btn:focus-visible,.nav-link:focus-visible',CSS)
+
     def test_wizard_has_dark_theme_safe_tokens_and_mobile_layout(self):
         self.assertIn('_WHP_RELEASE_ASSETS',BASE)
         self.assertIn('cloudif-whp-release-script',BASE)
