@@ -96,6 +96,7 @@ class AIConnectorsHubTests(unittest.TestCase):
         self.assertIn('Gerar/rotacionar Client Secret para GPT Actions', html)
         self.assertIn('Client Secret obrigatório no token exchange', html)
         self.assertIn('workspace.artifact.import via MCP openai/fileParams', html)
+        self.assertIn('workspace.artifact.upload.file via OAuth MCP + openai/fileParams', html)
         self.assertIn('Scan Tools/Refresh', html)
         self.assertIn('não use o importador legado de Actions', html)
 

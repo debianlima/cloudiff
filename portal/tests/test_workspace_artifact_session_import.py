@@ -18,6 +18,15 @@ class WorkspaceArtifactSessionImportTests(unittest.TestCase):
   self.assertIn("'maximum':1073741824",block)
   self.assertIn("'maximum':7200",source[source.index("'name':'workspace.artifact.upload.ticket'"):source.index("'name':'workspace.artifact.upload.status'")])
 
+ def test_existing_artifact_file_upload_descriptor_is_oauth_mcp_only(self):
+  source=GATEWAY.read_text();start=source.index("'name':'workspace.artifact.upload.file'");end=source.index("'name':'workspace.artifact.upload.ticket'",start);block=source[start:end]
+  self.assertIn("'_meta':{'openai/fileParams':['file']}",block)
+  self.assertIn("'required':['slug','artifact_id','file']",block)
+  self.assertIn("'artifact_id':{'type':'string','pattern':'^art_[a-f0-9]{24}$'}",block)
+  self.assertIn('sem cookie do Portal',block)
+  self.assertNotIn('expected_size',block)
+  self.assertNotIn('expected_sha256',block)
+
  def test_every_openai_file_param_descriptor_is_scan_tools_compliant(self):
   file_tools=[tool for tool in M.TOOLS if (tool.get('_meta') or {}).get('openai/fileParams')]
   self.assertGreaterEqual(len(file_tools),1)
@@ -162,6 +171,29 @@ class WorkspaceArtifactSessionImportTests(unittest.TestCase):
  def test_stream_transport_rejects_trailing_bytes_by_contract(self):
   source=GATEWAY.read_text();start=source.index('def _workspace_direct_upload_stream');end=source.index('def workspace_artifact_import_https',start);block=source[start:end]
   self.assertIn("if source.read(1):raise ValueError('session_file_size_mismatch')",block)
+
+ def test_existing_artifact_file_upload_reuses_recorded_integrity_and_streams(self):
+  raw=b'existing-artifact-upload';digest=hashlib.sha256(raw).hexdigest();aid='art_'+'2'*24
+  artifact={'artifact_id':aid,'project_slug':'demo','filename':'archive.zip','status':'uploading','expected_size':len(raw),'expected_sha256':digest,'received_bytes':0}
+  calls=[]
+  def broker(path,payload,timeout=0):
+   calls.append((path,payload,timeout))
+   if path=='/v1/artifact/upload/status':return 200,{'ok':True,'result':artifact}
+   self.fail(path)
+  result={'artifact_id':aid,'project_slug':'demo','filename':'archive.zip','status':'sealed','size':len(raw),'sha256':digest,'received_bytes':len(raw)}
+  ref={'download_url':'https://files.oaiusercontent.com/signed','file_id':'file_123456','file_name':'archive.zip','mime_type':'application/zip'}
+  with patch.object(M,'workspace_broker_post',side_effect=broker),patch.object(M,'_session_file_open',return_value=io.BytesIO(raw)),patch.object(M,'_workspace_direct_upload_stream',return_value=result) as stream:
+   uploaded,meta=M.workspace_artifact_upload_existing_https('demo',aid,ref,'trace')
+  self.assertTrue(uploaded['uploaded']);self.assertTrue(uploaded['ready_for_change_set']);self.assertEqual(uploaded['transport'],'mcp_oauth_file_stream');self.assertEqual(uploaded['next_tool'],'workspace.artifact.commit.plan')
+  self.assertEqual(meta['sha256'],digest);self.assertEqual(meta['size'],len(raw));self.assertEqual(meta['file_id'],'file_123456')
+  self.assertEqual([x[0] for x in calls],['/v1/artifact/upload/status']);stream.assert_called_once_with(aid,unittest.mock.ANY,len(raw),digest)
+
+ def test_existing_artifact_file_upload_rejects_project_mismatch_before_download(self):
+  aid='art_'+'3'*24;ref={'download_url':'https://files.oaiusercontent.com/signed','file_id':'file_123456'}
+  status={'artifact_id':aid,'project_slug':'other','filename':'archive.zip','status':'uploading','expected_size':1,'expected_sha256':'a'*64}
+  with patch.object(M,'workspace_broker_post',return_value=(200,{'ok':True,'result':status})),patch.object(M,'_session_file_open') as opener:
+   with self.assertRaises(PermissionError):M.workspace_artifact_upload_existing_https('demo',aid,ref,'trace')
+  opener.assert_not_called()
 
  def test_https_import_starts_ticket_and_streams_without_materializing_file(self):
   raw=b'https-stream-payload';digest=hashlib.sha256(raw).hexdigest();aid='art_'+'1'*24

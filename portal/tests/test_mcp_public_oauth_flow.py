@@ -244,6 +244,7 @@ class MCPPublicOAuthFlowTest(unittest.TestCase):
         self.assertIn('project.get', read_enum)
         self.assertNotIn('workspace.prepare', read_enum)
         self.assertNotIn('workspace.artifact.import',write_enum)
+        self.assertNotIn('workspace.artifact.upload.file',write_enum)
         status,_,raw=self.request('GET','/cloudiff/mcp/actions/v1/tools',headers={'Authorization':'Bearer '+self.oauth_token()})
         self.assertEqual(status,200,raw)
         action_rows={row['name']:row for row in json.loads(raw)['result']}
@@ -256,6 +257,12 @@ class MCPPublicOAuthFlowTest(unittest.TestCase):
         self.assertEqual(file_import['inputSchema']['properties']['file']['type'],'object')
         self.assertNotIn('$ref',file_import['inputSchema']['properties']['file'])
         self.assertEqual(file_import['mcp_endpoint'],'https://cloudiff.duckdns.org/cloudiff/mcp')
+        self.assertIn('workspace.artifact.upload.file',action_rows)
+        file_upload=action_rows['workspace.artifact.upload.file']
+        self.assertEqual(file_upload['transport'],'mcp')
+        self.assertFalse(file_upload['callable_via_actions'])
+        self.assertEqual(file_upload['_meta']['openai/fileParams'],['file'])
+        self.assertEqual(file_upload['inputSchema']['required'],['slug','artifact_id','file'])
         self.assertIn('workspace.prepare', write_enum)
         for name, item in schemas.items():
             if item.get('type') == 'object':
@@ -295,12 +302,17 @@ class MCPPublicOAuthFlowTest(unittest.TestCase):
         self.assertEqual(connector_result['mcp']['file_import']['host_hydration'],'openai/fileParams')
         self.assertEqual(connector_result['mcp']['file_import']['schema_mode'],'inline_openai_file_object')
         self.assertFalse(connector_result['mcp']['file_import']['local_paths_supported'])
+        self.assertTrue(connector_result['mcp']['file_upload']['authorized'])
+        self.assertEqual(connector_result['mcp']['file_upload']['authentication'],'oauth_identity_reused_server_side')
+        self.assertFalse(connector_result['mcp']['file_upload']['requires_portal_cookie'])
+        self.assertFalse(connector_result['mcp']['file_upload']['requires_browser_session'])
         status, _, raw = self.request('GET', '/cloudiff/mcp/actions/v1/tools', headers=auth)
         self.assertEqual(status, 200, raw)
         names = [item['name'] for item in json.loads(raw)['result']]
         self.assertIn('project.get', names)
         self.assertIn('workspace.prepare', names)
         self.assertIn('workspace.artifact.import', names)
+        self.assertIn('workspace.artifact.upload.file', names)
         payload = json.dumps({'tool': 'project.get', 'arguments': {'slug': 'outro-projeto'}})
         status, _, raw = self.request('POST', '/cloudiff/mcp/actions/v1/read', payload, {
             **auth, 'Content-Type': 'application/json', 'Content-Length': str(len(payload)),

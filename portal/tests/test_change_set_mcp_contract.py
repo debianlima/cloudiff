@@ -21,7 +21,7 @@ READ_TOOLS = {
     'forgejo.proposal.change-set.plan',
 }
 WRITE_TOOLS = {
-    'workspace.artifact.upload.start', 'workspace.artifact.upload.chunk', 'workspace.artifact.upload.batch', 'workspace.artifact.import', 'workspace.artifact.upload.ticket', 'workspace.artifact.upload.status', 'workspace.artifact.upload.complete',
+    'workspace.artifact.upload.start', 'workspace.artifact.upload.chunk', 'workspace.artifact.upload.batch', 'workspace.artifact.import', 'workspace.artifact.upload.file', 'workspace.artifact.upload.ticket', 'workspace.artifact.upload.status', 'workspace.artifact.upload.complete',
     'approval.request-change-set-proposal', 'approval.cancel',
     'forgejo.proposal.change-set.create',
 }
@@ -96,7 +96,7 @@ class ChangeSetMCPContractTests(unittest.TestCase):
             self.assertIn(marker, execute)
 
     def test_artifact_transport_stays_out_of_change_set_json(self):
-        for marker in ('workspace.artifact.upload.start','workspace.artifact.upload.chunk','workspace.artifact.upload.batch','workspace.artifact.import','workspace.artifact.upload.ticket','workspace.artifact.upload.status','workspace.artifact.commit.plan','workspace.artifact.upload.complete',"'artifact_id':{'type':'string'",'def session_file_resolve','openai/fileParams','SESSION_FILE_DOWNLOAD_SUFFIXES','def workspace_artifact_import_bytes','def workspace_artifact_read','application/octet-stream','def forgejo_artifact_stage','def stage_change_set_artifacts'):
+        for marker in ('workspace.artifact.upload.start','workspace.artifact.upload.chunk','workspace.artifact.upload.batch','workspace.artifact.import','workspace.artifact.upload.file','workspace.artifact.upload.ticket','workspace.artifact.upload.status','workspace.artifact.commit.plan','workspace.artifact.upload.complete',"'artifact_id':{'type':'string'",'def session_file_resolve','openai/fileParams','SESSION_FILE_DOWNLOAD_SUFFIXES','def workspace_artifact_import_bytes','def workspace_artifact_read','application/octet-stream','def forgejo_artifact_stage','def stage_change_set_artifacts'):
             self.assertIn(marker,self.gateway)
         self.assertIn('/v1/artifact/batch',self.broker)
         self.assertIn('/v1/artifact/ticket',self.broker)

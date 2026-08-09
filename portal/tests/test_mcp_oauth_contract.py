@@ -135,11 +135,13 @@ class MCPOAuthContractTests(unittest.TestCase):
 
     def test_file_import_is_mcp_only_and_legacy_actions_handler_is_not_advertised(self):
         for marker in (
-            "MCP_ONLY_TOOLS={'workspace.artifact.import'}",
+            "MCP_ONLY_TOOLS={'workspace.artifact.import','workspace.artifact.upload.file'}",
             "'_meta':{'openai/fileParams':['file']}",
             "'title':'Importar arquivo da conversa'",
             "'file':{'type':'object'",
             "'schema_mode':'inline_openai_file_object'",
+            "'name':'workspace.artifact.upload.file'",
+            "'requires_portal_cookie':False",
             "path=='/cloudiff/mcp/actions/v1/artifact/import'",
             "_action_rpc(identity,'workspace.artifact.import',args)",
         ):
@@ -149,6 +151,7 @@ class MCPOAuthContractTests(unittest.TestCase):
         self.assertNotIn("base+'/artifact/import'",schema_block)
         self.assertNotIn("'operationId':'importCloudIFFArtifact'",schema_block)
         self.assertIn("Arquivos anexados são importados exclusivamente pelo MCP workspace.artifact.import",schema_block)
+        self.assertIn("'workspace.artifact.upload.file'",self.gateway)
         self.assertIn("result=_project_tool_catalog(identity['tools'])",self.gateway)
         self.assertIn("def _project_tool_catalog(names):",self.gateway)
         self.assertIn("'callable_via_actions':not mcp_only",self.gateway)
