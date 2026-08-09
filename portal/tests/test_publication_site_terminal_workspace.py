@@ -9,6 +9,7 @@ COEXIST=(ROOT/'components/control-plane/srv/cloudif/lib/cloudif_portal_v2_coexis
 RUNTIME=(ROOT/'components/runtime/current-apps/komodo-agent-current/cloudif-komodo-agent.py').read_text()
 PUBLISHER=(ROOT/'components/proxy/current-apps/publisher-agent-current/cloudif-npm-publisher-agent.py').read_text()
 CSS=(ROOT/'portal/design/components.css').read_text()
+KOMODO_EMBED=(ROOT/'components/proxy/usr/local/sbin/cloudif-configure-komodo-embed.sh').read_text()
 
 
 class PublicationSiteTerminalWorkspaceTests(unittest.TestCase):
@@ -31,8 +32,27 @@ class PublicationSiteTerminalWorkspaceTests(unittest.TestCase):
         self.assertIn("target.hostname.endsWith('.cloudiff.duckdns.org')",BASE)
         self.assertIn('class="stage-site-preview"',BASE)
         self.assertIn('sandbox="allow-forms allow-modals allow-popups allow-popups-to-escape-sandbox allow-same-origin allow-scripts allow-downloads"',BASE)
-        self.assertIn("frame-src 'self' https://*.cloudiff.duckdns.org",BASE)
+        self.assertIn("frame-src 'self' https://*.cloudiff.duckdns.org https://komodoiff.duckdns.org",BASE)
         self.assertIn('.stage-site-preview iframe{',CSS)
+
+    def test_terminal_is_embedded_and_keeps_external_fallback(self):
+        self.assertIn('stage-site-preview stage-terminal-embed',BASE)
+        self.assertIn('stage-terminal-embed__frame',BASE)
+        self.assertIn('allow=\"clipboard-read; clipboard-write\"',BASE)
+        self.assertIn('Abrir no Komodo',BASE)
+        self.assertIn("https://komodoiff.duckdns.org",BASE)
+        self.assertIn('.stage-terminal-embed__frame',CSS)
+        terminal_block=BASE[BASE.index('async function publicationTerminalOpen'):BASE.index('async function publicationVariablesLoad')]
+        self.assertNotIn('window.open(',terminal_block)
+
+    def test_komodo_proxy_allows_only_cloudiff_portal_as_frame_ancestor(self):
+        self.assertIn('DOMAIN=komodoiff.duckdns.org',KOMODO_EMBED)
+        self.assertIn('PORTAL_ORIGIN=https://cloudiff.duckdns.org',KOMODO_EMBED)
+        self.assertIn('proxy_hide_header X-Frame-Options;',KOMODO_EMBED)
+        self.assertIn('proxy_hide_header Content-Security-Policy;',KOMODO_EMBED)
+        self.assertIn("frame-ancestors 'self' {portal}",KOMODO_EMBED)
+        self.assertIn('nginx -t',KOMODO_EMBED)
+        self.assertIn('rollback()',KOMODO_EMBED)
 
     def test_stage_terminal_portal_contract_is_exact_and_production_is_privileged(self):
         block=PUBLICATIONS[PUBLICATIONS.index('def stage_terminal('):PUBLICATIONS.index('def recreate_preview(',PUBLICATIONS.index('def stage_terminal('))]
@@ -63,6 +83,7 @@ class PublicationSiteTerminalWorkspaceTests(unittest.TestCase):
         self.assertIn('function renderReleaseSite()',BASE)
         self.assertIn('function renderReleaseTerminal()',BASE)
         self.assertIn('function openStageTerminal()',BASE)
+        self.assertIn('function renderEmbeddedTerminal(result,ctx)',BASE)
         self.assertIn("post('stage/terminal',{environment})",BASE)
         self.assertIn('.release-tools{display:flex',CSS)
 

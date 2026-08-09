@@ -33,11 +33,14 @@ class ReleaseFlowWizardUITests(unittest.TestCase):
         self.assertIn("'production/approval/request'",COEXIST)
         self.assertIn("'production/enqueue'",COEXIST)
 
-    def test_preview_tab_opens_preview_terminal_without_popup_race(self):
+    def test_preview_tab_embeds_preview_terminal_without_popup(self):
         self.assertIn('Abrir terminal do Preview',BASE)
         self.assertIn("data-release-action=\"preview-terminal\"",BASE)
         self.assertIn('async function openPreviewTerminal()',BASE)
-        self.assertIn("window.open('about:blank','_blank')",BASE)
+        self.assertIn('function renderEmbeddedTerminal(result,ctx)',BASE)
+        self.assertIn('class=\"stage-site-preview stage-terminal-embed\"',BASE)
+        block=BASE[BASE.index('async function openPreviewTerminal()'):BASE.index('function bindActions()',BASE.index('async function openPreviewTerminal()'))]
+        self.assertNotIn('window.open(',block)
         self.assertIn("post('preview/terminal',{})",BASE)
         self.assertIn("target.hostname!=='komodoiff.duckdns.org'",BASE)
         self.assertIn('preview/terminal',COEXIST)
