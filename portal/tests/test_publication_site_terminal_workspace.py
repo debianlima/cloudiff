@@ -23,7 +23,7 @@ class PublicationSiteTerminalWorkspaceTests(unittest.TestCase):
     def test_environment_workspace_has_site_and_terminal_tools(self):
         self.assertIn("const publicationTools=['overview','site','php','node','terminal','variables']",BASE)
         self.assertIn('function publicationSiteRender()',BASE)
-        self.assertIn('function publicationTerminalRender()',BASE)
+        self.assertIn('function publicationTerminalRender(requestId)',BASE)
         self.assertIn("/release-flow/stage/terminal",BASE)
         self.assertIn("target.hostname!=='komodoiff.duckdns.org'",BASE)
         self.assertIn('data-publication-terminal-open',BASE)
@@ -38,7 +38,8 @@ class PublicationSiteTerminalWorkspaceTests(unittest.TestCase):
     def test_terminal_is_embedded_and_keeps_external_fallback(self):
         self.assertIn('stage-site-preview stage-terminal-embed',BASE)
         self.assertIn('stage-terminal-embed__frame',BASE)
-        self.assertIn('allow=\"clipboard-read; clipboard-write\"',BASE)
+        self.assertIn('allow=\"clipboard-read; clipboard-write; fullscreen\"',BASE)
+        self.assertIn("embed.searchParams.set('_cloudiff_embed',String(Date.now()))",BASE)
         self.assertIn('Abrir no Komodo',BASE)
         self.assertIn("https://komodoiff.duckdns.org",BASE)
         self.assertIn('.stage-terminal-embed__frame',CSS)
@@ -52,7 +53,17 @@ class PublicationSiteTerminalWorkspaceTests(unittest.TestCase):
         self.assertIn('more_set_headers',KOMODO_EMBED)
         self.assertIn("frame-ancestors 'self' {portal}",KOMODO_EMBED)
         self.assertIn('nginx -t',KOMODO_EMBED)
+        self.assertIn("more_set_headers -t 'text/html' 'Cache-Control: no-store';",KOMODO_EMBED)
         self.assertIn('rollback()',KOMODO_EMBED)
+
+    def test_terminal_tabs_prepare_the_session_automatically(self):
+        workspace=BASE[BASE.index('function publicationTerminalRender'):BASE.index('async function publicationVariablesLoad')]
+        self.assertIn('publicationTerminalOpen(null,requestId)',workspace)
+        self.assertNotIn('Abrir terminal no Komodo</button>',workspace)
+        release=BASE[BASE.index('function renderReleaseTerminal'):BASE.index('async function load()',BASE.index('function renderReleaseTerminal'))]
+        self.assertIn("if(model.view==='terminal')",release)
+        self.assertIn('setTimeout(openStageTerminal,0)',release)
+        self.assertNotIn('data-release-stage-terminal',release)
 
     def test_stage_terminal_portal_contract_is_exact_and_production_is_privileged(self):
         block=PUBLICATIONS[PUBLICATIONS.index('def stage_terminal('):PUBLICATIONS.index('def recreate_preview(',PUBLICATIONS.index('def stage_terminal('))]

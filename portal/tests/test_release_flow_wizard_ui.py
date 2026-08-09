@@ -45,6 +45,15 @@ class ReleaseFlowWizardUITests(unittest.TestCase):
         self.assertIn("target.hostname!=='komodoiff.duckdns.org'",BASE)
         self.assertIn('preview/terminal',COEXIST)
 
+    def test_terminal_tool_auto_loads_and_cache_busts_komodo_document(self):
+        release=BASE[BASE.index('function renderReleaseTerminal'):BASE.index('async function load()',BASE.index('function renderReleaseTerminal'))]
+        self.assertIn("if(model.view==='terminal')",release)
+        self.assertIn('setTimeout(openStageTerminal,0)',release)
+        self.assertNotIn('data-release-stage-terminal',release)
+        self.assertIn("embed.searchParams.set('_cloudiff_embed',String(Date.now()))",BASE)
+        embedded=BASE[BASE.index('function renderEmbeddedTerminal'):BASE.index('async function openStageTerminal')]
+        self.assertNotIn('sandbox=',embedded)
+
     def test_wizard_has_dark_theme_safe_tokens_and_mobile_layout(self):
         self.assertIn('_WHP_RELEASE_ASSETS',BASE)
         self.assertIn('cloudif-whp-release-script',BASE)

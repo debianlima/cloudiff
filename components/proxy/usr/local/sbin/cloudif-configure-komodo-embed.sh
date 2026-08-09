@@ -40,6 +40,7 @@ begin='# CloudIF Komodo Portal Embed BEGIN';end='# CloudIF Komodo Portal Embed E
 block=f'''# CloudIF Komodo Portal Embed BEGIN
 more_clear_headers 'X-Frame-Options';
 more_set_headers "Content-Security-Policy: frame-ancestors 'self' {portal}";
+more_set_headers -t 'text/html' 'Cache-Control: no-store';
 # CloudIF Komodo Portal Embed END'''
 c=sqlite3.connect(p)
 row=c.execute('select advanced_config from proxy_host where id=?',(host_id,)).fetchone()
@@ -59,6 +60,7 @@ begin='# CloudIF Komodo Portal Embed BEGIN';end='# CloudIF Komodo Portal Embed E
 block=f'''  # CloudIF Komodo Portal Embed BEGIN
   more_clear_headers 'X-Frame-Options';
   more_set_headers "Content-Security-Policy: frame-ancestors 'self' {portal}";
+more_set_headers -t 'text/html' 'Cache-Control: no-store';
   # CloudIF Komodo Portal Embed END'''
 pattern=re.compile(r'\s*'+re.escape(begin)+r'.*?'+re.escape(end)+r'\s*',re.S)
 if pattern.search(s):s=pattern.sub('\n'+block+'\n',s,count=1)
@@ -83,6 +85,7 @@ sleep 1
 
 grep -q "more_clear_headers 'X-Frame-Options';" "$HOST_CONF"
 grep -Fq "frame-ancestors 'self' $PORTAL_ORIGIN" "$HOST_CONF"
+grep -Fq "Cache-Control: no-store" "$HOST_CONF"
 python3 - "$DB" "$HOST_ID" "$PORTAL_ORIGIN" <<'PY'
 import sqlite3,sys
 c=sqlite3.connect(sys.argv[1]);row=c.execute('select advanced_config from proxy_host where id=?',(int(sys.argv[2]),)).fetchone();c.close()
@@ -90,12 +93,14 @@ s=(row[0] or '') if row else ''
 assert '# CloudIF Komodo Portal Embed BEGIN' in s
 assert "more_clear_headers 'X-Frame-Options';" in s
 assert f"frame-ancestors 'self' {sys.argv[3]}" in s
+assert "Cache-Control: no-store" in s
 PY
 
 headers=$(mktemp)
 curl -fsSI --max-time 15 "https://$DOMAIN/" >"$headers"
 if grep -qi '^x-frame-options:' "$headers"; then echo 'komodo_x_frame_options_still_present' >&2; exit 4; fi
 grep -Fqi "content-security-policy: frame-ancestors 'self' $PORTAL_ORIGIN" "$headers" || { echo 'komodo_frame_ancestors_missing' >&2; exit 5; }
+grep -Fqi "cache-control: no-store" "$headers" || { echo 'komodo_html_no_store_missing' >&2; exit 6; }
 rm -f "$headers"
 trap - EXIT
 printf 'configured|domain=%s|proxy_host_id=%s|frame_ancestor=%s|backup=%s\n' "$DOMAIN" "$HOST_ID" "$PORTAL_ORIGIN" "$BACKUP_DIR"
