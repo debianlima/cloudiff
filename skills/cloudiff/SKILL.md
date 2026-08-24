@@ -1,71 +1,170 @@
 ---
 name: cloudiff
-versao: 0.1.0
-description: Governa, reconcilia, normaliza e evolui o CloudIFF V1→V2 C/C++ preservando integralmente a interface homologada, contratos, compatibilidade e capacidade de rollback.
+versao: 0.1.1
+description: Governa, reconcilia, normaliza e evolui a plataforma CloudIFF V1/Python→V2/C++23 preservando interface homologada, contratos, segurança, dados, observabilidade e rollback.
 tipo_competencia: projeto
+origem:
+  projeto_de_origem: cloudiff
+  derivacao: original
+  commit_divergencia: NAO APLICAVEL
+  plataforma: [linux, systemd, docker, cxx23, python, postgresql, nats]
+  pressupostos:
+    - interface homologada e rotas públicas são contratos de compatibilidade
+    - produção usa releases imutáveis e rollback
+    - reconciliação incremental antecede normalização
+escopo_comum: arquitetura, operação, portal, agentes, mensageria, release e migração tecnológica da CloudIFF
+escopo_proprio: decisões, invariantes e armadilhas verificadas no projeto CloudIFF
+compoe: []
+referencia:
+  - {id: desenvolvedor-de-software, versao_fixada: 14, estado: reconciliado}
+  - {id: github-incremental-reconciliation, versao_fixada: 7, estado: reconciliado}
+  - {id: governanca-ontologica-de-skills, versao_fixada: 1.0.4, estado: reconciliado}
+  - {id: telemetry-data-visualization, versao_fixada: 2, estado: reconciliado}
+  - {id: distributed-agent-control, versao_fixada: 1, estado: reconciliado}
+  - {id: network-ssh-operations, versao_fixada: 1, estado: reconciliado}
+  - {id: operational-ui-truth, versao_fixada: 1, estado: reconciliado}
+  - {id: cloud-design-patterns, versao_fixada: NAO DECLARADO, estado: preexistente}
+  - {id: ddia-systems, versao_fixada: 1.4.0, estado: preexistente}
+  - {id: release-it, versao_fixada: 1.4.0, estado: preexistente}
+  - {id: platform-engineering, versao_fixada: NAO DECLARADO, estado: preexistente}
+  - {id: playwright, versao_fixada: NAO DECLARADO, estado: preexistente}
+  - {id: cloudiff-authentik-oidc, versao_fixada: NAO DECLARADO, estado: preexistente}
+  - {id: cloudiff-safe-release, versao_fixada: NAO DECLARADO, estado: preexistente}
+  - {id: cpp-pro, versao_fixada: NAO DECLARADO, estado: preexistente}
 ---
 
-# Skill de projeto CloudIFF
+# CloudIFF — skill de projeto
 
-## Invariante mestre
+## 1. Origem e problema
 
-`FrozenPortalInterface` é o requisito máximo do projeto. Visão geral, Publicações, Projetos e Bancos/tenants, além de seus fluxos visíveis homologados, não podem mudar por consequência da migração tecnológica. Migrar Python para C/C++ muda implementação, nunca a experiência visual já homologada. Qualquer mudança visual exige autorização humana explícita separada.
+CloudIFF é uma plataforma distribuída com Portal, plano de controle, runtime, proxy/publicação, agentes, mensageria e integrações. O histórico V1 predominava em Python e o núcleo V2 introduziu C++23. Ambos pertencem ao mesmo projeto e devem ser reconciliados incrementalmente; linguagem de implementação não pode apagar comportamento homologado.
 
-## Método obrigatório
+A unidade de verdade combina documentação hierárquica, manifesto/contratos, código, testes, Git e runtime observado. Esta é a única skill raiz do projeto; outras skills são composição, referência ou aprendizado preexistente, nunca uma segunda autoridade de projeto.
 
-Toda unidade segue, nesta ordem:
+A auditoria inicial encontrou 1.320 arquivos rastreados no Git V1, enquanto documentação gerada anterior registrava 1.157; o V2 operacional existia fora de um checkout Git próprio. A reconciliação deve preservar ambos os deltas antes de regenerar documentação ou normalizar nomes.
 
-1. `desenvolvedor-de-software@14` para selecionar entrada elegível, dependências e portões;
-2. `github-incremental-reconciliation@7` para inventariar deltas e preservar aprendizados;
-3. emitir `DELTA_INVENTORY=PASS` e `LEARNING_PRESERVED=PASS` antes de normalizar;
-4. `governanca-ontologica-de-skills@1.0.4` quando a unidade tocar skills, relações ou catálogo;
-5. normalizar apenas o estado já reconciliado;
-6. executar portões mecânicos independentes;
-7. quando a unidade exigir o node Faro, implementar e provar no Faro real `10.62.91.5` durante a própria conciliação;
-8. atualizar aprendizado desta skill somente depois de homologação comprovada.
+## 2. Decisões e alternativas descartadas
 
-## Referências correlatas
+### FrozenPortalInterface — requisito mestre
 
-- `distributed-agent-control@1`: agentes, heartbeat, comando, update, fencing e idempotência.
-- `telemetry-data-visualization@2`: telemetria e apresentação administrativa baseada em fonte observada.
-- `network-ssh-operations@1`: SSH, roteamento, VPN e conectividade por camadas.
-- `operational-ui-truth@1`: UI operacional deve refletir fonte viva e passar Playwright/snapshot.
-- competências CloudIFF já instaladas e declaradas em `competencias.yaml`: `cloud-design-patterns`, `ddia-systems`, `release-it`, `platform-engineering`, `playwright`, `cloudiff-authentik-oidc`, `cloudiff-safe-release`, `cpp-pro`.
+A interface gráfica conhecida pelos usuários **não muda durante a migração**. Visão geral, Publicações, Projetos e Bancos/tenants, seus textos, layout, navegação, estilos, rotas e fluxos visíveis homologados só mudam mediante autorização humana explícita separada.
 
-Referência por co-uso não cria dependência. Arestas ontológicas só existem com composição, referência, dependência operacional ou roteamento explícito comprovado.
+Evidência canônica: `portal/FROZEN_SURFACES.md`, `portal/tests/test_frozen_surfaces_contract.py`, `docs/portal-v2/REAL-PAGE-PROOF.json` e `config/portal-quality-baseline.json`.
 
-## Aprendizado preexistente a preservar
+**Descartado:** redesenhar UI ao trocar backend. Motivo: elimina o oráculo de compatibilidade e mistura duas variáveis.
 
-As skills locais `cloudif-accessibility-audit`, `cloudif-api-tenant-security`, `cloudif-appsec-asvs`, `cloudif-disaster-security`, `cloudif-iam-authentik`, `cloudif-secure-release-gate`, `cloudif-security-observability`, `cloudif-threat-model`, `cloudif-ui-design-system` e `cloudif-ui-flow-tests` são fontes preexistentes de aprendizado. Elas não são descartadas nem promovidas automaticamente: seus requisitos são absorvidos semanticamente pela reconciliação e cada identidade só vira nó ontológico após versão, fonte, portão e procedência mecânicos.
+### V1 e V2 são um único projeto
 
-## Migração V1 → V2
+A reconciliação é aditiva antes de ser redutiva. V1 fornece baseline funcional/visual e rollback; V2 fornece a direção tecnológica. O inventário inicial provou zero colisões de caminho, permitindo união aditiva antes da normalização sem sobrescrever V1.
 
-- V1 versionado é baseline funcional/visual e fonte de compatibilidade.
-- V2 C++ é a direção tecnológica para serviços e lógica de produção.
-- A reconciliação é aditiva antes de ser redutiva: nenhuma implementação antiga é removida até substituto C/C++ passar paridade funcional, segurança, observabilidade e rollback.
-- Serviços/daemons Python são candidatos prioritários a C++23.
-- Portal pode mover backend/controladores para C++, mas HTML/CSS/JS, navegação e comportamento visível permanecem equivalentes aos contratos congelados.
-- Ferramentas e testes Python permanecem até existir verificação equivalente; linguagem não é justificativa para perder um gate.
-- LegacyRetirement só executa depois de backup íntegro, substituição aceita e rollback comprovado.
+**Descartado:** big-bang ou substituição V1→V2 em massa.
 
-## Gates mínimos por unidade C/C++
+### C/C++ é troca de implementação, não de contrato
 
-- namespace/manifesto/contrato/competência válidos;
-- build CMake/Ninja/Clang em Debug e Release;
-- `-Wall -Wextra -Wpedantic` sem warnings;
-- ASan/UBSan limpos quando aplicável;
-- CTest específico e integração real;
-- paridade de autorização/tenant/CSRF/OIDC;
-- falha/reconnect/retry quando distribuído;
-- rollback real;
-- para Portal: hashes/snapshots/DOM/fluxos congelados sem regressão visual.
+Serviços e lógica de produção Python são candidatos prioritários a C++23 quando contrato, efeitos, segurança, dados, rotas e observabilidade puderem ser provados equivalentes. Python não é removido apenas por linguagem. Testes, geradores e ferramentas ficam até existir gate equivalente.
 
-## Autoverificação e autoconciliação
+O plano inicial classificou 444 arquivos Python: 123 serviços/runtime candidatos prioritários a C++, 249 componentes de compatibilidade do Portal, 68 bibliotecas candidatas e 4 itens de tooling/verificação preservados até substituição equivalente.
 
-A skill administra somente o fecho CloudIFF: esta skill + `compoe` + `referencia` + dependências transitivas. Em alternância de unidade, confira deltas remotos, preserve aprendizado e só então avance referências. Nenhuma competência, prompt, catálogo ou projeção muda silenciosamente no meio de uma unidade.
+### Migração por coexistência/strangler
 
-## Estado inicial auditado
+`docs/REQUIREMENTS.md` e `docs/GUIA-DE-MIGRACAO.md` determinam coexistência: rotas migram uma por vez e fallback permanece até os portões fecharem. A referência inventariada mede 31 rotas e 93 combinações rota × grupo para preservar decisões de acesso.
 
-- V1 `debianlima/cloudiff@10a76d589525e4b4ee681f62274e585250d49429`: 1.320/1.320 arquivos auditados; sintaxe sem erros; validador oficial PASS.
-- V2 local: núcleo C++23 e infraestrutura declarada em manifesto; união inicial V1↔V2 tem zero colisões de caminho.
-- Plano de migração e hashes da interface ficam em `docs/reconciliation/`.
+## 3. Algoritmos criados ou modificados
+
+### Reconciliação incremental CloudIFF
+
+**Entrada:** Git canônico, árvore operacional, manifesto/contratos, READMEs, testes e runtime.
+
+**Procedimento:** inventariar → classificar diferenças → preservar união válida → resolver conflitos por evidência → `DELTA_INVENTORY=PASS` + `LEARNING_PRESERVED=PASS` → somente então normalizar → repetir gates → registrar estado.
+
+**Saída:** árvore versionada única sem perda de aprendizado válido.
+
+### Migração por rota/serviço
+
+1. identificar contrato de entrada/saída, side effects, autorização e dependências;
+2. criar candidata C++ sem mudar rota ou resposta visível;
+3. testar método, permissões, CSRF/OIDC/tenant e dados;
+4. comparar resposta/DOM/screenshot quando houver UI;
+5. injetar falhas relevantes: timeout, duplicata, reconnect, stale/fencing;
+6. promover por release imutável com rollback;
+7. retirar legado somente após aceite e backup íntegro.
+
+### Método obrigatório por unidade
+
+1. carregar `desenvolvedor-de-software@14`;
+2. verificar `trabalho_compartilhado`/zona de exclusão;
+3. reconciliar com `github-incremental-reconciliation@7`;
+4. emitir `DELTA_INVENTORY=PASS` e `LEARNING_PRESERVED=PASS`;
+5. aplicar `governanca-ontologica-de-skills@1.0.4` quando tocar skill/catálogo/relação;
+6. normalizar somente o estado conciliado;
+7. executar portões mecânicos independentes;
+8. quando a entrada elegível exigir Faro, implantar e provar no Faro real `10.62.91.5` durante a própria unidade;
+9. atualizar esta skill somente após aprendizado homologado.
+
+## 4. Formatos de pesquisa que funcionaram
+
+- buscar primeiro `README`, `FROZEN_SURFACES`, `REQUIREMENTS`, `AUDIT`, `INVENTORY`, `COVERAGE`, `current-apps` e units;
+- interpretar cada arquivo pelo README ancestral mais próximo antes de classificá-lo;
+- comparar `git ls-files` com inventários/documentação gerada antes de regenerá-los;
+- usar SHA-256 para distinguir mirror deliberado de duplicação candidata;
+- confrontar fonte versionada, configuração e runtime observado; nenhum deles sozinho é suficiente;
+- comparar baseline versionado com release `previous` e live quando um teste de patch aparentar regressão.
+
+## 5. Recriar do zero
+
+1. clone a revisão CloudIFF escolhida;
+2. valide manifesto, contratos, skill e referências;
+3. execute `scripts/validate.sh` e `scripts/test.sh` antes de modificar;
+4. leia o README ancestral de cada subsistema;
+5. inventarie hashes, units, rotas, serviços e runtime real;
+6. resolva o menor fecho de competências;
+7. construa C++23 com CMake/Ninja/Clang, warnings zero e sanitizers;
+8. migre por strangler/canary e preserve rollback;
+9. use Faro quando a unidade o exigir;
+10. só retire legado após gates e backup verificável.
+
+## 6. Modificar sem quebrar
+
+- **Interface:** frozen surfaces + hash/DOM/screenshot/Playwright quando aplicável.
+- **Rotas:** endereço, método e semântica permanecem enquanto a política não mudar por decisão separada.
+- **Autorização:** candidata decide igual ao baseline; isolamento tenant/objeto é obrigatório.
+- **CSRF/OIDC:** toda ação mantém proteção e identidade.
+- **APIs:** não remover/renomear chaves públicas sem contrato versionado.
+- **Dados:** PostgreSQL/schema/migração exigem constraints, integridade e rollback; linguagem não autoriza trocar modelo de dados.
+- **Mensageria/agentes:** testar duplicate delivery, reconnect, stale, fencing, restart real e idempotência.
+- **Release:** nunca editar release ativo como fonte; candidato imutável, smoke, current/previous e rollback.
+- **LegacyRetirement:** só após backup verificável e substituto aceito.
+- **Faro:** é alvo efetivo de implantação quando a entrada exigir; não instalar OpenCode/agentes auxiliares sem autorização.
+- **Interface administrativa:** necessidade operacional não autoriza alterar a UI de usuário.
+
+## 7. Armadilhas e aprendizado acumulado
+
+### L001 — documentação hierárquica é contrato de auditoria
+Todo arquivo deve ser interpretado pelo README ancestral mais próximo e confrontado com controles/código/runtime. Evita classificar por nome sem contexto.
+
+### L002 — interface congelada prevalece sobre refatoração
+Implementação pode mudar; superfície homologada não muda junto. Gate: frozen-surface tests + prova de página real.
+
+### L003 — união V1+V2 deve provar aditividade
+V1 1.320 arquivos auditados; V2 importado sem colisão de caminho; união validada com 1.008 testes e 10 hashes de UI preservados; commit `2e869b7a5216a33bfb88875b97d710392d325ed0`.
+
+### L004 — teste live pode se tornar autorreferente depois do deploy
+`portal-admin-observability.patch` parecia reverso porque o teste aplicava o patch no live já patchado. O baseline V1/`previous` produziu exatamente o hash da release live. Gate: patch offline sobre baseline + hash de equivalência.
+
+### L005 — normalização YAML deve ser mecânica
+`manifesto.yaml` continha scalars `proposito` com `: ` sem aspas. Citar 20 scalars preservou os 175 propósitos anteriores e permitiu parse completo.
+
+### L006 — scanner não deve se autoacusar
+Testes de ausência de chave continham literalmente o marcador de chave privada e acionavam o scanner. Construir o marcador em runtime preservou a asserção e zerou falsos positivos.
+
+### L007 — duplicação exige contexto antes de remoção
+A auditoria dos 1.320 encontrou 84 grupos SHA-256 duplicados, muitos em templates/mirrors deliberados. Hash igual não autoriza exclusão.
+
+### L008 — saúde do control-plane é gate de capacidade
+Hospedagem foi observada com `/` em 100% e 17 units failed. Migração pesada não começa sem capacidade/saúde suficiente.
+
+### L009 — `systemctl active` não prova reconexão
+Agente pode permanecer ativo e não voltar a publicar após indisponibilidade NATS. Gate: `last_seen`/heartbeat retomado sem restart do agente.
+
+### L010 — release imutável não recebe chmod corretivo
+`cpp-pro` foi observado root-only em release antiga. Correção deve nascer em nova release reconciliada, não por mutação local.

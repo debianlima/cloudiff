@@ -73,5 +73,12 @@
     "v2_yaml": "PASS",
     "faro_node_preparation": "PASS",
     "agent_update_offline": "PASS"
+  },
+  "skill_reconciliation": {
+    "catalog_copy_head": "8d06515e8cd6946063325d337d9c80bc837fd8ef",
+    "catalog_copy_path": "projeto/cloudiff/SKILL.md",
+    "DELTA_INVENTORY": "PASS",
+    "LEARNING_PRESERVED": "PASS",
+    "canonical_skill_version": "0.1.1"
   }
 }

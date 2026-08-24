@@ -6,7 +6,7 @@ skill=(root/'skills/cloudiff/SKILL.md').read_text()
 audit=json.load(open(root/'docs/reconciliation/v1-1320-audit.json'))
 delta=json.load(open(root/'docs/reconciliation/v1-v2-delta.json'))
 plan=json.load(open(root/'docs/reconciliation/normalization-plan.json'))
-assert 'name: cloudiff' in skill and 'tipo_competencia: projeto' in skill and 'versao: 0.1.0' in skill
+assert 'name: cloudiff' in skill and 'tipo_competencia: projeto' in skill and 'versao: 0.1.1' in skill
 for x in ('desenvolvedor-de-software@14','github-incremental-reconciliation@7','governanca-ontologica-de-skills@1.0.4','FrozenPortalInterface'):
     assert x in skill,x
 assert audit['tracked_count']==1320 and audit['audited_count']==1320 and len(audit['syntax_errors'])==0
