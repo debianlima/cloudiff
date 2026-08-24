@@ -1,0 +1,32 @@
+{
+  "version":2,
+  "architectures":["amd64"],
+  "networkPolicies":{"none":{"supported":true,"description":"Sem acesso de rede durante build e proof."}},
+  "baseImages":{
+    "static":{"versions":{"default":{
+      "status":"approved",
+      "image":"cgr.dev/chainguard/nginx@sha256:e4ff957080737c90a9ecfeaa40e3d19ea9d687e9cacda2f2a031c75ffcdd72b7",
+      "imageId":"sha256:e4ff957080737c90a9ecfeaa40e3d19ea9d687e9cacda2f2a031c75ffcdd72b7",
+      "architectures":["amd64"],
+      "user":"65532",
+      "scannerCounts":{},
+      "scannerBlocked":false,
+      "scanDate":"2026-08-20"
+    }}}
+  },
+  "blockedRuntimes":{
+    "node":{"24":{
+      "status":"blocked",
+      "reason":"security_scan_failed",
+      "scannerEvidence":[
+        {"candidate":"node:24-bookworm","counts":{"CRITICAL":37,"HIGH":317,"LOW":1066,"MEDIUM":1193,"UNKNOWN":55}},
+        {"candidate":"gcr.io/distroless/nodejs24-debian12:nonroot","counts":{"CRITICAL":1,"HIGH":5,"LOW":22,"MEDIUM":10}},
+        {"candidate":"node:24-alpine","counts":{"CRITICAL":1,"HIGH":4,"LOW":2,"MEDIUM":4}}
+      ]
+    }}
+  },
+  "systemPackages":{},
+  "tools":{},
+  "provisionPolicy":{"enabled":false,"reason":"no-approved-shell-build-runtime"},
+  "scannerPolicy":{"block":["HIGH","CRITICAL"],"offlineCache":true}
+}

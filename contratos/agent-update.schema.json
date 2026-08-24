@@ -1,0 +1,202 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CloudIFF AgentUpdate v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "repository",
+    "layout",
+    "verification",
+    "activation",
+    "polling",
+    "recovery",
+    "policy"
+  ],
+  "properties": {
+    "version": {
+      "const": 1
+    },
+    "repository": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "url",
+        "bind",
+        "port",
+        "image",
+        "allowed_sources",
+        "https_route"
+      ],
+      "properties": {
+        "url": {
+          "const": "https://cloudiff.duckdns.org/__cloudiff_agent_updates"
+        },
+        "bind": {
+          "const": "127.0.0.1"
+        },
+        "port": {
+          "const": 18250
+        },
+        "image": {
+          "const": "nginx@sha256:5f979dcfed4ce6461873f087e8c980d6e29b084b9e8776d9704a7e989b5f4898"
+        },
+        "allowed_sources": {
+          "const": [
+            "10.62.91.2",
+            "10.62.91.3",
+            "10.62.91.5",
+            "10.62.92.7"
+          ]
+        },
+        "https_route": {
+          "const": "NPM Mauricio :443 -> 10.62.92.7:8099 router -> 127.0.0.1:18250 repository"
+        }
+      }
+    },
+    "layout": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "root",
+        "releases",
+        "current",
+        "state",
+        "public_key"
+      ],
+      "properties": {
+        "root": {
+          "const": "/opt/cloudiff-agent"
+        },
+        "releases": {
+          "const": "/opt/cloudiff-agent/releases"
+        },
+        "current": {
+          "const": "/opt/cloudiff-agent/current"
+        },
+        "state": {
+          "const": "/var/lib/cloudiff-agent/update"
+        },
+        "public_key": {
+          "const": "/etc/cloudiff-agent/update-signing.pub.pem"
+        }
+      }
+    },
+    "verification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "algorithm",
+        "manifest",
+        "signature",
+        "artifact_hash",
+        "artifact_size"
+      ],
+      "properties": {
+        "algorithm": {
+          "const": "Ed25519"
+        },
+        "manifest": {
+          "const": "manifest.json"
+        },
+        "signature": {
+          "const": "manifest.sig"
+        },
+        "artifact_hash": {
+          "const": "sha256"
+        },
+        "artifact_size": {
+          "const": true
+        }
+      }
+    },
+    "activation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "atomic_current",
+        "restart_service",
+        "rollback_on_failure"
+      ],
+      "properties": {
+        "atomic_current": {
+          "const": true
+        },
+        "restart_service": {
+          "const": "cloudiff-v2-agent.service"
+        },
+        "rollback_on_failure": {
+          "const": true
+        }
+      }
+    },
+    "polling": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "interval_seconds",
+        "random_delay_seconds"
+      ],
+      "properties": {
+        "interval_seconds": {
+          "const": 300
+        },
+        "random_delay_seconds": {
+          "const": 60
+        }
+      }
+    },
+    "recovery": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "reboot_default",
+        "admin_can_disable_reboot",
+        "reboot_only_after_failed_service_recovery"
+      ],
+      "properties": {
+        "reboot_default": {
+          "const": true
+        },
+        "admin_can_disable_reboot": {
+          "const": true
+        },
+        "reboot_only_after_failed_service_recovery": {
+          "const": true
+        }
+      }
+    },
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "url_template",
+        "node_id_file",
+        "cache_file",
+        "default_reboot_enabled",
+        "failure_behavior",
+        "reboot_cooldown_seconds"
+      ],
+      "properties": {
+        "url_template": {
+          "const": "https://cloudiff.duckdns.org/cloudiff/portal/api/node-recovery-policy?node_id={node_id}"
+        },
+        "node_id_file": {
+          "const": "/etc/cloudiff-v2/node-id"
+        },
+        "cache_file": {
+          "const": "/var/lib/cloudiff-agent/update/recovery-policy.json"
+        },
+        "default_reboot_enabled": {
+          "const": true
+        },
+        "failure_behavior": {
+          "const": "keep-last-cached-policy; if no cache use default true"
+        },
+        "reboot_cooldown_seconds": {
+          "const": 900
+        }
+      }
+    }
+  }
+}

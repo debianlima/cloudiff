@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "origin": "https://cloudiff.duckdns.org/__cloudif_distribution",
+  "backend": {"address":"10.62.91.3","port":18240,"tlsTermination":"NPM"},
+  "route": {"methods":["GET"],"sourceAllow":["10.62.92.7"],"otherHosts":"404","cache":"no-store"},
+  "capability": {"transport":"Authorization: Bearer","tokenStorage":"provider stores sha256 only; consumer stores raw token in root-owned file","audienceHeader":"X-CloudIFF-Audience","expiryRequired":true,"collectionScopeRequired":true,"queryTokenAllowed":false},
+  "integrity": {"memberDigest":"sha256","generation":"sha256 of canonical sorted member id|sha256|size records","objectPrecondition":"X-CloudIFF-Expected-Generation required and must equal current generation"},
+  "collections": [
+    {
+      "id":"nats-server-cert",
+      "audiences":["988cbfab-6f23-4c53-975b-61bc2e638a75"],
+      "members":[
+        {"id":"fullchain.pem","path":"/srv/cloudif/proxy/npm/letsencrypt/live/cloudiff-nats/fullchain.pem","media_type":"application/x-pem-file","max_bytes":65536},
+        {"id":"privkey.pem","path":"/srv/cloudif/proxy/npm/letsencrypt/live/cloudiff-nats/privkey.pem","media_type":"application/x-pem-file","max_bytes":65536}
+      ]
+    }
+  ]
+}

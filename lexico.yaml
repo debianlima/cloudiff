@@ -1,0 +1,111 @@
+projeto: CloudIFF
+versao: 1
+termos:
+  - conceito: núcleo de controle distribuído
+    canonico: cloudiff-control
+    proibidos: [control-v2, controller-v2]
+  - conceito: executor de trabalhos duráveis
+    canonico: cloudiff-worker
+    proibidos: [worker-v2, job-runner-new]
+  - conceito: agente de nó
+    canonico: cloudiff-agent
+    proibidos: [node-agent-v2, harvester-v2]
+  - conceito: identidade canônica do nó
+    canonico: node_id
+    proibidos: [machine_id, hostname_id, machine-id]
+  - conceito: estado desejado
+    canonico: desired_state
+    proibidos: [target_state, wanted_state]
+  - conceito: estado observado
+    canonico: observed_state
+    proibidos: [actual_state, runtime_state]
+  - conceito: trabalho durável
+    canonico: job
+    proibidos: [task_item, work_item]
+  - conceito: posse temporária de trabalho
+    canonico: lease
+    proibidos: [job_lock, worker_lock]
+  - conceito: adaptador de integração externa
+    canonico: Provider
+    proibidos: [integration-daemon]
+  - conceito: executor de runtime por perfil
+    canonico: RuntimeExecutor
+    proibidos: [preview-executor-v2, prod-executor-v2]
+  - conceito: sistema legado integral para rollback
+    canonico: legacy_system
+    proibidos: [fallback-component]
+  - conceito: barramento de eventos
+    canonico: NATS
+    proibidos: [NAT, event-bus-generic]
+  - conceito: credencial lógica individual do NATS
+    canonico: nats_credential
+    proibidos: [NATS_AUTH_TOKEN, shared_token, global_token]
+  - conceito: provider de publicação edge no NPM
+    canonico: NpmPublisherProvider
+    proibidos: [npm-publisher-v2, edge-publisher-daemon, publisher-cpp]
+  - conceito: motor de construção e verificação de artefatos
+    canonico: ArtifactEngine
+    proibidos: [ArtifactExecutorV2, artifact-cpp, artifact-builder-new]
+  - conceito: broker de fila de build clássico
+    canonico: BuildBroker
+    proibidos: [BuildBrokerV2, build-queue-new, broker-build-cpp]
+  - conceito: executor do build clássico sobre a fila PostgreSQL
+    canonico: ClassicBuildWorker
+    proibidos: [BuildWorkerV2, classic-worker-new, build-executor-cpp]
+  - conceito: perfil de execução do RuntimeExecutor
+    canonico: runtime_profile
+    proibidos: [environment_mode, deployment_tier, runtime_mode]
+  - conceito: transporte de arquivos pelo MCP CloudIFF
+    canonico: McpFileTransfer
+    proibidos: [MCPFileV2, file-transfer-new, artifact-file-bridge]
+  - conceito: planejador de compatibilidade de upload MCP sem efeitos
+    canonico: McpUploadPlanner
+    proibidos: [MCPUploadV2, FileParamAdapter, upload-compat-daemon]
+  - conceito: distribuidor interno autenticado de objetos entre nós CloudIFF
+    canonico: SecureDistributionProvider
+    proibidos: [DistributionServerV2, cert-download-server, internal-file-server]
+  - conceito: fixture sistêmico dedicado ao canary E2E do ClassicBuildWorker
+    canonico: BuildWorkerCanaryFixture
+    proibidos: [test-project, dummy-project, canary-project]
+  - conceito: capability HTTPS temporária para download de artifact MCP
+    canonico: ArtifactDownloadCapability
+    proibidos: [download-token-url, artifact-public-link, temporary-download-secret]
+  - conceito: ingress interno dedicado do ClassicBuildWorker para o ArtifactEngine C++
+    canonico: ClassicArtifactIngress
+    proibidos: [artifact-v2-proxy, classic-build-proxy, artifact-shadow-public]
+  - conceito: modelo distribuído de validação e onboarding de Faro
+    canonico: FaroValidation
+    proibidos: [faro-agent-role-assumed, faro-auto-onboarding, faro-unverified-node]
+  - conceito: reserva de endereço e identidade do futuro node Faro
+    canonico: FaroNodeReservation
+    proibidos: [faro-live-node-before-ssh, faro-shared-identity, faro-dynamic-ip]
+  - conceito: telemetria hierárquica do ambiente
+    canonico: Telemetry
+    proibidos: [MetricsPayload, NodeMetrics, MonitoringPayload]
+  - conceito: auto atualização assinada do agente
+    canonico: AgentUpdate
+    proibidos: [SelfUpdate, AgentAutoUpdater, HotAgentUpdate]
+  - conceito: observabilidade administrativa separada
+    canonico: AdminObservability
+    proibidos: [AdminMonitoring, OpsDashboard, MonitoringAdmin]
+  - conceito: retirada controlada de componentes legados
+    canonico: LegacyRetirement
+    proibidos: [LegacyCleanup, DeleteLegacy, LegacyPurge]
+  - conceito: perfil desejado do node Faro
+    canonico: FaroNodeProfile
+    proibidos: [FaroProfile, FaroRoleConfig, FaroMachineProfile]
+  - conceito: política de recuperação automática por node
+    canonico: NodeRecoveryPolicy
+    proibidos: [RebootToggle, NodeRebootFlag, RecoverySwitch]
+  - conceito: workspace isolado de desenvolvimento e navegação automatizada
+    canonico: WebDevWorkspace
+    proibidos: [WebDevAgent, OpenCodeWorkspace, ProductionBrowser]
+  - conceito: skill raiz do projeto CloudIFF
+    canonico: CloudIFFProjectSkill
+    proibidos: [CloudIFFPrompt, ProjectAgentSkill]
+  - conceito: invariante máximo da interface homologada
+    canonico: FrozenPortalInterface
+    proibidos: [PortalRedesign, V2VisualReplacement]
+  - conceito: auditoria incremental integral do projeto
+    canonico: CloudIFFProjectReconciliation
+    proibidos: [LegacySweep, MassRewrite]

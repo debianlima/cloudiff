@@ -1,0 +1,31 @@
+[Unit]
+Description=CloudIFF v2 Control subscriber (shadow)
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=cloudiff-v2-control
+Group=cloudiff-v2-control
+EnvironmentFile=/etc/cloudiff-v2/control.env
+ExecStartPre=/usr/bin/timeout 120 /bin/sh -c 'until /usr/bin/pg_isready -h 127.0.0.1 -p 55433 -q; do sleep 1; done'
+ExecStart=/opt/cloudiff-v2/current/bin/cloudiff-control
+Restart=on-failure
+RestartSec=2s
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+RestrictRealtime=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,22 @@
+{
+  "$schema":"https://json-schema.org/draft/2020-12/schema",
+  "title":"CloudIFF Telemetry v1",
+  "type":"object",
+  "additionalProperties":false,
+  "required":["version","hierarchy","host","containers","collected_at"],
+  "properties":{
+    "version":{"const":1},
+    "hierarchy":{"const":"environment>node>container>service"},
+    "collected_at":{"type":"string","format":"date-time"},
+    "host":{"type":"object","additionalProperties":false,"required":["cpu_count","load1","load5","load15","ram_total_bytes","ram_available_bytes","root_capacity_bytes","root_available_bytes","uptime_seconds","agent_version"],"properties":{
+      "cpu_count":{"type":"integer","minimum":1},"load1":{"type":"number","minimum":0},"load5":{"type":"number","minimum":0},"load15":{"type":"number","minimum":0},
+      "ram_total_bytes":{"type":"integer","minimum":0},"ram_available_bytes":{"type":"integer","minimum":0},"root_capacity_bytes":{"type":"integer","minimum":0},"root_available_bytes":{"type":"integer","minimum":0},"uptime_seconds":{"type":"integer","minimum":0},"agent_version":{"type":"string","minLength":1}
+    }},
+    "containers":{"type":"object","additionalProperties":false,"required":["status","source","items","truncated"],"properties":{
+      "status":{"enum":["available","unavailable","disabled"]},"source":{"const":"cadvisor-local"},"truncated":{"type":"boolean"},
+      "items":{"type":"array","maxItems":256,"items":{"type":"object","additionalProperties":false,"required":["name","id","cpu_usage_seconds","memory_usage_bytes","network_rx_bytes","network_tx_bytes"],"properties":{
+        "name":{"type":"string"},"id":{"type":"string"},"cpu_usage_seconds":{"type":"number","minimum":0},"memory_usage_bytes":{"type":"integer","minimum":0},"network_rx_bytes":{"type":"integer","minimum":0},"network_tx_bytes":{"type":"integer","minimum":0}
+      }}}
+    }}
+  }
+}

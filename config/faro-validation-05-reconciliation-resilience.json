@@ -1,0 +1,75 @@
+{
+  "version": 1,
+  "model": "FaroValidation",
+  "stage": "reconciliation-resilience",
+  "verification_status": "not_verified",
+  "goal": "Validar convergência desired/observed e recuperação diante das falhas parciais esperadas em sistema distribuído.",
+  "depends_on": [
+    "agent-heartbeat"
+  ],
+  "requirements": [
+    {
+      "id": "FARO-R14",
+      "statement": "Desired/observed revisions devem produzir decisão noop, reconcile, blocked, degraded ou failed de forma determinística.",
+      "source": "contratos/reconciliation.schema.json",
+      "mandatory": true,
+      "evidence": "casos de reconciliação registrados"
+    },
+    {
+      "id": "FARO-R15",
+      "statement": "Perda temporária de NATS/rede deve ser detectável e recuperação não deve duplicar node/eventos semanticamente.",
+      "source": "cloud-design-patterns: retry/partial failure",
+      "mandatory": true,
+      "evidence": "injeção controlada + recuperação"
+    },
+    {
+      "id": "FARO-R16",
+      "statement": "Certificado ou credencial inválidos devem falhar fechados sem fallback para identidade compartilhada.",
+      "source": "contratos/nats-security.schema.json",
+      "mandatory": true,
+      "evidence": "testes negativos mTLS/credential"
+    },
+    {
+      "id": "FARO-R17",
+      "statement": "Reboot do host e restart do agent devem recuperar o mesmo node_id e observed state.",
+      "source": "cloud-design-patterns: resilience",
+      "mandatory": true,
+      "evidence": "reboot/restart com continuidade de identidade"
+    }
+  ],
+  "tasks": [
+    {
+      "id": "FARO-T13",
+      "action": "Executar casos desired==observed e desired!=observed e registrar decisão/reason/revisions.",
+      "expected_result": "reconciliação determinística",
+      "gate": "não verificado"
+    },
+    {
+      "id": "FARO-T14",
+      "action": "Injetar indisponibilidade NATS/rede em janela controlada e restaurar conectividade.",
+      "expected_result": "degradação observável e recuperação sem duplicidade",
+      "gate": "não verificado"
+    },
+    {
+      "id": "FARO-T15",
+      "action": "Testar certificado/credencial de outro node e subject não autorizado.",
+      "expected_result": "falha fechada em identidade e ACL",
+      "gate": "não verificado"
+    },
+    {
+      "id": "FARO-T16",
+      "action": "Reiniciar agent e, se autorizado, Faro para provar recuperação do mesmo resource_id.",
+      "expected_result": "estado converge após restart",
+      "gate": "não verificado"
+    }
+  ],
+  "distributed_system_checks": {
+    "identity_independence": "Faro deve possuir node_id e credenciais próprios; nenhuma identidade é herdada de outro host.",
+    "trust_boundary": "Cada salto de rede/autenticação precisa de allowlist e identidade verificável; rede não é assumida confiável.",
+    "idempotency": "Reenvio de heartbeat e repetição de bootstrap/verificação não podem criar node duplicado nem efeitos divergentes.",
+    "partial_failure": "Falhas de rede, NATS, certificado, agent ou control-plane devem degradar de modo observável e recuperável.",
+    "observability": "Toda transição relevante precisa produzir health, observed_at, audit/evento ou evidência mecânica equivalente.",
+    "reconciliation": "Desired e observed state devem convergir por revisão explícita; divergência deve resultar em noop/reconcile/blocked/degraded/failed."
+  },
+  "decisions": []
+}

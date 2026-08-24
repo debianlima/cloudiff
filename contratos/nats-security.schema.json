@@ -1,0 +1,112 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CloudIFF NATS Security",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "server_address",
+    "server_port",
+    "expected_hostname",
+    "tls_required",
+    "client_certificate_required",
+    "credential_required",
+    "credential_mode",
+    "shared_token_allowed",
+    "subject_authorization_required",
+    "server_certificate_source",
+    "client_certificate_source",
+    "server_certificate_distribution",
+    "distribution_origin",
+    "distribution_collection",
+    "ssh_distribution_allowed",
+    "distribution_validation"
+  ],
+  "properties": {
+    "server_address": {
+      "const": "10.62.92.7"
+    },
+    "server_port": {
+      "const": 14222
+    },
+    "expected_hostname": {
+      "const": "nats.cloudiff.duckdns.org"
+    },
+    "tls_required": {
+      "const": true
+    },
+    "client_certificate_required": {
+      "const": true
+    },
+    "credential_required": {
+      "const": true
+    },
+    "credential_mode": {
+      "const": "user-password"
+    },
+    "credential_scope": {
+      "const": "per-node-and-control"
+    },
+    "server_password_storage": {
+      "const": "bcrypt"
+    },
+    "shared_token_allowed": {
+      "const": false
+    },
+    "agent_user_binding": {
+      "const": "username-equals-node_id"
+    },
+    "subject_authorization_required": {
+      "const": true
+    },
+    "agent_publish_allow": {
+      "const": "cloudiff.v2.node.observed"
+    },
+    "agent_subscribe_allowed": {
+      "const": false
+    },
+    "control_publish_allowed": {
+      "const": false
+    },
+    "control_subscribe_allow": {
+      "const": "cloudiff.v2.node.observed"
+    },
+    "server_certificate_source": {
+      "const": "mauricio/npm/certbot/letsencrypt"
+    },
+    "client_certificate_source": {
+      "const": "cloudiff-agent-pki"
+    },
+    "node_identity_binding": {
+      "const": "node_id-as-certificate-cn-and-uri"
+    },
+    "server_certificate_eku": {
+      "const": "serverAuth"
+    },
+    "client_certificate_eku": {
+      "const": "clientAuth"
+    },
+    "server_certificate_distribution": {
+      "const": "https-capability"
+    },
+    "distribution_origin": {
+      "const": "https://cloudiff.duckdns.org/__cloudif_distribution"
+    },
+    "distribution_collection": {
+      "const": "nats-server-cert"
+    },
+    "ssh_distribution_allowed": {
+      "const": false
+    },
+    "distribution_validation": {
+      "const": [
+        "https certificate validation",
+        "capability audience/scope/expiry",
+        "manifest generation",
+        "member sha256/size",
+        "server hostname",
+        "minimum certificate lifetime",
+        "certificate-private-key match"
+      ]
+    }
+  }
+}

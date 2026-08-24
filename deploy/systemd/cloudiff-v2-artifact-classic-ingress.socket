@@ -1,0 +1,15 @@
+[Unit]
+Description=CloudIFF v2 ClassicArtifactIngress socket
+After=network-online.target
+Wants=network-online.target
+
+[Socket]
+ListenStream=10.62.91.2:18228
+NoDelay=true
+ReusePort=false
+Service=cloudiff-v2-artifact-classic-ingress.service
+IPAddressAllow=10.62.91.3/32
+IPAddressDeny=any
+
+[Install]
+WantedBy=sockets.target

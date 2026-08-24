@@ -1,0 +1,244 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CloudIFF RuntimeExecutor v18",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "profiles",
+    "commonSecurity",
+    "shadow",
+    "canary"
+  ],
+  "properties": {
+    "commonSecurity": {
+      "const": {
+        "user": "65532:65532",
+        "readOnly": true,
+        "capDrop": [
+          "ALL"
+        ],
+        "noNewPrivileges": true,
+        "publishedPorts": []
+      }
+    },
+    "profiles": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "PREVIEW",
+        "TEST",
+        "HOMOLOGATION",
+        "CANARY",
+        "PRODUCTION",
+        "SEALED"
+      ],
+      "properties": {
+        "PREVIEW": {
+          "const": {
+            "mutationAllowed": true,
+            "activationAllowed": true,
+            "trafficScope": "preview-proxy",
+            "network": "cloudif-publications",
+            "memoryMiB": 128,
+            "pids": 128,
+            "tmpfsMiB": 16,
+            "ttlMinSeconds": 300,
+            "ttlMaxSeconds": 86400,
+            "preSwitchSmoke": true,
+            "postSwitchSmoke": false,
+            "externalHealthMatch": false,
+            "rollbackRequired": false,
+            "removeAfterExecution": false
+          }
+        },
+        "TEST": {
+          "const": {
+            "mutationAllowed": true,
+            "activationAllowed": false,
+            "trafficScope": "none",
+            "network": "none",
+            "memoryMiB": 128,
+            "pids": 128,
+            "tmpfsMiB": 16,
+            "ttlMinSeconds": 0,
+            "ttlMaxSeconds": 0,
+            "preSwitchSmoke": true,
+            "postSwitchSmoke": false,
+            "externalHealthMatch": false,
+            "rollbackRequired": false,
+            "removeAfterExecution": true
+          }
+        },
+        "HOMOLOGATION": {
+          "const": {
+            "mutationAllowed": true,
+            "activationAllowed": true,
+            "trafficScope": "homologation-proxy",
+            "network": "cloudif-publications",
+            "networkAlias": "cloudif-prod-homologation",
+            "memoryMiB": 128,
+            "pids": 128,
+            "tmpfsMiB": 16,
+            "ttlMinSeconds": 0,
+            "ttlMaxSeconds": 0,
+            "preSwitchSmoke": true,
+            "postSwitchSmoke": true,
+            "externalHealthMatch": false,
+            "rollbackRequired": true,
+            "removeAfterExecution": false
+          }
+        },
+        "CANARY": {
+          "const": {
+            "mutationAllowed": true,
+            "activationAllowed": true,
+            "trafficScope": "internal-canary",
+            "network": "cloudif-production-canary",
+            "networkAlias": "cloudif-prod-canary",
+            "memoryMiB": 128,
+            "pids": 128,
+            "tmpfsMiB": 16,
+            "ttlMinSeconds": 0,
+            "ttlMaxSeconds": 0,
+            "preSwitchSmoke": true,
+            "postSwitchSmoke": true,
+            "externalHealthMatch": false,
+            "rollbackRequired": true,
+            "removeAfterExecution": false
+          }
+        },
+        "PRODUCTION": {
+          "const": {
+            "mutationAllowed": true,
+            "activationAllowed": true,
+            "trafficScope": "public-production",
+            "network": "cloudif-publications",
+            "networkAlias": "cloudif-production-active",
+            "memoryMiB": 192,
+            "pids": 160,
+            "tmpfsMiB": 16,
+            "ttlMinSeconds": 0,
+            "ttlMaxSeconds": 0,
+            "preSwitchSmoke": true,
+            "postSwitchSmoke": true,
+            "externalHealthMatch": true,
+            "rollbackRequired": true,
+            "removeAfterExecution": false
+          }
+        },
+        "SEALED": {
+          "const": {
+            "mutationAllowed": false,
+            "activationAllowed": false,
+            "trafficScope": "none",
+            "network": "none",
+            "memoryMiB": 0,
+            "pids": 0,
+            "tmpfsMiB": 0,
+            "ttlMinSeconds": 0,
+            "ttlMaxSeconds": 0,
+            "preSwitchSmoke": false,
+            "postSwitchSmoke": false,
+            "externalHealthMatch": false,
+            "rollbackRequired": false,
+            "removeAfterExecution": false,
+            "sealed": true,
+            "productionEffectsEnabled": false,
+            "artifactAliasAttached": false,
+            "restoreValidationRequired": true,
+            "monitoringRequired": true
+          }
+        }
+      }
+    },
+    "shadow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "bind",
+        "port",
+        "effectsEnabled",
+        "routes"
+      ],
+      "properties": {
+        "bind": {
+          "const": "127.0.0.1"
+        },
+        "port": {
+          "const": 18232
+        },
+        "effectsEnabled": {
+          "const": false
+        },
+        "routes": {
+          "const": [
+            "GET /health",
+            "POST /v1/plan",
+            "POST /v1/execute"
+          ]
+        }
+      }
+    },
+    "canary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "bind",
+        "port",
+        "effectsEnabled",
+        "profiles",
+        "requestFields",
+        "executionIdPattern",
+        "imageIdentity",
+        "cleanup",
+        "previewPublicTraffic",
+        "dockerInvocation",
+        "resultPostcondition"
+      ],
+      "properties": {
+        "bind": {
+          "const": "127.0.0.1"
+        },
+        "port": {
+          "const": 18233
+        },
+        "effectsEnabled": {
+          "const": true
+        },
+        "profiles": {
+          "const": [
+            "TEST",
+            "PREVIEW"
+          ]
+        },
+        "requestFields": {
+          "const": [
+            "profile",
+            "execution_id",
+            "artifact_image_id",
+            "immutable_source_digest",
+            "ttl_seconds"
+          ]
+        },
+        "executionIdPattern": {
+          "const": "^rt_[0-9a-f]{20}$"
+        },
+        "imageIdentity": {
+          "const": "sha256 digest exact; image Config.User must be non-root"
+        },
+        "cleanup": {
+          "const": "reserved container removed before return on success and failure"
+        },
+        "previewPublicTraffic": {
+          "const": false
+        },
+        "dockerInvocation": {
+          "const": "execvp argv only; no shell; no published ports"
+        },
+        "resultPostcondition": {
+          "const": "container_removed=true and container_running=false"
+        }
+      }
+    }
+  }
+}

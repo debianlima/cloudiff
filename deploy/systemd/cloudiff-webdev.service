@@ -1,0 +1,19 @@
+[Unit]
+Description=CloudIFF WebDevWorkspace isolated browser
+After=docker.service network-online.target
+Requires=docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStartPre=/var/lib/cloudiff-webdev/current/deploy/install_webdev_workspace.sh firewall-apply
+ExecStart=/usr/bin/docker compose -f /var/lib/cloudiff-webdev/current/deploy/compose.webdev.yaml up -d
+ExecStartPost=/var/lib/cloudiff-webdev/current/deploy/install_webdev_workspace.sh health
+ExecStop=/usr/bin/docker compose -f /var/lib/cloudiff-webdev/current/deploy/compose.webdev.yaml down --remove-orphans
+ExecStopPost=/var/lib/cloudiff-webdev/current/deploy/install_webdev_workspace.sh firewall-remove
+TimeoutStartSec=180
+TimeoutStopSec=60
+
+[Install]
+WantedBy=multi-user.target

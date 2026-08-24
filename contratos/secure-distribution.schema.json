@@ -1,0 +1,89 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CloudIFF SecureDistributionProvider v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "origin", "backend", "route", "capability", "integrity", "collections"],
+  "properties": {
+    "version": {"const": 1},
+    "origin": {"const": "https://cloudiff.duckdns.org/__cloudif_distribution"},
+    "backend": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["address", "port", "tlsTermination"],
+      "properties": {
+        "address": {"const": "10.62.91.3"},
+        "port": {"const": 18240},
+        "tlsTermination": {"const": "NPM"}
+      }
+    },
+    "route": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["methods", "sourceAllow", "otherHosts", "cache"],
+      "properties": {
+        "methods": {"const": ["GET"]},
+        "sourceAllow": {"const": ["10.62.92.7"]},
+        "otherHosts": {"const": "404"},
+        "cache": {"const": "no-store"}
+      }
+    },
+    "capability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["transport", "tokenStorage", "audienceHeader", "expiryRequired", "collectionScopeRequired", "queryTokenAllowed"],
+      "properties": {
+        "transport": {"const": "Authorization: Bearer"},
+        "tokenStorage": {"const": "provider stores sha256 only; consumer stores raw token in root-owned file"},
+        "audienceHeader": {"const": "X-CloudIFF-Audience"},
+        "expiryRequired": {"const": true},
+        "collectionScopeRequired": {"const": true},
+        "queryTokenAllowed": {"const": false}
+      }
+    },
+    "integrity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["memberDigest", "generation", "objectPrecondition"],
+      "properties": {
+        "memberDigest": {"const": "sha256"},
+        "generation": {"const": "sha256 of canonical sorted member id|sha256|size records"},
+        "objectPrecondition": {"const": "X-CloudIFF-Expected-Generation required and must equal current generation"}
+      }
+    },
+    "collections": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "audiences", "members"],
+        "properties": {
+          "id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$"},
+          "audiences": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {"type": "string", "pattern": "^[A-Za-z0-9._:-]{1,128}$"}
+          },
+          "members": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 32,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["id", "path", "media_type", "max_bytes"],
+              "properties": {
+                "id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$"},
+                "path": {"type": "string", "minLength": 1, "maxLength": 1024},
+                "media_type": {"type": "string", "minLength": 1, "maxLength": 128},
+                "max_bytes": {"type": "integer", "minimum": 1, "maximum": 16777216}
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

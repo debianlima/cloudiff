@@ -1,0 +1,12 @@
+[Unit]
+Description=CloudIFF agent signed auto-update
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/cloudiff-agent-updater apply
+NoNewPrivileges=yes
+ProtectHome=yes
+PrivateTmp=yes
+UMask=0077

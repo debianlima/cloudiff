@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CloudIFF Node",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "node_id",
+    "hostname",
+    "role",
+    "observed_at",
+    "capabilities"
+  ],
+  "properties": {
+    "node_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "hostname": {
+      "type": "string",
+      "minLength": 1
+    },
+    "role": {
+      "enum": [
+        "control",
+        "forja",
+        "edge",
+        "other"
+      ]
+    },
+    "observed_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "capabilities": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "uniqueItems": true
+    },
+    "certificate_fingerprint": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "telemetry": {
+      "$ref": "telemetry.schema.json"
+    }
+  }
+}

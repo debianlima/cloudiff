@@ -1,0 +1,13 @@
+{
+  "version":1,
+  "identity":{"canonicalName":"BuildWorkerCanaryFixture","slug":"system-build-canary","systemOwned":true,"containsUserData":false},
+  "forgejo":{"ownerSource":"FORGEJO_OWNER","repository":"cloudif-system-build-canary","branch":"main","private":true,"createEndpoint":"POST /api/v1/admin/users/{owner}/repos","webhooks":false,"komodo":false,"persistent":true},
+  "registry":{"directory":"/var/lib/cloudif/forja-agent/system-fixtures","file":"system-build-canary.json","visibleInProjects":false,"visibleInProjectStatus":false,"archiveFallbackOnly":true,"projectStateFileAllowed":false},
+  "files":[
+    {"path":"compose.yml","source":"fixtures/build-worker-canary/compose.yml","sha256":"3c1c1ee8b0fbbb44d676a85c40345d40cfe3fd677c9dabe1075ab80e8da9e210"},
+    {"path":"site/index.html","source":"fixtures/build-worker-canary/site/index.html","sha256":"20858acb9d3801dd53d762a5a872cf493bf5eeb8a15526ca32c6b1eabf29f854"}
+  ],
+  "workspaceValidation":{"route":"POST /v1/test-static","expected":"HTTP 200; body.ok=true; body.result.valid=true","composeImage":"cgr.dev/chainguard/nginx@sha256:e4ff957080737c90a9ecfeaa40e3d19ea9d687e9cacda2f2a031c75ffcdd72b7","buildForbidden":true,"publishedPorts":[],"privileged":false,"hostNamespaces":false,"devices":false,"capAdd":false,"externalUrls":false},
+  "canary":{"buildBroker":"http://127.0.0.1:18221/v1/builds","worker":"cloudiff-v2-build-worker-canary.service","kind":"cloudiff.v2.build.classic","queuePrecondition":"zero other ready|waiting_retry|leased cloudiff.v2.build.classic jobs","planDigestSource":"POST http://127.0.0.1:18212/v1/plan framework=static","success":"job succeeded; artifact production_ready=true; attestation_verified=true"},
+  "cleanup":{"jobRow":"remove only returned build_id after evidence","attemptRows":"remove only rows for returned build_id","partitionLease":"remove only lease for returned build_id","artifactImage":"external Forja gate removes only returned artifact_image_id when absent from baseline","fixtureRepository":"persistent; never deleted by canary cleanup"}
+}

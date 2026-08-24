@@ -1,0 +1,20 @@
+[Unit]
+Description=CloudIFF v2 NATS external allowlisted socket
+After=network-online.target
+Wants=network-online.target
+
+[Socket]
+ListenStream=10.62.92.7:14222
+NoDelay=true
+ReusePort=false
+Service=cloudiff-v2-nats-source-allowlist.service
+IPAddressAllow=10.62.91.2/32
+IPAddressAllow=10.62.91.3/32
+IPAddressAllow=10.62.91.5/32
+IPAddressAllow=172.16.0.2/32
+IPAddressAllow=172.16.0.3/32
+IPAddressAllow=10.0.0.0/16
+IPAddressDeny=any
+
+[Install]
+WantedBy=sockets.target

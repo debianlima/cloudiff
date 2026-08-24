@@ -1,0 +1,45 @@
+[Unit]
+Description=CloudIFF v2 ClassicBuildWorker canary (manual one-shot)
+After=network-online.target cloudiff-v2-control.service
+Wants=network-online.target
+StartLimitIntervalSec=60
+StartLimitBurst=3
+
+[Service]
+Type=oneshot
+TimeoutStartSec=25min
+User=cloudiff-v2-worker
+Group=cloudiff-v2-worker
+EnvironmentFile=/etc/cloudiff-v2/worker.env
+EnvironmentFile=/etc/cloudiff-v2/build-worker.env
+Environment=CLOUDIFF_WORKER_ALLOWED_KINDS=cloudiff.v2.build.classic
+Environment=CLOUDIFF_WORKER_CONCURRENCY=1
+Environment=CLOUDIFF_WORKER_LEASE_SECONDS=1200
+ExecStart=/opt/cloudiff-v2/build-worker-current/bin/cloudiff-worker --once
+UMask=0077
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProtectKernelLogs=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+RestrictNamespaces=yes
+RemoveIPC=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+IPAddressDeny=any
+IPAddressAllow=127.0.0.0/8
+IPAddressAllow=10.62.91.3/32
+CapabilityBoundingSet=
+AmbientCapabilities=
+SystemCallArchitectures=native
+ProtectProc=invisible
+ProcSubset=pid

@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CloudIFF ArtifactDownloadCapability v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "tool", "scope", "capability", "httpsRoute", "stream", "mcpRepresentation"],
+  "properties": {
+    "version": {"const": 1},
+    "tool": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "input", "sideEffect"],
+      "properties": {
+        "name": {"const": "workspace.artifact.download"},
+        "input": {"const": ["slug", "artifact_id", "ttl_seconds"]},
+        "sideEffect": {"const": "issues one temporary download capability; artifact bytes are unchanged"}
+      }
+    },
+    "scope": {"const": "workspace:change-set-plan"},
+    "capability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["format", "storage", "ttlSeconds", "projectBound", "artifactBound", "oneTime", "replacement", "oauthTokenExposed", "queryAllowed"],
+      "properties": {
+        "format": {"const": "dlt_<artifact-hex-24>_<random-hex-48>"},
+        "storage": {"const": "sha256 only in artifact metadata"},
+        "ttlSeconds": {"type": "object", "const": {"minimum": 60, "maximum": 3600, "default": 900}},
+        "projectBound": {"const": true},
+        "artifactBound": {"const": true},
+        "oneTime": {"const": "strict; capability is consumed before response streaming"},
+        "replacement": {"const": "issuing a new capability invalidates the previous capability for the artifact"},
+        "oauthTokenExposed": {"const": false},
+        "queryAllowed": {"const": false}
+      }
+    },
+    "httpsRoute": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["origin", "pathPattern", "methods", "npmAccessLog", "npmErrorLog", "routerAccessLog", "routerErrorLog", "redirects", "newPort"],
+      "properties": {
+        "origin": {"const": "https://cloudiff.duckdns.org"},
+        "pathPattern": {"const": "^/cloudiff/artifact-download/dlt_[a-f0-9]{24}_[a-f0-9]{48}$"},
+        "methods": {"const": ["GET"]},
+        "npmAccessLog": {"const": false},
+        "npmErrorLog": {"const": "discard for capability location"},
+        "routerAccessLog": {"const": false},
+        "routerErrorLog": {"const": "discard for capability location"},
+        "redirects": {"const": false},
+        "newPort": {"const": false}
+      }
+    },
+    "stream": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "consumer", "contentType", "cacheControl", "contentDisposition", "integrity", "secondUse"],
+      "properties": {
+        "source": {"const": "WorkspaceBroker sealed artifact payload"},
+        "consumer": {"const": "loopback-only GET /v1/artifact/download/capability/read via host-network router"},
+        "contentType": {"const": "application/octet-stream"},
+        "cacheControl": {"const": "no-store"},
+        "contentDisposition": {"const": "attachment; filename*=UTF-8''<percent-encoded-filename>"},
+        "integrity": {"const": ["Content-Length equals artifact size", "X-CloudIF-Artifact-Sha256 equals sealed sha256", "stream is re-hashed while sent"]},
+        "secondUse": {"const": "HTTP 410"}
+      }
+    },
+    "mcpRepresentation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["transfer", "content", "resourceLink", "uiRequired"],
+      "properties": {
+        "transfer": {"const": "CloudIFF MCP File Transfer with direction=download and HTTPS content_ref"},
+        "content": {"const": "text metadata plus resource_link"},
+        "resourceLink": {"const": ["type=resource_link", "uri=content_ref", "name=artifact filename", "mimeType=application/octet-stream"]},
+        "uiRequired": {"const": false}
+      }
+    }
+  }
+}

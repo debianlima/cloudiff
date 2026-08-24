@@ -1,0 +1,119 @@
+versao: 2
+skill_projeto:
+  id: cloudiff
+  nome: CloudIFF
+  tipo_competencia: projeto
+  fonte: skills/cloudiff/SKILL.md
+  versao: 0.1.0
+  vinculada_por: usuario em 2026-08-24
+  protocolo_governanca: PGH 1.2.0
+  compoe: []
+  referencia:
+    - id: desenvolvedor-de-software
+      versao_fixada: '14'
+      fonte: debianlima/competencias-catalogo:metodo/desenvolvedor-de-software/SKILL.md
+      delta_lido_ate: bf231270f2e75a23dd989a8a92eac4073813b75b
+      estado_reconciliacao: ATUAL
+    - id: github-incremental-reconciliation
+      versao_fixada: '7'
+      fonte: debianlima/competencias-catalogo:metodo/github-incremental-reconciliation/SKILL.md
+      delta_lido_ate: bf231270f2e75a23dd989a8a92eac4073813b75b
+      estado_reconciliacao: ATUAL
+    - id: governanca-ontologica-de-skills
+      versao_fixada: 1.0.4
+      fonte: debianlima/competencias-catalogo:metodo/governanca-ontologica-de-skills/SKILL.md
+      delta_lido_ate: bf231270f2e75a23dd989a8a92eac4073813b75b
+      estado_reconciliacao: ATUAL
+    - id: distributed-agent-control
+      versao_fixada: '1'
+      fonte: debianlima/competencias-catalogo:dominio/distributed-agent-control/SKILL.md
+      delta_lido_ate: bf231270f2e75a23dd989a8a92eac4073813b75b
+      estado_reconciliacao: ATUAL
+    - id: telemetry-data-visualization
+      versao_fixada: '2'
+      fonte: debianlima/competencias-catalogo:dominio/telemetry-data-visualization/SKILL.md
+      delta_lido_ate: bf231270f2e75a23dd989a8a92eac4073813b75b
+      estado_reconciliacao: ATUAL
+    - id: network-ssh-operations
+      versao_fixada: '1'
+      fonte: debianlima/competencias-catalogo:dominio/network-ssh-operations/SKILL.md
+      delta_lido_ate: bf231270f2e75a23dd989a8a92eac4073813b75b
+      estado_reconciliacao: ATUAL
+    - id: operational-ui-truth
+      versao_fixada: '1'
+      fonte: debianlima/competencias-catalogo:dominio/operational-ui-truth/SKILL.md
+      delta_lido_ate: bf231270f2e75a23dd989a8a92eac4073813b75b
+      estado_reconciliacao: ATUAL
+competencias:
+  - id: dist
+    nome: Sistemas distribuídos
+    skill: cloud-design-patterns
+    ativa_em: [backend-integracao, fila, reconciliacao, agente, runtime]
+    fonte: /srv/cloudif/agent-skills/current/cloud-design-patterns/SKILL.md
+    melhora: idempotência, mensageria, reconciliação, boundaries
+    portao: falha injetada controlada; reexecução prova idempotência; duplicate delivery segura
+    evidencia: auditoria encontrou reconciliadores, leases, dead-letter e drift desired/observed em três hosts
+    instalada_em: 2026-08-20
+  - id: dados
+    nome: Sistemas de dados distribuídos
+    skill: ddia-systems
+    ativa_em: [schema, migracao-dados, fila, persistencia]
+    fonte: /srv/cloudif/agent-skills/current/ddia-systems/SKILL.md
+    melhora: PostgreSQL, transações, consistência, jobs e eventos
+    portao: constraints verificadas; migração testada; integridade comparada
+    evidencia: auditoria encontrou múltiplos SQLite; v2 foi decidido com PostgreSQL novo e limpo
+    instalada_em: 2026-08-20
+  - id: resiliencia
+    nome: Resiliência de produção
+    skill: release-it
+    ativa_em: [agente, fila, runtime, integracao, deploy]
+    fonte: /srv/cloudif/agent-skills/current/release-it/SKILL.md
+    melhora: timeout, retry/backoff, circuit breaker, bulkhead, capacity
+    portao: timeout explícito; recovery testado; falha injetada autorizada em ambiente controlado
+    evidencia: auditoria encontrou timeouts, units failed, retry desigual e falhas parciais
+    instalada_em: 2026-08-20
+  - id: plataforma
+    nome: Platform engineering e orquestração
+    skill: platform-engineering
+    ativa_em: [infraestrutura, agente, runtime, rede, pki, observabilidade]
+    fonte: /srv/cloudif/agent-skills/current/platform-engineering/SKILL.md
+    melhora: containers, systemd, networking, secrets, PKI e observabilidade
+    portao: diff estado declarado/coletado; smoke test; rollback integral disponível
+    evidencia: CloudIFF opera em três hosts com Docker, systemd, NPM, Forgejo, Komodo, Supabase e PKI
+    instalada_em: 2026-08-20
+  - id: navegacao
+    nome: Navegação e regressão visual
+    skill: playwright
+    ativa_em: [interface, fluxo-portal, integracao-portal]
+    fonte: /srv/cloudif/agent-skills/current/playwright/SKILL.md
+    melhora: navegação real, screenshots, E2E e regressão visual
+    portao: screenshots comparadas; fluxo crítico percorrido
+    evidencia: interface visual imutável; Xvfb+Playwright operacional
+    instalada_em: 2026-08-20
+  - id: autenticacao
+    nome: Authentik OIDC
+    skill: cloudiff-authentik-oidc
+    ativa_em: [autenticacao, sessao, identidade]
+    fonte: /srv/cloudif/agent-skills/current/cloudiff-authentik-oidc/SKILL.md
+    melhora: integração OIDC e preservação da identidade existente
+    portao: login real; callback válido; sessão válida
+    evidencia: autenticação integrada com Authentik mantida por decisão explícita
+    instalada_em: 2026-08-20
+  - id: release
+    nome: Release seguro CloudIFF
+    skill: cloudiff-safe-release
+    ativa_em: [deploy, cutover, rollback]
+    fonte: /srv/cloudif/agent-skills/current/cloudiff-safe-release/SKILL.md
+    melhora: promoção imutável, current/previous, smoke e rollback
+    portao: dry-run; smoke pós-deploy; rollback integral funcional
+    evidencia: rollback integral do legado é requisito confirmado
+    instalada_em: 2026-08-20
+  - id: cpp
+    nome: C++ moderno e build nativo
+    skill: cpp-pro
+    ativa_em: [build-cpp]
+    fonte: /srv/cloudif/agent-skills/current/cpp-pro/SKILL.md
+    melhora: C++20/23, CMake moderno, RAII, warnings, sanitizers, concorrência e otimização mensurável
+    portao: CMake/Ninja com Clang; zero warnings em -Wall -Wextra -Wpedantic; ASan/UBSan limpos; CTest aprovado em Debug e Release
+    evidencia: revisão v12 encontrou a entrada build-cpp sem nenhuma competência ativa cobrindo o tipo; cobertura obrigatória antes de reabrir CMake
+    instalada_em: 2026-08-20

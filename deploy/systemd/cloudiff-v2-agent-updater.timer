@@ -1,0 +1,12 @@
+[Unit]
+Description=CloudIFF agent auto-update timer
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+RandomizedDelaySec=60
+Persistent=true
+Unit=cloudiff-v2-agent-updater.service
+
+[Install]
+WantedBy=timers.target

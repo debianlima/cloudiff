@@ -1,0 +1,2686 @@
+{
+  "schema_version": 1,
+  "source_head": "10a76d589525e4b4ee681f62274e585250d49429",
+  "python_files": 444,
+  "classification_counts": {
+    "runtime-service-cpp-candidate": 123,
+    "library-review-cpp-candidate": 68,
+    "portal-compatibility-cpp-candidate": 249,
+    "verification-retain-until-equivalent": 1,
+    "tooling-retain-until-runtime-normalized": 3
+  },
+  "master_invariant": "FrozenPortalInterface: no visual/layout/navigation/text/visible-flow change without explicit operator authorization",
+  "strategy": [
+    "incremental-reconcile",
+    "learning-preserved",
+    "normalize",
+    "mechanical-gates",
+    "deploy-to-faro-when-unit-eligible"
+  ],
+  "items": [
+    {
+      "path": "components/control-plane/current-apps/agent-controller-current/cloudif-agent-controller.py",
+      "sha256": "08fe152d1107921d42f20acb4149635076ac481126cc359c8e8dcb6d591c973f",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/control-plane/current-apps/agent-registry-current/cloudif-agent-registry.py",
+      "sha256": "81f258305a7fc4d464243bcd16b39540f15a64c3c3b09b647cb0d06d96d0f22d",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/control-plane/current-apps/approvals-current/cloudif-approval-api.py",
+      "sha256": "b6497b95c4d302de6d50253de4791dcaeb8d289938e8f9136e94c9f1279ef5e1",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/control-plane/current-apps/approvals-current/cloudif_approval_policy.py",
+      "sha256": "53ce310cf93380fa0b55380229b2bb21869c5d2b2d1a7b952e90fdfdf016363c",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/control-plane/current-apps/audit-current/cloudif-academic-audit-api.py",
+      "sha256": "cee4ada6cb2e9d25be06c75296f2e34dba880e25b226318fb9ce85402bff46f5",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/control-plane/current-apps/build-broker-current/cloudif-build-broker.py",
+      "sha256": "c82f1ec155010f9bb0aab9777be0948625cbd95e272b0737dc7845cdf6298958",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/control-plane/current-apps/build-broker-current/cloudif_toolchain_lifecycle.py",
+      "sha256": "746fdbb1f406564dddbff8048d3f80505bd5194da86860cbcf9c5c63b5610bcf",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/control-plane/current-apps/build-broker-current/cloudif_toolchain_policy.py",
+      "sha256": "c239fa005313970b7798630c3a81cf108ebfd268ee8108931f76fecebb7935ba",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/control-plane/current-apps/control-dashboard-current/cloudif-control-dashboard.py",
+      "sha256": "7308d758f854b2ab795062ca86b55e815e78ac201c020dc4502c55ec4a747925",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/control-plane/current-apps/control-plane-smoke-current/cloudif-control-plane-smoke.py",
+      "sha256": "8a52659f62a29d3372731482995129dc741736ee7464e432dd77e6c821f99a48",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/control-plane/current-apps/deployment-broker-current/cloudif-deployment-broker.py",
+      "sha256": "503191c79f1d2b5b313020d9b1fc274befdf443e474ffcb866fc3e8c569c2e13",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/control-plane/current-apps/evaluations-current/cloudif-evaluation-api.py",
+      "sha256": "4398c1fbb8e1793ee56e11f8a549c3ddb86b65586b6c51b67a4798e6eb14d109",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/control-plane/current-apps/mcp-gateway-current/cloudif-mcp-gateway.py",
+      "sha256": "948e071ab08e45cd6a0683375669217aaaa76af5b8cc07bbd0092a7e1e71c846",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/control-plane/current-apps/monitor-current/cloudif-monitor-api.py",
+      "sha256": "e986cc8efeb7eb7a7f84e1db59a787cc6e0baa304c541c13f032777991c7a342",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/control-plane/current-apps/monitor-current/cloudif-monitor-collector.py",
+      "sha256": "4e5e82146ee84d93d5aa4f7c5a50141811695404cea2a8fa93437ada309aa902",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/control-plane/current-apps/multiservice-preview-current/cloudif-multiservice-preview-broker.py",
+      "sha256": "508726ca3058c4ea63aa5102445600e86e60ddba37e2b4c617a67cd35f20e9b8",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/control-plane/current-apps/notifications-current/cloudif-notification-api.py",
+      "sha256": "b0937bb14e620132594e3ba183f75fd881fd6c1486edd9daf25e606cd1f7723c",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/control-plane/current-apps/notifications-current/cloudif-notification-evaluator.py",
+      "sha256": "167cd1df39bd0c2df25961aa3741c01945f5f34aeeddea53a1b1be8e6d2df9fe",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/control-plane/current-apps/portal-current/cloudif-admin-portal-base.py",
+      "sha256": "fe137bac9bcced4c4083f0f917ccaf9b9d4c8d4b3aa71a1a5f56cec37a39767a",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/control-plane/current-apps/portal-current/cloudif-admin-portal.py",
+      "sha256": "5d11bb370c788838186c06464e959accfcdb01da0df28825a95e2fc519d9cb33",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/control-plane/current-apps/portal-current/cloudif_ai_agents_guide.py",
+      "sha256": "ffc10dcd1224cba00db1b29ef36330b1030642065497d30bdaa04b5d6feb5c6d",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/control-plane/current-apps/portal-current/cloudif_approval_panel.py",
+      "sha256": "8d4d4fce4686273dec3c978152323abaf081ebc4faaf098c6df52337482926a9",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/control-plane/current-apps/portal-current/cloudif_portal_publications.py",
+      "sha256": "db7e0d10ad83aab01ea904a7a4a44ef831b2ddc7001a62174c00ed6179695147",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/control-plane/current-apps/portal-current/cloudif_portal_sections98.py",
+      "sha256": "e73ce7a331ac9bf8baf595eeabb0d7de45ea00a31a2a2b4a09c8d006d6c5f3f9",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/control-plane/current-apps/portal-current/cloudif_production_operations_panel.py",
+      "sha256": "808be3c66491c2af0408cb18584acb36ddce3efc0743d8d54025fd03164d7caf",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/control-plane/current-apps/portal-current/cloudif_project_capabilities_panel.py",
+      "sha256": "807f6fccfd1b0ed70f8f73affd5da4f78a91284c9defffead33128841dfbd221",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/control-plane/current-apps/portal-current/cloudif_project_identity_panel.py",
+      "sha256": "2a6978e52e2da92a3b1491002390c97f23765918105d8e1d1e184578c61e7094",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/control-plane/current-apps/portal-current/cloudif_promotion_panel.py",
+      "sha256": "d20e1ecb75f930814a8c3bf2b9322bbad6e045e082921abdc5e03d19316a2cd4",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/control-plane/current-apps/portal-current/cloudif_publication_panel.py",
+      "sha256": "2dc0ca3d9650845109b448af0bdae8f66393d4237f358dc5ce74b2c4cd1fecd6",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/control-plane/current-apps/portal-current/cloudif_reconcile_panel.py",
+      "sha256": "cf922530bd30f864d996ef363167eff4d55e8947b782b83f5aaac7ca8001d422",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/control-plane/current-apps/portal-current/cloudif_transaction_panel.py",
+      "sha256": "e67c132b6e1b5b10eca5869a8af3270a4daa0b00a8ca2010b10305d66530ce76",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/control-plane/current-apps/portal-current/cloudif_ui_publications.py",
+      "sha256": "acf37421384034889ecc82f331ece85dbcac3ff23eeea0523cd2e977ef63d3a3",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/control-plane/current-apps/portal-current/cloudif_unique_pages98.py",
+      "sha256": "a542a1370322e839dfa3ad717ef15d55be749d233d692e7878f1fc7ac1da26be",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/control-plane/current-apps/preview-broker-current/cloudif-preview-broker.py",
+      "sha256": "c0bb2b54399ab0ff29c1282a18b193023189bd4b4e07c17b5aec96e9a2593a22",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/control-plane/current-apps/preview-broker-current/cloudif-preview-cleanup-client.py",
+      "sha256": "325f54b4ba523b9a99cb0d888a1a37f0118f1fc4d5d6a45dcd2ed0192381303c",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/control-plane/current-apps/production-window-guard-current/cloudif-production-window-guard.py",
+      "sha256": "2e5f6d464fc5cce11e042f160944fc63acc22f926c504a0d7b679cd7b0cce20a",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/control-plane/current-apps/project-capabilities-current/cloudif-project-capabilities.py",
+      "sha256": "47f5ece06cb7c0bdec26e1dd194d5283af5f631b669195d0cf8518a49cd2ac1f",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/control-plane/current-apps/project-config-controller-current/cloudif-project-config-controller.py",
+      "sha256": "e0ad2261f7dbc7d880510cae7054c42b3f9727df33c350d91cbc9becc9092699",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/control-plane/current-apps/project-config-controller-current/cloudif_project_environment.py",
+      "sha256": "3dd3486a9521aa41048b392c0c5192fb16401f26943d7dd5ff0bfd20b5532bce",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/control-plane/current-apps/project-config-controller-current/cloudif_project_secret_store.py",
+      "sha256": "492570bf3b71b064aadd5f4e110e7196fcf02c1a83e5a85f1d1c0353aa1dfc7f",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/control-plane/current-apps/project-config-reconciler-current/cloudif-project-config-reconciler.py",
+      "sha256": "b6e8542e57649999e30c12bc42bc2d155105c17c57453b238b94bef6d5a9588a",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/control-plane/current-apps/project-observability-current/cloudif-project-observability.py",
+      "sha256": "c54199e545f25101b540aab57b398c71d245a3a31292427dca1a9d777476d609",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/control-plane/current-apps/project-onboarding-current/cloudif-project-onboarding-run.py",
+      "sha256": "ae703a1d32f50f3433aab0ca24bc13a56029b48a515c668ac5756f8d673d3786",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/control-plane/current-apps/project-onboarding-current/cloudif-project-onboarding.py",
+      "sha256": "85ec4c9773f82812800baa5eb3f1762bf30475d1bead1b5039cc1617d5ffe4aa",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/control-plane/current-apps/project-runtime-reconciler-current/cloudif-project-runtime-reconciler.py",
+      "sha256": "9a9a186069144383099ddcbdb0d9cebf61d2ece1f9f8aafafcacef085300d322",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/control-plane/current-apps/project-state-reconcile-current/cloudif-project-state-reconcile.py",
+      "sha256": "93564d20170de3af5c5af7a9ba8000a73dd850c29449cd5023ee00f64684b2ef",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/control-plane/current-apps/reconcile-worker-current/cloudif-reconcile-worker.py",
+      "sha256": "81d7cebb5198a743166a6673230ce6795ab81f9acbe0f23bd5dacf0282ea8770",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/control-plane/current-apps/reconcile-worker-current/cloudif_reconcile_client.py",
+      "sha256": "17238845de4ec7faf1e5a7dae77a87edf4a851a9c4deb6aad615ff0369d48389",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/control-plane/current-apps/runtime-policy-current/cloudif-runtime-policy.py",
+      "sha256": "96e9855b2d8bbc83669ee9fde994a70453ebaad035d166c9416c1270705c13f6",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/control-plane/current-apps/supabase-mcp-broker-current/cloudif-supabase-mcp-broker.py",
+      "sha256": "79adfee9fc1e322def0793806b1c971b8c63550dbc3015c6ad7595b32c39d343",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/control-plane/current-apps/supabase-onboarding-broker-current/cloudif-supabase-onboarding-broker.py",
+      "sha256": "78efa9834638acf383eb34d01ca4acce29162215037d8f2d56a58fe35ae9b0e4",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/control-plane/current-apps/transaction-reconciler-current/cloudif-transaction-reconciler.py",
+      "sha256": "e1502bc18a1cfd37033a5b3b6b9dd5ff726afad7794bea90bf921384b39a4d97",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/control-plane/current-apps/workspace-broker-current/cloudif-workspace-broker.py",
+      "sha256": "196b4452e85babca99fbbab611a38c49dfaaea377c36360d9f7d4c24c02aaf33",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/control-plane/current-apps/workspace-broker-current/cloudif_change_set.py",
+      "sha256": "068c52667baa956b45d7f60a2b63b1d0b3f6362083d6121aaf6689e7576f435e",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/control-plane/current-apps/workspace-broker-current/cloudif_multitech_detector.py",
+      "sha256": "c49a218488f0539d85ee0d803a9f1110167146c76b2ba944396d46091f43f641",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/control-plane/current-apps/workspace-broker-current/cloudif_workspace_artifact.py",
+      "sha256": "99bb293fd46c2db05413aefcd7b3707d13213d08faa77dd9eb68dabc372bbc99",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/control-plane/srv/cloudif/bin/cloudif-env-set.py",
+      "sha256": "224e6c5613981761eef777b24bce165ec96ef0d970b09a0f8be368c82448409e",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/control-plane/srv/cloudif/bin/cloudif-forja-client.py",
+      "sha256": "6df38fa0f3d54e3adfac3fa25610e19248e40033078ecc9a7e0cc934b9b8d53d",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/control-plane/srv/cloudif/bin/cloudif-integrations-cli.py",
+      "sha256": "71a160a313c30ef7f0534276136346f9428a458391656e6b71bc572809298087",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/control-plane/srv/cloudif/bin/cloudif-jwt.py",
+      "sha256": "4ec5237b27a0c401cdc66dd1d6db1c90bb8135b5841878af001d968287c5efba",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/control-plane/srv/cloudif/bin/cloudif-project-orchestrator-v3.py",
+      "sha256": "12b98644bb10bb8c49586b4a8177b5b5b56810e6f40ca0af93b08426b9e11637",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/control-plane/srv/cloudif/bin/cloudif-project-orchestrator-v4.py",
+      "sha256": "d102a13cdfba9f68f1ce8231ec531c892f1fdeb04f3ff08a7941028a9850ea83",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/control-plane/srv/cloudif/bin/cloudif-tenant-access-check.py",
+      "sha256": "5be5706883ddbc8902317d335fdb6845313f1c506858f7f8705a3055e588f9cc",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/control-plane/srv/cloudif/lib/cloudif_ad_directory_module.py",
+      "sha256": "4ce3d00042b4a05ae381132749b8e29539d4707cd4579f1b5d1642a2aa6a7f8b",
+      "class": "library-review-cpp-candidate",
+      "priority": "medium"
+    },
+    {
+      "path": "components/control-plane/srv/cloudif/lib/cloudif_ad_search_module.py",
+      "sha256": "d7574d4a842cf8cb2959e3d8eec6c83b935c9e1bdf992ed7de1f28b819e923d4",
+      "class": "library-review-cpp-candidate",
+      "priority": "medium"
+    },
+    {
+      "path": "components/control-plane/srv/cloudif/lib/cloudif_admin_project_delete.py",
+      "sha256": "2e08e301f82a215a57f55911b8e41102b4f100d6fe469f8eb2eb191d82c96e21",
+      "class": "library-review-cpp-candidate",
+      "priority": "medium"
+    },
+    {
+      "path": "components/control-plane/srv/cloudif/lib/cloudif_admin_tenant_delete.py",
+      "sha256": "515e00536bde736b2c4edb0dc352ddd4c82e1cd15163c8aea578294390b05072",
+      "class": "library-review-cpp-candidate",
+      "priority": "medium"
+    },
+    {
+      "path": "components/control-plane/srv/cloudif/lib/cloudif_bancos_module.py",
+      "sha256": "c31c205753128c004d9e2d9f21bb26239762fabe5e8b40f7b72e180ab4ad11f5",
+      "class": "library-review-cpp-candidate",
+      "priority": "medium"
+    },
+    {
+      "path": "components/control-plane/srv/cloudif/lib/cloudif_delete_git_komodo_action.py",
+      "sha256": "f961fad3dd05e1b52f7a133f0bf446c263200a29735cf84e481832261fb6bd66",
+      "class": "library-review-cpp-candidate",
+      "priority": "medium"
+    },
+    {
+      "path": "components/control-plane/srv/cloudif/lib/cloudif_frontend_v55.py",
+      "sha256": "dae64489f3ea795dbe3262eb3098a91e4e14bc0cdd9831ee9d12861fff37d934",
+      "class": "library-review-cpp-candidate",
+      "priority": "medium"
+    },
+    {
+      "path": "components/control-plane/srv/cloudif/lib/cloudif_git_komodo_module.py",
+      "sha256": "9be5bca92d5dbb8baee51cbf8dc57869ab9330dcda1b5385846b055031e611fe",
+      "class": "library-review-cpp-candidate",
+      "priority": "medium"
+    },
+    {
+      "path": "components/control-plane/srv/cloudif/lib/cloudif_machine_db.py",
+      "sha256": "401eb4fa2179f8e15004f731417c59adfdf5d307297d1759cdbc0d91417e8605",
+      "class": "library-review-cpp-candidate",
+      "priority": "medium"
+    },
+    {
+      "path": "components/control-plane/srv/cloudif/lib/cloudif_multiservice_preview_portal.py",
+      "sha256": "e411d2788f3edb841b58eba12c4e95a528ee6c5127131e38cdde62977bb7e9ae",
+      "class": "library-review-cpp-candidate",
+      "priority": "medium"
+    },
+    {
+      "path": "components/control-plane/srv/cloudif/lib/cloudif_onboarding_v2.py",
+      "sha256": "aaea3e9075c259f71a04a58dc52d7122d40ae963066981adadb3d31e044de16b",
+      "class": "library-review-cpp-candidate",
+      "priority": "medium"
+    },
+    {
+      "path": "components/control-plane/srv/cloudif/lib/cloudif_portal_artifact_upload.py",
+      "sha256": "a0679fb51982f418e34a022a4e72d3f6914808ec693d7183985d2ac10addbbc1",
+      "class": "library-review-cpp-candidate",
+      "priority": "medium"
+    },
+    {
+      "path": "components/control-plane/srv/cloudif/lib/cloudif_portal_publications.py",
+      "sha256": "db7e0d10ad83aab01ea904a7a4a44ef831b2ddc7001a62174c00ed6179695147",
+      "class": "library-review-cpp-candidate",
+      "priority": "medium"
+    },
+    {
+      "path": "components/control-plane/srv/cloudif/lib/cloudif_portal_v2_coexist.py",
+      "sha256": "4407bd7c216ad7229e99c4518ac1a611ca91d625e8402426bbb1584782ee9005",
+      "class": "library-review-cpp-candidate",
+      "priority": "medium"
+    },
+    {
+      "path": "components/control-plane/srv/cloudif/lib/cloudif_project_acl_module.py",
+      "sha256": "9306afa1884792f7d79ed7f4c5dc4bc98bc8e8c2cf8e9263138af86a457592fa",
+      "class": "library-review-cpp-candidate",
+      "priority": "medium"
+    },
+    {
+      "path": "components/control-plane/srv/cloudif/lib/cloudif_project_action_safe.py",
+      "sha256": "dc7bf8e5ee910edfb2ad31b8f5499044245f02491caaf64d5cf2b0942350063d",
+      "class": "library-review-cpp-candidate",
+      "priority": "medium"
+    },
+    {
+      "path": "components/control-plane/srv/cloudif/lib/cloudif_project_config_events.py",
+      "sha256": "beda36125b31f0aded3432bbbd56f5567505f87a5e809718cb8afbc53e872086",
+      "class": "library-review-cpp-candidate",
+      "priority": "medium"
+    },
+    {
+      "path": "components/control-plane/srv/cloudif/lib/cloudif_project_environment_web.py",
+      "sha256": "1c92f699783710a718977fd3e6491dd81f1e62a02b4885bc69dea6611a95c494",
+      "class": "library-review-cpp-candidate",
+      "priority": "medium"
+    },
+    {
+      "path": "components/control-plane/srv/cloudif/lib/cloudif_project_environments_overview.py",
+      "sha256": "5bcdb2524bb1f5609669feca25176887c4c67bde71963ab835391cd6c398f139",
+      "class": "library-review-cpp-candidate",
+      "priority": "medium"
+    },
+    {
+      "path": "components/control-plane/srv/cloudif/lib/cloudif_project_observability_web.py",
+      "sha256": "fa5c122306b9f08088e7abca12029b88118ddd70f277fc19b53dfa0745873200",
+      "class": "library-review-cpp-candidate",
+      "priority": "medium"
+    },
+    {
+      "path": "components/control-plane/srv/cloudif/lib/cloudif_project_provision_real.py",
+      "sha256": "bec0e14d62ad8f337bdd493e9dde63178f226558526562a7c3e344f402a85d40",
+      "class": "library-review-cpp-candidate",
+      "priority": "medium"
+    },
+    {
+      "path": "components/control-plane/srv/cloudif/lib/cloudif_project_provision_recover.py",
+      "sha256": "6d0a30b21203e44e35d07487e4a0a671c0461d1156ee86748cd7a8aac5012318",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/control-plane/srv/cloudif/lib/cloudif_project_provision_status.py",
+      "sha256": "9dc740685c51d78c0fd79647b706ff6fa6adf4a043355311e16c4587141be52c",
+      "class": "library-review-cpp-candidate",
+      "priority": "medium"
+    },
+    {
+      "path": "components/control-plane/srv/cloudif/lib/cloudif_project_provision_worker.py",
+      "sha256": "0556c9095a8fdceb2623eb83bf3ca18a4cca03ba2476c858c6ff1a93ad566bea",
+      "class": "library-review-cpp-candidate",
+      "priority": "medium"
+    },
+    {
+      "path": "components/control-plane/srv/cloudif/lib/cloudif_project_publication_config.py",
+      "sha256": "dbf8c2611cb5cffa50e1fba9e7fab132a44ac785c6b12a170cda7ef0340406df",
+      "class": "library-review-cpp-candidate",
+      "priority": "medium"
+    },
+    {
+      "path": "components/control-plane/srv/cloudif/lib/cloudif_project_runtime_reconcile_web.py",
+      "sha256": "1c6a9cbdfba5d99a79935f51330564ce346a921cd9ea6e2b0deb5c426d778faf",
+      "class": "library-review-cpp-candidate",
+      "priority": "medium"
+    },
+    {
+      "path": "components/control-plane/srv/cloudif/lib/cloudif_project_secret_web.py",
+      "sha256": "0362594733ae3f2296ba6e77c855a3d0ecc20f9f0013b258b2e4baf5a234a197",
+      "class": "library-review-cpp-candidate",
+      "priority": "medium"
+    },
+    {
+      "path": "components/control-plane/srv/cloudif/lib/cloudif_project_toolchain_web.py",
+      "sha256": "52855d056ec77ece9a15df37b2f9f0a5b5ff9fc463add3922197d16bc105c6f0",
+      "class": "library-review-cpp-candidate",
+      "priority": "medium"
+    },
+    {
+      "path": "components/control-plane/srv/cloudif/lib/cloudif_publish_site_action.py",
+      "sha256": "4d02d2663ee113c0dee46431d63057ae46fd9552288baa1945a207f0ef08526e",
+      "class": "library-review-cpp-candidate",
+      "priority": "medium"
+    },
+    {
+      "path": "components/control-plane/srv/cloudif/lib/cloudif_rbac.py",
+      "sha256": "f4b289d01cdb78de446025ac46fe8b97472f7f01593f1540cf13bd3a9131dd13",
+      "class": "library-review-cpp-candidate",
+      "priority": "medium"
+    },
+    {
+      "path": "components/control-plane/srv/cloudif/lib/cloudif_reconcile_client.py",
+      "sha256": "17238845de4ec7faf1e5a7dae77a87edf4a851a9c4deb6aad615ff0369d48389",
+      "class": "library-review-cpp-candidate",
+      "priority": "medium"
+    },
+    {
+      "path": "components/control-plane/srv/cloudif/lib/cloudif_release_manager.py",
+      "sha256": "c7e031fbf5a1481f444299d7b177c5ef70eb63f696c7333d368045a685f0546d",
+      "class": "library-review-cpp-candidate",
+      "priority": "medium"
+    },
+    {
+      "path": "components/control-plane/srv/cloudif/lib/cloudif_theme_module.py",
+      "sha256": "f93782df23da5a84e2be592fc3ad6a3a6f212bcc44369880bc1fcebbba08a7f2",
+      "class": "library-review-cpp-candidate",
+      "priority": "medium"
+    },
+    {
+      "path": "components/control-plane/srv/cloudif/lib/cloudif_ui_components.py",
+      "sha256": "74184b8fe625061f10c9752f7355d137566c60e3fedc6f818bc106973a41cb3b",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/control-plane/srv/cloudif/lib/cloudif_ui_data.py",
+      "sha256": "933551b38666df811657e7bb0b7423f78ccccf4909be20d5d365c7cf650ee560",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/control-plane/srv/cloudif/lib/cloudif_ui_modular.py",
+      "sha256": "af6839fcfe50d074903d5312521f13273fe0f826ce2a4edb3b076029cfc1bad7",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/control-plane/srv/cloudif/lib/cloudif_ui_pages.py",
+      "sha256": "4ed3f58eaccf70302ba16a44470595579dda069a9bec0b2842e5f3b024d84f30",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/control-plane/srv/cloudif/lib/cloudif_ui_publications.py",
+      "sha256": "acf37421384034889ecc82f331ece85dbcac3ff23eeea0523cd2e977ef63d3a3",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/control-plane/srv/cloudif/lib/sitecustomize.py",
+      "sha256": "3e193e42e699641b69a7c097e1aab4e7d15652db1093a6923f38854e2b194f47",
+      "class": "library-review-cpp-candidate",
+      "priority": "medium"
+    },
+    {
+      "path": "components/control-plane/srv/cloudif/staging/cloudif-admin-portal-staging.py",
+      "sha256": "03b4fb6ae3fae2722f502106f47f1dc8b744643222e5739bdf4f0f4b7d2b5798",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/control-plane/srv/cloudif/staging/lib/cloudif_ad_directory_module.py",
+      "sha256": "4ce3d00042b4a05ae381132749b8e29539d4707cd4579f1b5d1642a2aa6a7f8b",
+      "class": "library-review-cpp-candidate",
+      "priority": "medium"
+    },
+    {
+      "path": "components/control-plane/srv/cloudif/staging/lib/cloudif_ad_search_module.py",
+      "sha256": "d7574d4a842cf8cb2959e3d8eec6c83b935c9e1bdf992ed7de1f28b819e923d4",
+      "class": "library-review-cpp-candidate",
+      "priority": "medium"
+    },
+    {
+      "path": "components/control-plane/srv/cloudif/staging/lib/cloudif_bancos_module.py",
+      "sha256": "c31c205753128c004d9e2d9f21bb26239762fabe5e8b40f7b72e180ab4ad11f5",
+      "class": "library-review-cpp-candidate",
+      "priority": "medium"
+    },
+    {
+      "path": "components/control-plane/srv/cloudif/staging/lib/cloudif_delete_git_komodo_action.py",
+      "sha256": "02995e35a390926ae3397ecc4350e1c9f3af432293370b367aa4ee0c5cda8d68",
+      "class": "library-review-cpp-candidate",
+      "priority": "medium"
+    },
+    {
+      "path": "components/control-plane/srv/cloudif/staging/lib/cloudif_frontend_v55.py",
+      "sha256": "dae64489f3ea795dbe3262eb3098a91e4e14bc0cdd9831ee9d12861fff37d934",
+      "class": "library-review-cpp-candidate",
+      "priority": "medium"
+    },
+    {
+      "path": "components/control-plane/srv/cloudif/staging/lib/cloudif_git_komodo_module.py",
+      "sha256": "352a98a8bd9192488fde49ada9aace951ca4f7dd5c02f54f894b9749adda44e8",
+      "class": "library-review-cpp-candidate",
+      "priority": "medium"
+    },
+    {
+      "path": "components/control-plane/srv/cloudif/staging/lib/cloudif_machine_db.py",
+      "sha256": "401eb4fa2179f8e15004f731417c59adfdf5d307297d1759cdbc0d91417e8605",
+      "class": "library-review-cpp-candidate",
+      "priority": "medium"
+    },
+    {
+      "path": "components/control-plane/srv/cloudif/staging/lib/cloudif_onboarding_v2.py",
+      "sha256": "f89ba08150cfc2275b19ee4896e03d2f811d1fd385ff5c7cd0e1b4f17a0da322",
+      "class": "library-review-cpp-candidate",
+      "priority": "medium"
+    },
+    {
+      "path": "components/control-plane/srv/cloudif/staging/lib/cloudif_portal_publications.py",
+      "sha256": "a4d19190bdb82509c76d484600248ae0f408a0504346e941fcbd602a68300748",
+      "class": "library-review-cpp-candidate",
+      "priority": "medium"
+    },
+    {
+      "path": "components/control-plane/srv/cloudif/staging/lib/cloudif_project_acl_module.py",
+      "sha256": "6428abc85227d77413b967a1d5850a7b3142dbe3b3f5b73763a81b3b83c04386",
+      "class": "library-review-cpp-candidate",
+      "priority": "medium"
+    },
+    {
+      "path": "components/control-plane/srv/cloudif/staging/lib/cloudif_project_action_safe.py",
+      "sha256": "4178aac396acfd1ccc6c8a1966668d820bdc02161c3f0c7789598e1a4d4b4393",
+      "class": "library-review-cpp-candidate",
+      "priority": "medium"
+    },
+    {
+      "path": "components/control-plane/srv/cloudif/staging/lib/cloudif_project_provision_real.py",
+      "sha256": "f0a821882dfd9faccba80838c4f37878bd8ff257a6c84e9aafee809265b9773d",
+      "class": "library-review-cpp-candidate",
+      "priority": "medium"
+    },
+    {
+      "path": "components/control-plane/srv/cloudif/staging/lib/cloudif_project_provision_worker.py",
+      "sha256": "01e9d5d86c95e75d459b926b3fd42295d3f477327345de18f302141aa1692021",
+      "class": "library-review-cpp-candidate",
+      "priority": "medium"
+    },
+    {
+      "path": "components/control-plane/srv/cloudif/staging/lib/cloudif_publish_site_action.py",
+      "sha256": "4d02d2663ee113c0dee46431d63057ae46fd9552288baa1945a207f0ef08526e",
+      "class": "library-review-cpp-candidate",
+      "priority": "medium"
+    },
+    {
+      "path": "components/control-plane/srv/cloudif/staging/lib/cloudif_rbac.py",
+      "sha256": "f4b289d01cdb78de446025ac46fe8b97472f7f01593f1540cf13bd3a9131dd13",
+      "class": "library-review-cpp-candidate",
+      "priority": "medium"
+    },
+    {
+      "path": "components/control-plane/srv/cloudif/staging/lib/cloudif_reconcile_client.py",
+      "sha256": "b6d31eaca82c1ab41a57337d09f070a58d5f61db0df99ca3b8bdc301f198da23",
+      "class": "library-review-cpp-candidate",
+      "priority": "medium"
+    },
+    {
+      "path": "components/control-plane/srv/cloudif/staging/lib/cloudif_release_manager.py",
+      "sha256": "c7e031fbf5a1481f444299d7b177c5ef70eb63f696c7333d368045a685f0546d",
+      "class": "library-review-cpp-candidate",
+      "priority": "medium"
+    },
+    {
+      "path": "components/control-plane/srv/cloudif/staging/lib/cloudif_theme_module.py",
+      "sha256": "f93782df23da5a84e2be592fc3ad6a3a6f212bcc44369880bc1fcebbba08a7f2",
+      "class": "library-review-cpp-candidate",
+      "priority": "medium"
+    },
+    {
+      "path": "components/control-plane/srv/cloudif/staging/lib/cloudif_ui_components.py",
+      "sha256": "74184b8fe625061f10c9752f7355d137566c60e3fedc6f818bc106973a41cb3b",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/control-plane/srv/cloudif/staging/lib/cloudif_ui_data.py",
+      "sha256": "933551b38666df811657e7bb0b7423f78ccccf4909be20d5d365c7cf650ee560",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/control-plane/srv/cloudif/staging/lib/cloudif_ui_modular.py",
+      "sha256": "af6839fcfe50d074903d5312521f13273fe0f826ce2a4edb3b076029cfc1bad7",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/control-plane/srv/cloudif/staging/lib/cloudif_ui_pages.py",
+      "sha256": "bd9322ca41b69b6fcc54549e5a1b8ebd3cc482fa53e79ab566b429768e6ecd4f",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/control-plane/srv/cloudif/staging/lib/cloudif_ui_publications.py",
+      "sha256": "2394770b2d41d8dca76a0b4066f8b768252cb438af3b18e5dbb03853f32eeebe",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/control-plane/srv/cloudif/tests/cloudif-ui-security-tests.py",
+      "sha256": "87bbd00ad9ebd762747366b91ce625a0da68dd85c2b4e9b5f8e1b2346cf1460d",
+      "class": "verification-retain-until-equivalent",
+      "priority": "later"
+    },
+    {
+      "path": "components/control-plane/usr/local/sbin/cloudif-admin-portal.py",
+      "sha256": "cf8edadb94043940b05fa7e1863ce0314d3d4a16e2400751562ad0cb4253cfea",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/control-plane/usr/local/sbin/cloudif-agent-pki.py",
+      "sha256": "e3aa544672789284d832597cdd5529f26264a5b92f25578d0e896638e3f40e21",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/control-plane/usr/local/sbin/cloudif-authz-gate.py",
+      "sha256": "57e2f725c2c8c3843c97e3a12d20272186439a6a884e3fc07dc1b31107ab21e5",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/control-plane/usr/local/sbin/cloudif-certificate-alert-dispatcher.py",
+      "sha256": "9905c474fcef0beb667155157ec92f33a992202b87b2b479134bfc3190a08911",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/control-plane/usr/local/sbin/cloudif-control-plane-api.py",
+      "sha256": "c4e7bfcb6ab4415ec84b59277e49b9c4bb693bdc29d942b6f11b024be3f1a176",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/control-plane/usr/local/sbin/cloudif-control-plane-integrity.py",
+      "sha256": "c1bf8fb9f7f7f56aee268cd27137d2fad914b99c577e474d2e4da77ac649338f",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/control-plane/usr/local/sbin/cloudif-control-plane-smoke.py",
+      "sha256": "adda1f4cc6e9caa94cd1249c140a914cff2473d2b9d44fe24afe364a3d6a7a37",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/control-plane/usr/local/sbin/cloudif-control-plane-sync.py",
+      "sha256": "0d22942197b0b14aac067efd8370973ce5860b527a1a3b5c71d9015d64ccb772",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/control-plane/usr/local/sbin/cloudif-data-retention.py",
+      "sha256": "60eb5c5667a166dfe8f4d82bf271192bab0d22e4956870cdcde8b5ccfdd6c255",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/control-plane/usr/local/sbin/cloudif-deploy-panel.py",
+      "sha256": "98d568d655f851ae8ce41cdfcff56d27622fc18bc2d64e2c5c66aa03e77cfb72",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/control-plane/usr/local/sbin/cloudif-machine-controller.py",
+      "sha256": "a9f32291e98b8e9a76d058b8be456996132b592ce515b52d0806622b673de488",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/control-plane/usr/local/sbin/cloudif-machine-executor.py",
+      "sha256": "f59974047abb85fa25d7d646da34d1edc4c48b3ba3a9cebbad6b4350c513c08c",
+      "class": "library-review-cpp-candidate",
+      "priority": "medium"
+    },
+    {
+      "path": "components/control-plane/usr/local/sbin/cloudif-machine-guardian.py",
+      "sha256": "c6bf9370d606c501b44d8b8289c52fbce58457b54373db49177167de06273ba1",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/control-plane/usr/local/sbin/cloudif-machine-harvester.py",
+      "sha256": "d20fba5190ce74d8be872bb26685b8bdd77cfbd9ddcaadce8b7e0957d9a254fb",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/control-plane/usr/local/sbin/cloudif-node-metrics.py",
+      "sha256": "0962e5d59706a7fbf12254373fc680fe9cbf0c0db438a2248bc45670aefb1536",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/control-plane/usr/local/sbin/cloudif-portal-refresh-cache.py",
+      "sha256": "30ac3cc61693849375fc94c50bb49ccc460aa9116bdd84fd81e9bb9ccb700c78",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/control-plane/usr/local/sbin/cloudif-portal-ttl-janitor.py",
+      "sha256": "914244b1235d5481fbec2d4358515eba7dff41e018d0796a8fb3e2759d92bf75",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/control-plane/usr/local/sbin/cloudif-project-backup-auto.py",
+      "sha256": "5c5238c81fdb9a6214acd1a5d32e06b4972353c1bb8c864116dbbd08a4d4f947",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/control-plane/usr/local/sbin/cloudif-project-backup.py",
+      "sha256": "ad7502b5804b39e625c0b383f16c47b91e91b4bcdc5c75c84da69bea705104d1",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/control-plane/usr/local/sbin/cloudif-project-ensure.py",
+      "sha256": "82ca6d1285c5750976b7e5a039f44ccc73cac54e86b129a8ab4b7333d8fca31c",
+      "class": "library-review-cpp-candidate",
+      "priority": "medium"
+    },
+    {
+      "path": "components/control-plane/usr/local/sbin/cloudif-project-initial-publish.py",
+      "sha256": "8be3faf3e96ef48f9a257aa8624d3e0b6124a48d250965bc28d41563b86ffe32",
+      "class": "library-review-cpp-candidate",
+      "priority": "medium"
+    },
+    {
+      "path": "components/control-plane/usr/local/sbin/cloudif-project-template-apply.py",
+      "sha256": "896acee0305725f8bf639acc63441d8ab71fe8b5a0a564ae7e8c75b3d20b6372",
+      "class": "library-review-cpp-candidate",
+      "priority": "medium"
+    },
+    {
+      "path": "components/control-plane/usr/local/sbin/cloudif-project-template-seed.py",
+      "sha256": "0019469451edd1eda996468c15d8532d2c6a10dac1abe67b195cd54d9114534c",
+      "class": "library-review-cpp-candidate",
+      "priority": "medium"
+    },
+    {
+      "path": "components/control-plane/usr/local/sbin/cloudif-publication-worker.py",
+      "sha256": "1b71eaee43863a25b18f9f32a81588bacdd5fa892dd2df44e601a949752dd4a6",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/control-plane/usr/local/sbin/cloudif-publish-1009-once.py",
+      "sha256": "99e56b12c0a645c79f6a0d11a265ae4552f7433a48f5645174d09b13ac380791",
+      "class": "library-review-cpp-candidate",
+      "priority": "medium"
+    },
+    {
+      "path": "components/control-plane/usr/local/sbin/cloudif-reconcile-tenant-certificates.py",
+      "sha256": "064ddb71cfc122777caae869d3922a3261e566af829c64a27460a609e0c7567e",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/control-plane/usr/local/sbin/cloudif-reconcile-worker.py",
+      "sha256": "81d7cebb5198a743166a6673230ce6795ab81f9acbe0f23bd5dacf0282ea8770",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/control-plane/usr/local/sbin/cloudif-refresh-komodo-status-cache.py",
+      "sha256": "1b577bda3a1ac8e7d3c2370437bd12620ac3987e062b7b7533c3e4be3b2b0d83",
+      "class": "library-review-cpp-candidate",
+      "priority": "medium"
+    },
+    {
+      "path": "components/control-plane/usr/local/sbin/cloudif-release-dispatch.py",
+      "sha256": "2d548f848b6882e69a13f7c5c3c2c0f1bf7600e4af9aaabb3b1cc68127df958c",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/control-plane/usr/local/sbin/cloudif-storage-guard.py",
+      "sha256": "7ff8d66eea8e2ea241b66f1d7f3f7a2fd14aa733affad8d0d4d521209e6c123a",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/control-plane/usr/local/sbin/cloudif-supabase-launch-api.py",
+      "sha256": "6b85d15f7f36ff26f65918657495b2b758fd97ee0e64b3e0de2ace923471a9a5",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/control-plane/usr/local/sbin/cloudif-supabase-release-agent.py",
+      "sha256": "c0164836ac5eb7391e5a580c90371bb5330ac2032de3b2a1167ed52a2e05426b",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/control-plane/usr/local/sbin/cloudif-supabase-session-broker.py",
+      "sha256": "cdc17327aa4d68d85da1cae7635c2d40fb84e77d9cb1147695e7bfbbc21779ed",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/control-plane/usr/local/sbin/cloudif-tenant-guard.py",
+      "sha256": "6cff9a4f85215f007f86b69750d6ab6c6dd96fcbd79b73e11940076a22656b2c",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/control-plane/usr/local/sbin/cloudif-tenant-policy-ensure.py",
+      "sha256": "2c6fa8045083d48652b12a008987730f77d4c84983b366e5a8acdaebba7833a0",
+      "class": "library-review-cpp-candidate",
+      "priority": "medium"
+    },
+    {
+      "path": "components/control-plane/usr/local/sbin/cloudif-test-cross-subdomain-publish-once.py",
+      "sha256": "3dbaafd8aee3cab9b8706a545dcdd2cc8ecaaa9277ac6585fa1301a9ac6ecae1",
+      "class": "library-review-cpp-candidate",
+      "priority": "medium"
+    },
+    {
+      "path": "components/control-plane/usr/local/sbin/cloudif-test-mobile-null-origin-publish-once.py",
+      "sha256": "9f5ef8ee586f78753b1cb3982464849477d33a2d25f7aaef5caed85b5105d7d1",
+      "class": "library-review-cpp-candidate",
+      "priority": "medium"
+    },
+    {
+      "path": "components/control-plane/usr/local/sbin/cloudif-test-publication-redirect-once.py",
+      "sha256": "5c4102a4acd1f42e0e6e1f2eb3dd15e1940f868080e73d6309e69b6e4361f536",
+      "class": "library-review-cpp-candidate",
+      "priority": "medium"
+    },
+    {
+      "path": "components/control-plane/usr/local/sbin/cloudif-test-tenant-control-publish-once.py",
+      "sha256": "86f3f9e952dc4d7ccda61d8e462c1ab436dd0ce324f8fab282bc2a7fc1e2fdb9",
+      "class": "library-review-cpp-candidate",
+      "priority": "medium"
+    },
+    {
+      "path": "components/control-plane/usr/local/sbin/cloudif-test-tenant-publish-button-once.py",
+      "sha256": "9b2c23be6aa3a8c54124747b7d5f062d0db62d29208c57dc997ea3daa320b352",
+      "class": "library-review-cpp-candidate",
+      "priority": "medium"
+    },
+    {
+      "path": "components/control-plane/usr/local/sbin/cloudif-workspace-cleanup.py",
+      "sha256": "c63953ae4aee242f6bc4ddc51180e910784a219a15b98d7d6d69cab8a58de5ee",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/proxy/current-apps/access-telemetry-current/cloudif-access-api.py",
+      "sha256": "3818ea36d780389f6549f20018647fe8d95e970b0adf8fba65280dcf17373645",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/proxy/current-apps/access-telemetry-current/cloudif-access-collector.py",
+      "sha256": "1c6e12f8d1d33225fd06349ae694d2d616f1dfc9687398fa3aa5cedc7703e0af",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/proxy/current-apps/access-telemetry-current/cloudif-access-push.py",
+      "sha256": "57998d0d6a31ee3b26fb0c3ad2900b61fd02adf74655ed2d4a73987733b383a8",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/proxy/current-apps/publisher-agent-current/cloudif-npm-publisher-agent.py",
+      "sha256": "a43abe7af88fd472b5c9d88e6453557ac39d5cf85de568443a9b70faee1ab8ad",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/proxy/usr/local/sbin/cloudif-machine-certificate-renew.py",
+      "sha256": "2fe62afa07d6d4c5d57b1bf23c3e6ceb60c64a876a45181d65bf972371e9c184",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/proxy/usr/local/sbin/cloudif-machine-executor.py",
+      "sha256": "f59974047abb85fa25d7d646da34d1edc4c48b3ba3a9cebbad6b4350c513c08c",
+      "class": "library-review-cpp-candidate",
+      "priority": "medium"
+    },
+    {
+      "path": "components/proxy/usr/local/sbin/cloudif-machine-guardian.py",
+      "sha256": "c6bf9370d606c501b44d8b8289c52fbce58457b54373db49177167de06273ba1",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/proxy/usr/local/sbin/cloudif-machine-harvester.py",
+      "sha256": "d20fba5190ce74d8be872bb26685b8bdd77cfbd9ddcaadce8b7e0957d9a254fb",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/proxy/usr/local/sbin/cloudif-node-metrics.py",
+      "sha256": "0962e5d59706a7fbf12254373fc680fe9cbf0c0db438a2248bc45670aefb1536",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/proxy/usr/local/sbin/cloudif-npm-publisher-agent.py",
+      "sha256": "a43abe7af88fd472b5c9d88e6453557ac39d5cf85de568443a9b70faee1ab8ad",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/runtime/current-apps/artifact-executor-current/cloudif-artifact-executor.py",
+      "sha256": "a9f6b4ea5db7d6ec499805d744d33798b65b5847408ed713ae3367c1d04906a1",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/runtime/current-apps/artifact-executor-current/cloudif_multiservice_artifact.py",
+      "sha256": "c5afd1768ba3b5aa64eb70b820fd53de14a785fe55a5dbddca08fd111101095c",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/runtime/current-apps/artifact-executor-current/cloudif_toolchain_policy.py",
+      "sha256": "c239fa005313970b7798630c3a81cf108ebfd268ee8108931f76fecebb7935ba",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/runtime/current-apps/forja-agent-current/cloudif-forja-agent.py",
+      "sha256": "d0329556d5c83665a455a0c6f82321b6e4dcd6a11bc1081a8bb652c54223ad74",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/runtime/current-apps/komodo-agent-current/cloudif-komodo-agent.py",
+      "sha256": "91d28aba6f8bed5afb18be0d3a7583f5f5f165fa1c28e681c40d5f5b7d690021",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/runtime/current-apps/multiservice-deployment-executor-current/cloudif-multiservice-deployment-executor.py",
+      "sha256": "2044dd275e9866440e58faf1f1dcb74b2c15df11be17cba7dffa517a5859e226",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/runtime/current-apps/multiservice-preview-executor-current/cloudif-multiservice-preview-executor.py",
+      "sha256": "25be1373b9b2ae5ccff5da297a33fa536e6851cc4e659c434d78686983e7a385",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/runtime/current-apps/node24-pipeline-current/cloudif-node24-pipeline.py",
+      "sha256": "1a1022af5f8028c90393777ac084c22a99e6fea4941dda66241171f098b94de8",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/runtime/current-apps/preview-executor-current/cloudif-preview-executor.py",
+      "sha256": "19a2515a8f0b38c41f2394dfa6806574733332ad7108b7474b932747a2a6f30d",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/runtime/current-apps/production-canary-executor-current/cloudif-production-canary-executor.py",
+      "sha256": "aac3a588100e5fbddcb44d523b6bdd1844e622e6ad870963793ac023ba55efee",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/runtime/current-apps/production-homologation-executor-current/cloudif-production-homologation-executor.py",
+      "sha256": "245e71190265fb4e89b6e8f30e6a29099d5ccb84e71fd1d10510e0977a9d43cc",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/runtime/current-apps/production-public-executor-current/cloudif-production-public-executor.py",
+      "sha256": "62d23374b670a9a5c76626fcc9739fa621026b1354233bba87561873b2de6483",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/runtime/current-apps/production-sealed-target-current/cloudif-production-sealed-target.py",
+      "sha256": "eaa9faec4b3e4f674669f769048e90fde6fe72018da9e8f0a927b51ee90d1c4a",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/runtime/usr/local/sbin/cloudif-forja-agent.py",
+      "sha256": "d0329556d5c83665a455a0c6f82321b6e4dcd6a11bc1081a8bb652c54223ad74",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/runtime/usr/local/sbin/cloudif-komodo-agent.py",
+      "sha256": "7c9d6db624bed4f421627f41bd65b4ebe59c002160b85ccde7578f6c26065d53",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/runtime/usr/local/sbin/cloudif-komodo-api-call.py",
+      "sha256": "11cc3694c9ad256d3947e219b58818c36e9d90bb16958cf1d197bdc378b30848",
+      "class": "library-review-cpp-candidate",
+      "priority": "medium"
+    },
+    {
+      "path": "components/runtime/usr/local/sbin/cloudif-komodo-authz-sync.py",
+      "sha256": "6f89e1d945671c60f1162ca70621b96f6ac3ea7ea41f99c7575744d2adda369e",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/runtime/usr/local/sbin/cloudif-komodo-project-authz.py",
+      "sha256": "e92d3b130537ef3d67dec4e1cf55805f05b85ad6268bc41a177d8afa934c2876",
+      "class": "library-review-cpp-candidate",
+      "priority": "medium"
+    },
+    {
+      "path": "components/runtime/usr/local/sbin/cloudif-machine-certificate-renew.py",
+      "sha256": "2fe62afa07d6d4c5d57b1bf23c3e6ceb60c64a876a45181d65bf972371e9c184",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/runtime/usr/local/sbin/cloudif-machine-executor.py",
+      "sha256": "f59974047abb85fa25d7d646da34d1edc4c48b3ba3a9cebbad6b4350c513c08c",
+      "class": "library-review-cpp-candidate",
+      "priority": "medium"
+    },
+    {
+      "path": "components/runtime/usr/local/sbin/cloudif-machine-guardian.py",
+      "sha256": "c6bf9370d606c501b44d8b8289c52fbce58457b54373db49177167de06273ba1",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/runtime/usr/local/sbin/cloudif-machine-harvester.py",
+      "sha256": "d20fba5190ce74d8be872bb26685b8bdd77cfbd9ddcaadce8b7e0957d9a254fb",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "components/runtime/usr/local/sbin/cloudif-node-metrics.py",
+      "sha256": "0962e5d59706a7fbf12254373fc680fe9cbf0c0db438a2248bc45670aefb1536",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/__init__.py",
+      "sha256": "07a0f4a01fb3b411ced740893278048e97e6b4462e2efc6b4a965a51b25e341d",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/app.py",
+      "sha256": "a769cb5666d8f5adfc1c6eeff98f8ea3b5ea15f4a26df0756de997072f17e588",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/core/__init__.py",
+      "sha256": "bacac67cc3e79800ebbb060764deaa92939dd516b05288273264a469fa5c1f96",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/core/auth.py",
+      "sha256": "72848ace79be5b380c80b3898141b522a5368c2f98a110fd9335608381974498",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/core/dispatch.py",
+      "sha256": "4ba6b45995342365f17d3c59267cb1c73e8a41d2a1551de07ad5c1a1bbb896ac",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/core/errors.py",
+      "sha256": "8662792a0dbed5eb5bf33df43d988bd75d938559aa3304b240d3efed980cc12c",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/core/http.py",
+      "sha256": "5e72cb4ecc1a35452ee6c12a1afbbd34f045072c5c146c546cc6c523db496645",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/core/legacy_bridge.py",
+      "sha256": "4721de6c1c4098aac5f79a925cc1f7f8e0038a184e65f30143ef627e8572bcca",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/core/legacy_shell.py",
+      "sha256": "cd0f6fd3d1b54b541b9eb086a7e36c841f481f812d933e29aad9a8f52d5c70ee",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/core/rbac.py",
+      "sha256": "3f93dc568e6bd4d4f94f3477dc155be460a94cef643d56d25336b7722fd9bca4",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/core/security.py",
+      "sha256": "df241042a99c528bf71218d648d58329e251be8dbd0dab6ba9cef6ebbb4db76f",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/legacy/cloudif-admin-portal-base.py",
+      "sha256": "6dc54e44e91549f11298a061104dbe70e6ff1ce1a218cbf6f5ad328d72f133d3",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/legacy/cloudif-admin-portal.py",
+      "sha256": "bd8481a2705951d1dd9bdd6c725da4ed05c9c1bf957a7594c6e96228c80fa0ec",
+      "class": "runtime-service-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/legacy/cloudif_ai_agents_guide.py",
+      "sha256": "ffc10dcd1224cba00db1b29ef36330b1030642065497d30bdaa04b5d6feb5c6d",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/legacy/cloudif_approval_panel.py",
+      "sha256": "8d4d4fce4686273dec3c978152323abaf081ebc4faaf098c6df52337482926a9",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/legacy/cloudif_portal_publications.py",
+      "sha256": "7b59f407306521a0ab3c0156f3234ed87fda1d3f57c0871d75eca41f9f4db635",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/legacy/cloudif_portal_sections98.py",
+      "sha256": "e73ce7a331ac9bf8baf595eeabb0d7de45ea00a31a2a2b4a09c8d006d6c5f3f9",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/legacy/cloudif_production_operations_panel.py",
+      "sha256": "808be3c66491c2af0408cb18584acb36ddce3efc0743d8d54025fd03164d7caf",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/legacy/cloudif_project_capabilities_panel.py",
+      "sha256": "807f6fccfd1b0ed70f8f73affd5da4f78a91284c9defffead33128841dfbd221",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/legacy/cloudif_project_identity_panel.py",
+      "sha256": "2a6978e52e2da92a3b1491002390c97f23765918105d8e1d1e184578c61e7094",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/legacy/cloudif_promotion_panel.py",
+      "sha256": "d20e1ecb75f930814a8c3bf2b9322bbad6e045e082921abdc5e03d19316a2cd4",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/legacy/cloudif_publication_panel.py",
+      "sha256": "2dc0ca3d9650845109b448af0bdae8f66393d4237f358dc5ce74b2c4cd1fecd6",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/legacy/cloudif_reconcile_panel.py",
+      "sha256": "cf922530bd30f864d996ef363167eff4d55e8947b782b83f5aaac7ca8001d422",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/legacy/cloudif_transaction_panel.py",
+      "sha256": "e67c132b6e1b5b10eca5869a8af3270a4daa0b00a8ca2010b10305d66530ce76",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/legacy/cloudif_ui_publications.py",
+      "sha256": "9b4f67007140f3410751f75f79674ee683cb6afa80cdcabea0123923cdef8872",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/legacy/cloudif_unique_pages98.py",
+      "sha256": "a542a1370322e839dfa3ad717ef15d55be749d233d692e7878f1fc7ac1da26be",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/modules/__init__.py",
+      "sha256": "9b3ac150067e148feb3354d61005bdfb86b830a3d4409e4cdeb665e87e4c4bb6",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/modules/admin/__init__.py",
+      "sha256": "baf3c3ef4146ee9fa65885c16e5d90fa77360c6052793888ce6173c8659e8d37",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/modules/admin/routes.py",
+      "sha256": "6509f0dd7762b4fc946118ae5654c57fd0e2d107ec69c30f8aa219b3e1886d75",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/modules/admin/service.py",
+      "sha256": "4778f5222729b921167d1553cf23821c31e43cd16ef6419aefcfaa0472170f7a",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/modules/admin/views.py",
+      "sha256": "af347ba0dbf64ca00cde3ca89615c91a7b60780ba9ca85bc0cd9f82f99b6ac50",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/modules/delivery/__init__.py",
+      "sha256": "c15a8f19c62f9c1b2041b0ada83e33d2b964fb121bb1470c0b42dd55ea3bab0a",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/modules/delivery/routes.py",
+      "sha256": "8d1edf77b6fc99f4ef88db416c010d9508374c4b96ded0a6cad45d14ff133173",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/modules/delivery/service.py",
+      "sha256": "638e6a7e129a4be87cb55106d6be097b7ac371f4ee414b2861860b11bd55ada9",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/modules/delivery/views.py",
+      "sha256": "5a500c08509666e2f182a991ebadfac9a46c551b17bf5c166cb858d3583f5a0b",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/modules/environments/__init__.py",
+      "sha256": "23293add88d2b7f97229f5e8be41bb0eaefa224df6b3f22c4662b4ebfb7265ba",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/modules/environments/routes.py",
+      "sha256": "d604c7e021890abecac6d14a9f6c14ed847a70e2f4d8cb43c1cd6e3bc0f4b13b",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/modules/environments/service.py",
+      "sha256": "6d85800aa61783a6a7b57a83a746b85607b50fcc63e53d334aba34de5026398f",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/modules/environments/views.py",
+      "sha256": "87a6624d6adfb9efae65218494e99a85c645d9220f73e7cfe95653d5a713f8ca",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/modules/health/__init__.py",
+      "sha256": "3886c4605c9e1819aa5d3bbde675ab12b96994cb78b06ed6c8c3b0acec181e51",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/modules/health/routes.py",
+      "sha256": "055605a182e635a2142d19b0109f66c60832a1cfe2f977dd6b4bfb5bd4e75833",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/modules/health/service.py",
+      "sha256": "5f007eac64954db82cd0b8ec0105a9baf63ae23f4dcba74d84e6b1faf8147467",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/modules/health/views.py",
+      "sha256": "7ca7ce68a63c614918348c600f961d5199864ae0c31fbe6d06d96986a53a67b9",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/modules/overview/__init__.py",
+      "sha256": "0d432d1fa3358733593379fee955fbd6e04f2764509f13d13154c1ca7c5ccc6c",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/modules/overview/routes.py",
+      "sha256": "771a4f340d659166e998b42daf46ff06a171014c44bc71c9f297daac9ef12116",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/modules/overview/service.py",
+      "sha256": "6e78730957690d62fc64453e9f52443d6281fc913c2766cf7731b946e4cfb45b",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/modules/overview/views.py",
+      "sha256": "f25336533a6973e55c910d5b9310aa11d3e4a7e1f560cc11a83ae23f060379cc",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/modules/projects/__init__.py",
+      "sha256": "79dd1cd66ab53b979058fbd9780b3aaf30b3d81ad82b790294fa40d2d8b138ca",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/modules/projects/routes.py",
+      "sha256": "d6fb3fd15e840aaf9f9e91c10688f82df5cf785fa6af343ff760c4b6529579a1",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/modules/projects/service.py",
+      "sha256": "02adcbbda366760cd38ead8fb8051155f7fb1a919942a8cd2ade93d31dfd36c9",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/modules/projects/views.py",
+      "sha256": "fdfbf68dae5632d994cb74bcde9055269f463aaaae58cb089f89c5dfe951bd57",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/registry.py",
+      "sha256": "64c44cfe9d7d1b9194e984645df31895a17978517479eab8cbd69afd545afb29",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/__init__.py",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_active_toolchain_consumption.py",
+      "sha256": "449c3204595fbf7ff82e9a00568011aff7f3f01d1e761d0e7c1b1db30f1b349a",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_admin_delete_agent_integration_contract.py",
+      "sha256": "2a2547f4778c104047ce4239287222e08e031fc8c33cfb78519faad474f21fc2",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_admin_delete_complete_resource_contract.py",
+      "sha256": "ac71ecaa65cd6fe5c5a46ae50dacfe445a76b75ff19efefd1f7b30ab37a60664",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_admin_delete_identity_observability_contract.py",
+      "sha256": "9ce3608e27a061efe7c71b2481ec857f98f494f3f69757189f3ca00d2abbb3ed",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_admin_project_delete_contract.py",
+      "sha256": "9418eb06a3e0e9e9ec0a716aeb62b178de43ecd75458a01c64f43c1c8cc92186",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_admin_project_delete_runtime_contract.py",
+      "sha256": "b388c2c4dfcb9c725d6d327fe2d4ded068ad38d70b06bed09647808eb1544bf7",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_ai_connectors_hub.py",
+      "sha256": "a141def7824dbdda30df06792f8d20577ca5a2e08c5315ee5432802cc7899c08",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_approval_cancel.py",
+      "sha256": "05a45af52bad814543c1f24bf73abc3c7b37e1f6ed0d4cc53339da78d927e669",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_artifact_upload_agent_handoff.py",
+      "sha256": "1001877e54d8b05e42380d2d39b83cbb87da739ce15443f244f5da820f900a7e",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_authz_gate_tenant_allowlist.py",
+      "sha256": "f00d14fdc26155387470f3ddd1ce5c64d5e0d2d1467e657b36c8fdc408e062b1",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_backup_console_json_and_sections.py",
+      "sha256": "985d1ac3f9c410c315c6ddac7e2ad9f2f2414449fdc1b173d777251c9ce6a352",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_backup_progress_modal.py",
+      "sha256": "8e8b574d459224d3b5b9c3984e976b72cddde8d3761225e679f719bece9c21c1",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_backup_remote_global_config.py",
+      "sha256": "984830dd5a74caee24858021a76288db678b1a553a0d5429192c65edd8c76fe7",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_backup_role_visibility_policy.py",
+      "sha256": "b34f8b7a7ff3666d86505ee3c3d61f168736e7ed80bd3e3386cb3ba35a762732",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_build_bound_preview_deployment_contract.py",
+      "sha256": "d5f81c9262f574f7e11d2213b0ea77a9444b197900ec521b2c821c95b5abd65c",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_canonical_help_videos.py",
+      "sha256": "bb7afe2a125f16f4bbd27aa2ee7449039ab62ad648414974a02cda8b9d9b5434",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_change_set_argument_contract.py",
+      "sha256": "432d267666c8e23a86851da110e31384228de9c37848b6f6b043612fc0abc07d",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_change_set_mcp_contract.py",
+      "sha256": "f04e77ce99e22950aca4b086ce3b7f1ec5158fc86f80cc17ffe956d7c28c6d75",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_concurrent_project_tenant_operations.py",
+      "sha256": "92622e4147e6be489d206b87f196934e43deb15d20b83171e5739dc9b82720e7",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_connector_public_oauth_onboarding.py",
+      "sha256": "5585594a24e569fb13a8b878f090c269ca6cf4f837601aa07bcd65567f23aefb",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_dark_theme_legacy_surfaces.py",
+      "sha256": "caac260c34ecc26020b2b1975d690cae1013493135e31b4ec7c01a99ecebe399",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_database_active_mode_fallback.py",
+      "sha256": "8572722cf103c5751ca4b07f171087e74d217982704c68be2e22a225c6e480f7",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_deployment_sensitive_runtime_security.py",
+      "sha256": "ff473ac50202196e2a3dddad3cfc72fc9ecf58dbd935615eae2a542e288aaaec",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_effective_environment_build_contract.py",
+      "sha256": "a5d0c8d59f4d98fffcc2bb4f21dce323310c43d1e82b90935264b91d41d1aa16",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_forgejo_merge_sha_resolution.py",
+      "sha256": "1c51ebee8573b9d34645ef68a921d884b1b21645f592cf2894361b437efcb93e",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_forgejo_webhook_automation_contract.py",
+      "sha256": "6eec0583a82fcc33d96d0e9ea449bc12493f7f36d18dcb2ddcc4f6d0d933f207",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_forja_agent_only_provisioning.py",
+      "sha256": "b602b3881eddc0bae94e4084000d1528f69399ea79ee1f2f733a4642473c3463",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_forja_change_set_proposal.py",
+      "sha256": "e4f309e4ddd9515332ebe88ff47217828a1deedbee1f46f66618798c91cdbe2a",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_forja_komodo_client_unit_contract.py",
+      "sha256": "1ab77893596006d01ba7cac12f083ad1e76593c0e1001ea023aaf9801c80a2f6",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_forja_personal_owner_and_komodo_payload.py",
+      "sha256": "d0335ac69bfd82edbea95fe6af37e68591e89fcdc926d60706e84ae74e37a936",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_frozen_surfaces_contract.py",
+      "sha256": "6c6c63d6a296d2dad43fef240aac966e3cedaadb19e93fd65d493f5991b6e017",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_grouped_resources.py",
+      "sha256": "bdb631797331bab30f708c48546f32e0ea6d3d467615169aa42b7e9b3258e268",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_help_external_connections.py",
+      "sha256": "f86f33c67168d8ddf09d8bdee335552ce6c56cc49b4472ac6fd3355656bf6ece",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_help_youtube_videos.py",
+      "sha256": "c12d20aa8ed1401177030b7980db789c2c28701dee33934f12eab17c0bf06c74",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_initial_publication_immutable_recovery.py",
+      "sha256": "0572aabf935d614cbe680743102ec357e41015115dbdae3df6bea1e744ec7934",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_initial_publication_local_health_fastpath.py",
+      "sha256": "47495139a18e4c459eec856105fa207fc05729659538bce2e84d7ce95087fc46",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_initial_publication_readiness_contract.py",
+      "sha256": "7d8a89872f5a5c97bb69947347cf3ceefa8f46602d3fce1e8050d341d97f61de",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_komodo_destroy_completion_contract.py",
+      "sha256": "f6495b54fe65569c9b4acb4c5808c53fd14844015f0815ddff1513d218e688f7",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_komodo_force_rebuild.py",
+      "sha256": "055c05861cbbc81c4fc4c176ba6f57a8ec86548bcf048ceda2a8a3c83659b35f",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_komodo_local_health_json.py",
+      "sha256": "acdde225e07357deb41834d1613ca720fbae009fc65dc46a79025dabec35a08d",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_komodo_local_health_reconciliation.py",
+      "sha256": "beb54f043974a05dabafcdb55beaaf9174bb6cf9cc13e4f99fa79afbb889eb74",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_komodo_unified_layout_ensure.py",
+      "sha256": "a562fdb5ec24e9e0e5d9c8851d2b1576aeb8904cd5d75aaf9554f70b0affb3f2",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_legacy_shell.py",
+      "sha256": "dafc3f6a7fad2e6ed1d91522e45b325414296aae50ff547c3b3347724c5cc3d0",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_mcp_actionable_error_contract.py",
+      "sha256": "2e19642b147e9a93b4016205a2860adee80a66d4ecb76251f00f028c61d63734",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_mcp_documentation_catalog_parity.py",
+      "sha256": "b410a9921feb39fffb6a894fed4b16d0dd253ec362a02e41aa265a271c498572",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_mcp_oauth_contract.py",
+      "sha256": "b8ca8b1b4c1893820b0eb04c2121bae3f76cac3b45177832bdf69ac61764d9bf",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_mcp_public_oauth_flow.py",
+      "sha256": "6d4bcba463e7dfd50575efec8b9fe0de69649d54ff44189854bc7491bd0deee8",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_membership_reconciliation.py",
+      "sha256": "f82950daab40e0b109053b440c926d9ebebafc714b6fb4eb78410480fef889a0",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_multiservice_artifact_policy.py",
+      "sha256": "3394bd54ae82d213dafc1dff0494aaf73d9cef1e254c6135c71c2fb7dceca835",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_multiservice_build_broker.py",
+      "sha256": "407838f19dabac6d0431584582b681bf946c0ab06f26f51d4f165ad01430d954",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_multiservice_build_mcp_contract.py",
+      "sha256": "4163bc0794cd342c2ab58546730226c87c72011c725daf6dc4930adcce0f244d",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_multiservice_deployment_execution.py",
+      "sha256": "f2700a84d3b96a355bc34ac0f1ac675402dcc06537a42c441d576d9e1c6553db",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_multiservice_deployment_execution_mcp_contract.py",
+      "sha256": "ddabe8e6b2e1646e7335a6d14520bb1389c3f303c4a3334252b561dda051abf4",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_multiservice_deployment_executor.py",
+      "sha256": "33444b3f71e2c69f4ef85a4aa73c9e12a0aeac8e93574c4ae87c0476c31faa55",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_multiservice_deployment_mcp_contract.py",
+      "sha256": "e0b81bbb6b2ce4d8066e33d181d1c61504ca8535b31c5fdcb0ec338106aba18b",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_multiservice_deployment_plan.py",
+      "sha256": "eac426656c9a40d9d62d7725f727a108b816c69667371032c702dd3d6f7d5104",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_multiservice_preview_broker.py",
+      "sha256": "0bafe3584aa0d04fbb9b4bec038be6c0c65b3ac0f17de6ae1451918e073397ff",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_multiservice_preview_executor.py",
+      "sha256": "740bfed4877c42d709c19d1adaec645fac7a6156f230ca792d23602bb16eb3e1",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_multiservice_preview_mcp_contract.py",
+      "sha256": "cd47a902f8e15853e154ee94208c280a3944ee65d7624f102e27483af88e7aa9",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_multiservice_runtime_config_contract.py",
+      "sha256": "0c386a0bcb79edb063d80a2826d3d3e56b284f53abe634b03eb131aec7f22558",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_multitech_mcp_contract.py",
+      "sha256": "eab32c5355d40a9437fec68b6756e0eeeac2a4b1d332f653ef05053dcfa543d8",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_multitech_recursive_detector.py",
+      "sha256": "256c6606f6b747990ba7faf442b7763908c4fcb4f5060e40ab2becb01c787302",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_navigation_information_architecture.py",
+      "sha256": "c80e3f95da77dc9acce66ab18c4c580840e4aa1f8e29475d9e20facb9419dfee",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_node_php_mixed_runtime.py",
+      "sha256": "968d079b84ed0149dfde9c996d967391ddb005ce30832c6d475db568114b2a26",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_overview_sites.py",
+      "sha256": "40ad1c6a113b5995c02caaee5270aaa7440b1900361e8affac8cb97bb669300f",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_permission_table.py",
+      "sha256": "62be23fb24d8a7e0116bf418b18b6d433a71114eb3295c83c6a640848d7db7c6",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_persistent_approval_portal_contract.py",
+      "sha256": "2791beee4c4d81c5e387bbcacb70251704fce6f6cf5d0bb34f087f3adabfb66c",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_persistent_human_approval_policy.py",
+      "sha256": "1f6ea6f5686b4941169f9b56419c0c22ce4fcb791b6d1d95978c9923ab59e668",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_personal_repo_survives_initial_publish.py",
+      "sha256": "124ca6e12dcdf98265459ab824efff5dcbcbdb07acc6eed04c4305dbea48598f",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_platform_backup_progress_modal.py",
+      "sha256": "3bfc964bb042ca931faaed519a0e1d3807deec498736dcea1155e383024ced80",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_platform_guide_canonical.py",
+      "sha256": "2943be654a0e61ae8147091e03ead5b04de529b331221eae8c9c9a619242c6dd",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_platform_guide_github.py",
+      "sha256": "94acb2fcc2225dfae7204e825293c19d9ead5d4c303e0f0c53f6e1d11c6b55c8",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_portal_approval_redirect_v2.py",
+      "sha256": "4f24d6c945227f182e89bd399c6ff1ad4facd2c57dee387ceec2277887fd6858",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_portal_artifact_upload_bridge.py",
+      "sha256": "cc6ad126fdefa5086afedd4d1de22018f889870b1f45fba5783849328f2245e3",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_portal_artifact_upload_routes.py",
+      "sha256": "88c0e7b0d828619575a2e579338587851c3b20664d697e0df01cf32bc8eb88d8",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_portal_launcher_base_compatibility.py",
+      "sha256": "7ff645ba5eab59448c5d2f378835a80c6c4c04f203f671270211f7d8649e6133",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_portal_no_legacy_visual_fallback.py",
+      "sha256": "e547ef6fbd4f7ed88b05b549c849a403645666d83b51faf02290ce50391a4948",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_portal_sqlite_wal_resilience.py",
+      "sha256": "9f9accce9486b60555d211695882c569fc85da43140f7185084e61fcf667e5ba",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_project_acl_visual_layout.py",
+      "sha256": "5d873b26f4d16dbe257a8c5d0c30ec8f9444d93360deceb843b028897a94a3b7",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_project_backup_download_public_route.py",
+      "sha256": "9f277d8c6a879cc423f7e991a4a400032f71f6873245175c22428c123cb9a5a9",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_project_capabilities_catalog_parser.py",
+      "sha256": "f1c2b1b86263d5478c8149f11a571d86ec26b31bb58c46db5518df8f2a743d05",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_project_centered_navigation.py",
+      "sha256": "7828d689dc466f0b58b6fc95257d774cc47130e7603d9768d1ab78f6af2e3975",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_project_config_active_reconciliation.py",
+      "sha256": "e779d35425006dcd729c1ed4774d295ff66fcc39aa624b37e9fa1c42edb111a7",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_project_config_controller_http.py",
+      "sha256": "af59fcc65e6f874ae091c0f66695ab813c3c3302f016fa4401235b42b35c7bac",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_project_config_reconciler_behavior.py",
+      "sha256": "a1008ccce68f4a01f1d34ca4b6c60e78ef44509cbe32158b35e8f2a39fc601d6",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_project_creation_modal_runtime.py",
+      "sha256": "22b692fe8bbecdb9ea5ab6514a4aca1e0b9b24f8860850e9f15cdbb4ae9398b4",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_project_creation_wizard_steps.py",
+      "sha256": "40f70a10895779b512c42eb5416d6698844471904b9ddc4f5e1b33697a80232d",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_project_delete_already_deleted_ui.py",
+      "sha256": "37309904fe26e8eb5071c4a1f97c977057112ec90f721371925a06eb4c2307a6",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_project_delete_cleans_derived_komodo_resources.py",
+      "sha256": "2f088ba95fae04de90372106c8d4ec93ac6fd02ab3ce5cbd87d28cab286bd3ae",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_project_delete_confirmation_normalization.py",
+      "sha256": "1a2bc2baade4d52d251c92697673fcae3ab49bcb71ae65ef8a59bb825d6e19fd",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_project_delete_global_groups_and_polling.py",
+      "sha256": "e70845528fdb03c3083a806efe31ba1892f38986fa9d343ffa80372752a15133",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_project_delete_idempotent_cleanup.py",
+      "sha256": "050eb56d99ed21f67b490b05e401ff135b08aff0f832e9b9734717f01c4687ad",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_project_delete_personal_forgejo_repo.py",
+      "sha256": "e7734e00b9889b4f2da7d7a4a9ebaa51a47df09bdc8894d8642f7a8aed96529f",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_project_delete_tracking_modal.py",
+      "sha256": "dd4315ba7bc49f6c218bc3235a165a7700446c734f9aa0857d22f4bd87bd0a7e",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_project_delete_wizard_required.py",
+      "sha256": "79f0effcd97744706f1fd766dd214c7ba2b2f5d324652b47c1e2707756add778",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_project_environment_controller.py",
+      "sha256": "73a3845e2fe78e9d037d0524e0ec1d900e2cc235a1b32f32d3c23b6f240aaf76",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_project_environment_dotenv_contract.py",
+      "sha256": "0fc3aab63b97a092301b0c4024187e1c51544291aa2d71fb9616adc8aa31c49a",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_project_environment_effective_resolution.py",
+      "sha256": "76dc8d5c7f681c9f4e45ca4c30c95e5619f2dada3e52b47eb8f233c88fa4f115",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_project_environment_mcp_contract.py",
+      "sha256": "990fe523c3d3c0108f72d2619efe90f2d31c8220588b57f8b87dcce49767caba",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_project_environment_secret_store.py",
+      "sha256": "ea951abea4a62e2ac7fa189140af04dca24d257de1260105ccdf071efd217bac",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_project_environment_web_api.py",
+      "sha256": "993e7c42d6582d1bf9c355ab6a951a695fafb4c58f7ea0a7c3a7aa13feff0550",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_project_environments_overview.py",
+      "sha256": "a6d2fd485bd3a42c27ac14d64872eb05a4fcd48ac593e20dda945146ca8b85f8",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_project_manifest_controller.py",
+      "sha256": "d33db01c13c8279f2a251d13b426968d39735ae77c11922bba95d21196ab2afd",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_project_manifest_environment_toolchain_v1.py",
+      "sha256": "29dc5e3a2a9e052c95a565b028414b3468f05b8a5573d5dfab7663bc6cf49570",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_project_observability_mcp_web.py",
+      "sha256": "c20b0755c7f39ae5331af49f7f2a3da753b174c17ef9c3fa07fe3cffc76a5020",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_project_observability_service.py",
+      "sha256": "8fd981ab1a97e37ec82ef13f62bd1dffdc18135ea878cd1f4bd0b48d634b398c",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_project_owner_delete_authorization.py",
+      "sha256": "4d8b7565e0f593101f947343f44e877006abfe26508460cfad4815dc1c1d5fa2",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_project_provision_resume_contract.py",
+      "sha256": "b79ae983fd7af729989d8723d2a53172740106bd8f0786f8d50414a512c24993",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_project_provision_status_recovery.py",
+      "sha256": "8749bcc664022429a6c4d187952941e0835851cd9fdd4caf1a77d4d478b28233",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_project_provisioning_contract.py",
+      "sha256": "a9455d5e5318626f857962485e3ff87eaaf999c63b9d5bed0d82106614047e36",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_project_provisioning_live_wizard.py",
+      "sha256": "81d9a637fc6a3d9614c968c08892df754f74524ec5f14a96d52c725f6004f37b",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_project_publication_configuration_v1.py",
+      "sha256": "d2440c167c58fcb307ca46aacec5805b778338e858327d3b29bb2d1a22dd5ae6",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_project_repo_oauth_owner.py",
+      "sha256": "8dcb77c5396c305d0c0ed83a880a66b16acbeae8a9dd8724e5e46b16ad518785",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_project_repository_manual.py",
+      "sha256": "f1a38a5da977f2facce55f68f0e93dc26ee3ba46e4ae0611e62256b065548d3e",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_project_resource_reorganization.py",
+      "sha256": "22751bd7da7778da09d7f3cc20cb506e9e8af61ab95dc32fefd786f4a527c88d",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_project_runtime_reconciler_mcp_web.py",
+      "sha256": "0e6a88aa35af587b8846d3c66bebc50497038eba422f87966c512390eaa896cb",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_project_runtime_reconciler_states.py",
+      "sha256": "43c3f2578c8b2aa51b55602a4b82d4b4f329269d343dff3c314a55b34e69bdf0",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_project_runtime_status_ui.py",
+      "sha256": "09d552423a18fc8124c1c2bcd4d5d71f4dde29802b35b88ad12cd31a6602247e",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_project_secret_controller_contract.py",
+      "sha256": "1751467cf7eef96ec007b5a7ae26f0f1109e5f2bed39c0af0fd58b8caa710a30",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_project_secret_mcp_contract.py",
+      "sha256": "77e9c39b5ea744c7040ba3983d2bff23b2ba4bf66b3a00245b08ebd1b0a08f1b",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_project_secret_web_api.py",
+      "sha256": "42cf71f9620a74053b5c6452d30fdd9bbedac6dc084610652f3dfb512f2ec322",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_project_terminal_dedicated_flow.py",
+      "sha256": "877a59bdab7163639dd801c5d084913bdb10328438f115fed2c43a3a2c39ec8d",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_project_toolchain_web_api.py",
+      "sha256": "1e99496d6f146f653d96598792566cce1d9ec5e5c2f1224ee4907a539d31920c",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_provision_worker_persists_forgejo_owner.py",
+      "sha256": "520e3b32f3372167f831cb1bc12e2f2389c25d687cc4591d3218673d4f04c7bd",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_provision_worker_systemd_recovery.py",
+      "sha256": "8c143dfe877fbe8d441d15fccfbb6915b3091a21abd31a86eb6cb2d69057b3b3",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_provisioning_metadata_persistence_contract.py",
+      "sha256": "6d29cbbcaae609cf185f25ad7d18a141e5f20f8bac8cbdf760ecf90297a65405",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_provisioning_policy_readme_dark_theme.py",
+      "sha256": "268735d599fe6e96f4d7d0d136f947f37b5ceff0d724faaf719ba7c77af40d05",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_provisioning_runtime_completion_contract.py",
+      "sha256": "be940d11cd0af85b18b667b17a4d0dd042b3dec3b14878c2cfe0ce19017e0900",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_provisioning_waits_start_page_theme.py",
+      "sha256": "568c2dc0fcb6b0718c90571396d1f7e29cbec3b6eb6b988a13604d42b745d25e",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_publication_deploy_promotion_race.py",
+      "sha256": "f745b1a8a3f86a991eab45408ba3063f09322ebdadfa7445219aa5df3c941456",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_publication_jobs.py",
+      "sha256": "0cb83024730e67c78ad9c9c357d936c5c53bef4c90028f7f55a044db6208762e",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_publication_management_ui.py",
+      "sha256": "52712b484f284a4cd96c58634aa0337457ab4e23bde9173afa10c5940a9fbb72",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_publication_personal_owner_base_project.py",
+      "sha256": "de9dc4262c09719949606dd0255fcde4b850f982edc1c4ef266d0112af397845",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_publication_runtime_fallback.py",
+      "sha256": "bfca36f6290b337d7beb1af8953b10f86a73b924eb19cf812e9d5119ed47b007",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_publication_runtime_links_and_actions.py",
+      "sha256": "4c5c91f57023f564675f88895f30991b04a03ba75ec7dda7c0460dfc6359ea97",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_publication_site_terminal_workspace.py",
+      "sha256": "099866d0c2532c4ce8315504cadd023c50a96878c380b24e7525a3e00fa52f4c",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_publication_workspace_tools.py",
+      "sha256": "e9c40e1e90f503c98b18e74d4649edb3b7251c5dc31c0d0043bc9e14bcbe6ac5",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_recreate_owner_and_initial_terminal.py",
+      "sha256": "ed95e42dcd30a8af43b5d5403e7ba26de6e910de78e0d9ff44a68f9f0e82417b",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_registry.py",
+      "sha256": "41e59bd2cbf0a9f19ccae4da6bf97cb2385a10d59959e97df5fdd8cc8e0ec6e5",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_release_flow_wizard_ui.py",
+      "sha256": "41792b43c7d3f80898298f0924bdcfec4778a7a6a2f1cd9d315cd3a69441d847",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_repository_readme_landing.py",
+      "sha256": "de7d43c4ae224f4e19a37a6969677be388a365875bd636bca0cc3c3bb2e56a3d",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_router_warmup_visual.py",
+      "sha256": "49a8d6fce6ed31707d9f5c670c832e880a6d0f3d84ed6a2b0ff82539cced4736",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_runtime_cards_open_komodo.py",
+      "sha256": "3756d34b619df708dc032f7e359680c7afe9c1ef12bcaab1304294ce1a931b2d",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_runtime_completion_contract.py",
+      "sha256": "826e6617bfca47018517ac6da29d1bb341a92784de4bfe9709371ff9d6b9d046",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_runtime_diagnostics_new_tab.py",
+      "sha256": "76478db98906bb49d709154c03d3d739768ab0fdf17dbbb31d4eea71401dd1c9",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_runtime_framework_inspection.py",
+      "sha256": "3c51b66e82a255b1ed191472654eaf314ce10703c1285e67f4596a71c4d47b0a",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_runtime_info_active_publication.py",
+      "sha256": "17ab67840febd22a15c13511c74dde367a21a1b437cce363ea3c573dbf44bfa3",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_runtime_info_reconcile_retry.py",
+      "sha256": "410b6e87cb2716172faa04ab5d0fd648ffaaf4437930bd043f9ed29f3ecdc9a1",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_runtime_modal_body_layer.py",
+      "sha256": "3a3443d6678980fbed093de5126d3a5a16755c4da2b7c6fe078fdbc83919d719",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_runtime_modal_web.py",
+      "sha256": "a9511c46340fb7ea89a699603512a01403cc622a0cec91e16b611da92fa0d644",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_shared_user_related_stacks.py",
+      "sha256": "5d14aab3ba55e595fd1bd06388c3c5259cb10565c366046da2e0ef33798f0b95",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_shell_and_services.py",
+      "sha256": "2e81b9a72053e1c48cc885765a84713d01acdab709fb9dbe9601f865b6689d09",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_supabase_mcp_database_connector_contract.py",
+      "sha256": "efd80be5bb4b996977a5d98a03a936ea5e0740293fb20ee22f7a65482ca3ced3",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_supabase_mcp_sql_policy.py",
+      "sha256": "0020e6eb068a6ec433498780c28a642ddaaf88d91125aaff15e33a047b3f6ac8",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_template_fileops_personal_owner.py",
+      "sha256": "90751fb2c59742c3d453b22b168ceff33336937c38bc15ee2f49cd3046885980",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_tenant_always_on_final_handler.py",
+      "sha256": "af6bb67014922af8c854367cc229f3cc808cf5ba23a0b1da62f2030d1a410117",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_tenant_auto_off_and_countdown.py",
+      "sha256": "fb201a0f4c9615d7644b056f3b7402d7a9e4a879742e6cf2cfdd74951f44b974",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_tenant_backup_dynamic_and_graceful_tls.py",
+      "sha256": "04591bfb813503cc9786192a335bbb8522a521911d252a470fe42dd1f2d0372a",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_tenant_delete_job_receipt.py",
+      "sha256": "69aade50bbc13214762cb08d2c2dc7a57f4edac39162731506e1025b8d46dcc4",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_tenant_guard_auto_recovery.py",
+      "sha256": "77bcea023e516ccd952d2934b14283b5dad34463b44ab84bf7097fdda4a2b1a7",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_tenant_https_entry_contract.py",
+      "sha256": "c928f880ed3a09b2e0919472c8fdbe01c57a3469c9b0b674c34a89dfe3dc62f3",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_tenant_port_allocator_contract.py",
+      "sha256": "a01faca8079ed453cc7193de506207ac84cfb7e102a075aa22ea4e3e417b2bc7",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_tenant_proxy_lifecycle_contract.py",
+      "sha256": "9d5371127ca48004204b7b28ff8af9ff41fe934512ca8a68ae50744bd4afdda9",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_terminal_and_publication_layout.py",
+      "sha256": "8f0a4fd464b6b36ba9cc5b85dd05d5595f4670edfb9f87d0ce4fb281eb886bed",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_terminal_reconciles_unified_stack.py",
+      "sha256": "88c1d8114847b1ebbf3261c61904ad29fa9e79507249dc09fb50e1772949dbc8",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_terminal_stack_resolution_contract.py",
+      "sha256": "0ef91e279b873ed8f25bd0a781f3ba8081dfab0e0a44bf8cde3739bbb4359287",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_terminal_uses_active_publication_stack.py",
+      "sha256": "7e9f0c2bac2a9472057315d5ab0cbb1d18b19e1c49c27a090b32324ca1298954",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_terminal_uses_authenticated_actor.py",
+      "sha256": "e34745c0d6c706c6595c7139927d9fc29f638979c3701f84b1c4c41e2b2872d6",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_toolchain_catalog_policy.py",
+      "sha256": "7a66ff7c863601ba689f0b35d9827b32c7ecb0c0018a45a0ddb1596f7c86a203",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_toolchain_lifecycle_broker.py",
+      "sha256": "540cccf63dbe365f6afb460bedf1df679b5cc9fccb1d4e9973991b0986f73aea",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_toolchain_mcp_contract.py",
+      "sha256": "4a788d1289902b987e8c2ad8f19ac29215264912d5f7a87a960b1c0e39e5af1c",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_ui_security_gate_contract.py",
+      "sha256": "c40153f460f49ad835ed8c2c2e8f75f189a478eb99634d7f152472cc1bc6660c",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_unified_project_runtime.py",
+      "sha256": "e133e44eb853bf80fdb1473fa7f66a470f5250f90e218ad3c7d65af12e28db51",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_unified_runtime_documentation.py",
+      "sha256": "6194daf263f05de6beab76053f6d29935b86360ec4142c6cda6eaa5c41127894",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_user_owned_forgejo_and_komodo_acl.py",
+      "sha256": "942567e90fc4bbc0d31f1af372240d4b7f807781d11e3fce7b8a2634a2134c66",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_versioned_unified_runtime_publication.py",
+      "sha256": "8054a40c52e9415352f5878a17f2a229ff14f4b99e3f9895daa05366e077c07b",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_w_h_p_release_flow.py",
+      "sha256": "50a764f4bcbdf6d32e7f0399738f3af0da2c96e3624d48194913e11a8b50cce8",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_workspace_artifact_direct_http.py",
+      "sha256": "253f07b617e9f7a60be71c3ad5889d587b69cb6dbcbeceb1d997d805f2a43f39",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_workspace_artifact_direct_upload.py",
+      "sha256": "0183fe25b6b922bbc233a448c1981ddcc7ea64028049bc1a13edb3972b312b16",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_workspace_artifact_session_import.py",
+      "sha256": "e9953db80394d41374e176b4caac54bc91f794a69e458f1e09ef0c6b969e61bf",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_workspace_artifact_upload.py",
+      "sha256": "383e71f3f165bc88e6b37934f4eb9ed0229d5a1d2c0de707df9c143304039571",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/tests/test_workspace_change_set.py",
+      "sha256": "91bbbbc5dc7ea5e04c1cc234d6c92ff3d339713c7d98ea073b1c746f3342257a",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/ui/__init__.py",
+      "sha256": "f6951578abf65a74e31e63352dde71444566e7da98c1a63c2335044b07e0a493",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/ui/components.py",
+      "sha256": "72412c37ffe0d9b75d2738b8f3bf8154936d8adb95ef58368f2589106e4de9b8",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/ui/icons.py",
+      "sha256": "42e112aef9fcc6bae52062a2c8f46707d9f234a25f4e8331ae63ade16cab524b",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/ui/shell.py",
+      "sha256": "6acc3a8ed1e93d93bc9e09bc988f3058154da44aa77c66e3a3a614e89ceb2938",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "portal/wiring.py",
+      "sha256": "257c582b90852f21646dccfcde66d4fbe24494a048ffc1e7c1556c45e06b4124",
+      "class": "portal-compatibility-cpp-candidate",
+      "priority": "high"
+    },
+    {
+      "path": "scripts/generate-directory-readmes.py",
+      "sha256": "f1d98a8c8e97715fbd5c3732fad3b90bdab42497496ab3c6306ee2214cf8540f",
+      "class": "tooling-retain-until-runtime-normalized",
+      "priority": "later"
+    },
+    {
+      "path": "scripts/generate-technical-catalogs.py",
+      "sha256": "368631393f32103d4b0895ca13252fd2ef149a4c361a183964b482dfa3c6c002",
+      "class": "tooling-retain-until-runtime-normalized",
+      "priority": "later"
+    },
+    {
+      "path": "scripts/validate-repository.py",
+      "sha256": "450955bb0b28278093124958b4f44adc3156a58da23ed1a4408c884444f5b95c",
+      "class": "tooling-retain-until-runtime-normalized",
+      "priority": "later"
+    }
+  ]
+}

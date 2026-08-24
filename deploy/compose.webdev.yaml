@@ -1,0 +1,34 @@
+name: cloudiff-webdev
+services:
+  webdev-browser:
+    image: selenium/standalone-chrome@sha256:9569014786466376d3e5cf8a7758562368cd9637f783dcd3abdb2eaf3a0d5cd7
+    container_name: cloudiff-webdev-browser
+    restart: "no"
+    ports:
+      - "127.0.0.1:14444:4444"
+      - "10.62.91.2:17900:7900"
+    dns:
+      - 10.68.128.252
+    environment:
+      SE_NODE_MAX_SESSIONS: "1"
+      SE_NODE_OVERRIDE_MAX_SESSIONS: "false"
+      SE_VNC_NO_PASSWORD: "true"
+      SE_SCREEN_WIDTH: "1440"
+      SE_SCREEN_HEIGHT: "900"
+      SE_SCREEN_DEPTH: "24"
+      SE_SESSION_REQUEST_TIMEOUT: "120"
+      SE_NODE_SESSION_TIMEOUT: "900"
+      CLOUDIFF_SIMULATION_AD_HOST: "10.68.128.252"
+    cpus: 1.0
+    mem_limit: 2g
+    shm_size: 1g
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - /srv/cloudif/webdev-workspace:/workspace:ro
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:4444/status >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 15s

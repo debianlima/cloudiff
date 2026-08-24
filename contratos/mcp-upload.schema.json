@@ -1,0 +1,30 @@
+{
+  "$schema":"https://json-schema.org/draft/2020-12/schema",
+  "title":"CloudIFF MCP Upload Compatibility v20",
+  "type":"object",
+  "additionalProperties":false,
+  "required":["tools","hydratedFile","pathLikeFallback","security","shadow"],
+  "properties":{
+    "tools":{"const":["workspace.artifact.import","workspace.artifact.upload.file"]},
+    "hydratedFile":{"type":"object","additionalProperties":false,"required":["requiredFields","optionalFields","mode","downloadUrlPolicy","persistDownloadUrl"],"properties":{
+      "requiredFields":{"const":["download_url","file_id"]},
+      "optionalFields":{"const":["mime_type","file_name"]},
+      "mode":{"const":"direct_https_stream"},
+      "downloadUrlPolicy":{"const":"https only; no userinfo; port 443/default; host suffix oaiusercontent.com|openai.com|chatgpt.com"},
+      "persistDownloadUrl":{"const":false}
+    }},
+    "pathLikeFallback":{"type":"object","additionalProperties":false,"required":["classifications","filesystemAccessAttempted","importEffectiveTool","existingArtifactEffectiveTool","idempotentPlan"],"properties":{
+      "classifications":{"const":["absolute_path","sandbox","file_uri","mnt_data"]},
+      "filesystemAccessAttempted":{"const":false},
+      "importEffectiveTool":{"const":"workspace.artifact.upload.start"},
+      "existingArtifactEffectiveTool":{"const":"workspace.artifact.upload.file.select"},
+      "idempotentPlan":{"const":true}
+    }},
+    "security":{"type":"object","additionalProperties":false,"required":["sideEffectFree","externalNetwork","workspaceMutation","secretsExposed"],"properties":{
+      "sideEffectFree":{"const":true},"externalNetwork":{"const":false},"workspaceMutation":{"const":false},"secretsExposed":{"const":false}
+    }},
+    "shadow":{"type":"object","additionalProperties":false,"required":["bind","port","routes"],"properties":{
+      "bind":{"const":"127.0.0.1"},"port":{"const":18234},"routes":{"const":["GET /health","POST /v1/plan"]}
+    }}
+  }
+}

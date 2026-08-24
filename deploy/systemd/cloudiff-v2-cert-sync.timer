@@ -1,0 +1,12 @@
+[Unit]
+Description=Periodic CloudIFF v2 NATS certificate sync over SecureDistribution HTTPS
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=6h
+RandomizedDelaySec=15min
+Persistent=true
+Unit=cloudiff-v2-cert-sync.service
+
+[Install]
+WantedBy=timers.target

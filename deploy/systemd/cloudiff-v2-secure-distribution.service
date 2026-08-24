@@ -1,0 +1,43 @@
+[Unit]
+Description=CloudIFF v2 SecureDistributionProvider
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=root
+Group=root
+EnvironmentFile=/etc/cloudiff-v2/secure-distribution.env
+ExecStart=/opt/cloudiff-v2/secure-distribution-current/bin/cloudiff-agent --secure-distribution
+Restart=on-failure
+RestartSec=2s
+UMask=0077
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProtectKernelLogs=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+RestrictNamespaces=yes
+RemoveIPC=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+CapabilityBoundingSet=
+AmbientCapabilities=
+SystemCallArchitectures=native
+ProtectProc=invisible
+ProcSubset=pid
+ReadOnlyPaths=/srv/cloudif/proxy/npm/letsencrypt/live/cloudiff-nats /etc/cloudiff-v2/secure-distribution-capabilities.json /opt/cloudiff-v2/secure-distribution-current/config/secure-distribution-v1.json
+
+[Install]
+WantedBy=multi-user.target

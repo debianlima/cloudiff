@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CloudIFF MCP File Transfer",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "transfer_id",
+    "direction",
+    "name",
+    "size",
+    "sha256",
+    "content_ref"
+  ],
+  "properties": {
+    "transfer_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "direction": {
+      "enum": [
+        "upload",
+        "download"
+      ]
+    },
+    "name": {
+      "type": "string"
+    },
+    "size": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "content_ref": {
+      "type": "string"
+    },
+    "media_type": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "direction": {
+            "const": "download"
+          }
+        },
+        "required": [
+          "direction"
+        ]
+      },
+      "then": {
+        "required": [
+          "media_type"
+        ],
+        "properties": {
+          "content_ref": {
+            "type": "string",
+            "pattern": "^https://cloudiff[.]duckdns[.]org/cloudiff/artifact-download/dlt_[a-f0-9]{24}_[a-f0-9]{48}$"
+          },
+          "media_type": {
+            "const": "application/octet-stream"
+          }
+        }
+      }
+    }
+  ]
+}

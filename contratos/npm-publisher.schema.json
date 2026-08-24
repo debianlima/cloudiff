@@ -1,0 +1,202 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CloudIFF NpmPublisherProvider Contract",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "listen",
+    "authentication",
+    "routes",
+    "state",
+    "effects",
+    "cutover"
+  ],
+  "properties": {
+    "listen": {
+      "type": "object",
+      "required": [
+        "legacy_host",
+        "legacy_port",
+        "shadow_host",
+        "shadow_port",
+        "live_host",
+        "live_port"
+      ],
+      "properties": {
+        "legacy_host": {
+          "const": "10.62.91.3"
+        },
+        "legacy_port": {
+          "const": 18160
+        },
+        "shadow_host": {
+          "const": "127.0.0.1"
+        },
+        "shadow_port": {
+          "const": 18260
+        },
+        "live_host": {
+          "const": "10.62.91.3"
+        },
+        "live_port": {
+          "const": 18160
+        }
+      }
+    },
+    "authentication": {
+      "type": "object",
+      "required": [
+        "header",
+        "health_requires_auth",
+        "comparison"
+      ],
+      "properties": {
+        "header": {
+          "const": "X-CloudIF-Token"
+        },
+        "health_requires_auth": {
+          "const": false
+        },
+        "comparison": {
+          "const": "constant-time"
+        }
+      }
+    },
+    "routes": {
+      "type": "array",
+      "minItems": 8,
+      "maxItems": 8,
+      "items": {
+        "enum": [
+          "GET /health",
+          "POST /publish",
+          "POST /version",
+          "POST /stage",
+          "POST /alias",
+          "POST /unpublish",
+          "POST /tenant",
+          "POST /tenant/delete"
+        ]
+      }
+    },
+    "state": {
+      "type": "object",
+      "required": [
+        "top_level_keys",
+        "atomic_write",
+        "mode"
+      ],
+      "properties": {
+        "top_level_keys": {
+          "const": [
+            "projects",
+            "aliases",
+            "stages",
+            "tenants"
+          ]
+        },
+        "atomic_write": {
+          "const": true
+        },
+        "mode": {
+          "const": "0600"
+        }
+      }
+    },
+    "effects": {
+      "type": "object",
+      "required": [
+        "certificate_provider",
+        "nginx_test_before_reload",
+        "rollback_on_nginx_failure",
+        "shadow_live_effects",
+        "canary_live_existing_certificates",
+        "certificate_issuance_enabled",
+        "managed_block_preserves_outer_config",
+        "backup_before_write",
+        "canary_bind",
+        "certificate_issuance_serialized",
+        "certificate_postcondition",
+        "certificate_command"
+      ],
+      "properties": {
+        "certificate_provider": {
+          "const": "mauricio/npm/certbot-webroot"
+        },
+        "nginx_test_before_reload": {
+          "const": true
+        },
+        "rollback_on_nginx_failure": {
+          "const": true
+        },
+        "shadow_live_effects": {
+          "const": false
+        },
+        "canary_live_existing_certificates": {
+          "const": true
+        },
+        "certificate_issuance_enabled": {
+          "const": true
+        },
+        "managed_block_preserves_outer_config": {
+          "const": true
+        },
+        "backup_before_write": {
+          "const": true
+        },
+        "canary_bind": {
+          "const": "127.0.0.1:18261"
+        },
+        "certificate_issuance_serialized": {
+          "const": true
+        },
+        "certificate_postcondition": {
+          "const": "x509-san-covers-all-requested-domains"
+        },
+        "certificate_command": {
+          "const": "certbot-certonly-webroot"
+        }
+      }
+    },
+    "cutover": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "authoritative_service",
+        "fallback_service",
+        "rollback_on_smoke_failure",
+        "python_removed",
+        "consumer_ingress",
+        "consumer_host_header",
+        "consumer_source",
+        "backend_direct_cross_subnet_required"
+      ],
+      "properties": {
+        "authoritative_service": {
+          "const": "cloudiff-v2-npm-publisher-live.service"
+        },
+        "fallback_service": {
+          "const": "cloudif-npm-publisher-agent.service"
+        },
+        "rollback_on_smoke_failure": {
+          "const": true
+        },
+        "python_removed": {
+          "const": false
+        },
+        "consumer_ingress": {
+          "const": "http://10.62.91.3:80"
+        },
+        "consumer_host_header": {
+          "const": "cloudif-publisher.internal"
+        },
+        "consumer_source": {
+          "const": "10.62.92.7"
+        },
+        "backend_direct_cross_subnet_required": {
+          "const": false
+        }
+      }
+    }
+  }
+}

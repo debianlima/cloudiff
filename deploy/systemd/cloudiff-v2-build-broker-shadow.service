@@ -1,0 +1,45 @@
+[Unit]
+Description=CloudIFF v2 BuildBroker PostgreSQL shadow
+After=network-online.target cloudiff-v2-control.service
+Wants=network-online.target
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=cloudiff-v2-control
+Group=cloudiff-v2-control
+EnvironmentFile=/etc/cloudiff-v2/build-broker.env
+ExecStart=/opt/cloudiff-v2/current/bin/cloudiff-control --build-broker
+Restart=on-failure
+RestartSec=2s
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+RestrictRealtime=yes
+PrivateDevices=yes
+RemoveIPC=yes
+RestrictSUIDSGID=yes
+ProtectHostname=yes
+ProtectKernelLogs=yes
+ProtectProc=invisible
+ProcSubset=pid
+RestrictNamespaces=yes
+SystemCallArchitectures=native
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+IPAddressAllow=127.0.0.0/8
+IPAddressDeny=any
+ReadOnlyPaths=/etc/cloudiff-v2/build-broker.env
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

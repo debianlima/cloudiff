@@ -1,0 +1,36 @@
+[Unit]
+Description=CloudIFF v2 NATS certificate sync over SecureDistribution HTTPS
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+EnvironmentFile=/etc/cloudiff-v2/secure-distribution-nats-client.env
+ExecStart=/opt/cloudiff-v2/secure-distribution-consumer-current/deploy/sync_nats_server_cert.sh
+UMask=0077
+StateDirectory=cloudiff-v2/backups/nats-cert
+StateDirectoryMode=0700
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProtectKernelLogs=yes
+LockPersonality=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+RestrictNamespaces=yes
+RemoveIPC=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+CapabilityBoundingSet=
+AmbientCapabilities=
+SystemCallArchitectures=native
+ReadWritePaths=/var/lib/cloudiff-v2/tls/server /var/run/docker.sock
+ReadOnlyPaths=/etc/cloudiff-v2/secure-distribution-nats.token

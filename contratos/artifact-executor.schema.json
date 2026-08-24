@@ -1,0 +1,722 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CloudIFF ArtifactEngine Contract",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "legacy",
+    "consumer_ingress",
+    "authentication",
+    "routes",
+    "static_v1",
+    "state",
+    "shadow",
+    "toolchain",
+    "multiservice",
+    "classic_v2",
+    "classic_ingress_auth"
+  ],
+  "properties": {
+    "legacy": {
+      "type": "object",
+      "required": [
+        "host",
+        "port",
+        "service",
+        "fallback_preserved"
+      ],
+      "properties": {
+        "host": {
+          "const": "10.62.91.2"
+        },
+        "port": {
+          "const": 18216
+        },
+        "service": {
+          "const": "cloudif-artifact-executor.service"
+        },
+        "fallback_preserved": {
+          "const": true
+        }
+      }
+    },
+    "consumer_ingress": {
+      "type": "object",
+      "required": [
+        "url",
+        "host_header",
+        "npm_source",
+        "gateway",
+        "gateway_prefix"
+      ],
+      "properties": {
+        "url": {
+          "const": "http://10.62.91.3"
+        },
+        "host_header": {
+          "const": "cloudif-artifact-executor.internal"
+        },
+        "npm_source": {
+          "const": "10.62.92.7"
+        },
+        "gateway": {
+          "const": "http://10.62.91.2:18150"
+        },
+        "gateway_prefix": {
+          "const": "/__cloudif_artifact_executor/"
+        }
+      }
+    },
+    "authentication": {
+      "type": "object",
+      "required": [
+        "scheme",
+        "health_requires_auth",
+        "failure_status",
+        "comparison"
+      ],
+      "properties": {
+        "scheme": {
+          "const": "Bearer"
+        },
+        "health_requires_auth": {
+          "const": false
+        },
+        "failure_status": {
+          "const": 401
+        },
+        "comparison": {
+          "const": "constant-time"
+        }
+      }
+    },
+    "routes": {
+      "type": "object",
+      "required": [
+        "legacy",
+        "deferred",
+        "v14_implemented",
+        "v16_implemented"
+      ],
+      "properties": {
+        "legacy": {
+          "const": [
+            "GET /health",
+            "GET /v1/artifacts/{build_id}",
+            "POST /v1/artifacts",
+            "POST /v1/build",
+            "POST /v1/multiservice/build",
+            "POST /v1/toolchain/validate",
+            "POST /v1/toolchain/build"
+          ]
+        },
+        "v14_implemented": {
+          "const": [
+            "GET /health",
+            "GET /v1/artifacts/{build_id}",
+            "POST /v1/artifacts",
+            "POST /v1/build profile=static-v1",
+            "POST /v1/toolchain/validate",
+            "POST /v1/toolchain/build",
+            "POST /v1/multiservice/build static-only"
+          ]
+        },
+        "deferred": {
+          "const": [
+            "node24 runtime",
+            "activeToolchainImages authoritative reuse",
+            "non-static multiservice runtimes"
+          ]
+        },
+        "v16_implemented": {
+          "const": [
+            "POST /v1/build profile=classic-static-v2"
+          ]
+        }
+      }
+    },
+    "static_v1": {
+      "type": "object",
+      "required": [
+        "base_image",
+        "build_network",
+        "runtime_user",
+        "runtime_read_only",
+        "cap_drop",
+        "published_ports",
+        "scanner_policy",
+        "syft_pinned",
+        "trivy_pinned",
+        "external_scanners",
+        "idempotency_key"
+      ],
+      "properties": {
+        "base_image": {
+          "const": "cgr.dev/chainguard/nginx@sha256:e4ff957080737c90a9ecfeaa40e3d19ea9d687e9cacda2f2a031c75ffcdd72b7"
+        },
+        "build_network": {
+          "const": "none"
+        },
+        "runtime_user": {
+          "const": "65532:65532"
+        },
+        "runtime_read_only": {
+          "const": true
+        },
+        "cap_drop": {
+          "const": [
+            "ALL"
+          ]
+        },
+        "published_ports": {
+          "const": []
+        },
+        "scanner_policy": {
+          "const": "block HIGH/CRITICAL"
+        },
+        "syft_pinned": {
+          "const": true
+        },
+        "trivy_pinned": {
+          "const": true
+        },
+        "external_scanners": {
+          "const": true
+        },
+        "idempotency_key": {
+          "const": "build_id"
+        }
+      }
+    },
+    "state": {
+      "type": "object",
+      "required": [
+        "sqlite_allowed",
+        "postgres_authority",
+        "shadow_result_files",
+        "shadow_result_authoritative"
+      ],
+      "properties": {
+        "sqlite_allowed": {
+          "const": false
+        },
+        "postgres_authority": {
+          "const": "cloudiff_v2.jobs through BuildBroker/ClassicBuildWorker"
+        },
+        "shadow_result_files": {
+          "const": "immutable-test-evidence-only"
+        },
+        "shadow_result_authoritative": {
+          "const": false
+        }
+      }
+    },
+    "shadow": {
+      "type": "object",
+      "required": [
+        "bind",
+        "port",
+        "external_ingress",
+        "tag_prefix",
+        "root",
+        "max_concurrent_builds",
+        "backpressure_status"
+      ],
+      "properties": {
+        "bind": {
+          "const": "127.0.0.1"
+        },
+        "port": {
+          "const": 18226
+        },
+        "external_ingress": {
+          "const": false
+        },
+        "tag_prefix": {
+          "const": "cloudiff-v2-shadow-static"
+        },
+        "root": {
+          "const": "/var/lib/cloudiff-v2/artifact-shadow"
+        },
+        "max_concurrent_builds": {
+          "minimum": 1,
+          "maximum": 4
+        },
+        "backpressure_status": {
+          "const": 429
+        }
+      }
+    },
+    "toolchain": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "catalog",
+        "archive",
+        "validation",
+        "build",
+        "signature",
+        "runtimeStatus"
+      ],
+      "properties": {
+        "catalog": {
+          "type": "object",
+          "required": [
+            "path",
+            "version"
+          ],
+          "properties": {
+            "path": {
+              "const": "config/toolchain-catalog-v2.json"
+            },
+            "version": {
+              "const": 2
+            }
+          }
+        },
+        "archive": {
+          "type": "object",
+          "required": [
+            "url",
+            "query",
+            "digestHeader",
+            "compressedMaxBytes",
+            "unpackedMaxBytes",
+            "maxEntries",
+            "privateEntriesFiltered"
+          ],
+          "properties": {
+            "url": {
+              "const": "http://10.62.91.2:18095/project/archive"
+            },
+            "query": {
+              "const": [
+                "slug",
+                "ref"
+              ]
+            },
+            "digestHeader": {
+              "const": "X-CloudIF-SHA256"
+            },
+            "compressedMaxBytes": {
+              "const": 20971520
+            },
+            "unpackedMaxBytes": {
+              "const": 268435456
+            },
+            "maxEntries": {
+              "const": 25000
+            },
+            "privateEntriesFiltered": {
+              "const": true
+            }
+          }
+        },
+        "validation": {
+          "type": "object",
+          "required": [
+            "sideEffectFree",
+            "imagesCreated",
+            "containersChanged"
+          ],
+          "properties": {
+            "sideEffectFree": {
+              "const": true
+            },
+            "imagesCreated": {
+              "const": 0
+            },
+            "containersChanged": {
+              "const": false
+            }
+          }
+        },
+        "build": {
+          "type": "object",
+          "required": [
+            "activationRequired",
+            "containersChanged",
+            "buildsCreated",
+            "previewsCreated",
+            "deploymentsCreated",
+            "network"
+          ],
+          "properties": {
+            "activationRequired": {
+              "const": true
+            },
+            "containersChanged": {
+              "const": false
+            },
+            "buildsCreated": {
+              "const": 0
+            },
+            "previewsCreated": {
+              "const": 0
+            },
+            "deploymentsCreated": {
+              "const": 0
+            },
+            "network": {
+              "const": "none"
+            }
+          }
+        },
+        "signature": {
+          "type": "object",
+          "required": [
+            "algorithm",
+            "privateKey",
+            "publicKey",
+            "verifyBeforeReturn"
+          ],
+          "properties": {
+            "algorithm": {
+              "const": "Ed25519"
+            },
+            "privateKey": {
+              "const": "/etc/cloudiff-v2/artifact-signing-ed25519.pem"
+            },
+            "publicKey": {
+              "const": "/etc/cloudiff-v2/artifact-signing-ed25519.pub.pem"
+            },
+            "verifyBeforeReturn": {
+              "const": true
+            }
+          }
+        },
+        "runtimeStatus": {
+          "type": "object",
+          "required": [
+            "static",
+            "node24"
+          ],
+          "properties": {
+            "static": {
+              "const": "approved"
+            },
+            "node24": {
+              "const": "blocked-security-scan"
+            }
+          }
+        }
+      }
+    },
+    "multiservice": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "route",
+        "profile",
+        "serviceCount",
+        "approvedRuntimes",
+        "blockedRuntimes",
+        "effectiveEnvironment",
+        "source",
+        "runtimeImage",
+        "effects",
+        "idempotency",
+        "output"
+      ],
+      "properties": {
+        "route": {
+          "const": "POST /v1/multiservice/build"
+        },
+        "profile": {
+          "const": "multiservice-v1"
+        },
+        "serviceCount": {
+          "type": "object",
+          "required": [
+            "min",
+            "max"
+          ],
+          "properties": {
+            "min": {
+              "const": 1
+            },
+            "max": {
+              "const": 16
+            }
+          }
+        },
+        "approvedRuntimes": {
+          "const": [
+            "static"
+          ]
+        },
+        "blockedRuntimes": {
+          "const": [
+            "node24-security-scan",
+            "node-other",
+            "php",
+            "docker",
+            "compose",
+            "unknown"
+          ]
+        },
+        "effectiveEnvironment": {
+          "type": "object",
+          "required": [
+            "secretValuesIncluded",
+            "buildSecrets",
+            "publicBuildValues",
+            "secretRuntimeReferences",
+            "responseValues"
+          ],
+          "properties": {
+            "secretValuesIncluded": {
+              "const": false
+            },
+            "buildSecrets": {
+              "const": "blocked"
+            },
+            "publicBuildValues": {
+              "const": "allowed-build-args-only"
+            },
+            "secretRuntimeReferences": {
+              "const": "metadata-only"
+            },
+            "responseValues": {
+              "const": "names-and-digests-only"
+            }
+          }
+        },
+        "source": {
+          "type": "object",
+          "required": [
+            "singleFetch",
+            "safeExtract",
+            "privateFilesFiltered",
+            "maxEntries",
+            "maxBytes"
+          ],
+          "properties": {
+            "singleFetch": {
+              "const": true
+            },
+            "safeExtract": {
+              "const": "libarchive"
+            },
+            "privateFilesFiltered": {
+              "const": true
+            },
+            "maxEntries": {
+              "const": 25000
+            },
+            "maxBytes": {
+              "const": 268435456
+            }
+          }
+        },
+        "effects": {
+          "type": "object",
+          "required": [
+            "network",
+            "containersChanged",
+            "applicationContainersStarted",
+            "scannerPolicy",
+            "signatureAlgorithm",
+            "sqliteAllowed"
+          ],
+          "properties": {
+            "network": {
+              "const": "none"
+            },
+            "containersChanged": {
+              "const": false
+            },
+            "applicationContainersStarted": {
+              "const": false
+            },
+            "scannerPolicy": {
+              "const": "block HIGH/CRITICAL"
+            },
+            "signatureAlgorithm": {
+              "const": "Ed25519"
+            },
+            "sqliteAllowed": {
+              "const": false
+            }
+          }
+        },
+        "idempotency": {
+          "type": "object",
+          "required": [
+            "key",
+            "samePlan",
+            "differentPlan"
+          ],
+          "properties": {
+            "key": {
+              "const": "job_id"
+            },
+            "samePlan": {
+              "const": "return persisted result with idempotent=true"
+            },
+            "differentPlan": {
+              "const": "HTTP 409 job_id_conflict"
+            }
+          }
+        },
+        "output": {
+          "type": "object",
+          "required": [
+            "toolchains",
+            "applications",
+            "sourceRemoved",
+            "secretsIncluded",
+            "signaturesVerified",
+            "applicationRuntimeEvidence"
+          ],
+          "properties": {
+            "toolchains": {
+              "const": "one per service"
+            },
+            "applications": {
+              "const": "one per service"
+            },
+            "sourceRemoved": {
+              "const": true
+            },
+            "secretsIncluded": {
+              "const": false
+            },
+            "signaturesVerified": {
+              "const": true
+            },
+            "applicationRuntimeEvidence": {
+              "const": [
+                "runtimeReadOnlyCompatible",
+                "runtimeWritablePaths",
+                "runtimeConfigSha256",
+                "nginxConfigPath"
+              ]
+            }
+          }
+        },
+        "runtimeImage": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "rootfsReadOnly",
+            "runtimeUser",
+            "writablePaths",
+            "nginxConfigPath",
+            "nginxTemporaryPaths",
+            "configDigestInApplicationIdentity",
+            "publishedPorts"
+          ],
+          "properties": {
+            "rootfsReadOnly": {
+              "const": true
+            },
+            "runtimeUser": {
+              "const": "65532:65532"
+            },
+            "writablePaths": {
+              "const": [
+                "/tmp"
+              ]
+            },
+            "nginxConfigPath": {
+              "const": "/etc/nginx/nginx.conf"
+            },
+            "nginxTemporaryPaths": {
+              "const": [
+                "/tmp/client_temp",
+                "/tmp/proxy_temp",
+                "/tmp/fastcgi_temp",
+                "/tmp/uwsgi_temp",
+                "/tmp/scgi_temp"
+              ]
+            },
+            "configDigestInApplicationIdentity": {
+              "const": true
+            },
+            "publishedPorts": {
+              "const": []
+            }
+          }
+        }
+      }
+    },
+    "classic_v2": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "profile",
+        "route",
+        "source",
+        "requiredFields",
+        "siteRoot",
+        "archiveDigestRequired",
+        "legacyStaticMappingRequired",
+        "idempotencyKey",
+        "resultCompatibility"
+      ],
+      "properties": {
+        "profile": {
+          "const": "classic-static-v2"
+        },
+        "route": {
+          "const": "POST /v1/build"
+        },
+        "source": {
+          "const": "Forja /project/archive"
+        },
+        "requiredFields": {
+          "const": [
+            "project_slug",
+            "ref",
+            "build_id",
+            "archive_sha256"
+          ]
+        },
+        "siteRoot": {
+          "const": "site/"
+        },
+        "archiveDigestRequired": {
+          "const": true
+        },
+        "legacyStaticMappingRequired": {
+          "const": false
+        },
+        "idempotencyKey": {
+          "const": "build_id"
+        },
+        "resultCompatibility": {
+          "const": "legacy classic artifact summary fields plus ref/archive_sha256/source_mode"
+        }
+      }
+    },
+    "classic_ingress_auth": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "tokenEnv",
+        "tokenScope",
+        "standardTokenClassicAllowed",
+        "classicTokenOtherRoutesAllowed",
+        "legacySharedStateAuthority"
+      ],
+      "properties": {
+        "tokenEnv": {
+          "const": "CLOUDIFF_ARTIFACT_CLASSIC_TOKEN"
+        },
+        "tokenScope": {
+          "const": "POST /v1/build profile=classic-static-v2"
+        },
+        "standardTokenClassicAllowed": {
+          "const": false
+        },
+        "classicTokenOtherRoutesAllowed": {
+          "const": false
+        },
+        "legacySharedStateAuthority": {
+          "const": "Python artifact executor remains authority for cloudif-artifact-executor.internal and its SQLite results"
+        }
+      }
+    }
+  }
+}

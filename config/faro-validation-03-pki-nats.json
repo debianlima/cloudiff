@@ -1,0 +1,69 @@
+{
+  "version": 1,
+  "model": "FaroValidation",
+  "stage": "pki-nats",
+  "verification_status": "not_verified",
+  "goal": "Validar identidade criptográfica e autorização NATS individual de Faro.",
+  "depends_on": [
+    "identity-network"
+  ],
+  "requirements": [
+    {
+      "id": "FARO-R07",
+      "statement": "Certificado cliente deve usar clientAuth e vincular CN/URI ao node_id.",
+      "source": "contratos/nats-security.schema.json",
+      "mandatory": true,
+      "evidence": "certificado decodificado + fingerprint + binding node_id"
+    },
+    {
+      "id": "FARO-R08",
+      "statement": "Credencial NATS deve ser individual, username igual ao node_id reservado a8c4d414-175b-4369-8f9c-a8057ca53bdc, e sem token compartilhado.",
+      "source": "contratos/nats-security.schema.json",
+      "mandatory": true,
+      "evidence": "autenticação individual validada"
+    },
+    {
+      "id": "FARO-R09",
+      "statement": "Agent pode publicar apenas cloudiff.v2.node.observed e não pode assinar subjects.",
+      "source": "contratos/nats-security.schema.json",
+      "mandatory": true,
+      "evidence": "publish permitido e subscribe negado"
+    },
+    {
+      "id": "FARO-R10",
+      "statement": "Certificado servidor NATS deve chegar por SecureDistribution HTTPS/capability; SSH não é canal permitido.",
+      "source": "contratos/nats-security.schema.json",
+      "mandatory": true,
+      "evidence": "manifest SHA/size/hostname/lifetime/key-match validados"
+    }
+  ],
+  "tasks": [
+    {
+      "id": "FARO-T07",
+      "action": "No primeiro SSH, gerar chave privada no próprio Faro e CSR vinculado ao node_id reservado; não gerar/copiar a chave privada no control-plane.",
+      "expected_result": "chave privada permanece em Faro; CSR assinado pelo Agent PKI signer root-only em Hospedagem",
+      "gate": "não verificado"
+    },
+    {
+      "id": "FARO-T08",
+      "action": "Provisionar usuário/senha NATS exclusivos e validar ACL de subject.",
+      "expected_result": "least privilege do agent comprovado por testes positivo/negativo",
+      "gate": "não verificado"
+    },
+    {
+      "id": "FARO-T09",
+      "action": "Executar download SecureDistribution do certificado servidor e validar integridade/hostname.",
+      "expected_result": "trust bootstrap sem SSH",
+      "gate": "não verificado"
+    }
+  ],
+  "distributed_system_checks": {
+    "identity_independence": "Faro deve possuir node_id e credenciais próprios; nenhuma identidade é herdada de outro host.",
+    "trust_boundary": "Cada salto de rede/autenticação precisa de allowlist e identidade verificável; rede não é assumida confiável.",
+    "idempotency": "Reenvio de heartbeat e repetição de bootstrap/verificação não podem criar node duplicado nem efeitos divergentes.",
+    "partial_failure": "Falhas de rede, NATS, certificado, agent ou control-plane devem degradar de modo observável e recuperável.",
+    "observability": "Toda transição relevante precisa produzir health, observed_at, audit/evento ou evidência mecânica equivalente.",
+    "reconciliation": "Desired e observed state devem convergir por revisão explícita; divergência deve resultar em noop/reconcile/blocked/degraded/failed."
+  },
+  "decisions": []
+}

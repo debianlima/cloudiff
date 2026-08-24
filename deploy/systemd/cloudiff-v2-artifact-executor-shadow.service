@@ -1,0 +1,36 @@
+[Unit]
+Description=CloudIFF v2 ArtifactEngine static-v1/toolchain/multiservice shadow
+After=network-online.target docker.service cloudiff-v2-agent.service
+Wants=network-online.target docker.service
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=root
+Group=root
+EnvironmentFile=/etc/cloudiff-v2/artifact-shadow.env
+EnvironmentFile=/etc/cloudiff-v2/artifact-forja-client.env
+ExecStart=/opt/cloudiff-v2/artifact-shadow-current/bin/cloudiff-agent --artifact-executor
+Restart=on-failure
+RestartSec=2s
+UMask=0077
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+RestrictRealtime=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+CapabilityBoundingSet=
+AmbientCapabilities=
+ReadWritePaths=/var/lib/cloudiff-v2/artifact-shadow /var/run/docker.sock
+ReadOnlyPaths=/etc/komodo/stacks /srv/cloudif/scanners /etc/cloudiff-v2/artifact-signing-ed25519.pem /etc/cloudiff-v2/artifact-signing-ed25519.pub.pem
+
+[Install]
+WantedBy=multi-user.target

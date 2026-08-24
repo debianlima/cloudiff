@@ -1,0 +1,252 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CloudIFF FaroNodePreparation v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "identity",
+    "placement",
+    "runtime",
+    "bootstrap",
+    "nats",
+    "controlPlane",
+    "verification"
+  ],
+  "properties": {
+    "version": {
+      "const": 1
+    },
+    "identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "canonicalName",
+        "hostname",
+        "nodeId",
+        "address",
+        "network",
+        "formFactor",
+        "roleStatus",
+        "capabilitiesStatus"
+      ],
+      "properties": {
+        "canonicalName": {
+          "const": "FaroNodeReservation"
+        },
+        "hostname": {
+          "const": "faro"
+        },
+        "nodeId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "address": {
+          "const": "10.62.91.5"
+        },
+        "network": {
+          "const": "10.62.91.0/24"
+        },
+        "formFactor": {
+          "const": "virtual-machine-or-physical-vpn"
+        },
+        "roleStatus": {
+          "const": "fixed-edge"
+        },
+        "capabilitiesStatus": {
+          "const": "fixed-portal-telemetry-update"
+        }
+      }
+    },
+    "placement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "hospedagem",
+        "mauricio",
+        "forja"
+      ],
+      "properties": {
+        "hospedagem": {
+          "const": "required runtime control-plane: NATS 10.62.92.7:14222 + cloudiff-control + PostgreSQL"
+        },
+        "mauricio": {
+          "const": "not required for heartbeat runtime; retained for HTTPS/SecureDistribution future updates"
+        },
+        "forja": {
+          "const": "not a baseline dependency; used only if future Faro capabilities require build/runtime"
+        }
+      }
+    },
+    "runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "heartbeatPath",
+        "criticalPath",
+        "forjaInCriticalPath",
+        "mauricioInCriticalPath"
+      ],
+      "properties": {
+        "heartbeatPath": {
+          "const": "Faro 10.62.91.5 -> NATS 10.62.92.7:14222 -> cloudiff-control -> PostgreSQL"
+        },
+        "criticalPath": {
+          "const": [
+            "faro",
+            "hospedagem"
+          ]
+        },
+        "forjaInCriticalPath": {
+          "const": false
+        },
+        "mauricioInCriticalPath": {
+          "const": false
+        }
+      }
+    },
+    "bootstrap": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "initialChannel",
+        "authorization",
+        "privateKeyGeneration",
+        "csrSigning",
+        "bundleContainsSecrets"
+      ],
+      "properties": {
+        "initialChannel": {
+          "const": "SSH when access is explicitly provided by operator"
+        },
+        "authorization": {
+          "const": "explicit user decision 2026-08-21"
+        },
+        "privateKeyGeneration": {
+          "const": "on Faro only after SSH access"
+        },
+        "csrSigning": {
+          "const": "Agent PKI signer is root-only on hospedagem; CSR is generated on Faro and signed on hospedagem"
+        },
+        "bundleContainsSecrets": {
+          "const": false
+        }
+      }
+    },
+    "nats": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "server",
+        "port",
+        "username",
+        "publishAllow",
+        "subscribeDeny",
+        "sourceAllowlist",
+        "passwordStorage",
+        "clientCertificate",
+        "externalIngress",
+        "hostFirewall"
+      ],
+      "properties": {
+        "server": {
+          "const": "10.62.92.7"
+        },
+        "port": {
+          "const": 14222
+        },
+        "username": {
+          "const": "a8c4d414-175b-4369-8f9c-a8057ca53bdc"
+        },
+        "publishAllow": {
+          "const": [
+            "cloudiff.v2.node.observed"
+          ]
+        },
+        "subscribeDeny": {
+          "const": [
+            ">"
+          ]
+        },
+        "sourceAllowlist": {
+          "const": [
+            "10.62.91.2/32",
+            "10.62.91.3/32",
+            "10.62.91.5/32",
+            "172.16.0.2/32",
+            "172.16.0.3/32",
+            "10.0.0.0/16"
+          ]
+        },
+        "passwordStorage": {
+          "const": "runtime root-only; never committed"
+        },
+        "clientCertificate": {
+          "const": "pending CSR/key generation on Faro; CN/URI must bind nodeId"
+        },
+        "externalIngress": {
+          "const": "systemd socket proxy 10.62.92.7:14222 -> 127.0.0.1:14222; NATS Docker loopback-only; source allowlist on socket"
+        },
+        "hostFirewall": {
+          "const": "Hospedagem INPUT exact match 10.62.92.7:14222/TCP; allow only declared sourceAllowlist; drop all other remote sources; loopback control unaffected"
+        }
+      }
+    },
+    "controlPlane": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "host",
+        "service",
+        "database",
+        "requiredBeforeFaro",
+        "tlsAccessFix"
+      ],
+      "properties": {
+        "host": {
+          "const": "hospedagem"
+        },
+        "service": {
+          "const": "cloudiff-v2-control.service"
+        },
+        "database": {
+          "const": "cloudiff-v2-postgres"
+        },
+        "requiredBeforeFaro": {
+          "const": true
+        },
+        "tlsAccessFix": {
+          "const": "/etc/cloudiff-v2 execute-only traversal for service user plus existing cloudiff-v2-nats group access"
+        }
+      }
+    },
+    "verification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ipAvailability",
+        "nodeOperational",
+        "sshAvailable",
+        "csrSigned",
+        "heartbeatE2E"
+      ],
+      "properties": {
+        "ipAvailability": {
+          "const": "verified-free-from-forja-and-mauricio-on-2026-08-21"
+        },
+        "nodeOperational": {
+          "const": false
+        },
+        "sshAvailable": {
+          "const": false
+        },
+        "csrSigned": {
+          "const": false
+        },
+        "heartbeatE2E": {
+          "const": false
+        }
+      }
+    }
+  }
+}

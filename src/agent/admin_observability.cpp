@@ -1,0 +1,48 @@
+#include "cloudiff/admin_observability.hpp"
+#include <boost/asio.hpp>
+#include <boost/beast.hpp>
+#include <libpq-fe.h>
+#include <openssl/crypto.h>
+#include <algorithm>
+#include <array>
+#include <cctype>
+#include <cstdlib>
+#include <memory>
+#include <regex>
+#include <stdexcept>
+#include <string>
+#include <string_view>
+#include <thread>
+namespace cloudiff {
+namespace {
+namespace asio=boost::asio;namespace beast=boost::beast;namespace http=beast::http;using tcp=asio::ip::tcp;
+constexpr std::size_t kMaxBody=64*1024;
+struct Conn { PGconn* p{nullptr}; explicit Conn(const std::string& ci):p(PQconnectdb(ci.c_str())){if(!p||PQstatus(p)!=CONNECTION_OK)throw std::runtime_error("postgres_unavailable");}~Conn(){if(p)PQfinish(p);} };
+struct Result { PGresult* p{nullptr}; explicit Result(PGresult* x):p(x){if(!p)throw std::runtime_error("postgres_result_null");}~Result(){PQclear(p);} };
+std::string env_or(const char* n,std::string f={}){const char* v=std::getenv(n);return v?std::string(v):std::move(f);}
+int env_int(const char* n,int f){try{return std::stoi(env_or(n,std::to_string(f)));}catch(...){return f;}}
+bool secure_equal(std::string_view a,std::string_view b){if(a.size()!=b.size())return false;unsigned char d=0;for(std::size_t i=0;i<a.size();++i)d|=static_cast<unsigned char>(a[i])^static_cast<unsigned char>(b[i]);return d==0;}
+bool authorized(const std::string& h,const std::string& token){return !token.empty()&&secure_equal(h,"Bearer "+token);}
+bool uuid_ok(const std::string& s){static const std::regex r("^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",std::regex::icase);return std::regex_match(s,r);}
+bool actor_ok(const std::string& s){if(s.empty()||s.size()>128)return false;for(char ch:s){const auto c=static_cast<unsigned char>(ch);if(c<32||c==127)return false;}return true;}
+std::string path_only(std::string target){if(auto q=target.find('?');q!=std::string::npos)target.resize(q);return target;}
+std::string node_from_path(const std::string& p,const std::string& suffix){const std::string pre="/v1/nodes/";if(!p.starts_with(pre)||!p.ends_with(suffix)||p.size()<=pre.size()+suffix.size())return {};return p.substr(pre.size(),p.size()-pre.size()-suffix.size());}
+nlohmann::json parse_json_or_empty(const char* p){if(!p||!*p)return nlohmann::json::object();try{return nlohmann::json::parse(p);}catch(...){return nlohmann::json::object();}}
+nlohmann::json environment(PGconn* c){
+ Result r(PQexec(c,"SELECT n.node_id::text,n.hostname,n.role,to_json(n.capabilities)::text,n.observed_at::text,n.last_seen_at::text,n.metadata::text,COALESCE(d.revision,0)::text,COALESCE(d.state->>'automatic_reboot_enabled','true') FROM cloudiff_v2.nodes n LEFT JOIN cloudiff_v2.desired_state d ON d.resource_type='node_recovery' AND d.resource_id=n.node_id::text ORDER BY n.hostname"));
+ if(PQresultStatus(r.p)!=PGRES_TUPLES_OK)throw std::runtime_error("postgres_query_failed");nlohmann::json nodes=nlohmann::json::array();
+ for(int i=0;i<PQntuples(r.p);++i){auto meta=parse_json_or_empty(PQgetvalue(r.p,i,6));nlohmann::json caps=nlohmann::json::array();try{caps=nlohmann::json::parse(PQgetvalue(r.p,i,3));}catch(...){ }
+  nlohmann::json node={{"node_id",PQgetvalue(r.p,i,0)},{"hostname",PQgetvalue(r.p,i,1)},{"role",PQgetvalue(r.p,i,2)},{"capabilities",caps},{"observed_at",PQgetvalue(r.p,i,4)},{"last_seen_at",PQgetvalue(r.p,i,5)},{"telemetry",meta.value("telemetry",nlohmann::json::object())},{"automatic_reboot_enabled",std::string(PQgetvalue(r.p,i,8))=="true"},{"policy_revision",std::stoll(PQgetvalue(r.p,i,7))}};
+  nodes.push_back(std::move(node));
+ }
+ return {{"ok",true},{"hierarchy","environment>node>container>service"},{"nodes",nodes}};
+}
+AdminObservabilityResponse policy(PGconn* c,const std::string& id){const char* vals[]={id.c_str()};Result r(PQexecParams(c,"SELECT n.node_id::text,COALESCE(d.revision,0)::text,COALESCE(d.state->>'automatic_reboot_enabled','true') FROM cloudiff_v2.nodes n LEFT JOIN cloudiff_v2.desired_state d ON d.resource_type='node_recovery' AND d.resource_id=n.node_id::text WHERE n.node_id=$1::uuid",1,nullptr,vals,nullptr,nullptr,0));if(PQresultStatus(r.p)!=PGRES_TUPLES_OK)throw std::runtime_error("postgres_query_failed");if(PQntuples(r.p)!=1)return {404,{{"ok",false},{"error","node_not_found"}}};return {200,{{"node_id",PQgetvalue(r.p,0,0)},{"automatic_reboot_enabled",std::string(PQgetvalue(r.p,0,2))=="true"},{"revision",std::stoll(PQgetvalue(r.p,0,1))}}};}
+AdminObservabilityResponse set_policy(PGconn* c,const std::string& id,const std::string& body){nlohmann::json j;try{j=nlohmann::json::parse(body);}catch(...){return {400,{{"ok",false},{"error","invalid_json"}}};}if(!j.is_object()||!j.contains("automatic_reboot_enabled")||!j["automatic_reboot_enabled"].is_boolean()||!j.contains("actor")||!j["actor"].is_string())return {422,{{"ok",false},{"error","invalid_policy"}}};const auto actor=j["actor"].get<std::string>();if(!actor_ok(actor))return {422,{{"ok",false},{"error","invalid_actor"}}};const auto enabled=j["automatic_reboot_enabled"].get<bool>();const char* checkv[]={id.c_str()};Result check(PQexecParams(c,"SELECT 1 FROM cloudiff_v2.nodes WHERE node_id=$1::uuid",1,nullptr,checkv,nullptr,nullptr,0));if(PQresultStatus(check.p)!=PGRES_TUPLES_OK)throw std::runtime_error("postgres_query_failed");if(PQntuples(check.p)!=1)return {404,{{"ok",false},{"error","node_not_found"}}};
+ Result begin(PQexec(c,"BEGIN"));if(PQresultStatus(begin.p)!=PGRES_COMMAND_OK)throw std::runtime_error("postgres_begin_failed");try{const std::string state=nlohmann::json{{"automatic_reboot_enabled",enabled}}.dump();const char* vals[]={id.c_str(),state.c_str()};Result up(PQexecParams(c,"INSERT INTO cloudiff_v2.desired_state(resource_type,resource_id,revision,state,updated_at) VALUES('node_recovery',$1,1,$2::jsonb,now()) ON CONFLICT(resource_type,resource_id) DO UPDATE SET revision=cloudiff_v2.desired_state.revision+1,state=EXCLUDED.state,updated_at=now() RETURNING revision::text",2,nullptr,vals,nullptr,nullptr,0));if(PQresultStatus(up.p)!=PGRES_TUPLES_OK||PQntuples(up.p)!=1)throw std::runtime_error("policy_upsert_failed");const auto rev=std::stoll(PQgetvalue(up.p,0,0));const std::string details=nlohmann::json{{"automatic_reboot_enabled",enabled},{"revision",rev}}.dump();const char* av[]={actor.c_str(),id.c_str(),details.c_str()};Result audit(PQexecParams(c,"INSERT INTO cloudiff_v2.audit_log(actor,action,resource_type,resource_id,details) VALUES($1,'node_recovery_policy_changed','node',$2,$3::jsonb)",3,nullptr,av,nullptr,nullptr,0));if(PQresultStatus(audit.p)!=PGRES_COMMAND_OK)throw std::runtime_error("audit_insert_failed");Result commit(PQexec(c,"COMMIT"));if(PQresultStatus(commit.p)!=PGRES_COMMAND_OK)throw std::runtime_error("postgres_commit_failed");return {200,{{"ok",true},{"node_id",id},{"automatic_reboot_enabled",enabled},{"revision",rev}}};}catch(...){Result rollback(PQexec(c,"ROLLBACK"));(void)rollback;throw;}}
+}
+AdminObservability::AdminObservability(AdminObservabilityOptions o):options_(std::move(o)){if(options_.token.empty()||options_.postgres_conninfo.empty())throw std::invalid_argument("token/postgres required");}
+AdminObservabilityResponse AdminObservability::handle(const std::string& method,const std::string& target,const std::string& auth,const std::string& body) const {try{const auto path=path_only(target);if(method=="GET"&&path=="/health")return {200,{{"ok",true},{"service","AdminObservability"}}};if(!authorized(auth,options_.token))return {401,{{"ok",false},{"error","unauthorized"}}};Conn c(options_.postgres_conninfo);if(method=="GET"&&path=="/v1/environment")return {200,environment(c.p)};if(method=="GET"){const auto id=node_from_path(path,"/policy");if(!id.empty()){if(!uuid_ok(id))return {400,{{"ok",false},{"error","invalid_node_id"}}};return policy(c.p,id);}}if(method=="POST"){const auto id=node_from_path(path,"/recovery");if(!id.empty()){if(!uuid_ok(id))return {400,{{"ok",false},{"error","invalid_node_id"}}};return set_policy(c.p,id,body);}}return {404,{{"ok",false},{"error","not_found"}}};}catch(const std::exception& e){return {500,{{"ok",false},{"error","internal_error"},{"detail",std::string(e.what()).substr(0,120)}}};}}
+AdminObservabilityOptions admin_observability_options_from_environment(){AdminObservabilityOptions o;o.bind_address=env_or("CLOUDIFF_ADMIN_OBSERVABILITY_BIND","127.0.0.1");o.port=static_cast<unsigned short>(std::clamp(env_int("CLOUDIFF_ADMIN_OBSERVABILITY_PORT",18260),1,65535));o.token=env_or("CLOUDIFF_ADMIN_OBSERVABILITY_TOKEN");o.postgres_conninfo=env_or("CLOUDIFF_POSTGRES_CONNINFO");return o;}
+int run_admin_observability_server(const AdminObservabilityOptions& options){AdminObservability api(options);asio::io_context io;tcp::acceptor acceptor(io,{asio::ip::make_address(options.bind_address),options.port});acceptor.set_option(asio::socket_base::reuse_address(true));for(;;){tcp::socket socket(io);acceptor.accept(socket);std::thread([&api,s=std::move(socket)]()mutable{try{beast::flat_buffer buffer;http::request_parser<http::string_body> parser;parser.body_limit(kMaxBody);http::read(s,buffer,parser);auto req=parser.release();const auto av=req[http::field::authorization];std::string auth(av.data(),av.size());std::string target(req.target().data(),req.target().size());auto r=api.handle(req.method_string(),target,auth,req.body());http::response<http::string_body> res{static_cast<http::status>(r.status),req.version()};res.set(http::field::content_type,"application/json");res.set(http::field::cache_control,"no-store");res.set("X-Content-Type-Options","nosniff");res.keep_alive(false);res.body()=r.body.dump();res.prepare_payload();http::write(s,res);beast::error_code ec;s.shutdown(tcp::socket::shutdown_send,ec);}catch(...){}}).detach();}}
+}

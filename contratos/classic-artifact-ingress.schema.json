@@ -1,0 +1,258 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CloudIFF ClassicArtifactIngress v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "identity",
+    "legacyContinuity",
+    "worker",
+    "npm",
+    "socketProxy",
+    "artifactEngine",
+    "authentication",
+    "rollback"
+  ],
+  "properties": {
+    "version": {
+      "const": 1
+    },
+    "identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "canonicalName",
+        "purpose"
+      ],
+      "properties": {
+        "canonicalName": {
+          "const": "ClassicArtifactIngress"
+        },
+        "purpose": {
+          "const": "dedicated internal ingress for ClassicBuildWorker to ArtifactEngine C++"
+        }
+      }
+    },
+    "legacyContinuity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sharedHost",
+        "authority",
+        "redirectForbidden",
+        "evidence"
+      ],
+      "properties": {
+        "sharedHost": {
+          "const": "cloudif-artifact-executor.internal"
+        },
+        "authority": {
+          "const": "Python artifact executor remains unchanged"
+        },
+        "redirectForbidden": {
+          "const": true
+        },
+        "evidence": {
+          "const": "legacy build babe4613-1aa9-415e-9973-5e53fe80b0c5 is HTTP 200/succeeded in Python and HTTP 404/artifact_not_found in C++ shadow"
+        }
+      }
+    },
+    "worker": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "connectIp",
+        "port",
+        "hostHeader",
+        "method",
+        "route",
+        "profile",
+        "sourceIp"
+      ],
+      "properties": {
+        "connectIp": {
+          "const": "10.62.91.3"
+        },
+        "port": {
+          "const": 80
+        },
+        "hostHeader": {
+          "const": "cloudif-artifact-executor-v2.internal"
+        },
+        "method": {
+          "const": "POST"
+        },
+        "route": {
+          "const": "/v1/build"
+        },
+        "profile": {
+          "const": "classic-static-v2"
+        },
+        "sourceIp": {
+          "const": "10.62.92.7"
+        }
+      }
+    },
+    "npm": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "config",
+        "serverName",
+        "allow",
+        "denyAll",
+        "backend",
+        "allowedRoute",
+        "otherRoutes"
+      ],
+      "properties": {
+        "config": {
+          "const": "/srv/cloudif/proxy/npm/data/nginx/custom/http.conf"
+        },
+        "serverName": {
+          "const": "cloudif-artifact-executor-v2.internal"
+        },
+        "allow": {
+          "const": [
+            "10.62.92.7"
+          ]
+        },
+        "denyAll": {
+          "const": true
+        },
+        "backend": {
+          "const": "http://10.62.91.2:18228"
+        },
+        "allowedRoute": {
+          "const": "POST /v1/build"
+        },
+        "otherRoutes": {
+          "const": "404"
+        }
+      }
+    },
+    "socketProxy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "listen",
+        "allow",
+        "denyAll",
+        "target",
+        "implementation"
+      ],
+      "properties": {
+        "listen": {
+          "const": "10.62.91.2:18228"
+        },
+        "allow": {
+          "const": [
+            "10.62.91.3"
+          ]
+        },
+        "denyAll": {
+          "const": true
+        },
+        "target": {
+          "const": "127.0.0.1:18226"
+        },
+        "implementation": {
+          "const": "/usr/lib/systemd/systemd-socket-proxyd"
+        }
+      }
+    },
+    "artifactEngine": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "bind",
+        "existingPort",
+        "singleProcess",
+        "stateRoot",
+        "classicTokenEnv",
+        "standardTokenEnv"
+      ],
+      "properties": {
+        "bind": {
+          "const": "127.0.0.1"
+        },
+        "existingPort": {
+          "const": 18226
+        },
+        "singleProcess": {
+          "const": true
+        },
+        "stateRoot": {
+          "const": "/var/lib/cloudiff-v2/artifact-shadow"
+        },
+        "classicTokenEnv": {
+          "const": "CLOUDIFF_ARTIFACT_CLASSIC_TOKEN"
+        },
+        "standardTokenEnv": {
+          "const": "CLOUDIFF_ARTIFACT_TOKEN"
+        }
+      }
+    },
+    "authentication": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "classicTokenFile",
+        "workerTokenFile",
+        "tokenBytes",
+        "storage",
+        "classicScope",
+        "standardClassicAllowed",
+        "classicOtherRoutesAllowed"
+      ],
+      "properties": {
+        "classicTokenFile": {
+          "const": "/etc/cloudiff-v2/classic-artifact.token"
+        },
+        "workerTokenFile": {
+          "const": "/etc/cloudiff-v2/classic-artifact.token"
+        },
+        "tokenBytes": {
+          "const": 64
+        },
+        "storage": {
+          "const": "root-only token file; value copied into root-owned EnvironmentFile; never committed or logged"
+        },
+        "classicScope": {
+          "const": "POST /v1/build profile=classic-static-v2"
+        },
+        "standardClassicAllowed": {
+          "const": false
+        },
+        "classicOtherRoutesAllowed": {
+          "const": false
+        }
+      }
+    },
+    "rollback": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "forja",
+        "npm",
+        "worker",
+        "jobAttempt"
+      ],
+      "properties": {
+        "forja": {
+          "const": "disable and remove dedicated socket/service units; restore pre-v27 ArtifactEngine env; restore artifact-shadow-previous pointer; restart loopback shadow"
+        },
+        "npm": {
+          "const": "restore exact previous http.conf then nginx -t and reload"
+        },
+        "worker": {
+          "const": "restore exact pre-v27 build-worker.env and build-worker-previous pointer"
+        },
+        "jobAttempt": {
+          "const": "existing P11 job remains waiting_retry attempt=1 until ingress gates pass"
+        }
+      }
+    }
+  }
+}

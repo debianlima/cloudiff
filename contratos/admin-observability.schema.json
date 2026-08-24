@@ -1,0 +1,21 @@
+{
+  "$schema":"https://json-schema.org/draft/2020-12/schema",
+  "title":"CloudIFF AdminObservability v1",
+  "type":"object","additionalProperties":false,
+  "required":["version","backend","authorization","routes","recovery"],
+  "properties":{
+    "version":{"const":1},
+    "backend":{"type":"object","additionalProperties":false,"required":["bind","port","postgres_source","service_token_env"],"properties":{
+      "bind":{"const":"127.0.0.1"},"port":{"const":18260},"postgres_source":{"const":"cloudiff_v2 nodes.metadata + desired_state"},"service_token_env":{"const":"CLOUDIFF_ADMIN_OBSERVABILITY_TOKEN"}
+    }},
+    "authorization":{"type":"object","additionalProperties":false,"required":["admin_group","portal_auth_source","csrf"],"properties":{
+      "admin_group":{"const":"CloudIF-Tenants-Admin"},"portal_auth_source":{"const":"existing Authentik headers/session"},"csrf":{"const":"existing portal production CSRF"}
+    }},
+    "routes":{"type":"object","additionalProperties":false,"required":["admin_page","environment_api","recovery_action","node_policy"],"properties":{
+      "admin_page":{"const":"GET /admin"},"environment_api":{"const":"GET /cloudiff/portal/api/admin-observability"},"recovery_action":{"const":"POST /cloudiff/portal/action/node-recovery"},"node_policy":{"const":"GET /cloudiff/portal/api/node-recovery-policy?node_id=<uuid>"}
+    }},
+    "recovery":{"type":"object","additionalProperties":false,"required":["resource_type","default_enabled","admin_can_disable","pull_model","public_policy_fields"],"properties":{
+      "resource_type":{"const":"node_recovery"},"default_enabled":{"const":true},"admin_can_disable":{"const":true},"pull_model":{"const":"updater pulls non-secret policy; agents do not subscribe NATS"},"public_policy_fields":{"const":["node_id","automatic_reboot_enabled","revision"]}
+    }}
+  }
+}

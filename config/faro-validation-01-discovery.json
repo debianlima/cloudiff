@@ -1,0 +1,95 @@
+{
+  "version": 1,
+  "model": "FaroValidation",
+  "stage": "discovery",
+  "verification_status": "not_verified",
+  "goal": "Determinar o que Faro é fisicamente e quais responsabilidades podem ser contratadas sem assumir função por nome.",
+  "depends_on": [],
+  "requirements": [
+    {
+      "id": "FARO-R01",
+      "statement": "Identificar hostname, SO, arquitetura, CPU, RAM, disco, interfaces, IPs e serviços existentes.",
+      "source": "contratos/node.schema.json",
+      "mandatory": true,
+      "evidence": "inventário coletado no próprio host"
+    },
+    {
+      "id": "FARO-R02",
+      "statement": "Determinar role somente após inventário; valores permitidos continuam control, forja, edge ou other.",
+      "source": "contratos/node.schema.json",
+      "mandatory": true,
+      "evidence": "decisão registrada com justificativa"
+    },
+    {
+      "id": "FARO-R03",
+      "statement": "Declarar capabilities somente quando forem observáveis e necessárias à função escolhida.",
+      "source": "contratos/node.schema.json",
+      "mandatory": true,
+      "evidence": "lista de capabilities aprovada sem inferências"
+    }
+  ],
+  "tasks": [
+    {
+      "id": "FARO-T01",
+      "action": "Coletar inventário de hardware, sistema, interfaces, rotas e serviços sem alterar configuração.",
+      "expected_result": "baseline físico e lógico de Faro",
+      "gate": "não verificado"
+    },
+    {
+      "id": "FARO-T02",
+      "action": "Classificar role e capabilities a partir do inventário e da função desejada pelo operador.",
+      "expected_result": "role/capabilities deixam de ser unresolved somente com decisão explícita",
+      "gate": "não verificado"
+    },
+    {
+      "id": "FARO-T03",
+      "action": "Registrar conflitos com serviços existentes, portas ocupadas e restrições de manutenção.",
+      "expected_result": "mapa de coexistência antes de qualquer deploy",
+      "gate": "não verificado"
+    }
+  ],
+  "distributed_system_checks": {
+    "identity_independence": "Faro deve possuir node_id e credenciais próprios; nenhuma identidade é herdada de outro host.",
+    "trust_boundary": "Cada salto de rede/autenticação precisa de allowlist e identidade verificável; rede não é assumida confiável.",
+    "idempotency": "Reenvio de heartbeat e repetição de bootstrap/verificação não podem criar node duplicado nem efeitos divergentes.",
+    "partial_failure": "Falhas de rede, NATS, certificado, agent ou control-plane devem degradar de modo observável e recuperável.",
+    "observability": "Toda transição relevante precisa produzir health, observed_at, audit/evento ou evidência mecânica equivalente.",
+    "reconciliation": "Desired e observed state devem convergir por revisão explícita; divergência deve resultar em noop/reconcile/blocked/degraded/failed."
+  },
+  "decisions": [
+    {
+      "name": "role",
+      "status": "unresolved",
+      "allowed_values": [
+        "control",
+        "forja",
+        "edge",
+        "other"
+      ],
+      "rule": "não escolher antes do inventário e da intenção operacional"
+    },
+    {
+      "name": "capabilities",
+      "status": "unresolved",
+      "allowed_values": [],
+      "rule": "derivar apenas do papel confirmado e de capacidades reais do host"
+    },
+    {
+      "name": "network_address",
+      "status": "fixed",
+      "allowed_values": [
+        "10.62.91.5"
+      ],
+      "rule": "endereço reservado pelo operador para VM ou máquina física via VPN"
+    },
+    {
+      "name": "form_factor",
+      "status": "unresolved",
+      "allowed_values": [
+        "virtual-machine",
+        "physical-machine-via-vpn"
+      ],
+      "rule": "ambas usam 10.62.91.5; decidir quando o recurso existir"
+    }
+  ]
+}

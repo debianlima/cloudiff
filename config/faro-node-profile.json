@@ -1,0 +1,13 @@
+{
+  "version":1,
+  "hostname":"faro",
+  "address":"10.62.91.5",
+  "role":"edge",
+  "capabilities":["inventory","health","telemetry-host","portal-host","agent-auto-update"],
+  "excluded_capabilities":["build","runtime"],
+  "platform":{"os":"ubuntu-server-26.04","arch":"x86_64","systemd":true},
+  "requested_resources":{"vcpu":4,"ram_bytes":8589934592,"disk_bytes":214748364800,"status":"awaiting-provider-confirmation"},
+  "recovery":{"backup":"reinstall-from-scratch","automatic_reboot_default":true,"admin_can_disable_reboot":true},
+  "portal":{"desired_host":true,"cutover":"after-faro-onboarding-and-portal-shadow-gates"},
+  "monitoring":{"hierarchy":"environment>node>container>service","containers":"cadvisor-local","admin_surface":"/admin"}
+}

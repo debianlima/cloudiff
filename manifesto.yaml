@@ -1,0 +1,1459 @@
+projeto: cloudiff-v2
+versao_contrato: 38
+namespace_fechado: true
+entradas:
+  - id: 1
+    caminho: lexico.yaml
+    proposito: fixa nomes canônicos do CloudIFF v2
+    tipo: documentacao-estrutural
+    consome: []
+    produz: contrato/lexico
+    aceite: portao-mecanico/documentacao-estrutural
+    status: pendente
+  - id: 2
+    caminho: competencias.yaml
+    proposito: declara competências, portões externos e evidências
+    tipo: documentacao-estrutural
+    consome: [contrato/lexico]
+    produz: contrato/competencias
+    aceite: portao-mecanico/documentacao-estrutural
+    status: aceito
+  - id: 3
+    caminho: contratos/node.schema.json
+    proposito: contrato de identidade e inventário mínimo de node
+    tipo: schema
+    consome: [contrato/lexico]
+    produz: contratos/node.schema
+    aceite: portao-mecanico/schema
+    status: aceito
+  - id: 4
+    caminho: contratos/job.schema.json
+    proposito: contrato de job durável com lease, retry e idempotência
+    tipo: fila
+    consome: [contrato/lexico, contrato/competencias]
+    produz: contratos/job.schema
+    aceite: portao-mecanico/fila
+    status: aceito
+  - id: 5
+    caminho: contratos/reconciliation.schema.json
+    proposito: contrato desired_state/observed_state e decisão de reconciliação
+    tipo: reconciliacao
+    consome: [contrato/lexico, contratos/node.schema]
+    produz: contratos/reconciliation.schema
+    aceite: portao-mecanico/reconciliacao
+    status: aceito
+  - id: 6
+    caminho: contratos/auth-session.schema.json
+    proposito: preserva autenticação integrada com Authentik
+    tipo: autenticacao
+    consome: [contrato/lexico]
+    produz: contratos/auth-session.schema
+    aceite: portao-mecanico/autenticacao
+    status: aceito
+  - id: 7
+    caminho: contratos/event.schema.json
+    proposito: envelope canônico para eventos NATS e auditoria
+    tipo: backend-integracao
+    consome: [contrato/lexico, contratos/node.schema]
+    produz: contratos/event.schema
+    aceite: portao-mecanico/backend-integracao
+    status: aceito
+  - id: 8
+    caminho: contratos/file-transfer.schema.json
+    proposito: contrato para envio e recebimento de arquivos via MCP
+    tipo: backend-integracao
+    consome: [contrato/lexico, contratos/auth-session.schema]
+    produz: contratos/file-transfer.schema
+    aceite: portao-mecanico/backend-integracao
+    status: aceito
+  - id: 9
+    caminho: estado.md
+    proposito: snapshot canônico das decisões, pendências e progresso
+    tipo: documentacao-estrutural
+    consome: [contrato/competencias, contratos/job.schema, contratos/reconciliation.schema, contratos/auth-session.schema, contratos/event.schema, contratos/file-transfer.schema]
+    produz: contrato/estado
+    aceite: portao-mecanico/documentacao-estrutural
+    status: aceito
+  - id: 10
+    caminho: manifesto.yaml
+    proposito: namespace fechado e dependências do CloudIFF v2
+    tipo: documentacao-estrutural
+    consome: [contrato/estado]
+    produz: contrato/manifesto-v1
+    aceite: portao-mecanico/documentacao-estrutural
+    status: aceito
+  - id: 11
+    caminho: include/cloudiff/node_identity.hpp
+    proposito: declara NodeIdentity e validação de node_id
+    tipo: agente
+    consome: [contratos/node.schema]
+    produz: cpp/node-identity-hpp
+    aceite: portao-mecanico/agente
+    status: aceito
+  - id: 12
+    caminho: src/common/node_identity.cpp
+    proposito: implementa leitura e validação de node_id
+    tipo: agente
+    consome: [cpp/node-identity-hpp, contratos/node.schema]
+    produz: cpp/node-identity
+    aceite: portao-mecanico/agente
+    status: aceito
+  - id: 13
+    caminho: include/cloudiff/job_state.hpp
+    proposito: declara estados e transições válidas de job
+    tipo: fila
+    consome: [contratos/job.schema]
+    produz: cpp/job-state-hpp
+    aceite: portao-mecanico/fila
+    status: aceito
+  - id: 14
+    caminho: src/common/job_state.cpp
+    proposito: implementa máquina de estados local de job
+    tipo: fila
+    consome: [cpp/job-state-hpp, contratos/job.schema]
+    produz: cpp/job-state
+    aceite: portao-mecanico/fila
+    status: aceito
+  - id: 15
+    caminho: src/agent/main.cpp
+    proposito: primeiro cloudiff-agent shadow com inventário local --once
+    tipo: agente
+    consome: [cpp/node-identity, contratos/node.schema]
+    produz: bin/cloudiff-agent
+    aceite: portao-mecanico/agente
+    status: pendente
+  - id: 16
+    caminho: src/control/main.cpp
+    proposito: primeiro cloudiff-control shadow sem autoridade sobre legado
+    tipo: backend-integracao
+    consome: [contratos/reconciliation.schema, contratos/event.schema, contratos/auth-session.schema]
+    produz: bin/cloudiff-control
+    aceite: portao-mecanico/backend-integracao
+    status: aceito
+  - id: 17
+    caminho: src/worker/main.cpp
+    proposito: primeiro cloudiff-worker shadow e máquina de estado de job
+    tipo: fila
+    consome: [cpp/job-state, contratos/job.schema]
+    produz: bin/cloudiff-worker
+    aceite: portao-mecanico/fila
+    status: aceito
+  - id: 18
+    caminho: sql/001_bootstrap.sql
+    proposito: schema PostgreSQL limpo para nodes, jobs, leases, estado, eventos e auditoria
+    tipo: schema
+    consome: [contratos/node.schema, contratos/job.schema, contratos/reconciliation.schema, contratos/event.schema]
+    produz: db/cloudiff-v2-schema-v1
+    aceite: portao-mecanico/schema
+    status: aceito
+  - id: 19
+    caminho: deploy/nats.conf
+    proposito: configuração inicial NATS JetStream em shadow
+    tipo: infraestrutura
+    consome: [contratos/event.schema]
+    produz: runtime/nats-config
+    aceite: portao-mecanico/infraestrutura
+    status: aceito
+  - id: 20
+    caminho: deploy/compose.yaml
+    proposito: PostgreSQL 18.4 e NATS 2.14.4 isolados do legado
+    tipo: infraestrutura
+    consome: [db/cloudiff-v2-schema-v1, runtime/nats-config]
+    produz: runtime/v2-foundation
+    aceite: portao-mecanico/infraestrutura
+    status: pendente
+  - id: 21
+    caminho: tests/test_node_identity.cpp
+    proposito: teste unitário de NodeIdentity
+    tipo: agente
+    consome: [cpp/node-identity]
+    produz: teste/node-identity
+    aceite: portao-mecanico/agente
+    status: aceito
+  - id: 22
+    caminho: tests/test_job_state.cpp
+    proposito: teste unitário e reexecução de transições de job
+    tipo: fila
+    consome: [cpp/job-state]
+    produz: teste/job-state
+    aceite: portao-mecanico/fila
+    status: aceito
+  - id: 23
+    caminho: tests/test_schema.sql
+    proposito: teste mecânico de constraints, zero projetos e idempotência no PostgreSQL
+    tipo: schema
+    consome: [db/cloudiff-v2-schema-v1]
+    produz: teste/schema
+    aceite: portao-mecanico/schema
+    status: aceito
+  - id: 24
+    caminho: CMakeLists.txt
+    proposito: build C++23 dos três binários e testes
+    tipo: build-cpp
+    consome: [bin/cloudiff-agent, bin/cloudiff-control, bin/cloudiff-worker, teste/node-identity, teste/job-state]
+    produz: build/v2
+    aceite: portao-mecanico/build-cpp
+    status: pendente
+  - id: 25
+    caminho: tools/verify_namespace.py
+    proposito: verifica árvore real contra namespace fechado do manifesto
+    tipo: documentacao-estrutural
+    consome: [contrato/manifesto-v2]
+    produz: portao/namespace
+    aceite: portao-mecanico/documentacao-estrutural
+    status: aceito
+  - id: 26
+    caminho: tools/derive_diagrams.py
+    proposito: deriva diagramas Mermaid exclusivamente do manifesto
+    tipo: documentacao-estrutural
+    consome: [contrato/manifesto-v2]
+    produz: portao/diagramas
+    aceite: portao-mecanico/documentacao-estrutural
+    status: pendente
+  - id: 27
+    caminho: include/cloudiff/nats_client.hpp
+    proposito: RAII do cliente NATS com publish e acesso nativo limitado
+    tipo: backend-integracao
+    consome: [contratos/event.schema]
+    produz: cpp/nats-client-hpp
+    aceite: portao-mecanico/backend-integracao
+    status: pendente
+  - id: 28
+    caminho: src/common/nats_client.cpp
+    proposito: implementa conexão NATS autenticada, flush e publish
+    tipo: backend-integracao
+    consome: [cpp/nats-client-hpp, contratos/event.schema]
+    produz: cpp/nats-client
+    aceite: portao-mecanico/backend-integracao
+    status: pendente
+  - id: 29
+    caminho: include/cloudiff/postgres_client.hpp
+    proposito: RAII libpq para persistência autoritativa de observed_state
+    tipo: persistencia
+    consome: [contratos/node.schema, contratos/reconciliation.schema]
+    produz: cpp/postgres-client-hpp
+    aceite: portao-mecanico/persistencia
+    status: aceito
+  - id: 30
+    caminho: src/common/postgres_client.cpp
+    proposito: implementa upsert transacional de node, observed_state, event e audit
+    tipo: persistencia
+    consome: [cpp/postgres-client-hpp, db/cloudiff-v2-schema-v1]
+    produz: cpp/postgres-client
+    aceite: portao-mecanico/persistencia
+    status: aceito
+  - id: 31
+    caminho: include/cloudiff/heartbeat.hpp
+    proposito: declara geração canônica do evento node observed
+    tipo: agente
+    consome: [contratos/node.schema, contratos/event.schema, cpp/node-identity]
+    produz: cpp/heartbeat-hpp
+    aceite: portao-mecanico/agente
+    status: aceito
+  - id: 32
+    caminho: src/common/heartbeat.cpp
+    proposito: gera evento heartbeat/inventário mínimo com event_id e trace_id
+    tipo: agente
+    consome: [cpp/heartbeat-hpp, cpp/node-identity]
+    produz: cpp/heartbeat
+    aceite: portao-mecanico/agente
+    status: aceito
+  - id: 33
+    caminho: tests/test_nats_client.cpp
+    proposito: teste de integração C++ de autenticação e publish NATS
+    tipo: backend-integracao
+    consome: [cpp/nats-client]
+    produz: teste/nats-client
+    aceite: portao-mecanico/backend-integracao
+    status: pendente
+  - id: 34
+    caminho: tests/test_postgres_client.cpp
+    proposito: teste de integração C++ de persistência observed_state
+    tipo: persistencia
+    consome: [cpp/postgres-client]
+    produz: teste/postgres-client
+    aceite: portao-mecanico/persistencia
+    status: aceito
+  - id: 35
+    caminho: tests/test_heartbeat.cpp
+    proposito: teste unitário do envelope heartbeat e node_id
+    tipo: agente
+    consome: [cpp/heartbeat]
+    produz: teste/heartbeat
+    aceite: portao-mecanico/agente
+    status: aceito
+  - id: 36
+    caminho: deploy/systemd/cloudiff-v2-agent.service
+    proposito: unidade systemd shadow sem root para agente persistente
+    tipo: infraestrutura
+    consome: [bin/cloudiff-agent]
+    produz: runtime/agent-service
+    aceite: portao-mecanico/infraestrutura
+    status: aceito
+  - id: 37
+    caminho: deploy/systemd/cloudiff-v2-control.service
+    proposito: unidade systemd shadow sem root para control subscriber
+    tipo: infraestrutura
+    consome: [bin/cloudiff-control]
+    produz: runtime/control-service
+    aceite: portao-mecanico/infraestrutura
+    status: pendente
+  - id: 38
+    caminho: tests/test_observed_state.sql
+    proposito: verifica persistência e atualização convergente de observed_state
+    tipo: schema
+    consome: [db/cloudiff-v2-schema-v1]
+    produz: teste/observed-state
+    aceite: portao-mecanico/schema
+    status: aceito
+  - id: 39
+    caminho: include/cloudiff/job_engine.hpp
+    proposito: API C++ do job engine durável com enqueue, claim, lease, retry e conclusão
+    tipo: fila
+    consome: [contratos/job.schema, cpp/job-state]
+    produz: cpp/job-engine-hpp
+    aceite: portao-mecanico/fila
+    status: aceito
+  - id: 40
+    caminho: src/common/job_engine.cpp
+    proposito: implementa job engine transacional via libpq
+    tipo: fila
+    consome: [cpp/job-engine-hpp, db/cloudiff-v2-job-engine-v2]
+    produz: cpp/job-engine
+    aceite: portao-mecanico/fila
+    status: aceito
+  - id: 41
+    caminho: sql/002_job_engine.sql
+    proposito: adiciona partition leases e claim concorrente seguro por partition_key
+    tipo: schema
+    consome: [db/cloudiff-v2-schema-v1, contratos/job.schema]
+    produz: db/cloudiff-v2-job-engine-v1
+    aceite: portao-mecanico/schema
+    status: aceito
+  - id: 42
+    caminho: tests/test_job_engine.cpp
+    proposito: teste C++ de idempotência, concorrência, recovery e dead-letter
+    tipo: fila
+    consome: [cpp/job-engine, db/cloudiff-v2-job-engine-v1]
+    produz: teste/job-engine
+    aceite: portao-mecanico/fila
+    status: aceito
+  - id: 43
+    caminho: tests/test_job_engine.sql
+    proposito: teste SQL de exclusão por partition_key e lease recovery
+    tipo: schema
+    consome: [db/cloudiff-v2-job-engine-v1]
+    produz: teste/job-engine-sql
+    aceite: portao-mecanico/schema
+    status: aceito
+  - id: 44
+    caminho: deploy/systemd/cloudiff-v2-worker.service
+    proposito: worker C++ shadow com concorrência limitada e sem root
+    tipo: infraestrutura
+    consome: [bin/cloudiff-worker, cpp/job-engine]
+    produz: runtime/worker-service
+    aceite: portao-mecanico/infraestrutura
+    status: aceito
+  - id: 45
+    caminho: contratos/nats-security.schema.json
+    proposito: contrato TLS/mTLS e hostname esperado do barramento NATS
+    tipo: pki
+    consome: [contratos/node.schema, contratos/event.schema]
+    produz: contratos/nats-security.schema
+    aceite: portao-mecanico/pki
+    status: aceito
+  - id: 46
+    caminho: deploy/sync_nats_server_cert.sh
+    proposito: consome o bundle NATS por HTTPS capability, valida hostname/expiry/par cert-key/SHA e instala atomicamente
+    tipo: infraestrutura
+    consome: [contratos/nats-security.schema, contratos/secure-distribution.schema]
+    produz: runtime/nats-cert-sync
+    aceite: portao-mecanico/infraestrutura
+    status: aceito
+  - id: 47
+    caminho: deploy/systemd/cloudiff-v2-cert-sync.service
+    proposito: oneshot consumidor HTTPS da distribuição segura para renovar o certificado NATS
+    tipo: infraestrutura
+    consome: [runtime/nats-cert-sync]
+    produz: runtime/nats-cert-sync-service
+    aceite: portao-mecanico/infraestrutura
+    status: aceito
+  - id: 48
+    caminho: deploy/systemd/cloudiff-v2-cert-sync.timer
+    proposito: aciona periodicamente o consumidor HTTPS do certificado NATS
+    tipo: infraestrutura
+    consome: [runtime/nats-cert-sync-service]
+    produz: runtime/nats-cert-sync-timer
+    aceite: portao-mecanico/infraestrutura
+    status: aceito
+  - id: 49
+    caminho: tests/test_nats_mtls.cpp
+    proposito: teste C++ de TLS, hostname, client certificate e publish/subscribe
+    tipo: pki
+    consome: [cpp/nats-client, contratos/nats-security.schema]
+    produz: teste/nats-mtls
+    aceite: portao-mecanico/pki
+    status: aceito
+  - id: 50
+    caminho: contratos/npm-publisher.schema.json
+    proposito: contrato HTTP, estado e efeitos compatíveis do publisher NPM edge
+    tipo: backend-integracao
+    consome: [contrato/lexico]
+    produz: contratos/npm-publisher.schema
+    aceite: portao-mecanico/backend-integracao
+    status: aceito
+  - id: 51
+    caminho: include/cloudiff/npm_publisher_provider.hpp
+    proposito: API C++ do NpmPublisherProvider e servidor HTTP shadow
+    tipo: runtime
+    consome: [contratos/npm-publisher.schema]
+    produz: cpp/npm-publisher-hpp
+    aceite: portao-mecanico/runtime
+    status: aceito
+  - id: 52
+    caminho: src/agent/npm_publisher_provider.cpp
+    proposito: implementa estado, renderização, autenticação e rotas do publisher NPM
+    tipo: runtime
+    consome: [cpp/npm-publisher-hpp, contratos/npm-publisher.schema]
+    produz: cpp/npm-publisher
+    aceite: portao-mecanico/runtime
+    status: aceito
+  - id: 53
+    caminho: tests/test_npm_publisher_provider.cpp
+    proposito: teste de contrato do publisher sem efeitos reais em NPM/Certbot
+    tipo: runtime
+    consome: [cpp/npm-publisher, contratos/npm-publisher.schema]
+    produz: teste/npm-publisher
+    aceite: portao-mecanico/runtime
+    status: aceito
+  - id: 54
+    caminho: deploy/systemd/cloudiff-v2-npm-publisher.service
+    proposito: serviço shadow do mesmo cloudiff-agent em perfil publisher, isolado do heartbeat
+    tipo: infraestrutura
+    consome: [bin/cloudiff-agent, cpp/npm-publisher]
+    produz: runtime/npm-publisher-shadow
+    aceite: portao-mecanico/infraestrutura
+    status: aceito
+  - id: 55
+    caminho: deploy/systemd/cloudiff-v2-npm-publisher-canary.service
+    proposito: canary manual privilegiado e reversível dos efeitos live do NpmPublisherProvider
+    tipo: infraestrutura
+    consome: [cpp/npm-publisher, contratos/npm-publisher.schema]
+    produz: runtime/npm-publisher-canary
+    aceite: portao-mecanico/infraestrutura
+    status: aceito
+  - id: 56
+    caminho: deploy/systemd/cloudiff-v2-npm-publisher-live.service
+    proposito: serviço C++ autoritativo do publisher NPM em 10.62.91.3:18160 com fallback Python preservado
+    tipo: infraestrutura
+    consome: [cpp/npm-publisher, contratos/npm-publisher.schema]
+    produz: runtime/npm-publisher-live
+    aceite: portao-mecanico/infraestrutura
+    status: aceito
+  - id: 57
+    caminho: contratos/artifact-executor.schema.json
+    proposito: contrato do ArtifactEngine e compatibilidade do executor de artefatos
+    tipo: backend-integracao
+    consome: [contrato/lexico, contrato/competencias]
+    produz: contratos/artifact-executor.schema
+    aceite: portao-mecanico/backend-integracao
+    status: aceito
+  - id: 58
+    caminho: include/cloudiff/artifact_engine.hpp
+    proposito: API C++ do ArtifactEngine static-v1 e servidor HTTP shadow
+    tipo: runtime
+    consome: [contratos/artifact-executor.schema]
+    produz: cpp/artifact-engine-hpp
+    aceite: portao-mecanico/runtime
+    status: aceito
+  - id: 59
+    caminho: src/agent/artifact_engine.cpp
+    proposito: implementa build estático, runtime proof, SBOM, scan e idempotência sem SQLite
+    tipo: runtime
+    consome: [cpp/artifact-engine-hpp, contratos/artifact-executor.schema]
+    produz: cpp/artifact-engine
+    aceite: portao-mecanico/runtime
+    status: aceito
+  - id: 60
+    caminho: tests/test_artifact_engine.cpp
+    proposito: contract test do ArtifactEngine com command runner injetável e idempotência
+    tipo: runtime
+    consome: [cpp/artifact-engine]
+    produz: teste/artifact-engine
+    aceite: portao-mecanico/runtime
+    status: aceito
+  - id: 61
+    caminho: deploy/systemd/cloudiff-v2-artifact-executor-shadow.service
+    proposito: serviço shadow local do ArtifactEngine em Forja sem autoridade externa
+    tipo: infraestrutura
+    consome: [bin/cloudiff-agent, cpp/artifact-engine]
+    produz: runtime/artifact-engine-shadow
+    aceite: portao-mecanico/infraestrutura
+    status: aceito
+  - id: 62
+    caminho: contratos/toolchain-catalog.schema.json
+    proposito: contrato formal do catálogo v2 de imagens e itens homologados da toolchain
+    tipo: schema
+    consome: [contrato/lexico]
+    produz: contratos/toolchain-catalog.schema
+    aceite: portao-mecanico/schema
+    status: aceito
+  - id: 63
+    caminho: config/toolchain-catalog-v2.json
+    proposito: catálogo v2 imutável com imagens pinadas por RepoDigest e image ID após scanner
+    tipo: infraestrutura
+    consome: [contratos/toolchain-catalog.schema]
+    produz: config/toolchain-catalog-v2
+    aceite: portao-mecanico/infraestrutura
+    status: aceito
+  - id: 64
+    caminho: contratos/build-broker.schema.json
+    proposito: contrato de compatibilidade da fila clássica BuildBroker sobre PostgreSQL
+    tipo: backend-integracao
+    consome: [contrato/lexico, contratos/job.schema, cpp/job-engine]
+    produz: contratos/build-broker.schema
+    aceite: portao-mecanico/backend-integracao
+    status: aceito
+  - id: 65
+    caminho: include/cloudiff/build_broker.hpp
+    proposito: API C++ do BuildBroker shadow e adaptador de compatibilidade HTTP
+    tipo: backend-integracao
+    consome: [contratos/build-broker.schema, cpp/job-engine-hpp]
+    produz: cpp/build-broker-hpp
+    aceite: portao-mecanico/backend-integracao
+    status: aceito
+  - id: 66
+    caminho: src/control/build_broker.cpp
+    proposito: implementa reserva, plan proxy, status, logs e artifact sobre JobEngine PostgreSQL
+    tipo: backend-integracao
+    consome: [cpp/build-broker-hpp, cpp/job-engine, contratos/build-broker.schema]
+    produz: cpp/build-broker
+    aceite: portao-mecanico/backend-integracao
+    status: aceito
+  - id: 67
+    caminho: tests/test_build_broker.cpp
+    proposito: contract test PostgreSQL de idempotência, status e compatibilidade do BuildBroker
+    tipo: fila
+    consome: [cpp/build-broker, db/cloudiff-v2-job-engine-v2]
+    produz: teste/build-broker
+    aceite: portao-mecanico/fila
+    status: aceito
+  - id: 68
+    caminho: deploy/systemd/cloudiff-v2-build-broker-shadow.service
+    proposito: serviço BuildBroker C++ shadow loopback sem autoridade externa
+    tipo: infraestrutura
+    consome: [bin/cloudiff-control, cpp/build-broker]
+    produz: runtime/build-broker-shadow
+    aceite: portao-mecanico/infraestrutura
+    status: aceito
+  - id: 69
+    caminho: sql/003_job_kind_filter.sql
+    proposito: claim PostgreSQL filtrado por kind preservando partition lease e SKIP LOCKED
+    tipo: schema
+    consome: [db/cloudiff-v2-job-engine-v1, contratos/job.schema]
+    produz: db/cloudiff-v2-job-engine-v2
+    aceite: portao-mecanico/schema
+    status: aceito
+  - id: 70
+    caminho: contratos/build-worker.schema.json
+    proposito: contrato do ClassicBuildWorker sobre JobEngine, WorkspaceBroker e ArtifactEngine
+    tipo: fila
+    consome: [contratos/job.schema, contratos/build-broker.schema, contratos/artifact-executor.schema]
+    produz: contratos/build-worker.schema
+    aceite: portao-mecanico/fila
+    status: aceito
+  - id: 71
+    caminho: include/cloudiff/classic_build_worker.hpp
+    proposito: API C++ do ClassicBuildWorker e clientes injetáveis de workspace/artefato
+    tipo: fila
+    consome: [contratos/build-worker.schema, cpp/job-engine-hpp]
+    produz: cpp/classic-build-worker-hpp
+    aceite: portao-mecanico/fila
+    status: aceito
+  - id: 72
+    caminho: src/worker/classic_build_worker.cpp
+    proposito: execução clássica com validação workspace, ArtifactEngine, HMAC e classificação retry/terminal
+    tipo: fila
+    consome: [cpp/classic-build-worker-hpp, contratos/build-worker.schema]
+    produz: cpp/classic-build-worker
+    aceite: portao-mecanico/fila
+    status: aceito
+  - id: 73
+    caminho: tests/test_classic_build_worker.cpp
+    proposito: contract test de sucesso, bloqueio terminal, HMAC, idempotência lógica e falha de transporte
+    tipo: fila
+    consome: [cpp/classic-build-worker, cpp/job-engine]
+    produz: teste/classic-build-worker
+    aceite: portao-mecanico/fila
+    status: aceito
+  - id: 74
+    caminho: deploy/systemd/cloudiff-v2-build-worker-canary.service
+    proposito: worker manual one-shot somente para cloudiff.v2.build.classic
+    tipo: infraestrutura
+    consome: [bin/cloudiff-worker, cpp/classic-build-worker]
+    produz: runtime/classic-build-worker-canary
+    aceite: portao-mecanico/infraestrutura
+    status: aceito
+  - id: 75
+    caminho: contratos/runtime-executor.schema.json
+    proposito: contrato dos seis perfis RuntimeExecutor e invariantes de isolamento/tráfego/rollback
+    tipo: backend-integracao
+    consome: [contrato/lexico, contratos/artifact-executor.schema, contratos/reconciliation.schema]
+    produz: contratos/runtime-executor.schema
+    aceite: portao-mecanico/backend-integracao
+    status: aceito
+  - id: 76
+    caminho: include/cloudiff/runtime_executor.hpp
+    proposito: API C++ do RuntimeExecutor planner e servidor HTTP shadow sem efeitos
+    tipo: runtime
+    consome: [contratos/runtime-executor.schema]
+    produz: cpp/runtime-executor-hpp
+    aceite: portao-mecanico/runtime
+    status: aceito
+  - id: 77
+    caminho: src/agent/runtime_executor.cpp
+    proposito: implementa políticas PREVIEW TEST HOMOLOGATION CANARY PRODUCTION SEALED e endpoint plan-only
+    tipo: runtime
+    consome: [cpp/runtime-executor-hpp, contratos/runtime-executor.schema]
+    produz: cpp/runtime-executor
+    aceite: portao-mecanico/runtime
+    status: aceito
+  - id: 78
+    caminho: tests/test_runtime_executor.cpp
+    proposito: contract test dos seis perfis, autenticação, validação e bloqueio de efeitos no shadow
+    tipo: runtime
+    consome: [cpp/runtime-executor]
+    produz: teste/runtime-executor
+    aceite: portao-mecanico/runtime
+    status: aceito
+  - id: 79
+    caminho: deploy/systemd/cloudiff-v2-runtime-executor-shadow.service
+    proposito: serviço RuntimeExecutor shadow loopback sem Docker nem efeitos
+    tipo: infraestrutura
+    consome: [bin/cloudiff-agent, cpp/runtime-executor]
+    produz: runtime/runtime-executor-shadow
+    aceite: portao-mecanico/infraestrutura
+    status: aceito
+  - id: 80
+    caminho: deploy/systemd/cloudiff-v2-runtime-executor-canary.service
+    proposito: canary manual privilegiado e auto-reversível do RuntimeExecutor para TEST e PREVIEW
+    tipo: infraestrutura
+    consome: [cpp/runtime-executor, contratos/runtime-executor.schema]
+    produz: runtime/runtime-executor-canary
+    aceite: portao-mecanico/infraestrutura
+    status: aceito
+  - id: 81
+    caminho: contratos/mcp-upload.schema.json
+    proposito: 'contrato específico do upload MCP: file hidratado ou fallback Portal sem acesso a filesystem'
+    tipo: backend-integracao
+    consome: [contratos/file-transfer.schema, contratos/auth-session.schema]
+    produz: contratos/mcp-upload.schema
+    aceite: portao-mecanico/backend-integracao
+    status: aceito
+  - id: 82
+    caminho: include/cloudiff/mcp_upload.hpp
+    proposito: API C++ do normalizador/planejador de upload MCP sem efeitos
+    tipo: backend-integracao
+    consome: [contratos/mcp-upload.schema]
+    produz: cpp/mcp-upload-hpp
+    aceite: portao-mecanico/backend-integracao
+    status: aceito
+  - id: 83
+    caminho: src/agent/mcp_upload.cpp
+    proposito: implementa classificação de fileParams e fallback determinístico para path-like sem ler /mnt/data
+    tipo: backend-integracao
+    consome: [cpp/mcp-upload-hpp, contratos/mcp-upload.schema]
+    produz: cpp/mcp-upload
+    aceite: portao-mecanico/backend-integracao
+    status: aceito
+  - id: 84
+    caminho: tests/test_mcp_upload.cpp
+    proposito: prova file object hidratado, fallback path-like, rejeições e idempotência de reexecução
+    tipo: backend-integracao
+    consome: [cpp/mcp-upload]
+    produz: teste/mcp-upload
+    aceite: portao-mecanico/backend-integracao
+    status: aceito
+  - id: 85
+    caminho: deploy/systemd/cloudiff-v2-mcp-upload-shadow.service
+    proposito: serviço shadow loopback plan-only do upload MCP sem rede externa nem filesystem do host
+    tipo: infraestrutura
+    consome: [bin/cloudiff-agent, cpp/mcp-upload]
+    produz: runtime/mcp-upload-shadow
+    aceite: portao-mecanico/infraestrutura
+    status: aceito
+  - id: 86
+    caminho: compat/mcp-gateway-upload-fallback.patch
+    proposito: patch mínimo do gateway legado que restaura import path-like -> upload.start com auditoria compatível
+    tipo: backend-integracao
+    consome: [contratos/mcp-upload.schema]
+    produz: compat/mcp-gateway-upload-fallback
+    aceite: portao-mecanico/backend-integracao
+    status: aceito
+  - id: 87
+    caminho: tests/test_mcp_gateway_upload_fallback.py
+    proposito: teste offline do patch contra o SHA do gateway atual e dos invariantes do fallback
+    tipo: backend-integracao
+    consome: [compat/mcp-gateway-upload-fallback]
+    produz: teste/mcp-gateway-upload-fallback
+    aceite: portao-mecanico/backend-integracao
+    status: aceito
+  - id: 88
+    caminho: deploy/apply_mcp_gateway_upload_fallback.sh
+    proposito: rollout reversível do patch em nova app-release com pointer rollback e smoke
+    tipo: infraestrutura
+    consome: [compat/mcp-gateway-upload-fallback, teste/mcp-gateway-upload-fallback]
+    produz: runtime/mcp-gateway-upload-fallback
+    aceite: portao-mecanico/infraestrutura
+    status: aceito
+  - id: 89
+    caminho: contratos/secure-distribution.schema.json
+    proposito: contrato genérico de distribuição HTTPS autenticada por capability, audience, expiração e SHA-256
+    tipo: backend-integracao
+    consome: [contrato/lexico, contratos/node.schema]
+    produz: contratos/secure-distribution.schema
+    aceite: portao-mecanico/backend-integracao
+    status: aceito
+  - id: 90
+    caminho: config/secure-distribution-v1.json
+    proposito: catálogo não secreto de objetos distribuíveis e audiences; inclui o bundle NATS
+    tipo: infraestrutura
+    consome: [contratos/secure-distribution.schema]
+    produz: config/secure-distribution
+    aceite: portao-mecanico/infraestrutura
+    status: aceito
+  - id: 91
+    caminho: include/cloudiff/secure_distribution.hpp
+    proposito: API C++ do SecureDistributionProvider e validação de capabilities
+    tipo: backend-integracao
+    consome: [contratos/secure-distribution.schema]
+    produz: cpp/secure-distribution-hpp
+    aceite: portao-mecanico/backend-integracao
+    status: aceito
+  - id: 92
+    caminho: src/agent/secure_distribution.cpp
+    proposito: 'provider HTTP interno: manifesta e entrega objetos allowlisted após capability válida'
+    tipo: backend-integracao
+    consome: [cpp/secure-distribution-hpp, config/secure-distribution]
+    produz: cpp/secure-distribution
+    aceite: portao-mecanico/backend-integracao
+    status: aceito
+  - id: 93
+    caminho: tests/test_secure_distribution.cpp
+    proposito: contract tests de audience, expiry, object scope, digest, traversal e reexecução
+    tipo: backend-integracao
+    consome: [cpp/secure-distribution]
+    produz: teste/secure-distribution
+    aceite: portao-mecanico/backend-integracao
+    status: aceito
+  - id: 94
+    caminho: deploy/systemd/cloudiff-v2-secure-distribution.service
+    proposito: serviço provider em Maurício no backend LAN 10.62.91.3:18240, autenticado por capability; exposição HTTPS somente via NPM
+    tipo: infraestrutura
+    consome: [bin/cloudiff-agent, cpp/secure-distribution]
+    produz: runtime/secure-distribution-provider
+    aceite: portao-mecanico/infraestrutura
+    status: aceito
+  - id: 95
+    caminho: deploy/install_secure_distribution_route.sh
+    proposito: instala/valida/rollback da rota HTTPS /__cloudif_distribution/ no include server_proxy do NPM
+    tipo: infraestrutura
+    consome: [runtime/secure-distribution-provider, contratos/secure-distribution.schema]
+    produz: runtime/secure-distribution-https-route
+    aceite: portao-mecanico/infraestrutura
+    status: aceito
+  - id: 96
+    caminho: contratos/build-canary-fixture.schema.json
+    proposito: contrato do BuildWorkerCanaryFixture sistêmico, isolado de projetos de usuário e válido no WorkspaceBroker
+    tipo: schema
+    consome: [contrato/lexico, contratos/build-worker.schema]
+    produz: contratos/build-canary-fixture.schema
+    aceite: portao-mecanico/schema
+    status: aceito
+  - id: 97
+    caminho: config/build-worker-canary-fixture.json
+    proposito: metadados não secretos do fixture sistêmico, repo privado, branch e mapping do Forja agent
+    tipo: infraestrutura
+    consome: [contratos/build-canary-fixture.schema]
+    produz: config/build-worker-canary-fixture
+    aceite: portao-mecanico/infraestrutura
+    status: aceito
+  - id: 98
+    caminho: fixtures/build-worker-canary/compose.yml
+    proposito: Compose mínimo do fixture com imagem imutável e sem capacidades/portas/host namespaces
+    tipo: infraestrutura
+    consome: [contratos/build-canary-fixture.schema]
+    produz: fixture/build-worker-canary-compose
+    aceite: portao-mecanico/infraestrutura
+    status: aceito
+  - id: 99
+    caminho: fixtures/build-worker-canary/site/index.html
+    proposito: conteúdo estático mínimo, sem dados de usuário nem URLs externas
+    tipo: infraestrutura
+    consome: [contratos/build-canary-fixture.schema]
+    produz: fixture/build-worker-canary-site
+    aceite: portao-mecanico/infraestrutura
+    status: aceito
+  - id: 100
+    caminho: compat/forja-agent-system-fixture.patch
+    proposito: 'patch mínimo: /project/archive consulta registry system-fixtures somente como fallback e não altera /projects'
+    tipo: backend-integracao
+    consome: [config/build-worker-canary-fixture, contratos/build-canary-fixture.schema]
+    produz: compat/forja-agent-system-fixture
+    aceite: portao-mecanico/backend-integracao
+    status: aceito
+  - id: 101
+    caminho: tests/test_forja_agent_system_fixture.py
+    proposito: teste offline do patch, isolamento de /projects, archive fallback e SHA da base do Forja agent
+    tipo: backend-integracao
+    consome: [compat/forja-agent-system-fixture]
+    produz: teste/forja-agent-system-fixture
+    aceite: portao-mecanico/backend-integracao
+    status: aceito
+  - id: 102
+    caminho: deploy/provision_build_worker_canary_fixture.sh
+    proposito: provisiona repo privado e registry sistêmico de forma idempotente, sem webhook/Komodo/projeto normal
+    tipo: infraestrutura
+    consome: [fixture/build-worker-canary-compose, fixture/build-worker-canary-site, compat/forja-agent-system-fixture]
+    produz: runtime/build-worker-canary-fixture
+    aceite: portao-mecanico/infraestrutura
+    status: aceito
+  - id: 103
+    caminho: deploy/run_build_worker_canary.sh
+    proposito: executa canary E2E via BuildBroker shadow e ClassicBuildWorker, limpa o job próprio e registra artifact_image_id para cleanup externo atribuído em Forja
+    tipo: deploy
+    consome: [runtime/build-worker-canary-fixture, runtime/classic-build-worker-canary, contratos/build-worker.schema]
+    produz: evidencia/build-worker-canary
+    aceite: portao-mecanico/deploy
+    status: aceito
+  - id: 104
+    caminho: contratos/mcp-download.schema.json
+    proposito: contrato do download MCP por capability HTTPS temporária, one-time e vinculada a artifact/projeto
+    tipo: schema
+    consome: [contratos/file-transfer.schema, contratos/auth-session.schema]
+    produz: contratos/mcp-download.schema
+    aceite: portao-mecanico/schema
+    status: aceito
+  - id: 105
+    caminho: compat/workspace-broker-download-capability.patch
+    proposito: patch do WorkspaceBroker para emitir/consumir download ticket hash-only e fazer streaming íntegro
+    tipo: backend-integracao
+    consome: [contratos/mcp-download.schema]
+    produz: compat/workspace-broker-download-capability
+    aceite: portao-mecanico/backend-integracao
+    status: aceito
+  - id: 106
+    caminho: tests/test_workspace_download_capability.py
+    proposito: teste offline de ticket one-time, expiry, projeto, SHA/tamanho e rota de streaming
+    tipo: backend-integracao
+    consome: [compat/workspace-broker-download-capability]
+    produz: teste/workspace-download-capability
+    aceite: portao-mecanico/backend-integracao
+    status: aceito
+  - id: 107
+    caminho: compat/mcp-gateway-download-resource.patch
+    proposito: 'patch do MCP gateway: workspace.artifact.download, FileTransfer download e resource_link HTTPS'
+    tipo: backend-integracao
+    consome: [contratos/mcp-download.schema, contratos/file-transfer.schema]
+    produz: compat/mcp-gateway-download-resource
+    aceite: portao-mecanico/backend-integracao
+    status: aceito
+  - id: 108
+    caminho: tests/test_mcp_download_resource.py
+    proposito: teste offline de schema/tool/scope/resource_link e ausência de token em logs estáticos
+    tipo: backend-integracao
+    consome: [compat/mcp-gateway-download-resource]
+    produz: teste/mcp-download-resource
+    aceite: portao-mecanico/backend-integracao
+    status: aceito
+  - id: 109
+    caminho: deploy/install_artifact_download_route.sh
+    proposito: instala/valida/rollback das rotas NPM+router com access_log off e sem nova porta
+    tipo: infraestrutura
+    consome: [compat/workspace-broker-download-capability, contratos/mcp-download.schema]
+    produz: runtime/mcp-download-route
+    aceite: portao-mecanico/infraestrutura
+    status: aceito
+  - id: 110
+    caminho: deploy/apply_mcp_download_capability.sh
+    proposito: rollout reversível dos patches WorkspaceBroker/MCP com smoke e pointers anteriores
+    tipo: deploy
+    consome: [compat/workspace-broker-download-capability, compat/mcp-gateway-download-resource, teste/workspace-download-capability, teste/mcp-download-resource]
+    produz: runtime/mcp-download-rollout
+    aceite: portao-mecanico/deploy
+    status: aceito
+  - id: 111
+    caminho: contratos/classic-artifact-ingress.schema.json
+    proposito: contrato do ingress v2 dedicado do ClassicBuildWorker para ArtifactEngine C++ sem alterar autoridade legada
+    tipo: schema
+    consome: [contrato/lexico, contratos/build-worker.schema, contratos/artifact-executor.schema]
+    produz: contratos/classic-artifact-ingress.schema
+    aceite: portao-mecanico/schema
+    status: aceito
+  - id: 112
+    caminho: config/classic-artifact-ingress.json
+    proposito: topologia não secreta do host interno, NPM, socket proxy, allowlists e arquivos de token
+    tipo: infraestrutura
+    consome: [contratos/classic-artifact-ingress.schema]
+    produz: config/classic-artifact-ingress
+    aceite: portao-mecanico/infraestrutura
+    status: aceito
+  - id: 113
+    caminho: deploy/systemd/cloudiff-v2-artifact-classic-ingress.socket
+    proposito: socket LAN 10.62.91.2:18227 com allowlist somente Maurício
+    tipo: infraestrutura
+    consome: [config/classic-artifact-ingress]
+    produz: runtime/classic-artifact-ingress-socket
+    aceite: portao-mecanico/infraestrutura
+    status: aceito
+  - id: 114
+    caminho: deploy/systemd/cloudiff-v2-artifact-classic-ingress.service
+    proposito: systemd-socket-proxyd para ArtifactEngine C++ loopback 127.0.0.1:18226
+    tipo: infraestrutura
+    consome: [runtime/classic-artifact-ingress-socket]
+    produz: runtime/classic-artifact-ingress-proxy
+    aceite: portao-mecanico/infraestrutura
+    status: aceito
+  - id: 115
+    caminho: tests/test_classic_artifact_ingress.py
+    proposito: teste offline de contrato, units, allowlists, NPM host dedicado e escopo do token clássico
+    tipo: backend-integracao
+    consome: [contratos/classic-artifact-ingress.schema, runtime/classic-artifact-ingress-proxy]
+    produz: teste/classic-artifact-ingress
+    aceite: portao-mecanico/backend-integracao
+    status: aceito
+  - id: 116
+    caminho: deploy/install_classic_artifact_ingress.sh
+    proposito: rollout/rollback do socket proxy, rota NPM, token files/env e host do ClassicBuildWorker
+    tipo: deploy
+    consome: [config/classic-artifact-ingress, teste/classic-artifact-ingress, bin/cloudiff-agent, bin/cloudiff-worker]
+    produz: runtime/classic-artifact-ingress
+    aceite: portao-mecanico/deploy
+    status: aceito
+  - id: 117
+    caminho: contratos/faro-validation.schema.json
+    proposito: contrato do modelo distribuído de validação/onboarding de Faro sem assumir role/capabilities
+    tipo: schema
+    consome: [contrato/lexico, contratos/node.schema, contratos/nats-security.schema, contratos/reconciliation.schema]
+    produz: contratos/faro-validation.schema
+    aceite: portao-mecanico/schema
+    status: aceito
+  - id: 118
+    caminho: config/faro-validation-01-discovery.json
+    proposito: 'Faro etapa 1: descobrir identidade física, SO, recursos, conectividade e decidir role/capabilities'
+    tipo: infraestrutura
+    consome: [contratos/faro-validation.schema, contratos/node.schema]
+    produz: validation/faro-discovery
+    aceite: portao-mecanico/infraestrutura
+    status: aceito
+  - id: 119
+    caminho: config/faro-validation-02-identity-network.json
+    proposito: 'Faro etapa 2: validar node_id independente, hostname, rotas e fronteiras de rede'
+    tipo: rede
+    consome: [validation/faro-discovery, contratos/node.schema]
+    produz: validation/faro-identity-network
+    aceite: portao-mecanico/rede
+    status: aceito
+  - id: 120
+    caminho: config/faro-validation-03-pki-nats.json
+    proposito: 'Faro etapa 3: validar PKI cliente, binding node_id, SecureDistribution e credencial NATS individual'
+    tipo: pki
+    consome: [validation/faro-identity-network, contratos/nats-security.schema]
+    produz: validation/faro-pki-nats
+    aceite: portao-mecanico/pki
+    status: aceito
+  - id: 121
+    caminho: config/faro-validation-04-agent-heartbeat.json
+    proposito: 'Faro etapa 4: validar agent não-root, heartbeat idempotente e observed state no control-plane'
+    tipo: agente
+    consome: [validation/faro-pki-nats, runtime/agent-service, teste/node-identity, teste/heartbeat]
+    produz: validation/faro-agent-heartbeat
+    aceite: portao-mecanico/agente
+    status: aceito
+  - id: 122
+    caminho: config/faro-validation-05-reconciliation-resilience.json
+    proposito: 'Faro etapa 5: validar desired/observed, retries, falhas parciais, reconexão e ausência de duplicidade'
+    tipo: reconciliacao
+    consome: [validation/faro-agent-heartbeat, contratos/reconciliation.schema]
+    produz: validation/faro-reconciliation-resilience
+    aceite: portao-mecanico/reconciliacao
+    status: aceito
+  - id: 123
+    caminho: config/faro-validation-06-acceptance.json
+    proposito: 'Faro etapa 6: matriz de aceite; nenhum gate pode ser aprovado sem evidência mecânica do host'
+    tipo: infraestrutura
+    consome: [validation/faro-reconciliation-resilience]
+    produz: validation/faro-acceptance
+    aceite: portao-mecanico/infraestrutura
+    status: aceito
+  - id: 124
+    caminho: tests/test_faro_validation_model.py
+    proposito: teste estrutural do modelo Faro contra contratos existentes, dependências e gates não verificados
+    tipo: backend-integracao
+    consome: [validation/faro-acceptance, contratos/faro-validation.schema]
+    produz: teste/faro-validation-model
+    aceite: portao-mecanico/backend-integracao
+    status: aceito
+  - id: 125
+    caminho: contratos/faro-node-preparation.schema.json
+    proposito: contrato da reserva física/lógica do Faro em 10.62.91.5 e preparação do control-plane antes do SSH
+    tipo: schema
+    consome: [contrato/lexico, contratos/faro-validation.schema, contratos/node.schema, contratos/nats-security.schema]
+    produz: contratos/faro-node-preparation.schema
+    aceite: portao-mecanico/schema
+    status: aceito
+  - id: 126
+    caminho: config/faro-node-reservation.json
+    proposito: 'reserva não secreta de Faro: IP 10.62.91.5, node_id dedicado, runtime em Hospedagem e bootstrap SSH quando autorizado'
+    tipo: infraestrutura
+    consome: [contratos/faro-node-preparation.schema]
+    produz: config/faro-node-reservation
+    aceite: portao-mecanico/infraestrutura
+    status: aceito
+  - id: 127
+    caminho: deploy/prepare_faro_control_plane.sh
+    proposito: prepara reserva Faro, usuário NATS individual e corrige acesso TLS do cloudiff-control com rollback
+    tipo: deploy
+    consome: [config/faro-node-reservation, runtime/nats-config, runtime/control-service]
+    produz: runtime/faro-control-plane-preparation
+    aceite: portao-mecanico/deploy
+    status: aceito
+  - id: 128
+    caminho: deploy/apply_nats_source_allowlist.sh
+    proposito: migra a exposição NATS externa para proxy TCP systemd allowlisted, mantendo o container somente em loopback
+    tipo: rede
+    consome: [config/faro-node-reservation, runtime/nats-config]
+    produz: runtime/nats-source-allowlist
+    aceite: portao-mecanico/rede
+    status: aceito
+  - id: 129
+    caminho: deploy/systemd/cloudiff-v2-nats-source-allowlist.service
+    proposito: systemd-socket-proxyd do listener NATS externo 10.62.92.7:14222 para 127.0.0.1:14222
+    tipo: infraestrutura
+    consome: [runtime/nats-source-allowlist]
+    produz: runtime/nats-source-allowlist-service
+    aceite: portao-mecanico/infraestrutura
+    status: aceito
+  - id: 130
+    caminho: deploy/build_faro_bootstrap_bundle.sh
+    proposito: 'gera bundle não secreto para bootstrap SSH futuro: agent, unit, CA pública e template sem credenciais'
+    tipo: deploy
+    consome: [config/faro-node-reservation, bin/cloudiff-agent, runtime/agent-service]
+    produz: runtime/faro-bootstrap-bundle
+    aceite: portao-mecanico/deploy
+    status: aceito
+  - id: 131
+    caminho: tests/test_faro_node_preparation.py
+    proposito: teste estrutural da reserva Faro, topologia física, allowlist, bootstrap e ausência de segredo em source
+    tipo: backend-integracao
+    consome: [contratos/faro-node-preparation.schema, config/faro-node-reservation, runtime/faro-control-plane-preparation, runtime/nats-source-allowlist, runtime/faro-bootstrap-bundle]
+    produz: teste/faro-node-preparation
+    aceite: portao-mecanico/backend-integracao
+    status: pendente
+  - id: 132
+    caminho: deploy/systemd/cloudiff-v2-nats-source-allowlist.socket
+    proposito: socket NATS externo 10.62.92.7:14222 com allowlist de origens incluindo Faro 10.62.91.5
+    tipo: rede
+    consome: [runtime/nats-source-allowlist, runtime/v2-foundation]
+    produz: runtime/nats-source-allowlist-socket
+    aceite: portao-mecanico/rede
+    status: aceito
+  - id: 133
+    caminho: deploy/apply_faro_nats_firewall.sh
+    proposito: aplica cadeia INPUT dedicada ao NATS externo 10.62.92.7:14222 com allowlist mínima incluindo Faro 10.62.91.5 e rollback isolado
+    tipo: rede
+    consome: [config/faro-node-reservation, runtime/nats-source-allowlist-socket]
+    produz: runtime/faro-nats-firewall
+    aceite: portao-mecanico/rede
+    status: aceito
+  - id: 134
+    caminho: deploy/systemd/cloudiff-v2-faro-nats-firewall.service
+    proposito: reaplica após boot a política INPUT dedicada do NATS Faro sem alterar CLOUDIF_INPUT legado
+    tipo: infraestrutura
+    consome: [runtime/faro-nats-firewall]
+    produz: runtime/faro-nats-firewall-service
+    aceite: portao-mecanico/infraestrutura
+    status: aceito
+  - id: 135
+    caminho: tests/test_faro_nats_firewall.py
+    proposito: 'teste estrutural da política de firewall Faro: destino/porta exatos, allowlist, drop final e rollback'
+    tipo: backend-integracao
+    consome: [runtime/faro-nats-firewall-service, config/faro-node-reservation]
+    produz: teste/faro-nats-firewall
+    aceite: portao-mecanico/backend-integracao
+    status: aceito
+  - id: 136
+    caminho: contratos/telemetry.schema.json
+    proposito: contrato hierárquico environment→node→container→service para telemetria do agent
+    tipo: schema
+    consome: [contrato/lexico, contratos/node.schema]
+    produz: contratos/telemetry.schema
+    aceite: portao-mecanico/schema
+    status: aceito
+  - id: 137
+    caminho: contratos/agent-update.schema.json
+    proposito: contrato de auto-update assinado do agent com release imutável, current atômico e rollback
+    tipo: schema
+    consome: [contrato/lexico, contratos/node.schema]
+    produz: contratos/agent-update.schema
+    aceite: portao-mecanico/schema
+    status: pendente
+  - id: 138
+    caminho: contratos/admin-observability.schema.json
+    proposito: contrato da API administrativa separada para topologia, saúde, atualização e recovery reboot toggle
+    tipo: backend-integracao
+    consome: [contratos/telemetry.schema, contratos/reconciliation.schema]
+    produz: contratos/admin-observability.schema
+    aceite: portao-mecanico/backend-integracao
+    status: pendente
+  - id: 139
+    caminho: contratos/legacy-retirement.schema.json
+    proposito: contrato de retirada destrutiva do legado somente após backup principal pre-v2 íntegro e dependências substituídas
+    tipo: schema
+    consome: [contrato/lexico]
+    produz: contratos/legacy-retirement.schema
+    aceite: portao-mecanico/schema
+    status: pendente
+  - id: 140
+    caminho: config/faro-node-profile.json
+    proposito: 'perfil desejado Faro: edge, portal-host, telemetry, Ubuntu 26.04 x86_64 e recurso solicitado 4vCPU/8GiB/200GiB'
+    tipo: infraestrutura
+    consome: [contratos/faro-node-preparation.schema, contratos/telemetry.schema]
+    produz: config/faro-node-profile
+    aceite: portao-mecanico/infraestrutura
+    status: aceito
+  - id: 141
+    caminho: include/cloudiff/telemetry.hpp
+    proposito: declara coleta host/container e payload hierárquico de telemetria
+    tipo: agente
+    consome: [contratos/telemetry.schema]
+    produz: cpp/telemetry-hpp
+    aceite: portao-mecanico/agente
+    status: aceito
+  - id: 142
+    caminho: src/common/telemetry.cpp
+    proposito: implementa métricas host e coleta opcional de containers via cAdvisor local
+    tipo: agente
+    consome: [cpp/telemetry-hpp]
+    produz: cpp/telemetry
+    aceite: portao-mecanico/agente
+    status: pendente
+  - id: 143
+    caminho: tests/test_telemetry.cpp
+    proposito: testa estrutura, limites e hierarquia da telemetria sem depender de Docker
+    tipo: agente
+    consome: [cpp/telemetry]
+    produz: teste/telemetry
+    aceite: portao-mecanico/agente
+    status: aceito
+  - id: 144
+    caminho: config/agent-update.json
+    proposito: configuração não secreta do repositório e diretório padrão de releases do agent
+    tipo: infraestrutura
+    consome: [contratos/agent-update.schema]
+    produz: config/agent-update
+    aceite: portao-mecanico/infraestrutura
+    status: pendente
+  - id: 145
+    caminho: config/nginx/agent-updates.conf
+    proposito: Nginx interno read-only para manifesto/binário assinados de auto-update
+    tipo: infraestrutura
+    consome: [config/agent-update]
+    produz: config/agent-update-nginx
+    aceite: portao-mecanico/infraestrutura
+    status: aceito
+  - id: 146
+    caminho: deploy/publish_agent_update.sh
+    proposito: publica release assinada do agent no repositório interno sem expor chave de assinatura
+    tipo: deploy
+    consome: [config/agent-update, bin/cloudiff-agent]
+    produz: runtime/agent-update-publish
+    aceite: portao-mecanico/deploy
+    status: pendente
+  - id: 147
+    caminho: deploy/agent_updater.sh
+    proposito: 'updater root mínimo: verifica assinatura/hash, instala release imutável, troca current e reinicia agent'
+    tipo: deploy
+    consome: [config/agent-update, contratos/agent-update.schema]
+    produz: runtime/agent-updater
+    aceite: portao-mecanico/deploy
+    status: pendente
+  - id: 148
+    caminho: deploy/systemd/cloudiff-v2-agent-updater.service
+    proposito: serviço oneshot do auto-update do agent
+    tipo: infraestrutura
+    consome: [runtime/agent-updater]
+    produz: runtime/agent-updater-service
+    aceite: portao-mecanico/infraestrutura
+    status: aceito
+  - id: 149
+    caminho: deploy/systemd/cloudiff-v2-agent-updater.timer
+    proposito: timer periódico obrigatório de auto-update
+    tipo: infraestrutura
+    consome: [runtime/agent-updater-service]
+    produz: runtime/agent-updater-timer
+    aceite: portao-mecanico/infraestrutura
+    status: aceito
+  - id: 150
+    caminho: tests/test_agent_update.py
+    proposito: teste offline de assinatura, hash, release/current e rollback do auto-update
+    tipo: backend-integracao
+    consome: [runtime/agent-updater, runtime/agent-update-publish]
+    produz: teste/agent-update
+    aceite: portao-mecanico/backend-integracao
+    status: pendente
+  - id: 151
+    caminho: config/admin-observability.json
+    proposito: 'configuração da API /admin: árvore do ambiente, métricas e recovery reboot toggle por node'
+    tipo: infraestrutura
+    consome: [contratos/admin-observability.schema]
+    produz: config/admin-observability
+    aceite: portao-mecanico/infraestrutura
+    status: pendente
+  - id: 152
+    caminho: include/cloudiff/admin_observability.hpp
+    proposito: declara servidor HTTP C++ de observabilidade administrativa sobre PostgreSQL
+    tipo: backend-integracao
+    consome: [contratos/admin-observability.schema]
+    produz: cpp/admin-observability-hpp
+    aceite: portao-mecanico/backend-integracao
+    status: pendente
+  - id: 153
+    caminho: src/agent/admin_observability.cpp
+    proposito: implementa API read/admin de nodes, containers e recovery toggle sem banco paralelo
+    tipo: backend-integracao
+    consome: [cpp/admin-observability-hpp, contratos/admin-observability.schema]
+    produz: cpp/admin-observability
+    aceite: portao-mecanico/backend-integracao
+    status: pendente
+  - id: 154
+    caminho: tests/test_admin_observability.cpp
+    proposito: testa autorização, resposta hierárquica e toggle de recovery
+    tipo: backend-integracao
+    consome: [cpp/admin-observability]
+    produz: teste/admin-observability
+    aceite: portao-mecanico/backend-integracao
+    status: pendente
+  - id: 155
+    caminho: deploy/systemd/cloudiff-v2-admin-observability.service
+    proposito: serviço loopback da API administrativa v2
+    tipo: infraestrutura
+    consome: [bin/cloudiff-agent, cpp/admin-observability]
+    produz: runtime/admin-observability
+    aceite: portao-mecanico/infraestrutura
+    status: pendente
+  - id: 156
+    caminho: compat/portal-admin-observability.patch
+    proposito: patch mínimo do Portal atual adicionando /admin separado sem alterar UI de usuário
+    tipo: ui-compat
+    consome: [contratos/admin-observability.schema, config/admin-observability]
+    produz: compat/portal-admin-observability
+    aceite: portao-mecanico/ui-compat
+    status: pendente
+  - id: 157
+    caminho: tests/test_portal_admin_observability.py
+    proposito: teste offline do patch /admin, isolamento de autorização e preservação das rotas de usuário
+    tipo: ui-compat
+    consome: [compat/portal-admin-observability]
+    produz: teste/portal-admin-observability
+    aceite: portao-mecanico/ui-compat
+    status: pendente
+  - id: 158
+    caminho: deploy/apply_portal_admin_observability.sh
+    proposito: rollout/rollback do /admin no Portal atual com smoke e pointer reversível
+    tipo: deploy
+    consome: [compat/portal-admin-observability, teste/portal-admin-observability]
+    produz: runtime/portal-admin-observability
+    aceite: portao-mecanico/deploy
+    status: pendente
+  - id: 159
+    caminho: deploy/install_standard_monitoring.sh
+    proposito: instala padrão de monitoramento host e cAdvisor local idempotente nos nodes Docker
+    tipo: deploy
+    consome: [cpp/telemetry, runtime/agent-service]
+    produz: runtime/standard-monitoring
+    aceite: portao-mecanico/deploy
+    status: pendente
+  - id: 160
+    caminho: config/legacy-retirement.json
+    proposito: 'inventário e fases de retirada: preserva pre-v2 principal, bloqueia serviços ainda requeridos e elimina resíduos seguros'
+    tipo: infraestrutura
+    consome: [contratos/legacy-retirement.schema]
+    produz: config/legacy-retirement
+    aceite: portao-mecanico/infraestrutura
+    status: pendente
+  - id: 161
+    caminho: tests/test_legacy_backup_integrity.py
+    proposito: verifica snapshots pre-v2, SQLite antigos e dumps PostgreSQL antes de qualquer exclusão
+    tipo: backend-integracao
+    consome: [config/legacy-retirement]
+    produz: teste/legacy-backup-integrity
+    aceite: portao-mecanico/backend-integracao
+    status: pendente
+  - id: 162
+    caminho: deploy/retire_legacy_artifacts.sh
+    proposito: remove somente itens legacy allowlisted após gate de backup; serviços ativos ficam bloqueados até substituição
+    tipo: deploy
+    consome: [config/legacy-retirement, teste/legacy-backup-integrity]
+    produz: runtime/legacy-retirement
+    aceite: portao-mecanico/deploy
+    status: pendente
+  - id: 163
+    caminho: tests/test_legacy_retirement.py
+    proposito: testa allowlist, preservação do backup principal e recusa de exclusão de runtime ainda dependente
+    tipo: backend-integracao
+    consome: [runtime/legacy-retirement]
+    produz: teste/legacy-retirement
+    aceite: portao-mecanico/backend-integracao
+    status: pendente
+  - id: 164
+    caminho: deploy/systemd/cloudiff-v2-agent-update-repository.service
+    proposito: serviço de repositório interno assinado para releases do agent
+    tipo: infraestrutura
+    consome: [config/agent-update-nginx, runtime/v2-foundation]
+    produz: runtime/agent-update-repository
+    aceite: portao-mecanico/infraestrutura
+    status: aceito
+  - id: 165
+    caminho: tests/test_faro_profile.py
+    proposito: valida role edge, portal-host, recursos solicitados, reinstall recovery e ausência inicial de build/runtime
+    tipo: infraestrutura
+    consome: [config/faro-node-profile]
+    produz: teste/faro-profile
+    aceite: portao-mecanico/infraestrutura
+    status: pendente
+  - id: 169
+    caminho: deploy/install_agent_update_route.sh
+    proposito: 'instala rota HTTPS AgentUpdate: NPM Maurício -> router Hospedagem -> repository loopback, com rollback'
+    tipo: deploy
+    consome: [config/agent-update, runtime/agent-update-repository]
+    produz: runtime/agent-update-https-route
+    aceite: portao-mecanico/deploy
+    status: pendente
+  - id: 170
+    caminho: tests/test_agent_update_route.py
+    proposito: testa isolamento da rota AgentUpdate, allowlist, método, strip de prefixo e backends exatos
+    tipo: backend-integracao
+    consome: [runtime/agent-update-https-route]
+    produz: teste/agent-update-route
+    aceite: portao-mecanico/backend-integracao
+    status: pendente
+  - id: 171
+    caminho: contratos/webdev-workspace.schema.json
+    proposito: contrato do WebDevWorkspace isolado em Forja para automação Selenium/noVNC e simulações contra infraestrutura física
+    tipo: schema
+    consome: [contrato/lexico]
+    produz: contratos/webdev-workspace.schema
+    aceite: portao-mecanico/schema
+    status: pendente
+  - id: 172
+    caminho: config/webdev-workspace.json
+    proposito: 'configuração não secreta do WebDevWorkspace: Forja, portas fixas internas, DNS/AD físico e limites de recurso'
+    tipo: infraestrutura
+    consome: [contratos/webdev-workspace.schema]
+    produz: config/webdev-workspace
+    aceite: portao-mecanico/infraestrutura
+    status: pendente
+  - id: 173
+    caminho: deploy/compose.webdev.yaml
+    proposito: stack Docker isolado do WebDevWorkspace sem socket Docker, sem agentes e sem mounts de produção
+    tipo: infraestrutura
+    consome: [config/webdev-workspace]
+    produz: runtime/webdev-compose
+    aceite: portao-mecanico/infraestrutura
+    status: pendente
+  - id: 174
+    caminho: deploy/install_webdev_workspace.sh
+    proposito: instala, valida, atualiza e remove o WebDevWorkspace em Forja com link web fixo LAN/VPN
+    tipo: deploy
+    consome: [runtime/webdev-compose]
+    produz: runtime/webdev-workspace
+    aceite: portao-mecanico/deploy
+    status: pendente
+  - id: 175
+    caminho: tests/test_webdev_workspace.py
+    proposito: verifica isolamento, ausência de OpenCode/agentes, portas, DNS físico, recursos e imutabilidade da interface de produção
+    tipo: backend-integracao
+    consome: [runtime/webdev-workspace]
+    produz: teste/webdev-workspace
+    aceite: portao-mecanico/backend-integracao
+    status: pendente
+  - id: 176
+    caminho: deploy/sync_agent_skills.sh
+    proposito: sincroniza competências aprovadas entre hosts Linux e troca atomicamente o symlink current sem instalar agente
+    tipo: deploy
+    consome: [contrato/competencias]
+    produz: runtime/agent-skills-sync
+    aceite: portao-mecanico/deploy
+    status: pendente
+  - id: 177
+    caminho: tests/test_agent_skills_sync.py
+    proposito: testa allowlist de hosts, release imutável, symlink atômico e proibição de instalação de agentes no sincronizador
+    tipo: backend-integracao
+    consome: [runtime/agent-skills-sync]
+    produz: teste/agent-skills-sync
+    aceite: portao-mecanico/backend-integracao
+    status: pendente
+  - id: 178
+    caminho: deploy/systemd/cloudiff-webdev.service
+    proposito: garante boot persistente do WebDev em Forja com ordem firewall antes do container e teardown reverso
+    tipo: infraestrutura
+    consome: [runtime/webdev-workspace]
+    produz: runtime/webdev-service
+    aceite: portao-mecanico/infraestrutura
+    status: pendente
+  - id: 179
+    caminho: skills/cloudiff/SKILL.md
+    proposito: 'skill raiz do projeto CloudIFF: reconciliação incremental, migração C/C++ e interface homologada imutável'
+    tipo: skill-projeto
+    consome: [contrato/lexico, contrato/competencias]
+    produz: skill/cloudiff
+    aceite: portao-mecanico/skill-projeto
+    status: pendente
+  - id: 180
+    caminho: docs/reconciliation/v1-1320-audit.json
+    proposito: auditoria integral dos 1320 arquivos rastreados do CloudIFF V1 com hash, tipo, sintaxe, duplicidade e integridade
+    tipo: documentacao-estrutural
+    consome: [skill/cloudiff]
+    produz: evidencia/v1-1320-audit
+    aceite: portao-mecanico/documentacao-estrutural
+    status: pendente
+  - id: 181
+    caminho: docs/reconciliation/v1-v2-delta.json
+    proposito: inventário incremental V1↔V2 com preservação de aprendizado, grupos correspondentes e autorização de normalização
+    tipo: documentacao-estrutural
+    consome: [evidencia/v1-1320-audit, skill/cloudiff]
+    produz: evidencia/v1-v2-delta
+    aceite: portao-mecanico/documentacao-estrutural
+    status: pendente
+  - id: 182
+    caminho: tests/test_cloudiff_project_skill.py
+    proposito: verifica identidade, método, referências ontológicas, interface congelada e gates da skill raiz CloudIFF
+    tipo: backend-integracao
+    consome: [skill/cloudiff, evidencia/v1-v2-delta]
+    produz: teste/cloudiff-project-skill
+    aceite: portao-mecanico/backend-integracao
+    status: pendente
+  - id: 183
+    caminho: docs/reconciliation/normalization-plan.json
+    proposito: fila incremental de normalização e migração Python para C/C++ preservando compatibilidade e interface
+    tipo: documentacao-estrutural
+    consome: [evidencia/v1-v2-delta]
+    produz: evidencia/normalization-plan
+    aceite: portao-mecanico/documentacao-estrutural
+    status: pendente
+
+trabalho_compartilhado:
+  unidade: reconcile-cloudiff-project-skill-v38
+  ator: WORK-SSH
+  inicio: '2026-08-24'
+  zona_exclusao:
+    - manifesto.yaml
+    - lexico.yaml
+    - competencias.yaml
+    - skills/cloudiff/SKILL.md
+    - docs/reconciliation/
+    - tests/test_cloudiff_project_skill.py
+    - tests/test_faro_node_preparation.py
+    - tests/test_agent_update.py
+  estado: ativo

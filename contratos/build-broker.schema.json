@@ -1,0 +1,365 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CloudIFF BuildBroker Classic Queue Compatibility v15",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "legacy",
+    "shadow",
+    "authentication",
+    "routes",
+    "request",
+    "planValidation",
+    "queue",
+    "statusMapping",
+    "responses",
+    "logs",
+    "attestation",
+    "execution"
+  ],
+  "properties": {
+    "legacy": {
+      "type": "object",
+      "required": [
+        "service",
+        "bind",
+        "port",
+        "queue",
+        "authorityPreserved"
+      ],
+      "properties": {
+        "service": {
+          "const": "cloudif-build-broker.service"
+        },
+        "bind": {
+          "const": "127.0.0.1"
+        },
+        "port": {
+          "const": 18213
+        },
+        "queue": {
+          "const": "sqlite-wal"
+        },
+        "authorityPreserved": {
+          "const": true
+        }
+      }
+    },
+    "shadow": {
+      "type": "object",
+      "required": [
+        "service",
+        "profile",
+        "bind",
+        "port",
+        "queue",
+        "externalIngress"
+      ],
+      "properties": {
+        "service": {
+          "const": "cloudiff-v2-build-broker-shadow.service"
+        },
+        "profile": {
+          "const": "cloudiff-control --build-broker"
+        },
+        "bind": {
+          "const": "127.0.0.1"
+        },
+        "port": {
+          "const": 18221
+        },
+        "queue": {
+          "const": "postgresql-skip-locked"
+        },
+        "externalIngress": {
+          "const": false
+        }
+      }
+    },
+    "authentication": {
+      "type": "object",
+      "required": [
+        "scheme",
+        "healthRequiresAuth",
+        "comparison",
+        "tokenSource"
+      ],
+      "properties": {
+        "scheme": {
+          "const": "Bearer"
+        },
+        "healthRequiresAuth": {
+          "const": false
+        },
+        "comparison": {
+          "const": "constant-time"
+        },
+        "tokenSource": {
+          "const": "root-owned environment file"
+        }
+      }
+    },
+    "routes": {
+      "type": "object",
+      "required": [
+        "implemented",
+        "deferred"
+      ],
+      "properties": {
+        "implemented": {
+          "const": [
+            "GET /health",
+            "POST /v1/plan",
+            "POST /v1/execute",
+            "POST /v1/builds",
+            "GET /v1/projects/{slug}/builds/{build_id}",
+            "GET /v1/projects/{slug}/builds/{build_id}/logs",
+            "GET /v1/projects/{slug}/builds/{build_id}/artifact"
+          ]
+        },
+        "deferred": {
+          "const": [
+            "POST /internal/drain",
+            "toolchain BuildBroker routes",
+            "multiservice BuildBroker routes",
+            "toolchain activation routes"
+          ]
+        }
+      }
+    },
+    "request": {
+      "type": "object",
+      "required": [
+        "requiredFields",
+        "projectSlugPattern",
+        "refPattern",
+        "framework",
+        "planDigestPattern",
+        "maxBodyBytes"
+      ],
+      "properties": {
+        "requiredFields": {
+          "const": [
+            "project_slug",
+            "ref",
+            "framework",
+            "build_plan_digest"
+          ]
+        },
+        "projectSlugPattern": {
+          "const": "^[a-z0-9][a-z0-9-]{0,62}$"
+        },
+        "refPattern": {
+          "const": "^[A-Za-z0-9._/-]{1,128}$"
+        },
+        "framework": {
+          "const": "static"
+        },
+        "planDigestPattern": {
+          "const": "^[0-9a-f]{64}$"
+        },
+        "maxBodyBytes": {
+          "const": 1048576
+        }
+      }
+    },
+    "planValidation": {
+      "type": "object",
+      "required": [
+        "dependency",
+        "route",
+        "timeoutSeconds",
+        "sideEffectFree",
+        "digestComparison"
+      ],
+      "properties": {
+        "dependency": {
+          "const": "cloudif-runtime-policy.service"
+        },
+        "route": {
+          "const": "POST http://127.0.0.1:18212/v1/plan"
+        },
+        "timeoutSeconds": {
+          "const": 15
+        },
+        "sideEffectFree": {
+          "const": true
+        },
+        "digestComparison": {
+          "const": "constant-time"
+        }
+      }
+    },
+    "queue": {
+      "type": "object",
+      "required": [
+        "sourceOfTruth",
+        "kind",
+        "partitionKey",
+        "idempotencyMaterial",
+        "externalBuildId",
+        "maxAttempts",
+        "claimFilter",
+        "legacyRowsImported",
+        "projectsImported"
+      ],
+      "properties": {
+        "sourceOfTruth": {
+          "const": "PostgreSQL cloudiff_v2.jobs"
+        },
+        "kind": {
+          "const": "cloudiff.v2.build.classic"
+        },
+        "partitionKey": {
+          "const": "project_slug"
+        },
+        "idempotencyMaterial": {
+          "const": "project_slug|ref|framework|build_plan_digest|preview|build.request"
+        },
+        "externalBuildId": {
+          "const": "job_id UUID"
+        },
+        "maxAttempts": {
+          "const": 3
+        },
+        "claimFilter": {
+          "const": "generic shadow worker excludes cloudiff.v2.build.classic until v16"
+        },
+        "legacyRowsImported": {
+          "const": false
+        },
+        "projectsImported": {
+          "const": false
+        }
+      }
+    },
+    "statusMapping": {
+      "const": {
+        "ready": "queued",
+        "waiting_retry": "queued",
+        "leased": "running",
+        "succeeded": "succeeded",
+        "failed": "failed",
+        "dead_letter": "dead_letter",
+        "cancelled": "cancelled"
+      }
+    },
+    "responses": {
+      "type": "object",
+      "required": [
+        "reserve",
+        "build",
+        "artifact"
+      ],
+      "properties": {
+        "reserve": {
+          "const": {
+            "http": 202,
+            "phase": "reserve",
+            "idempotent": true,
+            "secrets_exposed": false
+          }
+        },
+        "build": {
+          "const": "legacy field names preserved; lease/idempotency internals omitted"
+        },
+        "artifact": {
+          "const": "result JSON or null; downloadable=false; attestation_verified derived from result"
+        }
+      }
+    },
+    "logs": {
+      "type": "object",
+      "required": [
+        "storage",
+        "source",
+        "sanitized",
+        "secretValues"
+      ],
+      "properties": {
+        "storage": {
+          "const": "no dedicated build log table"
+        },
+        "source": {
+          "const": "job state + job_attempts + last_error"
+        },
+        "sanitized": {
+          "const": true
+        },
+        "secretValues": {
+          "const": false
+        }
+      }
+    },
+    "attestation": {
+      "type": "object",
+      "required": [
+        "algorithm",
+        "signatureFormat",
+        "reasonForCompatibility",
+        "rotation"
+      ],
+      "properties": {
+        "algorithm": {
+          "const": "HMAC-SHA256"
+        },
+        "signatureFormat": {
+          "const": "64 lowercase hex"
+        },
+        "reasonForCompatibility": {
+          "const": "preview-broker and deployment-broker require this shape until their migration"
+        },
+        "rotation": {
+          "const": "v2 key may be rotated but algorithm/shape remains compatible in v15"
+        }
+      }
+    },
+    "execution": {
+      "type": "object",
+      "required": [
+        "enabledInV15",
+        "nextUnit",
+        "artifactAuthority",
+        "enabledInV16",
+        "worker",
+        "workspaceValidation",
+        "artifactProfile",
+        "terminalFailure",
+        "transportRetry",
+        "externalAuthorityPreserved"
+      ],
+      "properties": {
+        "enabledInV15": {
+          "const": false
+        },
+        "nextUnit": {
+          "const": "v16 BuildWorker classic execution"
+        },
+        "artifactAuthority": {
+          "const": "legacy Python remains authoritative"
+        },
+        "enabledInV16": {
+          "const": true
+        },
+        "worker": {
+          "const": "ClassicBuildWorker"
+        },
+        "workspaceValidation": {
+          "const": "WorkspaceBroker /v1/test-static"
+        },
+        "artifactProfile": {
+          "const": "classic-static-v2"
+        },
+        "terminalFailure": {
+          "const": "failed without retry for workspace/artifact policy"
+        },
+        "transportRetry": {
+          "const": "waiting_retry then dead_letter"
+        },
+        "externalAuthorityPreserved": {
+          "const": true
+        }
+      }
+    }
+  }
+}

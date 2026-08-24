@@ -1,0 +1,31 @@
+[Unit]
+Description=CloudIFF v2 NpmPublisherProvider live canary (manual)
+After=network-online.target docker.service
+Wants=network-online.target
+StartLimitIntervalSec=60
+StartLimitBurst=3
+
+[Service]
+Type=simple
+User=root
+Group=root
+EnvironmentFile=/etc/cloudiff-v2/publisher-canary.env
+ExecStart=/opt/cloudiff-v2/publisher-canary-current/bin/cloudiff-agent --publisher
+Restart=no
+UMask=0077
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+RestrictRealtime=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+CapabilityBoundingSet=
+AmbientCapabilities=
+ReadWritePaths=/var/lib/cloudif-npm-publisher /srv/cloudif/proxy/npm/data/nginx/custom
+ReadOnlyPaths=/srv/cloudif/proxy/npm/letsencrypt/live /var/run/docker.sock

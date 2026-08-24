@@ -1,0 +1,239 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CloudIFF BuildWorkerCanaryFixture v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "identity",
+    "forgejo",
+    "registry",
+    "files",
+    "workspaceValidation",
+    "canary",
+    "cleanup"
+  ],
+  "properties": {
+    "version": {
+      "const": 1
+    },
+    "identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "canonicalName",
+        "slug",
+        "systemOwned",
+        "containsUserData"
+      ],
+      "properties": {
+        "canonicalName": {
+          "const": "BuildWorkerCanaryFixture"
+        },
+        "slug": {
+          "const": "system-build-canary"
+        },
+        "systemOwned": {
+          "const": true
+        },
+        "containsUserData": {
+          "const": false
+        }
+      }
+    },
+    "forgejo": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ownerSource",
+        "repository",
+        "branch",
+        "private",
+        "createEndpoint",
+        "webhooks",
+        "komodo",
+        "persistent"
+      ],
+      "properties": {
+        "ownerSource": {
+          "const": "FORGEJO_OWNER"
+        },
+        "repository": {
+          "const": "cloudif-system-build-canary"
+        },
+        "branch": {
+          "const": "main"
+        },
+        "private": {
+          "const": true
+        },
+        "createEndpoint": {
+          "const": "POST /api/v1/admin/users/{owner}/repos"
+        },
+        "webhooks": {
+          "const": false
+        },
+        "komodo": {
+          "const": false
+        },
+        "persistent": {
+          "const": true
+        }
+      }
+    },
+    "registry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "directory",
+        "file",
+        "visibleInProjects",
+        "visibleInProjectStatus",
+        "archiveFallbackOnly",
+        "projectStateFileAllowed"
+      ],
+      "properties": {
+        "directory": {
+          "const": "/var/lib/cloudif/forja-agent/system-fixtures"
+        },
+        "file": {
+          "const": "system-build-canary.json"
+        },
+        "visibleInProjects": {
+          "const": false
+        },
+        "visibleInProjectStatus": {
+          "const": false
+        },
+        "archiveFallbackOnly": {
+          "const": true
+        },
+        "projectStateFileAllowed": {
+          "const": false
+        }
+      }
+    },
+    "files": {
+      "const": [
+        {
+          "path": "compose.yml",
+          "source": "fixtures/build-worker-canary/compose.yml",
+          "sha256": "3c1c1ee8b0fbbb44d676a85c40345d40cfe3fd677c9dabe1075ab80e8da9e210"
+        },
+        {
+          "path": "site/index.html",
+          "source": "fixtures/build-worker-canary/site/index.html",
+          "sha256": "20858acb9d3801dd53d762a5a872cf493bf5eeb8a15526ca32c6b1eabf29f854"
+        }
+      ]
+    },
+    "workspaceValidation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "route",
+        "expected",
+        "composeImage",
+        "buildForbidden",
+        "publishedPorts",
+        "privileged",
+        "hostNamespaces",
+        "devices",
+        "capAdd",
+        "externalUrls"
+      ],
+      "properties": {
+        "route": {
+          "const": "POST /v1/test-static"
+        },
+        "expected": {
+          "const": "HTTP 200; body.ok=true; body.result.valid=true"
+        },
+        "composeImage": {
+          "const": "cgr.dev/chainguard/nginx@sha256:e4ff957080737c90a9ecfeaa40e3d19ea9d687e9cacda2f2a031c75ffcdd72b7"
+        },
+        "buildForbidden": {
+          "const": true
+        },
+        "publishedPorts": {
+          "const": []
+        },
+        "privileged": {
+          "const": false
+        },
+        "hostNamespaces": {
+          "const": false
+        },
+        "devices": {
+          "const": false
+        },
+        "capAdd": {
+          "const": false
+        },
+        "externalUrls": {
+          "const": false
+        }
+      }
+    },
+    "canary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "buildBroker",
+        "worker",
+        "kind",
+        "queuePrecondition",
+        "planDigestSource",
+        "success"
+      ],
+      "properties": {
+        "buildBroker": {
+          "const": "http://127.0.0.1:18221/v1/builds"
+        },
+        "worker": {
+          "const": "cloudiff-v2-build-worker-canary.service"
+        },
+        "kind": {
+          "const": "cloudiff.v2.build.classic"
+        },
+        "queuePrecondition": {
+          "const": "zero other ready|waiting_retry|leased cloudiff.v2.build.classic jobs"
+        },
+        "planDigestSource": {
+          "const": "POST http://127.0.0.1:18212/v1/plan framework=static"
+        },
+        "success": {
+          "const": "job succeeded; artifact production_ready=true; attestation_verified=true"
+        }
+      }
+    },
+    "cleanup": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "jobRow",
+        "attemptRows",
+        "partitionLease",
+        "artifactImage",
+        "fixtureRepository"
+      ],
+      "properties": {
+        "jobRow": {
+          "const": "remove only returned build_id after evidence"
+        },
+        "attemptRows": {
+          "const": "remove only rows for returned build_id"
+        },
+        "partitionLease": {
+          "const": "remove only lease for returned build_id"
+        },
+        "artifactImage": {
+          "const": "external Forja gate removes only returned artifact_image_id when absent from baseline"
+        },
+        "fixtureRepository": {
+          "const": "persistent; never deleted by canary cleanup"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,52 @@
+{
+  "version": 1,
+  "repository": {
+    "url": "https://cloudiff.duckdns.org/__cloudiff_agent_updates",
+    "bind": "127.0.0.1",
+    "port": 18250,
+    "image": "nginx@sha256:5f979dcfed4ce6461873f087e8c980d6e29b084b9e8776d9704a7e989b5f4898",
+    "allowed_sources": [
+      "10.62.91.2",
+      "10.62.91.3",
+      "10.62.91.5",
+      "10.62.92.7"
+    ],
+    "https_route": "NPM Mauricio :443 -> 10.62.92.7:8099 router -> 127.0.0.1:18250 repository"
+  },
+  "layout": {
+    "root": "/opt/cloudiff-agent",
+    "releases": "/opt/cloudiff-agent/releases",
+    "current": "/opt/cloudiff-agent/current",
+    "state": "/var/lib/cloudiff-agent/update",
+    "public_key": "/etc/cloudiff-agent/update-signing.pub.pem"
+  },
+  "verification": {
+    "algorithm": "Ed25519",
+    "manifest": "manifest.json",
+    "signature": "manifest.sig",
+    "artifact_hash": "sha256",
+    "artifact_size": true
+  },
+  "activation": {
+    "atomic_current": true,
+    "restart_service": "cloudiff-v2-agent.service",
+    "rollback_on_failure": true
+  },
+  "polling": {
+    "interval_seconds": 300,
+    "random_delay_seconds": 60
+  },
+  "recovery": {
+    "reboot_default": true,
+    "admin_can_disable_reboot": true,
+    "reboot_only_after_failed_service_recovery": true
+  },
+  "policy": {
+    "url_template": "https://cloudiff.duckdns.org/cloudiff/portal/api/node-recovery-policy?node_id={node_id}",
+    "node_id_file": "/etc/cloudiff-v2/node-id",
+    "cache_file": "/var/lib/cloudiff-agent/update/recovery-policy.json",
+    "default_reboot_enabled": true,
+    "failure_behavior": "keep-last-cached-policy; if no cache use default true",
+    "reboot_cooldown_seconds": 900
+  }
+}

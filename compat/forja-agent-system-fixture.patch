@@ -1,0 +1,51 @@
+--- a/cloudif-forja-agent.py
++++ b/cloudif-forja-agent.py
+@@ -21,9 +21,11 @@
+
+ ENVFILE = Path("/etc/cloudif/forja-agent.env")
+ STATE_DIR = Path("/var/lib/cloudif/forja-agent/projects")
++SYSTEM_FIXTURE_DIR = Path("/var/lib/cloudif/forja-agent/system-fixtures")
+ EVENT_DIR = Path("/var/lib/cloudif/forja-agent/events")
+ ARTIFACT_STAGE_DIR = Path("/var/lib/cloudif/forja-agent/artifacts")
+ STATE_DIR.mkdir(parents=True, exist_ok=True)
++SYSTEM_FIXTURE_DIR.mkdir(parents=True, exist_ok=True)
+ EVENT_DIR.mkdir(parents=True, exist_ok=True)
+ ARTIFACT_STAGE_DIR.mkdir(parents=True, exist_ok=True)
+
+@@ -82,6 +84,27 @@
+     except Exception:
+         return None
+
++def system_fixture_path(slug):
++    value = str(slug or '').strip()
++    if not re.fullmatch(r'^[a-z0-9][a-z0-9-]{0,62}$', value):
++        return None
++    return SYSTEM_FIXTURE_DIR / f"{value}.json"
++
++def load_system_fixture(slug):
++    p = system_fixture_path(slug)
++    if p is None or not p.exists():
++        return None
++    try:
++        data = json.loads(p.read_text(errors="ignore"))
++    except Exception:
++        return None
++    if not isinstance(data, dict) or data.get('system_fixture') is not True or data.get('project_slug') != str(slug):
++        return None
++    forgejo = data.get('forgejo') if isinstance(data.get('forgejo'), dict) else {}
++    if not str(forgejo.get('owner') or '').strip() or not str(forgejo.get('repo') or '').strip():
++        return None
++    return data
++
+ def save_project(project):
+     slug = project["project_slug"]
+     old = load_project(slug) or {}
+@@ -2254,7 +2277,7 @@
+     ref = str((qs.get('ref') or ['main'])[0]).strip()
+     if not _CLOUDIF_ARCHIVE_SLUG_RE.fullmatch(slug) or not _CLOUDIF_ARCHIVE_REF_RE.fullmatch(ref) or '..' in ref or ref.startswith('/') or ref.endswith('/'):
+         return cloudif_send_json(handler, 400, {'ok': False, 'error': 'invalid_request'})
+-    project = load_project(slug)
++    project = load_project(slug) or load_system_fixture(slug)
+     if not project:
+         return cloudif_send_json(handler, 404, {'ok': False, 'error': 'project_not_found'})
+     owner = str(project.get('forgejo', {}).get('owner') or project.get('forgejo_owner') or CFG.get('FORGEJO_OWNER') or 'cloudif').strip()

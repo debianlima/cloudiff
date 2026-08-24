@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CloudIFF Reconciliation",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "resource_id",
+    "resource_type",
+    "desired_state",
+    "observed_state",
+    "desired_revision",
+    "observed_revision",
+    "decision"
+  ],
+  "properties": {
+    "resource_id": {
+      "type": "string"
+    },
+    "resource_type": {
+      "type": "string"
+    },
+    "desired_state": {
+      "type": "object"
+    },
+    "observed_state": {
+      "type": "object"
+    },
+    "desired_revision": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "observed_revision": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "decision": {
+      "enum": [
+        "noop",
+        "reconcile",
+        "blocked",
+        "degraded",
+        "failed"
+      ]
+    },
+    "reason": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "trace_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  }
+}

@@ -1,0 +1,191 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CloudIFF FaroValidation v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "model",
+    "stage",
+    "verification_status",
+    "goal",
+    "depends_on",
+    "requirements",
+    "tasks",
+    "distributed_system_checks",
+    "decisions"
+  ],
+  "properties": {
+    "version": {
+      "const": 1
+    },
+    "model": {
+      "const": "FaroValidation"
+    },
+    "stage": {
+      "enum": [
+        "discovery",
+        "identity-network",
+        "pki-nats",
+        "agent-heartbeat",
+        "reconciliation-resilience",
+        "acceptance"
+      ]
+    },
+    "verification_status": {
+      "const": "not_verified"
+    },
+    "goal": {
+      "type": "string",
+      "minLength": 8
+    },
+    "depends_on": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "uniqueItems": true
+    },
+    "requirements": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "statement",
+          "source",
+          "mandatory",
+          "evidence"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^FARO-R[0-9]{2}$"
+          },
+          "statement": {
+            "type": "string",
+            "minLength": 8
+          },
+          "source": {
+            "type": "string",
+            "minLength": 3
+          },
+          "mandatory": {
+            "type": "boolean"
+          },
+          "evidence": {
+            "type": "string",
+            "minLength": 4
+          }
+        }
+      }
+    },
+    "tasks": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "action",
+          "expected_result",
+          "gate"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^FARO-T[0-9]{2}$"
+          },
+          "action": {
+            "type": "string",
+            "minLength": 8
+          },
+          "expected_result": {
+            "type": "string",
+            "minLength": 8
+          },
+          "gate": {
+            "type": "string",
+            "minLength": 4
+          }
+        }
+      }
+    },
+    "distributed_system_checks": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "identity_independence",
+        "trust_boundary",
+        "idempotency",
+        "partial_failure",
+        "observability",
+        "reconciliation"
+      ],
+      "properties": {
+        "identity_independence": {
+          "type": "string",
+          "minLength": 4
+        },
+        "trust_boundary": {
+          "type": "string",
+          "minLength": 4
+        },
+        "idempotency": {
+          "type": "string",
+          "minLength": 4
+        },
+        "partial_failure": {
+          "type": "string",
+          "minLength": 4
+        },
+        "observability": {
+          "type": "string",
+          "minLength": 4
+        },
+        "reconciliation": {
+          "type": "string",
+          "minLength": 4
+        }
+      }
+    },
+    "decisions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "status",
+          "allowed_values",
+          "rule"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "unresolved",
+              "derived",
+              "fixed"
+            ]
+          },
+          "allowed_values": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "rule": {
+            "type": "string",
+            "minLength": 4
+          }
+        }
+      }
+    }
+  }
+}

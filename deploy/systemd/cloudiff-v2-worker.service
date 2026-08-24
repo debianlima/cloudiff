@@ -1,0 +1,29 @@
+[Unit]
+Description=CloudIFF v2 Durable Worker (shadow)
+After=network-online.target cloudiff-v2-control.service
+Wants=network-online.target
+StartLimitIntervalSec=60
+StartLimitBurst=5
+[Service]
+Type=simple
+User=cloudiff-v2-worker
+Group=cloudiff-v2-worker
+EnvironmentFile=/etc/cloudiff-v2/worker.env
+Environment=CLOUDIFF_WORKER_ALLOWED_KINDS=cloudiff.v2.noop,cloudiff.v2.fail_once
+ExecStart=/opt/cloudiff-v2/current/bin/cloudiff-worker
+Restart=on-failure
+RestartSec=2s
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+RestrictRealtime=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+[Install]
+WantedBy=multi-user.target

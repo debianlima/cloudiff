@@ -1,0 +1,221 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CloudIFF ClassicBuildWorker v16",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "job",
+    "workspace",
+    "artifact",
+    "attestation",
+    "completion",
+    "lease",
+    "canary"
+  ],
+  "properties": {
+    "job": {
+      "type": "object",
+      "required": [
+        "kind",
+        "partitionKey",
+        "maxAttempts",
+        "payloadFields"
+      ],
+      "properties": {
+        "kind": {
+          "const": "cloudiff.v2.build.classic"
+        },
+        "partitionKey": {
+          "const": "project_slug"
+        },
+        "maxAttempts": {
+          "const": 3
+        },
+        "payloadFields": {
+          "const": [
+            "project_slug",
+            "ref",
+            "framework",
+            "build_plan_digest"
+          ]
+        }
+      }
+    },
+    "workspace": {
+      "type": "object",
+      "required": [
+        "endpoint",
+        "authentication",
+        "request",
+        "success",
+        "digestBinding"
+      ],
+      "properties": {
+        "endpoint": {
+          "const": "http://127.0.0.1:18206/v1/test-static"
+        },
+        "authentication": {
+          "const": "Bearer"
+        },
+        "request": {
+          "const": [
+            "project_slug",
+            "ref",
+            "trace_id"
+          ]
+        },
+        "success": {
+          "const": "HTTP 200; body.ok=true; body.result.valid=true"
+        },
+        "digestBinding": {
+          "const": "body.result.archive_sha256"
+        }
+      }
+    },
+    "artifact": {
+      "type": "object",
+      "required": [
+        "ingress",
+        "hostHeader",
+        "route",
+        "profile",
+        "authentication",
+        "request",
+        "digestEquality",
+        "legacyStaticMappingRequired"
+      ],
+      "properties": {
+        "ingress": {
+          "const": "http://10.62.91.3:80"
+        },
+        "hostHeader": {
+          "const": "cloudif-artifact-executor-v2.internal"
+        },
+        "route": {
+          "const": "POST /v1/build"
+        },
+        "profile": {
+          "const": "classic-static-v2"
+        },
+        "request": {
+          "const": [
+            "profile",
+            "project_slug",
+            "ref",
+            "build_id",
+            "archive_sha256"
+          ]
+        },
+        "digestEquality": {
+          "const": "artifact archive must equal workspace body.result.archive_sha256"
+        },
+        "legacyStaticMappingRequired": {
+          "const": false
+        },
+        "authentication": {
+          "const": "Bearer dedicated classic token; scope POST /v1/build profile=classic-static-v2 only"
+        }
+      }
+    },
+    "attestation": {
+      "type": "object",
+      "required": [
+        "algorithm",
+        "signatureFormat",
+        "canonicalJson",
+        "payloadFields",
+        "verifyBeforeComplete"
+      ],
+      "properties": {
+        "algorithm": {
+          "const": "HMAC-SHA256"
+        },
+        "signatureFormat": {
+          "const": "64 lowercase hex"
+        },
+        "canonicalJson": {
+          "const": "sorted keys, compact, ASCII escaped"
+        },
+        "payloadFields": {
+          "const": [
+            "version",
+            "project_slug",
+            "build_id",
+            "artifact_image_id",
+            "sbom_sha256",
+            "scanner_sha256",
+            "immutable_source_digest",
+            "policy"
+          ]
+        },
+        "verifyBeforeComplete": {
+          "const": true
+        }
+      }
+    },
+    "completion": {
+      "type": "object",
+      "required": [
+        "success",
+        "policyFailure",
+        "transportFailure"
+      ],
+      "properties": {
+        "success": {
+          "const": "JobEngine.complete -> succeeded"
+        },
+        "policyFailure": {
+          "const": "JobEngine.fail_terminal -> failed without retry"
+        },
+        "transportFailure": {
+          "const": "JobEngine.fail -> waiting_retry then dead_letter at max_attempts"
+        }
+      }
+    },
+    "lease": {
+      "type": "object",
+      "required": [
+        "seconds",
+        "renewal"
+      ],
+      "properties": {
+        "seconds": {
+          "minimum": 300,
+          "maximum": 3600
+        },
+        "renewal": {
+          "const": "while classic build runs; interval <= lease/3"
+        }
+      }
+    },
+    "canary": {
+      "type": "object",
+      "required": [
+        "service",
+        "mode",
+        "allowedKinds",
+        "externalAuthority",
+        "cleanup"
+      ],
+      "properties": {
+        "service": {
+          "const": "cloudiff-v2-build-worker-canary.service"
+        },
+        "mode": {
+          "const": "manual oneshot"
+        },
+        "allowedKinds": {
+          "const": [
+            "cloudiff.v2.build.classic"
+          ]
+        },
+        "externalAuthority": {
+          "const": "Python BuildBroker remains authoritative in v16"
+        },
+        "cleanup": {
+          "const": "canary job row removed after evidence"
+        }
+      }
+    }
+  }
+}

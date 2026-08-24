@@ -1,0 +1,7 @@
+{
+  "version":1,
+  "backend":{"bind":"127.0.0.1","port":18260,"postgres_source":"cloudiff_v2 nodes.metadata + desired_state","service_token_env":"CLOUDIFF_ADMIN_OBSERVABILITY_TOKEN"},
+  "authorization":{"admin_group":"CloudIF-Tenants-Admin","portal_auth_source":"existing Authentik headers/session","csrf":"existing portal production CSRF"},
+  "routes":{"admin_page":"GET /admin","environment_api":"GET /cloudiff/portal/api/admin-observability","recovery_action":"POST /cloudiff/portal/action/node-recovery","node_policy":"GET /cloudiff/portal/api/node-recovery-policy?node_id=<uuid>"},
+  "recovery":{"resource_type":"node_recovery","default_enabled":true,"admin_can_disable":true,"pull_model":"updater pulls non-secret policy; agents do not subscribe NATS","public_policy_fields":["node_id","automatic_reboot_enabled","revision"]}
+}

@@ -1,0 +1,171 @@
+--- a/cloudif_workspace_artifact.py
++++ b/cloudif_workspace_artifact.py
+@@ -24,7 +24,9 @@
+ DEFAULT_TTL = 3600
+ MAX_TTL = 86400
+ MAX_UPLOAD_TICKET_TTL = 7200
++MAX_DOWNLOAD_TICKET_TTL = 3600
+ UPLOAD_TICKET_RE = re.compile(r'^upt_([a-f0-9]{24})_([a-f0-9]{48})$')
++DOWNLOAD_TICKET_RE = re.compile(r'^dlt_([a-f0-9]{24})_([a-f0-9]{48})$')
+ _LOCKS: dict[str, threading.RLock] = {}
+ _LOCKS_GUARD = threading.Lock()
+
+@@ -231,6 +233,65 @@
+         return result
+
+
++def _download_ticket_artifact_id(ticket: str) -> str:
++    match=DOWNLOAD_TICKET_RE.fullmatch(str(ticket or '').strip())
++    if not match:
++        raise ArtifactError('invalid_download_ticket','A capability de download é inválida.','download_ticket')
++    return 'art_'+match.group(1)
++
++
++def _download_ticket_digest(ticket: str) -> str:
++    return hashlib.sha256(str(ticket).encode('utf-8')).hexdigest()
++
++
++def _validate_download_ticket_unlocked(artifact_root: str, ticket: str, *, allow_used: bool = False) -> tuple[dict[str, Any], str]:
++    artifact_id=_download_ticket_artifact_id(ticket)
++    data=_load(artifact_root,artifact_id)
++    record=data.get('download_ticket') if isinstance(data.get('download_ticket'),dict) else {}
++    stored=str(record.get('sha256') or '')
++    if not stored or not secrets.compare_digest(stored,_download_ticket_digest(ticket)):
++        raise ArtifactError('download_ticket_not_found','A capability de download não existe ou foi substituída.','download_ticket')
++    now=int(time.time())
++    if int(record.get('expires_at') or 0)<=now:
++        raise ArtifactError('download_ticket_expired','A capability de download expirou. Gere uma nova.','download_ticket')
++    if record.get('used_at') and not allow_used:
++        raise ArtifactError('download_ticket_used','A capability de download já foi utilizada. Gere uma nova.','download_ticket')
++    if data.get('status')!='sealed':
++        raise ArtifactError('artifact_not_sealed','O artifact precisa estar selado para download.','artifact_id')
++    return data,artifact_id
++
++
++def create_download_ticket(artifact_root: str, project_slug: str, artifact_id: str, requested_by: str = '', ttl_seconds: int = 900) -> dict[str, Any]:
++    try: ttl_seconds=int(ttl_seconds or 900)
++    except Exception as exc: raise ArtifactError('invalid_download_ticket_ttl','ttl_seconds deve ser inteiro.','ttl_seconds') from exc
++    if not (60<=ttl_seconds<=MAX_DOWNLOAD_TICKET_TTL):
++        raise ArtifactError('invalid_download_ticket_ttl','A capability de download pode durar entre 60 e 3600 segundos.','ttl_seconds')
++    with _artifact_lock(artifact_id):
++        data=_load(artifact_root,artifact_id)
++        if data.get('project_slug')!=project_slug:
++            raise ArtifactError('artifact_project_mismatch','O artefato pertence a outro projeto.','artifact_id')
++        resolved=_resolve_artifact_unlocked(artifact_root,project_slug,artifact_id)
++        now=int(time.time());expires=min(now+ttl_seconds,int(data.get('expires_at') or now+ttl_seconds))
++        if expires<=now:raise ArtifactError('artifact_expired','O artefato expirou.','artifact_id')
++        ticket='dlt_'+artifact_id[4:]+'_'+secrets.token_hex(24)
++        data['download_ticket']={'sha256':_download_ticket_digest(ticket),'created_at':now,'expires_at':expires,'requested_by':str(requested_by or '')[:160],'used_at':None}
++        data['updated_at']=now;_write_json_atomic(_meta_path(artifact_root,artifact_id),data)
++        result={k:v for k,v in resolved.items() if k!='payload_path'}
++        result.update({'download_ticket':ticket,'download_ticket_expires_at':expires,'download_ticket_ttl_seconds':expires-now,'download_ticket_one_time':True})
++        return result
++
++
++def consume_download_ticket(artifact_root: str, ticket: str) -> dict[str, Any]:
++    artifact_id=_download_ticket_artifact_id(ticket)
++    with _artifact_lock(artifact_id):
++        data,artifact_id=_validate_download_ticket_unlocked(artifact_root,ticket,allow_used=False)
++        project_slug=str(data.get('project_slug') or '')
++        resolved=_resolve_artifact_unlocked(artifact_root,project_slug,artifact_id)
++        record=dict(data.get('download_ticket') or {});record['used_at']=int(time.time());data['download_ticket']=record;data['updated_at']=record['used_at'];_write_json_atomic(_meta_path(artifact_root,artifact_id),data)
++        resolved.update({'download_ticket_expires_at':int(record.get('expires_at') or 0),'download_ticket_used_at':record['used_at']})
++        return resolved
++
++
+ def _validate_active_upload_window_unlocked(artifact_root: str, artifact_id: str, *, allow_used: bool = False) -> dict[str, Any]:
+     if not ARTIFACT_RE.fullmatch(str(artifact_id or '')):
+         raise ArtifactError('invalid_artifact_id','artifact_id inválido.','artifact_id')
+--- a/cloudif-workspace-broker.py
++++ b/cloudif-workspace-broker.py
+@@ -18,7 +18,7 @@
+ import yaml
+ from cloudif_multitech_detector import detect_components
+ from cloudif_change_set import (ChangeSetError, apply_changes, change_set_digest, clean_expired, load_sealed, normalize_changes, seal_change_set)
+-from cloudif_workspace_artifact import (ArtifactError, append_chunk, append_chunk_batch, complete_artifact, create_upload_ticket, direct_upload_artifact, direct_upload_artifact_by_id, inspect_upload_artifact, inspect_upload_ticket, read_artifact, resolve_artifact, start_artifact)
++from cloudif_workspace_artifact import (ArtifactError, append_chunk, append_chunk_batch, complete_artifact, consume_download_ticket, create_download_ticket, create_upload_ticket, direct_upload_artifact, direct_upload_artifact_by_id, inspect_upload_artifact, inspect_upload_ticket, read_artifact, resolve_artifact, start_artifact)
+ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+ from urllib.parse import urlparse
+
+@@ -1073,6 +1073,9 @@
+         self.send_header('X-CloudIF-Artifact-Sha256',str(metadata.get('sha256') or ''))
+         self.send_header('X-CloudIF-Artifact-Size',str(size))
+         self.send_header('X-CloudIF-Artifact-Expires',str(metadata.get('expires_at') or 0))
++        filename=str(metadata.get('filename') or 'artifact.bin').replace('\r','').replace('\n','')[:240]
++        self.send_header('Content-Disposition',"attachment; filename*=UTF-8''"+urllib.parse.quote(filename,safe=''))
++        self.send_header('Referrer-Policy','no-referrer')
+         self.send_header('Content-Length',str(size))
+         self.end_headers()
+         sent=0;digest=hashlib.sha256()
+@@ -1091,7 +1094,23 @@
+         return str((self.client_address or ('',0))[0]) in {'127.0.0.1','::1'}
+
+     def do_GET(self) -> None:
+-        if urlparse(self.path).path == '/health':
++        path=urlparse(self.path).path
++        if path == '/v1/artifact/download/capability/read':
++            if not self.local_client():self.sendj(403,{'ok':False,'error':{'code':'loopback_required'}});return
++            if urlparse(self.path).query:self.sendj(400,{'ok':False,'error':{'code':'query_not_allowed'}});return
++            ticket=str(self.headers.get('X-CloudIF-Download-Ticket') or '').strip()
++            if not ticket:self.sendj(404,{'ok':False,'error':{'code':'download_ticket_not_found'}});return
++            try:
++                resolved=consume_download_ticket(ARTIFACT_ROOT,ticket);payload_path=str(resolved.pop('payload_path'))
++                artifact_id=str(resolved.get('artifact_id') or '');project_slug=str(resolved.get('project_slug') or '')
++                self.send_artifact_file(200,payload_path,resolved)
++                print(json.dumps({'event':'workspace.artifact.download-capability','project_slug':project_slug,'artifact_id':artifact_id,'bytes':int(resolved.get('size') or 0),'result':'success'},separators=(',',':')),flush=True);return
++            except ArtifactError as exc:
++                code=410 if exc.code in {'download_ticket_used','download_ticket_expired'} else (404 if exc.code in {'invalid_download_ticket','download_ticket_not_found','artifact_not_found'} else 422)
++                self.sendj(code,{'ok':False,'error':exc.as_dict()});return
++            except Exception as exc:
++                self.sendj(503,{'ok':False,'error':{'code':'artifact_download_failed','detail':type(exc).__name__}});return
++        if path == '/health':
+             try:
+                 docker('version', '--format', '{{.Server.Version}}', timeout=4)
+                 self.sendj(200, {'ok': True, 'service': 'cloudif-workspace-broker', 'profiles': ['probe', 'prepare', 'detect-multiservice', 'normalize-plan', 'artifact-upload', 'change-set-validate', 'change-set-resolve', 'validate', 'test-static', 'preview-static', 'edit-preview']})
+@@ -1133,7 +1152,7 @@
+                 self.sendj(422,{'ok':False,'error':exc.as_dict()});return
+             except Exception as exc:
+                 self.sendj(400,{'ok':False,'error':{'code':'invalid_direct_upload','message':'O upload direto não pôde ser validado.','detail':type(exc).__name__}});return
+-        if path not in {'/v1/artifact/start','/v1/artifact/chunk','/v1/artifact/batch','/v1/artifact/ticket','/v1/artifact/complete','/v1/artifact/read','/v1/probe', '/v1/prepare', '/v1/detect-multiservice', '/v1/normalize-plan', '/v1/change-set/validate', '/v1/change-set/resolve', '/v1/validate', '/v1/test-static', '/v1/preview-static', '/v1/edit-preview'}:
++        if path not in {'/v1/artifact/start','/v1/artifact/chunk','/v1/artifact/batch','/v1/artifact/ticket','/v1/artifact/download/ticket','/v1/artifact/complete','/v1/artifact/read','/v1/probe', '/v1/prepare', '/v1/detect-multiservice', '/v1/normalize-plan', '/v1/change-set/validate', '/v1/change-set/resolve', '/v1/validate', '/v1/test-static', '/v1/preview-static', '/v1/edit-preview'}:
+             self.sendj(404, {'ok': False, 'error': 'not_found'})
+             return
+         if not self.auth():
+@@ -1154,6 +1173,8 @@
+                 required={'project_slug','trace_id','artifact_id','chunks'}; allowed=required
+             elif path == '/v1/artifact/ticket':
+                 required={'project_slug','trace_id','artifact_id'}; allowed=required|{'requested_by','ttl_seconds'}
++            elif path == '/v1/artifact/download/ticket':
++                required={'project_slug','trace_id','artifact_id'}; allowed=required|{'requested_by','ttl_seconds'}
+             elif path == '/v1/artifact/complete':
+                 required={'project_slug','trace_id','artifact_id'}; allowed=required
+             elif path == '/v1/artifact/read':
+@@ -1195,16 +1216,17 @@
+             chunk_sha256 = str(data.get('chunk_sha256') or '')
+             chunk_batch = data.get('chunks')
+             requested_by = str(data.get('requested_by') or '')
+-            if path not in {'/v1/change-set/resolve','/v1/artifact/start','/v1/artifact/chunk','/v1/artifact/batch','/v1/artifact/ticket','/v1/artifact/complete','/v1/artifact/read'}:
++            if path not in {'/v1/change-set/resolve','/v1/artifact/start','/v1/artifact/chunk','/v1/artifact/batch','/v1/artifact/ticket','/v1/artifact/download/ticket','/v1/artifact/complete','/v1/artifact/read'}:
+                 assert REF.fullmatch(ref) and '..' not in ref and not ref.startswith('/') and not ref.endswith('/')
+             if path in {'/v1/artifact/start','/v1/normalize-plan','/v1/change-set/validate'}: assert 300 <= ttl_seconds <= 86400
+             if path == '/v1/artifact/ticket': assert 60 <= ttl_seconds <= 7200
++            if path == '/v1/artifact/download/ticket': assert 60 <= ttl_seconds <= 3600
+         except Exception:
+             self.sendj(400, {'ok': False, 'error': {'code': 'invalid_request', 'message': 'A solicitação contém campos ausentes ou incompatíveis.'}})
+             return
+         started = time.monotonic()
+         event_map = {
+-            '/v1/artifact/start':'workspace.artifact.start','/v1/artifact/chunk':'workspace.artifact.chunk','/v1/artifact/batch':'workspace.artifact.batch','/v1/artifact/ticket':'workspace.artifact.ticket','/v1/artifact/complete':'workspace.artifact.complete','/v1/artifact/read':'workspace.artifact.read',
++            '/v1/artifact/start':'workspace.artifact.start','/v1/artifact/chunk':'workspace.artifact.chunk','/v1/artifact/batch':'workspace.artifact.batch','/v1/artifact/ticket':'workspace.artifact.ticket','/v1/artifact/download/ticket':'workspace.artifact.download-ticket','/v1/artifact/complete':'workspace.artifact.complete','/v1/artifact/read':'workspace.artifact.read',
+             '/v1/probe':'workspace.probe','/v1/prepare':'workspace.prepare',
+             '/v1/detect-multiservice':'workspace.detect-multiservice','/v1/normalize-plan':'workspace.normalize-plan',
+             '/v1/change-set/validate':'workspace.change-set.validate','/v1/change-set/resolve':'workspace.change-set.resolve',
+@@ -1221,6 +1243,8 @@
+                 result=append_chunk_batch(ARTIFACT_ROOT,slug,artifact_id,chunk_batch);run_dir='';name='';removed=True
+             elif path == '/v1/artifact/ticket':
+                 result=create_upload_ticket(ARTIFACT_ROOT,slug,artifact_id,requested_by,ttl_seconds);run_dir='';name='';removed=True
++            elif path == '/v1/artifact/download/ticket':
++                result=create_download_ticket(ARTIFACT_ROOT,slug,artifact_id,requested_by,ttl_seconds);run_dir='';name='';removed=True
+             elif path == '/v1/artifact/complete':
+                 result=complete_artifact(ARTIFACT_ROOT,slug,artifact_id);run_dir='';name='';removed=True
+             elif path == '/v1/artifact/read':

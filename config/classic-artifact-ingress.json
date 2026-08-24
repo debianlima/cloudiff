@@ -1,0 +1,65 @@
+{
+  "version": 1,
+  "identity": {
+    "canonicalName": "ClassicArtifactIngress",
+    "purpose": "dedicated internal ingress for ClassicBuildWorker to ArtifactEngine C++"
+  },
+  "legacyContinuity": {
+    "sharedHost": "cloudif-artifact-executor.internal",
+    "authority": "Python artifact executor remains unchanged",
+    "redirectForbidden": true,
+    "evidence": "legacy build babe4613-1aa9-415e-9973-5e53fe80b0c5 is HTTP 200/succeeded in Python and HTTP 404/artifact_not_found in C++ shadow"
+  },
+  "worker": {
+    "connectIp": "10.62.91.3",
+    "port": 80,
+    "hostHeader": "cloudif-artifact-executor-v2.internal",
+    "method": "POST",
+    "route": "/v1/build",
+    "profile": "classic-static-v2",
+    "sourceIp": "10.62.92.7"
+  },
+  "npm": {
+    "config": "/srv/cloudif/proxy/npm/data/nginx/custom/http.conf",
+    "serverName": "cloudif-artifact-executor-v2.internal",
+    "allow": [
+      "10.62.92.7"
+    ],
+    "denyAll": true,
+    "backend": "http://10.62.91.2:18228",
+    "allowedRoute": "POST /v1/build",
+    "otherRoutes": "404"
+  },
+  "socketProxy": {
+    "listen": "10.62.91.2:18228",
+    "allow": [
+      "10.62.91.3"
+    ],
+    "denyAll": true,
+    "target": "127.0.0.1:18226",
+    "implementation": "/usr/lib/systemd/systemd-socket-proxyd"
+  },
+  "artifactEngine": {
+    "bind": "127.0.0.1",
+    "existingPort": 18226,
+    "singleProcess": true,
+    "stateRoot": "/var/lib/cloudiff-v2/artifact-shadow",
+    "classicTokenEnv": "CLOUDIFF_ARTIFACT_CLASSIC_TOKEN",
+    "standardTokenEnv": "CLOUDIFF_ARTIFACT_TOKEN"
+  },
+  "authentication": {
+    "classicTokenFile": "/etc/cloudiff-v2/classic-artifact.token",
+    "workerTokenFile": "/etc/cloudiff-v2/classic-artifact.token",
+    "tokenBytes": 64,
+    "storage": "root-only token file; value copied into root-owned EnvironmentFile; never committed or logged",
+    "classicScope": "POST /v1/build profile=classic-static-v2",
+    "standardClassicAllowed": false,
+    "classicOtherRoutesAllowed": false
+  },
+  "rollback": {
+    "forja": "disable and remove dedicated socket/service units; restore pre-v27 ArtifactEngine env; restore artifact-shadow-previous pointer; restart loopback shadow",
+    "npm": "restore exact previous http.conf then nginx -t and reload",
+    "worker": "restore exact pre-v27 build-worker.env and build-worker-previous pointer",
+    "jobAttempt": "existing P11 job remains waiting_retry attempt=1 until ingress gates pass"
+  }
+}

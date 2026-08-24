@@ -1,0 +1,69 @@
+{
+  "version": 1,
+  "model": "FaroValidation",
+  "stage": "acceptance",
+  "verification_status": "not_verified",
+  "goal": "Consolidar os portões de Faro sem marcar nenhum requisito como aprovado antes de evidência mecânica do host.",
+  "depends_on": [
+    "reconciliation-resilience"
+  ],
+  "requirements": [
+    {
+      "id": "FARO-R18",
+      "statement": "Todos os requisitos obrigatórios R01-R17 precisam de evidência mecânica antes do aceite de Faro.",
+      "source": "P06/Faro v30",
+      "mandatory": true,
+      "evidence": "matriz de evidências completa"
+    },
+    {
+      "id": "FARO-R19",
+      "statement": "Nenhum segredo, token, chave privada ou capability temporária pode aparecer em evidência ou diagrama.",
+      "source": "política CloudIFF",
+      "mandatory": true,
+      "evidence": "scan de evidências sem material sensível"
+    },
+    {
+      "id": "FARO-R20",
+      "statement": "Rollback ou remoção do agent deve preservar serviços pré-existentes do host.",
+      "source": "cloud-design-patterns: compensating/rollback",
+      "mandatory": true,
+      "evidence": "baseline antes/depois e rollback exercitado"
+    },
+    {
+      "id": "FARO-R21",
+      "statement": "Faro deve operar com endereço 10.62.91.5 e seu heartbeat não pode depender de Forja ou Maurício no caminho crítico.",
+      "source": "contratos/faro-node-preparation.schema.json",
+      "mandatory": true,
+      "evidence": "topologia live + heartbeat E2E a partir de 10.62.91.5"
+    }
+  ],
+  "tasks": [
+    {
+      "id": "FARO-T17",
+      "action": "Consolidar inventário, rede, PKI, NATS, agent, heartbeat, reconciliação e resiliência em uma matriz final.",
+      "expected_result": "cada gate marcado passed/failed/not_verified com evidência",
+      "gate": "não verificado"
+    },
+    {
+      "id": "FARO-T18",
+      "action": "Executar rollback do onboarding ou desativação controlada do agent sem remover serviços legados.",
+      "expected_result": "host retorna ao baseline CloudIFF sem dano colateral",
+      "gate": "não verificado"
+    },
+    {
+      "id": "FARO-T19",
+      "action": "Somente após todos os gates obrigatórios, propor aceite do node Faro e eventual role/capabilities definitivos.",
+      "expected_result": "aceite é consequência de evidência, não de intenção",
+      "gate": "não verificado"
+    }
+  ],
+  "distributed_system_checks": {
+    "identity_independence": "Faro deve possuir node_id e credenciais próprios; nenhuma identidade é herdada de outro host.",
+    "trust_boundary": "Cada salto de rede/autenticação precisa de allowlist e identidade verificável; rede não é assumida confiável.",
+    "idempotency": "Reenvio de heartbeat e repetição de bootstrap/verificação não podem criar node duplicado nem efeitos divergentes.",
+    "partial_failure": "Falhas de rede, NATS, certificado, agent ou control-plane devem degradar de modo observável e recuperável.",
+    "observability": "Toda transição relevante precisa produzir health, observed_at, audit/evento ou evidência mecânica equivalente.",
+    "reconciliation": "Desired e observed state devem convergir por revisão explícita; divergência deve resultar em noop/reconcile/blocked/degraded/failed."
+  },
+  "decisions": []
+}

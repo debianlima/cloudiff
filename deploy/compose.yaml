@@ -1,0 +1,36 @@
+services:
+  postgres:
+    image: postgres:18.4-alpine3.22@sha256:774521500f4c22761b25a6bdb772a0a3c2e8dd32468210bdad9231c5752ea398
+    container_name: cloudiff-v2-postgres
+    restart: unless-stopped
+    env_file: /etc/cloudiff-v2/runtime.env
+    environment:
+      POSTGRES_DB: cloudiff_v2
+      POSTGRES_USER: cloudiff_v2
+    ports:
+      - "127.0.0.1:55433:5432"
+    volumes:
+      - /var/lib/cloudiff-v2/postgres:/var/lib/postgresql
+      - ../sql/001_bootstrap.sql:/docker-entrypoint-initdb.d/001_bootstrap.sql:ro
+    shm_size: 256m
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cloudiff_v2 -d cloudiff_v2"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
+  nats:
+    image: nats:2.14.4-alpine3.22@sha256:f2123f533c2b0cada0a5c5ec434fb2b8cfe1cf220215ef9d7517e1372917ad66
+    container_name: cloudiff-v2-nats
+    restart: unless-stopped
+    env_file: /etc/cloudiff-v2/runtime.env
+    command: ["-c", "/etc/nats/nats.conf", "-js"]
+    ports:
+      - "127.0.0.1:14222:4222"
+      - "127.0.0.1:18222:8222"
+    volumes:
+      - ./nats.conf:/etc/nats/nats.conf:ro
+      - /etc/cloudiff-v2/nats-users.conf:/etc/nats/nats-users.conf:ro
+      - /var/lib/cloudiff-v2/nats:/data
+      - /var/lib/cloudiff-v2/tls/server:/etc/nats/tls/server:ro
+      - /var/lib/cloudiff-v2/tls/client-ca:/etc/nats/tls/client-ca:ro

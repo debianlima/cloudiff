@@ -1,0 +1,62 @@
+{
+  "version": 1,
+  "model": "FaroValidation",
+  "stage": "identity-network",
+  "verification_status": "not_verified",
+  "goal": "Validar identidade independente de Faro e conectividade mínima sem assumir rede confiável.",
+  "depends_on": [
+    "discovery"
+  ],
+  "requirements": [
+    {
+      "id": "FARO-R04",
+      "statement": "Gerar node_id UUID independente e persistente; não reutilizar identidade de hospedagem, Forja ou Maurício.",
+      "source": "contratos/node.schema.json",
+      "mandatory": true,
+      "evidence": "node_id persistido e único"
+    },
+    {
+      "id": "FARO-R05",
+      "statement": "Validar Faro em 10.62.91.5 e caminho de saída para NATS 10.62.92.7:14222; se físico, 10.62.91.5 chega pela VPN.",
+      "source": "contratos/nats-security.schema.json",
+      "mandatory": true,
+      "evidence": "teste TCP/TLS e rota registrados"
+    },
+    {
+      "id": "FARO-R06",
+      "statement": "Não abrir porta inbound em Faro sem capability que a exija explicitamente.",
+      "source": "cloud-design-patterns: trust boundary",
+      "mandatory": true,
+      "evidence": "inventário de listeners antes/depois sem abertura implícita"
+    }
+  ],
+  "tasks": [
+    {
+      "id": "FARO-T04",
+      "action": "Criar ou validar /etc/cloudiff-v2/node-id com UUID próprio e permissões somente leitura para o agent.",
+      "expected_result": "identidade estável entre reinícios",
+      "gate": "não verificado"
+    },
+    {
+      "id": "FARO-T05",
+      "action": "A partir de Faro 10.62.91.5, testar rota e TCP/TLS para 10.62.92.7:14222 e endpoints autorizados.",
+      "expected_result": "matriz de conectividade com sucesso/falha por destino",
+      "gate": "não verificado"
+    },
+    {
+      "id": "FARO-T06",
+      "action": "Capturar listeners e regras locais para estabelecer baseline de superfície de ataque.",
+      "expected_result": "diff de rede mensurável para qualquer mudança futura",
+      "gate": "não verificado"
+    }
+  ],
+  "distributed_system_checks": {
+    "identity_independence": "Faro deve possuir node_id e credenciais próprios; nenhuma identidade é herdada de outro host.",
+    "trust_boundary": "Cada salto de rede/autenticação precisa de allowlist e identidade verificável; rede não é assumida confiável.",
+    "idempotency": "Reenvio de heartbeat e repetição de bootstrap/verificação não podem criar node duplicado nem efeitos divergentes.",
+    "partial_failure": "Falhas de rede, NATS, certificado, agent ou control-plane devem degradar de modo observável e recuperável.",
+    "observability": "Toda transição relevante precisa produzir health, observed_at, audit/evento ou evidência mecânica equivalente.",
+    "reconciliation": "Desired e observed state devem convergir por revisão explícita; divergência deve resultar em noop/reconcile/blocked/degraded/failed."
+  },
+  "decisions": []
+}

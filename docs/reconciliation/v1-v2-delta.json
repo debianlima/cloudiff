@@ -1,0 +1,77 @@
+{
+  "schema_version": 1,
+  "v1": {
+    "repository": "debianlima/cloudiff",
+    "head": "10a76d589525e4b4ee681f62274e585250d49429",
+    "tracked_files": 1320,
+    "audited_files": 1320,
+    "syntax_errors": 0,
+    "duplicate_groups": 84,
+    "broken_local_markdown_links": 5
+  },
+  "v2": {
+    "source": "/srv/cloudif-v2",
+    "contract_version": 38,
+    "path_collisions_with_v1": 0
+  },
+  "gates": {
+    "DELTA_INVENTORY": "PASS",
+    "LEARNING_PRESERVED": "PASS",
+    "NORMALIZATION_ALLOWED": "YES",
+    "RECONCILIATION_CLOSURE": "PASS"
+  },
+  "frozen_interface": {
+    "status": "master-invariant",
+    "assets_sha256": {
+      "portal/design/README.md": "275f6f45bc4ddad7fe7ab6ef2e8d0456a4c02288c989e19ef9b458cf2faa2074",
+      "portal/design/app.js": "f4fd13dc69872956ad47200cb6b9a27a510ed613b3a72595344cf1496b2efb8b",
+      "portal/design/base.css": "6335ceaea27b2d6145d847231dfb55cc456ffe71db50982e096e878db6289453",
+      "portal/design/components.css": "c663abc955bc91280e11e97bd984e4641ffde266ba4a14e072e967aae398926c",
+      "portal/design/tokens.css": "09823c9b79433f4b0a9a340436b176f22b248d88792d91e72ae38e67ac3272d9",
+      "portal/ui/README.md": "763d8bb7b1f6ca29b5d8cb02fed924a8977af66c80c59ade5f63dae905c2410c",
+      "portal/ui/__init__.py": "f6951578abf65a74e31e63352dde71444566e7da98c1a63c2335044b07e0a493",
+      "portal/ui/components.py": "72412c37ffe0d9b75d2738b8f3bf8154936d8adb95ef58368f2589106e4de9b8",
+      "portal/ui/icons.py": "42e112aef9fcc6bae52062a2c8f46707d9f234a25f4e8331ae63ade16cab524b",
+      "portal/ui/shell.py": "6acc3a8ed1e93d93bc9e09bc988f3058154da44aa77c66e3a3a614e89ceb2938"
+    },
+    "surfaces": [
+      "Visão geral",
+      "Publicações",
+      "Projetos",
+      "Bancos e tenants"
+    ]
+  },
+  "correspondence_groups": [
+    "governance-and-skills",
+    "portal-and-ui-contract",
+    "control-plane",
+    "identity-and-auth",
+    "jobs-build-artifacts",
+    "agent-and-node-management",
+    "providers-and-publication",
+    "telemetry-and-admin-observability",
+    "runtime-execution",
+    "network-pki-distribution",
+    "legacy-retirement-and-backup"
+  ],
+  "notes": [
+    "V1 and V2 had zero path collisions at inventory time; union is additive before semantic normalization.",
+    "Normalization never decides which content wins; it runs after learning preservation."
+  ],
+  "unified": {
+    "total_files": 1493,
+    "official_validator": "PASS",
+    "portal_test_suite": {
+      "status": "PASS",
+      "tests": 1008,
+      "skipped": 1
+    },
+    "frozen_ui_hashes": {
+      "status": "PASS",
+      "count": 10
+    },
+    "v2_yaml": "PASS",
+    "faro_node_preparation": "PASS",
+    "agent_update_offline": "PASS"
+  }
+}

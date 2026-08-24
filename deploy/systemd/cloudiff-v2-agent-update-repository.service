@@ -1,0 +1,16 @@
+[Unit]
+Description=CloudIFF signed agent update repository
+After=docker.service network-online.target
+Requires=docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStartPre=-/usr/bin/docker rm -f cloudiff-v2-agent-update-repository
+ExecStart=/usr/bin/docker run --rm --name cloudiff-v2-agent-update-repository --network host --read-only --user 101:101 --cap-drop ALL --security-opt no-new-privileges --tmpfs /tmp:rw,noexec,nosuid,size=16m -v /var/lib/cloudiff-agent/repository:/srv/agent-updates:ro -v /srv/cloudif-v2/config/nginx/agent-updates.conf:/etc/nginx/nginx.conf:ro --entrypoint nginx nginx@sha256:5f979dcfed4ce6461873f087e8c980d6e29b084b9e8776d9704a7e989b5f4898 -c /etc/nginx/nginx.conf -g "daemon off;"
+ExecStop=-/usr/bin/docker stop -t 5 cloudiff-v2-agent-update-repository
+Restart=on-failure
+RestartSec=3s
+
+[Install]
+WantedBy=multi-user.target
