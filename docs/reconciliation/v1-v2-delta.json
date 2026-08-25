@@ -18,7 +18,8 @@
     "DELTA_INVENTORY": "PASS",
     "LEARNING_PRESERVED": "PASS",
     "NORMALIZATION_ALLOWED": "YES",
-    "RECONCILIATION_CLOSURE": "PASS"
+    "RECONCILIATION_CLOSURE": "PASS",
+    "DEPENDENCY_REFERENCES": "PASS"
   },
   "frozen_interface": {
     "status": "master-invariant",
@@ -80,5 +81,11 @@
     "DELTA_INVENTORY": "PASS",
     "LEARNING_PRESERVED": "PASS",
     "canonical_skill_version": "0.1.1"
+  },
+  "catalog": {
+    "repository": "debianlima/competencias-catalogo",
+    "normalized_head": "7cf8efc3b345584a24e277cf4c04eee4c5a5177d",
+    "project_skill": "debianlima/cloudiff:skills/cloudiff/SKILL.md",
+    "project_skill_version": "0.1.1"
   }
 }
