@@ -87,7 +87,7 @@
   "catalog": {
     "repository": "debianlima/competencias-catalogo",
     "branch": "reconcile/cloudiff-skill-closure-v40",
-    "commit": "69206d06392010a0e16cd35081df129ee38113e0",
+    "commit": "998b6256ad7d5e6e43fa1e3477cd83e86bef2632",
     "validate_catalog": "PASS",
     "validate_sync_guard": "PASS"
   }

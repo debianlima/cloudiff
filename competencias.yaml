@@ -20,37 +20,37 @@ skill_projeto:
   - id: desenvolvedor-de-software
     versao_fixada: '14'
     fonte: debianlima/competencias-catalogo:metodo/desenvolvedor-de-software/SKILL.md
-    delta_lido_ate: 69206d06392010a0e16cd35081df129ee38113e0
+    delta_lido_ate: 998b6256ad7d5e6e43fa1e3477cd83e86bef2632
     estado_reconciliacao: ATUAL
   - id: github-incremental-reconciliation
     versao_fixada: '7'
     fonte: debianlima/competencias-catalogo:metodo/github-incremental-reconciliation/SKILL.md
-    delta_lido_ate: 69206d06392010a0e16cd35081df129ee38113e0
+    delta_lido_ate: 998b6256ad7d5e6e43fa1e3477cd83e86bef2632
     estado_reconciliacao: ATUAL
   - id: governanca-ontologica-de-skills
     versao_fixada: 1.0.4
     fonte: debianlima/competencias-catalogo:metodo/governanca-ontologica-de-skills/SKILL.md
-    delta_lido_ate: 69206d06392010a0e16cd35081df129ee38113e0
+    delta_lido_ate: 998b6256ad7d5e6e43fa1e3477cd83e86bef2632
     estado_reconciliacao: ATUAL
   - id: telemetry-data-visualization
     versao_fixada: '2'
     fonte: debianlima/competencias-catalogo:dominio/telemetry-data-visualization/SKILL.md
-    delta_lido_ate: 69206d06392010a0e16cd35081df129ee38113e0
+    delta_lido_ate: 998b6256ad7d5e6e43fa1e3477cd83e86bef2632
     estado_reconciliacao: ATUAL
   - id: distributed-agent-control
     versao_fixada: '1'
     fonte: debianlima/competencias-catalogo:dominio/distributed-agent-control/SKILL.md
-    delta_lido_ate: 69206d06392010a0e16cd35081df129ee38113e0
+    delta_lido_ate: 998b6256ad7d5e6e43fa1e3477cd83e86bef2632
     estado_reconciliacao: ATUAL
   - id: network-ssh-operations
     versao_fixada: '1'
     fonte: debianlima/competencias-catalogo:dominio/network-ssh-operations/SKILL.md
-    delta_lido_ate: 69206d06392010a0e16cd35081df129ee38113e0
+    delta_lido_ate: 998b6256ad7d5e6e43fa1e3477cd83e86bef2632
     estado_reconciliacao: ATUAL
   - id: operational-ui-truth
     versao_fixada: '1'
     fonte: debianlima/competencias-catalogo:dominio/operational-ui-truth/SKILL.md
-    delta_lido_ate: 69206d06392010a0e16cd35081df129ee38113e0
+    delta_lido_ate: 998b6256ad7d5e6e43fa1e3477cd83e86bef2632
     estado_reconciliacao: ATUAL
   - id: cloud-design-patterns
     versao_fixada: git:318066d2213b510e89b500ed0d53506c54093ddc

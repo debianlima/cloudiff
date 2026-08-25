@@ -33,7 +33,7 @@ for x in compoe:
 # Reconciliation evidence and source hashes.
 assert closure['contract_version']==40 and closure['project_skill_after']=='0.1.2'
 assert closure['gates']['DELTA_INVENTORY']=='PASS' and closure['gates']['LEARNING_PRESERVED']=='PASS' and closure['gates']['SOURCE_HASH_PARITY']=='PASS' and closure['gates']['CATALOG_SYNC']=='PASS' and closure['gates']['RECONCILIATION_CLOSURE']=='PASS' and closure['gates']['DEPENDENCY_REFERENCES']=='PASS'
-assert closure['catalog']['commit']=='69206d06392010a0e16cd35081df129ee38113e0'
+assert closure['catalog']['commit']=='998b6256ad7d5e6e43fa1e3477cd83e86bef2632'
 cur=Path('/srv/cloudif/agent-skills/current')
 for r in closure['external_references']:
  p=cur/r['id']/'SKILL.md';assert p.is_file();assert hashlib.sha256(p.read_bytes()).hexdigest()==r['sha256'],r['id']

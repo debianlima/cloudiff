@@ -35,37 +35,37 @@ referencia:
 - id: desenvolvedor-de-software
   fonte: debianlima/competencias-catalogo:metodo/desenvolvedor-de-software/SKILL.md
   versao_fixada: '14'
-  delta_lido_ate: 69206d06392010a0e16cd35081df129ee38113e0
+  delta_lido_ate: 998b6256ad7d5e6e43fa1e3477cd83e86bef2632
   estado: reconciliado
 - id: github-incremental-reconciliation
   fonte: debianlima/competencias-catalogo:metodo/github-incremental-reconciliation/SKILL.md
   versao_fixada: '7'
-  delta_lido_ate: 69206d06392010a0e16cd35081df129ee38113e0
+  delta_lido_ate: 998b6256ad7d5e6e43fa1e3477cd83e86bef2632
   estado: reconciliado
 - id: governanca-ontologica-de-skills
   fonte: debianlima/competencias-catalogo:metodo/governanca-ontologica-de-skills/SKILL.md
   versao_fixada: 1.0.4
-  delta_lido_ate: 69206d06392010a0e16cd35081df129ee38113e0
+  delta_lido_ate: 998b6256ad7d5e6e43fa1e3477cd83e86bef2632
   estado: reconciliado
 - id: telemetry-data-visualization
   fonte: debianlima/competencias-catalogo:dominio/telemetry-data-visualization/SKILL.md
   versao_fixada: '2'
-  delta_lido_ate: 69206d06392010a0e16cd35081df129ee38113e0
+  delta_lido_ate: 998b6256ad7d5e6e43fa1e3477cd83e86bef2632
   estado: reconciliado
 - id: distributed-agent-control
   fonte: debianlima/competencias-catalogo:dominio/distributed-agent-control/SKILL.md
   versao_fixada: '1'
-  delta_lido_ate: 69206d06392010a0e16cd35081df129ee38113e0
+  delta_lido_ate: 998b6256ad7d5e6e43fa1e3477cd83e86bef2632
   estado: reconciliado
 - id: network-ssh-operations
   fonte: debianlima/competencias-catalogo:dominio/network-ssh-operations/SKILL.md
   versao_fixada: '1'
-  delta_lido_ate: 69206d06392010a0e16cd35081df129ee38113e0
+  delta_lido_ate: 998b6256ad7d5e6e43fa1e3477cd83e86bef2632
   estado: reconciliado
 - id: operational-ui-truth
   fonte: debianlima/competencias-catalogo:dominio/operational-ui-truth/SKILL.md
   versao_fixada: '1'
-  delta_lido_ate: 69206d06392010a0e16cd35081df129ee38113e0
+  delta_lido_ate: 998b6256ad7d5e6e43fa1e3477cd83e86bef2632
   estado: reconciliado
 - id: cloud-design-patterns
   fonte: github/awesome-copilot:skills/cloud-design-patterns/SKILL.md

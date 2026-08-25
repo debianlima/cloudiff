@@ -46,9 +46,10 @@
 
 ## Divergências da última reconciliação
 ### Corrigidas
+- Delta concorrente `e4193a52f0ba0ea803f02fe414fa8f98bf86de6a` (SGLang v17) foi preservado por merge sem force; o commit de fecho do catálogo passou a `998b6256ad7d5e6e43fa1e3477cd83e86bef2632`.
 - Seis competências externas foram comparadas contra seus commits upstream; todos os arquivos-fonte relevantes presentes na release instalada têm paridade SHA-256.
 - Duas competências CloudIFF sem upstream foram internalizadas no repositório como `compoe` sem perder o corpo original.
-- Catálogo candidato `69206d06392010a0e16cd35081df129ee38113e0` passou `CATALOGO_SKILLS=PASS` e `SYNC_GUARD=PASS`, com 53 competências aceitas e zero pendentes.
+- Catálogo candidato `998b6256ad7d5e6e43fa1e3477cd83e86bef2632` passou `CATALOGO_SKILLS=PASS` e `SYNC_GUARD=PASS`, com 53 competências aceitas e zero pendentes.
 - Skill raiz `cloudiff@0.1.2`: `compoe=2`, `referencia=13`, anti-ciclo PASS.
 - `RECONCILIATION_CLOSURE=PASS` para 16 nós/15 arestas e `DEPENDENCY_REFERENCES=PASS` para 13 referências + 2 composições.
 - Interface congelada permaneceu inalterada; suíte oficial continua 1.008 testes PASS e 1 skip.
