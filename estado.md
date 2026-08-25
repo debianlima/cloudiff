@@ -1,67 +1,70 @@
-# Estado — 2026-08-24 — contrato v39
+# Estado — 2026-08-24 — contrato v40
 
 ## Decisões vigentes
-- CloudIFF é um único projeto: V1/Python e V2/C++23 são reconciliados incrementalmente antes de qualquer normalização ou remoção.
-- A skill raiz única é `cloudiff@0.1.1`; o próprio repositório CloudIFF é a fonte da skill e o catálogo PGH apenas registra/relaciona.
-- `FrozenPortalInterface` é o requisito mestre: implementação pode mudar, mas a interface gráfica homologada, navegação, rotas e comportamento visível não mudam sem decisão humana explícita separada.
-- Migração tecnológica segue strangler/coexistência: candidata, paridade, canary, observação, cutover e rollback preservado.
-- Faro é alvo efetivo durante a conciliação sempre que uma entrada elegível exigir deploy nele; não se espera o fim de toda a migração para testar o host real.
-- OpenCode ou outro agente auxiliar não é instalado em servidor/container sem autorização explícita.
+- CloudIFF V1/Python e V2/C++23 são um único projeto e são reconciliados incrementalmente antes de normalização, migração ou remoção.
+- `FrozenPortalInterface` continua sendo o requisito mestre: troca de implementação não autoriza redesign, mudança de navegação, rotas ou comportamento visível homologado.
+- Skill raiz canônica passa a ser `cloudiff@0.1.2`; deve ser recarregada antes da próxima unidade.
+- A ontologia da skill separa `compoe` de `referencia`: `cloudiff-authentik-oidc@1.0.0` e `cloudiff-safe-release@1.0.0` são competências do próprio projeto; treze referências externas/PGH têm fonte, versão e commit lido fixados.
+- Symlink/release operacional de skills é execução, não fonte canônica. Procedência vem de repositório/path/commit/hash ou de skill composta no próprio projeto.
+- Faro continua alvo efetivo durante a conciliação quando uma entrada elegível exigir deploy real; OpenCode/outro agente não é instalado sem autorização explícita.
 
 ## Decisões superadas
-- Tratar os 1.320 arquivos V1 como `preexistente` não auditado — superado pela auditoria integral 1.320/1.320 e pela promoção mecânica desta emenda.
-- Tratar a cópia de skill no catálogo como segunda autoridade — superado: `skills/cloudiff/SKILL.md` é a fonte única e o catálogo aponta para ela.
-- Estado operacional que descrevia o filesystem do control-plane em 100% — superado pela expansão online do disco/LVM/ext4 nesta unidade.
+- `cloudiff@0.1.1` — substituída por `0.1.2` após fecho ontológico v40; continua preservada no histórico Git e nas releases anteriores.
+- Oito competências `preexistente` com `repositorio/caminho: NAO DECLARADO` — substituídas por seis referências externas provadas e duas competências internas `compoe`.
+- Usar `/srv/cloudif/agent-skills/current` como origem de uma competência — substituído por procedência imutável; `current` permanece apenas caminho operacional.
+- Estado antigo da Hospedagem com `/` em 100% — superado pela expansão online do disco/LVM/ext4 para ~195 GiB de filesystem, com ~150 GiB livres no último gate.
 
 ## Decisões humanas pendentes
-- Nenhuma decisão humana nova bloqueia a v39; o bloqueio restante é técnico/ontológico e será tratado na v40.
+- Nenhuma decisão humana nova bloqueia a próxima unidade técnica.
 
 ## Pendências técnicas não humanas
-- `RECONCILIATION_CLOSURE` da skill de projeto está bloqueado por 8 referências ainda `preexistente`: seis externas com procedência recuperável e duas skills CloudIFF locais sem fonte compartilhada. v39 não é release para Faro.
-- Cinco arquivos V1 permanecem `preexistente` porque o portão de links Markdown encontrou referências quebradas: uma referência transitória na skill Playwright vendorizada e quatro links Logflare sem esquema em templates Supabase.
-- A suíte oficial passa 1.008 testes com 1 skip, mas emite `ResourceWarning` de handles/sockets não fechados no teardown; registrar e corrigir em unidade própria se persistir.
-- Heartbeat remoto de dois nós de execução permanece stale desde 22/08 após indisponibilidade NATS; v36 de reconnect/readiness continua aberta e precisa de outage real sem restart do agente para aceite.
-- Sete entradas permanecem declaradas e ainda não geradas: LegacyRetirement, monitoramento padrão e teste de perfil Faro.
-- Backup remoto principal continua sem integridade completa enquanto o servidor de backup estiver fora da rede; remoção destrutiva de legacy segue bloqueada.
+- v36 continua aberta: Forja e Maurício precisam provar reconexão NATS/heartbeat após indisponibilidade sem restart do agente; `systemctl active` isoladamente não vale aceite.
+- Cinco arquivos V1 permanecem `preexistente` por links Markdown quebrados identificados na auditoria integral.
+- Sete entradas declaradas continuam não geradas: contrato/config/testes LegacyRetirement, instalador de monitoramento padrão e teste de perfil Faro.
+- Backup principal `pre-v2-20260820` não pode ter integridade remota completa enquanto o servidor de backup permanecer fora da rede; remoção destrutiva de legacy segue bloqueada.
+- A suíte oficial passa, mas ainda emite `ResourceWarning` de handles/sockets no teardown; dívida técnica independente.
 
 ## Trabalho compartilhado
-- `manifesto.yaml.trabalho_compartilhado` — unidade `normalize-v1-namespace-v39`, estado `concluido`, sem zona de exclusão ativa.
+- `manifesto.yaml.trabalho_compartilhado` — unidade `skill-closure-v40`, concluída, sem zona de exclusão ativa.
 
 ## Competências ativas nesta unidade
-- `cloudiff@0.1.1` — skill raiz do projeto.
-- `desenvolvedor-de-software@14` — método de trabalho de projeto.
-- `github-incremental-reconciliation@7` — reconciliação antes da normalização.
-- `governanca-ontologica-de-skills@1.0.4` — fecho/identidade da skill e referências.
-- `telemetry-data-visualization@2` — macro obrigatória; início registrado no journal com plano congelado.
-- `ddia-systems@1.4.0` — gate de schema/migrations SQL em database efêmero.
+- `cloudiff@0.1.1` — versão congelada no início da unidade; produziu candidata `0.1.2`, que só ativa na próxima unidade.
+- `desenvolvedor-de-software@14` — método de projeto.
+- `github-incremental-reconciliation@7` — inventário/delta antes de normalizar.
+- `governanca-ontologica-de-skills@1.0.4` — composição, referência, anti-ciclo e fecho.
+- `telemetry-data-visualization@2` — macro global; `telemetria_inicio` registrada com hash do plano.
+
+## Competências instaladas para unidades futuras
+- `cloudiff-authentik-oidc@1.0.0` — composta pelo projeto; corpo do aprendizado operacional original preservado.
+- `cloudiff-safe-release@1.0.0` — composta pelo projeto; corpo do aprendizado operacional original preservado.
+- `cloudiff@0.1.2` — raiz a ser recarregada antes da próxima unidade.
 
 ## Falhas de portão por tipo de entrada
-- `documentacao-estrutural`: 5 arquivos V1 reprovaram integridade de link Markdown e permanecem `preexistente`.
-- `ui-compat`: `pytest` não existe em Forja e não foi instalado por conveniência; os mesmos testes foram executados pelo runner `unittest` já disponível e passaram 6/6.
-- `dados`: duas tentativas iniciais de gate SQL falharam antes de criar database de teste (PostgreSQL indisponível por disco cheio; depois formato/transferência temporária). Após a recuperação do host, database efêmero isolado passou 3 migrations + 3 testes.
-- `infraestrutura`: PostgreSQL entrou em restart loop porque o filesystem raiz estava em 100%; a causa foi capacidade virtual já entregue mas partição/LVM/ext4 ainda não expandidos.
+- `documentacao-estrutural`: `scripts/validate.sh` reprovou quando testes geraram `__pycache__`; execução final usa `PYTHONDONTWRITEBYTECODE=1` e validação pós-teste PASS.
+- `ontologia`: primeiro fecho cruzado assumiu `status` explícito em todos os nós; o validador canônico define ausência como `aceito`. Portão corrigido para a mesma semântica e passou.
+- `procedencia`: Playwright inicialmente foi procurado em `skills/playwright`; o commit fixado prova o caminho real `skills/.curated/playwright`, depois validado byte a byte.
 
 ## Divergências da última reconciliação
 ### Corrigidas
-- Os 1.320 arquivos não declarados eram exatamente os 1.320 arquivos auditados; todos foram declarados no namespace v39.
-- 1.315/1.320 arquivos V1 passaram o portão declarado e foram promovidos para `aceito`; 5 permaneceram `preexistente` por discordância real.
-- Seis SQL previamente `aceito` existiam no runtime V2, mas eram omitidos pelo `*.sql` global do `.gitignore`; foram recuperados byte a byte pelos hashes operacionais e apenas esses seis caminhos ganharam exceção de source-control.
-- O gate SQL efêmero passou: 3 migrations, 3 testes, schema versão 1 e 11 tabelas; database temporário removido ao final.
-- Filesystem do control-plane: disco virtual passou a 200 GiB; partição/PV/LV/ext4 foram expandidos online. O root ficou em ~195 GiB, ~20% usado e ~150 GiB livres, sem apagar arquivos.
-- PostgreSQL concluiu crash recovery e voltou a aceitar conexões. `control`, `worker` e `agent` foram recuperados em ordem e estão ativos, sem reinícios novos ou warnings recentes.
-- Aceites v38 observados no checkout concorrente foram preservados semanticamente nesta emenda; nenhuma alteração concorrente foi descartada.
+- Seis competências externas foram comparadas contra seus commits upstream; todos os arquivos-fonte relevantes presentes na release instalada têm paridade SHA-256.
+- Duas competências CloudIFF sem upstream foram internalizadas no repositório como `compoe` sem perder o corpo original.
+- Catálogo candidato `69206d06392010a0e16cd35081df129ee38113e0` passou `CATALOGO_SKILLS=PASS` e `SYNC_GUARD=PASS`, com 53 competências aceitas e zero pendentes.
+- Skill raiz `cloudiff@0.1.2`: `compoe=2`, `referencia=13`, anti-ciclo PASS.
+- `RECONCILIATION_CLOSURE=PASS` para 16 nós/15 arestas e `DEPENDENCY_REFERENCES=PASS` para 13 referências + 2 composições.
+- Interface congelada permaneceu inalterada; suíte oficial continua 1.008 testes PASS e 1 skip.
 
 ### Pendentes de autorização ou unidade própria
-- Corrigir conteúdo das cinco referências Markdown quebradas.
-- Fechar v36 de reconexão NATS/readiness com teste real de indisponibilidade sem restart dos agentes.
-- Implementar as sete entradas ainda pendentes quando suas dependências forem elegíveis.
+- Corrigir os cinco links Markdown sem alterar conteúdo vendorizado/upstream por conveniência.
+- Executar a v36 de reconnect/readiness antes de depender do heartbeat do Faro.
+- LegacyRetirement permanece bloqueado por backup/substituição, não por decisão de interface.
 
 ## Entradas aceitas nesta unidade
-- Estrutura v39: `manifesto.yaml`, `competencias.yaml`, `tools/verify_namespace.py`, `tests/test_v1_namespace_audit.py` e evidências de reconciliação associadas.
-- V1 auditado: 1.315 arquivos promovidos a `aceito`; 5 mantidos `preexistente` por falha de link.
-- SQL recuperado: `001_bootstrap`, `002_job_engine`, `003_job_kind_filter` e três testes SQL, com hashes preservados.
-- Aceites v38 concorrentes preservados: léxico, preparação Faro, AgentUpdate, AdminObservability patch/test e skill/reconciliação v38.
+- 2 `competencias.yaml` — raiz `0.1.2`, referências fixas e duas composições internas.
+- 179 `skills/cloudiff/SKILL.md` — `cloudiff@0.1.2` com L011 e fecho ontológico.
+- 182 `tests/test_cloudiff_project_skill.py` — identidade, hashes, composição, referências e anti-ciclo.
+- 1505 `skills/cloudiff-authentik-oidc/SKILL.md` — competência interna `1.0.0`.
+- 1506 `skills/cloudiff-safe-release/SKILL.md` — competência interna `1.0.0`.
+- 1507 `docs/reconciliation/skill-closure-v40.json` — evidência do fecho.
 
 ## Próxima unidade
-- v40: fechar a ontologia da skill `cloudiff` — verificar fontes/commits dos externos, internalizar as duas skills CloudIFF locais como `compoe`, incrementar/recarregar a skill e obter `RECONCILIATION_CLOSURE=PASS`/`DEPENDENCY_REFERENCES=PASS`.
-- Depois, fechar v36 de reconnect/readiness porque heartbeat confiável é pré-condição para o onboarding real do Faro; em seguida reconciliar perfil/reserva e implementar nele os serviços elegíveis, preservando a interface atual.
+- Recarregar `cloudiff@0.1.2` e executar v36 reconnect/readiness: cliente NATS reconecta após outage real sem restart; control aguarda PostgreSQL no boot sem StartLimit. Após isso, reconciliar perfil/reserva com o Faro real e implementar nele os serviços elegíveis, sem alteração da interface gráfica.

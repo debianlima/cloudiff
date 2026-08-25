@@ -1,0 +1,94 @@
+{
+  "format": "cloudiff-skill-closure-v40",
+  "contract_version": 40,
+  "project_skill_before": "0.1.1",
+  "project_skill_after": "0.1.2",
+  "gates": {
+    "DELTA_INVENTORY": "PASS",
+    "LEARNING_PRESERVED": "PASS",
+    "NORMALIZATION_ALLOWED": "YES",
+    "SOURCE_HASH_PARITY": "PASS",
+    "CATALOG_SYNC": "PASS",
+    "RECONCILIATION_CLOSURE": "PASS",
+    "DEPENDENCY_REFERENCES": "PASS"
+  },
+  "external_references": [
+    {
+      "id": "cloud-design-patterns",
+      "repository": "https://github.com/github/awesome-copilot",
+      "commit": "318066d2213b510e89b500ed0d53506c54093ddc",
+      "path": "skills/cloud-design-patterns",
+      "versao_fixada": "git:318066d2213b510e89b500ed0d53506c54093ddc",
+      "sha256": "69b0e14a0011137f7253f90b85745eba1710d8849710e3b5b677e3bf9dfe6320"
+    },
+    {
+      "id": "ddia-systems",
+      "repository": "https://github.com/wondelai/skills",
+      "commit": "6bac1534f9f256a56fc2b4dd0e70b9a692758966",
+      "path": "ddia-systems",
+      "versao_fixada": "1.4.0",
+      "sha256": "cdcd71bc1ce854f04921c5ff1a63b06872f96b09ef2f0576c91a33ffc8297012"
+    },
+    {
+      "id": "release-it",
+      "repository": "https://github.com/wondelai/skills",
+      "commit": "6bac1534f9f256a56fc2b4dd0e70b9a692758966",
+      "path": "release-it",
+      "versao_fixada": "1.4.0",
+      "sha256": "747c1130a348ede99b6533de5ec75bb77fb5dd05efc8cef35f0524f7a9f87e7e"
+    },
+    {
+      "id": "platform-engineering",
+      "repository": "https://github.com/magnus919/agent-skills",
+      "commit": "ed68466e04c9b5d33898ed5b503fb828f49c3e73",
+      "path": "platform-engineering",
+      "versao_fixada": "git:ed68466e04c9b5d33898ed5b503fb828f49c3e73",
+      "sha256": "cc6d7700ce5ee717e52d63d7e07f719f613ae6f98e48d6b1249d2e3745f47bee"
+    },
+    {
+      "id": "playwright",
+      "repository": "https://github.com/openai/skills",
+      "commit": "49f948faa9258a0c61caceaf225e179651397431",
+      "path": "skills/.curated/playwright",
+      "versao_fixada": "git:49f948faa9258a0c61caceaf225e179651397431",
+      "sha256": "0ffaabcc8e0990627c4725f18bf1c7955534a796c1c199e872909de2013ce6a8"
+    },
+    {
+      "id": "cpp-pro",
+      "repository": "https://github.com/saeed-vayghan/gemini-agent-skills",
+      "commit": "34ca3ca1db04b092c5f86eba155c23e105fc933b",
+      "path": ".gemini/skills/cpp-pro",
+      "versao_fixada": "git:34ca3ca1db04b092c5f86eba155c23e105fc933b",
+      "sha256": "524f11741f58c77884123342083b53e488d562b89860e4084ce1e86022712c01"
+    }
+  ],
+  "internal_compositions": [
+    {
+      "id": "cloudiff-authentik-oidc",
+      "versao": "1.0.0",
+      "source_release": "cloudiff-project-0.1.1-20260824",
+      "source_sha256": "1f1509c37ee6596832e15f3269784e4acab727d08121a6a985a596ba9b616a81",
+      "canonical_sha256": "9e54f10cb6111885b5a889f8b1750fbd254322d470b5667f141cdca558bf047d",
+      "body_preserved": true
+    },
+    {
+      "id": "cloudiff-safe-release",
+      "versao": "1.0.0",
+      "source_release": "cloudiff-project-0.1.1-20260824",
+      "source_sha256": "d53483b97e8251700dcc15afa783421f3cac1167b7303acc21d1f30a0a53ff4a",
+      "canonical_sha256": "64b973c76a59b129daa694b9e426fb3aa774db81ffd2658510d08ffd4e83db7b",
+      "body_preserved": true
+    }
+  ],
+  "notes": [
+    "platform-engineering frontmatter cites hermes-profiles lineage; exact installed bytes were proven against magnus919/agent-skills at the fixed commit",
+    "playwright installed manifest fixes openai/skills commit; exact path is skills/.curated/playwright"
+  ],
+  "catalog": {
+    "repository": "debianlima/competencias-catalogo",
+    "branch": "reconcile/cloudiff-skill-closure-v40",
+    "commit": "69206d06392010a0e16cd35081df129ee38113e0",
+    "validate_catalog": "PASS",
+    "validate_sync_guard": "PASS"
+  }
+}

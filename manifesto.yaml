@@ -1,5 +1,5 @@
 projeto: cloudiff-v2
-versao_contrato: 39
+versao_contrato: 40
 namespace_fechado: true
 entradas:
   - id: 1
@@ -1430,7 +1430,7 @@ entradas:
     caminho: tests/test_cloudiff_project_skill.py
     proposito: verifica identidade, método, referências ontológicas, interface congelada e gates da skill raiz CloudIFF
     tipo: backend-integracao
-    consome: [skill/cloudiff, evidencia/v1-v2-delta]
+    consome: [skill/cloudiff, evidencia/v1-v2-delta, evidencia/skill-closure-v40]
     produz: teste/cloudiff-project-skill
     aceite: portao-mecanico/backend-integracao
     status: aceito
@@ -12012,11 +12012,36 @@ entradas:
     aceite: portao-mecanico/v1-audit-file
     status: aceito
 
+  - id: 1505
+    caminho: skills/cloudiff-authentik-oidc/SKILL.md
+    proposito: competência de domínio Authentik/OIDC específica do CloudIFF internalizada com procedência preservada
+    tipo: documentacao-estrutural
+    consome: [skill/cloudiff]
+    produz: skill/cloudiff-authentik-oidc
+    aceite: portao-mecanico/skill-projeto
+    status: aceito
+  - id: 1506
+    caminho: skills/cloudiff-safe-release/SKILL.md
+    proposito: competência de domínio de release seguro específica do CloudIFF internalizada com procedência preservada
+    tipo: documentacao-estrutural
+    consome: [skill/cloudiff]
+    produz: skill/cloudiff-safe-release
+    aceite: portao-mecanico/skill-projeto
+    status: aceito
+  - id: 1507
+    caminho: docs/reconciliation/skill-closure-v40.json
+    proposito: evidência mecânica de procedência, hash e fecho ontológico das competências CloudIFF
+    tipo: documentacao-estrutural
+    consome: [skill/cloudiff-authentik-oidc, skill/cloudiff-safe-release]
+    produz: evidencia/skill-closure-v40
+    aceite: portao-mecanico/documentacao-estrutural
+    status: aceito
+
 trabalho_compartilhado:
   projeto: cloudiff
-  unidade: normalize-v1-namespace-v39
+  unidade: skill-closure-v40
   agente: WORK-SSH
-  atualizado_em: '2026-08-24T21:28:00-03:00'
-  concluido_em: '2026-08-24T21:28:00-03:00'
+  atualizado_em: '2026-08-24T21:47:00-03:00'
+  concluido_em: '2026-08-24T21:47:00-03:00'
   estado: concluido
   zona_exclusao: []

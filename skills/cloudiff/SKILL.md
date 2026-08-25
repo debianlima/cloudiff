@@ -1,36 +1,102 @@
 ---
 name: cloudiff
-versao: 0.1.1
-description: Governa, reconcilia, normaliza e evolui a plataforma CloudIFF V1/Python→V2/C++23 preservando interface homologada, contratos, segurança, dados, observabilidade e rollback.
+versao: 0.1.2
+description: Governa, reconcilia, normaliza e evolui a plataforma CloudIFF V1/Python→V2/C++23 preservando interface homologada, contratos, segurança,
+  dados, observabilidade e rollback.
 tipo_competencia: projeto
 origem:
   projeto_de_origem: cloudiff
   derivacao: original
   commit_divergencia: NAO APLICAVEL
-  plataforma: [linux, systemd, docker, cxx23, python, postgresql, nats]
+  plataforma:
+  - linux
+  - systemd
+  - docker
+  - cxx23
+  - python
+  - postgresql
+  - nats
   pressupostos:
-    - interface homologada e rotas públicas são contratos de compatibilidade
-    - produção usa releases imutáveis e rollback
-    - reconciliação incremental antecede normalização
+  - interface homologada e rotas públicas são contratos de compatibilidade
+  - produção usa releases imutáveis e rollback
+  - reconciliação incremental antecede normalização
 escopo_comum: arquitetura, operação, portal, agentes, mensageria, release e migração tecnológica da CloudIFF
 escopo_proprio: decisões, invariantes e armadilhas verificadas no projeto CloudIFF
-compoe: []
+compoe:
+- id: cloudiff-authentik-oidc
+  fonte: skills/cloudiff-authentik-oidc/SKILL.md
+  versao_fixada: 1.0.0
+  estado: reconciliado
+- id: cloudiff-safe-release
+  fonte: skills/cloudiff-safe-release/SKILL.md
+  versao_fixada: 1.0.0
+  estado: reconciliado
 referencia:
-  - {id: desenvolvedor-de-software, versao_fixada: 14, estado: reconciliado}
-  - {id: github-incremental-reconciliation, versao_fixada: 7, estado: reconciliado}
-  - {id: governanca-ontologica-de-skills, versao_fixada: 1.0.4, estado: reconciliado}
-  - {id: telemetry-data-visualization, versao_fixada: 2, estado: reconciliado}
-  - {id: distributed-agent-control, versao_fixada: 1, estado: reconciliado}
-  - {id: network-ssh-operations, versao_fixada: 1, estado: reconciliado}
-  - {id: operational-ui-truth, versao_fixada: 1, estado: reconciliado}
-  - {id: cloud-design-patterns, versao_fixada: NAO DECLARADO, estado: preexistente}
-  - {id: ddia-systems, versao_fixada: 1.4.0, estado: preexistente}
-  - {id: release-it, versao_fixada: 1.4.0, estado: preexistente}
-  - {id: platform-engineering, versao_fixada: NAO DECLARADO, estado: preexistente}
-  - {id: playwright, versao_fixada: NAO DECLARADO, estado: preexistente}
-  - {id: cloudiff-authentik-oidc, versao_fixada: NAO DECLARADO, estado: preexistente}
-  - {id: cloudiff-safe-release, versao_fixada: NAO DECLARADO, estado: preexistente}
-  - {id: cpp-pro, versao_fixada: NAO DECLARADO, estado: preexistente}
+- id: desenvolvedor-de-software
+  fonte: debianlima/competencias-catalogo:metodo/desenvolvedor-de-software/SKILL.md
+  versao_fixada: '14'
+  delta_lido_ate: 69206d06392010a0e16cd35081df129ee38113e0
+  estado: reconciliado
+- id: github-incremental-reconciliation
+  fonte: debianlima/competencias-catalogo:metodo/github-incremental-reconciliation/SKILL.md
+  versao_fixada: '7'
+  delta_lido_ate: 69206d06392010a0e16cd35081df129ee38113e0
+  estado: reconciliado
+- id: governanca-ontologica-de-skills
+  fonte: debianlima/competencias-catalogo:metodo/governanca-ontologica-de-skills/SKILL.md
+  versao_fixada: 1.0.4
+  delta_lido_ate: 69206d06392010a0e16cd35081df129ee38113e0
+  estado: reconciliado
+- id: telemetry-data-visualization
+  fonte: debianlima/competencias-catalogo:dominio/telemetry-data-visualization/SKILL.md
+  versao_fixada: '2'
+  delta_lido_ate: 69206d06392010a0e16cd35081df129ee38113e0
+  estado: reconciliado
+- id: distributed-agent-control
+  fonte: debianlima/competencias-catalogo:dominio/distributed-agent-control/SKILL.md
+  versao_fixada: '1'
+  delta_lido_ate: 69206d06392010a0e16cd35081df129ee38113e0
+  estado: reconciliado
+- id: network-ssh-operations
+  fonte: debianlima/competencias-catalogo:dominio/network-ssh-operations/SKILL.md
+  versao_fixada: '1'
+  delta_lido_ate: 69206d06392010a0e16cd35081df129ee38113e0
+  estado: reconciliado
+- id: operational-ui-truth
+  fonte: debianlima/competencias-catalogo:dominio/operational-ui-truth/SKILL.md
+  versao_fixada: '1'
+  delta_lido_ate: 69206d06392010a0e16cd35081df129ee38113e0
+  estado: reconciliado
+- id: cloud-design-patterns
+  fonte: github/awesome-copilot:skills/cloud-design-patterns/SKILL.md
+  versao_fixada: git:318066d2213b510e89b500ed0d53506c54093ddc
+  delta_lido_ate: 318066d2213b510e89b500ed0d53506c54093ddc
+  estado: reconciliado
+- id: ddia-systems
+  fonte: wondelai/skills:ddia-systems/SKILL.md
+  versao_fixada: 1.4.0
+  delta_lido_ate: 6bac1534f9f256a56fc2b4dd0e70b9a692758966
+  estado: reconciliado
+- id: release-it
+  fonte: wondelai/skills:release-it/SKILL.md
+  versao_fixada: 1.4.0
+  delta_lido_ate: 6bac1534f9f256a56fc2b4dd0e70b9a692758966
+  estado: reconciliado
+- id: platform-engineering
+  fonte: magnus919/agent-skills:platform-engineering/SKILL.md
+  versao_fixada: git:ed68466e04c9b5d33898ed5b503fb828f49c3e73
+  delta_lido_ate: ed68466e04c9b5d33898ed5b503fb828f49c3e73
+  estado: reconciliado
+- id: playwright
+  fonte: openai/skills:skills/.curated/playwright/SKILL.md
+  versao_fixada: git:49f948faa9258a0c61caceaf225e179651397431
+  delta_lido_ate: 49f948faa9258a0c61caceaf225e179651397431
+  estado: reconciliado
+- id: cpp-pro
+  fonte: saeed-vayghan/gemini-agent-skills:.gemini/skills/cpp-pro/SKILL.md
+  versao_fixada: git:34ca3ca1db04b092c5f86eba155c23e105fc933b
+  delta_lido_ate: 34ca3ca1db04b092c5f86eba155c23e105fc933b
+  estado: reconciliado
 ---
 
 # CloudIFF — skill de projeto
@@ -168,3 +234,5 @@ Agente pode permanecer ativo e não voltar a publicar após indisponibilidade NA
 
 ### L010 — release imutável não recebe chmod corretivo
 `cpp-pro` foi observado root-only em release antiga. Correção deve nascer em nova release reconciliada, não por mutação local.
+### L011 — `current` é execução, não procedência de skill
+Na v40, oito competências apareciam como `preexistente` porque o catálogo apontava para `/srv/cloudif/agent-skills/current`. O fecho recuperou `SOURCES.json`/`MANIFEST.json`, confirmou repositório+commit+path e comparou os bytes instalados com o upstream. As duas skills sem upstream eram aprendizado específico do CloudIFF e foram internalizadas como `compoe`. Gate: entrada 179/182 em 2026-08-24, `SOURCE_HASH_PARITY=PASS`, `RECONCILIATION_CLOSURE=PASS` e `DEPENDENCY_REFERENCES=PASS`. Evita promover symlink mutável a fonte ou inventar upstream. Vale em Linux/Git quando a release traz metadados de procedência ou quando há evidência equivalente verificável.
