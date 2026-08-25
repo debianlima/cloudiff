@@ -1,8 +1,8 @@
 {
-  "version": 1,
+  "version": 2,
   "model": "FaroValidation",
   "stage": "pki-nats",
-  "verification_status": "not_verified",
+  "verification_status": "verified",
   "goal": "Validar identidade criptográfica e autorização NATS individual de Faro.",
   "depends_on": [
     "identity-network"
@@ -13,28 +13,28 @@
       "statement": "Certificado cliente deve usar clientAuth e vincular CN/URI ao node_id.",
       "source": "contratos/nats-security.schema.json",
       "mandatory": true,
-      "evidence": "certificado decodificado + fingerprint + binding node_id"
+      "evidence": "Chave RSA 3072 gerada no Faro; certificado serial 100B assinado pelo Agent PKI, CN/URI=node_id, DNS=faro, cadeia válida e chave/cert correspondentes."
     },
     {
       "id": "FARO-R08",
       "statement": "Credencial NATS deve ser individual, username igual ao node_id reservado a8c4d414-175b-4369-8f9c-a8057ca53bdc, e sem token compartilhado.",
       "source": "contratos/nats-security.schema.json",
       "mandatory": true,
-      "evidence": "autenticação individual validada"
+      "evidence": "Usuário NATS individual igual ao node_id; senha root-only; autenticação mTLS+user/password comprovada por heartbeat e protocolo NATS."
     },
     {
       "id": "FARO-R09",
       "statement": "Agent pode publicar apenas cloudiff.v2.node.observed e não pode assinar subjects.",
       "source": "contratos/nats-security.schema.json",
       "mandatory": true,
-      "evidence": "publish permitido e subscribe negado"
+      "evidence": "Heartbeat prova publish permitido em cloudiff.v2.node.observed; protocolo NATS negou Subscription nesse subject e Publish em cloudiff.v2.unauthorized."
     },
     {
       "id": "FARO-R10",
-      "statement": "Certificado servidor NATS deve chegar por SecureDistribution HTTPS/capability; SSH não é canal permitido.",
+      "statement": "Faro deve validar a identidade TLS do servidor NATS por CA confiável + expected hostname; a coleção SecureDistribution nats-server-cert permanece restrita ao host servidor e nunca expõe sua privkey ao agente.",
       "source": "contratos/nats-security.schema.json",
       "mandatory": true,
-      "evidence": "manifest SHA/size/hostname/lifetime/key-match validados"
+      "evidence": "Agente valida servidor por CA do sistema + expected hostname nats.cloudiff.duckdns.org. SecureDistribution nats-server-cert é server-side, contém privkey e não concede audience/capability ao Faro."
     }
   ],
   "tasks": [
@@ -42,19 +42,19 @@
       "id": "FARO-T07",
       "action": "No primeiro SSH, gerar chave privada no próprio Faro e CSR vinculado ao node_id reservado; não gerar/copiar a chave privada no control-plane.",
       "expected_result": "chave privada permanece em Faro; CSR assinado pelo Agent PKI signer root-only em Hospedagem",
-      "gate": "não verificado"
+      "gate": "passed:key-local-csr-pki-enroll"
     },
     {
       "id": "FARO-T08",
       "action": "Provisionar usuário/senha NATS exclusivos e validar ACL de subject.",
       "expected_result": "least privilege do agent comprovado por testes positivo/negativo",
-      "gate": "não verificado"
+      "gate": "passed:nats-positive-negative-acl"
     },
     {
       "id": "FARO-T09",
-      "action": "Executar download SecureDistribution do certificado servidor e validar integridade/hostname.",
-      "expected_result": "trust bootstrap sem SSH",
-      "gate": "não verificado"
+      "action": "Validar handshake TLS do Faro com CA confiável/expected hostname e provar que a capability nats-server-cert não é concedida ao Faro.",
+      "expected_result": "trust bootstrap do agente sem SSH de certificado e sem acesso à chave privada do servidor",
+      "gate": "passed:system-ca-hostname-and-capability-exclusion"
     }
   ],
   "distributed_system_checks": {

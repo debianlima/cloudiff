@@ -1,6 +1,6 @@
 ---
 name: cloudiff
-versao: 0.1.2
+versao: 0.1.3
 description: Governa, reconcilia, normaliza e evolui a plataforma CloudIFF V1/Python→V2/C++23 preservando interface homologada, contratos, segurança,
   dados, observabilidade e rollback.
 tipo_competencia: projeto
@@ -236,3 +236,6 @@ Agente pode permanecer ativo e não voltar a publicar após indisponibilidade NA
 `cpp-pro` foi observado root-only em release antiga. Correção deve nascer em nova release reconciliada, não por mutação local.
 ### L011 — `current` é execução, não procedência de skill
 Na v40, oito competências apareciam como `preexistente` porque o catálogo apontava para `/srv/cloudif/agent-skills/current`. O fecho recuperou `SOURCES.json`/`MANIFEST.json`, confirmou repositório+commit+path e comparou os bytes instalados com o upstream. As duas skills sem upstream eram aprendizado específico do CloudIFF e foram internalizadas como `compoe`. Gate: entrada 179/182 em 2026-08-24, `SOURCE_HASH_PARITY=PASS`, `RECONCILIATION_CLOSURE=PASS` e `DEPENDENCY_REFERENCES=PASS`. Evita promover symlink mutável a fonte ou inventar upstream. Vale em Linux/Git quando a release traz metadados de procedência ou quando há evidência equivalente verificável.
+
+### L012 — capability de certificado do servidor não vira trust bundle do agente
+Na v42, a coleção `nats-server-cert` do SecureDistribution foi auditada e continha `fullchain.pem` **e** `privkey.pem`, com audience restrita ao host que opera o servidor NATS. Conceder essa capability ao Faro teria atravessado a fronteira de confiança e exposto a chave privada do servidor. Para agentes, o gate correto é mTLS com certificado cliente próprio + CA confiável do sistema + `expected hostname`; SecureDistribution continua server-side para material do servidor. Gate: Faro `10.62.91.5`, certificado cliente serial `100B`, heartbeat E2E, ACL NATS positiva/negativa, `NATS_NO_CLIENT_CERT_DENIED=PASS` e capability auditada sem audience Faro em 2026-08-25. Evita transformar distribuição segura do servidor em distribuição indevida de segredo para clientes.

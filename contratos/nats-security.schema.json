@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "CloudIFF NATS Security",
+  "title": "CloudIFF NATS Security v2",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -19,7 +19,10 @@
     "distribution_origin",
     "distribution_collection",
     "ssh_distribution_allowed",
-    "distribution_validation"
+    "distribution_validation",
+    "server_certificate_distribution_scope",
+    "agent_server_trust_source",
+    "agent_may_receive_server_private_key"
   ],
   "properties": {
     "server_address": {
@@ -107,6 +110,15 @@
         "minimum certificate lifetime",
         "certificate-private-key match"
       ]
+    },
+    "server_certificate_distribution_scope": {
+      "const": "nats-server-host-only"
+    },
+    "agent_server_trust_source": {
+      "const": "system-ca-plus-expected-hostname"
+    },
+    "agent_may_receive_server_private_key": {
+      "const": false
     }
   }
 }

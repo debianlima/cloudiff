@@ -1,8 +1,8 @@
 {
-  "version": 1,
+  "version": 2,
   "model": "FaroValidation",
   "stage": "identity-network",
-  "verification_status": "not_verified",
+  "verification_status": "verified",
   "goal": "Validar identidade independente de Faro e conectividade mínima sem assumir rede confiável.",
   "depends_on": [
     "discovery"
@@ -13,21 +13,21 @@
       "statement": "Gerar node_id UUID independente e persistente; não reutilizar identidade de hospedagem, Forja ou Maurício.",
       "source": "contratos/node.schema.json",
       "mandatory": true,
-      "evidence": "node_id persistido e único"
+      "evidence": "node_id a8c4d414-175b-4369-8f9c-a8057ca53bdc persistido; PostgreSQL contém exatamente um node com essa identidade."
     },
     {
       "id": "FARO-R05",
       "statement": "Validar Faro em 10.62.91.5 e caminho de saída para NATS 10.62.92.7:14222; se físico, 10.62.91.5 chega pela VPN.",
       "source": "contratos/nats-security.schema.json",
       "mandatory": true,
-      "evidence": "teste TCP/TLS e rota registrados"
+      "evidence": "Rota Faro->10.62.92.7 via 10.62.91.1, TCP 14222 OPEN e heartbeat E2E recebido no control-plane."
     },
     {
       "id": "FARO-R06",
       "statement": "Não abrir porta inbound em Faro sem capability que a exija explicitamente.",
       "source": "cloud-design-patterns: trust boundary",
       "mandatory": true,
-      "evidence": "inventário de listeners antes/depois sem abertura implícita"
+      "evidence": "Baseline de listeners antes/depois mantém somente SSH externo; agent/updater não abriram listener inbound."
     }
   ],
   "tasks": [
@@ -35,19 +35,19 @@
       "id": "FARO-T04",
       "action": "Criar ou validar /etc/cloudiff-v2/node-id com UUID próprio e permissões somente leitura para o agent.",
       "expected_result": "identidade estável entre reinícios",
-      "gate": "não verificado"
+      "gate": "passed:node-id-persistente"
     },
     {
       "id": "FARO-T05",
       "action": "A partir de Faro 10.62.91.5, testar rota e TCP/TLS para 10.62.92.7:14222 e endpoints autorizados.",
       "expected_result": "matriz de conectividade com sucesso/falha por destino",
-      "gate": "não verificado"
+      "gate": "passed:route-tcp-nats-e2e"
     },
     {
       "id": "FARO-T06",
       "action": "Capturar listeners e regras locais para estabelecer baseline de superfície de ataque.",
       "expected_result": "diff de rede mensurável para qualquer mudança futura",
-      "gate": "não verificado"
+      "gate": "passed:ss-listeners-firewall-baseline"
     }
   ],
   "distributed_system_checks": {

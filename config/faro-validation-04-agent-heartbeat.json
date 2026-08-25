@@ -1,8 +1,8 @@
 {
-  "version": 1,
+  "version": 2,
   "model": "FaroValidation",
   "stage": "agent-heartbeat",
-  "verification_status": "not_verified",
+  "verification_status": "verified",
   "goal": "Validar agent persistente não-root e heartbeat idempotente até o observed state do control-plane.",
   "depends_on": [
     "pki-nats"
@@ -13,21 +13,21 @@
       "statement": "cloudiff-agent deve executar como usuário não-root com hardening systemd e node-id read-only.",
       "source": "deploy/systemd/cloudiff-v2-agent.service",
       "mandatory": true,
-      "evidence": "systemd properties + security exposure"
+      "evidence": "cloudiff-v2-agent.service active como cloudiff-v2-agent, NRestarts=0, node-id read-only e hardening systemd aplicado."
     },
     {
       "id": "FARO-R12",
       "statement": "Heartbeat deve carregar node_id consistente, observed_at, role e capabilities confirmados.",
       "source": "contratos/node.schema.json + tests/test_heartbeat.cpp",
       "mandatory": true,
-      "evidence": "evento capturado e validado"
+      "evidence": "PostgreSQL observed state contém mesmo node_id, hostname=faro, role=edge, observed_at e capabilities inventory/health/telemetry-host/agent-auto-update."
     },
     {
       "id": "FARO-R13",
       "statement": "Reenvio do mesmo estado não pode criar node duplicado ou identidade nova.",
       "source": "cloud-design-patterns: idempotency",
       "mandatory": true,
-      "evidence": "contagem/identidade estáveis após reenvio"
+      "evidence": "Restart do agent manteve node_count=1 e last_seen avançou 30s; sem identidade duplicada."
     }
   ],
   "tasks": [
@@ -35,19 +35,19 @@
       "id": "FARO-T10",
       "action": "Instalar/ativar agent somente após identidade e PKI aprovadas.",
       "expected_result": "serviço active sem root e sem permissões extras",
-      "gate": "não verificado"
+      "gate": "passed:agent-0.36-non-root"
     },
     {
       "id": "FARO-T11",
       "action": "Publicar heartbeat real e correlacionar NATS → control-plane → PostgreSQL observed state.",
       "expected_result": "cadeia E2E observável com mesmo node_id",
-      "gate": "não verificado"
+      "gate": "passed:nats-control-postgres-heartbeat"
     },
     {
       "id": "FARO-T12",
       "action": "Repetir heartbeat e reiniciar o agent para provar identidade estável e idempotência.",
       "expected_result": "sem node duplicado e revision/observed_at coerentes",
-      "gate": "não verificado"
+      "gate": "passed:restart-idempotency-node-count-1"
     }
   ],
   "distributed_system_checks": {

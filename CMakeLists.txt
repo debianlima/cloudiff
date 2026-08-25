@@ -16,7 +16,7 @@ pkg_check_modules(NATS REQUIRED IMPORTED_TARGET libnats)
 pkg_check_modules(UUID REQUIRED IMPORTED_TARGET uuid)
 add_library(cloudiff_common STATIC
  src/common/node_identity.cpp src/common/job_state.cpp src/common/nats_client.cpp
- src/common/postgres_client.cpp src/common/heartbeat.cpp src/common/telemetry.cpp src/common/job_engine.cpp)
+ src/common/postgres_client.cpp src/common/heartbeat.cpp src/common/telemetry.cpp src/common/job_engine.cpp src/common/reconciliation.cpp)
 target_include_directories(cloudiff_common PUBLIC include)
 target_link_libraries(cloudiff_common PUBLIC nlohmann_json::nlohmann_json PostgreSQL::PostgreSQL Threads::Threads OpenSSL::Crypto LibArchive::LibArchive PkgConfig::NATS PkgConfig::UUID)
 target_compile_definitions(cloudiff_common PUBLIC BOOST_ERROR_CODE_HEADER_ONLY)
@@ -46,6 +46,16 @@ add_executable(test_telemetry tests/test_telemetry.cpp)
 target_link_libraries(test_telemetry PRIVATE cloudiff_common)
 add_test(NAME telemetry COMMAND test_telemetry)
 add_test(NAME job_engine COMMAND test_job_engine)
+
+add_executable(cloudiff-reconcile src/reconcile/main.cpp)
+target_link_libraries(cloudiff-reconcile PRIVATE cloudiff_common)
+target_compile_options(cloudiff-reconcile PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
+
+add_executable(test_reconciliation tests/test_reconciliation.cpp)
+target_link_libraries(test_reconciliation PRIVATE cloudiff_common)
+target_compile_options(test_reconciliation PRIVATE -UNDEBUG -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
+add_test(NAME reconciliation COMMAND test_reconciliation)
+
 
 add_executable(test_nats_mtls tests/test_nats_mtls.cpp)
 target_link_libraries(test_nats_mtls PRIVATE cloudiff_common)

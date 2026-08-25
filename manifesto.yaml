@@ -1,5 +1,5 @@
 projeto: cloudiff-v2
-versao_contrato: 41
+versao_contrato: 42
 namespace_fechado: true
 entradas:
   - id: 1
@@ -193,7 +193,7 @@ entradas:
     consome: [bin/cloudiff-agent, bin/cloudiff-control, bin/cloudiff-worker, teste/node-identity, teste/job-state]
     produz: build/v2
     aceite: portao-mecanico/build-cpp
-    status: pendente
+    status: aceito
   - id: 25
     caminho: tools/verify_namespace.py
     proposito: verifica árvore real contra namespace fechado do manifesto
@@ -985,7 +985,7 @@ entradas:
     consome: [validation/faro-reconciliation-resilience]
     produz: validation/faro-acceptance
     aceite: portao-mecanico/infraestrutura
-    status: aceito
+    status: pendente
   - id: 124
     caminho: tests/test_faro_validation_model.py
     proposito: teste estrutural do modelo Faro contra contratos existentes, dependências e gates não verificados
@@ -993,7 +993,7 @@ entradas:
     consome: [validation/faro-acceptance, contratos/faro-validation.schema]
     produz: teste/faro-validation-model
     aceite: portao-mecanico/backend-integracao
-    status: aceito
+    status: pendente
   - id: 125
     caminho: contratos/faro-node-preparation.schema.json
     proposito: contrato da reserva física/lógica do Faro em 10.62.91.5 e preparação do control-plane antes do SSH
@@ -1321,7 +1321,7 @@ entradas:
     consome: [config/faro-node-profile]
     produz: teste/faro-profile
     aceite: portao-mecanico/infraestrutura
-    status: pendente
+    status: aceito
   - id: 169
     caminho: deploy/install_agent_update_route.sh
     proposito: 'instala rota HTTPS AgentUpdate: NPM Maurício -> router Hospedagem -> repository loopback, com rollback'
@@ -12037,11 +12037,52 @@ entradas:
     aceite: portao-mecanico/documentacao-estrutural
     status: aceito
 
+  - id: 1508
+    caminho: include/cloudiff/reconciliation.hpp
+    proposito: contrato C++ puro de CloudIFFProjectReconciliation para desired_state/observed_state
+    tipo: backend-integracao
+    consome: [contratos/reconciliation.schema]
+    produz: lib/reconciliation
+    aceite: portao-mecanico/backend-integracao
+    status: aceito
+  - id: 1509
+    caminho: src/common/reconciliation.cpp
+    proposito: avaliador determinístico de convergência, drift, bloqueio e degradação
+    tipo: backend-integracao
+    consome: [lib/reconciliation, evidencia/v1-file-0239]
+    produz: runtime/reconciliation-evaluator
+    aceite: portao-mecanico/backend-integracao
+    status: aceito
+  - id: 1510
+    caminho: src/reconcile/main.cpp
+    proposito: CLI de gate para executar CloudIFFProjectReconciliation sem efeitos colaterais
+    tipo: backend-integracao
+    consome: [runtime/reconciliation-evaluator]
+    produz: bin/cloudiff-reconcile
+    aceite: portao-mecanico/backend-integracao
+    status: aceito
+  - id: 1511
+    caminho: tests/test_reconciliation.cpp
+    proposito: prova decisões determinísticas noop/reconcile/blocked/degraded/failed
+    tipo: build-cpp
+    consome: [runtime/reconciliation-evaluator]
+    produz: teste/reconciliation
+    aceite: portao-mecanico/build-cpp
+    status: aceito
+  - id: 1512
+    caminho: docs/reconciliation/faro-r14-v42.json
+    proposito: evidência mecânica R14 com casos desired igual/diferente para Faro
+    tipo: documentacao-estrutural
+    consome: [bin/cloudiff-reconcile, validation/faro-agent-heartbeat]
+    produz: evidencia/faro-r14-v42
+    aceite: portao-mecanico/documentacao-estrutural
+    status: aceito
+
 trabalho_compartilhado:
   projeto: cloudiff
-  unidade: reconnect-readiness-v41
+  unidade: faro-onboarding-v42
   agente: WORK-SSH
-  atualizado_em: '2026-08-24T22:34:11-03:00'
-  concluido_em: '2026-08-24T22:34:11-03:00'
+  atualizado_em: '2026-08-25T15:06:00-03:00'
+  concluido_em: '2026-08-25T15:06:00-03:00'
   estado: concluido
   zona_exclusao: []

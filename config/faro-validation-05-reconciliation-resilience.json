@@ -1,8 +1,8 @@
 {
-  "version": 1,
+  "version": 2,
   "model": "FaroValidation",
   "stage": "reconciliation-resilience",
-  "verification_status": "not_verified",
+  "verification_status": "verified",
   "goal": "Validar convergência desired/observed e recuperação diante das falhas parciais esperadas em sistema distribuído.",
   "depends_on": [
     "agent-heartbeat"
@@ -13,28 +13,28 @@
       "statement": "Desired/observed revisions devem produzir decisão noop, reconcile, blocked, degraded ou failed de forma determinística.",
       "source": "contratos/reconciliation.schema.json",
       "mandatory": true,
-      "evidence": "casos de reconciliação registrados"
+      "evidence": "cloudiff-reconcile v42: Debug+ASan/UBSan e Release PASS, zero warnings; desired==observed -> noop; revision drift -> reconcile; evidência docs/reconciliation/faro-r14-v42.json."
     },
     {
       "id": "FARO-R15",
       "statement": "Perda temporária de NATS/rede deve ser detectável e recuperação não deve duplicar node/eventos semanticamente.",
       "source": "cloud-design-patterns: retry/partial failure",
       "mandatory": true,
-      "evidence": "injeção controlada + recuperação"
+      "evidence": "Outage NATS real reiniciou o container; Faro preservou o mesmo PID 28284 e last_seen avançou 45s após recuperação."
     },
     {
       "id": "FARO-R16",
       "statement": "Certificado ou credencial inválidos devem falhar fechados sem fallback para identidade compartilhada.",
       "source": "contratos/nats-security.schema.json",
       "mandatory": true,
-      "evidence": "testes negativos mTLS/credential"
+      "evidence": "Senha errada retornou Authorization Violation; ausência de client cert falhou TLS; subscribe e publish fora do subject permitido foram negados."
     },
     {
       "id": "FARO-R17",
       "statement": "Reboot do host e restart do agent devem recuperar o mesmo node_id e observed state.",
       "source": "cloud-design-patterns: resilience",
       "mandatory": true,
-      "evidence": "reboot/restart com continuidade de identidade"
+      "evidence": "Reboot real mudou boot_id, preservou node_id, agent/updater ativos, NRestarts=0, node_count=1 e heartbeat retomado em 64s."
     }
   ],
   "tasks": [
@@ -42,25 +42,25 @@
       "id": "FARO-T13",
       "action": "Executar casos desired==observed e desired!=observed e registrar decisão/reason/revisions.",
       "expected_result": "reconciliação determinística",
-      "gate": "não verificado"
+      "gate": "passed:cloudiff-reconcile-v42-noop-reconcile"
     },
     {
       "id": "FARO-T14",
       "action": "Injetar indisponibilidade NATS/rede em janela controlada e restaurar conectividade.",
       "expected_result": "degradação observável e recuperação sem duplicidade",
-      "gate": "não verificado"
+      "gate": "passed:production-nats-outage-recovery"
     },
     {
       "id": "FARO-T15",
       "action": "Testar certificado/credencial de outro node e subject não autorizado.",
       "expected_result": "falha fechada em identidade e ACL",
-      "gate": "não verificado"
+      "gate": "passed:mtls-credential-subject-negative-gates"
     },
     {
       "id": "FARO-T16",
       "action": "Reiniciar agent e, se autorizado, Faro para provar recuperação do mesmo resource_id.",
       "expected_result": "estado converge após restart",
-      "gate": "não verificado"
+      "gate": "passed:agent-restart-and-host-reboot-continuity"
     }
   ],
   "distributed_system_checks": {

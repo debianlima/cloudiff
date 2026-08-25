@@ -1,8 +1,8 @@
 {
-  "version": 1,
+  "version": 2,
   "model": "FaroValidation",
   "stage": "discovery",
-  "verification_status": "not_verified",
+  "verification_status": "verified",
   "goal": "Determinar o que Faro é fisicamente e quais responsabilidades podem ser contratadas sem assumir função por nome.",
   "depends_on": [],
   "requirements": [
@@ -11,21 +11,21 @@
       "statement": "Identificar hostname, SO, arquitetura, CPU, RAM, disco, interfaces, IPs e serviços existentes.",
       "source": "contratos/node.schema.json",
       "mandatory": true,
-      "evidence": "inventário coletado no próprio host"
+      "evidence": "Host faro: Ubuntu 26.04 KVM x86_64; DMI QEMU 8 GB RAM e MemTotal guest 7.785.426.944 bytes; 2 vCPU; disco 200 GiB; LV 198G; rede 10.62.91.5; inventário residente errors=0 warnings=0."
     },
     {
       "id": "FARO-R02",
       "statement": "Determinar role somente após inventário; valores permitidos continuam control, forja, edge ou other.",
       "source": "contratos/node.schema.json",
       "mandatory": true,
-      "evidence": "decisão registrada com justificativa"
+      "evidence": "Role edge confirmada pelo perfil CloudIFF e observada no heartbeat PostgreSQL."
     },
     {
       "id": "FARO-R03",
       "statement": "Declarar capabilities somente quando forem observáveis e necessárias à função escolhida.",
       "source": "contratos/node.schema.json",
       "mandatory": true,
-      "evidence": "lista de capabilities aprovada sem inferências"
+      "evidence": "Capabilities observadas: inventory, health, telemetry-host, agent-auto-update; portal-host permanece desejada e ainda não observada."
     }
   ],
   "tasks": [
@@ -33,19 +33,19 @@
       "id": "FARO-T01",
       "action": "Coletar inventário de hardware, sistema, interfaces, rotas e serviços sem alterar configuração.",
       "expected_result": "baseline físico e lógico de Faro",
-      "gate": "não verificado"
+      "gate": "passed:inventario-host-real"
     },
     {
       "id": "FARO-T02",
       "action": "Classificar role e capabilities a partir do inventário e da função desejada pelo operador.",
       "expected_result": "role/capabilities deixam de ser unresolved somente com decisão explícita",
-      "gate": "não verificado"
+      "gate": "passed:role-edge-capabilities-observadas"
     },
     {
       "id": "FARO-T03",
       "action": "Registrar conflitos com serviços existentes, portas ocupadas e restrições de manutenção.",
       "expected_result": "mapa de coexistência antes de qualquer deploy",
-      "gate": "não verificado"
+      "gate": "passed:listeners-baseline-ssh-only"
     }
   ],
   "distributed_system_checks": {
@@ -59,20 +59,22 @@
   "decisions": [
     {
       "name": "role",
-      "status": "unresolved",
+      "status": "fixed",
       "allowed_values": [
-        "control",
-        "forja",
-        "edge",
-        "other"
+        "edge"
       ],
-      "rule": "não escolher antes do inventário e da intenção operacional"
+      "rule": "role edge confirmada pelo operador/projeto e observada no heartbeat"
     },
     {
       "name": "capabilities",
-      "status": "unresolved",
-      "allowed_values": [],
-      "rule": "derivar apenas do papel confirmado e de capacidades reais do host"
+      "status": "derived",
+      "allowed_values": [
+        "inventory",
+        "health",
+        "telemetry-host",
+        "agent-auto-update"
+      ],
+      "rule": "somente capabilities observadas no heartbeat atual; portal-host ainda não observada"
     },
     {
       "name": "network_address",
@@ -84,12 +86,11 @@
     },
     {
       "name": "form_factor",
-      "status": "unresolved",
+      "status": "fixed",
       "allowed_values": [
-        "virtual-machine",
-        "physical-machine-via-vpn"
+        "virtual-machine-kvm"
       ],
-      "rule": "ambas usam 10.62.91.5; decidir quando o recurso existir"
+      "rule": "systemd-detect-virt=kvm no host definitivo 10.62.91.5"
     }
   ]
 }

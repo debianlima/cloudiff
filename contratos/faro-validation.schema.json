@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "CloudIFF FaroValidation v1",
+  "title": "CloudIFF FaroValidation v2",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -17,7 +17,7 @@
   ],
   "properties": {
     "version": {
-      "const": 1
+      "const": 2
     },
     "model": {
       "const": "FaroValidation"
@@ -33,7 +33,12 @@
       ]
     },
     "verification_status": {
-      "const": "not_verified"
+      "enum": [
+        "not_verified",
+        "partially_verified",
+        "verified",
+        "failed"
+      ]
     },
     "goal": {
       "type": "string",

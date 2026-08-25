@@ -1,80 +1,90 @@
-# Estado — 2026-08-24 — contrato v41
+# Estado — 2026-08-25 — contrato v42
 
 ## Decisões vigentes
-- CloudIFF V1/Python e V2/C++23 permanecem um único projeto; reconciliação incremental antecede normalização, migração ou remoção.
-- `FrozenPortalInterface` continua sendo o requisito mestre: implementação pode mudar; interface gráfica, navegação, rotas e comportamento visível homologado não mudam sem decisão humana explícita separada.
-- Skill raiz ativa é `cloudiff@0.1.2`; revisão de cobertura da v41 concluída sem nova versão porque L009 já define o gate homologado de reconexão por heartbeat sem restart.
-- Agentes centrais usam release imutável `0.36.0` via updater assinado Ed25519. Forja, Maurício e Hospedagem estão com timer de auto-update `enabled` e `active`.
-- O control-plane usa unit com `ExecStartPre` baseado em `pg_isready`; indisponibilidade temporária do PostgreSQL deixa o serviço em `activating/start-pre`, não em StartLimit/falha.
-- Faro continua alvo efetivo quando a unidade elegível exigir deploy real; nenhuma mudança de interface será acoplada ao onboarding.
-- OpenCode ou outro agente auxiliar não é instalado em servidor/container sem autorização explícita.
+- CloudIFF V1/Python e V2/C++23 continuam um único projeto reconciliado incrementalmente.
+- `FrozenPortalInterface` permanece requisito mestre: nenhum trabalho v42 alterou interface gráfica, navegação ou comportamento visual homologado.
+- Skill raiz produzida nesta unidade é `cloudiff@0.1.3`, com L012 homologado: material privado do certificado servidor NATS não é distribuído a agentes; agentes usam certificado cliente próprio + CA confiável + hostname esperado.
+- Faro definitivo é `10.62.91.5`, role `edge`, Ubuntu Server 26.04 x86_64, VM KVM.
+- Faro usa node_id próprio, credencial NATS individual, chave privada gerada no próprio host, certificado cliente Agent PKI e agent `0.36.0` não-root.
+- Faro publica diretamente para `10.62.92.7:14222`; heartbeat não depende de Forja/Maurício.
+- Requisito prescritivo de recursos continua 4 vCPU, 8 GiB RAM e 200 GiB disco. O ambiente observado vence apenas o inventário, não o requisito.
+- OpenCode/outro agente não é instalado sem autorização explícita.
 
 ## Decisões superadas
-- Agentes `0.34.0` como baseline operacional — substituídos por `0.36.0` após build, CTest, canary e outage real.
-- Considerar `systemctl active` como evidência suficiente de saúde do agente — superado: gate exige PID preservado + heartbeat/`last_seen` retomado após outage.
-- Unit do control sem espera ativa por PostgreSQL — substituída pela unit canônica com `ExecStartPre=/usr/bin/timeout 120 ... pg_isready`.
-- Timer de updater da Hospedagem desabilitado durante a recuperação — reativado após v41, retornando `AGENT_UPDATE=NOOP` em 0.36.0.
+- Faro como host inexistente/sem SSH — superado; host real e SSH foram homologados.
+- Reserva Faro com `nodeOperational=false`, `sshAvailable=false`, `csrSigned=false`, `heartbeatE2E=false` — superada pela reserva v2 observada.
+- Caminho Faro→NATS classificado como bloqueado — superado por TCP aberto, contador de firewall para `10.62.91.5` e heartbeat E2E PostgreSQL.
+- RAM em “provider-confirmation-required” — superada por DMI de 8 GB; MemTotal guest permanece ~7,25 GiB observável por overhead.
+- R14 sem executor runtime — superado por `cloudiff-reconcile` C++ com decisões determinísticas.
+- Skill `cloudiff@0.1.2` — substituída por `0.1.3` após homologação L012; recarga obrigatória antes da próxima unidade.
 
 ## Decisões humanas pendentes
-- Nenhuma decisão humana nova bloqueia o fecho v41.
+- Nenhuma nova decisão humana. O requisito de 4 vCPU já foi decidido pelo operador e não será rebaixado automaticamente.
 
 ## Pendências técnicas não humanas
-- Cinco arquivos V1 continuam `preexistente` porque a auditoria integral encontrou links Markdown quebrados; não foram alterados nesta unidade.
-- Sete entradas declaradas continuam não geradas: LegacyRetirement, monitoramento padrão e teste de perfil Faro.
-- Backup principal `pre-v2-20260820` continua sem integridade remota completa enquanto o servidor de backup estiver fora da rede; remoção destrutiva de legacy segue bloqueada.
-- A suíte Python oficial ainda pode emitir `ResourceWarning` de handles/sockets no teardown; dívida independente da v41.
-- Acesso direto Hospedagem (`10.62.92.7`) → `10.68.128.253` segue filtrado; `.253` responde ICMP e SSH pela rede local através de `10.68.128.252`. SSH `cti` no `.253` foi comprovado via salto.
+- Faro possui 2 vCPU observadas e requer 4 vCPU. Isto bloqueia `config/faro-validation-06-acceptance.json` e o aceite final do node para cargas que exigem o perfil completo, incluindo Portal.
+- `fwupd-refresh.service` no Faro falha por timeout de egress para `cdn.fwupd.org`; CloudIFF interno, DNS, HTTPS interno, NATS e heartbeat estão funcionais. Warning registrado no inventário residente.
+- Containers/telemetria de container permanecem indisponíveis no Faro porque Docker/cAdvisor/monitoramento padrão ainda não foram implantados.
+- Cinco arquivos V1 continuam `preexistente` por links Markdown quebrados.
+- LegacyRetirement e instalador de monitoramento padrão continuam declarados e não gerados.
+- Backup principal `pre-v2-20260820` continua sem integridade remota completa enquanto o servidor de backup permanecer fora da rede; remoção destrutiva de legacy continua bloqueada.
 
 ## Trabalho compartilhado
-- `manifesto.yaml.trabalho_compartilhado` — unidade `reconnect-readiness-v41`, concluída, sem zona de exclusão ativa.
+- ponteiro: `manifesto.yaml.trabalho_compartilhado` — unidade `faro-onboarding-v42`, concluída, sem zona de exclusão ativa.
 
 ## Competências ativas nesta unidade
-- `cloudiff@0.1.2` — skill raiz do projeto.
+- `cloudiff@0.1.2` — skill ativa durante a execução da v42; produziu candidata `0.1.3` após homologação L012.
 - `desenvolvedor-de-software@14` — método de projeto.
-- `github-incremental-reconciliation@7` — reconciliação/delta antes de normalizar.
-- `cloud-design-patterns` no commit fixado — reconnect/falha injetada.
-- `platform-engineering` no commit fixado — readiness/systemd/runtime.
-- `release-it@1.4.0` — promoção assinada/canary/rollback.
-- `distributed-agent-control@1` — agentes, heartbeat e reconexão.
-- `network-ssh-operations@1` — caminho NATS e testes de conectividade.
-- `telemetry-data-visualization@2` — macro global de telemetria da unidade.
+- `github-incremental-reconciliation@7` — reconciliação incremental.
+- `platform-engineering` no commit fixado — systemd/runtime/onboarding.
+- `distributed-agent-control@1` — identidade, heartbeat, reconciliação e resiliência.
+- `release-it@1.4.0` — updater assinado e rollback.
+- `network-ssh-operations@1` — DNS, NATS, rotas e gates positivos/negativos.
+- `telemetry-data-visualization@2` — macro global.
 
-## Revisão da skill do projeto
-- Cobertura revisada após homologação v41.
-- Nenhuma nova entrada foi adicionada à skill porque L009 já contém exatamente o aprendizado homologado: agente `active` não prova reconexão; o gate é retomada de `last_seen`/heartbeat sem restart do agente.
-- `cloudiff@0.1.2` permanece a versão ativa; não houve incremento artificial de versão.
+## Competências instaladas para unidades futuras
+- `cloudiff@0.1.3` — precisa ser recarregada antes da próxima unidade.
 
-## Portões v41
-- Build Debug 0.36: 63/63 targets, Clang, ASan/UBSan, zero warnings.
-- Build Release 0.36: 63/63 targets, zero warnings.
-- CTest Debug: 13/13 PASS com worker parado.
-- CTest Release: 13/13 PASS com worker parado.
-- Teste NATS isolado: primeiro publish/subscription PASS; marcador `NATS_RECONNECT_READY`; NATS temporário reiniciado; segunda publicação recebida sem restart do processo.
-- Publicação 0.36: Ed25519 signature PASS, SHA-256/size PASS; chave privada `0600 root:root`.
-- Canary Forja: updater `APPLIED VERSION=0.36.0`, agente ativo, heartbeat fresco.
-- Maurício: já havia aplicado 0.36 automaticamente; updater manual retornou `NOOP`.
-- Hospedagem: updater `APPLIED VERSION=0.36.0`, agente ativo.
-- Outage NATS real: container NATS reiniciado por ~1s; Forja, Maurício e Hospedagem mantiveram os mesmos PIDs, `NRestarts=0` e avançaram `last_seen` em 60–75s.
-- Readiness control/PostgreSQL: com DB parado, control ficou `activating/start-pre`; após DB voltar, control ficou `active`, `NRestarts=0`; worker foi restaurado `active`.
-- Auto-update: timers dos três nós `enabled+active`, checks finais `AGENT_UPDATE=NOOP`.
-- Interface: nenhum arquivo de UI/FrozenPortalInterface foi alterado nesta unidade.
+## Falhas de portão por tipo de entrada
+- `infraestrutura`: Faro inicialmente tinha apenas 2 vCPU para requisito 4; gap permanece aberto e bloqueia aceite final.
+- `rede`: DNS inicial do Faro não tinha resolver global; corrigido com `systemd-resolved` usando `10.62.91.1`, com rollback testado nas tentativas intermediárias.
+- `pki`: enrollment falhou primeiro fora de `PYTHONPATH=/srv/cloudif/lib` e sem env do machine-controller; nenhuma emissão ocorreu até usar o runtime canônico. Emissão final serial 100B PASS.
+- `agente`: primeiro bootstrap detectou dependência dinâmica ausente; updater falhou fechado sem reboot/loop. Preflight posterior mostrou `MISSING_COUNT=0` e 0.36 ativou com `NRestarts=0`.
+- `reconciliacao`: R14 permaneceu não verificado até build/test de `cloudiff-reconcile`; depois passou em Debug+ASan/UBSan e Release, zero warnings.
+- `ambiente`: `fwupd-refresh` continua warning externo por egress LVFS indisponível; não foi ocultado nem desabilitado.
+- `teste-global`: primeira execução v42 falhou apenas em `TemporaryDirectory.cleanup()` de `MultiserviceBuildBrokerTests` (`Directory not empty`); módulo isolado passou 3/3 e suíte global repetida passou 1008/1008 + 1 skip. `ResourceWarning` de sockets/handles permanece dívida técnica separada.
 
-## Divergências corrigidas
-- Fonte canônica já continha o reparo 0.36, mas runtime ainda usava agent 0.34 e unit antiga do control; v41 promoveu/homologou o estado canônico.
-- Forja e Maurício estavam `active` mas com `Connection Closed`; v41 provou reconexão funcional por heartbeat após outage real.
-- Hospedagem estava com updater timer desabilitado desde recuperação anterior; v41 restaurou a política de auto-update contínuo.
+## Divergências da última reconciliação
+### Corrigidas
+- Dotfiles Faro foi sincronizado por bundle sem Internet direta; verificador residente repinado para o commit reconciliado.
+- LV/ext4 do Faro cresceu online para consumir todo o VG: LV ~198G, filesystem `/` ~195G.
+- DNS interno do Faro passou a usar `10.62.91.1`; repositório HTTPS de agent-update voltou a resolver.
+- PKI cliente: chave RSA 3072 gerada somente no Faro, CSR assinado pelo Agent PKI, CN/URI=node_id, DNS=faro, cadeia válida.
+- Agent 0.36 + updater timer habilitado; heartbeat E2E observado com metadata/telemetria no PostgreSQL.
+- R14: `cloudiff-reconcile` gerado e homologado; evidência em `docs/reconciliation/faro-r14-v42.json`.
+- Catálogo remoto já contém CloudIFF `0.1.3` em commit concorrente preservado; nenhum commit duplicado foi criado.
+
+### Pendentes de autorização ou capacidade
+- Aumentar a VM Faro de 2 para 4 vCPU no hypervisor. Não requer mudança de contrato; após isso rerodar inventário e etapa 6 de aceite.
+- Implantar Docker/cAdvisor/monitoramento padrão em unidade própria, desde que os requisitos de capacidade da entrada sejam atendidos.
 
 ## Entradas aceitas nesta unidade
-- 27 `include/cloudiff/nats_client.hpp` — interface do cliente NATS homologada com reconexão.
-- 28 `src/common/nats_client.cpp` — reconnect automático homologado em outage isolado e real.
-- 33 `tests/test_nats_client.cpp` — marcador determinístico `NATS_RECONNECT_READY` e gate de segunda publicação.
-- 37 `deploy/systemd/cloudiff-v2-control.service` — readiness PostgreSQL homologado em indisponibilidade real.
-- 142 `src/common/telemetry.cpp` — versão 0.36 observada no fluxo de heartbeat.
+- 2 `competencias.yaml`
+- 24 `CMakeLists.txt`
+- 45 `contratos/nats-security.schema.json`
+- 117–122 modelo Faro etapas 1–5
+- 125 `contratos/faro-node-preparation.schema.json`
+- 126 `config/faro-node-reservation.json`
+- 131 `tests/test_faro_node_preparation.py`
+- 140 `config/faro-node-profile.json`
+- 165 `tests/test_faro_profile.py`
+- 179 `skills/cloudiff/SKILL.md` — candidata `0.1.3`
+- 182 `tests/test_cloudiff_project_skill.py`
+- 1508–1512 reconciliador C++/test/evidência R14
 
-## Estado operacional relevante
-- Hospedagem: `/` ~195 GiB, ~150 GiB livres após expansão de disco/LVM/ext4; PostgreSQL, control, worker, agent e NATS ativos.
-- Forja/Maurício/Hospedagem: agent `0.36.0`, updater timer habilitado e ativo.
-- `10.68.128.253` (`vmnova`) está vivo e acessível via `10.68.128.252`; acesso direto da Hospedagem é filtrado entre redes.
+## Entradas ainda pendentes
+- 123 `config/faro-validation-06-acceptance.json` — bloqueada por 2/4 vCPU.
+- 124 `tests/test_faro_validation_model.py` — consumidor da etapa 6; permanece pendente embora o teste estrutural execute.
 
 ## Próxima unidade
-- Reconciliar o perfil/máquina Faro real (`10.62.91.5`) contra inventário PGH e recursos observados; depois implantar nele os serviços Faro elegíveis, começando por agent/telemetria/update e somente então Portal, sempre preservando a interface existente.
+- Recarregar `cloudiff@0.1.3`. Se Faro já estiver com 4 vCPU, rerodar inventário/verificador e fechar etapa 6/aceite. Se ainda estiver com 2 vCPU, seguir apenas para entradas independentes que não requeiram o perfil completo, priorizando monitoramento padrão e preparação declarativa, sem Portal e sem mudança de interface.

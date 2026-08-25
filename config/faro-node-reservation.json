@@ -1,12 +1,12 @@
 {
-  "version": 1,
+  "version": 2,
   "identity": {
     "canonicalName": "FaroNodeReservation",
     "hostname": "faro",
     "nodeId": "a8c4d414-175b-4369-8f9c-a8057ca53bdc",
     "address": "10.62.91.5",
     "network": "10.62.91.0/24",
-    "formFactor": "virtual-machine-or-physical-vpn",
+    "formFactor": "virtual-machine-kvm",
     "roleStatus": "fixed-edge",
     "capabilitiesStatus": "fixed-portal-telemetry-update"
   },
@@ -50,7 +50,10 @@
       "10.0.0.0/16"
     ],
     "passwordStorage": "runtime root-only; never committed",
-    "clientCertificate": "pending CSR/key generation on Faro; CN/URI must bind nodeId",
+    "clientCertificate": {
+      "status": "signed",
+      "binding": "CN/URI must bind nodeId"
+    },
     "externalIngress": "systemd socket proxy 10.62.92.7:14222 -> 127.0.0.1:14222; NATS Docker loopback-only; source allowlist on socket",
     "hostFirewall": "Hospedagem INPUT exact match 10.62.92.7:14222/TCP; allow only declared sourceAllowlist; drop all other remote sources; loopback control unaffected"
   },
@@ -62,10 +65,32 @@
     "tlsAccessFix": "/etc/cloudiff-v2 execute-only traversal for service user plus existing cloudiff-v2-nats group access"
   },
   "verification": {
-    "ipAvailability": "verified-free-from-forja-and-mauricio-on-2026-08-21",
-    "nodeOperational": false,
-    "sshAvailable": false,
-    "csrSigned": false,
-    "heartbeatE2E": false
+    "ipAvailability": "assigned-to-faro",
+    "nodeOperational": true,
+    "sshAvailable": true,
+    "csrSigned": true,
+    "heartbeatE2E": true,
+    "natsPath": "reachable",
+    "observedAt": "2026-08-25T14:58:00-03:00"
+  },
+  "resources": {
+    "requested": {
+      "vcpu": 4,
+      "ramBytes": 8589934592,
+      "diskBytes": 214748364800
+    },
+    "observed": {
+      "vcpu": 2,
+      "ramBytes": 7785426944,
+      "diskBytes": 214748364800,
+      "lvBytes": 212596686848,
+      "rootFilesystemBytes": 208661176320,
+      "configuredRamBytes": 8589934592
+    },
+    "gates": {
+      "vcpu": "gap-observed-2-required-4",
+      "ram": "pass",
+      "disk": "pass"
+    }
   }
 }

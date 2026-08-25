@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "contract_version": 42,
+  "requirement": "FARO-R14",
+  "resource_type": "node",
+  "resource_id": "a8c4d414-175b-4369-8f9c-a8057ca53bdc",
+  "build": {
+    "debug": {"sanitizers": ["ASan", "UBSan"], "warnings": 0, "status": "PASS"},
+    "release": {"warnings": 0, "status": "PASS"}
+  },
+  "test_reconciliation": {
+    "decisions_covered": ["noop", "reconcile", "blocked", "degraded", "failed"],
+    "debug": "PASS",
+    "release": "PASS"
+  },
+  "cases": [
+    {
+      "name": "desired_equals_observed",
+      "desired_revision": 42,
+      "observed_revision": 42,
+      "desired_state": {"status": "active", "role": "edge"},
+      "observed_state": {"status": "active", "role": "edge"},
+      "expected_decision": "noop",
+      "observed_decision": "noop",
+      "reason": "desired-observed-converged",
+      "status": "PASS"
+    },
+    {
+      "name": "revision_drift",
+      "desired_revision": 42,
+      "observed_revision": 41,
+      "desired_state": {"status": "active", "role": "edge"},
+      "observed_state": {"status": "active", "role": "edge"},
+      "expected_decision": "reconcile",
+      "observed_decision": "reconcile",
+      "reason": "revision-drift",
+      "status": "PASS"
+    }
+  ],
+  "source_archive_sha256": "da8fd9d3a6cfc5c44b9587d002c88c57393882c261c58eba563305ced326a2dc",
+  "environment": "Hospedagem isolated build; no PostgreSQL/worker mutation required",
+  "result": "PASS"
+}

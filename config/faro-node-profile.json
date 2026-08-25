@@ -1,13 +1,56 @@
 {
-  "version":1,
-  "hostname":"faro",
-  "address":"10.62.91.5",
-  "role":"edge",
-  "capabilities":["inventory","health","telemetry-host","portal-host","agent-auto-update"],
-  "excluded_capabilities":["build","runtime"],
-  "platform":{"os":"ubuntu-server-26.04","arch":"x86_64","systemd":true},
-  "requested_resources":{"vcpu":4,"ram_bytes":8589934592,"disk_bytes":214748364800,"status":"awaiting-provider-confirmation"},
-  "recovery":{"backup":"reinstall-from-scratch","automatic_reboot_default":true,"admin_can_disable_reboot":true},
-  "portal":{"desired_host":true,"cutover":"after-faro-onboarding-and-portal-shadow-gates"},
-  "monitoring":{"hierarchy":"environment>node>container>service","containers":"cadvisor-local","admin_surface":"/admin"}
+  "version": 2,
+  "hostname": "faro",
+  "address": "10.62.91.5",
+  "role": "edge",
+  "capabilities": [
+    "inventory",
+    "health",
+    "telemetry-host",
+    "portal-host",
+    "agent-auto-update"
+  ],
+  "excluded_capabilities": [
+    "build",
+    "runtime"
+  ],
+  "platform": {
+    "os": "ubuntu-server-26.04",
+    "arch": "x86_64",
+    "systemd": true,
+    "virtualization": "kvm"
+  },
+  "requested_resources": {
+    "vcpu": 4,
+    "ram_bytes": 8589934592,
+    "disk_bytes": 214748364800,
+    "status": "partially-satisfied"
+  },
+  "recovery": {
+    "backup": "reinstall-from-scratch",
+    "automatic_reboot_default": true,
+    "admin_can_disable_reboot": true
+  },
+  "portal": {
+    "desired_host": true,
+    "cutover": "after-faro-onboarding-and-portal-shadow-gates"
+  },
+  "monitoring": {
+    "hierarchy": "environment>node>container>service",
+    "containers": "cadvisor-local",
+    "admin_surface": "/admin"
+  },
+  "observed_resources": {
+    "vcpu": 2,
+    "ram_bytes": 7785426944,
+    "disk_bytes": 214748364800,
+    "lv_bytes": 212596686848,
+    "root_filesystem_bytes": 208661176320,
+    "configured_ram_bytes": 8589934592
+  },
+  "resource_gates": {
+    "vcpu": "gap-observed-2-required-4",
+    "ram": "pass",
+    "disk": "pass"
+  }
 }
