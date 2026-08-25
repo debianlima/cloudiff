@@ -1,5 +1,5 @@
 projeto: cloudiff-v2
-versao_contrato: 42
+versao_contrato: 43
 namespace_fechado: true
 entradas:
   - id: 1
@@ -1273,7 +1273,7 @@ entradas:
     consome: [cpp/telemetry, runtime/agent-service]
     produz: runtime/standard-monitoring
     aceite: portao-mecanico/deploy
-    status: pendente
+    status: aceito
   - id: 160
     caminho: config/legacy-retirement.json
     proposito: 'inventário e fases de retirada: preserva pre-v2 principal, bloqueia serviços ainda requeridos e elimina resíduos seguros'
@@ -12080,9 +12080,9 @@ entradas:
 
 trabalho_compartilhado:
   projeto: cloudiff
-  unidade: faro-onboarding-v42
+  unidade: faro-standard-monitoring-v43
   agente: WORK-SSH
-  atualizado_em: '2026-08-25T15:06:00-03:00'
-  concluido_em: '2026-08-25T15:06:00-03:00'
+  atualizado_em: '2026-08-25T16:41:00-03:00'
+  concluido_em: '2026-08-25T16:41:00-03:00'
   estado: concluido
   zona_exclusao: []
