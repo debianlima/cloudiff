@@ -1,73 +1,67 @@
-# Estado — 2026-08-22 — contrato v37
+# Estado — 2026-08-24 — contrato v39
 
 ## Decisões vigentes
-- Core v2: C++23, PostgreSQL, NATS TLS/mTLS, Authentik e migração Strangler; Portal de usuário permanece visualmente imutável.
-- Faro: `10.62.91.5`, role `edge`; capabilities iniciais `inventory`, `health`, `telemetry-host`, `portal-host`, `agent-auto-update`; `build`/`runtime` fora do perfil inicial.
-- Faro usará Ubuntu Server 26.04 x86_64; recurso solicitado 4 vCPU, 8 GiB e 200 GiB, aguardando confirmação.
-- Telemetria canônica usa `environment > node > container > service`, dentro do `node.observed`; `nodes.metadata` no PostgreSQL contém o payload observado atual.
-- Agent padrão usa `/opt/cloudiff-agent/releases/<versão>` e symlink atômico `/opt/cloudiff-agent/current`.
-- AgentUpdate é pull automático a cada 5 min + jitter, manifesto assinado Ed25519, SHA-256/tamanho, rollback automático se serviço falhar. Agent permanece não-root; updater é helper root separado.
-- Repositório AgentUpdate fica em Hospedagem apenas `127.0.0.1:18250`, Nginx read-only; nodes acessam por `https://cloudiff.duckdns.org/__cloudiff_agent_updates` via NPM Maurício → router Hospedagem → loopback.
-- SSH permanece apenas bootstrap/emergência; atualização normal não depende de SSH.
-- Reboot de recovery é permitido por padrão, com futura opção `/admin` por node para desativá-lo.
-- Recuperação de Faro pode ser reinstalação total; nenhum backup de host é requisito.
-- Backup principal candidato preservado: conjunto remoto `pre-v2-20260820`; destruição de legado continua bloqueada até os três snapshots passarem integridade e todo runtime dependente estar substituído.
+- CloudIFF é um único projeto: V1/Python e V2/C++23 são reconciliados incrementalmente antes de qualquer normalização ou remoção.
+- A skill raiz única é `cloudiff@0.1.1`; o próprio repositório CloudIFF é a fonte da skill e o catálogo PGH apenas registra/relaciona.
+- `FrozenPortalInterface` é o requisito mestre: implementação pode mudar, mas a interface gráfica homologada, navegação, rotas e comportamento visível não mudam sem decisão humana explícita separada.
+- Migração tecnológica segue strangler/coexistência: candidata, paridade, canary, observação, cutover e rollback preservado.
+- Faro é alvo efetivo durante a conciliação sempre que uma entrada elegível exigir deploy nele; não se espera o fim de toda a migração para testar o host real.
+- OpenCode ou outro agente auxiliar não é instalado em servidor/container sem autorização explícita.
 
 ## Decisões superadas
-- Agent em `/opt/cloudiff-v2/current/bin/cloudiff-agent` — substituído pelo layout padrão `/opt/cloudiff-agent/current`.
-- Atualização permanente por SSH — substituída por AgentUpdate assinado e automático.
-- Repositório direto `10.62.92.7:18250` para nodes — reprovado por conectividade inter-VLAN e substituído em v33 pelo HTTPS NPM/router; entradas pendentes 166-168 foram retiradas da emenda e seus artefatos removidos.
-- Faro role/capabilities unresolved — substituído por edge + portal/telemetry/update.
+- Tratar os 1.320 arquivos V1 como `preexistente` não auditado — superado pela auditoria integral 1.320/1.320 e pela promoção mecânica desta emenda.
+- Tratar a cópia de skill no catálogo como segunda autoridade — superado: `skills/cloudiff/SKILL.md` é a fonte única e o catálogo aponta para ela.
+- Estado operacional que descrevia o filesystem do control-plane em 100% — superado pela expansão online do disco/LVM/ext4 nesta unidade.
 
-## Pendências abertas
-- Faro ainda sem SSH/onboarding real/PKI/reboot E2E.
-- Confirmação do recurso Faro 4 vCPU/8 GiB/200 GiB.
-- AdminObservability `/admin`: 138, 151-159 pendentes.
-- LegacyRetirement: 139, 160-163 pendentes; snapshot Maurício `pre-v2` ainda incompleto na verificação local/remota temporariamente indisponível.
-- Portal ainda reside em Hospedagem e depende de serviços Python legados; migração para Faro só depois do onboarding e de shadow/cutover próprios.
+## Decisões humanas pendentes
+- Nenhuma decisão humana nova bloqueia a v39; o bloqueio restante é técnico/ontológico e será tratado na v40.
 
-## Revisão de competências v33
-- `rede`, `plataforma`, `dist`, `resiliencia` e `release` continuaram adequadas após a troca porta direta → HTTPS. Nenhuma competência nova ou substituição.
+## Pendências técnicas não humanas
+- `RECONCILIATION_CLOSURE` da skill de projeto está bloqueado por 8 referências ainda `preexistente`: seis externas com procedência recuperável e duas skills CloudIFF locais sem fonte compartilhada. v39 não é release para Faro.
+- Cinco arquivos V1 permanecem `preexistente` porque o portão de links Markdown encontrou referências quebradas: uma referência transitória na skill Playwright vendorizada e quatro links Logflare sem esquema em templates Supabase.
+- A suíte oficial passa 1.008 testes com 1 skip, mas emite `ResourceWarning` de handles/sockets não fechados no teardown; registrar e corrigir em unidade própria se persistir.
+- Heartbeat remoto de dois nós de execução permanece stale desde 22/08 após indisponibilidade NATS; v36 de reconnect/readiness continua aberta e precisa de outage real sem restart do agente para aceite.
+- Sete entradas permanecem declaradas e ainda não geradas: LegacyRetirement, monitoramento padrão e teste de perfil Faro.
+- Backup remoto principal continua sem integridade completa enquanto o servidor de backup estiver fora da rede; remoção destrutiva de legacy segue bloqueada.
 
-## Revisão de competências v34
-- AdminObservability: `dist` cobre desired/observed e policy pull; `cpp` cobre backend no agent binary; `plataforma` cobre serviço; `ui-compat` cobre `/admin`; `resiliencia` cobre reboot/rollback. Nenhuma competência nova ou troca.
+## Trabalho compartilhado
+- `manifesto.yaml.trabalho_compartilhado` — unidade `normalize-v1-namespace-v39`, estado `concluido`, sem zona de exclusão ativa.
 
-## Revisão de competências v35
-- `rede`, `plataforma`, `dist`, `resiliencia` e `release` continuam adequadas para policy pull do AgentUpdate. Nenhuma competência nova ou substituição.
-
-## Revisão de competências v36
-- `dist` cobre reconnect, partição e falha injetada; `plataforma`/`resiliencia` cobrem readiness e boot recovery. `rede` permanece relevante para o caminho NATS. Nenhuma competência nova ou substituição necessária.
-
-## Revisão de competências v37
-- `plataforma`, `navegacao`/Playwright e `cloudiff-ephemeral-workspace` cobrem o WebDevWorkspace; sincronização de skills é operação de plataforma. Nenhum OpenCode/agente adicional autorizado ou necessário.
-
-## Competências ativas
-cpp, dist, plataforma, ui-compat — próxima unidade AdminObservability/monitoramento padrão
+## Competências ativas nesta unidade
+- `cloudiff@0.1.1` — skill raiz do projeto.
+- `desenvolvedor-de-software@14` — método de trabalho de projeto.
+- `github-incremental-reconciliation@7` — reconciliação antes da normalização.
+- `governanca-ontologica-de-skills@1.0.4` — fecho/identidade da skill e referências.
+- `telemetry-data-visualization@2` — macro obrigatória; início registrado no journal com plano congelado.
+- `ddia-systems@1.4.0` — gate de schema/migrations SQL em database efêmero.
 
 ## Falhas de portão por tipo de entrada
-- build-cpp: primeiro CTest v32 sem `CLOUDIFF_POSTGRES_CONNINFO`; corrigido pela pré-condição existente e passou 12/12 Debug e 12/12 Release.
-- rede: acesso direto Forja→Hospedagem:18250 bloqueado antes do host; v33 migrou para HTTPS existente sem abrir porta inter-VLAN.
-- deploy: repository Nginx inicialmente tentou `/var/cache/nginx/client_temp` em rootfs read-only; corrigido para `/tmp` e entrypoint direto, mantendo hardening.
-- verificação: primeira consulta de telemetria usou coluna inexistente `nodes.observed_state`; coluna real é `nodes.metadata`; telemetria foi comprovada nela.
-- backup: snapshot Maurício pre-v2 ainda não validado integralmente; destruição permanece bloqueada.
+- `documentacao-estrutural`: 5 arquivos V1 reprovaram integridade de link Markdown e permanecem `preexistente`.
+- `ui-compat`: `pytest` não existe em Forja e não foi instalado por conveniência; os mesmos testes foram executados pelo runner `unittest` já disponível e passaram 6/6.
+- `dados`: duas tentativas iniciais de gate SQL falharam antes de criar database de teste (PostgreSQL indisponível por disco cheio; depois formato/transferência temporária). Após a recuperação do host, database efêmero isolado passou 3 migrations + 3 testes.
+- `infraestrutura`: PostgreSQL entrou em restart loop porque o filesystem raiz estava em 100%; a causa foi capacidade virtual já entregue mas partição/LVM/ext4 ainda não expandidos.
 
-## Entradas aceitas
-- Base histórica aceita preservada.
-- Telemetria/perfil Faro v32: 1,3,15,24,31,32,125,126,136,140-143 aceitos.
-- AgentUpdate v33: 36,137,144-150,164,169-170 aceitos.
+## Divergências da última reconciliação
+### Corrigidas
+- Os 1.320 arquivos não declarados eram exatamente os 1.320 arquivos auditados; todos foram declarados no namespace v39.
+- 1.315/1.320 arquivos V1 passaram o portão declarado e foram promovidos para `aceito`; 5 permaneceram `preexistente` por discordância real.
+- Seis SQL previamente `aceito` existiam no runtime V2, mas eram omitidos pelo `*.sql` global do `.gitignore`; foram recuperados byte a byte pelos hashes operacionais e apenas esses seis caminhos ganharam exceção de source-control.
+- O gate SQL efêmero passou: 3 migrations, 3 testes, schema versão 1 e 11 tabelas; database temporário removido ao final.
+- Filesystem do control-plane: disco virtual passou a 200 GiB; partição/PV/LV/ext4 foram expandidos online. O root ficou em ~195 GiB, ~20% usado e ~150 GiB livres, sem apagar arquivos.
+- PostgreSQL concluiu crash recovery e voltou a aceitar conexões. `control`, `worker` e `agent` foram recuperados em ordem e estão ativos, sem reinícios novos ou warnings recentes.
+- Aceites v38 observados no checkout concorrente foram preservados semanticamente nesta emenda; nenhuma alteração concorrente foi descartada.
 
-## Entradas pendentes
-20, 26, 138-139, 151-163, 165
+### Pendentes de autorização ou unidade própria
+- Corrigir conteúdo das cinco referências Markdown quebradas.
+- Fechar v36 de reconexão NATS/readiness com teste real de indisponibilidade sem restart dos agentes.
+- Implementar as sete entradas ainda pendentes quando suas dependências forem elegíveis.
 
-## Evidência de portão — AgentUpdate
-- Agent v32 Debug e Release: Clang, 0 warnings, CTest 12/12 em ambos; jobs PostgreSQL=0 e worker restaurado.
-- Manifesto de release 0.32.0 assinado Ed25519; assinatura, SHA-256 e tamanho validados.
-- Chave de assinatura: root-only em Hospedagem; repositório contém apenas artefatos públicos assinados.
-- Repository: Nginx read-only, cap-drop ALL, no-new-privileges, backend somente 127.0.0.1:18250, NRestarts=0 após correção.
-- HTTPS route: Forja GET 200; POST 403; query 400; porta direta 18250 bloqueada; rollback gera 404 e reapply restaura 200.
-- Forja foi migrada primeiro de 0.7.0 para layout padrão sem mudança funcional; depois AgentUpdate aplicou 0.32.0 assinado.
-- Forja: assinatura inválida bloqueada sem trocar current; segunda checagem NOOP; rollback para 0.7.0 passou; reapply 0.32.0 passou; timer ativo/enabled.
-- PostgreSQL `nodes.metadata`: Forja reporta hierarchy completa, agent_version 0.32.0 e containers.status=available.
+## Entradas aceitas nesta unidade
+- Estrutura v39: `manifesto.yaml`, `competencias.yaml`, `tools/verify_namespace.py`, `tests/test_v1_namespace_audit.py` e evidências de reconciliação associadas.
+- V1 auditado: 1.315 arquivos promovidos a `aceito`; 5 mantidos `preexistente` por falha de link.
+- SQL recuperado: `001_bootstrap`, `002_job_engine`, `003_job_kind_filter` e três testes SQL, com hashes preservados.
+- Aceites v38 concorrentes preservados: léxico, preparação Faro, AgentUpdate, AdminObservability patch/test e skill/reconciliação v38.
 
 ## Próxima unidade
-AdminObservability v34: backend loopback sobre PostgreSQL, `/admin` somente CloudIF-Tenants-Admin, NodeRecoveryPolicy em desired_state e pull HTTPS pelo updater; depois monitoring padrão 159 e perfil Faro 165.
+- v40: fechar a ontologia da skill `cloudiff` — verificar fontes/commits dos externos, internalizar as duas skills CloudIFF locais como `compoe`, incrementar/recarregar a skill e obter `RECONCILIATION_CLOSURE=PASS`/`DEPENDENCY_REFERENCES=PASS`.
+- Depois, fechar v36 de reconnect/readiness porque heartbeat confiável é pré-condição para o onboarding real do Faro; em seguida reconciliar perfil/reserva e implementar nele os serviços elegíveis, preservando a interface atual.

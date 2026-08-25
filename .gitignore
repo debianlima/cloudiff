@@ -46,3 +46,11 @@ node_modules/
 !components/proxy/srv/cloudif/proxy/npm/data/nginx/custom/http.conf
 
 !components/proxy/srv/cloudif/proxy/npm/data/nginx/custom/server_proxy.conf
+
+# CloudIFF v2 schema and SQL acceptance tests are source artifacts, not runtime dumps.
+!sql/001_bootstrap.sql
+!sql/002_job_engine.sql
+!sql/003_job_kind_filter.sql
+!tests/test_job_engine.sql
+!tests/test_observed_state.sql
+!tests/test_schema.sql

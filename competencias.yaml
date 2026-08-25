@@ -84,7 +84,7 @@ competencias:
   - id: navegacao
     nome: Navegação e regressão visual
     skill: playwright
-    ativa_em: [interface, fluxo-portal, integracao-portal]
+    ativa_em: [interface, fluxo-portal, integracao-portal, ui-compat]
     fonte: /srv/cloudif/agent-skills/current/playwright/SKILL.md
     melhora: navegação real, screenshots, E2E e regressão visual
     portao: screenshots comparadas; fluxo crítico percorrido

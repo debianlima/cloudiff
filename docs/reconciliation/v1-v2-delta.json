@@ -87,5 +87,47 @@
     "normalized_head": "7cf8efc3b345584a24e277cf4c04eee4c5a5177d",
     "project_skill": "debianlima/cloudiff:skills/cloudiff/SKILL.md",
     "project_skill_version": "0.1.1"
+  },
+  "post_reconciliation_normalization": {
+    "phase": "v39-namespace-normalization",
+    "v1_changed_paths": [
+      {
+        "path": ".gitignore",
+        "audit_sha256": "d03efa6272e9099c4084a70812e51b2c8ee7b9778e954dec97482d2f6bf075f3",
+        "reason": "preserve global *.sql ignore while allowing exactly six accepted CloudIFF v2 schema/test SQL source artifacts"
+      }
+    ],
+    "recovered_v2_accepted_paths": [
+      {
+        "path": "sql/001_bootstrap.sql",
+        "sha256": "c2974559e1fadc3379c8198ca74d563e0a286b15755f9dd27865388dcf03c818",
+        "source": "/srv/cloudif-v2"
+      },
+      {
+        "path": "sql/002_job_engine.sql",
+        "sha256": "06ac1bd0fea05834c508c2ddb1953a75780be24cfcb1c161a300b3a655860525",
+        "source": "/srv/cloudif-v2"
+      },
+      {
+        "path": "sql/003_job_kind_filter.sql",
+        "sha256": "89a2c293d347489d8a56f8cedd306e621cffc1eed4d363f4c616828b748e9419",
+        "source": "/srv/cloudif-v2"
+      },
+      {
+        "path": "tests/test_job_engine.sql",
+        "sha256": "65fc34dfa94d2c57debb145c8131f36ae9167d211852b80b45eecfcf36eff556",
+        "source": "/srv/cloudif-v2"
+      },
+      {
+        "path": "tests/test_observed_state.sql",
+        "sha256": "4bb4f09b372a905574ee0386e648ab6d61550e02f658ca976321e795bd6fdf29",
+        "source": "/srv/cloudif-v2"
+      },
+      {
+        "path": "tests/test_schema.sql",
+        "sha256": "8b81e5b61d7bc0d43cfb4e4afd9bdd0516b90921392882ebe959a42b1b5a11f5",
+        "source": "/srv/cloudif-v2"
+      }
+    ]
   }
 }
