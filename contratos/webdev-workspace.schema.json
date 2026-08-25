@@ -1,22 +1,189 @@
 {
-  "$schema":"https://json-schema.org/draft/2020-12/schema",
-  "title":"CloudIFF WebDevWorkspace v1",
-  "type":"object","additionalProperties":false,
-  "required":["version","host","browser","network","resources","workspace","security","simulation"],
-  "properties":{
-    "version":{"const":1},
-    "host":{"type":"object","additionalProperties":false,"required":["name","address","runtime"],"properties":{"name":{"const":"forja"},"address":{"const":"10.62.91.2"},"runtime":{"const":"docker-compose"}}},
-    "browser":{"type":"object","additionalProperties":false,"required":["image","webdriver_bind","novnc_bind","max_sessions","screen"],"properties":{
-      "image":{"const":"selenium/standalone-chrome@sha256:9569014786466376d3e5cf8a7758562368cd9637f783dcd3abdb2eaf3a0d5cd7"},
-      "webdriver_bind":{"const":"127.0.0.1:14444"},"novnc_bind":{"const":"10.62.91.2:17900"},"max_sessions":{"const":1},
-      "screen":{"const":{"width":1440,"height":900,"depth":24}}
-    }},
-    "network":{"type":"object","additionalProperties":false,"required":["viewer_sources","public_exposure","fixed_link"],"properties":{
-      "viewer_sources":{"const":["10.0.0.0/16"]},"public_exposure":{"const":false},"fixed_link":{"const":"http://10.62.91.2:17900/"}
-    }},
-    "resources":{"const":{"cpus":1.0,"memory_bytes":2147483648,"shm_bytes":1073741824}},
-    "workspace":{"type":"object","additionalProperties":false,"required":["host_path","container_path","read_only"],"properties":{"host_path":{"const":"/srv/cloudif/webdev-workspace"},"container_path":{"const":"/workspace"},"read_only":{"const":true}}},
-    "security":{"type":"object","additionalProperties":false,"required":["docker_socket","privileged","additional_agent","novnc_password","no_new_privileges"],"properties":{"docker_socket":{"const":false},"privileged":{"const":false},"additional_agent":{"const":false},"novnc_password":{"const":"disabled-vpn-only"},"no_new_privileges":{"const":true}}},
-    "simulation":{"type":"object","additionalProperties":false,"required":["dns_server","physical_ad_host","allowed_readonly_services"],"properties":{"dns_server":{"const":"10.68.128.252"},"physical_ad_host":{"const":"10.68.128.252"},"allowed_readonly_services":{"const":["dns","ldap","ldaps","global-catalog"]}}}
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CloudIFF WebDevWorkspace v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "host",
+    "browser",
+    "network",
+    "resources",
+    "workspace",
+    "security",
+    "simulation"
+  ],
+  "properties": {
+    "version": {
+      "const": 2
+    },
+    "host": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "address",
+        "runtime"
+      ],
+      "properties": {
+        "name": {
+          "const": "forja"
+        },
+        "address": {
+          "const": "10.62.91.2"
+        },
+        "runtime": {
+          "const": "docker-compose"
+        }
+      }
+    },
+    "browser": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "image",
+        "webdriver_bind",
+        "novnc_bind",
+        "max_sessions",
+        "screen"
+      ],
+      "properties": {
+        "image": {
+          "const": "selenium/standalone-chrome@sha256:9569014786466376d3e5cf8a7758562368cd9637f783dcd3abdb2eaf3a0d5cd7"
+        },
+        "webdriver_bind": {
+          "const": "127.0.0.1:14444"
+        },
+        "novnc_bind": {
+          "const": "10.62.91.2:17900"
+        },
+        "max_sessions": {
+          "const": 1
+        },
+        "screen": {
+          "const": {
+            "width": 1440,
+            "height": 900,
+            "depth": 24
+          }
+        }
+      }
+    },
+    "network": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "viewer_sources",
+        "proxy_sources",
+        "public_exposure",
+        "direct_link",
+        "fixed_link",
+        "fixed_link_access"
+      ],
+      "properties": {
+        "viewer_sources": {
+          "const": [
+            "10.0.0.0/16"
+          ]
+        },
+        "proxy_sources": {
+          "const": [
+            "10.62.91.3/32"
+          ]
+        },
+        "public_exposure": {
+          "const": false
+        },
+        "direct_link": {
+          "const": "http://10.62.91.2:17900/"
+        },
+        "fixed_link": {
+          "const": "https://cloudiff.duckdns.org/__cloudiff_webdev/"
+        },
+        "fixed_link_access": {
+          "const": "vpn-only-10.0.0.0/16"
+        }
+      }
+    },
+    "resources": {
+      "const": {
+        "cpus": 1.0,
+        "memory_bytes": 2147483648,
+        "shm_bytes": 1073741824
+      }
+    },
+    "workspace": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "host_path",
+        "container_path",
+        "read_only"
+      ],
+      "properties": {
+        "host_path": {
+          "const": "/srv/cloudif/webdev-workspace"
+        },
+        "container_path": {
+          "const": "/workspace"
+        },
+        "read_only": {
+          "const": true
+        }
+      }
+    },
+    "security": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "docker_socket",
+        "privileged",
+        "additional_agent",
+        "novnc_password",
+        "no_new_privileges"
+      ],
+      "properties": {
+        "docker_socket": {
+          "const": false
+        },
+        "privileged": {
+          "const": false
+        },
+        "additional_agent": {
+          "const": false
+        },
+        "novnc_password": {
+          "const": "disabled-vpn-only"
+        },
+        "no_new_privileges": {
+          "const": true
+        }
+      }
+    },
+    "simulation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "dns_server",
+        "physical_ad_host",
+        "allowed_readonly_services"
+      ],
+      "properties": {
+        "dns_server": {
+          "const": "10.68.128.252"
+        },
+        "physical_ad_host": {
+          "const": "10.68.128.252"
+        },
+        "allowed_readonly_services": {
+          "const": [
+            "dns",
+            "ldap",
+            "ldaps",
+            "global-catalog"
+          ]
+        }
+      }
+    }
   }
 }

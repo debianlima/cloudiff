@@ -9,6 +9,7 @@ RUNTIME_ROOT=/var/lib/cloudiff-webdev
 CHAIN=CLOUDIFF_WEBDEV
 HOST_IP=10.62.91.2
 VIEWER_CIDR=10.0.0.0/16
+PROXY_IP=10.62.91.3
 
 assert_forja(){
   local addrs
@@ -27,7 +28,9 @@ firewall_apply(){
   iptables -S DOCKER-USER >/dev/null 2>&1
   iptables -N "$CHAIN" 2>/dev/null || true
   iptables -F "$CHAIN"
+  iptables -A "$CHAIN" -m conntrack --ctstate ESTABLISHED,RELATED -j RETURN
   iptables -A "$CHAIN" -s "$VIEWER_CIDR" -j RETURN
+  iptables -A "$CHAIN" -s "$PROXY_IP/32" -j RETURN
   iptables -A "$CHAIN" -s 127.0.0.0/8 -j RETURN
   iptables -A "$CHAIN" -s "$HOST_IP/32" -j RETURN
   iptables -A "$CHAIN" -j DROP
@@ -56,10 +59,34 @@ health(){
   curl -fsS --max-time 5 http://127.0.0.1:14444/status >/dev/null
 }
 
+runtime_equivalent(){
+  local cur live_unit=/etc/systemd/system/cloudiff-webdev.service
+  cur=$(readlink -f "$RUNTIME_ROOT/current" 2>/dev/null || true)
+  [ -n "$cur" ] || return 1
+  [ -f "$cur/deploy/compose.webdev.yaml" ] || return 1
+  [ -f "$cur/deploy/install_webdev_workspace.sh" ] || return 1
+  [ -f "$cur/config/webdev-workspace.json" ] || return 1
+  [ -f "$live_unit" ] || return 1
+  cmp -s "$cur/deploy/compose.webdev.yaml" "$ROOT/deploy/compose.webdev.yaml" || return 1
+  cmp -s "$cur/deploy/install_webdev_workspace.sh" "$ROOT/deploy/install_webdev_workspace.sh" || return 1
+  cmp -s "$cur/config/webdev-workspace.json" "$ROOT/config/webdev-workspace.json" || return 1
+  cmp -s "$live_unit" "$UNIT_SOURCE" || return 1
+  systemctl is-active --quiet cloudiff-webdev.service || return 1
+  return 0
+}
+
 apply(){
   assert_forja
   install -d -m 0755 "$WORKSPACE" "$WORKSPACE/projects" "$WORKSPACE/evidence" "$RUNTIME_ROOT"
   docker compose -f "$COMPOSE" config -q
+  if runtime_equivalent; then
+    firewall_apply
+    health
+    echo WEBDEV_WORKSPACE=NOOP
+    echo WEBDEV_LINK=https://cloudiff.duckdns.org/__cloudiff_webdev/
+    echo WEBDEV_DIRECT_LINK=http://10.62.91.2:17900/
+    return 0
+  fi
   ln -sfn "$(cd "$ROOT" && pwd)" "$RUNTIME_ROOT/current.new"
   mv -Tf "$RUNTIME_ROOT/current.new" "$RUNTIME_ROOT/current"
   install -m 0644 "$UNIT_SOURCE" /etc/systemd/system/cloudiff-webdev.service
@@ -69,7 +96,8 @@ apply(){
   systemctl is-active --quiet cloudiff-webdev.service
   health
   echo WEBDEV_WORKSPACE=PASS
-  echo WEBDEV_LINK=http://10.62.91.2:17900/
+  echo WEBDEV_LINK=https://cloudiff.duckdns.org/__cloudiff_webdev/
+  echo WEBDEV_DIRECT_LINK=http://10.62.91.2:17900/
 }
 
 remove(){

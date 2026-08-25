@@ -1,8 +1,8 @@
 ---
 name: cloudiff
-versao: 0.1.3
-description: Governa, reconcilia, normaliza e evolui a plataforma CloudIFF V1/Python→V2/C++23 preservando interface homologada, contratos, segurança,
-  dados, observabilidade e rollback.
+versao: 0.1.4
+description: Governa, reconcilia, normaliza e evolui a plataforma CloudIFF V1/Python→V2/C++23 preservando interface homologada,
+  contratos, segurança, dados, observabilidade e rollback.
 tipo_competencia: projeto
 origem:
   projeto_de_origem: cloudiff
@@ -35,37 +35,37 @@ referencia:
 - id: desenvolvedor-de-software
   fonte: debianlima/competencias-catalogo:metodo/desenvolvedor-de-software/SKILL.md
   versao_fixada: '14'
-  delta_lido_ate: 998b6256ad7d5e6e43fa1e3477cd83e86bef2632
+  delta_lido_ate: 2a641bfe597377a55711ea0804c602ea999fda07
   estado: reconciliado
 - id: github-incremental-reconciliation
   fonte: debianlima/competencias-catalogo:metodo/github-incremental-reconciliation/SKILL.md
   versao_fixada: '7'
-  delta_lido_ate: 998b6256ad7d5e6e43fa1e3477cd83e86bef2632
+  delta_lido_ate: 2a641bfe597377a55711ea0804c602ea999fda07
   estado: reconciliado
 - id: governanca-ontologica-de-skills
   fonte: debianlima/competencias-catalogo:metodo/governanca-ontologica-de-skills/SKILL.md
   versao_fixada: 1.0.4
-  delta_lido_ate: 998b6256ad7d5e6e43fa1e3477cd83e86bef2632
+  delta_lido_ate: 2a641bfe597377a55711ea0804c602ea999fda07
   estado: reconciliado
 - id: telemetry-data-visualization
   fonte: debianlima/competencias-catalogo:dominio/telemetry-data-visualization/SKILL.md
   versao_fixada: '2'
-  delta_lido_ate: 998b6256ad7d5e6e43fa1e3477cd83e86bef2632
+  delta_lido_ate: 2a641bfe597377a55711ea0804c602ea999fda07
   estado: reconciliado
 - id: distributed-agent-control
   fonte: debianlima/competencias-catalogo:dominio/distributed-agent-control/SKILL.md
   versao_fixada: '1'
-  delta_lido_ate: 998b6256ad7d5e6e43fa1e3477cd83e86bef2632
+  delta_lido_ate: 2a641bfe597377a55711ea0804c602ea999fda07
   estado: reconciliado
 - id: network-ssh-operations
   fonte: debianlima/competencias-catalogo:dominio/network-ssh-operations/SKILL.md
   versao_fixada: '1'
-  delta_lido_ate: 998b6256ad7d5e6e43fa1e3477cd83e86bef2632
+  delta_lido_ate: 2a641bfe597377a55711ea0804c602ea999fda07
   estado: reconciliado
 - id: operational-ui-truth
   fonte: debianlima/competencias-catalogo:dominio/operational-ui-truth/SKILL.md
   versao_fixada: '1'
-  delta_lido_ate: 998b6256ad7d5e6e43fa1e3477cd83e86bef2632
+  delta_lido_ate: 2a641bfe597377a55711ea0804c602ea999fda07
   estado: reconciliado
 - id: cloud-design-patterns
   fonte: github/awesome-copilot:skills/cloud-design-patterns/SKILL.md
@@ -239,3 +239,6 @@ Na v40, oito competências apareciam como `preexistente` porque o catálogo apon
 
 ### L012 — capability de certificado do servidor não vira trust bundle do agente
 Na v42, a coleção `nats-server-cert` do SecureDistribution foi auditada e continha `fullchain.pem` **e** `privkey.pem`, com audience restrita ao host que opera o servidor NATS. Conceder essa capability ao Faro teria atravessado a fronteira de confiança e exposto a chave privada do servidor. Para agentes, o gate correto é mTLS com certificado cliente próprio + CA confiável do sistema + `expected hostname`; SecureDistribution continua server-side para material do servidor. Gate: Faro `10.62.91.5`, certificado cliente serial `100B`, heartbeat E2E, ACL NATS positiva/negativa, `NATS_NO_CLIENT_CERT_DENIED=PASS` e capability auditada sem audience Faro em 2026-08-25. Evita transformar distribuição segura do servidor em distribuição indevida de segredo para clientes.
+
+### L013 — `apply` idempotente não reinicia runtime equivalente
+Na v44, o portão de deploy da entrada 174 reprovou porque duas execuções consecutivas de `install_webdev_workspace.sh apply` recriavam o container Selenium: `container ID` e `StartedAt` mudavam mesmo sem alteração de compose, config ou unit. A correção passou a comparar release atual, compose, instalador, config e unit live; runtime equivalente executa apenas reconciliação de firewall + health e retorna `WEBDEV_WORKSPACE=NOOP`, sem `systemctl restart`. Gate homologado em 2026-08-25: duas aplicações consecutivas preservaram exatamente o mesmo container ID e `StartedAt`; rota HTTPS também passou rollback→reapply. Evita transformar instalação declarativa em reinício disruptivo e perder sessões de automação. Vale em Linux/systemd/Docker Compose quando a release é imutável e o health gate consegue provar equivalência operacional.

@@ -1,5 +1,5 @@
 projeto: cloudiff-v2
-versao_contrato: 43
+versao_contrato: 44
 namespace_fechado: true
 entradas:
   - id: 1
@@ -1345,7 +1345,7 @@ entradas:
     consome: [contrato/lexico]
     produz: contratos/webdev-workspace.schema
     aceite: portao-mecanico/schema
-    status: pendente
+    status: aceito
   - id: 172
     caminho: config/webdev-workspace.json
     proposito: 'configuração não secreta do WebDevWorkspace: Forja, portas fixas internas, DNS/AD físico e limites de recurso'
@@ -1353,7 +1353,7 @@ entradas:
     consome: [contratos/webdev-workspace.schema]
     produz: config/webdev-workspace
     aceite: portao-mecanico/infraestrutura
-    status: pendente
+    status: aceito
   - id: 173
     caminho: deploy/compose.webdev.yaml
     proposito: stack Docker isolado do WebDevWorkspace sem socket Docker, sem agentes e sem mounts de produção
@@ -1361,7 +1361,7 @@ entradas:
     consome: [config/webdev-workspace]
     produz: runtime/webdev-compose
     aceite: portao-mecanico/infraestrutura
-    status: pendente
+    status: aceito
   - id: 174
     caminho: deploy/install_webdev_workspace.sh
     proposito: instala, valida, atualiza e remove o WebDevWorkspace em Forja com link web fixo LAN/VPN
@@ -1369,7 +1369,7 @@ entradas:
     consome: [runtime/webdev-compose]
     produz: runtime/webdev-workspace
     aceite: portao-mecanico/deploy
-    status: pendente
+    status: aceito
   - id: 175
     caminho: tests/test_webdev_workspace.py
     proposito: verifica isolamento, ausência de OpenCode/agentes, portas, DNS físico, recursos e imutabilidade da interface de produção
@@ -1377,7 +1377,7 @@ entradas:
     consome: [runtime/webdev-workspace]
     produz: teste/webdev-workspace
     aceite: portao-mecanico/backend-integracao
-    status: pendente
+    status: aceito
   - id: 176
     caminho: deploy/sync_agent_skills.sh
     proposito: sincroniza competências aprovadas entre hosts Linux e troca atomicamente o symlink current sem instalar agente
@@ -1401,7 +1401,7 @@ entradas:
     consome: [runtime/webdev-workspace]
     produz: runtime/webdev-service
     aceite: portao-mecanico/infraestrutura
-    status: pendente
+    status: aceito
   - id: 179
     caminho: skills/cloudiff/SKILL.md
     proposito: 'skill raiz do projeto CloudIFF: reconciliação incremental, migração C/C++ e interface homologada imutável'
@@ -12078,11 +12078,28 @@ entradas:
     aceite: portao-mecanico/documentacao-estrutural
     status: aceito
 
+  - id: 1513
+    caminho: deploy/install_webdev_route.sh
+    proposito: instala e remove de forma reversível a rota HTTPS VPN-only do WebDev via NPM→Forja sem exposição pública direta
+    tipo: deploy
+    consome: [runtime/webdev-workspace]
+    produz: runtime/webdev-route
+    aceite: portao-mecanico/deploy
+    status: aceito
+  - id: 1514
+    caminho: tests/test_webdev_route.py
+    proposito: verifica allowlist VPN, prefixo, websocket, origem NPM no firewall, rollback e ausência de bypass público
+    tipo: backend-integracao
+    consome: [runtime/webdev-route]
+    produz: teste/webdev-route
+    aceite: portao-mecanico/backend-integracao
+    status: aceito
+
 trabalho_compartilhado:
   projeto: cloudiff
-  unidade: faro-standard-monitoring-v43
+  unidade: webdev-workspace-v44
   agente: WORK-SSH
-  atualizado_em: '2026-08-25T16:41:00-03:00'
-  concluido_em: '2026-08-25T16:41:00-03:00'
+  atualizado_em: '2026-08-25T17:30:05-03:00'
+  concluido_em: '2026-08-25T17:30:05-03:00'
   estado: concluido
   zona_exclusao: []

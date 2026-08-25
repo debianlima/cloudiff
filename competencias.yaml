@@ -4,7 +4,7 @@ skill_projeto:
   nome: CloudIFF
   tipo_competencia: projeto
   fonte: skills/cloudiff/SKILL.md
-  versao: 0.1.3
+  versao: 0.1.4
   vinculada_por: usuario em 2026-08-24
   protocolo_governanca: PGH 1.2.0
   compoe:
@@ -20,37 +20,37 @@ skill_projeto:
   - id: desenvolvedor-de-software
     versao_fixada: '14'
     fonte: debianlima/competencias-catalogo:metodo/desenvolvedor-de-software/SKILL.md
-    delta_lido_ate: 998b6256ad7d5e6e43fa1e3477cd83e86bef2632
+    delta_lido_ate: 2a641bfe597377a55711ea0804c602ea999fda07
     estado_reconciliacao: ATUAL
   - id: github-incremental-reconciliation
     versao_fixada: '7'
     fonte: debianlima/competencias-catalogo:metodo/github-incremental-reconciliation/SKILL.md
-    delta_lido_ate: 998b6256ad7d5e6e43fa1e3477cd83e86bef2632
+    delta_lido_ate: 2a641bfe597377a55711ea0804c602ea999fda07
     estado_reconciliacao: ATUAL
   - id: governanca-ontologica-de-skills
     versao_fixada: 1.0.4
     fonte: debianlima/competencias-catalogo:metodo/governanca-ontologica-de-skills/SKILL.md
-    delta_lido_ate: 998b6256ad7d5e6e43fa1e3477cd83e86bef2632
+    delta_lido_ate: 2a641bfe597377a55711ea0804c602ea999fda07
     estado_reconciliacao: ATUAL
   - id: telemetry-data-visualization
     versao_fixada: '2'
     fonte: debianlima/competencias-catalogo:dominio/telemetry-data-visualization/SKILL.md
-    delta_lido_ate: 998b6256ad7d5e6e43fa1e3477cd83e86bef2632
+    delta_lido_ate: 2a641bfe597377a55711ea0804c602ea999fda07
     estado_reconciliacao: ATUAL
   - id: distributed-agent-control
     versao_fixada: '1'
     fonte: debianlima/competencias-catalogo:dominio/distributed-agent-control/SKILL.md
-    delta_lido_ate: 998b6256ad7d5e6e43fa1e3477cd83e86bef2632
+    delta_lido_ate: 2a641bfe597377a55711ea0804c602ea999fda07
     estado_reconciliacao: ATUAL
   - id: network-ssh-operations
     versao_fixada: '1'
     fonte: debianlima/competencias-catalogo:dominio/network-ssh-operations/SKILL.md
-    delta_lido_ate: 998b6256ad7d5e6e43fa1e3477cd83e86bef2632
+    delta_lido_ate: 2a641bfe597377a55711ea0804c602ea999fda07
     estado_reconciliacao: ATUAL
   - id: operational-ui-truth
     versao_fixada: '1'
     fonte: debianlima/competencias-catalogo:dominio/operational-ui-truth/SKILL.md
-    delta_lido_ate: 998b6256ad7d5e6e43fa1e3477cd83e86bef2632
+    delta_lido_ate: 2a641bfe597377a55711ea0804c602ea999fda07
     estado_reconciliacao: ATUAL
   - id: cloud-design-patterns
     versao_fixada: git:318066d2213b510e89b500ed0d53506c54093ddc
@@ -184,5 +184,6 @@ competencias:
   fonte: saeed-vayghan/gemini-agent-skills@34ca3ca1db04b092c5f86eba155c23e105fc933b:.gemini/skills/cpp-pro/SKILL.md
   melhora: C++20/23, CMake moderno, RAII, warnings, sanitizers, concorrência e otimização mensurável
   portao: CMake/Ninja com Clang; zero warnings em -Wall -Wextra -Wpedantic; ASan/UBSan limpos; CTest aprovado em Debug e Release
-  evidencia: revisão v12 encontrou a entrada build-cpp sem nenhuma competência ativa cobrindo o tipo; cobertura obrigatória antes de reabrir CMake
+  evidencia: revisão v12 encontrou a entrada build-cpp sem nenhuma competência ativa cobrindo o tipo; cobertura obrigatória
+    antes de reabrir CMake
   instalada_em: 2026-08-20
