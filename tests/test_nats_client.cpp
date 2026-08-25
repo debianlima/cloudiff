@@ -6,6 +6,7 @@
 #include <string>
 #include <thread>
 #include <chrono>
+#include <iostream>
 
 namespace {
 std::string env_required(const char* name){ const char* v=std::getenv(name); if(!v||!*v) throw std::runtime_error(std::string(name)+" required"); return v; }
@@ -21,7 +22,9 @@ int main(){
     std::string body(natsMsg_GetData(msg),static_cast<std::size_t>(natsMsg_GetDataLength(msg))); assert(body=="cpp-v7-auth-ok");
     natsMsg_Destroy(msg);
     if(const char* wait=std::getenv("CLOUDIFF_NATS_TEST_RECONNECT_WAIT_SECONDS");wait&&*wait){
-        const int seconds=std::stoi(wait);if(seconds>0)std::this_thread::sleep_for(std::chrono::seconds(seconds));
+        const int seconds=std::stoi(wait);
+        std::cout<<"NATS_RECONNECT_READY\n"<<std::flush;
+        if(seconds>0)std::this_thread::sleep_for(std::chrono::seconds(seconds));
         publisher.publish("cloudiff.v2.node.observed","cpp-v36-reconnect-ok",5000);
         msg=nullptr;assert(natsSubscription_NextMsg(&msg,sub,5000)==NATS_OK);
         body.assign(natsMsg_GetData(msg),static_cast<std::size_t>(natsMsg_GetDataLength(msg)));assert(body=="cpp-v36-reconnect-ok");natsMsg_Destroy(msg);

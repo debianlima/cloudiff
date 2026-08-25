@@ -1,5 +1,5 @@
 projeto: cloudiff-v2
-versao_contrato: 40
+versao_contrato: 41
 namespace_fechado: true
 entradas:
   - id: 1
@@ -217,7 +217,7 @@ entradas:
     consome: [contratos/event.schema]
     produz: cpp/nats-client-hpp
     aceite: portao-mecanico/backend-integracao
-    status: pendente
+    status: aceito
   - id: 28
     caminho: src/common/nats_client.cpp
     proposito: implementa conexão NATS autenticada, flush e publish
@@ -225,7 +225,7 @@ entradas:
     consome: [cpp/nats-client-hpp, contratos/event.schema]
     produz: cpp/nats-client
     aceite: portao-mecanico/backend-integracao
-    status: pendente
+    status: aceito
   - id: 29
     caminho: include/cloudiff/postgres_client.hpp
     proposito: RAII libpq para persistência autoritativa de observed_state
@@ -265,7 +265,7 @@ entradas:
     consome: [cpp/nats-client]
     produz: teste/nats-client
     aceite: portao-mecanico/backend-integracao
-    status: pendente
+    status: aceito
   - id: 34
     caminho: tests/test_postgres_client.cpp
     proposito: teste de integração C++ de persistência observed_state
@@ -297,7 +297,7 @@ entradas:
     consome: [bin/cloudiff-control]
     produz: runtime/control-service
     aceite: portao-mecanico/infraestrutura
-    status: pendente
+    status: aceito
   - id: 38
     caminho: tests/test_observed_state.sql
     proposito: verifica persistência e atualização convergente de observed_state
@@ -1137,7 +1137,7 @@ entradas:
     consome: [cpp/telemetry-hpp]
     produz: cpp/telemetry
     aceite: portao-mecanico/agente
-    status: pendente
+    status: aceito
   - id: 143
     caminho: tests/test_telemetry.cpp
     proposito: testa estrutura, limites e hierarquia da telemetria sem depender de Docker
@@ -12039,9 +12039,9 @@ entradas:
 
 trabalho_compartilhado:
   projeto: cloudiff
-  unidade: skill-closure-v40
+  unidade: reconnect-readiness-v41
   agente: WORK-SSH
-  atualizado_em: '2026-08-24T22:02:00-03:00'
-  concluido_em: '2026-08-24T22:02:00-03:00'
+  atualizado_em: '2026-08-24T22:34:11-03:00'
+  concluido_em: '2026-08-24T22:34:11-03:00'
   estado: concluido
   zona_exclusao: []
