@@ -1,6 +1,6 @@
 ---
 name: cloudiff
-versao: 0.1.4
+versao: 0.1.5
 description: Governa, reconcilia, normaliza e evolui a plataforma CloudIFF V1/Python→V2/C++23 preservando interface homologada,
   contratos, segurança, dados, observabilidade e rollback.
 tipo_competencia: projeto
@@ -242,3 +242,7 @@ Na v42, a coleção `nats-server-cert` do SecureDistribution foi auditada e cont
 
 ### L013 — `apply` idempotente não reinicia runtime equivalente
 Na v44, o portão de deploy da entrada 174 reprovou porque duas execuções consecutivas de `install_webdev_workspace.sh apply` recriavam o container Selenium: `container ID` e `StartedAt` mudavam mesmo sem alteração de compose, config ou unit. A correção passou a comparar release atual, compose, instalador, config e unit live; runtime equivalente executa apenas reconciliação de firewall + health e retorna `WEBDEV_WORKSPACE=NOOP`, sem `systemctl restart`. Gate homologado em 2026-08-25: duas aplicações consecutivas preservaram exatamente o mesmo container ID e `StartedAt`; rota HTTPS também passou rollback→reapply. Evita transformar instalação declarativa em reinício disruptivo e perder sessões de automação. Vale em Linux/systemd/Docker Compose quando a release é imutável e o health gate consegue provar equivalência operacional.
+
+
+### L014 — release existente não dispensa prova do artefato recebido
+Na v45, o sincronizador de skills inicialmente aceitava três estados que quebravam o contrato de release imutável: TAR com FIFO/symlink/hardlink não representado no manifesto; TAR divergente quando a release-alvo já existia; e `current` como diretório comum, que só falhava após criar artefatos de promoção. A correção passou a rejeitar todo membro que não seja arquivo regular/diretório, validar o TAR recebido contra `NEW_MANIFEST` independentemente da existência do alvo e exigir `current`/`previous` como symlinks antes de qualquer mutação. Gate homologado em 2026-08-26: `AGENT_SKILLS_SYNC_OFFLINE=PASS`; hardness dos três casos PASS; e o mesmo SHA `e8e6528af7fed0920d0af28fe2ff7b5c335bce55be3116b7b665c916c4b4483b` produziu `DRY_RUN_PASS -> NOOP -> POINTER_STABLE=PASS` em Forja, Hospedagem, Maurício, Faro e Pelego. Evita confundir idempotência com confiança cega no target existente e preserva a atomicidade do ponteiro. Vale em Linux quando releases são árvores imutáveis identificadas por manifesto e promovidas por symlink.

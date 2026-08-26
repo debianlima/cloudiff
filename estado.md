@@ -1,93 +1,78 @@
-# Estado — 2026-08-25 — contrato v44
+# Estado — 2026-08-26 — contrato v45
 
 ## Decisões vigentes
-- `FrozenPortalInterface` permanece requisito mestre: a v44 não altera Portal/UI, navegação, rotas de usuário ou comportamento visual homologado.
-- WebDevWorkspace fica em Forja como navegador Selenium/noVNC isolado, sem Docker socket, sem privilégio, sem OpenCode/agente adicional e com `/workspace` read-only.
-- Link operacional fixo: `https://cloudiff.duckdns.org/__cloudiff_webdev/`, restrito à VPN `10.0.0.0/16`; NPM em Maurício é a única origem proxy permitida no backend Forja.
-- Acesso direto `http://10.62.91.2:17900/` permanece apenas para origens explicitamente permitidas pelo firewall do WebDev; Faro e Hospedagem não têm bypass direto.
-- Simulações/read-only de infraestrutura no WebDev usam DNS/AD físico `10.68.128.252`; não há agente adicional dentro do container.
-- Skill ativa durante a unidade foi `cloudiff@0.1.3`. A homologação produziu `cloudiff@0.1.4` com L013; a nova versão só ativa na próxima unidade.
-- Catálogo PGH registra `cloudiff@0.1.4` em `2a641bfe597377a55711ea0804c602ea999fda07`.
+- `FrozenPortalInterface` permanece requisito mestre; a v45 não altera Portal/UI, navegação, rotas de usuário ou comportamento visual homologado.
+- Releases de agent-skills são imutáveis: o sincronizador sempre prova o TAR recebido contra `NEW_MANIFEST`, mesmo quando o target já existe; membros especiais de arquivo são rejeitados; `current`/`previous` precisam ser symlinks antes de mutação.
+- A v45 homologa a sincronização de agent-skills sem instalar OpenCode, cliente ou agente adicional e sem promover uma release diferente quando o target atual já é equivalente.
+- Faro tem alvo contratual humano de 4 vCPU; o último estado observado nesta unidade continua 2 vCPU (`CPU_ONLINE=0-1`). Workloads que exigem 4 vCPU permanecem bloqueados até 4 serem observadas no runtime.
+- A skill ativa durante a unidade foi `cloudiff@0.1.4`. A homologação produziu `cloudiff@0.1.5` com L014; a nova versão ativa somente na próxima unidade.
 
 ## Decisões superadas
-- `apply` do WebDev sempre reiniciar `cloudiff-webdev.service` — superado: runtime equivalente executa firewall/health e retorna `WEBDEV_WORKSPACE=NOOP`, preservando sessão/container.
-- Link operacional principal apenas `http://10.62.91.2:17900/` — superado pelo HTTPS fixo VPN-only; o link direto permanece apenas como canal interno restrito.
+- Confiar apenas na árvore de uma release já existente como prova do artefato recebido — superado: o TAR recebido agora é validado sempre contra `NEW_MANIFEST`.
+- Permitir symlink/hardlink/FIFO no TAR desde que não escapasse do path — superado: somente diretórios e arquivos regulares entram na release declarada.
+- Tratar `readlink -f current` como prova suficiente da atomicidade — superado: `current` e, quando presente, `previous` precisam ser symlinks antes da mutação.
 
 ## Decisões humanas pendentes
-- Nenhuma nova decisão humana na v44.
+- Nenhuma nova decisão humana na v45. O aumento do Faro para 4 vCPU já foi decidido pelo operador e aguarda execução da TI.
+
+## Decisões fechadas nesta emenda
+- O sincronizador de agent-skills deve falhar fechado para arquivo recebido divergente, tipos especiais não declarados e ponteiros que perderam a natureza de symlink.
 
 ## Pendências técnicas não humanas
-- Faro continua com 2 vCPU observadas para requisito prescritivo de 4 vCPU; Portal não deve migrar para Faro até o recurso ser corrigido e a etapa 6 ser rerodada.
-- Faro possui egress Internet filtrado: CloudIFF interno/NATS/heartbeat funcionam, mas GitHub/LVFS externos expiram. `fwupd-refresh.service` permanece warning de máquina por timeout LVFS.
-- Cinco arquivos V1 continuam `preexistente` por links Markdown quebrados.
-- LegacyRetirement continua bloqueado pela integridade remota do backup principal `pre-v2-20260820` enquanto o servidor de backup estiver indisponível.
-- Acesso direto Hospedagem → `10.68.128.253` permanece filtrado; `.253` responde via salto por `10.68.128.252`.
+- Faro permanece observado em 2/4 vCPU até a TI alterar a VM; rerodar o gate de capacidade antes de qualquer workload que requeira 4 vCPU.
+- Cinco arquivos V1 permanecem `preexistente` por links Markdown quebrados, herdado do estado anterior e fora do escopo da v45.
+- LegacyRetirement continua separado desta unidade e depende dos próprios gates de backup/substituto antes de qualquer retirada destrutiva.
 
 ## Trabalho compartilhado
-- ponteiro: `manifesto.yaml.trabalho_compartilhado` — unidade `webdev-workspace-v44`, concluída, sem zona de exclusão ativa.
+- ponteiro: `manifesto.yaml.trabalho_compartilhado` — unidade `agent-skills-sync-v45`, concluída, sem zona de exclusão ativa.
 
 ## Competências ativas nesta unidade
-- `cloudiff@0.1.3` — skill raiz usada durante a execução.
+- `cloudiff@0.1.4` — skill raiz efetivamente carregada no início da unidade.
 - `desenvolvedor-de-software@14` — método PGH.
 - `github-incremental-reconciliation@7` — reconciliação antes de normalização/release.
-- `governanca-ontologica-de-skills@1.0.4` — atualização da skill e catálogo após homologação.
-- `platform-engineering@ed68466e04c9b5d33898ed5b503fb828f49c3e73` — Docker/systemd/runtime.
-- `release-it@1.4.0` — idempotência e rollback.
-- `network-ssh-operations@1` — allowlists, NPM, WebSocket e bypass negativo.
-- `operational-ui-truth@1` — navegador real/efeito observado sem alterar UI.
+- `governanca-ontologica-de-skills@1.0.4` — atualização da skill e registro de catálogo após homologação.
 - `telemetry-data-visualization@2` — macro global da unidade.
+- `network-ssh-operations@1` — primeiro salto obrigatório, caminho SSH e homologação distribuída.
+- `release-it@1.4.0` — idempotência, release imutável e rollback.
 
 ## Competências instaladas/atualizadas para unidades futuras
-- `cloudiff@0.1.4` — L013: apply idempotente preserva container ID/StartedAt e evita restart de runtime equivalente.
+- `cloudiff@0.1.5` — L014: release existente não dispensa prova do artefato recebido; tipos especiais são rejeitados e ponteiros são provados antes da mutação.
 
 ## Falhas de portão por tipo de entrada
-- `deploy` entrada 174: primeira prova de idempotência reprovou porque duas execuções consecutivas recriavam o container; corrigido com `runtime_equivalent` + `WEBDEV_WORKSPACE=NOOP`.
-- `runtime` candidata v44: release antiga tinha unit em `deploy/cloudiff-webdev.service`, enquanto o instalador self-relative espera `deploy/systemd/cloudiff-webdev.service`; layout da candidata foi reconciliado antes do gate final.
-- `higiene`: scanner inicial tratou `SE_VNC_NO_PASSWORD: "true"` como segredo; gate foi corrigido para distinguir marcador booleano `NO_PASSWORD` de atribuição de senha real, sem alterar o teste correto.
-- `automacao`: primeira recriação de sessão WebDriver após restart encontrou slot transitório; sessão dedicada foi reconciliada e o gate final de navegação passou.
+- `deploy` entrada 176: TAR com FIFO/symlink/hardlink podia passar porque o manifesto enumerava apenas arquivos regulares; corrigido com rejeição de membros não regulares/diretórios.
+- `deploy` entrada 176: quando a release-alvo já existia, o TAR recebido não era comparado ao `NEW_MANIFEST`; corrigido por `validate_archive_manifest` obrigatório.
+- `deploy` entrada 176: `current` como diretório comum só falhava após criar artefatos de promoção; corrigido com pré-condição `current_not_symlink` antes de qualquer mutação.
+- `higiene`: `tests/__pycache__` criado por um gate auxiliar fez `scripts/validate.sh` reprovar; o temporário criado nesta unidade foi removido e a validação limpa passou. Não era defeito do produto.
 
 ## Divergências da última reconciliação
 ### Corrigidas
-- Catálogo remoto avançou de `998b625...` até `2a641bf...`; as sete referências internas do CloudIFF foram comparadas e permaneceram byte a byte inalteradas antes do checkpoint avançar.
-- WebDev runtime passou a apontar novamente para `/var/lib/cloudiff-webdev/v44`, não para worktree de desenvolvimento.
-- Instalador WebDev agora é idempotente: duas aplicações consecutivas preservaram exatamente o mesmo container ID e `StartedAt`.
-- Rota NPM passou rollback→reapply e retornou ao mesmo SHA de configuração.
-- WebSocket real pelo HTTPS fixo respondeu `101 Switching Protocols`.
-- Selenium navegou o Portal real e foi redirecionado corretamente ao Authentik; sessão visível ficou aberta no noVNC.
+- O worktree v45 preservou o staged do agente anterior e recebeu somente o delta de hardness comprovado.
+- As 13 referências e duas composições da skill de projeto foram reconciliadas contra o catálogo atual; versões em `metadata.version` foram tratadas como formato canônico válido das skills internas.
+- O catálogo registra `cloudiff@0.1.5` por ponteiro ao repositório dono, sem duplicar a skill; `controle/caminhos-canonicos.yaml` recebeu o hash derivado do índice atualizado.
 
 ### Pendentes de autorização ou capacidade
-- Liberar/ajustar 4 vCPU no hypervisor do Faro.
-- Egress externo do Faro exige correção no gateway/ACL; nenhum canal administrativo do gateway estava exposto pelos endereços/portas testados.
+- Faro: capacidade observada ainda 2 vCPU para alvo humano de 4 vCPU; aguarda TI.
 
 ## Entradas aceitas nesta unidade
-- 2 `competencias.yaml` — skill projeto candidata 0.1.4 e checkpoints reconciliados.
-- 171 `contratos/webdev-workspace.schema.json` — contrato WebDev v2.
-- 172 `config/webdev-workspace.json` — link HTTPS fixo e política VPN-only.
-- 173 `deploy/compose.webdev.yaml` — Selenium isolado, imagem pinada e mounts restritos.
-- 174 `deploy/install_webdev_workspace.sh` — apply idempotente homologado.
-- 175 `tests/test_webdev_workspace.py` — gates de isolamento, configuração e idempotência.
-- 178 `deploy/systemd/cloudiff-webdev.service` — runtime systemd homologado.
-- 179 `skills/cloudiff/SKILL.md` — candidata `cloudiff@0.1.4` com L013.
-- 182 `tests/test_cloudiff_project_skill.py` — versão/ontologia/anti-ciclo atualizados.
-- 1513 `deploy/install_webdev_route.sh` — rota NPM HTTPS reversível.
-- 1514 `tests/test_webdev_route.py` — VPN-only, websocket, rollback e ausência de bypass.
+- 2 `competencias.yaml` — skill raiz atualizada para candidata 0.1.5.
+- 176 `deploy/sync_agent_skills.sh` — sincronização fail-closed, idempotente e atômica homologada.
+- 177 `tests/test_agent_skills_sync.py` — allowlist, release imutável, archive hardness, NOOP, rollback e pré-condições de symlink homologados.
+- 179 `skills/cloudiff/SKILL.md` — candidata `cloudiff@0.1.5` com L014.
+- 182 `tests/test_cloudiff_project_skill.py` — gate da skill 0.1.5/ontologia/anti-ciclo atualizado.
 
-## Portões v44
-- `WEBDEV_WORKSPACE_OFFLINE=PASS`.
-- `WEBDEV_ROUTE_OFFLINE=PASS`.
-- WebDev runtime: container healthy, imagem digest pinada, `privileged=false`, Docker socket ausente, workspace read-only.
-- Idempotência: duas aplicações consecutivas `NOOP`, container ID e `StartedAt` inalterados.
-- NPM: `nginx -t` PASS; rollback removeu bloco; reapply restaurou SHA original.
-- Acesso fixo: Forja/Hospedagem 200; Faro 403.
-- Bypass direto: Faro/Hospedagem bloqueados.
-- WebSocket HTTPS: `101 Switching Protocols`.
-- Selenium: navegação real PASS; Authentik observado no navegador visível.
-- Frozen UI: 6/6 PASS; nenhum arquivo Portal/UI no diff.
+## Portões v45
+- `AGENT_SKILLS_SYNC_OFFLINE=PASS` com dry-run, atomicidade, NOOP, rollback, divergência, allowlist e proibição de instalação de agente.
+- Hardness: TAR divergente em target existente rejeitado; FIFO/symlink/hardlink rejeitados; `current` não-symlink falha antes de efeitos colaterais.
+- Mesmo SHA do sincronizador `e8e6528af7fed0920d0af28fe2ff7b5c335bce55be3116b7b665c916c4b4483b` em Forja, Hospedagem, Maurício, Faro e Pelego.
+- Cinco hosts: `DRY_RUN_PASS -> NOOP -> POINTER_STABLE=PASS`; release permaneceu `cloudiff-project-0.1.4-20260825`, 27 skills; nenhuma promoção real.
 - Suíte oficial: 1008 testes PASS + 1 skip.
-- Namespace: zero extras e zero ausências obrigatórias; cinco pendências LegacyRetirement continuam declaradas e não geradas.
-- Secret scan e `git diff --check`: PASS.
-- Catálogo: `CATALOGO_SKILLS=PASS`, `SYNC_GUARD=PASS`.
+- Frozen UI: 3/3 PASS; nenhum arquivo Portal/UI alterado.
+- `CLOUDIFF_PROJECT_SKILL=PASS version=0.1.5 compoe=2 referencia=13 anti_cycle=PASS`.
+- `DELTA_INVENTORY=PASS`; `LEARNING_PRESERVED=PASS`; `RECONCILIATION_CLOSURE=PASS`; `DEPENDENCY_REFERENCES=PASS`.
+- Catálogo: `CATALOGO_SKILLS=PASS`; `SYNC_GUARD=PASS`; ponteiro `cloudiff@0.1.5` validado.
+- Secret scan e `git diff --check`: PASS nos deltas da unidade.
 
 ## Próxima unidade
-- Recarregar `cloudiff@0.1.4` antes de qualquer nova unidade.
-- Enquanto Faro permanecer 2/4 vCPU, não migrar Portal. Priorizar pendência independente que não altere a interface: reconciliar egress externo do Faro se surgir canal administrativo seguro do gateway; caso contrário seguir outra entrada elegível fora de LegacyRetirement/Portal.
+- Recarregar `cloudiff@0.1.5` antes de selecionar qualquer nova entrada.
+- Reobservar o Faro antes de qualquer unidade que requeira 4 vCPU.
+- Escolher a próxima entrada elegível fora de Portal/LegacyRetirement enquanto a capacidade do Faro ou gates destrutivos continuarem bloqueados.

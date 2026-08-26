@@ -1,5 +1,5 @@
 projeto: cloudiff-v2
-versao_contrato: 44
+versao_contrato: 45
 namespace_fechado: true
 entradas:
   - id: 1
@@ -73,7 +73,7 @@ entradas:
     consome: [contrato/competencias, contratos/job.schema, contratos/reconciliation.schema, contratos/auth-session.schema, contratos/event.schema, contratos/file-transfer.schema]
     produz: contrato/estado
     aceite: portao-mecanico/documentacao-estrutural
-    status: aceito
+    status: em_curso
   - id: 10
     caminho: manifesto.yaml
     proposito: namespace fechado e dependências do CloudIFF v2
@@ -81,7 +81,7 @@ entradas:
     consome: [contrato/estado]
     produz: contrato/manifesto-v1
     aceite: portao-mecanico/documentacao-estrutural
-    status: aceito
+    status: em_curso
   - id: 11
     caminho: include/cloudiff/node_identity.hpp
     proposito: declara NodeIdentity e validação de node_id
@@ -1385,7 +1385,7 @@ entradas:
     consome: [contrato/competencias]
     produz: runtime/agent-skills-sync
     aceite: portao-mecanico/deploy
-    status: pendente
+    status: aceito
   - id: 177
     caminho: tests/test_agent_skills_sync.py
     proposito: testa allowlist de hosts, release imutável, symlink atômico e proibição de instalação de agentes no sincronizador
@@ -1393,7 +1393,7 @@ entradas:
     consome: [runtime/agent-skills-sync]
     produz: teste/agent-skills-sync
     aceite: portao-mecanico/backend-integracao
-    status: pendente
+    status: aceito
   - id: 178
     caminho: deploy/systemd/cloudiff-webdev.service
     proposito: garante boot persistente do WebDev em Forja com ordem firewall antes do container e teardown reverso
@@ -12097,9 +12097,13 @@ entradas:
 
 trabalho_compartilhado:
   projeto: cloudiff
-  unidade: webdev-workspace-v44
+  caminho: /srv/cloudif/cloudiff-v45
+  unidade: agent-skills-sync-v45
+  descricao: homologa sincronização atômica das skills CloudIFF entre hosts sem instalar cliente ou agente
   agente: WORK-SSH
-  atualizado_em: '2026-08-25T17:30:05-03:00'
-  concluido_em: '2026-08-25T17:30:05-03:00'
-  estado: concluido
+  atualizado_em: '2026-08-26T08:39:39-03:00'
+  concluido_em: '2026-08-26T08:39:39-03:00'
+  prorrogado_em: '2026-08-26T08:25:35-03:00'
+  previsao_termino: '2026-08-26T10:25:35-03:00'
   zona_exclusao: []
+  estado: concluido

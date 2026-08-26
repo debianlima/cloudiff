@@ -8,10 +8,11 @@ audit=json.load(open(root/'docs/reconciliation/v1-1320-audit.json'))
 delta=json.load(open(root/'docs/reconciliation/v1-v2-delta.json'))
 plan=json.load(open(root/'docs/reconciliation/normalization-plan.json'))
 closure=json.load(open(root/'docs/reconciliation/skill-closure-v40.json'))
-assert fm['name']=='cloudiff' and fm['tipo_competencia']=='projeto' and fm['versao']=='0.1.4'
+assert fm['name']=='cloudiff' and fm['tipo_competencia']=='projeto' and fm['versao']=='0.1.5'
 assert 'FrozenPortalInterface' in raw
 assert '### L012 — capability de certificado do servidor não vira trust bundle do agente' in raw
 assert '### L013 — `apply` idempotente não reinicia runtime equivalente' in raw
+assert '### L014 — release existente não dispensa prova do artefato recebido' in raw
 for x in ('desenvolvedor-de-software@14','github-incremental-reconciliation@7','governanca-ontologica-de-skills@1.0.4'):
  assert x in raw,x
 # Project ontology: exactly two internally-composed CloudIFF skills and thirteen reconciled references.
@@ -52,4 +53,4 @@ for rel,expected in delta['frozen_interface']['assets_sha256'].items():
  if p.exists():assert hashlib.sha256(p.read_bytes()).hexdigest()==expected,rel
 for f in ('tests/test_faro_node_preparation.py','tests/test_agent_update.py'):
  assert ('-----BEGIN '+'PRIVATE KEY-----') not in (root/f).read_text()
-print('CLOUDIFF_PROJECT_SKILL=PASS version=0.1.4 compoe=2 referencia=13 anti_cycle=PASS')
+print('CLOUDIFF_PROJECT_SKILL=PASS version=0.1.5 compoe=2 referencia=13 anti_cycle=PASS')
