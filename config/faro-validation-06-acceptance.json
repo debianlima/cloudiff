@@ -2,7 +2,7 @@
   "version": 2,
   "model": "FaroValidation",
   "stage": "acceptance",
-  "verification_status": "partially_verified",
+  "verification_status": "verified",
   "goal": "Consolidar os portões de Faro sem marcar nenhum requisito como aprovado antes de evidência mecânica do host.",
   "depends_on": [
     "reconciliation-resilience"
@@ -13,7 +13,7 @@
       "statement": "Todos os requisitos obrigatórios R01-R17 precisam de evidência mecânica antes do aceite de Faro.",
       "source": "P06/Faro v30",
       "mandatory": true,
-      "evidence": "R01-R17 possuem evidência mecânica; R14 fechada por docs/reconciliation/faro-r14-v42.json. Falta somente o scan final R19 desta mesma unidade."
+      "evidence": "R01-R21 possuem evidência mecânica. Em 26/08/2026 Faro observou 4 vCPU online (0-3), cAdvisor API reportou 4 cores e o control-plane manteve node_count=1 com observed_at=2026-08-26T13:03:45-03:00."
     },
     {
       "id": "FARO-R19",
@@ -54,7 +54,7 @@
       "id": "FARO-T19",
       "action": "Somente após todos os gates obrigatórios, propor aceite do node Faro e eventual role/capabilities definitivos.",
       "expected_result": "aceite é consequência de evidência, não de intenção",
-      "gate": "not_verified:blocked-by-resource-cpu-gap-2-of-4-vcpu"
+      "gate": "passed:resource-profile-satisfied-4-of-4-vcpu"
     }
   ],
   "distributed_system_checks": {

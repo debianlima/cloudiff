@@ -985,7 +985,7 @@ entradas:
     consome: [validation/faro-reconciliation-resilience]
     produz: validation/faro-acceptance
     aceite: portao-mecanico/infraestrutura
-    status: pendente
+    status: aceito
   - id: 124
     caminho: tests/test_faro_validation_model.py
     proposito: teste estrutural do modelo Faro contra contratos existentes, dependências e gates não verificados
@@ -993,7 +993,7 @@ entradas:
     consome: [validation/faro-acceptance, contratos/faro-validation.schema]
     produz: teste/faro-validation-model
     aceite: portao-mecanico/backend-integracao
-    status: pendente
+    status: aceito
   - id: 125
     caminho: contratos/faro-node-preparation.schema.json
     proposito: contrato da reserva física/lógica do Faro em 10.62.91.5 e preparação do control-plane antes do SSH
@@ -12097,9 +12097,9 @@ entradas:
 
 trabalho_compartilhado:
   projeto: cloudiff
-  unidade: webdev-workspace-v44
+  unidade: faro-final-acceptance-v46
   agente: WORK-SSH
-  atualizado_em: '2026-08-25T17:30:05-03:00'
-  concluido_em: '2026-08-25T17:30:05-03:00'
+  atualizado_em: '2026-08-26T13:11:46-03:00'
+  concluido_em: '2026-08-26T13:11:46-03:00'
   estado: concluido
   zona_exclusao: []
