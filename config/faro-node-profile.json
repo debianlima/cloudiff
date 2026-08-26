@@ -24,7 +24,7 @@
     "vcpu": 4,
     "ram_bytes": 8589934592,
     "disk_bytes": 214748364800,
-    "status": "partially-satisfied"
+    "status": "satisfied"
   },
   "recovery": {
     "backup": "reinstall-from-scratch",
@@ -41,15 +41,15 @@
     "admin_surface": "/admin"
   },
   "observed_resources": {
-    "vcpu": 2,
-    "ram_bytes": 7785426944,
+    "vcpu": 4,
+    "ram_bytes": 7784714240,
     "disk_bytes": 214748364800,
     "lv_bytes": 212596686848,
     "root_filesystem_bytes": 208661176320,
     "configured_ram_bytes": 8589934592
   },
   "resource_gates": {
-    "vcpu": "gap-observed-2-required-4",
+    "vcpu": "pass",
     "ram": "pass",
     "disk": "pass"
   }

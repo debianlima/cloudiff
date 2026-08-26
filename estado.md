@@ -1,93 +1,91 @@
-# Estado — 2026-08-25 — contrato v44
+# Estado — 2026-08-26 — contrato v44
 
 ## Decisões vigentes
-- `FrozenPortalInterface` permanece requisito mestre: a v44 não altera Portal/UI, navegação, rotas de usuário ou comportamento visual homologado.
-- WebDevWorkspace fica em Forja como navegador Selenium/noVNC isolado, sem Docker socket, sem privilégio, sem OpenCode/agente adicional e com `/workspace` read-only.
-- Link operacional fixo: `https://cloudiff.duckdns.org/__cloudiff_webdev/`, restrito à VPN `10.0.0.0/16`; NPM em Maurício é a única origem proxy permitida no backend Forja.
-- Acesso direto `http://10.62.91.2:17900/` permanece apenas para origens explicitamente permitidas pelo firewall do WebDev; Faro e Hospedagem não têm bypass direto.
-- Simulações/read-only de infraestrutura no WebDev usam DNS/AD físico `10.68.128.252`; não há agente adicional dentro do container.
-- Skill ativa durante a unidade foi `cloudiff@0.1.3`. A homologação produziu `cloudiff@0.1.4` com L013; a nova versão só ativa na próxima unidade.
-- Catálogo PGH registra `cloudiff@0.1.4` em `2a641bfe597377a55711ea0804c602ea999fda07`.
+- `FrozenPortalInterface` permanece requisito mestre; esta unidade não altera Portal/UI, navegação, rotas de usuário ou comportamento visual homologado.
+- Faro `10.62.91.5` está aceito como node `edge` com `inventory`, `health`, `telemetry-host`, `portal-host` e `agent-auto-update`; `build` e `runtime` continuam excluídos.
+- O requisito de capacidade do Faro permanece 4 vCPU / 8 GiB configurados / 200 GiB de disco; em 26/08/2026 o SO passou a observar 4 vCPU online (`0-3`).
+- O cutover do Portal continua separado do aceite do node e só ocorre após os gates de portal-shadow previstos no perfil; nenhum cutover foi executado nesta unidade.
+- Monitoramento padrão do Faro permanece cAdvisor `v0.57.0`, image ID pinado e exposição somente em `127.0.0.1:18081`.
+- `cloudiff@0.1.4` é a skill de projeto ativa; o princípio “competência acrescenta acesso; não retira identidade” permanece preservado e nenhum algoritmo nativo foi alterado.
 
 ## Decisões superadas
-- `apply` do WebDev sempre reiniciar `cloudiff-webdev.service` — superado: runtime equivalente executa firewall/health e retorna `WEBDEV_WORKSPACE=NOOP`, preservando sessão/container.
-- Link operacional principal apenas `http://10.62.91.2:17900/` — superado pelo HTTPS fixo VPN-only; o link direto permanece apenas como canal interno restrito.
+- “Faro possui 2/4 vCPU e não pode concluir o aceite” — superada pela observação viva de 4 vCPU em 26/08/2026.
+- `apply` do WebDev sempre reiniciar `cloudiff-webdev.service` — permanece superada pela idempotência homologada na v44.
+- Link operacional principal apenas `http://10.62.91.2:17900/` — permanece superado pelo HTTPS fixo VPN-only, mantendo o link direto apenas como canal interno restrito.
 
 ## Decisões humanas pendentes
-- Nenhuma nova decisão humana na v44.
+- Nenhuma nova decisão humana nesta unidade.
 
 ## Pendências técnicas não humanas
-- Faro continua com 2 vCPU observadas para requisito prescritivo de 4 vCPU; Portal não deve migrar para Faro até o recurso ser corrigido e a etapa 6 ser rerodada.
-- Faro possui egress Internet filtrado: CloudIFF interno/NATS/heartbeat funcionam, mas GitHub/LVFS externos expiram. `fwupd-refresh.service` permanece warning de máquina por timeout LVFS.
+- Faro continua com egress Internet filtrado; `fwupd-refresh.service` permanece warning por timeout LVFS, sem afetar CloudIFF/NATS/heartbeat.
 - Cinco arquivos V1 continuam `preexistente` por links Markdown quebrados.
 - LegacyRetirement continua bloqueado pela integridade remota do backup principal `pre-v2-20260820` enquanto o servidor de backup estiver indisponível.
 - Acesso direto Hospedagem → `10.68.128.253` permanece filtrado; `.253` responde via salto por `10.68.128.252`.
+- Portal-shadow/cutover para Faro é uma unidade futura separada; o aceite do node não autoriza migração automática da interface.
 
 ## Trabalho compartilhado
-- ponteiro: `manifesto.yaml.trabalho_compartilhado` — unidade `webdev-workspace-v44`, concluída, sem zona de exclusão ativa.
+- ponteiro: `manifesto.yaml.trabalho_compartilhado` — unidade `faro-final-acceptance-v46`, concluída em `2026-08-26T13:11:46-03:00`, sem zona de exclusão ativa.
 
 ## Competências ativas nesta unidade
-- `cloudiff@0.1.3` — skill raiz usada durante a execução.
+- `cloudiff@0.1.4` — skill raiz do projeto.
 - `desenvolvedor-de-software@14` — método PGH.
 - `github-incremental-reconciliation@7` — reconciliação antes de normalização/release.
-- `governanca-ontologica-de-skills@1.0.4` — atualização da skill e catálogo após homologação.
-- `platform-engineering@ed68466e04c9b5d33898ed5b503fb828f49c3e73` — Docker/systemd/runtime.
-- `release-it@1.4.0` — idempotência e rollback.
-- `network-ssh-operations@1` — allowlists, NPM, WebSocket e bypass negativo.
-- `operational-ui-truth@1` — navegador real/efeito observado sem alterar UI.
+- `governanca-ontologica-de-skills@1.0.4` — fecho/identidade das competências.
 - `telemetry-data-visualization@2` — macro global da unidade.
+- `platform-engineering` e `release-it` — Docker/systemd, idempotência e preservação do agente.
+- `network-ssh-operations` — verificação SSH/NATS entre Faro e Hospedagem.
 
 ## Competências instaladas/atualizadas para unidades futuras
-- `cloudiff@0.1.4` — L013: apply idempotente preserva container ID/StartedAt e evita restart de runtime equivalente.
+- Nenhuma; a unidade somente reconciliou estado físico e evidência já coberta por `cloudiff@0.1.4`.
 
 ## Falhas de portão por tipo de entrada
-- `deploy` entrada 174: primeira prova de idempotência reprovou porque duas execuções consecutivas recriavam o container; corrigido com `runtime_equivalent` + `WEBDEV_WORKSPACE=NOOP`.
-- `runtime` candidata v44: release antiga tinha unit em `deploy/cloudiff-webdev.service`, enquanto o instalador self-relative espera `deploy/systemd/cloudiff-webdev.service`; layout da candidata foi reconciliado antes do gate final.
-- `higiene`: scanner inicial tratou `SE_VNC_NO_PASSWORD: "true"` como segredo; gate foi corrigido para distinguir marcador booleano `NO_PASSWORD` de atribuição de senha real, sem alterar o teste correto.
-- `automacao`: primeira recriação de sessão WebDriver após restart encontrou slot transitório; sessão dedicada foi reconciliada e o gate final de navegação passou.
+- Suíte oficial, primeira execução: erro transitório no `tearDownClass` de `test_multiservice_build_broker` ao remover diretório temporário; teste isolado passou 8/8 e o rerun integral passou 1008 testes + 1 skip. Classificado como flake ambiental não reproduzido, sem alteração de código para mascará-lo.
+- Gates específicos do Faro: nenhuma reprovação após a reconciliação de capacidade.
 
 ## Divergências da última reconciliação
 ### Corrigidas
-- Catálogo remoto avançou de `998b625...` até `2a641bf...`; as sete referências internas do CloudIFF foram comparadas e permaneceram byte a byte inalteradas antes do checkpoint avançar.
-- WebDev runtime passou a apontar novamente para `/var/lib/cloudiff-webdev/v44`, não para worktree de desenvolvimento.
-- Instalador WebDev agora é idempotente: duas aplicações consecutivas preservaram exatamente o mesmo container ID e `StartedAt`.
-- Rota NPM passou rollback→reapply e retornou ao mesmo SHA de configuração.
-- WebSocket real pelo HTTPS fixo respondeu `101 Switching Protocols`.
-- Selenium navegou o Portal real e foi redirecionado corretamente ao Authentik; sessão visível ficou aberta no noVNC.
+- Inventário residente do Faro corrigido de 2 para 4 vCPU e RAM observada atualizada; máquina real prevaleceu sobre o arquivo descritivo.
+- `debianlima/dotfiles` remoto avançou para `5afcbb601db7cbcc5e51d110e05b6cc2592cab9d`; clone do Faro foi alinhado e o verificador residente atualizado para o commit reconciliado.
+- `config/faro-node-profile.json` passou de `partially-satisfied` para `satisfied`, com gate de CPU `pass`.
+- `config/faro-node-reservation.json` passou a registrar 4 vCPU e `observedAt=2026-08-26T13:03:45-03:00`.
+- `config/faro-validation-06-acceptance.json` passou de `partially_verified` para `verified`; `FARO-T19` agora está `passed:resource-profile-satisfied-4-of-4-vcpu`.
+- cAdvisor foi validado duas vezes com o instalador v45: mesmo container ID, mesmo image ID pinado, API reportando 4 cores e bind loopback preservado.
+- `cloudiff-v2-agent.service` preservou o mesmo PID durante as duas execuções do instalador.
+- Control-plane/PostgreSQL confirmou `node_count=1`, mesmo node_id do Faro, role `edge`, capabilities esperadas e `observed_at=2026-08-26T13:03:45-03:00`.
 
 ### Pendentes de autorização ou capacidade
-- Liberar/ajustar 4 vCPU no hypervisor do Faro.
-- Egress externo do Faro exige correção no gateway/ACL; nenhum canal administrativo do gateway estava exposto pelos endereços/portas testados.
+- Nenhum bloqueio de CPU permanece no Faro.
+- Egress externo/LVFS do Faro continua pendência técnica independente do aceite CloudIFF.
 
-## Entradas aceitas nesta unidade
-- 2 `competencias.yaml` — skill projeto candidata 0.1.4 e checkpoints reconciliados.
-- 171 `contratos/webdev-workspace.schema.json` — contrato WebDev v2.
-- 172 `config/webdev-workspace.json` — link HTTPS fixo e política VPN-only.
-- 173 `deploy/compose.webdev.yaml` — Selenium isolado, imagem pinada e mounts restritos.
-- 174 `deploy/install_webdev_workspace.sh` — apply idempotente homologado.
-- 175 `tests/test_webdev_workspace.py` — gates de isolamento, configuração e idempotência.
-- 178 `deploy/systemd/cloudiff-webdev.service` — runtime systemd homologado.
-- 179 `skills/cloudiff/SKILL.md` — candidata `cloudiff@0.1.4` com L013.
-- 182 `tests/test_cloudiff_project_skill.py` — versão/ontologia/anti-ciclo atualizados.
-- 1513 `deploy/install_webdev_route.sh` — rota NPM HTTPS reversível.
-- 1514 `tests/test_webdev_route.py` — VPN-only, websocket, rollback e ausência de bypass.
+## Entradas revalidadas/aceitas nesta unidade
+- 123 `config/faro-validation-06-acceptance.json` — aceite final promovido para `verified`.
+- 124 `tests/test_faro_validation_model.py` — modelo atualizado para 6/6 estágios verificados e `T19=passed`.
+- 126 `config/faro-node-reservation.json` — recursos/heartbeat reconciliados.
+- 131 `tests/test_faro_node_preparation.py` — gate de recurso agora exige CPU `pass` e 4 vCPU observadas.
+- 140 `config/faro-node-profile.json` — perfil observado satisfeito.
+- 165 `tests/test_faro_profile.py` — prova 4/4 vCPU e gates de recurso `pass`.
+- 9 `estado.md` — snapshot desta unidade.
 
-## Portões v44
-- `WEBDEV_WORKSPACE_OFFLINE=PASS`.
-- `WEBDEV_ROUTE_OFFLINE=PASS`.
-- WebDev runtime: container healthy, imagem digest pinada, `privileged=false`, Docker socket ausente, workspace read-only.
-- Idempotência: duas aplicações consecutivas `NOOP`, container ID e `StartedAt` inalterados.
-- NPM: `nginx -t` PASS; rollback removeu bloco; reapply restaurou SHA original.
-- Acesso fixo: Forja/Hospedagem 200; Faro 403.
-- Bypass direto: Faro/Hospedagem bloqueados.
-- WebSocket HTTPS: `101 Switching Protocols`.
-- Selenium: navegação real PASS; Authentik observado no navegador visível.
-- Frozen UI: 6/6 PASS; nenhum arquivo Portal/UI no diff.
-- Suíte oficial: 1008 testes PASS + 1 skip.
-- Namespace: zero extras e zero ausências obrigatórias; cinco pendências LegacyRetirement continuam declaradas e não geradas.
-- Secret scan e `git diff --check`: PASS.
-- Catálogo: `CATALOGO_SKILLS=PASS`, `SYNC_GUARD=PASS`.
+## Portões v46
+- `DELTA_INVENTORY=PASS` e `LEARNING_PRESERVED=PASS` para o delta 2→4 vCPU; nenhuma normalização destrutiva aplicada.
+- Faro `/opt/agentes/verificar.sh`: `errors=0 warnings=1`; warning único `fwupd-refresh.service` já classificado como egress externo.
+- `FARO_PROFILE=PASS` — desired 4 vCPU/8 GiB/200 GiB; observed 4 vCPU e gates `pass`.
+- `FARO_NODE_PREPARATION=PASS`.
+- `FARO_VALIDATION_MODEL=PASS` — verified=6, partial=0, T19=passed.
+- `FARO_STANDARD_MONITORING_CONTRACT=PASS`.
+- `FARO_NATS_FIREWALL_MODEL=PASS`.
+- Monitoramento vivo: cAdvisor idempotente, API cores=4, agent preservado.
+- Heartbeat E2E: NATS acessível; PostgreSQL observed state com node_count=1 e timestamp recente.
+- Suíte oficial v46: 1008 testes PASS + 1 skip.
+- Nenhum arquivo de Portal/UI foi alterado nesta unidade.
+
+## Telemetria PGH
+- `telemetria_inicio`: `2026-08-26T13:05:17-03:00` — início da unidade versionada v46.
+- `telemetria_fim`: `2026-08-26T13:11:46-03:00` — fechamento do snapshot; tempo decorrido é derivado, não horas humanas.
+- cliente/agente: `WORK-SSH`; skill de projeto: `cloudiff@0.1.4`; macro: `telemetry-data-visualization@2`.
+- máquinas observadas: `faro` (capacidade/monitoramento/agente), `hospedagem` (NATS/control-plane/PostgreSQL) e `forja` (testes Git v46).
+- tokens/custo do cliente: `indisponivel`; nenhuma estimativa foi promovida a observado.
 
 ## Próxima unidade
-- Recarregar `cloudiff@0.1.4` antes de qualquer nova unidade.
-- Enquanto Faro permanecer 2/4 vCPU, não migrar Portal. Priorizar pendência independente que não altere a interface: reconciliar egress externo do Faro se surgir canal administrativo seguro do gateway; caso contrário seguir outra entrada elegível fora de LegacyRetirement/Portal.
+- O node Faro está homologado quanto a onboarding, capacidade, monitoramento, agent/heartbeat e resiliência.
+- Próximo trabalho elegível: executar os gates de portal-shadow antes de qualquer cutover, ou reconciliar o egress externo do Faro como pendência independente. Nenhuma migração de Portal deve ocorrer automaticamente.

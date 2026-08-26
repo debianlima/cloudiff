@@ -6,7 +6,7 @@ root=Path(__file__).resolve().parents[1]
 schema=json.load(open(root/'contratos/faro-validation.schema.json'));jsonschema.Draft202012Validator.check_schema(schema)
 files=sorted((root/'config').glob('faro-validation-*.json'));assert len(files)==6
 expected=['discovery','identity-network','pki-nats','agent-heartbeat','reconciliation-resilience','acceptance']
-expected_status=['verified','verified','verified','verified','verified','partially_verified']
+expected_status=['verified','verified','verified','verified','verified','verified']
 seen=[];req_ids=[];task_ids=[]
 for i,p in enumerate(files):
  x=json.load(open(p));jsonschema.validate(x,schema);seen.append(x['stage']);assert x['version']==2;assert x['verification_status']==expected_status[i]
@@ -23,4 +23,5 @@ node=json.load(open(root/'contratos/node.schema.json'));assert set(node['propert
 nats=json.load(open(root/'contratos/nats-security.schema.json'));assert nats['properties']['shared_token_allowed']['const'] is False;assert nats['properties']['agent_subscribe_allowed']['const'] is False;assert nats['properties']['agent_server_trust_source']['const']=='system-ca-plus-expected-hostname';assert nats['properties']['server_certificate_distribution_scope']['const']=='nats-server-host-only';assert nats['properties']['agent_may_receive_server_private_key']['const'] is False
 pki=json.load(open(files[2]));r10=next(r for r in pki['requirements'] if r['id']=='FARO-R10');assert 'nunca expõe sua privkey ao agente' in r10['statement']
 rec=json.load(open(root/'contratos/reconciliation.schema.json'));assert set(rec['properties']['decision']['enum'])=={'noop','reconcile','blocked','degraded','failed'}
-print('FARO_VALIDATION_MODEL=PASS v2 verified=5 partial=1 R14=verified R19=verified')
+acceptance=json.load(open(files[5]));assert next(t for t in acceptance['tasks'] if t['id']=='FARO-T19')['gate']=='passed:resource-profile-satisfied-4-of-4-vcpu'
+print('FARO_VALIDATION_MODEL=PASS v2 verified=6 partial=0 R14=verified R19=verified T19=passed')
