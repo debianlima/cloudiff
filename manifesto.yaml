@@ -73,7 +73,7 @@ entradas:
     consome: [contrato/competencias, contratos/job.schema, contratos/reconciliation.schema, contratos/auth-session.schema, contratos/event.schema, contratos/file-transfer.schema]
     produz: contrato/estado
     aceite: portao-mecanico/documentacao-estrutural
-    status: em_curso
+    status: aceito
   - id: 10
     caminho: manifesto.yaml
     proposito: namespace fechado e dependências do CloudIFF v2
@@ -81,7 +81,7 @@ entradas:
     consome: [contrato/estado]
     produz: contrato/manifesto-v1
     aceite: portao-mecanico/documentacao-estrutural
-    status: em_curso
+    status: aceito
   - id: 11
     caminho: include/cloudiff/node_identity.hpp
     proposito: declara NodeIdentity e validação de node_id
@@ -985,7 +985,7 @@ entradas:
     consome: [validation/faro-reconciliation-resilience]
     produz: validation/faro-acceptance
     aceite: portao-mecanico/infraestrutura
-    status: pendente
+    status: aceito
   - id: 124
     caminho: tests/test_faro_validation_model.py
     proposito: teste estrutural do modelo Faro contra contratos existentes, dependências e gates não verificados
@@ -993,7 +993,7 @@ entradas:
     consome: [validation/faro-acceptance, contratos/faro-validation.schema]
     produz: teste/faro-validation-model
     aceite: portao-mecanico/backend-integracao
-    status: pendente
+    status: aceito
   - id: 125
     caminho: contratos/faro-node-preparation.schema.json
     proposito: contrato da reserva física/lógica do Faro em 10.62.91.5 e preparação do control-plane antes do SSH
@@ -12097,13 +12097,12 @@ entradas:
 
 trabalho_compartilhado:
   projeto: cloudiff
-  caminho: /srv/cloudif/cloudiff-v45
-  unidade: agent-skills-sync-v45
-  descricao: homologa sincronização atômica das skills CloudIFF entre hosts sem instalar cliente ou agente
+  caminho: /srv/cloudif/cloudiff-release-faro
+  unidade: faro-cloudiff-release
+  descricao: fecha onboarding Faro apos capacidade 4 vCPU observada, sem cutover do Portal
   agente: WORK-SSH
-  atualizado_em: '2026-08-26T08:39:39-03:00'
-  concluido_em: '2026-08-26T08:39:39-03:00'
-  prorrogado_em: '2026-08-26T08:25:35-03:00'
-  previsao_termino: '2026-08-26T10:25:35-03:00'
+  atualizado_em: '2026-08-26T17:47:02-03:00'
+  concluido_em: '2026-08-26T17:47:02-03:00'
+  previsao_termino: '2026-08-26T17:47:02-03:00'
   zona_exclusao: []
   estado: concluido

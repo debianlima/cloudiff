@@ -11,7 +11,7 @@
       "statement": "Identificar hostname, SO, arquitetura, CPU, RAM, disco, interfaces, IPs e serviços existentes.",
       "source": "contratos/node.schema.json",
       "mandatory": true,
-      "evidence": "Host faro: Ubuntu 26.04 KVM x86_64; DMI QEMU 8 GB RAM e MemTotal guest 7.785.426.944 bytes; 2 vCPU; disco 200 GiB; LV 198G; rede 10.62.91.5; inventário residente errors=0 warnings=0."
+      "evidence": "Host faro: Ubuntu 26.04 KVM x86_64; DMI QEMU 8 GB RAM e MemTotal guest 7.784.714.240 bytes; 4 vCPU online (0-3); disco 200 GiB; LV 198G; rede 10.62.91.5; inventário residente errors=0 warnings=1 apenas fwupd-refresh por egress."
     },
     {
       "id": "FARO-R02",
@@ -25,7 +25,7 @@
       "statement": "Declarar capabilities somente quando forem observáveis e necessárias à função escolhida.",
       "source": "contratos/node.schema.json",
       "mandatory": true,
-      "evidence": "Capabilities observadas: inventory, health, telemetry-host, agent-auto-update; portal-host permanece desejada e ainda não observada."
+      "evidence": "Capabilities observadas no heartbeat PostgreSQL em 2026-08-26T20:38:13Z: inventory, health, telemetry-host, portal-host e agent-auto-update; build/runtime permanecem excluídas."
     }
   ],
   "tasks": [
@@ -72,7 +72,8 @@
         "inventory",
         "health",
         "telemetry-host",
-        "agent-auto-update"
+        "agent-auto-update",
+        "portal-host"
       ],
       "rule": "somente capabilities observadas no heartbeat atual; portal-host ainda não observada"
     },

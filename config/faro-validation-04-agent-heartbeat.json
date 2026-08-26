@@ -20,7 +20,7 @@
       "statement": "Heartbeat deve carregar node_id consistente, observed_at, role e capabilities confirmados.",
       "source": "contratos/node.schema.json + tests/test_heartbeat.cpp",
       "mandatory": true,
-      "evidence": "PostgreSQL observed state contém mesmo node_id, hostname=faro, role=edge, observed_at e capabilities inventory/health/telemetry-host/agent-auto-update."
+      "evidence": "PostgreSQL observed state em 2026-08-26T20:38:13Z contém o mesmo node_id, hostname=faro, role=edge, cpu_count=4 e capabilities inventory/health/telemetry-host/portal-host/agent-auto-update."
     },
     {
       "id": "FARO-R13",

@@ -1,78 +1,82 @@
 # Estado — 2026-08-26 — contrato v45
 
 ## Decisões vigentes
-- `FrozenPortalInterface` permanece requisito mestre; a v45 não altera Portal/UI, navegação, rotas de usuário ou comportamento visual homologado.
-- Releases de agent-skills são imutáveis: o sincronizador sempre prova o TAR recebido contra `NEW_MANIFEST`, mesmo quando o target já existe; membros especiais de arquivo são rejeitados; `current`/`previous` precisam ser symlinks antes de mutação.
-- A v45 homologa a sincronização de agent-skills sem instalar OpenCode, cliente ou agente adicional e sem promover uma release diferente quando o target atual já é equivalente.
-- Faro tem alvo contratual humano de 4 vCPU; o último estado observado nesta unidade continua 2 vCPU (`CPU_ONLINE=0-1`). Workloads que exigem 4 vCPU permanecem bloqueados até 4 serem observadas no runtime.
-- A skill ativa durante a unidade foi `cloudiff@0.1.4`. A homologação produziu `cloudiff@0.1.5` com L014; a nova versão ativa somente na próxima unidade.
+- `FrozenPortalInterface` permanece requisito mestre; nenhuma mudança de Portal/UI, navegação ou rotas de usuário foi feita nesta unidade.
+- Faro é o nó CloudIFF de papel `edge`; seu perfil deseja `portal-host`, mas o cutover do Portal ocorre somente após onboarding Faro e portões de portal shadow.
+- O onboarding Faro está aceito: 4 vCPU online, identidade própria, PKI/NATS individual, agent não-root, heartbeat direto para Hospedagem, reconciliação/resiliência e rollback já possuem evidência mecânica.
+- O heartbeat atual do Faro observa capabilities `inventory`, `health`, `telemetry-host`, `portal-host` e `agent-auto-update`; `build` e `runtime` continuam excluídas do perfil Faro.
+- O caminho crítico Faro é `10.62.91.5 -> NATS 10.62.92.7:14222 -> cloudiff-control -> PostgreSQL`; Forja e Maurício não participam do heartbeat crítico.
+- Releases de agent-skills permanecem imutáveis; o runtime Faro continua na release instalada `cloudiff@0.1.4`, enquanto a skill de projeto usada nesta unidade é `cloudiff@0.1.5`.
 
 ## Decisões superadas
-- Confiar apenas na árvore de uma release já existente como prova do artefato recebido — superado: o TAR recebido agora é validado sempre contra `NEW_MANIFEST`.
-- Permitir symlink/hardlink/FIFO no TAR desde que não escapasse do path — superado: somente diretórios e arquivos regulares entram na release declarada.
-- Tratar `readlink -f current` como prova suficiente da atomicidade — superado: `current` e, quando presente, `previous` precisam ser symlinks antes da mutação.
+- Faro bloqueado por `2/4 vCPU` — superado em 26/08/2026 após a TI ampliar a VM e o SO observar CPUs `0-3`.
+- `portal-host` apenas desejada/não observada — superado pelo heartbeat PostgreSQL atual, que já anuncia `portal-host`; isso não equivale a cutover do Portal.
+- Confiar apenas na árvore de uma release de skills já existente como prova do artefato recebido — superado na v45 pelo gate do TAR recebido.
 
 ## Decisões humanas pendentes
-- Nenhuma nova decisão humana na v45. O aumento do Faro para 4 vCPU já foi decidido pelo operador e aguarda execução da TI.
+- Nenhuma decisão humana adicional para aceitar o nó Faro.
+- Cutover definitivo do Portal para Faro permanece uma unidade posterior e deve respeitar os portões de portal shadow/FrozenPortalInterface; não foi executado implicitamente nesta unidade.
 
 ## Decisões fechadas nesta emenda
-- O sincronizador de agent-skills deve falhar fechado para arquivo recebido divergente, tipos especiais não declarados e ponteiros que perderam a natureza de symlink.
+- Faro atende ao perfil de recurso `4 vCPU / 8 GiB configurados / 200 GiB disco`; os três resource gates estão `pass`.
+- `FARO-T19` passou e a etapa `acceptance` mudou de `partially_verified` para `verified`.
 
 ## Pendências técnicas não humanas
-- Faro permanece observado em 2/4 vCPU até a TI alterar a VM; rerodar o gate de capacidade antes de qualquer workload que requeira 4 vCPU.
-- Cinco arquivos V1 permanecem `preexistente` por links Markdown quebrados, herdado do estado anterior e fora do escopo da v45.
-- LegacyRetirement continua separado desta unidade e depende dos próprios gates de backup/substituto antes de qualquer retirada destrutiva.
+- O host Faro mantém `fwupd-refresh.service` falho por indisponibilidade de egress para o serviço externo; o verificador residente retorna `errors=0 warnings=1`. Isso não afeta o runtime CloudIFF/NATS.
+- O inventário de máquina ainda precisa refletir Docker/cAdvisor presentes no Faro; máquina vence o inventário e a reconciliação é a próxima correção de ambiente desta mesma entrega.
+- Permanecem 21 entradas `pendente` e 5 `preexistente` no contrato v45 fora desta unidade; a liberação global do projeto deve selecionar quais delas são release-blocking antes de declarar release final.
+- LegacyRetirement continua separado e qualquer retirada destrutiva exige seus próprios gates e autorização final.
 
 ## Trabalho compartilhado
-- ponteiro: `manifesto.yaml.trabalho_compartilhado` — unidade `agent-skills-sync-v45`, concluída, sem zona de exclusão ativa.
+- ponteiro: `manifesto.yaml.trabalho_compartilhado` — unidade `faro-cloudiff-release`, concluída, sem zona de exclusão ativa.
 
 ## Competências ativas nesta unidade
-- `cloudiff@0.1.4` — skill raiz efetivamente carregada no início da unidade.
+- `cloudiff@0.1.5` — skill raiz carregada no início da unidade.
 - `desenvolvedor-de-software@14` — método PGH.
-- `github-incremental-reconciliation@7` — reconciliação antes de normalização/release.
-- `governanca-ontologica-de-skills@1.0.4` — atualização da skill e registro de catálogo após homologação.
-- `telemetry-data-visualization@2` — macro global da unidade.
-- `network-ssh-operations@1` — primeiro salto obrigatório, caminho SSH e homologação distribuída.
-- `release-it@1.4.0` — idempotência, release imutável e rollback.
-
-## Competências instaladas/atualizadas para unidades futuras
-- `cloudiff@0.1.5` — L014: release existente não dispensa prova do artefato recebido; tipos especiais são rejeitados e ponteiros são provados antes da mutação.
+- `github-incremental-reconciliation@7` — reconciliação incremental antes de normalização/release.
+- `governanca-ontologica-de-skills@1.0.4` — preservação do fecho de skills.
+- `telemetry-data-visualization@2` — macro global.
+- `network-ssh-operations@1` — primeiro salto pfSense e validação multi-host.
 
 ## Falhas de portão por tipo de entrada
-- `deploy` entrada 176: TAR com FIFO/symlink/hardlink podia passar porque o manifesto enumerava apenas arquivos regulares; corrigido com rejeição de membros não regulares/diretórios.
-- `deploy` entrada 176: quando a release-alvo já existia, o TAR recebido não era comparado ao `NEW_MANIFEST`; corrigido por `validate_archive_manifest` obrigatório.
-- `deploy` entrada 176: `current` como diretório comum só falhava após criar artefatos de promoção; corrigido com pré-condição `current_not_symlink` antes de qualquer mutação.
-- `higiene`: `tests/__pycache__` criado por um gate auxiliar fez `scripts/validate.sh` reprovar; o temporário criado nesta unidade foi removido e a validação limpa passou. Não era defeito do produto.
+- `infraestrutura/Faro`: documentos de perfil/reserva ainda registravam 2 vCPU apesar do runtime já observar 4; reconciliados para o estado real.
+- `agente/Faro`: evidências antigas omitiam `portal-host`; o PostgreSQL atual comprovou capability e os artefatos foram reconciliados.
+- `verificação`: um gate TLS agregado usava o exit code de `openssl s_client` após EOF; a cadeia estava válida (`Verify return code: 0`). O gate foi corrigido para validar a evidência de cadeia, não o encerramento do cliente de diagnóstico.
 
 ## Divergências da última reconciliação
 ### Corrigidas
-- O worktree v45 preservou o staged do agente anterior e recebeu somente o delta de hardness comprovado.
-- As 13 referências e duas composições da skill de projeto foram reconciliadas contra o catálogo atual; versões em `metadata.version` foram tratadas como formato canônico válido das skills internas.
-- O catálogo registra `cloudiff@0.1.5` por ponteiro ao repositório dono, sem duplicar a skill; `controle/caminhos-canonicos.yaml` recebeu o hash derivado do índice atualizado.
+- `config/faro-node-profile.json`: `observed_resources.vcpu=4`, `resource_gates.vcpu=pass`, recursos `satisfied`.
+- `config/faro-node-reservation.json`: recursos observados reconciliados com heartbeat atual e `vcpu=pass`.
+- `config/faro-validation-01-discovery.json`: CPU atual e `portal-host` observada.
+- `config/faro-validation-04-agent-heartbeat.json`: heartbeat atual registra `cpu_count=4` e `portal-host`.
+- `config/faro-validation-06-acceptance.json`: `verification_status=verified` e `FARO-T19=passed`.
 
 ### Pendentes de autorização ou capacidade
-- Faro: capacidade observada ainda 2 vCPU para alvo humano de 4 vCPU; aguarda TI.
+- Nenhuma pendência de capacidade para Faro.
+- Portal cutover permanece deliberadamente fora desta unidade.
 
 ## Entradas aceitas nesta unidade
-- 2 `competencias.yaml` — skill raiz atualizada para candidata 0.1.5.
-- 176 `deploy/sync_agent_skills.sh` — sincronização fail-closed, idempotente e atômica homologada.
-- 177 `tests/test_agent_skills_sync.py` — allowlist, release imutável, archive hardness, NOOP, rollback e pré-condições de symlink homologados.
-- 179 `skills/cloudiff/SKILL.md` — candidata `cloudiff@0.1.5` com L014.
-- 182 `tests/test_cloudiff_project_skill.py` — gate da skill 0.1.5/ontologia/anti-ciclo atualizado.
+- 9 `estado.md` — snapshot atual do contrato v45.
+- 10 `manifesto.yaml` — estados e trabalho compartilhado reconciliados.
+- 118 `config/faro-validation-01-discovery.json` — descoberta atualizada com 4 vCPU/portal-host observada.
+- 121 `config/faro-validation-04-agent-heartbeat.json` — observed state atual reconciliado.
+- 123 `config/faro-validation-06-acceptance.json` — etapa final `verified`.
+- 124 `tests/test_faro_validation_model.py` — seis etapas verificadas.
+- 126 `config/faro-node-reservation.json` — recurso vCPU aceito.
+- 131 `tests/test_faro_node_preparation.py` — reserva/resource gate atualizados.
+- 140 `config/faro-node-profile.json` — perfil satisfeito.
+- 165 `tests/test_faro_profile.py` — gate 4 vCPU atualizado.
 
-## Portões v45
-- `AGENT_SKILLS_SYNC_OFFLINE=PASS` com dry-run, atomicidade, NOOP, rollback, divergência, allowlist e proibição de instalação de agente.
-- Hardness: TAR divergente em target existente rejeitado; FIFO/symlink/hardlink rejeitados; `current` não-symlink falha antes de efeitos colaterais.
-- Mesmo SHA do sincronizador `e8e6528af7fed0920d0af28fe2ff7b5c335bce55be3116b7b665c916c4b4483b` em Forja, Hospedagem, Maurício, Faro e Pelego.
-- Cinco hosts: `DRY_RUN_PASS -> NOOP -> POINTER_STABLE=PASS`; release permaneceu `cloudiff-project-0.1.4-20260825`, 27 skills; nenhuma promoção real.
+## Portões Faro
+- `FARO_RUNTIME_GATE=PASS`: 4 vCPU, agent ativo/enabled, updater timer ativo/enabled, NATS TLS válido, cAdvisor loopback-only e somente SSH exposto externamente.
+- `FARO_DB_GATE=PASS`: `node_count=1`, `cpu_count=4`, `portal-host=true`, heartbeat recente.
+- `FARO_VALIDATION_MODEL=PASS`: 6 etapas verificadas, nenhuma parcial.
+- `FARO_PROFILE=PASS` e `FARO_NODE_PREPARATION=PASS`.
 - Suíte oficial: 1008 testes PASS + 1 skip.
 - Frozen UI: 3/3 PASS; nenhum arquivo Portal/UI alterado.
-- `CLOUDIFF_PROJECT_SKILL=PASS version=0.1.5 compoe=2 referencia=13 anti_cycle=PASS`.
-- `DELTA_INVENTORY=PASS`; `LEARNING_PRESERVED=PASS`; `RECONCILIATION_CLOSURE=PASS`; `DEPENDENCY_REFERENCES=PASS`.
-- Catálogo: `CATALOGO_SKILLS=PASS`; `SYNC_GUARD=PASS`; ponteiro `cloudiff@0.1.5` validado.
-- Secret scan e `git diff --check`: PASS nos deltas da unidade.
+- Secret scan, `git diff --check` e higiene `__pycache__`: PASS.
 
 ## Próxima unidade
-- Recarregar `cloudiff@0.1.5` antes de selecionar qualquer nova entrada.
-- Reobservar o Faro antes de qualquer unidade que requeira 4 vCPU.
-- Escolher a próxima entrada elegível fora de Portal/LegacyRetirement enquanto a capacidade do Faro ou gates destrutivos continuarem bloqueados.
+- Reconciliar o inventário descritivo do Faro com Docker/cAdvisor observados.
+- Em seguida, calcular o fecho de liberação global do CloudIFF e separar as 21 entradas pendentes em release-blocking versus trabalho posterior.
+- Portal shadow/cutover para Faro só inicia depois desse fecho e sem alterar a interface homologada antes dos portões próprios.

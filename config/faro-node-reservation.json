@@ -71,7 +71,7 @@
     "csrSigned": true,
     "heartbeatE2E": true,
     "natsPath": "reachable",
-    "observedAt": "2026-08-25T14:58:00-03:00"
+    "observedAt": "2026-08-26T20:38:13Z"
   },
   "resources": {
     "requested": {
@@ -80,15 +80,15 @@
       "diskBytes": 214748364800
     },
     "observed": {
-      "vcpu": 2,
-      "ramBytes": 7785426944,
+      "vcpu": 4,
+      "ramBytes": 7784714240,
       "diskBytes": 214748364800,
       "lvBytes": 212596686848,
       "rootFilesystemBytes": 208661176320,
       "configuredRamBytes": 8589934592
     },
     "gates": {
-      "vcpu": "gap-observed-2-required-4",
+      "vcpu": "pass",
       "ram": "pass",
       "disk": "pass"
     }
