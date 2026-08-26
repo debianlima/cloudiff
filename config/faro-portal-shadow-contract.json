@@ -1,0 +1,40 @@
+{
+  "contract_version": 1,
+  "node": "faro",
+  "mode": "portal-shadow",
+  "contract_state": "HOMOLOGADO_CI",
+  "live_state": "NAO_VERIFICADO",
+  "probe": {
+    "method": "GET",
+    "path": "/",
+    "read_only": true
+  },
+  "endpoint_sources": {
+    "authoritative": "CLOUDIFF_PORTAL_AUTHORITATIVE_URL",
+    "shadow": "CLOUDIFF_PORTAL_SHADOW_URL"
+  },
+  "safety": {
+    "parallel_only": true,
+    "dedicated_non_authoritative_endpoint": true,
+    "authoritative_untouched": true,
+    "automatic_migration": false,
+    "cutover_authorized": false,
+    "contract_only_may_approve_live": false
+  },
+  "evidence": {
+    "frozen_surfaces": "portal/FROZEN_SURFACES.md",
+    "real_page_proof": "docs/portal-v2/REAL-PAGE-PROOF.json",
+    "quality_baseline": "config/portal-quality-baseline.json",
+    "faro_profile": "config/faro-node-profile.json"
+  },
+  "live_gates": [
+    "endpoint-separation",
+    "authoritative-before-after-unchanged",
+    "shadow-readonly-root-probe",
+    "frozen-surface-equivalence",
+    "backend-navigation-and-actions",
+    "telemetry-observed",
+    "no-route-dns-lb-takeover",
+    "explicit-cutover-authorization"
+  ]
+}
