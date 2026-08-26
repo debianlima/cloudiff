@@ -1,0 +1,93 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cloudiff.local/contracts/portal-shadow.schema.json",
+  "title": "CloudIFF Portal Shadow Contract",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_version",
+    "node",
+    "mode",
+    "contract_state",
+    "live_state",
+    "probe",
+    "endpoint_sources",
+    "safety",
+    "evidence",
+    "live_gates"
+  ],
+  "properties": {
+    "contract_version": {"const": 1},
+    "node": {"const": "faro"},
+    "mode": {"const": "portal-shadow"},
+    "contract_state": {"enum": ["HOMOLOGADO_CI", "REPROVADO"]},
+    "live_state": {"enum": ["NAO_VERIFICADO", "APROVADO", "REPROVADO"]},
+    "probe": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["method", "path", "read_only"],
+      "properties": {
+        "method": {"const": "GET"},
+        "path": {"const": "/"},
+        "read_only": {"const": true}
+      }
+    },
+    "endpoint_sources": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["authoritative", "shadow"],
+      "properties": {
+        "authoritative": {"const": "CLOUDIFF_PORTAL_AUTHORITATIVE_URL"},
+        "shadow": {"const": "CLOUDIFF_PORTAL_SHADOW_URL"}
+      }
+    },
+    "safety": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "parallel_only",
+        "dedicated_non_authoritative_endpoint",
+        "authoritative_untouched",
+        "automatic_migration",
+        "cutover_authorized",
+        "contract_only_may_approve_live"
+      ],
+      "properties": {
+        "parallel_only": {"const": true},
+        "dedicated_non_authoritative_endpoint": {"const": true},
+        "authoritative_untouched": {"const": true},
+        "automatic_migration": {"const": false},
+        "cutover_authorized": {"const": false},
+        "contract_only_may_approve_live": {"const": false}
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["frozen_surfaces", "real_page_proof", "quality_baseline", "faro_profile"],
+      "properties": {
+        "frozen_surfaces": {"const": "portal/FROZEN_SURFACES.md"},
+        "real_page_proof": {"const": "docs/portal-v2/REAL-PAGE-PROOF.json"},
+        "quality_baseline": {"const": "config/portal-quality-baseline.json"},
+        "faro_profile": {"const": "config/faro-node-profile.json"}
+      }
+    },
+    "live_gates": {
+      "type": "array",
+      "minItems": 6,
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "endpoint-separation",
+          "authoritative-before-after-unchanged",
+          "shadow-readonly-root-probe",
+          "frozen-surface-equivalence",
+          "backend-navigation-and-actions",
+          "telemetry-observed",
+          "no-route-dns-lb-takeover",
+          "explicit-cutover-authorization"
+        ]
+      }
+    }
+  }
+}
