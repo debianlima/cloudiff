@@ -21,6 +21,7 @@
   ],
   "evidence": {
     "skill_root": "skills/cloudiff/SKILL.md",
+    "skill_contract": "skills/cloudiff/PROJECT-CAPABILITY-CONTRACT.md",
     "project_skill_test": "tests/test_cloudiff_project_skill.py",
     "frozen_interface_contracts": [
       "portal/FROZEN_SURFACES.md",
