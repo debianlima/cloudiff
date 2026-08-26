@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "cloudiff://contracts/project-capability-preservation.schema.json",
+  "title": "ProjectCapabilityPreservation",
+  "description": "Impede que uma habilidade/competencia derivada substitua, quebre ou desfigure o projeto-aplicacao que fornece o conhecimento. Projetos que sejam apenas competencias usam project_kind=capability.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_version",
+    "project",
+    "project_kind",
+    "capability_mode",
+    "native_access",
+    "algorithm_authority",
+    "delegation",
+    "security_inheritance"
+  ],
+  "properties": {
+    "contract_version": {"type": "integer", "const": 1},
+    "project": {"type": "string", "minLength": 1},
+    "project_kind": {"type": "string", "enum": ["application", "capability"]},
+    "capability_mode": {"type": "string", "enum": ["additive", "native_only"]},
+    "native_access": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["required", "interface_preserved", "normal_flow_preserved", "standalone_without_capability_runtime"],
+      "properties": {
+        "required": {"type": "boolean"},
+        "interface_preserved": {"type": "boolean"},
+        "normal_flow_preserved": {"type": "boolean"},
+        "standalone_without_capability_runtime": {"type": "boolean"}
+      }
+    },
+    "algorithm_authority": {"type": "string", "enum": ["source_project", "capability_self"]},
+    "delegation": {"type": "string", "enum": ["native_core", "not_applicable"]},
+    "security_inheritance": {"type": "boolean"},
+    "constraints": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "skill_root": {"type": "string", "minLength": 1},
+        "project_skill_test": {"type": "string", "minLength": 1},
+        "frozen_interface_contracts": {"type": "array", "items": {"type": "string", "minLength": 1}, "minItems": 1, "uniqueItems": true},
+        "native_algorithm_paths": {"type": "array", "items": {"type": "string", "minLength": 1}, "minItems": 1, "uniqueItems": true}
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"project_kind": {"const": "application"}}, "required": ["project_kind"]},
+      "then": {
+        "properties": {
+          "capability_mode": {"const": "additive"},
+          "algorithm_authority": {"const": "source_project"},
+          "delegation": {"const": "native_core"},
+          "security_inheritance": {"const": true},
+          "native_access": {
+            "properties": {
+              "required": {"const": true},
+              "interface_preserved": {"const": true},
+              "normal_flow_preserved": {"const": true},
+              "standalone_without_capability_runtime": {"const": true}
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {"properties": {"project_kind": {"const": "capability"}}, "required": ["project_kind"]},
+      "then": {
+        "properties": {
+          "capability_mode": {"const": "native_only"}
+        }
+      }
+    }
+  ]
+}

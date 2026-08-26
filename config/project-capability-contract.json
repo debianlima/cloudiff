@@ -1,0 +1,39 @@
+{
+  "contract_version": 1,
+  "project": "cloudiff",
+  "project_kind": "application",
+  "capability_mode": "additive",
+  "native_access": {
+    "required": true,
+    "interface_preserved": true,
+    "normal_flow_preserved": true,
+    "standalone_without_capability_runtime": true
+  },
+  "algorithm_authority": "source_project",
+  "delegation": "native_core",
+  "security_inheritance": true,
+  "constraints": [
+    "registrar ou remover uma competencia nao pode impedir o fluxo nativo do CloudIFF",
+    "competencias nao podem substituir Portal, API, CLI, rotas ou contratos nativos",
+    "algoritmos derivados devem delegar ao nucleo autoritativo do projeto quando a operacao ja existir nele",
+    "competencias herdam autenticacao, autorizacao, isolamento, validacoes e regras de negocio do projeto",
+    "mudanca de application para capability exige migracao explicita e nao pode ocorrer por descoberta ou registro automatico"
+  ],
+  "evidence": {
+    "skill_root": "skills/cloudiff/SKILL.md",
+    "skill_contract": "skills/cloudiff/PROJECT-CAPABILITY-CONTRACT.md",
+    "project_skill_test": "tests/test_cloudiff_project_skill.py",
+    "frozen_interface_contracts": [
+      "portal/FROZEN_SURFACES.md",
+      "portal/tests/test_frozen_surfaces_contract.py",
+      "docs/portal-v2/REAL-PAGE-PROOF.json",
+      "config/portal-quality-baseline.json"
+    ],
+    "native_algorithm_paths": [
+      "include/cloudiff/reconciliation.hpp",
+      "src/common/reconciliation.cpp",
+      "src/reconcile/main.cpp",
+      "tests/test_reconciliation.cpp"
+    ]
+  }
+}
