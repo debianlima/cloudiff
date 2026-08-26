@@ -40,7 +40,7 @@ assert contract['security_inheritance'] is True
 for group in ('frozen_interface_contracts', 'native_algorithm_paths'):
     for rel in contract['evidence'][group]:
         assert (root / rel).is_file(), (group, rel)
-for key in ('skill_root', 'project_skill_test'):
+for key in ('skill_root', 'skill_contract', 'project_skill_test'):
     assert (root / contract['evidence'][key]).is_file(), key
 
 skill = (root / contract['evidence']['skill_root']).read_text()
@@ -48,6 +48,17 @@ assert 'tipo_competencia: projeto' in skill
 assert 'FrozenPortalInterface' in skill
 assert 'V1 e V2 são um único projeto' in skill
 assert 'C/C++ é troca de implementação, não de contrato' in skill
+
+skill_contract = (root / contract['evidence']['skill_contract']).read_text()
+for required in (
+    'project_kind=application',
+    'capability_mode=additive',
+    'não substituem o software de origem',
+    'independentemente do runtime de competências',
+    'delega ao núcleo autoritativo',
+    'project_kind=capability',
+):
+    assert required in skill_contract, required
 
 project_gate = (root / contract['evidence']['project_skill_test']).read_text()
 assert "delta['frozen_interface']['status']=='master-invariant'" in project_gate
@@ -64,4 +75,4 @@ for required in (
 ):
     assert required in constraints, required
 
-print('PROJECT_CAPABILITY_PRESERVATION=PASS project=cloudiff kind=application mode=additive native_flow=preserved algorithm_authority=source_project')
+print('PROJECT_CAPABILITY_PRESERVATION=PASS project=cloudiff kind=application mode=additive native_flow=preserved algorithm_authority=source_project skill_contract=linked')
