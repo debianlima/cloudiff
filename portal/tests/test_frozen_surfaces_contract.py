@@ -6,7 +6,8 @@ class FrozenSurfacesContractTests(unittest.TestCase):
     def test_overview_publications_and_projects_remain_frozen(self):
         coexist = Path("components/control-plane/srv/cloudif/lib/cloudif_portal_v2_coexist.py").read_text()
         views = Path("portal/modules/overview/views.py").read_text()
-        self.assertIn('tab in {"resumo", "visao-geral", "visão-geral"}', coexist)
+        self.assertNotIn('if path in PORTAL_PATHS and tab in {"resumo", "visao-geral", "visão-geral"}', coexist)
+        self.assertIn('native_home = path in PORTAL_PATHS and tab in ("", "inicio", "início", "overview", "resumo", "visao-geral", "visão-geral")', coexist)
         self.assertNotIn('tab == "publicacao" and not (query.get("project")', coexist)
         self.assertIn('resource_scope = (query.get("scope")', coexist)
         self.assertIn('tab=publicacao&project=', views)

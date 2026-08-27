@@ -12097,12 +12097,12 @@ entradas:
 
 trabalho_compartilhado:
   projeto: cloudiff
-  caminho: /srv/cloudif/cloudiff-release-faro
-  unidade: faro-cloudiff-release
-  descricao: fecha onboarding Faro apos capacidade 4 vCPU observada, sem cutover do Portal
-  agente: WORK-SSH
-  atualizado_em: '2026-08-26T17:47:02-03:00'
-  concluido_em: '2026-08-26T17:47:02-03:00'
-  previsao_termino: '2026-08-26T17:47:02-03:00'
+  caminho: /tmp/cloudiff-ui-audit
+  unidade: ui-overview-alias-audit
+  descricao: corrige divergencia funcional do link congelado Visao geral sem alterar HTML CSS textos botoes ou layout
+  agente: Redes-GPT
+  atualizado_em: '2026-08-27T18:34:00-03:00'
+  concluido_em: '2026-08-27T18:34:00-03:00'
+  previsao_termino: '2026-08-27T20:00:00-03:00'
   zona_exclusao: []
   estado: concluido

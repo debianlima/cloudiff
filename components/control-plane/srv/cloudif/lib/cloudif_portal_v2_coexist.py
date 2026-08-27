@@ -769,11 +769,6 @@ def _install() -> None:
 
                 query = urllib.parse.parse_qs(parsed.query)
                 tab = (query.get("tab") or [""])[0]
-                if path in PORTAL_PATHS and tab in {"resumo", "visao-geral", "visão-geral"}:
-                    owner = sys.modules.get(handler_class.__module__)
-                    body = '<section class="overview-canonical"><div class="section-title"><div><h1>Visão geral</h1><p>Projetos, bancos, perfil e infraestrutura autorizados para sua sessão.</p></div></div>' + getattr(owner, "render_resumo")(self.user()) + '</section>'
-                    markup = render_legacy(identity(self.headers), "resumo", "Visão geral", body, "", "")
-                    return send(self, 200, "text/html; charset=utf-8", markup.encode("utf-8"))
                 if path in PORTAL_PATHS and tab == "admin-manutencao":
                     if not tenant_admin_allowed(self):
                         denied = render_legacy(identity(self.headers), tab, "Serviços globais", '<section class="card"><h1>Acesso negado</h1></section>', "", "")
@@ -787,7 +782,7 @@ def _install() -> None:
                 if path in PORTAL_PATHS and tab == "ajuda":
                     markup = render_legacy(identity(self.headers), "ajuda", "Guia da plataforma", help_body(), "", "")
                     return send(self, 200, "text/html; charset=utf-8", markup.encode("utf-8"))
-                native_home = path in PORTAL_PATHS and tab in ("", "inicio", "início", "overview")
+                native_home = path in PORTAL_PATHS and tab in ("", "inicio", "início", "overview", "resumo", "visao-geral", "visão-geral")
                 match_path = "/cloudiff/portal" if path == "/" else path
                 native_nonportal = (path, "GET") in NATIVE_READY and path not in PORTAL_PATHS
                 if native_home or native_nonportal:

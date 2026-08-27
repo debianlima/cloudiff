@@ -1,7 +1,8 @@
-# Estado — 2026-08-26 — contrato v45
+# Estado — 2026-08-27 — contrato v45
 
 ## Decisões vigentes
-- `FrozenPortalInterface` permanece requisito mestre; nenhuma mudança de Portal/UI, navegação ou rotas de usuário foi feita nesta unidade.
+- `FrozenPortalInterface` permanece requisito mestre; a correção desta unidade não altera HTML, CSS, JS visual, textos, botões ou layout.
+- O link congelado `Visão geral` (`?tab=resumo`) deve produzir o mesmo painel acadêmico canônico servido na raiz do Portal; o renderer administrativo legado não é contrato visual válido para esse alias.
 - Faro é o nó CloudIFF de papel `edge`; seu perfil deseja `portal-host`, mas o cutover do Portal ocorre somente após onboarding Faro e portões de portal shadow.
 - O onboarding Faro está aceito: 4 vCPU online, identidade própria, PKI/NATS individual, agent não-root, heartbeat direto para Hospedagem, reconciliação/resiliência e rollback já possuem evidência mecânica.
 - O heartbeat atual do Faro observa capabilities `inventory`, `health`, `telemetry-host`, `portal-host` e `agent-auto-update`; `build` e `runtime` continuam excluídas do perfil Faro.
@@ -28,55 +29,38 @@
 - LegacyRetirement continua separado e qualquer retirada destrutiva exige seus próprios gates e autorização final.
 
 ## Trabalho compartilhado
-- ponteiro: `manifesto.yaml.trabalho_compartilhado` — unidade `faro-cloudiff-release`, concluída, sem zona de exclusão ativa.
+- ponteiro: `manifesto.yaml.trabalho_compartilhado` — unidade `ui-overview-alias-audit`, concluída, sem zona de exclusão ativa.
 
 ## Competências ativas nesta unidade
-- `cloudiff@0.1.5` — skill raiz carregada no início da unidade.
+- `cloudiff@0.1.5` — skill raiz.
 - `desenvolvedor-de-software@14` — método PGH.
-- `github-incremental-reconciliation@7` — reconciliação incremental antes de normalização/release.
-- `governanca-ontologica-de-skills@1.0.4` — preservação do fecho de skills.
-- `telemetry-data-visualization@2` — macro global.
-- `network-ssh-operations@1` — primeiro salto pfSense e validação multi-host.
+- `github-incremental-reconciliation@7` — reconciliação incremental.
+- `governanca-ontologica-de-skills@1.0.4` — governança PGH.
+- `telemetry-data-visualization@2` — macro global; coletor executável não localizado no repositório desta unidade.
+- `navegacao`/Selenium WebDriver 4.46.0 — execução da interface real no WebDev isolado.
 
 ## Falhas de portão por tipo de entrada
-- `infraestrutura/Faro`: documentos de perfil/reserva ainda registravam 2 vCPU apesar do runtime já observar 4; reconciliados para o estado real.
-- `agente/Faro`: evidências antigas omitiam `portal-host`; o PostgreSQL atual comprovou capability e os artefatos foram reconciliados.
-- `verificação`: um gate TLS agregado usava o exit code de `openssl s_client` após EOF; a cadeia estava válida (`Verify return code: 0`). O gate foi corrigido para validar a evidência de cadeia, não o encerramento do cliente de diagnóstico.
+- `ui-compat`: a navegação real publicou `Visão geral -> ?tab=resumo`, mas o runtime desviava o alias para `render_resumo()` legado enquanto `/cloudiff/portal/` servia o painel acadêmico canônico.
+- `webdev`: o link fixo VPN-only devolveu 403 a partir do perfil work porque o tráfego chega ao NPM como `192.168.200.1`; a allowlist continua restrita e não foi ampliada nesta unidade.
+- `autenticacao`: a conta AD informada chegou à etapa de senha do Authentik, que respondeu `Invalid password`; nenhuma tentativa adicional foi feita.
 
 ## Divergências da última reconciliação
 ### Corrigidas
-- `config/faro-node-profile.json`: `observed_resources.vcpu=4`, `resource_gates.vcpu=pass`, recursos `satisfied`.
-- `config/faro-node-reservation.json`: recursos observados reconciliados com heartbeat atual e `vcpu=pass`.
-- `config/faro-validation-01-discovery.json`: CPU atual e `portal-host` observada.
-- `config/faro-validation-04-agent-heartbeat.json`: heartbeat atual registra `cpu_count=4` e `portal-host`.
-- `config/faro-validation-06-acceptance.json`: `verification_status=verified` e `FARO-T19=passed`.
+- Fonte: `cloudif_portal_v2_coexist.py` não intercepta mais `resumo/visao-geral/visão-geral` no renderer legado; os aliases entram no mesmo `native_home` da raiz.
+- Portão: `test_frozen_surfaces_contract.py` agora reprova se o interceptador legado voltar ou se os aliases deixarem o `native_home`.
+- Frozen UI 3/3, Portal 1008/1008, `validate-repository`, `git diff --check`: PASS; nenhum arquivo visual alterado.
 
 ### Pendentes de autorização ou capacidade
-- Nenhuma pendência de capacidade para Faro.
-- Portal cutover permanece deliberadamente fora desta unidade.
+- Runtime de produção ainda contém o adaptador anterior em `/srv/cloudif/lib`; não há mecanismo versionado localizado nesta árvore para rollout/rollback isolado dessa biblioteca. Não foi feito overwrite root manual.
+- O acesso WebDev por URL fixa no perfil work continua divergente da allowlist declarada; requer reconciliação de rota/origem, sem abrir exposição pública.
 
 ## Entradas aceitas nesta unidade
-- 9 `estado.md` — snapshot atual do contrato v45.
-- 10 `manifesto.yaml` — estados e trabalho compartilhado reconciliados.
-- 118 `config/faro-validation-01-discovery.json` — descoberta atualizada com 4 vCPU/portal-host observada.
-- 121 `config/faro-validation-04-agent-heartbeat.json` — observed state atual reconciliado.
-- 123 `config/faro-validation-06-acceptance.json` — etapa final `verified`.
-- 124 `tests/test_faro_validation_model.py` — seis etapas verificadas.
-- 126 `config/faro-node-reservation.json` — recurso vCPU aceito.
-- 131 `tests/test_faro_node_preparation.py` — reserva/resource gate atualizados.
-- 140 `config/faro-node-profile.json` — perfil satisfeito.
-- 165 `tests/test_faro_profile.py` — gate 4 vCPU atualizado.
-
-## Portões Faro
-- `FARO_RUNTIME_GATE=PASS`: 4 vCPU, agent ativo/enabled, updater timer ativo/enabled, NATS TLS válido, cAdvisor loopback-only e somente SSH exposto externamente.
-- `FARO_DB_GATE=PASS`: `node_count=1`, `cpu_count=4`, `portal-host=true`, heartbeat recente.
-- `FARO_VALIDATION_MODEL=PASS`: 6 etapas verificadas, nenhuma parcial.
-- `FARO_PROFILE=PASS` e `FARO_NODE_PREPARATION=PASS`.
-- Suíte oficial: 1008 testes PASS + 1 skip.
-- Frozen UI: 3/3 PASS; nenhum arquivo Portal/UI alterado.
-- Secret scan, `git diff --check` e higiene `__pycache__`: PASS.
+- 649 `components/control-plane/srv/cloudif/lib/cloudif_portal_v2_coexist.py` — alias da Visão geral reconciliado com o `native_home` canônico.
+- 1196 `portal/tests/test_frozen_surfaces_contract.py` — regressão capturada mecanicamente.
+- 9 `estado.md` — snapshot da auditoria da interface.
+- 10 `manifesto.yaml` — trabalho compartilhado encerrado sem zona ativa.
 
 ## Próxima unidade
-- Reconciliar o inventário descritivo do Faro com Docker/cAdvisor observados.
-- Em seguida, calcular o fecho de liberação global do CloudIFF e separar as 21 entradas pendentes em release-blocking versus trabalho posterior.
-- Portal shadow/cutover para Faro só inicia depois desse fecho e sem alterar a interface homologada antes dos portões próprios.
+- Criar/identificar mecanismo versionado de rollout/rollback para a biblioteca Portal v2 e aplicar a correção em shadow antes do runtime ativo.
+- Após rollout, executar novamente raiz versus `?tab=resumo` por canal HTTP independente e Selenium, exigindo equivalência do painel canônico.
+- Reconciliar o caminho VPN do WebDev sem ampliar exposição pública.
