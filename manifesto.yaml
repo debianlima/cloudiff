@@ -12116,13 +12116,10 @@ trabalho_compartilhado:
   projeto: cloudiff
   caminho: /tmp/cloudiff-ui-audit
   unidade: portal-v2-lib-safe-release
-  descricao: cria e homologa rollout versionado reversivel da biblioteca de coexistencia do Portal sem alterar superficie visual
+  descricao: mecanismo criado e endurecido; promocao nao executada porque o shadow reprovou e o plano de gestao do primeiro salto ficou indisponivel
   agente: Redes-GPT
-  atualizado_em: '2026-08-27T22:05:00-03:00'
+  atualizado_em: '2026-08-27T22:38:00-03:00'
+  concluido_em: '2026-08-27T22:38:00-03:00'
   previsao_termino: '2026-08-28T00:30:00-03:00'
-  zona_exclusao:
-    - deploy/apply_portal_v2_lib_release.sh
-    - tests/test_portal_v2_lib_release.py
-    - manifesto.yaml
-    - estado.md
-  estado: ativo
+  zona_exclusao: []
+  estado: concluido

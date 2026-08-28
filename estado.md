@@ -29,7 +29,7 @@
 - LegacyRetirement continua separado e qualquer retirada destrutiva exige seus próprios gates e autorização final.
 
 ## Trabalho compartilhado
-- ponteiro: `manifesto.yaml.trabalho_compartilhado` — unidade `portal-v2-lib-safe-release`, ativa; zona limitada ao rollout, teste e arquivos estruturais da unidade.
+- ponteiro: `manifesto.yaml.trabalho_compartilhado` — unidade `portal-v2-lib-safe-release`, encerrada sem promoção; nenhuma zona de exclusão permanece ativa.
 
 ## Competências ativas nesta unidade
 - `cloudiff@0.1.5` — skill raiz.
@@ -52,8 +52,10 @@
 - Frozen UI 3/3, Portal 1008/1008, `validate-repository`, `git diff --check`: PASS; nenhum arquivo visual alterado.
 
 ### Pendentes de autorização ou capacidade
-- Runtime de produção ainda contém o adaptador anterior em `/srv/cloudif/lib`; o mecanismo versionado 1515/1516 foi criado e passou prepare idempotente, frozen UI e regressão completa, mas ainda aguarda shadow real antes da promoção. Não foi feito overwrite root manual.
+- Runtime de produção ainda contém o adaptador anterior em `/srv/cloudif/lib`; `plan` e `prepare` passaram, mas o primeiro shadow reprovou antes da promoção. O live permaneceu com o mesmo SHA e PID. O mecanismo foi endurecido no commit `821c0f4`, porém a repetição do shadow ficou bloqueada pela indisponibilidade de SSH/HTTPS no primeiro salto pfSense. Não foi feito overwrite root manual.
 - O acesso WebDev por URL fixa no perfil work continua divergente da allowlist declarada; requer reconciliação de rota/origem, sem abrir exposição pública.
+- `18096` é porta declarada de `cloudif-node-metrics`; o rollout deixou de usá-la e agora seleciona somente `19080..19088` após provar ausência de listener.
+- Primeiro salto `172.16.0.1`: ICMP responde, mas SSH/HTTP/HTTPS e portas administrativas testadas estão fechadas em work e IPsec; isso bloqueia nova homologação na Hospedagem sem justificar bypass da segmentação.
 
 ## Entradas aceitas nesta unidade
 - 649 `components/control-plane/srv/cloudif/lib/cloudif_portal_v2_coexist.py` — alias da Visão geral reconciliado com o `native_home` canônico.
@@ -62,6 +64,6 @@
 - 10 `manifesto.yaml` — trabalho compartilhado encerrado sem zona ativa.
 
 ## Próxima unidade
-- Publicar o mecanismo 1515/1516 versionado, montar candidato exato na Hospedagem e executar `plan -> prepare -> shadow` sem tocar o runtime ativo.
-- Somente com shadow verde, promover por replace-one-file atômico, reiniciar apenas `cloudif-admin-portal.service` e provar raiz versus `?tab=resumo` por HTTP independente.
-- Reconciliar o caminho VPN do WebDev sem ampliar exposição pública; Selenium autenticado permanece separado enquanto o fluxo externo de autenticação não fornece sessão válida de teste.
+- Auditar localmente o mapa tela ↔ efeito das superfícies congeladas e localizar ações sem portão independente enquanto o primeiro salto está indisponível.
+- Quando o plano de gestão do pfSense voltar, repetir `plan -> prepare -> shadow` usando o commit `821c0f4`; somente shadow verde autoriza promoção.
+- Após eventual rollout, provar raiz versus `?tab=resumo` por HTTP independente e manter Selenium autenticado separado até existir sessão externa válida de teste.
