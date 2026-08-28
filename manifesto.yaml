@@ -1,5 +1,5 @@
 projeto: cloudiff-v2
-versao_contrato: 56
+versao_contrato: 57
 namespace_fechado: true
 entradas:
   - id: 1
@@ -12202,14 +12202,31 @@ entradas:
     aceite: portao-mecanico/backend-integracao
     status: aceito
 
+  - id: 1527
+    caminho: docs/reconciliation/npm-publisher-runtime-parity-v57.json
+    proposito: registra evidencia observada Portal ingress NPM publisher C++ live/shadow sem efeitos e explicita limites de procedencia e reconciliacao ainda nao migrada
+    tipo: documentacao-estrutural
+    consome: [contratos/npm-publisher.schema, evidencia/normalization-plan]
+    produz: evidencia/npm-publisher-runtime-parity-v57
+    aceite: tests/test_npm_publisher_runtime_parity_evidence.py
+    status: aceito
+  - id: 1528
+    caminho: tests/test_npm_publisher_runtime_parity_evidence.py
+    proposito: cruza rotas usadas pelo Portal com contrato/provider C++ e valida a evidencia live de ingress autenticacao negativa e efeito zero
+    tipo: backend-integracao
+    consome: [evidencia/npm-publisher-runtime-parity-v57, contratos/npm-publisher.schema]
+    produz: teste/npm-publisher-runtime-parity-evidence
+    aceite: portao-mecanico/backend-integracao
+    status: aceito
+
 trabalho_compartilhado:
   projeto: cloudiff
   caminho: /srv/mcp-workspace/tmp/cloudiff-ui-audit-wireguard
-  unidade: portal-v2-rollout-smoke-propagation
-  descricao: rollout da Visao geral homologado em producao e propagacao de falha do smoke corrigida
+  unidade: cpp23-publication-reconciliation-parity
+  descricao: paridade C++ e gates de procedencia da skill raiz homologados
   agente: Redes-GPT
-  atualizado_em: '2026-08-28T01:58:00-03:00'
-  concluido_em: '2026-08-28T01:58:00-03:00'
-  previsao_termino: '2026-08-28T03:00:00-03:00'
+  atualizado_em: '2026-08-28T01:57:53-03:00'
+  concluido_em: '2026-08-28T01:57:53-03:00'
+  previsao_termino: '2026-08-28T03:30:00-03:00'
   zona_exclusao: []
   estado: concluido

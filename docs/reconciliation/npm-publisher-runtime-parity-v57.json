@@ -1,0 +1,114 @@
+{
+  "schema_version": 1,
+  "collected_at": "2026-08-28T01:50:32-03:00",
+  "project_commit": "a140c62bf59898f305fb6f50f9b54b90a08d5de2",
+  "collection_path": "Labiff -> destinations direct, per operator/IT procedure updated 2026-08-28",
+  "mutation_performed": false,
+  "consumer_ingress": {
+    "source": "10.62.92.7",
+    "destination": "10.62.91.3:80",
+    "host_header": "cloudif-publisher.internal",
+    "health": {
+      "status": 200,
+      "body": {
+        "ok": true,
+        "service": "cloudif-npm-publisher"
+      }
+    },
+    "invalid_token_stage": {
+      "status": 403,
+      "body": {
+        "error": "forbidden",
+        "ok": false
+      }
+    }
+  },
+  "provider_host": {
+    "hostname": "mauricio",
+    "ip": "10.62.91.3",
+    "verifier": {
+      "errors": 1,
+      "warnings": 0,
+      "root_filesystem_percent": 91,
+      "blocking_condition": "filesystem / em 91%"
+    },
+    "new_deploy_allowed": false
+  },
+  "runtime": {
+    "live": {
+      "service": "cloudiff-v2-npm-publisher-live.service",
+      "service_state": "active",
+      "bind": "10.62.91.3",
+      "port": 18160,
+      "release": "/opt/cloudiff-v2/releases/20260820-v10-npm-publisher-acme",
+      "binary_version": "0.10.0-shadow",
+      "binary_sha256": "d75a583ec66e0431236b56070878a01a5f733d24c1375c3b159971a4fedf695b",
+      "python_fallback_state": "inactive",
+      "health": {
+        "status": 200,
+        "body": {
+          "ok": true,
+          "service": "cloudif-npm-publisher"
+        }
+      },
+      "invalid_token_stage": {
+        "status": 403,
+        "body": {
+          "error": "forbidden",
+          "ok": false
+        }
+      },
+      "valid_token_invalid_stage": {
+        "status": 422,
+        "error": "ValueError",
+        "detail": "invalid_stage",
+        "state_unchanged": true,
+        "nginx_conf_unchanged": true
+      }
+    },
+    "shadow": {
+      "service_unit_state": "inactive",
+      "process_state": "listening",
+      "bind": "127.0.0.1",
+      "port": 18260,
+      "release": "/opt/cloudiff-v2/releases/20260820-v8-npm-publisher-shadow",
+      "health": {
+        "status": 200,
+        "body": {
+          "ok": true,
+          "service": "cloudif-npm-publisher"
+        }
+      },
+      "invalid_token_stage": {
+        "status": 403,
+        "body": {
+          "error": "forbidden",
+          "ok": false
+        }
+      },
+      "valid_token_invalid_stage": {
+        "status": 422,
+        "error": "ValueError",
+        "detail": "invalid_stage",
+        "state_unchanged": true,
+        "nginx_conf_unchanged": true
+      }
+    }
+  },
+  "source_snapshot": {
+    "repo_agent_version": "0.36.0-shadow",
+    "live_source_commit": "NAO DECLARADO",
+    "provider_first_visible_git_commit": "2e869b7a5216a33bfb88875b97d710392d325ed0",
+    "provider_history_note": "Git history available in this branch begins with the reconciled snapshot; it does not establish which source commit produced the v10 live binary.",
+    "control_subscription": "cloudiff.v2.node.observed",
+    "control_project_events_observed": []
+  },
+  "conclusions": {
+    "publisher_runtime_contract_parity": true,
+    "consumer_ingress_path_parity": true,
+    "negative_effect_zero_mutation": true,
+    "current_repo_binary_is_live": false,
+    "project_reconciliation_cpp_migrated": false,
+    "npm_deploy_blocked_by_capacity_gate": true
+  }
+}

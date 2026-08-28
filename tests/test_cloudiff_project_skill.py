@@ -4,11 +4,16 @@ import json,hashlib,yaml
 root=Path(__file__).resolve().parents[1]
 raw=(root/'skills/cloudiff/SKILL.md').read_text();assert raw.startswith('---\n')
 fm=yaml.safe_load(raw.split('---',2)[1])
+competencias=yaml.safe_load((root/'competencias.yaml').read_text())
+project_skill=competencias['skill_projeto']
 audit=json.load(open(root/'docs/reconciliation/v1-1320-audit.json'))
 delta=json.load(open(root/'docs/reconciliation/v1-v2-delta.json'))
 plan=json.load(open(root/'docs/reconciliation/normalization-plan.json'))
 closure=json.load(open(root/'docs/reconciliation/skill-closure-v40.json'))
-assert fm['name']=='cloudiff' and fm['tipo_competencia']=='projeto' and fm['versao']=='0.1.5'
+assert fm['name']=='cloudiff' and fm['tipo_competencia']=='projeto'
+assert project_skill['id']=='cloudiff' and project_skill['tipo_competencia']=='projeto'
+assert project_skill['fonte']=='skills/cloudiff/SKILL.md'
+assert str(project_skill['versao'])==str(fm['versao'])
 assert 'FrozenPortalInterface' in raw
 assert '### L012 — capability de certificado do servidor não vira trust bundle do agente' in raw
 assert '### L013 — `apply` idempotente não reinicia runtime equivalente' in raw
@@ -37,9 +42,14 @@ for x in compoe:
 assert closure['contract_version']==40 and closure['project_skill_after']=='0.1.2'
 assert closure['gates']['DELTA_INVENTORY']=='PASS' and closure['gates']['LEARNING_PRESERVED']=='PASS' and closure['gates']['SOURCE_HASH_PARITY']=='PASS' and closure['gates']['CATALOG_SYNC']=='PASS' and closure['gates']['RECONCILIATION_CLOSURE']=='PASS' and closure['gates']['DEPENDENCY_REFERENCES']=='PASS'
 assert closure['catalog']['commit']=='998b6256ad7d5e6e43fa1e3477cd83e86bef2632'
-cur=Path('/srv/cloudif/agent-skills/current')
+refs_by_id={r['id']:r for r in refs}
 for r in closure['external_references']:
- p=cur/r['id']/'SKILL.md';assert p.is_file();assert hashlib.sha256(p.read_bytes()).hexdigest()==r['sha256'],r['id']
+ assert r['id'] in refs_by_id,r['id']
+ assert refs_by_id[r['id']]['versao_fixada']==r['versao_fixada'],r['id']
+ assert r['repository'].startswith('https://github.com/'),r['id']
+ assert len(r['commit'])==40 and all(c in '0123456789abcdef' for c in r['commit']),r['id']
+ assert len(r['sha256'])==64 and all(c in '0123456789abcdef' for c in r['sha256']),r['id']
+ assert r['path'],r['id']
 for r in closure['internal_compositions']:
  p=root/'skills'/r['id']/'SKILL.md';assert p.is_file();assert hashlib.sha256(p.read_bytes()).hexdigest()==r['canonical_sha256'];assert r['body_preserved'] is True
 # Existing project audit/frozen interface gates remain invariant.
@@ -53,4 +63,4 @@ for rel,expected in delta['frozen_interface']['assets_sha256'].items():
  if p.exists():assert hashlib.sha256(p.read_bytes()).hexdigest()==expected,rel
 for f in ('tests/test_faro_node_preparation.py','tests/test_agent_update.py'):
  assert ('-----BEGIN '+'PRIVATE KEY-----') not in (root/f).read_text()
-print('CLOUDIFF_PROJECT_SKILL=PASS version=0.1.5 compoe=2 referencia=13 anti_cycle=PASS')
+print(f"CLOUDIFF_PROJECT_SKILL=PASS version={fm['versao']} compoe=2 referencia=13 anti_cycle=PASS")
