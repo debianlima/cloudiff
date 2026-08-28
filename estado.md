@@ -1,4 +1,4 @@
-# Estado — 2026-08-27 — contrato v53
+# Estado — 2026-08-27 — contrato v54
 
 ## Decisões vigentes
 - `FrozenPortalInterface` permanece requisito mestre; a correção desta unidade não altera HTML, CSS, JS visual, textos, botões ou layout.
@@ -25,46 +25,41 @@
 ## Pendências técnicas não humanas
 - O host Faro mantém `fwupd-refresh.service` falho por indisponibilidade de egress para o serviço externo; o verificador residente retorna `errors=0 warnings=1`. Isso não afeta o runtime CloudIFF/NATS.
 - O inventário de máquina ainda precisa refletir Docker/cAdvisor presentes no Faro; máquina vence o inventário e a reconciliação é a próxima correção de ambiente desta mesma entrega.
-- Permanecem entradas `pendente`/`preexistente` fora desta unidade no contrato v53; a liberação global do projeto deve selecionar quais delas são release-blocking antes de declarar release final.
+- Permanecem entradas `pendente`/`preexistente` fora desta unidade no contrato v54; a liberação global do projeto deve selecionar quais delas são release-blocking antes de declarar release final.
 - LegacyRetirement continua separado e qualquer retirada destrutiva exige seus próprios gates e autorização final.
 
 ## Trabalho compartilhado
-- ponteiro: `manifesto.yaml.trabalho_compartilhado` — unidade `ui-action-map-project-create`, concluída em `2026-08-27T23:12:00-03:00`; nenhuma zona de exclusão permanece ativa.
+- ponteiro: `manifesto.yaml.trabalho_compartilhado` — unidade `ui-action-map-project-resume`, concluída em `2026-08-27T23:12:00-03:00`; nenhuma zona de exclusão permanece ativa.
 
 ## Competências ativas nesta unidade
-- `cloudiff@0.1.11` — skill raiz; L020 homologado nesta unidade.
+- `cloudiff@0.1.11` — skill raiz; nenhuma atualização nesta unidade porque o comportamento homologado já correspondia ao contrato.
 - `desenvolvedor-de-software@14` — método PGH para auditoria de tela.
-- `github-incremental-reconciliation@7` — reconciliação incremental da skill/catálogo.
-- `governanca-ontologica-de-skills@1.0.4` — governança da versão da skill.
+- `github-incremental-reconciliation@7` — reconciliação de branch/estrutura.
 - `telemetry-data-visualization@2` — macro global; coletor executável continua indisponível nesta árvore.
 - `operational-ui-truth@1` / `navegacao` — prova tela ↔ efeito fora da própria interface.
 
 ## Falhas de portão por tipo de entrada
-- `ui-compat`: o negativo de runtime não homologado devolvia erro 500, mas o portão observou que `projects` e ACL do dono já estavam persistidos; validação ocorria tarde demais.
-- `teste`: em discovery completo, um teste anterior deixava stub de `cloudif_delete_git_komodo_action` em `sys.modules`; o novo portão foi isolado para carregar o módulo real e restaurar o estado anterior, sem mudar produção.
+- `teste`: o primeiro harness de retomada não possuía as tabelas auxiliares `project_public_ids`/`project_publications`; elas foram declaradas somente no SQLite temporário do portão.
+- Nenhuma divergência funcional foi encontrada em `resume_initial_publication` ou no ramo resume-only do worker.
 
 ## Divergências da última reconciliação
 ### Corrigidas
-- Runtime, PHP e keepalive são validados antes de abrir a transação de escrita de `upsert_project()`.
-- Pedido válido pelo handler final assíncrono retorna 202 e produz projeto, ACL do proprietário, job JSON durável e evento `project.created` com runtime/layout.
-- Runtime inválido e CSRF ausente produzem efeito zero em projeto, ACL, job e reconciliação.
-- `cloudiff@0.1.11` registra L020 para preservar validação antes da primeira mutação na migração C++23.
-- Regressão do Portal: 1030/1030; `validate-repository`, `git diff --check` e `VISUAL_DIFF=NO`: PASS.
+- Entrada 1524 executa o botão **Retomar publicação** pelo handler final: proprietário recebe 303 e job com `action=resume_initial_publication`, `create_repo=0`, `setup_komodo=0`, runtime/public number existentes e projeto preservado.
+- Não proprietário e CSRF ausente não criam job.
+- O job real é entregue ao worker controlado, que executa somente `cloudif-project-initial-publish.py`, marca `resume_only=true` e enfileira `project.membership.changed` após sucesso; tenant policy, backup e provisionador geral não são executados.
+- Regressão do Portal: 1034/1034; `validate-repository`, `git diff --check` e `VISUAL_DIFF=NO`: PASS.
 
 ### Pendentes de autorização ou capacidade
-- `main` do Cloudiff ainda contém skill 0.1.5; as homologações desta auditoria vivem no branch `audit/ui-overview-alias-fix` e no catálogo por commit específico. Nenhum merge para `main` foi inferido.
+- `main` do Cloudiff permanece em skill 0.1.5; esta auditoria continua no branch auditável e catálogo por commit específico.
 - Runtime de produção da `Visão geral` continua sem promoção; entradas 1515/1516 permanecem `em_curso` até shadow real verde.
-- Primeiro salto `172.16.0.1` continua como bloqueio operacional enquanto o plano administrativo não responder.
+- Primeiro salto `172.16.0.1` continua bloqueando homologação remota enquanto o plano administrativo não responder.
 
 ## Entradas aceitas nesta unidade
-- 651 `components/control-plane/srv/cloudif/lib/cloudif_project_action_safe.py` — validação determinística movida antes da primeira escrita.
-- 1523 `portal/tests/test_project_create_action_effect.py` — 202 assíncrono, SQLite/ACL/job/reconciliação e negativos de efeito zero provados.
-- 179 `skills/cloudiff/SKILL.md` — `cloudiff@0.1.11`, L020 homologado.
-- 2 `competencias.yaml` — versão da skill raiz reconciliada.
+- 1524 `portal/tests/test_project_resume_action_effect.py` — handler + worker resume-only homologados por job/command/reconciliação independentes.
 - 9 `estado.md` — snapshot da unidade.
-- 10 `manifesto.yaml` — contrato v53 e zona liberada.
+- 10 `manifesto.yaml` — contrato v54 e zona liberada.
 
 ## Próxima unidade
-- Auditar a **retomada da publicação inicial** (`resume_initial_publication`) por efeito em job durável e reconciliação, garantindo que não repita infraestrutura já pronta.
-- Depois, completar o worker de provisionamento com prova de que H/P e publicação inicial usam os mesmos artefatos/identidades homologados.
+- Provar que o fluxo W/H/P preserva a **mesma identidade de artefato** entre candidato homologado e Produção, incluindo rejeição de imagem/digest divergente antes da fila.
+- Depois, auditar o worker de publicação contra esse binding sem alterar o wizard.
 - Quando o plano de gestão do pfSense voltar, repetir shadow da `Visão geral`; somente shadow verde autoriza promoção.

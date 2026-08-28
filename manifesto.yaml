@@ -1,5 +1,5 @@
 projeto: cloudiff-v2
-versao_contrato: 53
+versao_contrato: 54
 namespace_fechado: true
 entradas:
   - id: 1
@@ -12175,14 +12175,23 @@ entradas:
     aceite: portao-mecanico/ui-compat
     status: aceito
 
+  - id: 1524
+    caminho: portal/tests/test_project_resume_action_effect.py
+    proposito: executa Retomar publicacao pelo handler final e worker controlado provando job resume-only publicacao inicial unica e reconciliacao pos-sucesso
+    tipo: ui-compat
+    consome: [teste/project-create-action-effect]
+    produz: teste/project-resume-action-effect
+    aceite: portao-mecanico/ui-compat
+    status: aceito
+
 trabalho_compartilhado:
   projeto: cloudiff
   caminho: /tmp/cloudiff-ui-audit
-  unidade: ui-action-map-project-create
-  descricao: Criar e provisionar projeto homologado por SQLite ACL job duravel e reconciliacao sem alterar superficie visual
+  unidade: ui-action-map-project-resume
+  descricao: Retomar publicacao homologado pelo handler final e worker resume-only sem alterar superficie visual
   agente: Redes-GPT
   atualizado_em: '2026-08-27T23:12:00-03:00'
   concluido_em: '2026-08-27T23:12:00-03:00'
-  previsao_termino: '2026-08-28T01:30:00-03:00'
+  previsao_termino: '2026-08-28T01:45:00-03:00'
   zona_exclusao: []
   estado: concluido
