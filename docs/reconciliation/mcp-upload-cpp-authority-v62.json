@@ -1,0 +1,121 @@
+{
+  "schema_version": 1,
+  "collected_at": "2026-08-28T11:55:00-03:00",
+  "collection_path": "Labiff direct to Hospedagem; read-only gateway inspection plus side-effect-free planner probes",
+  "mutation_performed": false,
+  "host": {
+    "hostname": "hospedagem",
+    "ip": "10.62.92.7",
+    "verifier": {
+      "errors": 0,
+      "warnings": 1,
+      "root_filesystem_percent": 22
+    }
+  },
+  "cpp_planner": {
+    "unit": "cloudiff-v2-mcp-upload-shadow.service",
+    "service_active": true,
+    "observed_started_at_utc": "2026-08-28T14:41:55Z",
+    "bind": "127.0.0.1:18234",
+    "binary": "/opt/cloudiff-v2/mcp-upload-current/bin/cloudiff-agent",
+    "release_path": "/opt/cloudiff-v2/releases/20260820-v20-mcp-upload-shadow",
+    "release_binary_mtime_utc": "2026-08-21T00:04:55.511998534Z",
+    "binary_version": "0.20.0-shadow",
+    "binary_sha256": "db4d186e36883934e7cd6c9e87f5954101449e133f9b99b7d8d19ec5d78f10bf",
+    "gnu_build_id": "33c2aa5b89ee62eeb7304b0290a200198ca40f90",
+    "health_status": 200,
+    "health_service": "mcp-upload-planner",
+    "health_mode": "shadow-plan-only",
+    "effects_enabled": false,
+    "tools": [
+      "workspace.artifact.import",
+      "workspace.artifact.upload.file"
+    ],
+    "secrets_exposed": false,
+    "restart_is_new_release": false
+  },
+  "safe_probe": {
+    "input_classification": "mnt_data path-like string",
+    "input_slug": "laboratorio-de-hardware",
+    "bad_auth_status": 401,
+    "valid_plan_status": 200,
+    "requested_tool": "workspace.artifact.import",
+    "effective_tool": "workspace.artifact.upload.start",
+    "mode": "portal_upload_start",
+    "side_effect_free": true,
+    "filesystem_access_attempted": false,
+    "external_network_attempted": false,
+    "workspace_mutation": false,
+    "download_url_persisted": false,
+    "secrets_exposed": false,
+    "file_params_hydrated": false,
+    "host_hydration_required": true,
+    "automatic_fallback": true,
+    "fallback_reason": "host_file_param_not_hydrated",
+    "raw_path_leaked": false
+  },
+  "python_gateway": {
+    "unit": "cloudif-mcp-gateway.service",
+    "service_active": true,
+    "observed_started_at_utc": "2026-08-28T14:44:50Z",
+    "implementation": "Python",
+    "release": "/srv/cloudif/app-releases/mcp-gateway/platform-v26-download-resource-20260821",
+    "bind": "127.0.0.1:18198",
+    "planner_reference_count": 0,
+    "planner_reference_patterns_checked": [
+      "18234",
+      "MCP_UPLOAD",
+      "mcp-upload",
+      "mcp_upload"
+    ],
+    "tool_count": 152,
+    "upload_tools_present": {
+      "workspace.artifact.import": true,
+      "workspace.artifact.upload.file": true,
+      "workspace.artifact.upload.file.select": true,
+      "workspace.artifact.upload.file.resolve": true,
+      "workspace.artifact.upload.start": true
+    },
+    "path_like_import_behavior": "Python gateway prevalidation rewrites workspace.artifact.import to workspace.artifact.upload.start",
+    "path_like_existing_behavior": "Python gateway prevalidation rewrites workspace.artifact.upload.file to workspace.artifact.upload.file.select",
+    "hydrated_import_effect": "workspace_artifact_import_https",
+    "hydrated_existing_effect": "workspace_artifact_upload_existing_https",
+    "effect_backend": "cloudif-workspace-broker.service on 127.0.0.1:18206",
+    "live_sha256": "f332023a009c80e831eadfebb1ef11b36084f36ed0bd4ce5255cead9bef86df8",
+    "source_lineage": {
+      "repo_base_sha256": "948e071ab08e45cd6a0683375669217aaaa76af5b8cc07bbd0092a7e1e71c846",
+      "upload_fallback_patched_sha256": "b218ec85083e0d3f1b6f0a02befa6210301363b5ac0e9c0630338825b67a7841",
+      "download_resource_patched_sha256": "f332023a009c80e831eadfebb1ef11b36084f36ed0bd4ce5255cead9bef86df8",
+      "lineage_proven_by_repo_scripts_and_tests": true
+    }
+  },
+  "source_snapshot": {
+    "project_commit": "015729d250f1c351c208aad221ea58b77114b034",
+    "repo_agent_version": "0.36.0-shadow",
+    "live_binary_version": "0.20.0-shadow",
+    "live_exact_source_commit": "NAO DECLARADO",
+    "release_manifest_present": false,
+    "current_repo_binary_is_live": false,
+    "t023_new_release_candidate": false,
+    "reason": "the service restart on 2026-08-28 reused the existing v20 release whose binary mtime is 2026-08-21; no release-manifest.json or new binary identity appeared"
+  },
+  "authority_model": {
+    "cpp_role": "shadow compatibility planner",
+    "python_gateway_role": "authoritative MCP tool exposure, authentication, fallback selection and file operation dispatch",
+    "workspace_broker_role": "authoritative artifact upload mutation backend",
+    "cpp_planner_network_restricted": true,
+    "cpp_planner_filesystem_effects": false,
+    "consumer_wiring_to_cpp_planner": false
+  },
+  "conclusions": {
+    "cpp_planner_contract_parity": true,
+    "cpp_planner_safe_pathlike_behavior": true,
+    "cpp_planner_is_consumed_by_live_gateway": false,
+    "mcp_upload_effect_migrated_to_cpp": false,
+    "python_gateway_authoritative": true,
+    "workspace_broker_authoritative_for_mutation": true,
+    "safe_to_retire_python_gateway_upload_logic": false,
+    "service_restart_constitutes_new_provenanced_release": false,
+    "frozen_portal_visual_change": false
+  }
+}

@@ -1,5 +1,5 @@
 projeto: cloudiff-v2
-versao_contrato: 61
+versao_contrato: 62
 namespace_fechado: true
 entradas:
   - id: 1
@@ -12287,14 +12287,31 @@ entradas:
     aceite: portao-mecanico/runtime
     status: aceito
 
+  - id: 1537
+    caminho: docs/reconciliation/mcp-upload-cpp-authority-v62.json
+    proposito: registra evidencia live do mcp-upload C++ e delimita que o planner shadow nao e consumido pelo MCP Gateway Python autoritativo
+    tipo: documentacao-estrutural
+    consome: [contratos/mcp-upload.schema, cpp/mcp-upload, evidencia/cpp-live-binary-provenance-v61]
+    produz: evidencia/mcp-upload-cpp-authority-v62
+    aceite: tests/test_mcp_upload_cpp_authority_evidence.py
+    status: aceito
+  - id: 1538
+    caminho: tests/test_mcp_upload_cpp_authority_evidence.py
+    proposito: cruza contrato source gateway unit e evidencia live para impedir declarar upload MCP migrado sem wiring explicito do consumidor
+    tipo: backend-integracao
+    consome: [evidencia/mcp-upload-cpp-authority-v62, contratos/mcp-upload.schema]
+    produz: teste/mcp-upload-cpp-authority
+    aceite: portao-mecanico/backend-integracao
+    status: aceito
+
 trabalho_compartilhado:
   projeto: cloudiff
   caminho: /srv/mcp-workspace/tmp/cloudiff-ui-audit-wireguard
-  unidade: T-018-proveniencia-binarios-cpp-live
-  descricao: procedencia runtime dos binarios antigos fechada sem atribuir commit fonte ausente
+  unidade: T-019-mcp-upload-cpp-audit
+  descricao: planner mcp-upload C++ validado e autoridade delimitada como shadow sem wiring no gateway Python
   agente: Redes-GPT
-  atualizado_em: '2026-08-28T11:48:00-03:00'
-  concluido_em: '2026-08-28T11:48:00-03:00'
-  previsao_termino: '2026-08-28T12:30:00-03:00'
+  atualizado_em: '2026-08-28T12:02:00-03:00'
+  concluido_em: '2026-08-28T12:02:00-03:00'
+  previsao_termino: '2026-08-28T12:45:00-03:00'
   zona_exclusao: []
   estado: concluido
