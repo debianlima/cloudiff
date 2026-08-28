@@ -1,4 +1,4 @@
-# Estado — 2026-08-27 — contrato v45
+# Estado — 2026-08-27 — contrato v46
 
 ## Decisões vigentes
 - `FrozenPortalInterface` permanece requisito mestre; a correção desta unidade não altera HTML, CSS, JS visual, textos, botões ou layout.
@@ -25,11 +25,11 @@
 ## Pendências técnicas não humanas
 - O host Faro mantém `fwupd-refresh.service` falho por indisponibilidade de egress para o serviço externo; o verificador residente retorna `errors=0 warnings=1`. Isso não afeta o runtime CloudIFF/NATS.
 - O inventário de máquina ainda precisa refletir Docker/cAdvisor presentes no Faro; máquina vence o inventário e a reconciliação é a próxima correção de ambiente desta mesma entrega.
-- Permanecem 21 entradas `pendente` e 5 `preexistente` no contrato v45 fora desta unidade; a liberação global do projeto deve selecionar quais delas são release-blocking antes de declarar release final.
+- Permanecem entradas `pendente`/`preexistente` fora desta unidade no contrato v46 fora desta unidade; a liberação global do projeto deve selecionar quais delas são release-blocking antes de declarar release final.
 - LegacyRetirement continua separado e qualquer retirada destrutiva exige seus próprios gates e autorização final.
 
 ## Trabalho compartilhado
-- ponteiro: `manifesto.yaml.trabalho_compartilhado` — unidade `ui-overview-alias-audit`, concluída, sem zona de exclusão ativa.
+- ponteiro: `manifesto.yaml.trabalho_compartilhado` — unidade `portal-v2-lib-safe-release`, ativa; zona limitada ao rollout, teste e arquivos estruturais da unidade.
 
 ## Competências ativas nesta unidade
 - `cloudiff@0.1.5` — skill raiz.
@@ -37,6 +37,7 @@
 - `github-incremental-reconciliation@7` — reconciliação incremental.
 - `governanca-ontologica-de-skills@1.0.4` — governança PGH.
 - `telemetry-data-visualization@2` — macro global; coletor executável não localizado no repositório desta unidade.
+- `cloudiff-safe-release@1.0.0` — release imutável, shadow, current/previous e rollback.
 - `navegacao`/Selenium WebDriver 4.46.0 — execução da interface real no WebDev isolado.
 
 ## Falhas de portão por tipo de entrada
@@ -51,7 +52,7 @@
 - Frozen UI 3/3, Portal 1008/1008, `validate-repository`, `git diff --check`: PASS; nenhum arquivo visual alterado.
 
 ### Pendentes de autorização ou capacidade
-- Runtime de produção ainda contém o adaptador anterior em `/srv/cloudif/lib`; não há mecanismo versionado localizado nesta árvore para rollout/rollback isolado dessa biblioteca. Não foi feito overwrite root manual.
+- Runtime de produção ainda contém o adaptador anterior em `/srv/cloudif/lib`; o mecanismo versionado 1515/1516 foi criado e passou prepare idempotente, frozen UI e regressão completa, mas ainda aguarda shadow real antes da promoção. Não foi feito overwrite root manual.
 - O acesso WebDev por URL fixa no perfil work continua divergente da allowlist declarada; requer reconciliação de rota/origem, sem abrir exposição pública.
 
 ## Entradas aceitas nesta unidade
@@ -61,6 +62,6 @@
 - 10 `manifesto.yaml` — trabalho compartilhado encerrado sem zona ativa.
 
 ## Próxima unidade
-- Criar/identificar mecanismo versionado de rollout/rollback para a biblioteca Portal v2 e aplicar a correção em shadow antes do runtime ativo.
-- Após rollout, executar novamente raiz versus `?tab=resumo` por canal HTTP independente e Selenium, exigindo equivalência do painel canônico.
-- Reconciliar o caminho VPN do WebDev sem ampliar exposição pública.
+- Publicar o mecanismo 1515/1516 versionado, montar candidato exato na Hospedagem e executar `plan -> prepare -> shadow` sem tocar o runtime ativo.
+- Somente com shadow verde, promover por replace-one-file atômico, reiniciar apenas `cloudif-admin-portal.service` e provar raiz versus `?tab=resumo` por HTTP independente.
+- Reconciliar o caminho VPN do WebDev sem ampliar exposição pública; Selenium autenticado permanece separado enquanto o fluxo externo de autenticação não fornece sessão válida de teste.

@@ -1,5 +1,5 @@
 projeto: cloudiff-v2
-versao_contrato: 45
+versao_contrato: 46
 namespace_fechado: true
 entradas:
   - id: 1
@@ -12095,14 +12095,34 @@ entradas:
     aceite: portao-mecanico/backend-integracao
     status: aceito
 
+  - id: 1515
+    caminho: deploy/apply_portal_v2_lib_release.sh
+    proposito: promove de forma imutavel e reversivel a biblioteca de coexistencia do Portal v2 com shadow em porta isolada, current previous e rollback automatico
+    tipo: deploy
+    consome: [runtime/portal-v2-coexist, teste/frozen-portal-interface]
+    produz: runtime/portal-v2-lib-release
+    aceite: portao-mecanico/deploy
+    status: em_curso
+  - id: 1516
+    caminho: tests/test_portal_v2_lib_release.py
+    proposito: prova que o rollout da biblioteca Portal v2 cria candidato imutavel, shadow isolado, promocao atomica e rollback sem editar a interface
+    tipo: backend-integracao
+    consome: [runtime/portal-v2-lib-release]
+    produz: teste/portal-v2-lib-release
+    aceite: portao-mecanico/backend-integracao
+    status: em_curso
+
 trabalho_compartilhado:
   projeto: cloudiff
   caminho: /tmp/cloudiff-ui-audit
-  unidade: ui-overview-alias-audit
-  descricao: corrige divergencia funcional do link congelado Visao geral sem alterar HTML CSS textos botoes ou layout
+  unidade: portal-v2-lib-safe-release
+  descricao: cria e homologa rollout versionado reversivel da biblioteca de coexistencia do Portal sem alterar superficie visual
   agente: Redes-GPT
-  atualizado_em: '2026-08-27T18:34:00-03:00'
-  concluido_em: '2026-08-27T18:34:00-03:00'
-  previsao_termino: '2026-08-27T20:00:00-03:00'
-  zona_exclusao: []
-  estado: concluido
+  atualizado_em: '2026-08-27T22:05:00-03:00'
+  previsao_termino: '2026-08-28T00:30:00-03:00'
+  zona_exclusao:
+    - deploy/apply_portal_v2_lib_release.sh
+    - tests/test_portal_v2_lib_release.py
+    - manifesto.yaml
+    - estado.md
+  estado: ativo
