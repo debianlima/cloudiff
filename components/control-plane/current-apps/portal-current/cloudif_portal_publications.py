@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import hashlib, json, re, sqlite3, ssl, time, urllib.error, urllib.request
+import hashlib, hmac, json, re, sqlite3, ssl, time, urllib.error, urllib.request
 from pathlib import Path
 DB=Path('/var/lib/cloudif/portal/cloudif-portal.db')
 

@@ -1,5 +1,5 @@
 projeto: cloudiff-v2
-versao_contrato: 49
+versao_contrato: 50
 namespace_fechado: true
 entradas:
   - id: 1
@@ -12139,14 +12139,23 @@ entradas:
     aceite: portao-mecanico/ui-compat
     status: aceito
 
+  - id: 1520
+    caminho: portal/tests/test_release_flow_action_effect.py
+    proposito: executa homologation enqueue e production enqueue pelo HTTP final do adaptador v2 e prova fila/ativacao em SQLite fora do wizard
+    tipo: ui-compat
+    consome: [teste/frozen-portal-interface, teste/publication-alias-action-effect]
+    produz: teste/release-flow-action-effect
+    aceite: portao-mecanico/ui-compat
+    status: aceito
+
 trabalho_compartilhado:
   projeto: cloudiff
   caminho: /tmp/cloudiff-ui-audit
-  unidade: ui-action-map-publication-alias
-  descricao: Salvar endereco em Publicacoes homologado por SQLite publisher e action_log sem alterar superficie visual
+  unidade: ui-action-map-release-flow-http
+  descricao: wizard W H P homologado pelo HTTP final e efeitos em publication_jobs/activation sem alterar superficie visual
   agente: Redes-GPT
-  atualizado_em: '2026-08-28T00:40:00-03:00'
-  concluido_em: '2026-08-28T00:40:00-03:00'
-  previsao_termino: '2026-08-28T01:40:00-03:00'
+  atualizado_em: '2026-08-27T23:35:00-03:00'
+  concluido_em: '2026-08-27T23:35:00-03:00'
+  previsao_termino: '2026-08-28T01:15:00-03:00'
   zona_exclusao: []
   estado: concluido

@@ -1,6 +1,6 @@
 ---
 name: cloudiff
-versao: 0.1.7
+versao: 0.1.8
 description: Governa, reconcilia, normaliza e evolui a plataforma CloudIFF V1/Python→V2/C++23 preservando interface homologada,
   contratos, segurança, dados, observabilidade e rollback.
 tipo_competencia: projeto
@@ -252,3 +252,6 @@ Em 2026-08-27, a auditoria do controle congelado **“Testar e salvar”** do ba
 
 ### L016 — wrapper POST que delega deve preservar o corpo e a autorização deve casar com o controle visível
 Em 2026-08-27, a entrada 1518 executou os controles congelados de disponibilidade de Bancos contra SQLite temporário e runner Docker fake. O portão encontrou duas divergências que testes por strings não capturavam: `do_POST_v21` consumia o corpo antes de delegar, fazendo `start/stop` chegarem ao handler anterior com `tenant` vazio e virarem o fallback `projeto`; e o wrapper final tratava `keepalive` como admin-only embora a UI e `CLOUDIF_MAX_STUDENT_KEEPALIVE_HOURS` declarem tempo temporário para aluno. A correção preserva os bytes do POST e restaura `rfile`/`Content-Length` antes da delegação, e restringe o guard administrativo somente a `always_on`, `always_on_start` e `always_off`. Gate: `portal.tests.test_tenant_action_effect` prova Docker command + `tenant_policy` para aluno/admin; regressão completa 1015/1015; `VISUAL_DIFF=NO`. Evita ações visíveis que retornam 403 ou operam sobre parâmetros vazios por encadeamento de wrappers. Vale no Portal Python atual e deve ser preservado na migração C++23 como contrato de request forwarding e autorização por modo.
+
+### L017 — portão de aprovação só existe se o caminho protegido for executado
+Em 2026-08-27, a entrada 1520 executou o fluxo W/H/P pelo HTTP final do adaptador v2 com SQLite temporário. `homologation/enqueue` criou uma única fila idempotente e o negativo CSRF não produziu efeito; porém `production/enqueue` retornou 503 `NameError` antes de validar a aprovação porque `cloudif_portal_publications.py` chamava `hmac.compare_digest` sem importar `hmac`. O mesmo defeito fazia digest incorreto virar 503 em vez de 403. A correção adiciona o import ausente nas duas projeções versionadas byte-idênticas. Gate: `portal.tests.test_release_flow_action_effect` prova fila H, idempotência, CSRF negativo, vínculo aprovação/digest para P e digest inválido sem mutação; regressão completa 1021/1021; `VISUAL_DIFF=NO`. Evita tratar guard presente no código como guard efetivo sem executar a rota protegida. Vale no Portal Python atual; a migração C++23 deve preservar o binding entre candidato, aprovação, digest e fila, rejeitando divergência antes de qualquer mutação.
