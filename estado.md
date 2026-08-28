@@ -1,4 +1,4 @@
-# Estado — 2026-08-28 — contrato v64
+# Estado — 2026-08-28 — contrato v65
 
 ## Decisões vigentes
 - `FrozenPortalInterface` permanece requisito mestre; a correção desta unidade não altera HTML, CSS, JS visual, textos, botões ou layout.
@@ -21,19 +21,17 @@
 - Cutover definitivo do Portal para Faro permanece uma unidade posterior e deve respeitar os portões de portal shadow/FrozenPortalInterface; não foi executado implicitamente nesta unidade.
 
 ## Decisões fechadas nesta emenda
-- O contrato/source do `AdminObservability` C++ define backend loopback 18260, GET de ambiente/policy e POST transacional de recovery policy; o patch Portal versionado usa exatamente 18260, Authentik group `CloudIF-Tenants-Admin` e CSRF existente.
-- O caminho live não foi declarado aceito: durante T-021, Labiff manteve rota via wg0, mas 10.62.92.7/10.62.91.3/10.62.91.2 ficaram inalcançáveis; o endpoint público do Portal também expirou.
-- Sem acesso ao consumidor live, não se infere que Portal→18260 esteja ativo agora, nem se executa POST de recovery para compensar ausência de prova GET.
+- T-024 não possui candidato técnico: 30 branches remotas foram inspecionadas e nenhuma versão do MCP Gateway contém `18234`, `CLOUDIFF_MCP_UPLOAD`, `mcp-upload` ou `mcp_upload` como wiring do consumidor.
+- Commits posteriores a T-019 que tocaram áreas próximas pertencem a Faro/manifesto e não introduzem consumo do planner. O restart da release 0.20 permanece insuficiente para declarar integração.
 
 ## Pendências técnicas não humanas
-- T-021 permanece pendente de gate live: observar unit/binário 18260, Portal autenticado GET `/api/admin-observability`, policy GET e ausência de mutação por leitura quando a rede CloudIFF voltar.
-- O teste histórico `tests/test_portal_admin_observability.py` depende do executável `patch`, ausente no terminal WireGuard; essa limitação do executor não é evidência de falha do Portal.
+- T-024 permanece bloqueada até surgir commit/branch com wiring explícito Gateway→planner e rollback/efeitos definidos; 1543/1544 permanecem `pendente`.
+- T-021 permanece pendente de gate live enquanto a rede CloudIFF 10.62.* estiver indisponível via Labiff.
 - T-023 permanece bloqueada até release C++ nova com `release-manifest.json`.
-- T-024 wiring futuro do mcp-upload continua dependente de mudança real no consumidor.
-- T-014 política de retenção no 251 permanece READY.
+- T-014 política de retenção no 251 está READY e independente da rede 10.62.*.
 
 ## Trabalho compartilhado
-- ponteiro: `manifesto.yaml.trabalho_compartilhado` — unidade `T-021-admin-observability-cpp-audit`, concluída com lacuna externa; nenhuma zona de exclusão permanece ativa.
+- ponteiro: `manifesto.yaml.trabalho_compartilhado` — unidade `T-024-mcp-upload-wiring`, concluída com lacuna externa; nenhuma zona de exclusão permanece ativa.
 
 ## Competências ativas nesta unidade
 - `cloudiff@0.1.21` — skill raiz; L030 homologado.
@@ -44,24 +42,23 @@
 - `platform-engineering` / `operational-ui-truth` — prova de rota, capability, provider, consumer e efeito separado.
 
 ## Falhas de portão por tipo de entrada
-- `live`: hosts CloudIFF 10.62.92.7/10.62.91.3/10.62.91.2 ficaram inalcançáveis via Labiff apesar de rota wg0 presente; autoridade live do AdminObservability não foi inferida.
-- `executor`: teste de patch histórico não roda neste terminal por ausência do binário `patch`; testes que não dependem dele continuam executáveis.
+- `consumer-wiring`: nenhuma branch remota possui referência do MCP Gateway ao planner C++ 18234; T-024 não é executável sem artefato de migração.
+- `live`: a rede 10.62.* segue indisponível pelo caminho autorizado Labiff, mantendo T-021 bloqueada.
 
 ## Divergências da última reconciliação
 ### Corrigidas
-- Entrada 1541 separa wiring estático comprovado de gate live bloqueado; a indisponibilidade de rede é registrada sem promover o C++ a autoridade observada.
-- Entrada 1542 impede overclaim enquanto `live_gate_passed=false`.
+- Entrada 1543 registra busca agregada em 30 branches remotas e zero wiring do consumidor para o planner mcp-upload.
+- Entrada 1544 transforma a ausência de candidato em gate mecânico contra ativação por inferência.
 - Nenhum HTML/CSS/JS visual foi alterado (`VISUAL_DIFF=NO`).
 
 ### Pendentes de autorização ou capacidade
-- Reexecutar somente os GETs live quando a rede retornar; POST `/node-recovery` não faz parte da auditoria read-only.
-- O `main` do CloudIFF continua separado do branch auditável.
+- A unidade só reabre quando o fluxo de migração publicar wiring explícito; nenhuma integração foi criada por este agente.
 
 ## Entradas aceitas nesta unidade
-- Nenhuma nova entrada foi aceita em T-021; 1541/1542 permanecem `pendente` até o gate live.
-- 9 `estado.md` — snapshot v64 registra a lacuna externa sem alterar `cloudiff@0.1.21`.
-- 10 `manifesto.yaml` — contrato v64, entradas pendentes e zona liberada.
+- Nenhuma nova entrada aceita; 1543/1544 permanecem `pendente` por ausência do candidato.
+- 9 `estado.md` — snapshot v65.
+- 10 `manifesto.yaml` — contrato v65 e zona liberada.
 
 ## Próxima unidade
-- T-024: verificar se surgiu wiring real do `mcp-upload` C++ no consumidor; se não, registrar bloqueio por dependência sem inventar ligação.
-- T-014 segue READY e independente.
+- T-014: formalizar política de retenção no 251, independente da indisponibilidade 10.62.*.
+- T-021 deve ser retomada quando a rede CloudIFF voltar para completar o gate live.

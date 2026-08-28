@@ -1,5 +1,5 @@
 projeto: cloudiff-v2
-versao_contrato: 64
+versao_contrato: 65
 namespace_fechado: true
 entradas:
   - id: 1
@@ -12338,14 +12338,31 @@ entradas:
     aceite: portao-mecanico/backend-integracao
     status: pendente
 
+  - id: 1543
+    caminho: docs/reconciliation/mcp-upload-wiring-candidate-v65.json
+    proposito: registra ausencia de wiring Gateway para mcp-upload C++ em todas as branches remotas e impede ativacao por inferencia
+    tipo: documentacao-estrutural
+    consome: [evidencia/mcp-upload-cpp-authority-v62, cpp/mcp-upload]
+    produz: evidencia/mcp-upload-wiring-candidate-v65
+    aceite: tests/test_mcp_upload_wiring_candidate_evidence.py
+    status: pendente
+  - id: 1544
+    caminho: tests/test_mcp_upload_wiring_candidate_evidence.py
+    proposito: exige candidato de consumidor explicito antes de declarar T-024 executavel
+    tipo: backend-integracao
+    consome: [evidencia/mcp-upload-wiring-candidate-v65]
+    produz: teste/mcp-upload-wiring-candidate
+    aceite: portao-mecanico/backend-integracao
+    status: pendente
+
 trabalho_compartilhado:
   projeto: cloudiff
   caminho: /srv/mcp-workspace/tmp/cloudiff-ui-audit-wireguard
-  unidade: T-021-admin-observability-cpp-audit
-  descricao: wiring estatico provado; gate live bloqueado por indisponibilidade da rede CloudIFF
+  unidade: T-024-mcp-upload-wiring
+  descricao: nenhuma branch remota contem wiring Gateway para o planner mcp-upload C++; unidade bloqueada por dependencia
   agente: Redes-GPT
-  atualizado_em: '2026-08-28T13:08:00-03:00'
-  concluido_em: '2026-08-28T13:08:00-03:00'
+  atualizado_em: '2026-08-28T13:12:00-03:00'
+  concluido_em: '2026-08-28T13:12:00-03:00'
   previsao_termino: '2026-08-28T14:00:00-03:00'
   zona_exclusao: []
   estado: concluido_com_lacuna_externa

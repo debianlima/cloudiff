@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "collected_at": "2026-08-28T13:12:00-03:00",
+  "mutation_performed": false,
+  "remote_branch_count": 30,
+  "consumer_path": "components/control-plane/current-apps/mcp-gateway-current/cloudif-mcp-gateway.py",
+  "patterns": ["18234", "CLOUDIFF_MCP_UPLOAD", "mcp-upload", "mcp_upload"],
+  "branches_with_consumer_wiring": [],
+  "audit_branch_consumer_reference_count": 0,
+  "commits_after_t019_touching_related_paths": [
+    "3bb060c cloudiff: define Faro portal shadow contract",
+    "db187cf cloudiff: conclui homologação física do Faro v46",
+    "69a28e8 cloudiff: referencia contrato da skill no manifesto v45",
+    "1655138 cloudiff: declara CloudIFF como aplicacao com capacidades aditivas v45"
+  ],
+  "candidate_present": false,
+  "safe_to_execute_wiring": false,
+  "conclusions": {
+    "mcp_gateway_consumes_cpp_planner_in_any_remote_branch": false,
+    "service_restart_is_wiring": false,
+    "t024_blocked_by_missing_migration_artifact": true,
+    "integration_created_by_audit": false,
+    "frozen_portal_visual_change": false
+  }
+}
