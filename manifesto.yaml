@@ -1,5 +1,5 @@
 projeto: cloudiff-v2
-versao_contrato: 54
+versao_contrato: 55
 namespace_fechado: true
 entradas:
   - id: 1
@@ -12184,14 +12184,23 @@ entradas:
     aceite: portao-mecanico/ui-compat
     status: aceito
 
+  - id: 1525
+    caminho: portal/tests/test_release_artifact_identity_effect.py
+    proposito: executa worker de Producao com aprovacao vinculada e prova que alteracao do artifactImageId apos homologacao falha antes de publicar
+    tipo: backend-integracao
+    consome: [teste/release-flow-action-effect]
+    produz: teste/release-artifact-identity-effect
+    aceite: portao-mecanico/backend-integracao
+    status: aceito
+
 trabalho_compartilhado:
   projeto: cloudiff
   caminho: /tmp/cloudiff-ui-audit
-  unidade: ui-action-map-project-resume
-  descricao: Retomar publicacao homologado pelo handler final e worker resume-only sem alterar superficie visual
+  unidade: release-artifact-identity-effect
+  descricao: identidade do artefato H P homologada por worker approval binding e negativo antes do publish
   agente: Redes-GPT
   atualizado_em: '2026-08-27T23:12:00-03:00'
   concluido_em: '2026-08-27T23:12:00-03:00'
-  previsao_termino: '2026-08-28T01:45:00-03:00'
+  previsao_termino: '2026-08-28T02:00:00-03:00'
   zona_exclusao: []
   estado: concluido
