@@ -11,6 +11,7 @@ import csv
 import datetime
 import html
 import json
+import io
 import os
 import re
 import sqlite3
@@ -3493,7 +3494,8 @@ def do_POST_v21(self):
     user = self.user()
     parsed = urllib.parse.urlparse(self.path)
     length = int(self.headers.get("Content-Length", "0") or 0)
-    form = urllib.parse.parse_qs(self.rfile.read(length).decode())
+    raw = self.rfile.read(length)
+    form = urllib.parse.parse_qs(raw.decode())
 
     def val(k):
         return form.get(k, [""])[0]
@@ -3637,6 +3639,8 @@ def do_POST_v21(self):
             log_action(user["username"], "project_edit_save", slug, 0, "Projeto atualizado.", "")
             return self.redirect("/?tab=projetos")
 
+    self.rfile = io.BytesIO(raw)
+    self.headers.replace_header("Content-Length", str(len(raw)))
     return Portal._old_do_POST_v21(self)
 
 Portal._old_do_POST_v21 = Portal.do_POST
@@ -6769,7 +6773,7 @@ if 'Portal' in globals() and not globals().get('_tenant_always_on_final_wrapped'
             return _cloudif_security_reject(self,'Origem da requisição não autorizada.',403)
         if not _prod_csrf_equal(val('csrf_token'),_prod_csrf_token(user)):
             return _cloudif_security_reject(self,'Token CSRF inválido ou ausente.',403)
-        if not user.get('admin'):
+        if op in ('always_on','always_on_start','always_off') and not user.get('admin'):
             return _cloudif_security_reject(self,'Restrito a administrador.',403)
         if not tenant or not tenant_visible(tenant,user['username'],user['groups']):
             return _cloudif_security_reject(self,'Tenant não autorizado.',403)

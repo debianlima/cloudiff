@@ -1,6 +1,6 @@
 ---
 name: cloudiff
-versao: 0.1.6
+versao: 0.1.7
 description: Governa, reconcilia, normaliza e evolui a plataforma CloudIFF V1/Python→V2/C++23 preservando interface homologada,
   contratos, segurança, dados, observabilidade e rollback.
 tipo_competencia: projeto
@@ -249,3 +249,6 @@ Na v45, o sincronizador de skills inicialmente aceitava três estados que quebra
 
 ### L015 — ação de UI que persiste configuração exige prova no artefato canônico
 Em 2026-08-27, a auditoria do controle congelado **“Testar e salvar”** do backup remoto encontrou um teste que apenas procurava strings no código e um POST que gravava um caminho literal duplicado, enquanto a leitura usava `BACKUP_REMOTE_ENV`. A entrada 1178 passou a executar a persistência em diretório temporário e observar o efeito fora da interface: bytes antes/depois, conteúdo final exato, modo `0600`, replace atômico e ausência de temporário residual. A entrada 649 passou a gravar pela mesma fonte canônica `BACKUP_REMOTE_ENV`. Gate: `portal.tests.test_backup_remote_global_config` + regressão completa do Portal (1009 testes) + `VISUAL_DIFF=NO`. Evita homologar toast/string como efeito real e evita divergência futura entre caminho de leitura e caminho de escrita. Vale em Linux/Python para ações do Portal que persistem configuração em arquivo; a implementação pode migrar para C++ desde que preserve o mesmo contrato observável.
+
+### L016 — wrapper POST que delega deve preservar o corpo e a autorização deve casar com o controle visível
+Em 2026-08-27, a entrada 1518 executou os controles congelados de disponibilidade de Bancos contra SQLite temporário e runner Docker fake. O portão encontrou duas divergências que testes por strings não capturavam: `do_POST_v21` consumia o corpo antes de delegar, fazendo `start/stop` chegarem ao handler anterior com `tenant` vazio e virarem o fallback `projeto`; e o wrapper final tratava `keepalive` como admin-only embora a UI e `CLOUDIF_MAX_STUDENT_KEEPALIVE_HOURS` declarem tempo temporário para aluno. A correção preserva os bytes do POST e restaura `rfile`/`Content-Length` antes da delegação, e restringe o guard administrativo somente a `always_on`, `always_on_start` e `always_off`. Gate: `portal.tests.test_tenant_action_effect` prova Docker command + `tenant_policy` para aluno/admin; regressão completa 1015/1015; `VISUAL_DIFF=NO`. Evita ações visíveis que retornam 403 ou operam sobre parâmetros vazios por encadeamento de wrappers. Vale no Portal Python atual e deve ser preservado na migração C++23 como contrato de request forwarding e autorização por modo.
