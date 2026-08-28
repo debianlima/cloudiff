@@ -1,4 +1,4 @@
-# Estado — 2026-08-27 — contrato v46
+# Estado — 2026-08-27 — contrato v47
 
 ## Decisões vigentes
 - `FrozenPortalInterface` permanece requisito mestre; a correção desta unidade não altera HTML, CSS, JS visual, textos, botões ou layout.
@@ -29,43 +29,38 @@
 - LegacyRetirement continua separado e qualquer retirada destrutiva exige seus próprios gates e autorização final.
 
 ## Trabalho compartilhado
-- ponteiro: `manifesto.yaml.trabalho_compartilhado` — unidade `ui-action-map-backup-remote-config`, concluída; nenhuma zona de exclusão permanece ativa.
+- ponteiro: `manifesto.yaml.trabalho_compartilhado` — unidade `ui-action-map-tenant-acl`, concluída; nenhuma zona de exclusão permanece ativa.
 
 ## Competências ativas nesta unidade
-- `cloudiff@0.1.6` — skill raiz; L015 homologado nesta unidade.
-- `desenvolvedor-de-software@14` — método PGH.
-- `github-incremental-reconciliation@7` — reconciliação incremental para a atualização da skill/catálogo.
-- `governanca-ontologica-de-skills@1.0.4` — governança da versão da skill.
+- `cloudiff@0.1.6` — skill raiz, conferida no remoto antes da unidade.
+- `desenvolvedor-de-software@14` — método PGH para auditoria de tela.
+- `github-incremental-reconciliation@7` — reconciliação de branch/estrutura.
 - `telemetry-data-visualization@2` — macro global; coletor executável continua indisponível nesta árvore.
-- `operational-ui-truth@1` / `navegacao` — mapa tela ↔ efeito com canal independente.
+- `operational-ui-truth@1` / `navegacao` — prova tela ↔ efeito fora da própria interface.
 
 ## Falhas de portão por tipo de entrada
-- `ui-compat`: o controle congelado **“Testar e salvar”** do backup remoto possuía teste por presença de strings, sem executar nem observar o artefato persistido; o primeiro teste executável reprovou como esperado antes da correção.
-- `ui-compat`: a navegação real publicou `Visão geral -> ?tab=resumo`, mas o runtime produtivo ainda contém o adaptador anterior; a correção permanece versionada e não promovida enquanto o shadow real não passar.
-- `webdev`: o link fixo VPN-only devolveu 403 a partir do perfil work porque o tráfego chega ao NPM por origem não coberta pela allowlist; nenhuma exposição foi ampliada.
-- `autenticacao`: a conta AD informada foi recusada pelo Authentik na etapa de senha; não houve tentativa repetida.
+- `ui-compat`: o primeiro portão de ACL não chegou à ação porque o módulo-base inicializa telemetria em `/var/lib/cloudif/access-ingest`; o teste foi isolado com `CLOUDIF_ACCESS_INGEST_DB` temporário, sem alterar produção.
+- `ui-compat`: o segundo portão precisou incluir `portal-current` no `sys.path` do teste para carregar módulos irmãos; novamente, correção restrita ao ambiente de teste.
+- Nenhuma divergência funcional foi encontrada em `tenant_acl`: add/remove/owner-block bateram com o efeito declarado.
 
 ## Divergências da última reconciliação
 ### Corrigidas
-- `backup_remote_config`: leitura e escrita agora usam a mesma fonte canônica `BACKUP_REMOTE_ENV`.
-- O efeito de **“Testar e salvar”** é provado por bytes antes/depois, conteúdo exato, modo `0600`, replace atômico e ausência de temporário residual; toast/string não contam como evidência.
-- `cloudiff@0.1.6` registra L015 com entrada, data, portão, plataforma e pressupostos.
-- Regressão do Portal: 1009/1009; `validate-repository`, `git diff --check` e `VISUAL_DIFF=NO`: PASS.
+- Entrada 1517 agora executa o handler final de `/action/tenant_acl` com CSRF/origin válidos contra SQLite temporário e provedor/fila controlados.
+- `Adicionar`: linha aparece em `tenant_acl` e evento `tenant.membership.changed` com `operation=add` é observado.
+- `Remover`: linha desaparece e evento com `operation=remove` é observado.
+- Remoção do proprietário: HTTP 409, linha preservada e fila permanece vazia.
+- Regressão do Portal: 1011/1011; `validate-repository`, `git diff --check` e `VISUAL_DIFF=NO`: PASS.
 
 ### Pendentes de autorização ou capacidade
-- Runtime de produção ainda contém o adaptador anterior da `Visão geral`; entradas 1515/1516 permanecem `em_curso` até novo shadow real verde. Não houve promoção ou overwrite root.
-- Primeiro salto `172.16.0.1` segue com plano administrativo indisponível nas últimas sondagens; isso impede nova homologação na Hospedagem sem justificar bypass da segmentação.
-- O acesso WebDev por URL fixa no perfil work continua pendente de reconciliação de rota/origem, sem ampliar exposição pública.
+- Runtime de produção da `Visão geral` continua sem promoção; entradas 1515/1516 permanecem `em_curso` até shadow real verde.
+- Primeiro salto `172.16.0.1` permanece bloqueio operacional para nova homologação remota enquanto o plano administrativo não voltar.
 
 ## Entradas aceitas nesta unidade
-- 649 `components/control-plane/srv/cloudif/lib/cloudif_portal_v2_coexist.py` — persistência do backup remoto reconciliada com `BACKUP_REMOTE_ENV` e replace atômico.
-- 1178 `portal/tests/test_backup_remote_global_config.py` — efeito do controle provado por artefato independente.
-- 179 `skills/cloudiff/SKILL.md` — `cloudiff@0.1.6`, L015 homologado.
-- 2 `competencias.yaml` — versão da skill raiz reconciliada.
-- 9 `estado.md` — snapshot desta unidade.
-- 10 `manifesto.yaml` — entradas aceitas e zona liberada.
+- 1517 `portal/tests/test_tenant_acl_action_effect.py` — ACL de banco homologada por SQLite + fila independentes, incluindo owner-block.
+- 9 `estado.md` — snapshot da auditoria ACL.
+- 10 `manifesto.yaml` — contrato v47 e zona liberada.
 
 ## Próxima unidade
-- Auditar ações mutáveis de **Bancos/tenants**, começando por adicionar/remover ACL e start/stop, exigindo efeito observado em arquivo/DB/processo/rota fora da interface.
-- Em seguida, aplicar o mesmo cruzamento a Publicações e Projetos, priorizando controles cujo teste atual só inspeciona strings/HTML.
-- Quando o plano de gestão do pfSense voltar, repetir `plan -> prepare -> shadow` da Visão geral; somente shadow verde autoriza promoção.
+- Auditar `tenant_action` de Bancos: **Iniciar temporariamente**, **Ativar sempre ligado** e **desligamento automático**, observando política SQLite e execução Docker fake separadamente.
+- Depois, cruzar Publicações e Projetos contra os mesmos critérios de efeito independente.
+- Quando o plano de gestão do pfSense voltar, repetir shadow da correção `Visão geral` antes de qualquer promoção.

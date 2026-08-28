@@ -1,5 +1,5 @@
 projeto: cloudiff-v2
-versao_contrato: 46
+versao_contrato: 47
 namespace_fechado: true
 entradas:
   - id: 1
@@ -12112,14 +12112,23 @@ entradas:
     aceite: portao-mecanico/backend-integracao
     status: em_curso
 
+  - id: 1517
+    caminho: portal/tests/test_tenant_acl_action_effect.py
+    proposito: executa Adicionar Remover e bloqueio do dono do banco contra SQLite temporario e fila de reconciliacao fake para provar o efeito fora da interface
+    tipo: ui-compat
+    consome: [teste/frozen-portal-interface]
+    produz: teste/tenant-acl-action-effect
+    aceite: portao-mecanico/ui-compat
+    status: aceito
+
 trabalho_compartilhado:
   projeto: cloudiff
   caminho: /tmp/cloudiff-ui-audit
-  unidade: ui-action-map-backup-remote-config
-  descricao: efeito do controle Testar e salvar homologado por artefato independente sem alterar superficie visual
+  unidade: ui-action-map-tenant-acl
+  descricao: Adicionar Remover e protecao do dono do banco homologados por SQLite e fila independentes sem alterar a interface
   agente: Redes-GPT
-  atualizado_em: '2026-08-27T23:15:00-03:00'
-  concluido_em: '2026-08-27T23:15:00-03:00'
-  previsao_termino: '2026-08-28T00:20:00-03:00'
+  atualizado_em: '2026-08-27T23:42:00-03:00'
+  concluido_em: '2026-08-27T23:42:00-03:00'
+  previsao_termino: '2026-08-28T01:00:00-03:00'
   zona_exclusao: []
   estado: concluido
