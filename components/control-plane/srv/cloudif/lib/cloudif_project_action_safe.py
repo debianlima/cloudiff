@@ -203,6 +203,20 @@ def upsert_project(form, user):
     if not slug:
         raise RuntimeError("Nome/slug do projeto não informado.")
 
+    runtime_template = val(form, "runtime_template", "node22").strip().lower()
+    allowed_runtimes = {"node20", "node22", "node24"}
+    if runtime_template not in allowed_runtimes:
+        raise ValueError("Tecnologia web não homologada.")
+    php_version = val(form, "php_version", "8.3").strip()
+    if php_version not in {"8.2", "8.3", "8.4"}:
+        raise ValueError("Versão do PHP não homologada.")
+    try:
+        tenant_keepalive_hours = int(val(form, "tenant_keepalive_hours", "6") or "6")
+    except (TypeError, ValueError):
+        raise ValueError("Tempo inicial do banco inválido.")
+    if not 1 <= tenant_keepalive_hours <= 24:
+        raise ValueError("O tempo inicial do banco deve ficar entre 1 e 24 horas.")
+
     con = db()
     try:
         if "projects" not in tables(con):
@@ -264,21 +278,6 @@ def upsert_project(form, user):
         con.commit()
     finally:
         con.close()
-
-    runtime_template = val(form, "runtime_template", "node22").strip().lower()
-    allowed_runtimes = {"node20", "node22", "node24"}
-    if runtime_template not in allowed_runtimes:
-        raise ValueError("Tecnologia web não homologada.")
-    php_version = val(form, "php_version", "8.3").strip()
-    if php_version not in {"8.2", "8.3", "8.4"}:
-        raise ValueError("Versão do PHP não homologada.")
-
-    try:
-        tenant_keepalive_hours = int(val(form, "tenant_keepalive_hours", "6") or "6")
-    except (TypeError, ValueError):
-        raise ValueError("Tempo inicial do banco inválido.")
-    if not 1 <= tenant_keepalive_hours <= 24:
-        raise ValueError("O tempo inicial do banco deve ficar entre 1 e 24 horas.")
 
     job = {
         "action": action,

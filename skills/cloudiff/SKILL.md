@@ -1,6 +1,6 @@
 ---
 name: cloudiff
-versao: 0.1.10
+versao: 0.1.11
 description: Governa, reconcilia, normaliza e evolui a plataforma CloudIFF V1/Python→V2/C++23 preservando interface homologada,
   contratos, segurança, dados, observabilidade e rollback.
 tipo_competencia: projeto
@@ -261,3 +261,6 @@ Em 2026-08-27, a entrada 1521 auditou o controle final **“Checar projeto”**,
 
 ### L019 — falha de sync imediato após commit não pode suprimir a reconciliação durável
 Em 2026-08-27, a entrada 1522 executou **Gerenciar permissões** pelo handler final contra SQLite temporário, sync Komodo controlado e fila de reconciliação fake. Add/remove, bloqueio do dono e CSRF negativo já batiam com o contrato; o portão vermelho apareceu quando o sync Komodo falhou **depois** de `project_acl` ter sido commitada: `add_acl()`/`remove_acl()` levantavam exceção, o wrapper capturava o erro e não enfileirava `project.membership.changed`, deixando a fonte central alterada sem recuperação durável. A correção mantém a ACL central persistida, retorna estado de sincronização imediata pendente e permite ao wrapper sempre enfileirar a reconciliação durável. Gate: `portal.tests.test_project_acl_action_effect` prova DB, sync, fila, owner-block, CSRF negativo e falha sintética do Komodo; regressão completa 1027/1027; `VISUAL_DIFF=NO`. Evita estado parcialmente aplicado sem mecanismo de convergência. Vale no Portal Python atual e na migração C++23: após persistir a fonte central, falha de alvo externo deve produzir reconciliação/retry durável, nunca abortar o caminho que cria essa recuperação.
+
+### L020 — validar parâmetros antes da primeira escrita do provisionamento
+Em 2026-08-27, a entrada 1523 executou **Criar e provisionar projeto** pelo handler final com SQLite temporário, job durável controlado e fila de reconciliação fake. O portão positivo provou projeto, ACL do proprietário, job `queued` e `project.created`; o negativo de runtime não homologado reprovou porque `upsert_project()` fazia commit de `projects`/`project_acl` antes de validar runtime, PHP e keepalive. O usuário recebia erro 500, mas o projeto já existia parcialmente. A correção move essas validações para antes de abrir a transação de escrita. Gate: `portal.tests.test_project_create_action_effect` prova o caminho assíncrono 202 e efeito zero para runtime inválido/CSRF ausente; regressão completa 1030/1030; `VISUAL_DIFF=NO`. Evita objetos órfãos criados por requisições que deveriam ser rejeitadas. Vale no Portal Python atual e na migração C++23: toda validação determinística do pedido deve preceder a primeira mutação persistente; falha posterior exige mecanismo explícito de compensação/reconciliação.

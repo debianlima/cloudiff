@@ -1,5 +1,5 @@
 projeto: cloudiff-v2
-versao_contrato: 52
+versao_contrato: 53
 namespace_fechado: true
 entradas:
   - id: 1
@@ -12166,14 +12166,23 @@ entradas:
     aceite: portao-mecanico/ui-compat
     status: aceito
 
+  - id: 1523
+    caminho: portal/tests/test_project_create_action_effect.py
+    proposito: executa Criar e provisionar projeto pelo handler final e prova projeto ACL job duravel reconciliacao e ausencia de mutacao em entrada invalida
+    tipo: ui-compat
+    consome: [teste/frozen-portal-interface, teste/project-acl-action-effect]
+    produz: teste/project-create-action-effect
+    aceite: portao-mecanico/ui-compat
+    status: aceito
+
 trabalho_compartilhado:
   projeto: cloudiff
   caminho: /tmp/cloudiff-ui-audit
-  unidade: ui-action-map-project-acl
-  descricao: Gerenciar permissoes homologado por project_acl sync Komodo e fila duravel sem alterar superficie visual
+  unidade: ui-action-map-project-create
+  descricao: Criar e provisionar projeto homologado por SQLite ACL job duravel e reconciliacao sem alterar superficie visual
   agente: Redes-GPT
-  atualizado_em: '2026-08-27T23:37:00-03:00'
-  concluido_em: '2026-08-27T23:37:00-03:00'
-  previsao_termino: '2026-08-28T01:20:00-03:00'
+  atualizado_em: '2026-08-27T23:12:00-03:00'
+  concluido_em: '2026-08-27T23:12:00-03:00'
+  previsao_termino: '2026-08-28T01:30:00-03:00'
   zona_exclusao: []
   estado: concluido
