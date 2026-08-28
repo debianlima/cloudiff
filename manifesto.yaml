@@ -1,5 +1,5 @@
 projeto: cloudiff-v2
-versao_contrato: 62
+versao_contrato: 63
 namespace_fechado: true
 entradas:
   - id: 1
@@ -12304,14 +12304,31 @@ entradas:
     aceite: portao-mecanico/backend-integracao
     status: aceito
 
+  - id: 1539
+    caminho: docs/reconciliation/secure-distribution-cpp-authority-v63.json
+    proposito: registra evidencia live da autoridade do SecureDistributionProvider C++ para nats-server-cert e delimita a instalacao local como efeito do consumidor cert-sync
+    tipo: documentacao-estrutural
+    consome: [contratos/secure-distribution.schema, cpp/secure-distribution, evidencia/cpp-live-binary-provenance-v61]
+    produz: evidencia/secure-distribution-cpp-authority-v63
+    aceite: tests/test_secure_distribution_cpp_authority_evidence.py
+    status: aceito
+  - id: 1540
+    caminho: tests/test_secure_distribution_cpp_authority_evidence.py
+    proposito: cruza contrato source NPM capability provider consumer e evidencia live sem requisitar privkey durante a auditoria
+    tipo: backend-integracao
+    consome: [evidencia/secure-distribution-cpp-authority-v63, contratos/secure-distribution.schema]
+    produz: teste/secure-distribution-cpp-authority
+    aceite: portao-mecanico/backend-integracao
+    status: aceito
+
 trabalho_compartilhado:
   projeto: cloudiff
   caminho: /srv/mcp-workspace/tmp/cloudiff-ui-audit-wireguard
-  unidade: T-019-mcp-upload-cpp-audit
-  descricao: planner mcp-upload C++ validado e autoridade delimitada como shadow sem wiring no gateway Python
+  unidade: T-020-secure-distribution-cpp-audit
+  descricao: SecureDistributionProvider C++ provado como autoridade read-only da colecao nats-server-cert; instalacao permanece no cert-sync
   agente: Redes-GPT
-  atualizado_em: '2026-08-28T12:02:00-03:00'
-  concluido_em: '2026-08-28T12:02:00-03:00'
-  previsao_termino: '2026-08-28T12:45:00-03:00'
+  atualizado_em: '2026-08-28T12:30:00-03:00'
+  concluido_em: '2026-08-28T12:30:00-03:00'
+  previsao_termino: '2026-08-28T13:15:00-03:00'
   zona_exclusao: []
   estado: concluido
