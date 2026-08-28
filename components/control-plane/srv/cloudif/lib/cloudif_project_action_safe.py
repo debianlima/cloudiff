@@ -487,7 +487,7 @@ if __name__ == "__main__":
 '''
 
 def check_project(form, headers):
-    """Atualiza apenas o estado observado, sem reenfileirar ou mudar configuração."""
+    """Atualiza somente estado observado; nunca reenfileira nem reescreve configuração."""
     slug = val(form, "slug", "").strip()
     if not slug:
         raise ValueError("Projeto não informado.")
@@ -496,18 +496,46 @@ def check_project(form, headers):
         row = con.execute("SELECT slug,tenant,repo_url,komodo_status FROM projects WHERE slug=?", (slug,)).fetchone()
         if not row:
             raise LookupError("Projeto não encontrado.")
-        report_path = Path("/srv/cloudif/provisioning/projects") / slug / "provision-report.json"
+
+        import cloudif_project_provision_status as provision_status
+        state = provision_status.status(slug)
+        components = state.get("components") or {}
+        forge = components.get("forgejo") or {"ok": False, "status": "pending"}
+        komodo = components.get("komodo") or {"ok": False, "status": "pending"}
+        supabase = components.get("supabase") or {"ok": False, "status": "pending"}
+        tenant = str(row["tenant"] or "")
+        database = (
+            {"ok": bool(supabase.get("ok")), "status": str(supabase.get("status") or "pending")}
+            if tenant
+            else {"ok": True, "status": "not_applicable"}
+        )
+        observed = {
+            "repository": {"ok": bool(forge.get("ok")), "status": str(forge.get("status") or "pending")},
+            "database": database,
+            "container": {"ok": bool(komodo.get("ok")), "status": str(komodo.get("status") or "pending")},
+        }
+
+        report_path = provision_status.PROVISION_ROOT / slug / "provision-report.json"
         report = json.loads(report_path.read_text(encoding="utf-8")) if report_path.is_file() else {}
-        components = report.get("components") or {}
-        forge = components.get("forgejo") or {}
-        komodo = components.get("komodo") or {}
-        repo_url = str(forge.get("url") or row["repo_url"] or "")
-        komodo_status = "running" if komodo.get("ok") else str(row["komodo_status"] or "not_configured")
-        con.execute("UPDATE projects SET repo_url=?,komodo_status=?,updated_at=? WHERE slug=?",
-                    (repo_url,komodo_status,time.strftime("%Y-%m-%dT%H:%M:%S%z"),slug))
+        report_forge = ((report.get("components") or {}).get("forgejo") or {})
+        repo_url = str(report_forge.get("url") or row["repo_url"] or "")
+        komodo_status = str(row["komodo_status"] or "not_configured")
+        if report:
+            komodo_status = "running" if observed["container"]["ok"] else str(observed["container"]["status"] or komodo_status)
+
+        con.execute(
+            "UPDATE projects SET repo_url=?,komodo_status=?,updated_at=? WHERE slug=?",
+            (repo_url,komodo_status,time.strftime("%Y-%m-%dT%H:%M:%S%z"),slug),
+        )
         con.commit()
-        return {"slug":slug,"tenant":row["tenant"] or "","checked":True,
-                "message":"Estado atualizado sem alterar a configuração do projeto."}
+        return {
+            "slug": slug,
+            "tenant": tenant,
+            "checked": True,
+            "observed": observed,
+            "all_ok": all(item["ok"] for item in observed.values()),
+            "message": "Estado atualizado sem alterar a configuração do projeto.",
+        }
     finally:
         con.close()
 

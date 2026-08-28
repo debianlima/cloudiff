@@ -1,6 +1,6 @@
 ---
 name: cloudiff
-versao: 0.1.8
+versao: 0.1.9
 description: Governa, reconcilia, normaliza e evolui a plataforma CloudIFF V1/Python→V2/C++23 preservando interface homologada,
   contratos, segurança, dados, observabilidade e rollback.
 tipo_competencia: projeto
@@ -255,3 +255,6 @@ Em 2026-08-27, a entrada 1518 executou os controles congelados de disponibilidad
 
 ### L017 — portão de aprovação só existe se o caminho protegido for executado
 Em 2026-08-27, a entrada 1520 executou o fluxo W/H/P pelo HTTP final do adaptador v2 com SQLite temporário. `homologation/enqueue` criou uma única fila idempotente e o negativo CSRF não produziu efeito; porém `production/enqueue` retornou 503 `NameError` antes de validar a aprovação porque `cloudif_portal_publications.py` chamava `hmac.compare_digest` sem importar `hmac`. O mesmo defeito fazia digest incorreto virar 503 em vez de 403. A correção adiciona o import ausente nas duas projeções versionadas byte-idênticas. Gate: `portal.tests.test_release_flow_action_effect` prova fila H, idempotência, CSRF negativo, vínculo aprovação/digest para P e digest inválido sem mutação; regressão completa 1021/1021; `VISUAL_DIFF=NO`. Evita tratar guard presente no código como guard efetivo sem executar a rota protegida. Vale no Portal Python atual; a migração C++23 deve preservar o binding entre candidato, aprovação, digest e fila, rejeitando divergência antes de qualquer mutação.
+
+### L018 — “Checar projeto” deve consumir o status canônico dos três recursos
+Em 2026-08-27, a entrada 1521 auditou o controle final **“Checar projeto”**, cuja superfície congelada declara verificar repositório, banco e vínculo do container sem alterar a configuração. O primeiro portão executável reprovou porque `check_project()` não retornava mapa observado e ignorava Supabase: lia apenas Forgejo/Komodo diretamente de `provision-report.json`. A correção reutiliza `cloudif_project_provision_status.status()` como fonte canônica para Forgejo, Supabase e Komodo, usa `PROVISION_ROOT` canônico e limita a mutação a estado observado (`repo_url`, `komodo_status`, `updated_at`), preservando nome, dono, descrição e tenant. Gate: `portal.tests.test_project_check_action_effect` prova os três recursos e a não mutação de configuração; regressão completa 1023/1023; `VISUAL_DIFF=NO`. Evita a interface afirmar “estado real” quando o backend avalia somente parte de um relatório possivelmente incompleto. Vale no Portal Python atual; a migração C++23 deve produzir o mesmo mapa de três recursos e o mesmo contrato de leitura sem reenfileirar nem reconfigurar.

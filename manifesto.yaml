@@ -1,5 +1,5 @@
 projeto: cloudiff-v2
-versao_contrato: 50
+versao_contrato: 51
 namespace_fechado: true
 entradas:
   - id: 1
@@ -12148,14 +12148,23 @@ entradas:
     aceite: portao-mecanico/ui-compat
     status: aceito
 
+  - id: 1521
+    caminho: portal/tests/test_project_check_action_effect.py
+    proposito: executa Checar projeto contra SQLite e relatorio temporarios e prova observacao de repositorio banco e vinculo do container sem alterar configuracao
+    tipo: ui-compat
+    consome: [teste/frozen-portal-interface]
+    produz: teste/project-check-action-effect
+    aceite: portao-mecanico/ui-compat
+    status: aceito
+
 trabalho_compartilhado:
   projeto: cloudiff
   caminho: /tmp/cloudiff-ui-audit
-  unidade: ui-action-map-release-flow-http
-  descricao: wizard W H P homologado pelo HTTP final e efeitos em publication_jobs/activation sem alterar superficie visual
+  unidade: ui-action-map-project-check
+  descricao: Checar projeto homologado por Forgejo Supabase Komodo e SQLite sem alterar superficie visual
   agente: Redes-GPT
-  atualizado_em: '2026-08-27T23:35:00-03:00'
-  concluido_em: '2026-08-27T23:35:00-03:00'
-  previsao_termino: '2026-08-28T01:15:00-03:00'
+  atualizado_em: '2026-08-27T23:29:00-03:00'
+  concluido_em: '2026-08-27T23:29:00-03:00'
+  previsao_termino: '2026-08-28T01:30:00-03:00'
   zona_exclusao: []
   estado: concluido
