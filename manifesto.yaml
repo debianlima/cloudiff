@@ -1,5 +1,5 @@
 projeto: cloudiff-v2
-versao_contrato: 59
+versao_contrato: 60
 namespace_fechado: true
 entradas:
   - id: 1
@@ -12253,14 +12253,31 @@ entradas:
     aceite: portao-mecanico/backend-integracao
     status: aceito
 
+  - id: 1533
+    caminho: docs/reconciliation/artifact-executor-cpp-authority-v60.json
+    proposito: registra evidencia live do ArtifactEngine C++ e delimita sua autoridade parcial frente ao executor Python e ao ClassicBuildWorker canary
+    tipo: documentacao-estrutural
+    consome: [contratos/artifact-executor.schema, contratos/build-worker.schema, cpp/artifact-engine]
+    produz: evidencia/artifact-executor-cpp-authority-v60
+    aceite: tests/test_artifact_executor_cpp_authority_evidence.py
+    status: aceito
+  - id: 1534
+    caminho: tests/test_artifact_executor_cpp_authority_evidence.py
+    proposito: cruza contrato source ingress workers e evidencia live para impedir declarar ArtifactEngine C++ como autoridade geral antes da ativacao do worker classic
+    tipo: backend-integracao
+    consome: [evidencia/artifact-executor-cpp-authority-v60, contratos/artifact-executor.schema, contratos/build-worker.schema]
+    produz: teste/artifact-executor-cpp-authority
+    aceite: portao-mecanico/backend-integracao
+    status: aceito
+
 trabalho_compartilhado:
   projeto: cloudiff
   caminho: /srv/mcp-workspace/tmp/cloudiff-ui-audit-wireguard
-  unidade: T-013-project-events-cpp-reconciliation
-  descricao: caminho duravel de eventos de projeto provado e consumidor C++ delimitado como node-observation apenas
+  unidade: T-017-artifact-executor-cpp-authority
+  descricao: ArtifactEngine C++ validado e autoridade delimitada como canary parcial, sem substituir Python compartilhado
   agente: Redes-GPT
-  atualizado_em: '2026-08-28T07:48:00-03:00'
-  concluido_em: '2026-08-28T07:48:00-03:00'
-  previsao_termino: '2026-08-28T08:45:00-03:00'
+  atualizado_em: '2026-08-28T11:05:00-03:00'
+  concluido_em: '2026-08-28T11:05:00-03:00'
+  previsao_termino: '2026-08-28T11:45:00-03:00'
   zona_exclusao: []
   estado: concluido

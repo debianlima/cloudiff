@@ -1,0 +1,114 @@
+{
+  "schema_version": 1,
+  "collected_at": "2026-08-28T10:55:00-03:00",
+  "collection_path": "Labiff direct to Forja/Hospedagem, read-only plus pre-effect invalid HTTP probes",
+  "mutation_performed": false,
+  "forja": {
+    "hostname": "forja",
+    "ip": "10.62.91.2",
+    "verifier": {
+      "errors": 0,
+      "warnings": 1,
+      "root_filesystem_percent": 88
+    }
+  },
+  "artifact_cpp": {
+    "unit": "cloudiff-v2-artifact-executor-shadow.service",
+    "service_active": true,
+    "bind": "127.0.0.1:18226",
+    "binary": "/opt/cloudiff-v2/artifact-shadow-current/bin/cloudiff-agent",
+    "binary_version": "0.27.0-shadow",
+    "binary_sha256": "46e409246c9bf8feef34e36c5261a3c2cf07e1e9ec35f760af63102a9e19ea4d",
+    "health_status": 200,
+    "health_service": "artifact-executor",
+    "secrets_exposed": false,
+    "live_source_commit": "NAO DECLARADO"
+  },
+  "legacy_python": {
+    "unit": "cloudif-artifact-executor.service",
+    "service_active": true,
+    "bind": "10.62.91.2:18216",
+    "implementation": "Python",
+    "release": "/srv/cloudif/app-releases/artifact-executor/effective-env-ff62784-fixed-20260807-102232",
+    "health_status": 200,
+    "shared_host": "cloudif-artifact-executor.internal",
+    "shared_host_authority": true,
+    "port": 18216
+  },
+  "safe_validation": {
+    "request_source": "/var/lib/cloudiff-v2/artifact-shadow/evidence/v13-toolchain/accepted/request.json",
+    "project_slug": "laboratorio-de-hardware",
+    "ref": "main",
+    "archive_sha256": "0e8914b5cb2c95afb2dbaed81f636fc8fe62d9fe9ca5c298f7ccd111a13d4796",
+    "bad_auth_status": 401,
+    "status": 200,
+    "ok": true,
+    "valid": true,
+    "side_effect_free": true,
+    "images_created": 0,
+    "containers_changed": false,
+    "secret_values_included": false,
+    "images_hash_before": "bf615fe84eaafec97e037cfcab26a52da1fba9b0c5f26cd320e7191c869527fa",
+    "images_hash_after": "bf615fe84eaafec97e037cfcab26a52da1fba9b0c5f26cd320e7191c869527fa",
+    "containers_hash_before": "2656ec18edca63565741c7011a8b18868d268a6b71cd0e4fea74f8390a1dd17a",
+    "containers_hash_after": "2656ec18edca63565741c7011a8b18868d268a6b71cd0e4fea74f8390a1dd17a",
+    "persistent_results_hash_before": "8035ea9ece250a43235b499c8276f1fbe68874b916babb0be36eaf472828a14b",
+    "persistent_results_hash_after": "8035ea9ece250a43235b499c8276f1fbe68874b916babb0be36eaf472828a14b",
+    "images_unchanged": true,
+    "containers_unchanged": true,
+    "persistent_results_unchanged": true
+  },
+  "dedicated_ingress": {
+    "source_host": "10.62.92.7",
+    "connect_ip": "10.62.91.3",
+    "host_header": "cloudif-artifact-executor-v2.internal",
+    "npm_allowed_route": "POST /v1/build",
+    "npm_backend": "10.62.91.2:18228",
+    "socket_target": "127.0.0.1:18226",
+    "get_health_status": 404,
+    "wrong_profile_status": 403,
+    "wrong_profile_error": "artifact_token_scope",
+    "pre_effect_invalid_status": 400,
+    "pre_effect_invalid_error": "invalid_archive_source",
+    "pre_effect_probe_mutation": false
+  },
+  "classic_worker": {
+    "canary_unit": "cloudiff-v2-build-worker-canary.service",
+    "canary_active": false,
+    "canary_mode": "manual oneshot",
+    "canary_binary_version": "0.27.0-shadow",
+    "canary_binary_sha256": "9921831a4a28576c36d3b13505840b7c2ebbe7c09363b8d0b1897a04ab8a4d40",
+    "canary_allowed_kinds": [
+      "cloudiff.v2.build.classic"
+    ],
+    "generic_unit": "cloudiff-v2-worker.service",
+    "generic_active": true,
+    "generic_binary_version": "0.15.0-shadow",
+    "generic_allowed_kinds": [
+      "cloudiff.v2.noop",
+      "cloudiff.v2.fail_once"
+    ],
+    "active_classic_jobs": 0,
+    "classic_job_rows_observed": 0
+  },
+  "source_snapshot": {
+    "project_commit": "602e688b0470544aeb0a875a279d49a9eb5d3759",
+    "repo_agent_version": "0.36.0-shadow",
+    "repo_worker_version": "0.27.0-shadow",
+    "artifact_contract_legacy_fallback_preserved": true,
+    "build_worker_contract_external_authority": "Python BuildBroker remains authoritative in v16",
+    "current_repo_agent_binary_is_live": false
+  },
+  "conclusions": {
+    "artifact_cpp_safe_validation_parity": true,
+    "cpp_classic_canary_path_ready": true,
+    "artifact_cpp_general_authority": false,
+    "classic_build_migrated_to_continuous_cpp_worker": false,
+    "python_shared_artifact_authority_preserved": true,
+    "python_build_broker_authority_preserved": true,
+    "current_repo_binary_is_live": false,
+    "safe_to_retire_python_artifact_executor": false,
+    "safe_to_enable_classic_kind_on_generic_worker_without_separate_gate": false,
+    "frozen_portal_visual_change": false
+  }
+}
