@@ -1,5 +1,5 @@
 projeto: cloudiff-v2
-versao_contrato: 60
+versao_contrato: 61
 namespace_fechado: true
 entradas:
   - id: 1
@@ -12270,14 +12270,31 @@ entradas:
     aceite: portao-mecanico/backend-integracao
     status: aceito
 
+  - id: 1535
+    caminho: docs/reconciliation/cpp-live-binary-provenance-v61.json
+    proposito: registra procedencia observavel dos binarios C++ live antigos e delimita explicitamente quando o commit fonte e NAO DECLARADO
+    tipo: documentacao-estrutural
+    consome: [evidencia/runtime-executor-whp-parity-v58, evidencia/artifact-executor-cpp-authority-v60, evidencia/npm-publisher-runtime-parity-v57]
+    produz: evidencia/cpp-live-binary-provenance-v61
+    aceite: tests/test_cpp_live_binary_provenance_evidence.py
+    status: aceito
+  - id: 1536
+    caminho: tests/test_cpp_live_binary_provenance_evidence.py
+    proposito: impede atribuir commit fonte a release live quando a evidencia disponivel so prova release path hash BuildID toolchain e rollout posterior
+    tipo: runtime
+    consome: [evidencia/cpp-live-binary-provenance-v61]
+    produz: teste/cpp-live-binary-provenance
+    aceite: portao-mecanico/runtime
+    status: aceito
+
 trabalho_compartilhado:
   projeto: cloudiff
   caminho: /srv/mcp-workspace/tmp/cloudiff-ui-audit-wireguard
-  unidade: T-017-artifact-executor-cpp-authority
-  descricao: ArtifactEngine C++ validado e autoridade delimitada como canary parcial, sem substituir Python compartilhado
+  unidade: T-018-proveniencia-binarios-cpp-live
+  descricao: procedencia runtime dos binarios antigos fechada sem atribuir commit fonte ausente
   agente: Redes-GPT
-  atualizado_em: '2026-08-28T11:05:00-03:00'
-  concluido_em: '2026-08-28T11:05:00-03:00'
-  previsao_termino: '2026-08-28T11:45:00-03:00'
+  atualizado_em: '2026-08-28T11:48:00-03:00'
+  concluido_em: '2026-08-28T11:48:00-03:00'
+  previsao_termino: '2026-08-28T12:30:00-03:00'
   zona_exclusao: []
   estado: concluido

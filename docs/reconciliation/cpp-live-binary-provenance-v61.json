@@ -1,0 +1,140 @@
+{
+  "schema_version": 1,
+  "collected_at": "2026-08-28T11:42:00-03:00",
+  "collection_path": "Labiff direct to Forja and Mauricio + all CloudIFF remote Git refs",
+  "mutation_performed": false,
+  "targets": {
+    "npm_publisher_0_10": {
+      "host": "10.62.91.3",
+      "binary_version": "0.10.0-shadow",
+      "release_path": "/opt/cloudiff-v2/releases/20260820-v10-npm-publisher-acme",
+      "installed_at": "2026-08-20T16:36:58.229748046Z",
+      "sha256": "d75a583ec66e0431236b56070878a01a5f733d24c1375c3b159971a4fedf695b",
+      "gnu_build_id": "0a8d7c52217de4757a18d4c020f558723e92ee20",
+      "stripped": true,
+      "compiler_comment": {
+        "gcc": "GCC: (Ubuntu 15.2.0-16ubuntu1) 15.2.0",
+        "clang": "Ubuntu clang version 21.1.8 (6ubuntu1)"
+      },
+      "release_directory_contains_source_manifest": false,
+      "surviving_rollout_evidence": [
+        "/tmp/run_v10_acme_canary.sh",
+        "/tmp/v11_stage_switch.sh",
+        "journal cutover to cloudiff-v2-npm-publisher-live.service at 2026-08-20T16:42:51Z"
+      ],
+      "exact_source_commit": "NAO DECLARADO",
+      "source_commit_proven": false,
+      "reason": "release directory contains only the binary; rollout scripts/journal prove canary and cutover, not the source commit"
+    },
+    "runtime_planner_0_17": {
+      "host": "10.62.91.2",
+      "binary_version": "0.17.0-shadow",
+      "release_path": "/opt/cloudiff-v2/releases/20260820-v17-runtime-executor-shadow",
+      "installed_at": "2026-08-20T22:25:54.722981463Z",
+      "sha256": "917fe9cba09321ba0e6f408ca3c8903cd0d131bd1af7b09a2e883735628f4c6e",
+      "gnu_build_id": "0c60cb0c62e2750b309f57a76831471100f79f81",
+      "stripped": true,
+      "compiler_comment": {
+        "gcc": "GCC: (Ubuntu 15.2.0-16ubuntu1) 15.2.0",
+        "clang": "Ubuntu clang version 21.1.8 (6ubuntu1)"
+      },
+      "release_directory_contains_source_manifest": false,
+      "surviving_rollout_evidence": [
+        "/tmp/v17_runtime_gate.sh",
+        "journal sudo /tmp/v17_runtime_gate.sh at 2026-08-20T22:26:17Z"
+      ],
+      "exact_source_commit": "NAO DECLARADO",
+      "source_commit_proven": false,
+      "reason": "gate script proves runtime behavior and zero Docker mutation but does not identify the checkout used to build the binary"
+    },
+    "runtime_canary_0_24": {
+      "host": "10.62.91.2",
+      "binary_version": "0.24.0-shadow",
+      "release_path": "/opt/cloudiff-v2/releases/20260820-v24-runtime-executor-canary-r2",
+      "installed_at": "2026-08-21T02:08:55.993435871Z",
+      "sha256": "4ebaaadf69df5074a4e6088b36b73c0279f9ef3c69d4626ff980048e11a3688b",
+      "gnu_build_id": "582b2ad9954f09001c2aa108051656b7d86ab38e",
+      "stripped": false,
+      "debug_source_path_present": false,
+      "compiler_comment": {
+        "gcc": "GCC: (Ubuntu 15.2.0-16ubuntu1) 15.2.0",
+        "clang": "Ubuntu clang version 21.1.8 (6ubuntu1)"
+      },
+      "release_directory_contains_source_manifest": false,
+      "surviving_rollout_evidence": [
+        "/tmp/v24_runtime_live_gate.sh",
+        "/tmp/v24_artifact_real_gate.sh",
+        "journal sudo /tmp/v24_runtime_live_gate.sh at 2026-08-21T02:09:03Z"
+      ],
+      "exact_source_commit": "NAO DECLARADO",
+      "source_commit_proven": false,
+      "reason": "binary is reported non-stripped by file but exposes no DWARF debug_info/source path; surviving gates identify behavior, not source commit"
+    },
+    "artifact_engine_0_27": {
+      "host": "10.62.91.2",
+      "binary_version": "0.27.0-shadow",
+      "release_path": "/opt/cloudiff-v2/releases/20260821-v27-artifact-shadow",
+      "installed_at": "2026-08-21T14:26:34.309226320Z",
+      "sha256": "46e409246c9bf8feef34e36c5261a3c2cf07e1e9ec35f760af63102a9e19ea4d",
+      "gnu_build_id": "f3935c5b120602b3f7fec11e45348ad170c32f08",
+      "stripped": true,
+      "compiler_comment": {
+        "gcc": "GCC: (Ubuntu 15.2.0-16ubuntu1) 15.2.0",
+        "clang": "Ubuntu clang version 21.1.8 (6ubuntu1)"
+      },
+      "release_directory_contains_source_manifest": false,
+      "surviving_rollout_evidence": [
+        "journal installation via sudo bash -s at 2026-08-21T14:26:34Z",
+        "deploy/install_classic_artifact_ingress.sh later references the same v27 release"
+      ],
+      "exact_source_commit": "NAO DECLARADO",
+      "source_commit_proven": false,
+      "reason": "the first Git reference to the v27 release is a reconciled commit created after the binary was installed, so it is retrospective and not build provenance"
+    }
+  },
+  "git_history": {
+    "remote_branch_count_observed": 30,
+    "earliest_cpp_source_commit": "2e869b7a5216a33bfb88875b97d710392d325ed0",
+    "earliest_cpp_source_commit_time": "2026-08-24T23:53:38Z",
+    "earliest_cpp_source_commit_subject": "cloudiff: reconcile v1 and v2 under PGH project skill",
+    "earliest_cpp_source_postdates_all_target_installs": true,
+    "old_version_strings_found_in_remote_cpp_history": [],
+    "artifact_v27_post_build_reference": {
+      "commit": "2e869b7a5216a33bfb88875b97d710392d325ed0",
+      "commit_time": "2026-08-24T23:53:38Z",
+      "path": "deploy/install_classic_artifact_ingress.sh",
+      "release_reference": "/opt/cloudiff-v2/releases/20260821-v27-artifact-shadow",
+      "classification": "post_build_reference_not_build_provenance"
+    }
+  },
+  "search_scope": {
+    "hosts": ["10.62.91.2", "10.62.91.3"],
+    "filesystem_roots": ["/etc", "/opt/cloudiff-v2", "/srv/cloudif", "/var/lib/cloudiff-v2", "/var/lib/cloudif-npm-publisher", "/tmp", "/home/cti"],
+    "release_metadata_names_searched": ["source", "manifest", "build-info", "provenance", "release-json", "metadata", "version"],
+    "git_refs": "all refs/heads from origin",
+    "journal_windows": "installation/cutover windows on 2026-08-20 and 2026-08-21",
+    "secrets_collected": false
+  },
+  "future_release_provenance_gate": {
+    "manifest_name": "release-manifest.json",
+    "required_fields": [
+      "source_commit",
+      "source_tree",
+      "binary_sha256",
+      "gnu_build_id",
+      "compiler",
+      "build_command_digest",
+      "built_at"
+    ],
+    "rule": "a live binary is source-attributed only when its release-local manifest cryptographically pins source and binary, or an independently reproducible build matches the live SHA-256"
+  },
+  "conclusions": {
+    "old_live_binaries_are_runtime_identified": true,
+    "old_live_binaries_are_source_commit_attributed": false,
+    "current_repo_source_can_be_claimed_as_source_of_old_live_binaries": false,
+    "runtime_release_names_are_build_provenance": false,
+    "post_build_git_references_are_build_provenance": false,
+    "future_releases_need_release_local_provenance_manifest": true,
+    "frozen_portal_visual_change": false
+  }
+}

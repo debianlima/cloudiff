@@ -1,4 +1,4 @@
-# Estado — 2026-08-28 — contrato v60
+# Estado — 2026-08-28 — contrato v61
 
 ## Decisões vigentes
 - `FrozenPortalInterface` permanece requisito mestre; a correção desta unidade não altera HTML, CSS, JS visual, textos, botões ou layout.
@@ -8,7 +8,7 @@
 - O onboarding Faro está aceito: 4 vCPU online, identidade própria, PKI/NATS individual, agent não-root, heartbeat direto para Hospedagem, reconciliação/resiliência e rollback já possuem evidência mecânica.
 - O heartbeat atual do Faro observa capabilities `inventory`, `health`, `telemetry-host`, `portal-host` e `agent-auto-update`; `build` e `runtime` continuam excluídas do perfil Faro.
 - O caminho crítico Faro é `10.62.91.5 -> NATS 10.62.92.7:14222 -> cloudiff-control -> PostgreSQL`; Forja e Maurício não participam do heartbeat crítico.
-- Releases de agent-skills permanecem imutáveis; o runtime Faro continua na release instalada `cloudiff@0.1.4`, enquanto a skill de projeto usada nesta unidade é `cloudiff@0.1.18`.
+- Releases de agent-skills permanecem imutáveis; o runtime Faro continua na release instalada `cloudiff@0.1.4`, enquanto a skill de projeto usada nesta unidade é `cloudiff@0.1.19`.
 
 ## Decisões superadas
 - Salto obrigatório via `172.16.0.1` para acessar máquinas do laboratório — superado em 28/08/2026 pela nova orientação da TI comunicada pelo operador; acesso operacional passa a ser direto pelo conector Labiff, mantendo pfSense/MikroTik apenas como equipamentos de rede quando necessário.
@@ -21,53 +21,52 @@
 - Cutover definitivo do Portal para Faro permanece uma unidade posterior e deve respeitar os portões de portal shadow/FrozenPortalInterface; não foi executado implicitamente nesta unidade.
 
 ## Decisões fechadas nesta emenda
-- `ArtifactEngine` C++ live `0.27.0-shadow` na Forja passou validação side-effect-free real; imagens, containers e resultados persistentes permaneceram com hashes idênticos.
-- O ingress `cloudif-artifact-executor-v2.internal` é dedicado ao canary `classic-static-v2` e preserva escopo de token/rota; não substitui o host compartilhado legado.
-- `cloudif-artifact-executor.internal` e o executor Python 18216 permanecem autoritativos para o fluxo compartilhado; `ClassicBuildWorker` C++ 0.27 é manual oneshot/inativo e o worker contínuo 0.15 não aceita `cloudiff.v2.build.classic`.
+- NpmPublisher 0.10, RuntimeExecutor 0.17/0.24 e ArtifactEngine 0.27 estão identificados no live por release path, SHA-256, GNU BuildID, timestamp e toolchain, mas nenhum possui commit fonte comprovado.
+- O histórico C++ disponível em todas as branches remotas começa em `2e869b7` de 24/08, depois das quatro instalações de 20–21/08; portanto não pode ser usado retroativamente como source commit dessas builds.
+- Referência posterior de uma release no Git prova uso/continuidade, não a origem do binário. Releases futuras só recebem atribuição de source com manifesto local criptograficamente ligado ao binário ou build reproduzível independente com SHA idêntico.
 
 ## Pendências técnicas não humanas
-- Ativação contínua de `cloudiff.v2.build.classic` em C++ continua pendente de gate separado; não ampliar `CLOUDIFF_WORKER_ALLOWED_KINDS` sem canary de fila/lease/artifact/attestation.
-- Procedência exata do binário `ArtifactEngine` live 0.27 permanece `NAO DECLARADO`; source atual do agente é 0.36.
-- O executor Python compartilhado e o Python BuildBroker não podem ser retirados enquanto continuarem autoridade contratual/live.
+- Os quatro binários antigos permanecem com `exact_source_commit: NAO DECLARADO`; a lacuna foi fechada como não recuperável pelas fontes disponíveis, não apagada por inferência.
+- Releases futuras devem gerar `release-manifest.json` com source commit/tree, SHA-256, GNU BuildID, compiler, digest do comando de build e timestamp antes de promoção.
 - T-014 política de retenção no 251 permanece não executada e deve abrir unidade própria.
-- Dois dead-letters históricos de membership seguem pendentes de revisão somente leitura antes de qualquer replay.
+- Dois dead-letters históricos de membership seguem pendentes de revisão somente leitura antes de replay.
+- Ativação contínua de `cloudiff.v2.build.classic` em C++ continua dependente de gate próprio.
 
 ## Trabalho compartilhado
-- ponteiro: `manifesto.yaml.trabalho_compartilhado` — unidade `T-017-artifact-executor-cpp-authority`, concluída; nenhuma zona de exclusão permanece ativa.
+- ponteiro: `manifesto.yaml.trabalho_compartilhado` — unidade `T-018-proveniencia-binarios-cpp-live`, concluída; nenhuma zona de exclusão permanece ativa.
 
 ## Competências ativas nesta unidade
-- `cloudiff@0.1.18` — skill raiz; L027 homologado.
+- `cloudiff@0.1.19` — skill raiz; L028 homologado.
 - `desenvolvedor-de-software@14` — método PGH.
-- `github-incremental-reconciliation@7` — reconciliação incremental.
+- `github-incremental-reconciliation@7` — reconciliação incremental de Git/skill/catálogo.
 - `governanca-ontologica-de-skills@1.0.4` — governança da skill.
 - `telemetry-data-visualization@2` — macro global; coletor indisponível.
-- `platform-engineering` / `operational-ui-truth` — prova de ingress, consumidor e efeito live.
+- `platform-engineering` — procedência de release/binário e rastreabilidade de build.
 
 ## Falhas de portão por tipo de entrada
-- `autoridade`: C++ live/ingress dedicado não é autoridade geral; host compartilhado permanece Python.
-- `worker`: worker contínuo ativo exclui classic; canary 0.27 está inativo/manual.
-- `procedencia`: live artifact 0.27 não foi ligado a commit fonte exato.
+- `procedencia`: nenhum dos quatro binários antigos possui source manifest ou commit embutido; versões/release paths não satisfazem atribuição de fonte.
+- `historico`: o primeiro commit C++ disponível é posterior às builds antigas, logo não pode ser tratado como origem delas.
 
 ## Divergências da última reconciliação
 ### Corrigidas
-- Entrada 1533 registra coexistência real Python 18216 + C++ 18226 e o ingress dedicado v2 18228.
-- Validação live real de `laboratorio-de-hardware` retornou 200/valid/sideEffectFree sem alterar hashes de imagens, containers ou resultados.
-- Ingress dedicado desde Hospedagem retornou 404 para GET, 403 para token classic fora do profile e 400 pre-effect para fonte inválida, provando escopo sem build.
-- PostgreSQL não possuía job clássico ativo; canary worker estava inativo e worker contínuo aceitava apenas noop/fail_once.
-- `cloudiff@0.1.18` registra L027; `VISUAL_DIFF=NO`.
+- Entrada 1535 centraliza release path, SHA-256, GNU BuildID, timestamps, toolchain e rollout dos quatro binários antigos.
+- Foram pesquisadas todas as branches remotas, release dirs, journals, scripts sobreviventes, `/tmp`, `/home/cti` e metadados ELF sem encontrar commit fonte contemporâneo.
+- Artifact v27 possui referência no commit `2e869b7`, mas ela é de 24/08 e a instalação é de 21/08; foi classificada como `post_build_reference_not_build_provenance`.
+- Entrada 1536 impede promover versão/release/BuildID a source commit e fixa o gate de manifesto para futuras releases.
+- `cloudiff@0.1.19` registra L028; `VISUAL_DIFF=NO`.
 
 ### Pendentes de autorização ou capacidade
-- Habilitar classic no worker contínuo exige unidade/gate próprio; nenhuma ativação foi feita nesta auditoria.
-- O `main` continua separado do branch auditável.
+- Nenhuma ação destrutiva ou troca de runtime foi executada.
+- O `main` do CloudIFF permanece separado do branch auditável.
 
 ## Entradas aceitas nesta unidade
-- 1533 `docs/reconciliation/artifact-executor-cpp-authority-v60.json` — evidência live de autoridade parcial.
-- 1534 `tests/test_artifact_executor_cpp_authority_evidence.py` — gate contra overclaim.
-- 179 `skills/cloudiff/SKILL.md` — `cloudiff@0.1.18`, L027.
-- 2 `competencias.yaml` — skill raiz 0.1.18.
-- 9 `estado.md` — snapshot v60.
-- 10 `manifesto.yaml` — contrato v60 e zona liberada.
+- 1535 `docs/reconciliation/cpp-live-binary-provenance-v61.json` — procedência observável consolidada.
+- 1536 `tests/test_cpp_live_binary_provenance_evidence.py` — gate contra atribuição de source sem prova.
+- 179 `skills/cloudiff/SKILL.md` — `cloudiff@0.1.19`, L028.
+- 2 `competencias.yaml` — skill raiz 0.1.19.
+- 9 `estado.md` — snapshot v61.
+- 10 `manifesto.yaml` — contrato v61 e zona liberada.
 
 ## Próxima unidade
-- T-014: formalizar política de retenção no 251 sem deleção automática por idade e com checksum/ownership como gates.
-- T-017 seguinte: auditar `mcp-upload`, `secure-distribution` ou `admin-observability` conforme consumo live, sem inferir migração por presença de unit.
+- T-014: formalizar política de retenção no 251 sem deleção automática por idade, com checksum e ownership como gates.
+- Depois, continuar auditoria de `mcp-upload`, `secure-distribution` ou `admin-observability` pelo consumidor live.
