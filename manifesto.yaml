@@ -1,5 +1,5 @@
 projeto: cloudiff-v2
-versao_contrato: 57
+versao_contrato: 58
 namespace_fechado: true
 entradas:
   - id: 1
@@ -12219,14 +12219,31 @@ entradas:
     aceite: portao-mecanico/backend-integracao
     status: aceito
 
+  - id: 1529
+    caminho: docs/reconciliation/runtime-executor-whp-parity-v58.json
+    proposito: registra evidencia observada da paridade W/H/P entre planner RuntimeExecutor C++ e executores Python autoritativos sem declarar migracao de efeitos inexistente
+    tipo: documentacao-estrutural
+    consome: [contratos/runtime-executor.schema, cpp/runtime-executor, evidencia/normalization-plan]
+    produz: evidencia/runtime-executor-whp-parity-v58
+    aceite: tests/test_runtime_executor_whp_parity_evidence.py
+    status: aceito
+  - id: 1530
+    caminho: tests/test_runtime_executor_whp_parity_evidence.py
+    proposito: cruza contrato source systemd executores legados e evidencia live para impedir overclaim de migracao W/H/P no RuntimeExecutor C++
+    tipo: runtime
+    consome: [evidencia/runtime-executor-whp-parity-v58, contratos/runtime-executor.schema, cpp/runtime-executor]
+    produz: teste/runtime-executor-whp-parity-evidence
+    aceite: portao-mecanico/runtime
+    status: aceito
+
 trabalho_compartilhado:
   projeto: cloudiff
   caminho: /srv/mcp-workspace/tmp/cloudiff-ui-audit-wireguard
-  unidade: cpp23-publication-reconciliation-parity
-  descricao: paridade C++ e gates de procedencia da skill raiz homologados
+  unidade: T-012-runtimeexecutor-cpp-whp
+  descricao: paridade de políticas W/H/P provada e efeitos C++ explicitamente delimitados como ainda não migrados
   agente: Redes-GPT
-  atualizado_em: '2026-08-28T01:57:53-03:00'
-  concluido_em: '2026-08-28T01:57:53-03:00'
-  previsao_termino: '2026-08-28T03:30:00-03:00'
+  atualizado_em: '2026-08-28T07:31:00-03:00'
+  concluido_em: '2026-08-28T07:31:00-03:00'
+  previsao_termino: '2026-08-28T08:30:00-03:00'
   zona_exclusao: []
   estado: concluido

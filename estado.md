@@ -1,4 +1,4 @@
-# Estado — 2026-08-28 — contrato v57
+# Estado — 2026-08-28 — contrato v58
 
 ## Decisões vigentes
 - `FrozenPortalInterface` permanece requisito mestre; a correção desta unidade não altera HTML, CSS, JS visual, textos, botões ou layout.
@@ -8,7 +8,7 @@
 - O onboarding Faro está aceito: 4 vCPU online, identidade própria, PKI/NATS individual, agent não-root, heartbeat direto para Hospedagem, reconciliação/resiliência e rollback já possuem evidência mecânica.
 - O heartbeat atual do Faro observa capabilities `inventory`, `health`, `telemetry-host`, `portal-host` e `agent-auto-update`; `build` e `runtime` continuam excluídas do perfil Faro.
 - O caminho crítico Faro é `10.62.91.5 -> NATS 10.62.92.7:14222 -> cloudiff-control -> PostgreSQL`; Forja e Maurício não participam do heartbeat crítico.
-- Releases de agent-skills permanecem imutáveis; o runtime Faro continua na release instalada `cloudiff@0.1.4`, enquanto a skill de projeto usada nesta unidade é `cloudiff@0.1.15`.
+- Releases de agent-skills permanecem imutáveis; o runtime Faro continua na release instalada `cloudiff@0.1.4`, enquanto a skill de projeto usada nesta unidade é `cloudiff@0.1.16`.
 
 ## Decisões superadas
 - Salto obrigatório via `172.16.0.1` para acessar máquinas do laboratório — superado em 28/08/2026 pela nova orientação da TI comunicada pelo operador; acesso operacional passa a ser direto pelo conector Labiff, mantendo pfSense/MikroTik apenas como equipamentos de rede quando necessário.
@@ -21,57 +21,52 @@
 - Cutover definitivo do Portal para Faro permanece uma unidade posterior e deve respeitar os portões de portal shadow/FrozenPortalInterface; não foi executado implicitamente nesta unidade.
 
 ## Decisões fechadas nesta emenda
-- O caminho consumido pelo Portal `Hospedagem -> cloudif-publisher.internal -> NpmPublisherProvider C++` tem paridade observada para health, autenticação negativa e rejeição de stage inválido sem mutação de estado/Nginx.
-- A release live do publisher é `0.10.0-shadow`; o source atual do branch declara `0.36.0-shadow`. Sem commit de procedência da v10, **não** se declara que o source atual está implantado.
-- `cloudiff-control` C++ assina somente `cloudiff.v2.node.observed`; portanto reconciliação de projetos/eventos `project.created` e `project.membership.changed` **não** está declarada como migrada.
+- O `RuntimeExecutor` C++ já possui paridade de **política** para HOMOLOGATION/CANARY/PRODUCTION, mas não paridade de **efeito**: o planner live é side-effect-free e o canary C++ habilita somente TEST/PREVIEW.
+- O planner live da Forja é `0.17.0-shadow` e responde `effects_not_enabled_v17`; o branch auditável declara agente `0.36.0-shadow` e source `effects_not_enabled_v18`. Sem procedência do binário live, não se declara o source atual implantado.
+- HOMOLOGATION/CANARY/PRODUCTION continuam autoritativos nos executores Python ativos em 18217/18219/18220; não podem ser retirados até o C++ provar estado durável, idempotência, smoke, switch atômico, rollback e health externo equivalentes.
 
 ## Pendências técnicas não humanas
-- NPM/Maurício (`10.62.91.3`) reprova o verificador por filesystem `/` em 91% (`errors=1`); nenhum novo build/deploy C++ deve ocorrer nesse host até reconciliar capacidade.
-- A procedência exata da release live `/opt/cloudiff-v2/releases/20260820-v10-npm-publisher-acme` não é recuperável do histórico Git disponível; `live_source_commit=NAO DECLARADO` permanece explícito.
+- Recuperar a procedência exata dos binários `RuntimeExecutor` live `0.17.0-shadow` e canary `0.24.0-shadow`; commits fonte permanecem `NAO DECLARADO`.
+- A migração dos efeitos W/H/P para C++ continua pendente do outro fluxo: planner/policy não substitui deploy/rollback/status com persistência durável.
 - Reconciliação C++ de projeto/publicação ainda não possui consumidor equivalente aos eventos duráveis do Portal; o `cloudiff-control` atual é restrito a observação de nó.
-- O host Faro mantém `fwupd-refresh.service` falho por indisponibilidade de egress; o verificador residente já tratava isso como warning não bloqueante do runtime CloudIFF/NATS.
-- Permanecem entradas `pendente`/`preexistente` fora desta unidade no contrato v57; LegacyRetirement continua separado e destrutivo somente com gates próprios.
+- A procedência exata da release live do publisher NPM v10 também permanece `NAO DECLARADO`; o host Maurício já foi reconciliado para 38% de uso de `/`, removendo o antigo bloqueio de capacidade por 91%.
+- Permanecem entradas `pendente`/`preexistente` fora desta unidade; LegacyRetirement continua separado e destrutivo somente com gates próprios.
 
 ## Trabalho compartilhado
-- ponteiro: `manifesto.yaml.trabalho_compartilhado` — unidade `cpp23-publication-reconciliation-parity`, concluída em `2026-08-28T01:57:53-03:00`; nenhuma zona de exclusão permanece ativa.
+- ponteiro: `manifesto.yaml.trabalho_compartilhado` — unidade `T-012-runtimeexecutor-cpp-whp`, concluída; nenhuma zona de exclusão permanece ativa.
 
 ## Competências ativas nesta unidade
-- `cloudiff@0.1.15` — skill raiz; L023 e L024 homologados nesta unidade.
+- `cloudiff@0.1.16` — skill raiz; L025 homologado nesta unidade.
 - `desenvolvedor-de-software@14` — método PGH.
 - `github-incremental-reconciliation@7` — reconciliação incremental de skill/catálogo.
 - `governanca-ontologica-de-skills@1.0.4` — governança da versão da skill.
 - `telemetry-data-visualization@2` — macro global; coletor executável indisponível, medida classificada como `indisponivel`.
-- `operational-ui-truth@1` / `platform-engineering` — paridade observada no caminho real Portal→provider e capacity gate do host.
+- `platform-engineering` / `operational-ui-truth` — prova de runtime, procedência e canal independente de efeitos.
 
 ## Falhas de portão por tipo de entrada
-- `infraestrutura`: verificador do NPM retorna `errors=1` porque filesystem `/` está em 91%; bloqueia novo deploy no host, não a auditoria read-only do runtime já ativo.
-- `procedencia`: binário live reporta `0.10.0-shadow`, enquanto o branch auditado reporta `0.36.0-shadow`; o histórico reconciliado não liga a release v10 a um commit fonte específico.
-- `reconciliacao`: nenhum erro funcional foi atribuído ao publisher; o limite encontrado é de escopo — `cloudiff-control` atual consome somente observação de nó, não eventos de projeto.
-- `skill-projeto`: o gate da entrada 182 fixava `cloudiff@0.1.5` e depois comparava a evidência histórica v40 com `/srv/cloudif/agent-skills/current`; ambos os pressupostos envelheceram e reprovaram uma evolução válida.
+- `procedencia`: planner live `0.17.0-shadow` e canary `0.24.0-shadow` não têm commit fonte declarado no histórico disponível; o branch atual reporta `0.36.0-shadow`.
+- `runtime`: W/H/P têm policies C++ corretas, mas `/v1/execute` H/P é bloqueado e o canary C++ só admite TEST/PREVIEW; os efeitos continuam nos executores Python.
+- `reconciliacao`: `cloudiff-control` continua sem consumo dos eventos de projeto duráveis; T-013 deve auditar esse limite separadamente.
 
 ## Divergências da última reconciliação
 ### Corrigidas
-- Entrada 1527 registra evidência sem segredo do ingress real: Hospedagem `10.62.92.7` → `10.62.91.3:80` com `Host: cloudif-publisher.internal`, health 200 e token inválido 403.
-- Shadow v8 (`127.0.0.1:18260`) e live v10 (`10.62.91.3:18160`) retornaram 422 `ValueError/invalid_stage` com token válido, mantendo `state.json` e configuração Nginx com hashes inalterados.
-- Entrada 1528 cruza as oito rotas do contrato com o provider C++ e os consumidores do Portal e impede afirmar que `0.36.0` está live ou que reconciliação de projetos já migrou.
-- `cloudiff@0.1.15` registra L023 e L024: presença de C++/nome de serviço não equivale a substituição homologada sem identidade/procedência/cobertura; o gate da skill compara versão dinamicamente e preserva procedência histórica sem ler o ponteiro `current`.
-- Entrada 182 agora valida `SKILL.md` ↔ `competencias.yaml` e os seis refs v40 por `repository/commit/path/versao_fixada/sha256`, sem pin histórico da versão raiz.
-- Nenhum HTML/CSS/JS visual foi alterado; `FrozenPortalInterface` permanece intacta.
+- Entrada 1529 registra a Forja real: planner C++ 0.17 ativo em 18232 loopback, canary C++ 0.24 inativo, executores Python H/C/P ativos em 18217/18219/18220.
+- Planos HOMOLOGATION e PRODUCTION retornaram `side_effect_free=true`, políticas corretas e `effects_enabled=false`; `/execute` retornou 409 antes de qualquer efeito.
+- Inventário Docker antes/depois permaneceu no mesmo SHA-256 `b755a002...`, provando efeito zero do planner auditado.
+- Entrada 1530 impede overclaim: source atual 0.36 não é tratado como live e W/H/P não é marcado migrado enquanto os efeitos duráveis permanecerem no legado.
+- `cloudiff@0.1.16` registra L025; nenhum HTML/CSS/JS visual foi alterado (`VISUAL_DIFF=NO`).
 
 ### Pendentes de autorização ou capacidade
-- Resolver ocupação do filesystem do NPM antes de qualquer atualização do publisher C++.
-- Recuperar procedência da release v10 se existir fora do histórico reconciliado; enquanto isso o campo permanece `NAO DECLARADO`.
+- Implementação C++ dos efeitos W/H/P pertence ao fluxo de migração e deve chegar com portões equivalentes antes de substituir os serviços Python.
 - O `main` do Cloudiff continua separado do branch auditável; nenhum merge foi inferido.
 
 ## Entradas aceitas nesta unidade
-- 1527 `docs/reconciliation/npm-publisher-runtime-parity-v57.json` — evidência runtime live/shadow/ingress sem segredo e limites explícitos.
-- 1528 `tests/test_npm_publisher_runtime_parity_evidence.py` — Portal/contrato/provider/evidência cruzados mecanicamente.
-- 182 `tests/test_cloudiff_project_skill.py` — versão raiz dinâmica e procedência v40 sem dependência do `current` mutável.
-- 179 `skills/cloudiff/SKILL.md` — `cloudiff@0.1.15`, L023/L024 homologados.
-- 2 `competencias.yaml` — skill raiz reconciliada em `0.1.15`.
-- 9 `estado.md` — snapshot v57.
-- 10 `manifesto.yaml` — contrato v57 e zona liberada.
+- 1529 `docs/reconciliation/runtime-executor-whp-parity-v58.json` — evidência live W/H/P e limites de substituição.
+- 1530 `tests/test_runtime_executor_whp_parity_evidence.py` — contrato/source/systemd/legado/live cruzados mecanicamente.
+- 179 `skills/cloudiff/SKILL.md` — `cloudiff@0.1.16`, L025 homologado.
+- 2 `competencias.yaml` — skill raiz reconciliada em `0.1.16`.
+- 9 `estado.md` — snapshot v58.
+- 10 `manifesto.yaml` — contrato v58 e zona liberada.
 
 ## Próxima unidade
-- Auditar a paridade do `RuntimeExecutor` C++ para os perfis Homologação/Produção consumidos pelo fluxo W/H/P, sem executar benchmark/simulação fora do Samba4.
-- Em paralelo, tratar reconciliação de projetos C++ apenas quando o outro fluxo publicar um consumidor explícito dos eventos duráveis do Portal; não inventar esse vínculo no `cloudiff-control` atual.
+- T-013: auditar reconciliação C++ dos eventos `project.created` e `project.membership.changed`, confrontando produtores duráveis do Portal, broker/fila e consumidores atuais; não inventar vínculo no `cloudiff-control` se ele continuar restrito a `node.observed`.
