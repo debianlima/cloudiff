@@ -179,7 +179,7 @@ resolve_shadow_port(){
     return 0
   fi
   local candidate
-  for candidate in $(seq 18096 18105); do
+  for candidate in $(seq 19080 19088); do
     if ! port_busy "$candidate"; then
       SHADOW_PORT=$candidate
       return 0

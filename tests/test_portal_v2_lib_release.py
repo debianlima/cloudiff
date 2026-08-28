@@ -32,10 +32,12 @@ class PortalV2LibReleaseContractTests(unittest.TestCase):
             "unique_routes_required",
             "one_item_one_route_one_purpose",
             "resolve_shadow_port",
+            "seq 19080 19088",
             "trap stop_shadow EXIT INT TERM",
         ):
             self.assertIn(marker, text)
         self.assertNotIn("cp -a /srv/cloudif/lib ", text)
+        self.assertNotIn("seq 18096", text)
         subprocess.run(["bash", "-n", str(SCRIPT)], check=True)
 
     def test_prepare_is_immutable_idempotent_and_keeps_live_untouched(self):
