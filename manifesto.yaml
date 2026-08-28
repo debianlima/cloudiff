@@ -1,5 +1,5 @@
 projeto: cloudiff-v2
-versao_contrato: 63
+versao_contrato: 64
 namespace_fechado: true
 entradas:
   - id: 1
@@ -12321,14 +12321,31 @@ entradas:
     aceite: portao-mecanico/backend-integracao
     status: aceito
 
+  - id: 1541
+    caminho: docs/reconciliation/admin-observability-cpp-audit-v64.json
+    proposito: registra wiring estatico do AdminObservability C++ e bloqueio do gate live por indisponibilidade da rede CloudIFF
+    tipo: documentacao-estrutural
+    consome: [contratos/admin-observability.schema, cpp/admin-observability]
+    produz: evidencia/admin-observability-cpp-audit-v64
+    aceite: tests/test_admin_observability_cpp_audit_evidence.py
+    status: pendente
+  - id: 1542
+    caminho: tests/test_admin_observability_cpp_audit_evidence.py
+    proposito: impede declarar autoridade live do AdminObservability C++ quando o consumidor nao pode ser observado por indisponibilidade de rede
+    tipo: backend-integracao
+    consome: [evidencia/admin-observability-cpp-audit-v64, contratos/admin-observability.schema]
+    produz: teste/admin-observability-cpp-audit
+    aceite: portao-mecanico/backend-integracao
+    status: pendente
+
 trabalho_compartilhado:
   projeto: cloudiff
   caminho: /srv/mcp-workspace/tmp/cloudiff-ui-audit-wireguard
-  unidade: T-020-secure-distribution-cpp-audit
-  descricao: SecureDistributionProvider C++ provado como autoridade read-only da colecao nats-server-cert; instalacao permanece no cert-sync
+  unidade: T-021-admin-observability-cpp-audit
+  descricao: wiring estatico provado; gate live bloqueado por indisponibilidade da rede CloudIFF
   agente: Redes-GPT
-  atualizado_em: '2026-08-28T12:30:00-03:00'
-  concluido_em: '2026-08-28T12:30:00-03:00'
-  previsao_termino: '2026-08-28T13:15:00-03:00'
+  atualizado_em: '2026-08-28T13:08:00-03:00'
+  concluido_em: '2026-08-28T13:08:00-03:00'
+  previsao_termino: '2026-08-28T14:00:00-03:00'
   zona_exclusao: []
-  estado: concluido
+  estado: concluido_com_lacuna_externa

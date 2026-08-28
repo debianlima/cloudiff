@@ -1,4 +1,4 @@
-# Estado — 2026-08-28 — contrato v63
+# Estado — 2026-08-28 — contrato v64
 
 ## Decisões vigentes
 - `FrozenPortalInterface` permanece requisito mestre; a correção desta unidade não altera HTML, CSS, JS visual, textos, botões ou layout.
@@ -21,20 +21,19 @@
 - Cutover definitivo do Portal para Faro permanece uma unidade posterior e deve respeitar os portões de portal shadow/FrozenPortalInterface; não foi executado implicitamente nesta unidade.
 
 ## Decisões fechadas nesta emenda
-- `SecureDistributionProvider` C++ live `0.22.0-shadow` é autoridade real e consumida para a coleção `nats-server-cert`: NPM → 18240 → cert-sync da Hospedagem.
-- A fronteira permanece explícita: provider faz distribuição read-only/capability/generation; `cloudiff-v2-cert-sync` valida cert/key, instala localmente e sinaliza NATS quando há mudança.
-- A auditoria validou manifest e somente `fullchain.pem`; `privkey.pem` não foi requisitada. Faro foi negado com 403 no NPM e não recebe capability da coleção.
-- Capability provider é root-only, armazena apenas hash SHA-256 do token e exige audience, expiry, collection scope e generation precondition; token bruto permanece root-only no consumidor.
+- O contrato/source do `AdminObservability` C++ define backend loopback 18260, GET de ambiente/policy e POST transacional de recovery policy; o patch Portal versionado usa exatamente 18260, Authentik group `CloudIF-Tenants-Admin` e CSRF existente.
+- O caminho live não foi declarado aceito: durante T-021, Labiff manteve rota via wg0, mas 10.62.92.7/10.62.91.3/10.62.91.2 ficaram inalcançáveis; o endpoint público do Portal também expirou.
+- Sem acesso ao consumidor live, não se infere que Portal→18260 esteja ativo agora, nem se executa POST de recovery para compensar ausência de prova GET.
 
 ## Pendências técnicas não humanas
-- O commit-fonte exato do SecureDistribution 0.22 permanece `NAO DECLARADO`; release de 21/08 contém binário/config, mas não `release-manifest.json`.
-- T-023 permanece bloqueada até existir release realmente nova com manifesto de procedência; restart do v22 em 28/08 não conta.
-- T-024 wiring futuro do mcp-upload continua READY; planner C++ ainda não é consumido pelo gateway.
-- T-014 política de retenção no 251 permanece READY e não executada.
-- Dois dead-letters históricos de membership seguem pendentes de revisão somente leitura.
+- T-021 permanece pendente de gate live: observar unit/binário 18260, Portal autenticado GET `/api/admin-observability`, policy GET e ausência de mutação por leitura quando a rede CloudIFF voltar.
+- O teste histórico `tests/test_portal_admin_observability.py` depende do executável `patch`, ausente no terminal WireGuard; essa limitação do executor não é evidência de falha do Portal.
+- T-023 permanece bloqueada até release C++ nova com `release-manifest.json`.
+- T-024 wiring futuro do mcp-upload continua dependente de mudança real no consumidor.
+- T-014 política de retenção no 251 permanece READY.
 
 ## Trabalho compartilhado
-- ponteiro: `manifesto.yaml.trabalho_compartilhado` — unidade `T-020-secure-distribution-cpp-audit`, concluída; nenhuma zona de exclusão permanece ativa.
+- ponteiro: `manifesto.yaml.trabalho_compartilhado` — unidade `T-021-admin-observability-cpp-audit`, concluída com lacuna externa; nenhuma zona de exclusão permanece ativa.
 
 ## Competências ativas nesta unidade
 - `cloudiff@0.1.21` — skill raiz; L030 homologado.
@@ -45,31 +44,24 @@
 - `platform-engineering` / `operational-ui-truth` — prova de rota, capability, provider, consumer e efeito separado.
 
 ## Falhas de portão por tipo de entrada
-- `procedencia`: provider C++ 0.22 é funcionalmente autoritativo, mas não possui commit-fonte comprovado; autoridade de runtime não apaga lacuna de build provenance.
-- `segredo`: a coleção inclui `privkey.pem`; auditorias devem validar manifest/generation/fullchain sem requisitar chave privada salvo unidade explicitamente autorizada.
+- `live`: hosts CloudIFF 10.62.92.7/10.62.91.3/10.62.91.2 ficaram inalcançáveis via Labiff apesar de rota wg0 presente; autoridade live do AdminObservability não foi inferida.
+- `executor`: teste de patch histórico não roda neste terminal por ausência do binário `patch`; testes que não dependem dele continuam executáveis.
 
 ## Divergências da última reconciliação
 ### Corrigidas
-- Entrada 1539 registra provider C++ 0.22 ativo em 10.62.91.3:18240, capability não expirada, rota NPM GET/source-allow e consumer timer ativo na Hospedagem.
-- Probe autenticado provou auth inválida 403, query token 400, objeto sem generation 428, manifest 200 e fullchain com SHA/generation/fingerprint equivalentes ao local.
-- Faro recebeu 403 pelo NPM; `privkey.pem` não foi requisitada durante a auditoria.
-- Script cert-sync live tem SHA idêntico ao artefato versionado e a última execução terminou 0 com `certificate_unchanged`.
-- Entrada 1540 transforma autoridade read-only, fronteira de segredo e separação provider/install em gate mecânico.
-- `cloudiff@0.1.21` registra L030; `VISUAL_DIFF=NO`.
+- Entrada 1541 separa wiring estático comprovado de gate live bloqueado; a indisponibilidade de rede é registrada sem promover o C++ a autoridade observada.
+- Entrada 1542 impede overclaim enquanto `live_gate_passed=false`.
+- Nenhum HTML/CSS/JS visual foi alterado (`VISUAL_DIFF=NO`).
 
 ### Pendentes de autorização ou capacidade
-- Nenhuma alteração na capability, generation, certificado, chave ou NATS foi realizada nesta unidade.
+- Reexecutar somente os GETs live quando a rede retornar; POST `/node-recovery` não faz parte da auditoria read-only.
 - O `main` do CloudIFF continua separado do branch auditável.
 
 ## Entradas aceitas nesta unidade
-- 1539 `docs/reconciliation/secure-distribution-cpp-authority-v63.json` — evidência live provider/rota/capability/consumer.
-- 1540 `tests/test_secure_distribution_cpp_authority_evidence.py` — gate de autoridade e segredo.
-- 179 `skills/cloudiff/SKILL.md` — `cloudiff@0.1.21`, L030.
-- 2 `competencias.yaml` — skill raiz 0.1.21.
-- 9 `estado.md` — snapshot v63.
-- 10 `manifesto.yaml` — contrato v63 e zona liberada.
+- Nenhuma nova entrada foi aceita em T-021; 1541/1542 permanecem `pendente` até o gate live.
+- 9 `estado.md` — snapshot v64 registra a lacuna externa sem alterar `cloudiff@0.1.21`.
+- 10 `manifesto.yaml` — contrato v64, entradas pendentes e zona liberada.
 
 ## Próxima unidade
-- T-024: auditar qualquer wiring futuro do `mcp-upload` C++ somente quando aparecer no consumidor live; não inventar ligação em antecipação.
-- T-014 segue READY: formalizar política de retenção no 251 sem deleção automática por idade.
-- T-021 segue READY: auditar `admin-observability` C++ pela utilização real do Portal/operadores.
+- T-024: verificar se surgiu wiring real do `mcp-upload` C++ no consumidor; se não, registrar bloqueio por dependência sem inventar ligação.
+- T-014 segue READY e independente.

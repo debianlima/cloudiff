@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "collected_at": "2026-08-28T13:08:00-03:00",
+  "mutation_performed": false,
+  "static_contract": {
+    "backend_bind": "127.0.0.1",
+    "backend_port": 18260,
+    "environment_route": "GET /v1/environment",
+    "policy_route": "GET /v1/nodes/<uuid>/policy",
+    "recovery_route": "POST /v1/nodes/<uuid>/recovery",
+    "portal_admin_group": "CloudIF-Tenants-Admin",
+    "portal_csrf": "existing portal production CSRF",
+    "pull_model": true
+  },
+  "static_wiring": {
+    "portal_backend": "http://127.0.0.1:18260",
+    "portal_admin_api": "/cloudiff/portal/api/admin-observability",
+    "portal_policy_api": "/cloudiff/portal/api/node-recovery-policy",
+    "portal_recovery_action": "/cloudiff/portal/action/node-recovery",
+    "portal_to_cpp_declared": true,
+    "recovery_post_executed_in_audit": false
+  },
+  "network_observation": {
+    "labiff_route_present": true,
+    "labiff_route_interface": "wg0",
+    "hosts": {
+      "10.62.92.7": {"icmp": false, "ssh": false},
+      "10.62.91.3": {"icmp": false, "ssh": false},
+      "10.62.91.2": {"icmp": false, "ssh": false}
+    },
+    "mikrotik_unreachable_observed": true,
+    "public_portal_probe_timed_out": true
+  },
+  "executor_limit": {
+    "historical_patch_test_requires_patch_binary": true,
+    "patch_binary_present": false,
+    "classified_as_project_failure": false
+  },
+  "live_gate": {
+    "passed": false,
+    "reason": "CloudIFF network unreachable from authorized Labiff path",
+    "unit_observed": false,
+    "binary_identity_observed": false,
+    "portal_admin_get_observed": false,
+    "node_policy_get_observed": false
+  },
+  "conclusions": {
+    "static_portal_to_cpp_wiring_proven": true,
+    "admin_observability_cpp_live_authority_proven": false,
+    "safe_to_claim_live_authority": false,
+    "audit_changed_recovery_policy": false,
+    "frozen_portal_visual_change": false
+  }
+}
