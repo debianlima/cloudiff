@@ -12102,7 +12102,7 @@ entradas:
     consome: [runtime/portal-v2-coexist, teste/frozen-portal-interface]
     produz: runtime/portal-v2-lib-release
     aceite: portao-mecanico/deploy
-    status: em_curso
+    status: aceito
   - id: 1516
     caminho: tests/test_portal_v2_lib_release.py
     proposito: prova que o rollout da biblioteca Portal v2 cria candidato imutavel, shadow isolado, promocao atomica e rollback sem editar a interface
@@ -12110,7 +12110,7 @@ entradas:
     consome: [runtime/portal-v2-lib-release]
     produz: teste/portal-v2-lib-release
     aceite: portao-mecanico/backend-integracao
-    status: em_curso
+    status: aceito
 
   - id: 1517
     caminho: portal/tests/test_tenant_acl_action_effect.py
@@ -12205,11 +12205,11 @@ entradas:
 trabalho_compartilhado:
   projeto: cloudiff
   caminho: /srv/mcp-workspace/tmp/cloudiff-ui-audit-wireguard
-  unidade: release-approval-finalization-failure
-  descricao: falha de finalize apos publish homologada como estado parcial sem republicacao ou liberacao indevida
+  unidade: portal-v2-rollout-smoke-propagation
+  descricao: rollout da Visao geral homologado em producao e propagacao de falha do smoke corrigida
   agente: Redes-GPT
-  atualizado_em: '2026-08-28T00:52:00-03:00'
-  concluido_em: '2026-08-28T00:52:00-03:00'
-  previsao_termino: '2026-08-28T02:30:00-03:00'
+  atualizado_em: '2026-08-28T01:58:00-03:00'
+  concluido_em: '2026-08-28T01:58:00-03:00'
+  previsao_termino: '2026-08-28T03:00:00-03:00'
   zona_exclusao: []
   estado: concluido

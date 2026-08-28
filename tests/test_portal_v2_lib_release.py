@@ -107,6 +107,35 @@ class PortalV2LibReleaseContractTests(unittest.TestCase):
                 except FileNotFoundError:
                     pass
 
+    def test_smoke_live_propagates_failure_inside_conditional_context(self):
+        text = SCRIPT.read_text(encoding="utf-8")
+        prefix = text.split('case "$ACTION" in', 1)[0]
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            fake_bin = root / "bin"
+            fake_bin.mkdir()
+            curl = fake_bin / "curl"
+            curl.write_text("#!/usr/bin/env bash\nexit 7\n", encoding="utf-8")
+            curl.chmod(0o755)
+            state = root / "state"
+            state.mkdir()
+            portal_env = root / "portal.env"
+            portal_env.write_text("CLOUDIF_PORTAL_PORT=19999\n", encoding="utf-8")
+            env = os.environ.copy()
+            env.update(
+                PATH=str(fake_bin) + os.pathsep + env.get("PATH", ""),
+                CLOUDIFF_PORTAL_V2_ALLOW_NONROOT="1",
+                CLOUDIFF_V2_SOURCE_ROOT=str(root),
+                CLOUDIFF_PORTAL_V2_STATE=str(state),
+                CLOUDIFF_PORTAL_ENV=str(portal_env),
+            )
+            probe = prefix + "\nif smoke_live; then echo UNEXPECTED_SUCCESS; exit 9; else echo EXPECTED_FAILURE; exit 0; fi\n"
+            result = subprocess.run(["bash", "-c", probe], env=env, text=True, capture_output=True)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn("EXPECTED_FAILURE", result.stdout)
+            self.assertNotIn("PORTAL_V2_LIB_LIVE_SMOKE=PASS", result.stdout)
+            self.assertNotIn("unbound variable", result.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()

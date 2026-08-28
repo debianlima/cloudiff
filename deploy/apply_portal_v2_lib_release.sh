@@ -137,11 +137,10 @@ prepare(){
 }
 
 smoke_url(){
-  local base=$1 root_page alias_page nav_json
+  local base=$1 root_page alias_page nav_json rc=0 marker
   root_page=$(mktemp "$STATE/root.XXXXXX")
   alias_page=$(mktemp "$STATE/alias.XXXXXX")
   nav_json=$(mktemp "$STATE/navigation.XXXXXX")
-  trap 'rm -f "$root_page" "$alias_page" "$nav_json"' RETURN
   local headers=(
     -H 'Host: cloudiff.duckdns.org'
     -H 'X-Forwarded-Proto: https'
@@ -149,23 +148,32 @@ smoke_url(){
     -H 'X-authentik-email: ui-audit-admin@example.invalid'
     -H 'X-authentik-groups: CloudIF-Tenants-Admin,CloudIF-Professor'
   )
-  curl -fsS --max-time 8 "${headers[@]}" "$base/cloudiff/portal/" > "$root_page"
-  curl -fsS --max-time 8 "${headers[@]}" "$base/cloudiff/portal/?tab=resumo" > "$alias_page"
-  local marker
-  for marker in 'Meus sites' 'Meus bancos' 'Saúde da plataforma'; do
-    grep -Fq "$marker" "$root_page" || return 31
-    grep -Fq "$marker" "$alias_page" || return 32
-  done
-  curl -fsS --max-time 8 "${headers[@]}" "$base/cloudiff/portal/api/navigation" > "$nav_json"
-  python3 - "$nav_json" <<'PY'
+  if ! curl -fsS --max-time 8 "${headers[@]}" "$base/cloudiff/portal/" > "$root_page"; then
+    rc=30
+  elif ! curl -fsS --max-time 8 "${headers[@]}" "$base/cloudiff/portal/?tab=resumo" > "$alias_page"; then
+    rc=31
+  else
+    for marker in 'Meus sites' 'Meus bancos' 'Saúde da plataforma'; do
+      if ! grep -Fq "$marker" "$root_page"; then rc=32; break; fi
+      if ! grep -Fq "$marker" "$alias_page"; then rc=33; break; fi
+    done
+    if [ "$rc" -eq 0 ]; then
+      if ! curl -fsS --max-time 8 "${headers[@]}" "$base/cloudiff/portal/api/navigation" > "$nav_json"; then
+        rc=34
+      elif ! python3 - "$nav_json" <<'PY'
 import json,sys
 x=json.load(open(sys.argv[1],encoding='utf-8'))
 assert x.get('secrets_exposed') is False
 assert x.get('unique_routes_required') is True
 assert x.get('policy') == 'one_item_one_route_one_purpose'
 PY
+      then
+        rc=35
+      fi
+    fi
+  fi
   rm -f "$root_page" "$alias_page" "$nav_json"
-  trap - RETURN
+  return "$rc"
 }
 
 port_busy(){
@@ -281,7 +289,9 @@ copy_release_to_live(){
 
 smoke_live(){
   local port; port=$(live_port)
-  smoke_url "http://127.0.0.1:$port"
+  if ! smoke_url "http://127.0.0.1:$port"; then
+    return 1
+  fi
   printf 'PORTAL_V2_LIB_LIVE_SMOKE=PASS port=%s\n' "$port"
 }
 
