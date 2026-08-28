@@ -706,15 +706,29 @@ def run_job(job):
         if operation=='homologation_candidate':
             result=create_homologation_candidate(slug,user,progress=progress,candidate_number=int(job.get('candidate_number') or 0));message='Candidato '+str(result.get('stageCode') or '')+' pronto para homologação.'
         elif operation=='production_release':
-            approval_id=str(job.get('approval_id') or '');activation_digest=str(job.get('activation_digest') or '');reservation=''
+            approval_id=str(job.get('approval_id') or '');activation_digest=str(job.get('activation_digest') or '');reservation='';published=False
             try:
                 _candidate,reservation,_digest=_validate_production_approval(slug,int(job.get('candidate_number') or 0),int(job.get('publication_number') or 0),approval_id,activation_digest,actor)
-                result=publish_homologated_candidate(slug,int(job.get('candidate_number') or 0),user,progress=progress,publication_number=int(job.get('publication_number') or 0));message='Publicação '+str(result.get('stageCode') or '')+' ativada em Produção.'
+                result=publish_homologated_candidate(slug,int(job.get('candidate_number') or 0),user,progress=progress,publication_number=int(job.get('publication_number') or 0));published=True;message='Publicação '+str(result.get('stageCode') or '')+' ativada em Produção.'
                 code,finalized=_finalize_production_approval(approval_id,reservation,True)
-                if code!=200 or finalized.get('status')!='consumed':raise RuntimeError('approval_finalize_failed')
+                consumed=code==200 and finalized.get('status')=='consumed'
+                observed={}
+                if not consumed:
+                    try:
+                        read_code,read_data=_approval_call('GET','/v1/approvals?status=all')
+                        if read_code==200:
+                            observed=next((x for x in (read_data.get('approvals') or []) if x.get('approval_id')==approval_id),{})
+                    except Exception:
+                        observed={}
+                    consumed=bool(observed.get('status')=='consumed' and observed.get('reservation_id')==reservation)
+                if not consumed:
+                    partial={'ok':False,'status':'deployed_unfinalized','approvalId':approval_id,'publication':result,'approvalStatus':str(observed.get('status') or finalized.get('status') or 'unknown'),'secretValuesIncluded':False}
+                    con=sqlite3.connect(DB);_ensure_schema(con);con.execute("update production_activation_requests set status='deployed_unfinalized',updated_at=? where approval_id=?",(_now(),approval_id));con.commit();con.close()
+                    _job_update(job_id,status='deployed_unfinalized',step='finalization_pending',message='Produção ativada; finalização da aprovação pendente.',detail=partial,finished=True)
+                    return partial
                 con=sqlite3.connect(DB);_ensure_schema(con);con.execute("update production_activation_requests set status='consumed',updated_at=? where approval_id=?",(_now(),approval_id));con.commit();con.close()
             except Exception:
-                if reservation:_finalize_production_approval(approval_id,reservation,False)
+                if reservation and not published:_finalize_production_approval(approval_id,reservation,False)
                 raise
         else:
             result=publish_now(slug,user,progress=progress,publication_snapshot=job);message='Site publicado e ativado.'

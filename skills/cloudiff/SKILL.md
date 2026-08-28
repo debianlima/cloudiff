@@ -1,6 +1,6 @@
 ---
 name: cloudiff
-versao: 0.1.11
+versao: 0.1.12
 description: Governa, reconcilia, normaliza e evolui a plataforma CloudIFF V1/Python→V2/C++23 preservando interface homologada,
   contratos, segurança, dados, observabilidade e rollback.
 tipo_competencia: projeto
@@ -264,3 +264,6 @@ Em 2026-08-27, a entrada 1522 executou **Gerenciar permissões** pelo handler fi
 
 ### L020 — validar parâmetros antes da primeira escrita do provisionamento
 Em 2026-08-27, a entrada 1523 executou **Criar e provisionar projeto** pelo handler final com SQLite temporário, job durável controlado e fila de reconciliação fake. O portão positivo provou projeto, ACL do proprietário, job `queued` e `project.created`; o negativo de runtime não homologado reprovou porque `upsert_project()` fazia commit de `projects`/`project_acl` antes de validar runtime, PHP e keepalive. O usuário recebia erro 500, mas o projeto já existia parcialmente. A correção move essas validações para antes de abrir a transação de escrita. Gate: `portal.tests.test_project_create_action_effect` prova o caminho assíncrono 202 e efeito zero para runtime inválido/CSRF ausente; regressão completa 1030/1030; `VISUAL_DIFF=NO`. Evita objetos órfãos criados por requisições que deveriam ser rejeitadas. Vale no Portal Python atual e na migração C++23: toda validação determinística do pedido deve preceder a primeira mutação persistente; falha posterior exige mecanismo explícito de compensação/reconciliação.
+
+### L021 — efeito externo concluído não pode voltar ao estado genérico `failed` por falha de finalização
+Em 2026-08-28, a entrada 1526 executou a falha de `finalize` **depois** de `publish_homologated_candidate()` já ter ativado Produção. O portão vermelho mostrou dois modos incorretos: uma resposta 503 de finalize fazia `run_job()` marcar o job como `failed` mesmo quando a mesma reserva já aparecia `consumed` na releitura; e, quando a aprovação ainda estava `reserved`, o `except` chamava `release`, liberando uma autorização cujo efeito externo já havia sido aplicado. A correção relê `/v1/approvals?status=all` e aceita `consumed` somente quando o `reservation_id` é o mesmo; se ainda não consumida, marca job e `production_activation_requests` como `deployed_unfinalized`, mantém a reserva e não republica. Gate: `portal.tests.test_release_finalize_failure_effect` prova resposta perdida→sucesso e finalize pendente→estado parcial sem release/reclaim; regressão completa 1038/1038; `VISUAL_DIFF=NO`. Evita duplicar publish ou reaproveitar autorização depois de efeito crítico já aplicado. Vale no Portal Python atual e na migração C++23: após side effect confirmado, falha de finalize deve produzir estado parcial/reconciliável, nunca rollback lógico que reabra a autorização nem retry que repita o efeito.

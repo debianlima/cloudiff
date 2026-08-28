@@ -1,5 +1,5 @@
 projeto: cloudiff-v2
-versao_contrato: 55
+versao_contrato: 56
 namespace_fechado: true
 entradas:
   - id: 1
@@ -12193,14 +12193,23 @@ entradas:
     aceite: portao-mecanico/backend-integracao
     status: aceito
 
+  - id: 1526
+    caminho: portal/tests/test_release_finalize_failure_effect.py
+    proposito: executa falha de finalize apos publish e prova sucesso por releitura consumed ou estado deployed_unfinalized sem release nem republicacao
+    tipo: backend-integracao
+    consome: [teste/release-artifact-identity-effect]
+    produz: teste/release-finalize-failure-effect
+    aceite: portao-mecanico/backend-integracao
+    status: aceito
+
 trabalho_compartilhado:
   projeto: cloudiff
-  caminho: /tmp/cloudiff-ui-audit
-  unidade: release-artifact-identity-effect
-  descricao: identidade do artefato H P homologada por worker approval binding e negativo antes do publish
+  caminho: /srv/mcp-workspace/tmp/cloudiff-ui-audit-wireguard
+  unidade: release-approval-finalization-failure
+  descricao: falha de finalize apos publish homologada como estado parcial sem republicacao ou liberacao indevida
   agente: Redes-GPT
-  atualizado_em: '2026-08-27T23:12:00-03:00'
-  concluido_em: '2026-08-27T23:12:00-03:00'
-  previsao_termino: '2026-08-28T02:00:00-03:00'
+  atualizado_em: '2026-08-28T00:52:00-03:00'
+  concluido_em: '2026-08-28T00:52:00-03:00'
+  previsao_termino: '2026-08-28T02:30:00-03:00'
   zona_exclusao: []
   estado: concluido
