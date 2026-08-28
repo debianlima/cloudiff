@@ -1,5 +1,5 @@
 projeto: cloudiff-v2
-versao_contrato: 66
+versao_contrato: 67
 namespace_fechado: true
 entradas:
   - id: 1
@@ -12328,7 +12328,7 @@ entradas:
     consome: [contratos/admin-observability.schema, cpp/admin-observability]
     produz: evidencia/admin-observability-cpp-audit-v64
     aceite: tests/test_admin_observability_cpp_audit_evidence.py
-    status: pendente
+    status: aceito
   - id: 1542
     caminho: tests/test_admin_observability_cpp_audit_evidence.py
     proposito: impede declarar autoridade live do AdminObservability C++ quando o consumidor nao pode ser observado por indisponibilidade de rede
@@ -12336,7 +12336,7 @@ entradas:
     consome: [evidencia/admin-observability-cpp-audit-v64, contratos/admin-observability.schema]
     produz: teste/admin-observability-cpp-audit
     aceite: portao-mecanico/backend-integracao
-    status: pendente
+    status: aceito
 
   - id: 1543
     caminho: docs/reconciliation/mcp-upload-wiring-candidate-v65.json
@@ -12372,14 +12372,31 @@ entradas:
     aceite: portao-mecanico/backend-integracao
     status: aceito
 
+  - id: 1547
+    caminho: docs/reconciliation/admin-observability-cpp-live-v67.json
+    proposito: registra prova live read-only do Portal consumindo AdminObservability C++ com autenticacao e delta persistente nulo
+    tipo: documentacao-estrutural
+    consome: [evidencia/admin-observability-cpp-audit-v64, contratos/admin-observability.schema, evidencia/cpp-live-binary-provenance-v61]
+    produz: evidencia/admin-observability-cpp-live-v67
+    aceite: tests/test_admin_observability_cpp_live_evidence.py
+    status: aceito
+  - id: 1548
+    caminho: tests/test_admin_observability_cpp_live_evidence.py
+    proposito: exige identidade live consumidor real fronteira auth delta nulo e procedencia nao atribuida antes de aceitar autoridade observacional C++
+    tipo: backend-integracao
+    consome: [evidencia/admin-observability-cpp-live-v67, contratos/admin-observability.schema]
+    produz: teste/admin-observability-cpp-live
+    aceite: portao-mecanico/backend-integracao
+    status: aceito
+
 trabalho_compartilhado:
   projeto: cloudiff
   caminho: /srv/mcp-workspace/tmp/cloudiff-ui-audit-wireguard
-  unidade: T-016-membership-deadletters-readonly
-  descricao: dead-letters historicos auditados sem replay; estado atual convergido e causa exata nao recuperavel
+  unidade: T-021-admin-observability-live
+  descricao: autoridade observacional read-only C++ provada via consumidor Portal; recovery write nao exercido
   agente: Redes-GPT
-  atualizado_em: '2026-08-28T19:51:00-03:00'
-  concluido_em: '2026-08-28T19:51:00-03:00'
-  previsao_termino: '2026-08-28T20:20:00-03:00'
+  atualizado_em: '2026-08-28T19:58:00-03:00'
+  concluido_em: '2026-08-28T19:58:00-03:00'
+  previsao_termino: '2026-08-28T20:30:00-03:00'
   zona_exclusao: []
   estado: concluido

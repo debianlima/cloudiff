@@ -1,0 +1,77 @@
+{
+  "schema_version": 1,
+  "collected_at": "2026-08-28T19:58:00-03:00",
+  "mutation_performed": false,
+  "recovery_post_executed": false,
+  "live": {
+    "host": "hospedagem",
+    "host_ip": "10.62.92.7",
+    "service": "cloudiff-v2-admin-observability.service",
+    "service_active": true,
+    "portal_service_active": true,
+    "bind": "127.0.0.1:18260",
+    "version": "0.34.0-shadow",
+    "binary_sha256": "3146fb0957b2b76c9b8bcafe110ed28581f41e66f90a8c13e6de77c792adecc9",
+    "gnu_build_id": "1e83732f0c53be4295adb8e722d25db366f8fa83",
+    "release": "/opt/cloudiff-v2/releases/20260822-v34-admin-observability",
+    "health_http": 200,
+    "health_service": "AdminObservability",
+    "portal_release": "/srv/cloudif/app-releases/portal/v34-admin-observability"
+  },
+  "auth_and_consumer_proof": {
+    "backend_unauthenticated_environment_http": 401,
+    "backend_authenticated_environment_http": 200,
+    "backend_authenticated_policy_http": 200,
+    "portal_non_admin_environment_http": 403,
+    "portal_admin_environment_http": 200,
+    "portal_admin_policy_http": 200,
+    "portal_to_cpp_consumption_observed": true,
+    "portal_admin_group": "CloudIF-Tenants-Admin",
+    "environment_nodes": 4,
+    "hierarchy": "environment>node>container>service"
+  },
+  "read_only_delta": {
+    "before": {
+      "desired_count": 2,
+      "revision_sum": 4,
+      "audit_count": 0,
+      "audit_max_id": 0
+    },
+    "after": {
+      "desired_count": 2,
+      "revision_sum": 4,
+      "audit_count": 0,
+      "audit_max_id": 0
+    },
+    "desired_state_unchanged": true,
+    "recovery_audit_unchanged": true
+  },
+  "provenance": {
+    "release_manifest_present": false,
+    "release_binary_mtime": "2026-08-22T04:05:11.899617720Z",
+    "compiler_gcc": "GCC: (Ubuntu 15.2.0-16ubuntu1) 15.2.0",
+    "compiler_clang": "Ubuntu clang version 21.1.8 (6ubuntu1)",
+    "current_repo_agent_version": "0.36.0-shadow",
+    "live_version_present_in_remote_cpp_history": false,
+    "earliest_available_cpp_source_commit": "2e869b7a5216a33bfb88875b97d710392d325ed0",
+    "earliest_available_cpp_source_commit_at": "2026-08-24T23:53:38Z",
+    "exact_source_commit": "NAO DECLARADO",
+    "source_commit_attribution_proven": false
+  },
+  "scope": {
+    "readonly_observability_authority_proven": true,
+    "portal_consumes_cpp_backend": true,
+    "recovery_write_effect_proven": false,
+    "full_control_authority_claimed": false,
+    "frozen_portal_visual_change": false
+  },
+  "conclusions": {
+    "admin_observability_cpp_readonly_live_authority_proven": true,
+    "endpoint_presence_alone_used_as_authority_evidence": false,
+    "consumer_path_observed": true,
+    "no_write_delta_observed": true,
+    "safe_to_claim_readonly_authority": true,
+    "safe_to_claim_recovery_effect_parity": false,
+    "provenance_gate_passed_for_exact_source_commit": false
+  }
+}

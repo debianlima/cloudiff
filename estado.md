@@ -1,4 +1,4 @@
-# Estado — 2026-08-28 — contrato v66
+# Estado — 2026-08-28 — contrato v67
 
 ## Decisões vigentes
 - `FrozenPortalInterface` permanece requisito mestre; a correção desta unidade não altera HTML, CSS, JS visual, textos, botões ou layout.
@@ -8,7 +8,7 @@
 - O onboarding Faro está aceito: 4 vCPU online, identidade própria, PKI/NATS individual, agent não-root, heartbeat direto para Hospedagem, reconciliação/resiliência e rollback já possuem evidência mecânica.
 - O heartbeat atual do Faro observa capabilities `inventory`, `health`, `telemetry-host`, `portal-host` e `agent-auto-update`; `build` e `runtime` continuam excluídas do perfil Faro.
 - O caminho crítico Faro é `10.62.91.5 -> NATS 10.62.92.7:14222 -> cloudiff-control -> PostgreSQL`; Forja e Maurício não participam do heartbeat crítico.
-- Releases de agent-skills permanecem imutáveis; o runtime Faro continua na release instalada `cloudiff@0.1.4`, enquanto a skill de projeto usada nesta unidade é `cloudiff@0.1.22`.
+- Releases de agent-skills permanecem imutáveis; o runtime Faro continua na release instalada `cloudiff@0.1.4`, enquanto a skill de projeto usada nesta unidade é `cloudiff@0.1.23`.
 
 ## Decisões superadas
 - Salto obrigatório via `172.16.0.1` para acessar máquinas do laboratório — superado em 28/08/2026 pela nova orientação da TI comunicada pelo operador; acesso operacional passa a ser direto pelo conector Labiff, mantendo pfSense/MikroTik apenas como equipamentos de rede quando necessário.
@@ -21,51 +21,51 @@
 - Cutover definitivo do Portal para Faro permanece uma unidade posterior e deve respeitar os portões de portal shadow/FrozenPortalInterface; não foi executado implicitamente nesta unidade.
 
 ## Decisões fechadas nesta emenda
-- T-016 auditou em leitura os dois `project.membership.changed` históricos; nenhuma fila foi replayada e nenhum efeito externo foi solicitado.
-- A causa exata histórica permanece `NAO DECLARADA`: o dead-letter persiste apenas `RuntimeError/error_type` e os journals antigos não preservam o request detail.
-- O estado atual está convergido para ambos os projetos: owner/ACL central, tenant access, repositório Forgejo sem colaboradores extras e terminal do owner no Komodo. Não há item não-terminal atual para esses projetos.
-- Replay não é tecnicamente necessário sob o estado observado e continua bloqueado por efeitos + autorização humana separada.
-- O `project-onboarding-reconcile` atualmente falha com `URLError` para ambos os projetos; isso é T-031 separado, pois onboarding não participa do booleano `membership.ok`.
+- T-021 completou a prova live read-only do `AdminObservability` C++ em `127.0.0.1:18260`, versão `0.34.0-shadow`, consumido pelo Portal live.
+- Auth foi provada: backend sem token 401, Portal sem grupo admin 403 e Portal com `CloudIF-Tenants-Admin` 200 para environment/policy.
+- Os GETs foram observacionalmente sem efeito: `desired_state` e `audit_log` de recovery ficaram byte-logicamente equivalentes por contadores/revisions antes/depois; nenhum POST recovery foi executado.
+- Autoridade C++ aceita somente no escopo read-only observacional. O efeito de recovery não foi homologado nem inferido.
+- Procedência 0.34 permanece `NAO DECLARADO`: release sem manifest, versão ausente do histórico remoto C++ e branch atual em 0.36.
 
 ## Pendências técnicas não humanas
-- T-031 READY: diagnosticar em leitura o `URLError` atual do `cloudif-project-onboarding-reconcile.service` para os dois projetos.
-- T-021 segue READY para completar o gate live de admin-observability.
+- T-031 READY: diagnosticar em leitura o `URLError` atual do project-onboarding reconcile.
 - T-023/T-025 dependem de release C++ nova com manifesto de procedência.
 - T-024 segue bloqueada enquanto não existir wiring Gateway→mcp-upload C++.
-- T-016R permanece bloqueada: estado atual convergido e replay não justificado.
+- Recovery write do AdminObservability não foi exercido em T-021 e não é declarado como paridade de efeito.
 
 ## Trabalho compartilhado
-- ponteiro: `manifesto.yaml.trabalho_compartilhado` — unidade `T-016-membership-deadletters-readonly`, concluída; nenhuma zona de exclusão permanece ativa.
+- ponteiro: `manifesto.yaml.trabalho_compartilhado` — unidade `T-021-admin-observability-live`, concluída; nenhuma zona de exclusão permanece ativa.
 
 ## Competências ativas nesta unidade
-- `cloudiff@0.1.22` — skill raiz; L031 homologado.
+- `cloudiff@0.1.23` — skill raiz; L032 homologado.
 - `desenvolvedor-de-software@14` — método PGH.
 - `github-incremental-reconciliation@7` — reconciliação incremental.
 - `governanca-ontologica-de-skills@1.0.4` — governança.
 - `telemetry-data-visualization@2` — macro global; coletor indisponível.
 
 ## Falhas de portão por tipo de entrada
-- `observabilidade`: dead-letter guarda somente `error_type`; causa histórica exata não pode ser reconstruída após expiração dos journals.
-- `onboarding`: reconcile atual retorna `URLError` para ambos os projetos; separado em T-031.
+- `proveniencia`: binário live AdminObservability 0.34 sem release manifest/commit-fonte comprovado.
+- `efeito`: POST recovery não faz parte do gate read-only e permanece não homologado nesta unidade.
 
 ## Divergências da última reconciliação
 ### Corrigidas
-- Entrada 1545 fixa a diferença entre causa histórica não provada e convergência atual observada.
-- Entrada 1546 impede overclaim de causa/replay e garante que onboarding atual não seja confundido com a falha membership histórica.
-- `cloudiff@0.1.22` registra L031; `VISUAL_DIFF=NO`.
+- T-021 deixou de estar bloqueada por rede: Portal live consome o C++ e os GETs preservam estado persistente.
+- Entradas 1541/1542 ficam aceitas como evidência histórica verdadeira do bloqueio v64; 1547/1548 registram o gate live v67.
+- `cloudiff@0.1.23` registra L032; `VISUAL_DIFF=NO`.
 
 ### Pendentes de autorização ou capacidade
-- Replay T-016R continua bloqueado e sem necessidade técnica observada.
-- T-031 pode ser executado read-only sem replay.
+- Não homologar recovery write sem unidade separada e efeito controlado.
+- Não atribuir commit-fonte ao 0.34 sem manifest/prova reprodutível.
 
 ## Entradas aceitas nesta unidade
-- 1545 `docs/reconciliation/membership-deadletters-readonly-v66.json`.
-- 1546 `tests/test_membership_deadletters_readonly_evidence.py`.
-- 179 `skills/cloudiff/SKILL.md` — `cloudiff@0.1.22`, L031.
-- 2 `competencias.yaml` — skill raiz 0.1.22.
-- 9 `estado.md` — snapshot v66.
-- 10 `manifesto.yaml` — contrato v66 e zona liberada.
+- 1541/1542 — evidência histórica v64 do bloqueio live, agora fechada como etapa precedente.
+- 1547 `docs/reconciliation/admin-observability-cpp-live-v67.json`.
+- 1548 `tests/test_admin_observability_cpp_live_evidence.py`.
+- 179 `skills/cloudiff/SKILL.md` — `cloudiff@0.1.23`, L032.
+- 2 `competencias.yaml` — skill raiz 0.1.23.
+- 9 `estado.md` — snapshot v67.
+- 10 `manifesto.yaml` — contrato v67 e zona liberada.
 
 ## Próxima unidade
-- T-021: completar gate live de `admin-observability` C++.
 - T-031: diagnosticar onboarding atual em leitura.
+- T-024/T-025 somente quando surgirem seus artefatos de desbloqueio.
