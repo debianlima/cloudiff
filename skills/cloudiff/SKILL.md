@@ -1,6 +1,6 @@
 ---
 name: cloudiff
-versao: 0.1.5
+versao: 0.1.6
 description: Governa, reconcilia, normaliza e evolui a plataforma CloudIFF V1/Python→V2/C++23 preservando interface homologada,
   contratos, segurança, dados, observabilidade e rollback.
 tipo_competencia: projeto
@@ -246,3 +246,6 @@ Na v44, o portão de deploy da entrada 174 reprovou porque duas execuções cons
 
 ### L014 — release existente não dispensa prova do artefato recebido
 Na v45, o sincronizador de skills inicialmente aceitava três estados que quebravam o contrato de release imutável: TAR com FIFO/symlink/hardlink não representado no manifesto; TAR divergente quando a release-alvo já existia; e `current` como diretório comum, que só falhava após criar artefatos de promoção. A correção passou a rejeitar todo membro que não seja arquivo regular/diretório, validar o TAR recebido contra `NEW_MANIFEST` independentemente da existência do alvo e exigir `current`/`previous` como symlinks antes de qualquer mutação. Gate homologado em 2026-08-26: `AGENT_SKILLS_SYNC_OFFLINE=PASS`; hardness dos três casos PASS; e o mesmo SHA `e8e6528af7fed0920d0af28fe2ff7b5c335bce55be3116b7b665c916c4b4483b` produziu `DRY_RUN_PASS -> NOOP -> POINTER_STABLE=PASS` em Forja, Hospedagem, Maurício, Faro e Pelego. Evita confundir idempotência com confiança cega no target existente e preserva a atomicidade do ponteiro. Vale em Linux quando releases são árvores imutáveis identificadas por manifesto e promovidas por symlink.
+
+### L015 — ação de UI que persiste configuração exige prova no artefato canônico
+Em 2026-08-27, a auditoria do controle congelado **“Testar e salvar”** do backup remoto encontrou um teste que apenas procurava strings no código e um POST que gravava um caminho literal duplicado, enquanto a leitura usava `BACKUP_REMOTE_ENV`. A entrada 1178 passou a executar a persistência em diretório temporário e observar o efeito fora da interface: bytes antes/depois, conteúdo final exato, modo `0600`, replace atômico e ausência de temporário residual. A entrada 649 passou a gravar pela mesma fonte canônica `BACKUP_REMOTE_ENV`. Gate: `portal.tests.test_backup_remote_global_config` + regressão completa do Portal (1009 testes) + `VISUAL_DIFF=NO`. Evita homologar toast/string como efeito real e evita divergência futura entre caminho de leitura e caminho de escrita. Vale em Linux/Python para ações do Portal que persistem configuração em arquivo; a implementação pode migrar para C++ desde que preserve o mesmo contrato observável.

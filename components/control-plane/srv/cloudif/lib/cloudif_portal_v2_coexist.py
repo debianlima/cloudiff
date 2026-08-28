@@ -19,6 +19,7 @@ import html
 import re
 import sqlite3
 import subprocess
+import tempfile
 import datetime as dt
 from pathlib import Path
 
@@ -34,6 +35,25 @@ NATIVE_READY = {
     ("/cloudiff/portal/", "GET"),
     ("/", "GET"),
 }
+
+
+def _write_backup_remote_env(target: Path, payload: str) -> None:
+    """Atomically replace the backup remote configuration with mode 0600."""
+    target = Path(target)
+    fd, temporary = tempfile.mkstemp(prefix=target.name + ".tmp.", dir=target.parent)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(payload)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.chmod(temporary, 0o600)
+        os.replace(temporary, target)
+        os.chmod(target, 0o600)
+    finally:
+        try:
+            os.unlink(temporary)
+        except FileNotFoundError:
+            pass
 
 
 def _install() -> None:
@@ -1231,8 +1251,7 @@ def _install() -> None:
                             try: reachable=subprocess.run(["nc","-z","-w","3",host,str(port)],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=5).returncode==0
                             except Exception: reachable=False
                         env_text=(f"REMOTE_ENABLED={'1' if enabled else '0'}\nREMOTE_READY=1\nREMOTE_HOST={host}\nREMOTE_PORT={port}\nREMOTE_USER={remote_user}\nREMOTE_PATH={remote_path}\nREMOTE_KEY={remote_key}\n")
-                        target=Path('/etc/cloudif/project-backup-remote.env'); tmp=target.with_name(target.name+'.tmp')
-                        tmp.write_text(env_text,encoding='utf-8'); os.chmod(tmp,0o600); os.replace(tmp,target)
+                        _write_backup_remote_env(BACKUP_REMOTE_ENV, env_text)
                         getattr(owner,"log_action")(user.get("username") or "admin","backup_remote_config",host,0,f"port={port} path={remote_path} reachable={reachable}","")
                         return send_json(self,200,{"ok":True,"host":host,"port":port,"path":remote_path,"enabled":enabled,"reachable":reachable})
                     except Exception as exc:
