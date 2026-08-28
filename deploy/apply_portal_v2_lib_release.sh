@@ -13,7 +13,7 @@ STATE=${CLOUDIFF_PORTAL_V2_STATE:-/var/lib/cloudiff-v2/portal-v2-lib}
 PORTAL_PTR=${CLOUDIFF_PORTAL_PTR:-/srv/cloudif/app-pointers/portal-current}
 PORTAL_ENV=${CLOUDIFF_PORTAL_ENV:-/etc/cloudif/portal.env}
 SERVICE=${CLOUDIFF_PORTAL_SERVICE:-cloudif-admin-portal.service}
-SHADOW_PORT=${CLOUDIFF_PORTAL_V2_SHADOW_PORT:-18096}
+SHADOW_PORT=${CLOUDIFF_PORTAL_V2_SHADOW_PORT:-}
 ALLOW_NONROOT=${CLOUDIFF_PORTAL_V2_ALLOW_NONROOT:-0}
 
 CANDIDATE_HASH=
@@ -161,10 +161,31 @@ smoke_url(){
 import json,sys
 x=json.load(open(sys.argv[1],encoding='utf-8'))
 assert x.get('secrets_exposed') is False
-assert x.get('one_primary_route') is True
+assert x.get('unique_routes_required') is True
+assert x.get('policy') == 'one_item_one_route_one_purpose'
 PY
   rm -f "$root_page" "$alias_page" "$nav_json"
   trap - RETURN
+}
+
+port_busy(){
+  local port=$1
+  ss -H -ltn "sport = :$port" 2>/dev/null | grep -q .
+}
+
+resolve_shadow_port(){
+  if [ -n "$SHADOW_PORT" ]; then
+    port_busy "$SHADOW_PORT" && fail shadow_port_busy 36
+    return 0
+  fi
+  local candidate
+  for candidate in $(seq 18096 18105); do
+    if ! port_busy "$candidate"; then
+      SHADOW_PORT=$candidate
+      return 0
+    fi
+  done
+  fail no_shadow_port_available 36
 }
 
 stop_shadow(){
@@ -184,10 +205,8 @@ shadow_candidate(){
   [ -n "$CANDIDATE_DIR" ] || fail candidate_not_prepared 33
   [ -d "$PORTAL_PTR" ] || fail portal_pointer_missing 34
   [ -f "$PORTAL_PTR/cloudif-admin-portal.py" ] || fail portal_launcher_missing 35
-  if ss -ltn 2>/dev/null | grep -Eq ":${SHADOW_PORT}[[:space:]]"; then
-    fail shadow_port_busy 36
-  fi
-  local log="$STATE/shadow-$RELEASE_ID.log" pid
+  resolve_shadow_port
+  local log="$STATE/shadow-$RELEASE_ID.log" pid rc=0
   stop_shadow
   (
     set -a
@@ -201,18 +220,31 @@ shadow_candidate(){
   ) >"$log" 2>&1 &
   pid=$!
   printf '%s\n' "$pid" > "$STATE/shadow.pid"
-  trap stop_shadow RETURN
+  trap stop_shadow EXIT INT TERM
   local ready=0
   for _ in $(seq 1 60); do
     kill -0 "$pid" 2>/dev/null || break
     if curl -sS --max-time 1 "http://127.0.0.1:$SHADOW_PORT/cloudiff/portal/" >/dev/null 2>&1; then ready=1; break; fi
     sleep .25
   done
-  [ "$ready" = 1 ] || { printf 'PORTAL_V2_LIB_SHADOW=FAIL log=%s\n' "$log" >&2; return 37; }
-  ss -ltnp 2>/dev/null | grep -F "pid=$pid" | grep -Eq ":${SHADOW_PORT}[[:space:]]" || return 38
-  smoke_url "http://127.0.0.1:$SHADOW_PORT"
+  if [ "$ready" != 1 ]; then
+    printf 'PORTAL_V2_LIB_SHADOW=FAIL log=%s\n' "$log" >&2
+    rc=37
+  else
+    local owned
+    owned=$(ss -H -ltnp "sport = :$SHADOW_PORT" 2>/dev/null || true)
+    if ! grep -Fq "pid=$pid" <<<"$owned" || ! grep -Fq "127.0.0.1:$SHADOW_PORT" <<<"$owned"; then
+      rc=38
+    elif grep -Ev "127\.0\.0\.1:${SHADOW_PORT}[[:space:]]" <<<"$owned" | grep -q .; then
+      rc=39
+    elif ! smoke_url "http://127.0.0.1:$SHADOW_PORT"; then
+      rc=$?
+      [ "$rc" -ne 0 ] || rc=40
+    fi
+  fi
   stop_shadow
-  trap - RETURN
+  trap - EXIT INT TERM
+  [ "$rc" -eq 0 ] || return "$rc"
   printf 'PORTAL_V2_LIB_SHADOW=PASS release=%s port=%s\n' "$RELEASE_ID" "$SHADOW_PORT"
 }
 

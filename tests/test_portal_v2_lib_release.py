@@ -29,6 +29,10 @@ class PortalV2LibReleaseContractTests(unittest.TestCase):
             "Meus sites",
             "Meus bancos",
             "Saúde da plataforma",
+            "unique_routes_required",
+            "one_item_one_route_one_purpose",
+            "resolve_shadow_port",
+            "trap stop_shadow EXIT INT TERM",
         ):
             self.assertIn(marker, text)
         self.assertNotIn("cp -a /srv/cloudif/lib ", text)
