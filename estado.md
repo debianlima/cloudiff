@@ -1,4 +1,4 @@
-# Estado — 2026-08-27 — contrato v48
+# Estado — 2026-08-27 — contrato v49
 
 ## Decisões vigentes
 - `FrozenPortalInterface` permanece requisito mestre; a correção desta unidade não altera HTML, CSS, JS visual, textos, botões ou layout.
@@ -29,42 +29,35 @@
 - LegacyRetirement continua separado e qualquer retirada destrutiva exige seus próprios gates e autorização final.
 
 ## Trabalho compartilhado
-- ponteiro: `manifesto.yaml.trabalho_compartilhado` — unidade `ui-action-map-tenant-availability`, concluída; nenhuma zona de exclusão permanece ativa.
+- ponteiro: `manifesto.yaml.trabalho_compartilhado` — unidade `ui-action-map-publication-alias`, concluída; nenhuma zona de exclusão permanece ativa.
 
 ## Competências ativas nesta unidade
-- `cloudiff@0.1.7` — skill raiz; L016 homologado nesta unidade.
+- `cloudiff@0.1.7` — skill raiz, recarregada do branch auditável remoto antes da unidade.
 - `desenvolvedor-de-software@14` — método PGH para auditoria de tela.
-- `github-incremental-reconciliation@7` — reconciliação incremental da skill/catálogo.
-- `governanca-ontologica-de-skills@1.0.4` — governança da versão da skill.
+- `github-incremental-reconciliation@7` — reconciliação incremental de branch/estrutura.
 - `telemetry-data-visualization@2` — macro global; coletor executável continua indisponível nesta árvore.
 - `operational-ui-truth@1` / `navegacao` — prova tela ↔ efeito fora da própria interface.
 
 ## Falhas de portão por tipo de entrada
-- `ui-compat`: `keepalive` de aluno era visível e parametrizado por `CLOUDIF_MAX_STUDENT_KEEPALIVE_HOURS`, mas o wrapper final devolvia 403 por aplicar guard admin também ao modo temporário.
-- `ui-compat`: `start/stop/restart` chegavam ao handler legado com o corpo POST consumido por `do_POST_v21`; `tenant` vazio virava o fallback `projeto` e a autorização falhava.
-- `ui-compat`: o primeiro assert de deadline mediu microssegundos contra timestamp persistido em segundos; o teste foi corrigido com tolerância de 1s, sem alteração do produto.
+- Nenhuma divergência funcional encontrada em `set_alias`: o handler final preserva CSRF, autorização do dono, atualização do publisher, persistência SQLite e auditoria.
+- O portão negativo comprovou que ausência de CSRF retorna 403 sem linha de alias nem chamada ao publisher.
 
 ## Divergências da última reconciliação
 ### Corrigidas
-- `do_POST_v21` agora preserva bytes e restaura `rfile`/`Content-Length` quando delega uma ação não tratada, mantendo parâmetros intactos para wrappers anteriores.
-- O guard administrativo do wrapper final ficou restrito a `always_on`, `always_on_start` e `always_off`; `keepalive` permanece disponível ao dono visível dentro do limite de horas de aluno.
-- Entrada 1518 prova `keepalive`, `start`, `stop`, `always_on_start` e `always_off` contra SQLite temporário + runner Docker fake.
-- `cloudiff@0.1.7` registra L016 com entrada, data, portão e regra de compatibilidade para a migração C++23.
-- Regressão do Portal: 1015/1015; `validate-repository`, `git diff --check` e `VISUAL_DIFF=NO`: PASS.
+- Entrada 1519 adiciona prova executável do caminho **Salvar endereço**: formulário/handler → `project_publication_aliases` → publisher `/alias` → `action_log`.
+- Com publicação ativa P42/d3, o payload observado no publisher preserva `public_number=42`, `deploy_number=3` e o alias escolhido.
+- Regressão do Portal: 1017/1017; `validate-repository`, `git diff --check` e `VISUAL_DIFF=NO`: PASS.
 
 ### Pendentes de autorização ou capacidade
 - Runtime de produção da `Visão geral` continua sem promoção; entradas 1515/1516 permanecem `em_curso` até shadow real verde.
-- Primeiro salto `172.16.0.1` segue como bloqueio operacional enquanto o plano administrativo não responder; nenhuma rota paralela foi aberta.
+- Primeiro salto `172.16.0.1` segue como bloqueio operacional enquanto o plano administrativo não responder.
 
 ## Entradas aceitas nesta unidade
-- 389 `components/control-plane/current-apps/portal-current/cloudif-admin-portal-base.py` — forwarding de POST e autorização de disponibilidade reconciliados.
-- 1518 `portal/tests/test_tenant_action_effect.py` — efeitos de disponibilidade homologados por SQLite + Docker fake.
-- 179 `skills/cloudiff/SKILL.md` — `cloudiff@0.1.7`, L016 homologado.
-- 2 `competencias.yaml` — versão da skill raiz reconciliada.
+- 1519 `portal/tests/test_publication_alias_action_effect.py` — efeito do alias homologado por SQLite + publisher + log e negativo CSRF.
 - 9 `estado.md` — snapshot da unidade.
-- 10 `manifesto.yaml` — contrato v48 e zona liberada.
+- 10 `manifesto.yaml` — contrato v49 e zona liberada.
 
 ## Próxima unidade
-- Cruzar os controles mutáveis de **Publicações** contra efeitos observáveis em candidato/fila/runtime, priorizando ações cujo teste atual ainda é textual.
-- Em seguida, fazer o mesmo em **Projetos**, especialmente sync/integrate/edit e criação/provisionamento.
-- Quando o plano de gestão do pfSense voltar, repetir shadow da correção `Visão geral`; somente shadow verde autoriza promoção.
+- Auditar o wizard **Gerenciar publicação** em W/H/P, começando por `homologation/enqueue` e produção com aprovação, observando fila/candidato sem depender do modal.
+- Depois, cruzar ações de Projetos (`check`, `sync`, `integrate`, `edit_save`) contra DB/comandos reais simulados.
+- Quando o plano de gestão do pfSense voltar, repetir shadow da `Visão geral`; somente shadow verde autoriza promoção.
