@@ -265,7 +265,8 @@ def add_acl(slug, principal, principal_type="user", role="access", user=None):
         c.execute(sql, [values[x] for x in colnames])
         c.commit()
         sync=sync_komodo_acl(slug)
-        if not sync.get('ok'): raise RuntimeError('Permissão salva, mas a sincronização com o Komodo falhou: '+str(sync.get('error') or 'erro'))
+        if not sync.get('ok'):
+            return "Permissão adicionada. Sincronização imediata com o Komodo pendente; reconciliação durável será enfileirada."
         return "Permissão adicionada."
     finally:
         c.close()
@@ -297,7 +298,8 @@ def remove_acl(slug, principal, principal_type="", role="", user=None, row_id=""
             c.execute(f"DELETE FROM {table} WHERE {cfg['id_col']}=?", (row_id,))
             c.commit()
             sync=sync_komodo_acl(slug)
-            if not sync.get('ok'): raise RuntimeError('Permissão removida no Portal, mas a sincronização com o Komodo falhou: '+str(sync.get('error') or 'erro'))
+            if not sync.get('ok'):
+                return "Permissão removida. Sincronização imediata com o Komodo pendente; reconciliação durável será enfileirada."
             return "Permissão removida."
 
         where = f"{cfg['project_col']}=? AND {cfg['principal_col']}=?"
@@ -314,7 +316,8 @@ def remove_acl(slug, principal, principal_type="", role="", user=None, row_id=""
         c.execute(f"DELETE FROM {table} WHERE {where}", params)
         c.commit()
         sync=sync_komodo_acl(slug)
-        if not sync.get('ok'): raise RuntimeError('Permissão removida no Portal, mas a sincronização com o Komodo falhou: '+str(sync.get('error') or 'erro'))
+        if not sync.get('ok'):
+            return "Permissão removida. Sincronização imediata com o Komodo pendente; reconciliação durável será enfileirada."
         return "Permissão removida."
     finally:
         c.close()

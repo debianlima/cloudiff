@@ -1,5 +1,5 @@
 projeto: cloudiff-v2
-versao_contrato: 51
+versao_contrato: 52
 namespace_fechado: true
 entradas:
   - id: 1
@@ -12157,14 +12157,23 @@ entradas:
     aceite: portao-mecanico/ui-compat
     status: aceito
 
+  - id: 1522
+    caminho: portal/tests/test_project_acl_action_effect.py
+    proposito: executa Gerenciar permissoes pelo handler final e prova add remove owner block e reconciliacao mesmo com sync Komodo falho
+    tipo: ui-compat
+    consome: [teste/frozen-portal-interface]
+    produz: teste/project-acl-action-effect
+    aceite: portao-mecanico/ui-compat
+    status: aceito
+
 trabalho_compartilhado:
   projeto: cloudiff
   caminho: /tmp/cloudiff-ui-audit
-  unidade: ui-action-map-project-check
-  descricao: Checar projeto homologado por Forgejo Supabase Komodo e SQLite sem alterar superficie visual
+  unidade: ui-action-map-project-acl
+  descricao: Gerenciar permissoes homologado por project_acl sync Komodo e fila duravel sem alterar superficie visual
   agente: Redes-GPT
-  atualizado_em: '2026-08-27T23:29:00-03:00'
-  concluido_em: '2026-08-27T23:29:00-03:00'
-  previsao_termino: '2026-08-28T01:30:00-03:00'
+  atualizado_em: '2026-08-27T23:37:00-03:00'
+  concluido_em: '2026-08-27T23:37:00-03:00'
+  previsao_termino: '2026-08-28T01:20:00-03:00'
   zona_exclusao: []
   estado: concluido

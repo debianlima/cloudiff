@@ -1,6 +1,6 @@
 ---
 name: cloudiff
-versao: 0.1.9
+versao: 0.1.10
 description: Governa, reconcilia, normaliza e evolui a plataforma CloudIFF V1/Python→V2/C++23 preservando interface homologada,
   contratos, segurança, dados, observabilidade e rollback.
 tipo_competencia: projeto
@@ -258,3 +258,6 @@ Em 2026-08-27, a entrada 1520 executou o fluxo W/H/P pelo HTTP final do adaptado
 
 ### L018 — “Checar projeto” deve consumir o status canônico dos três recursos
 Em 2026-08-27, a entrada 1521 auditou o controle final **“Checar projeto”**, cuja superfície congelada declara verificar repositório, banco e vínculo do container sem alterar a configuração. O primeiro portão executável reprovou porque `check_project()` não retornava mapa observado e ignorava Supabase: lia apenas Forgejo/Komodo diretamente de `provision-report.json`. A correção reutiliza `cloudif_project_provision_status.status()` como fonte canônica para Forgejo, Supabase e Komodo, usa `PROVISION_ROOT` canônico e limita a mutação a estado observado (`repo_url`, `komodo_status`, `updated_at`), preservando nome, dono, descrição e tenant. Gate: `portal.tests.test_project_check_action_effect` prova os três recursos e a não mutação de configuração; regressão completa 1023/1023; `VISUAL_DIFF=NO`. Evita a interface afirmar “estado real” quando o backend avalia somente parte de um relatório possivelmente incompleto. Vale no Portal Python atual; a migração C++23 deve produzir o mesmo mapa de três recursos e o mesmo contrato de leitura sem reenfileirar nem reconfigurar.
+
+### L019 — falha de sync imediato após commit não pode suprimir a reconciliação durável
+Em 2026-08-27, a entrada 1522 executou **Gerenciar permissões** pelo handler final contra SQLite temporário, sync Komodo controlado e fila de reconciliação fake. Add/remove, bloqueio do dono e CSRF negativo já batiam com o contrato; o portão vermelho apareceu quando o sync Komodo falhou **depois** de `project_acl` ter sido commitada: `add_acl()`/`remove_acl()` levantavam exceção, o wrapper capturava o erro e não enfileirava `project.membership.changed`, deixando a fonte central alterada sem recuperação durável. A correção mantém a ACL central persistida, retorna estado de sincronização imediata pendente e permite ao wrapper sempre enfileirar a reconciliação durável. Gate: `portal.tests.test_project_acl_action_effect` prova DB, sync, fila, owner-block, CSRF negativo e falha sintética do Komodo; regressão completa 1027/1027; `VISUAL_DIFF=NO`. Evita estado parcialmente aplicado sem mecanismo de convergência. Vale no Portal Python atual e na migração C++23: após persistir a fonte central, falha de alvo externo deve produzir reconciliação/retry durável, nunca abortar o caminho que cria essa recuperação.
