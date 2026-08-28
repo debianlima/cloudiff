@@ -1,0 +1,113 @@
+{
+  "schema_version": 1,
+  "collected_at": "2026-08-28T07:42:00-03:00",
+  "collection_path": "Labiff -> 10.62.92.7 direct, read-only reconciliation audit",
+  "mutation_performed": false,
+  "host": {
+    "hostname": "hospedagem",
+    "ip": "10.62.92.7",
+    "verifier": {
+      "errors": 0,
+      "warnings": 1,
+      "root_filesystem_percent": 22
+    }
+  },
+  "cpp_control": {
+    "unit": "cloudiff-v2-control.service",
+    "active": true,
+    "sub_state": "running",
+    "binary": "/opt/cloudiff-v2/current/bin/cloudiff-control",
+    "binary_version": "0.15.0-shadow",
+    "binary_sha256": "1cfa647fd74dbbab7ea24dc5e56b4842e62e9cdedad60a148f95a23f54f25b7a",
+    "subscription": "cloudiff.v2.node.observed",
+    "handler": "PostgresClient::apply_observation",
+    "project_created_consumer_present": false,
+    "project_membership_changed_consumer_present": false
+  },
+  "python_reconcile_worker": {
+    "implementation": "Python",
+    "unit": "cloudif-reconcile-worker.service",
+    "service_type": "oneshot",
+    "last_exit_status": 0,
+    "last_processed": 0,
+    "path_unit": "cloudif-reconcile-worker.path",
+    "path_active": true,
+    "timer_unit": "cloudif-reconcile-worker.timer",
+    "timer_active": true,
+    "release": "/srv/cloudif/app-releases/reconcile-worker/platform-480ed90-20260807-174925",
+    "project_config_controller_active": true,
+    "project_config_release": "/srv/cloudif/app-releases/project-config-controller/platform-480ed90-20260807-174925",
+    "accepted_project_events": [
+      "project.created",
+      "project.updated",
+      "project.integrated",
+      "project.membership.changed",
+      "project.configuration.changed"
+    ],
+    "membership_effect": "reconcile_project_membership(project)",
+    "durable_status_sink": "reconcile_requests"
+  },
+  "queue": {
+    "database": "/var/lib/cloudif/portal/cloudif-portal.db",
+    "marker_directory": "/var/lib/cloudif/reconcile-queue/incoming",
+    "incoming_marker_count": 0,
+    "current_nonterminal": [],
+    "project_created_status_counts": {
+      "ready": 1,
+      "waiting": 1
+    },
+    "project_membership_changed_status_counts": {
+      "dead_letter": 2
+    },
+    "historical_membership_dead_letter_count": 2,
+    "historical_dead_letters": [
+      {
+        "created_at": "2026-08-07T23:15:11Z",
+        "project": "silvipro-jt-2026",
+        "source": "publication_activation",
+        "operation": "reconcile",
+        "attempt_count": 5,
+        "max_attempts": 5,
+        "last_error_type": "RuntimeError",
+        "detail_preserved": false
+      },
+      {
+        "created_at": "2026-08-05T21:01:41Z",
+        "project": "laboratorio-de-hardware",
+        "source": "initial_publication",
+        "operation": "reconcile",
+        "attempt_count": 5,
+        "max_attempts": 5,
+        "last_error_type": "RuntimeError",
+        "detail_preserved": false
+      }
+    ]
+  },
+  "producer_contract": {
+    "project_created": "cloudif_project_action_safe.py -> cloudif_reconcile_client.enqueue",
+    "project_membership_changed": "ACL/publication/provision flows -> cloudif_reconcile_client.enqueue",
+    "durability": [
+      "SQLite reconcile_requests commit",
+      "fsync marker",
+      "atomic os.replace into incoming queue"
+    ],
+    "partitioning": "project:<slug>",
+    "retry": "lease + waiting_retry + max_attempts + dead_letter"
+  },
+  "source_snapshot": {
+    "project_commit": "79d056c1b11fc2499e5229d04ea084a2d13c7c64",
+    "control_source_subscription": "cloudiff.v2.node.observed",
+    "control_source_project_event_strings": [],
+    "live_control_source_commit": "NAO DECLARADO"
+  },
+  "conclusions": {
+    "project_events_are_durable": true,
+    "python_reconcile_worker_authoritative": true,
+    "cpp_control_is_node_observation_consumer": true,
+    "project_event_reconciliation_cpp_migrated": false,
+    "safe_to_retire_python_reconcile_worker": false,
+    "historical_dead_letters_are_current_queue_backlog": false,
+    "historical_dead_letters_need_separate_cause_review_before_replay": true,
+    "frozen_portal_visual_change": false
+  }
+}

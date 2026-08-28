@@ -1,5 +1,5 @@
 projeto: cloudiff-v2
-versao_contrato: 58
+versao_contrato: 59
 namespace_fechado: true
 entradas:
   - id: 1
@@ -12236,14 +12236,31 @@ entradas:
     aceite: portao-mecanico/runtime
     status: aceito
 
+  - id: 1531
+    caminho: docs/reconciliation/project-events-cpp-reconciliation-v59.json
+    proposito: registra evidencia observada do caminho project.created e project.membership.changed e delimita que cloudiff-control C++ nao consome esses eventos
+    tipo: documentacao-estrutural
+    consome: [contratos/reconciliation.schema, cpp/control, evidencia/normalization-plan]
+    produz: evidencia/project-events-cpp-reconciliation-v59
+    aceite: tests/test_project_events_cpp_reconciliation_evidence.py
+    status: aceito
+  - id: 1532
+    caminho: tests/test_project_events_cpp_reconciliation_evidence.py
+    proposito: cruza produtores fila worker Python control C++ e evidencia live para impedir declarar reconciliacao de projeto migrada sem consumidor real
+    tipo: backend-integracao
+    consome: [evidencia/project-events-cpp-reconciliation-v59, contratos/reconciliation.schema]
+    produz: teste/project-events-cpp-reconciliation-evidence
+    aceite: portao-mecanico/backend-integracao
+    status: aceito
+
 trabalho_compartilhado:
   projeto: cloudiff
   caminho: /srv/mcp-workspace/tmp/cloudiff-ui-audit-wireguard
-  unidade: T-012-runtimeexecutor-cpp-whp
-  descricao: paridade de políticas W/H/P provada e efeitos C++ explicitamente delimitados como ainda não migrados
+  unidade: T-013-project-events-cpp-reconciliation
+  descricao: caminho duravel de eventos de projeto provado e consumidor C++ delimitado como node-observation apenas
   agente: Redes-GPT
-  atualizado_em: '2026-08-28T07:31:00-03:00'
-  concluido_em: '2026-08-28T07:31:00-03:00'
-  previsao_termino: '2026-08-28T08:30:00-03:00'
+  atualizado_em: '2026-08-28T07:48:00-03:00'
+  concluido_em: '2026-08-28T07:48:00-03:00'
+  previsao_termino: '2026-08-28T08:45:00-03:00'
   zona_exclusao: []
   estado: concluido
