@@ -1,0 +1,103 @@
+{
+  "schema_version": 1,
+  "collected_at": "2026-08-28T19:47:00-03:00",
+  "mutation_performed": false,
+  "queue_replay_performed": false,
+  "deadletters": [
+    {
+      "project": "laboratorio-de-hardware",
+      "request_id": "d9112e78-52e4-455a-b486-6344e6121ccf",
+      "event": "project.membership.changed",
+      "source": "initial_publication",
+      "created_at": "2026-08-05T21:01:41Z",
+      "dead_lettered_at": "2026-08-05T21:04:56Z",
+      "attempts": 5,
+      "last_error_type": "RuntimeError",
+      "historical_error_detail_preserved": false,
+      "owner": "iff1742962",
+      "tenant": "iff1742962-laboratoriodehardware",
+      "current_acl": [{"type":"user","subject":"iff1742962"}],
+      "tenant_access_users": ["iff1742962"],
+      "tenant_access_groups": [],
+      "forgejo_repo_exists": true,
+      "forgejo_owner_matches": true,
+      "forgejo_collaborators": [],
+      "komodo_integration_status": "ready",
+      "komodo_owner_terminal_present": true,
+      "komodo_owner_terminal_updated_at": "2026-08-05T21:04:54+0000",
+      "current_nonterminal_queue_items": 0
+    },
+    {
+      "project": "silvipro-jt-2026",
+      "request_id": "b5ddfdf0-5a7d-4f25-9d95-9c1ff983c4d4",
+      "event": "project.membership.changed",
+      "source": "publication_activation",
+      "created_at": "2026-08-07T23:15:11Z",
+      "dead_lettered_at": "2026-08-07T23:18:32Z",
+      "attempts": 5,
+      "last_error_type": "RuntimeError",
+      "historical_error_detail_preserved": false,
+      "owner": "iff1860746",
+      "tenant": "iff1860746-silviprojt2026",
+      "current_acl": [{"type":"user","subject":"iff1860746"}],
+      "tenant_access_users": ["iff1860746"],
+      "tenant_access_groups": [],
+      "forgejo_repo_exists": true,
+      "forgejo_owner_matches": true,
+      "forgejo_collaborators": [],
+      "komodo_integration_status": "ready",
+      "komodo_owner_terminal_present": true,
+      "komodo_owner_terminal_updated_at": "2026-08-07T23:18:27+0000",
+      "current_nonterminal_queue_items": 0
+    }
+  ],
+  "worker_contract": {
+    "membership_ok_requires": ["forgejo.ok", "komodo.ok", "tenant_access.ok"],
+    "onboarding_result_participates_in_membership_ok": false,
+    "deadletter_result_persists_only_error_type": true,
+    "deadletter_detail_reconstruction_from_row_alone_possible": false
+  },
+  "current_health": {
+    "forja_agent_client_token_present": true,
+    "komodo_agent_client_token_present": true,
+    "forgejo_token_present": true,
+    "forja_agent_active": true,
+    "komodo_agent_active": true,
+    "reconcile_worker_path_active": true,
+    "reconcile_worker_timer_active": true,
+    "komodo_general_deploy_status_failed_due_missing_docker_compose": true,
+    "komodo_general_deploy_status_is_membership_failure": false,
+    "onboarding_current_status": "failed",
+    "onboarding_current_error_type": "URLError",
+    "onboarding_current_projects_affected": ["laboratorio-de-hardware", "silvipro-jt-2026"],
+    "onboarding_current_failure_is_membership_deadletter_cause": false
+  },
+  "historical_reconstruction": {
+    "exact_root_cause_proven": false,
+    "reason_exact_root_cause_unprovable": "dead-letter rows preserve only RuntimeError/error_type and historical agent journals no longer retain the request detail",
+    "komodo_path_progress_proven": true,
+    "komodo_evidence": "owner terminal rows were written seconds before each final dead-letter timestamp",
+    "forja_or_aggregate_failure_cannot_be_distinguished_historically": true,
+    "current_membership_state_converged": true,
+    "current_drift_observed": false
+  },
+  "replay_decision": {
+    "technically_required_now": false,
+    "safe_to_replay_without_separate_authorization": false,
+    "reason": "current membership state is converged and replay would re-run effectful Forgejo/Komodo/tenant/onboarding paths without a demonstrated repair need"
+  },
+  "new_follow_up": {
+    "task_id": "T-031",
+    "title": "Diagnosticar falha atual do project-onboarding reconcile",
+    "state": "READY",
+    "scope": "read-only diagnosis of repeated URLError for both projects; separate from historical membership dead-letters"
+  },
+  "conclusions": {
+    "historical_exact_cause_declared": false,
+    "current_membership_converged": true,
+    "replay_recommended": false,
+    "replay_performed": false,
+    "onboarding_issue_is_separate": true,
+    "frozen_portal_visual_change": false
+  }
+}

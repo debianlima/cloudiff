@@ -1,5 +1,5 @@
 projeto: cloudiff-v2
-versao_contrato: 65
+versao_contrato: 66
 namespace_fechado: true
 entradas:
   - id: 1
@@ -12355,14 +12355,31 @@ entradas:
     aceite: portao-mecanico/backend-integracao
     status: pendente
 
+  - id: 1545
+    caminho: docs/reconciliation/membership-deadletters-readonly-v66.json
+    proposito: registra reconstrucao somente leitura dos dois dead-letters historicos e estado convergido atual sem replay
+    tipo: documentacao-estrutural
+    consome: [evidencia/project-events-cpp-reconciliation-v59, reconcile-worker/membership]
+    produz: evidencia/membership-deadletters-readonly-v66
+    aceite: tests/test_membership_deadletters_readonly_evidence.py
+    status: aceito
+  - id: 1546
+    caminho: tests/test_membership_deadletters_readonly_evidence.py
+    proposito: impede replay por inferencia e exige distinguir causa historica nao provada de convergencia atual observada
+    tipo: backend-integracao
+    consome: [evidencia/membership-deadletters-readonly-v66]
+    produz: teste/membership-deadletters-readonly
+    aceite: portao-mecanico/backend-integracao
+    status: aceito
+
 trabalho_compartilhado:
   projeto: cloudiff
   caminho: /srv/mcp-workspace/tmp/cloudiff-ui-audit-wireguard
-  unidade: T-024-mcp-upload-wiring
-  descricao: nenhuma branch remota contem wiring Gateway para o planner mcp-upload C++; unidade bloqueada por dependencia
+  unidade: T-016-membership-deadletters-readonly
+  descricao: dead-letters historicos auditados sem replay; estado atual convergido e causa exata nao recuperavel
   agente: Redes-GPT
-  atualizado_em: '2026-08-28T13:12:00-03:00'
-  concluido_em: '2026-08-28T13:12:00-03:00'
-  previsao_termino: '2026-08-28T14:00:00-03:00'
+  atualizado_em: '2026-08-28T19:51:00-03:00'
+  concluido_em: '2026-08-28T19:51:00-03:00'
+  previsao_termino: '2026-08-28T20:20:00-03:00'
   zona_exclusao: []
-  estado: concluido_com_lacuna_externa
+  estado: concluido
