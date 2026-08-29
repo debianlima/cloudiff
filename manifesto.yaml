@@ -1,5 +1,5 @@
 projeto: cloudiff-v2
-versao_contrato: 68
+versao_contrato: 69
 namespace_fechado: true
 entradas:
   - id: 1
@@ -12430,14 +12430,31 @@ entradas:
     aceite: portao-mecanico/backend-integracao
     status: aceito
 
+  - id: 1554
+    caminho: docs/reconciliation/project-onboarding-urllerror-v69.json
+    proposito: registra causa live da falha URLError do onboarding e a recuperação concorrente do Supabase Release Agent sem mutação nesta unidade
+    tipo: documentacao-estrutural
+    consome: [project-onboarding/reconcile, supabase-release-agent/systemd]
+    produz: evidencia/project-onboarding-urllerror-v69
+    aceite: tests/test_project_onboarding_urllerror_evidence.py
+    status: aceito
+  - id: 1555
+    caminho: tests/test_project_onboarding_urllerror_evidence.py
+    proposito: exige correlação temporal entre 226/NAMESPACE, path ausente, inspect 200 pós-recuperação e onboarding 2/2
+    tipo: backend-integracao
+    consome: [evidencia/project-onboarding-urllerror-v69]
+    produz: teste/project-onboarding-urllerror
+    aceite: portao-mecanico/backend-integracao
+    status: aceito
+
 trabalho_compartilhado:
   projeto: cloudiff
   caminho: /srv/mcp-workspace/tmp/cloudiff-ui-audit-wireguard
-  unidade: T-016R-membership-deadletters-replay
-  descricao: replay humano autorizado concluido apos correcao minima do NameError no Forja Agent; historico preservado
+  unidade: T-031-project-onboarding-diagnostico
+  descricao: causa do URLError provada como 226/NAMESPACE do Supabase Release Agent por ReadWritePaths ausente; recuperacao concorrente preservada
   agente: Redes-GPT
-  atualizado_em: '2026-08-28T21:09:00-03:00'
-  concluido_em: '2026-08-28T21:09:00-03:00'
-  previsao_termino: '2026-08-28T22:00:00-03:00'
+  atualizado_em: '2026-08-28T22:20:00-03:00'
+  concluido_em: '2026-08-28T22:20:00-03:00'
+  previsao_termino: '2026-08-28T22:45:00-03:00'
   zona_exclusao: []
   estado: concluido
