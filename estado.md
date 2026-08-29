@@ -1,4 +1,4 @@
-# Estado — 2026-08-28 — contrato v70
+# Estado — 2026-08-28 — contrato v71
 
 ## Decisões vigentes
 - `FrozenPortalInterface` permanece requisito mestre; a correção desta unidade não altera HTML, CSS, JS visual, textos, botões ou layout.
@@ -8,7 +8,7 @@
 - O onboarding Faro está aceito: 4 vCPU online, identidade própria, PKI/NATS individual, agent não-root, heartbeat direto para Hospedagem, reconciliação/resiliência e rollback já possuem evidência mecânica.
 - O heartbeat atual do Faro observa capabilities `inventory`, `health`, `telemetry-host`, `portal-host` e `agent-auto-update`; `build` e `runtime` continuam excluídas do perfil Faro.
 - O caminho crítico Faro é `10.62.91.5 -> NATS 10.62.92.7:14222 -> cloudiff-control -> PostgreSQL`; Forja e Maurício não participam do heartbeat crítico.
-- Releases de agent-skills permanecem imutáveis; o runtime Faro continua na release instalada `cloudiff@0.1.4`, enquanto a skill de projeto usada nesta unidade é `cloudiff@0.1.26`.
+- Releases de agent-skills permanecem imutáveis; o runtime Faro continua na release instalada `cloudiff@0.1.4`, enquanto a skill de projeto usada nesta unidade é `cloudiff@0.1.27`.
 
 ## Decisões superadas
 - Salto obrigatório via `172.16.0.1` para acessar máquinas do laboratório — superado em 28/08/2026 pela nova orientação da TI comunicada pelo operador; acesso operacional passa a ser direto pelo conector Labiff, mantendo pfSense/MikroTik apenas como equipamentos de rede quando necessário.
@@ -21,53 +21,55 @@
 - Cutover definitivo do Portal para Faro permanece uma unidade posterior e deve respeitar os portões de portal shadow/FrozenPortalInterface; não foi executado implicitamente nesta unidade.
 
 ## Decisões fechadas nesta emenda
-- T-036 diagnosticou `cloudif-ui-security-review.service` em failed sem restart: exit 1 é causado por 5 assertions de layout/role markers obsoletos no `cloudif-ui-security-tests.py`.
-- O report atual mantém professor/admin HTTP 200, skip-link/aria/logout e todos os headers/policies de segurança esperados em PASS; não há prova de regressão desses controles.
-- O Portal live usa `enterprise-nav/ui143-nav`, `profile-chip` e `portal-hero`, enquanto o gate exige `nav/app/page/profile-card/profile-role` e `Administração do AD`.
-- O gate live e o versionado têm o mesmo SHA; `portal/tests/test_ui_security_gate_contract.py` também institucionaliza os marcadores antigos, portanto a suíte estática pode ficar verde enquanto a revisão periódica live falha.
-- Houve restart do Portal às 04:35:43 UTC entre o último UI subtest 20/20 observado e a primeira série 5-failures, mas T-036 não declarou o restart como causa raiz do drift.
-- Nenhuma alteração visual, gate live ou restart foi executado. T-036R fica bloqueada por decisão humana para mudar semântica de aceitação do security gate em produção.
+- T-033 homologou no repositório observabilidade causal para retry/dead-letter do reconcile worker sem deploy live.
+- O schema acrescenta `last_error_stage`, `last_error_upstream`, `last_error_status`, `last_error_code` e `last_error_detail` por migração incremental; `last_error_type` permanece compatível.
+- Membership distingue `membership.forgejo`/`forja-agent` e `membership.komodo`/`komodo-agent`; runtime usa `runtime.reconcile`/`runtime-reconciler`.
+- Dead-letter preserva `error_type` e `secrets_exposed=false`, acrescentando `diagnostic`. Sucesso limpa os campos `last_error_*`.
+- Sanitização remove Bearer, assignments sensíveis e URL userinfo. Exceções genéricas nunca persistem `str(exc)`, somente o tipo.
+- Política operacional não mudou: `max_attempts=5`, `lease=45s`, particionamento e backoff preservados.
+- SQLite temporário real: 7/7 PASS; T-016/T-016R: 8/8 PASS; Portal: 1038/1038; validator/mirrors/secret scan PASS; `VISUAL_DIFF=NO`.
+- T-033R permanece BLOCKED: deploy/restart live do worker é frente effectful separada e não foi autorizado pelo BOT.
 
 ## Pendências técnicas não humanas
-- T-034R BLOCKED: hardening/rotação de `NPM data/keys.json` requer autorização humana.
-- T-036R BLOCKED: corrigir o contrato do UI security gate e reexecutar a oneshot requer decisão humana sobre semântica do gate live.
-- T-028 READY: investigar read-only o gatilho externo do reboot pfSense; não tocar no pfSense.
-- T-029 READY: arquitetura de redução de SPOF, sem implantação.
-- T-030/T-033/T-035 READY: documentação, observabilidade e warning NPM.
+- T-033R BLOCKED: deploy do worker/client enriquecidos exige gate effectful separado e autorização adequada.
+- T-034R BLOCKED: hardening/rotação do `NPM data/keys.json` requer autorização humana.
+- T-036R BLOCKED: corrigir/deployar o contrato do UI security gate requer decisão humana.
+- T-028 BLOCKED: falta identificar o nó/cluster Proxmox do pfSense para ler lifecycle host-side.
+- T-029R BLOCKED: implantação HA pfSense depende de autorização humana, inventário de IPs, WAN/TI e nó Proxmox.
+- T-035 READY: warning HTTP/2 NPM pode ser tratado estaticamente; reload fica separado.
 - T-022/T-023/T-024/T-025/T-032 permanecem dependentes de wiring/releases externas.
 
 ## Trabalho compartilhado
-- ponteiro: `manifesto.yaml.trabalho_compartilhado` — unidade `T-036-ui-security-review-failed-diagnostico`, concluída; nenhuma zona de exclusão permanece ativa.
+- ponteiro: `manifesto.yaml.trabalho_compartilhado` — unidade `T-033-deadletter-observability`, concluída; nenhuma zona de exclusão permanece ativa.
 
 ## Competências ativas nesta unidade
-- `cloudiff@0.1.26` — skill raiz; L035 homologado.
+- `cloudiff@0.1.27` — skill raiz; L036 homologado.
 - `desenvolvedor-de-software@14` — método PGH.
 - `github-incremental-reconciliation@7` — reconciliação incremental.
 - `governanca-ontologica-de-skills@1.0.4` — governança.
 - `telemetry-data-visualization@2` — macro global; coletor indisponível.
 
 ## Falhas de portão por tipo de entrada
-- `ui-security-review`: contrato live prende classes/labels antigos e falha 5/20 apesar de HTTP/headers de segurança verdes.
-- `contract-test`: teste estático do gate valida os mesmos marcadores obsoletos e impede detectar o drift antes do runtime.
+- `backend-integracao`: fixture inicial de migração era irrealmente incompleto; corrigido para representar o schema pre-T-033 antes do aceite.
+- `repository-validator`: `py_compile` criou `__pycache__`, fixture tinha URL autenticada sintética literal e README tinha blank line extra; todos removidos/corrigidos antes do aceite.
 
 ## Divergências da última reconciliação
 ### Corrigidas
-- Entrada 1556 fixa a causa observada da unit failed sem confundir drift UI com regressão de headers.
-- Entrada 1557 impede overclaim de segurança e exige registrar que o próprio contract test está stale.
-- `cloudiff@0.1.26` registra L035; `VISUAL_DIFF=NO`.
+- Worker e mirror byte-idênticos; client e dois mirrors byte-idênticos.
+- Evidência v71 e teste SQLite real cobrem retry, dead-letter, sanitização, migração e limpeza no sucesso.
+- Compatibilidade histórica T-016/T-016R preservada.
+- `cloudiff@0.1.27` registra L036; `VISUAL_DIFF=NO`.
 
 ### Pendentes de autorização ou capacidade
-- T-036R: alterar critérios do gate e executar/deployar a correção live somente após decisão humana.
-- T-034R: hardening da chave JWT NPM também aguarda autorização humana.
+- T-033R não deployado; produção continua sob o worker anterior até gate effectful separado.
 
 ## Entradas aceitas nesta unidade
-- 1556 `docs/reconciliation/ui-security-review-stale-gate-v70.json`.
-- 1557 `tests/test_ui_security_review_stale_gate_evidence.py`.
-- 179 `skills/cloudiff/SKILL.md` — `cloudiff@0.1.26`, L035.
-- 2 `competencias.yaml` — skill raiz 0.1.26.
-- 9 `estado.md` — snapshot v70.
-- 10 `manifesto.yaml` — contrato v70 e zona liberada.
+- 1558 `docs/reconciliation/reconcile-deadletter-observability-v71.json`.
+- 1559 `tests/test_reconcile_deadletter_observability.py`.
+- 179 `skills/cloudiff/SKILL.md` — `cloudiff@0.1.27`, L036.
+- 2 `competencias.yaml` — skill raiz 0.1.27.
+- 9 `estado.md` — snapshot v71.
+- 10 `manifesto.yaml` — contrato v71 e zona liberada.
 
 ## Próxima unidade
-- T-028: investigação read-only do hypervisor, sem tocar no pfSense.
-- T-029: pré-estudo/arquitetura de redundância pfSense, sem implantação.
+- T-035: localizar e preparar correção estática do warning HTTP/2 NPM; sem reload/deploy live.

@@ -549,7 +549,7 @@ try:
 except Exception as e:checks.append({'name':'reconcile-worker-partitioned-contract','ok':False,'error':type(e).__name__})
 try:
  c=sqlite3.connect('file:/var/lib/cloudif/portal/cloudif-portal.db?mode=ro',uri=True,timeout=8);cols={x[1] for x in c.execute('pragma table_info(reconcile_requests)')};idx={x[1] for x in c.execute('pragma index_list(reconcile_requests)')};live=c.execute("select count(*) from reconcile_requests where status='running' and lease_expires_at<>'' and lease_expires_at<datetime('now')").fetchone()[0];c.close()
- required={'attempt_count','max_attempts','next_attempt_at','lease_owner','lease_expires_at','heartbeat_at','partition_key','coalesce_key','dead_lettered_at','last_error_type'}
+ required={'attempt_count','max_attempts','next_attempt_at','lease_owner','lease_expires_at','heartbeat_at','partition_key','coalesce_key','dead_lettered_at','last_error_type','last_error_stage','last_error_upstream','last_error_status','last_error_code','last_error_detail'}
  ok=required<=cols and {'idx_reconcile_due','idx_reconcile_partition'}<=idx and live==0
  checks.append({'name':'reconcile-worker-queue-schema','ok':ok,'required_columns':len(required),'indexes':sorted(idx & {'idx_reconcile_due','idx_reconcile_partition'}),'expired_running_leases':live})
 except Exception as e:checks.append({'name':'reconcile-worker-queue-schema','ok':False,'error':type(e).__name__})

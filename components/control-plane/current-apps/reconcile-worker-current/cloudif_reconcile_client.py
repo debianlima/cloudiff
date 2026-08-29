@@ -96,7 +96,10 @@ def ensure_schema():
       "next_attempt_at":"TEXT NOT NULL DEFAULT ''","lease_owner":"TEXT NOT NULL DEFAULT ''",
       "lease_expires_at":"TEXT NOT NULL DEFAULT ''","heartbeat_at":"TEXT NOT NULL DEFAULT ''",
       "partition_key":"TEXT NOT NULL DEFAULT ''","coalesce_key":"TEXT NOT NULL DEFAULT ''",
-      "dead_lettered_at":"TEXT NOT NULL DEFAULT ''","last_error_type":"TEXT NOT NULL DEFAULT ''"
+      "dead_lettered_at":"TEXT NOT NULL DEFAULT ''","last_error_type":"TEXT NOT NULL DEFAULT ''",
+      "last_error_stage":"TEXT NOT NULL DEFAULT ''","last_error_upstream":"TEXT NOT NULL DEFAULT ''",
+      "last_error_status":"INTEGER NOT NULL DEFAULT 0","last_error_code":"TEXT NOT NULL DEFAULT ''",
+      "last_error_detail":"TEXT NOT NULL DEFAULT ''"
     }
     for name,kind in additions.items():
         if name not in cols: con.execute(f"ALTER TABLE reconcile_requests ADD COLUMN {name} {kind}")

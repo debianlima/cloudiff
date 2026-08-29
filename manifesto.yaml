@@ -1,5 +1,5 @@
 projeto: cloudiff-v2
-versao_contrato: 70
+versao_contrato: 71
 namespace_fechado: true
 entradas:
   - id: 1
@@ -12464,14 +12464,32 @@ entradas:
     aceite: portao-mecanico/backend-integracao
     status: aceito
 
+  - id: 1558
+    caminho: docs/reconciliation/reconcile-deadletter-observability-v71.json
+    proposito: registra contrato de diagnostico sanitizado por etapa/upstream/status/codigo sem persistir segredos
+    tipo: documentacao-estrutural
+    consome: [reconcile-worker/dead-letter, reconcile-client/schema]
+    produz: evidencia/reconcile-deadletter-observability-v71
+    aceite: tests/test_reconcile_deadletter_observability.py
+    status: aceito
+  - id: 1559
+    caminho: tests/test_reconcile_deadletter_observability.py
+    proposito: prova schema, sanitizacao, retry e dead-letter com contexto causal sem alterar politica de fila
+    tipo: backend-integracao
+    consome: [reconcile-worker/dead-letter, reconcile-client/schema]
+    produz: teste/reconcile-deadletter-observability
+    aceite: portao-mecanico/backend-integracao
+    status: aceito
+
 trabalho_compartilhado:
   projeto: cloudiff
   caminho: /srv/mcp-workspace/tmp/cloudiff-ui-audit-wireguard
-  unidade: T-036-ui-security-review-failed-diagnostico
-  descricao: unit failed diagnosticada como drift de contrato de marcadores UI; headers permanecem verdes e nenhum restart foi feito
+  unidade: T-033-deadletter-observability
+  descricao: contexto causal sanitizado homologado no repo; retry/lease preservados e nenhum deploy live executado
   agente: Redes-GPT
-  atualizado_em: '2026-08-28T22:49:00-03:00'
-  concluido_em: '2026-08-28T22:49:00-03:00'
-  previsao_termino: '2026-08-28T23:10:00-03:00'
+  atualizado_em: '2026-08-29T00:25:00-03:00'
+  concluido_em: '2026-08-29T00:25:00-03:00'
+  previsao_termino: '2026-08-29T00:45:00-03:00'
+  prorrogado_em: '2026-08-29T00:22:00-03:00'
   zona_exclusao: []
   estado: concluido

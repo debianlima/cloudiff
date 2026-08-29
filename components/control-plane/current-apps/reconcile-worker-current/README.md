@@ -16,3 +16,6 @@ Componentes implantados no plano de controle e no host de hospedagem.
 > Esta seção é gerada por `scripts/generate-directory-readmes.py`. Conteúdo manual fora dos marcadores é preservado.
 
 <!-- CLOUDIFF-AUTO-DOC:END -->
+## Diagnóstico de retry/dead-letter
+
+O schema persiste somente contexto sanitizado da última falha: `last_error_type`, `last_error_stage`, `last_error_upstream`, `last_error_status`, `last_error_code` e `last_error_detail`. O `result_json` de dead-letter preserva `error_type`/`secrets_exposed=false` e acrescenta `diagnostic`. Tokens, passwords, Authorization/Bearer e userinfo de URL são redigidos antes de persistência. Uma execução bem-sucedida limpa os campos `last_error_*`.

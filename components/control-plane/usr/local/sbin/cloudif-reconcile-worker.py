@@ -8,6 +8,7 @@ import subprocess
 import sys
 import time
 import random
+import re
 import socket
 import tempfile
 import concurrent.futures
@@ -24,6 +25,54 @@ import cloudif_project_config_events as config_events
 LOCK = Path("/run/cloudif-reconcile-worker.lock")
 QUEUE = client.QUEUE
 FORJA_ENV = Path("/etc/cloudif/forja-agent-client.env")
+
+_ERROR_CODE_RE=re.compile(r'^[A-Za-z0-9_.:-]{1,120}$')
+_ERROR_SECRET_RE=re.compile(r'(?i)\b(token|password|secret|authorization|api[_-]?key|access[_-]?token|refresh[_-]?token)\b\s*[:=]\s*([^\s,;]+)')
+_BEARER_RE=re.compile(r'(?i)\bBearer\s+[^\s,;]+')
+_URL_USERINFO_RE=re.compile(r'([a-z][a-z0-9+.-]*://)[^/@\s:]+:[^/@\s]+@',re.I)
+
+
+def sanitize_error_detail(value):
+    text=str(value or '').replace('\r',' ').replace('\n',' ').strip()[:800]
+    text=_BEARER_RE.sub('Bearer <redacted>',text)
+    text=_ERROR_SECRET_RE.sub(lambda m:m.group(1)+'=<redacted>',text)
+    text=_URL_USERINFO_RE.sub(r'\1<redacted>@',text)
+    return text[:500]
+
+
+def safe_error_code(value,fallback='reconcile_failed'):
+    text=str(value or '').strip()
+    return text if _ERROR_CODE_RE.fullmatch(text) else fallback
+
+
+def upstream_error_code(result,fallback):
+    if not isinstance(result,dict):return fallback
+    data=result.get('data') if isinstance(result.get('data'),dict) else {}
+    err=data.get('error')
+    if isinstance(err,dict):candidate=err.get('code') or err.get('type')
+    else:candidate=err
+    candidate=candidate or result.get('error_type') or fallback
+    return safe_error_code(candidate,fallback)
+
+
+class ReconcileFailure(RuntimeError):
+    def __init__(self,code,stage='',upstream='',status=0,detail=''):
+        self.code=safe_error_code(code)
+        self.stage=safe_error_code(stage,'process') if stage else 'process'
+        self.upstream=safe_error_code(upstream,'') if upstream else ''
+        try:self.status=max(0,min(int(status or 0),999))
+        except Exception:self.status=0
+        self.detail=sanitize_error_detail(detail or self.code)
+        super().__init__(self.code)
+
+
+def error_context(exc):
+    if isinstance(exc,ReconcileFailure):
+        code,stage,upstream,status,detail=exc.code,exc.stage,exc.upstream,exc.status,exc.detail
+    else:
+        code=type(exc).__name__
+        stage='process';upstream='';status=0;detail=type(exc).__name__
+    return {'type':type(exc).__name__,'stage':stage,'upstream':upstream,'status':status,'code':code,'detail':detail}
 
 
 def read_env(path):
@@ -164,7 +213,7 @@ def reconcile_project_membership(project):
 
 def update_request(request_id,status,message,result):
     con=client.connect()
-    con.execute("UPDATE reconcile_requests SET status=?,message=?,result_json=?,finished_at=?,lease_owner='',lease_expires_at='',heartbeat_at='' WHERE request_id=?",
+    con.execute("UPDATE reconcile_requests SET status=?,message=?,result_json=?,finished_at=?,lease_owner='',lease_expires_at='',heartbeat_at='',last_error_type='',last_error_stage='',last_error_upstream='',last_error_status=0,last_error_code='',last_error_detail='' WHERE request_id=?",
                 (status,message[:4000],json.dumps(result,ensure_ascii=False,default=str)[:100000],client.now_utc(),request_id))
     con.commit(); con.close()
 
@@ -221,11 +270,19 @@ def process(row):
         if event=="project.membership.changed":
             membership=reconcile_project_membership(project)
             if not membership.get('ok'):
-                raise RuntimeError('project_membership_reconcile_failed')
+                if not membership.get('forgejo',{}).get('ok'):
+                    part=membership.get('forgejo') or {};code=upstream_error_code(part,'project_membership_reconcile_failed')
+                    raise ReconcileFailure('project_membership_reconcile_failed','membership.forgejo','forja-agent',part.get('status') or 0,code)
+                if not membership.get('komodo',{}).get('ok'):
+                    part=membership.get('komodo') or {};code=upstream_error_code(part,'project_membership_reconcile_failed')
+                    raise ReconcileFailure('project_membership_reconcile_failed','membership.komodo','komodo-agent',part.get('status') or 0,code)
+                raise ReconcileFailure('project_membership_reconcile_failed','membership.local','','0','membership_local_reconcile_failed')
         if event=="project.configuration.changed":
             environment=str(payload.get('environment') or 'production')
             runtime_reconcile=reconcile_project_runtime(project,environment)
-            if not runtime_reconcile.get('ok'):raise RuntimeError('project_runtime_reconcile_failed')
+            if not runtime_reconcile.get('ok'):
+                code=upstream_error_code(runtime_reconcile,'project_runtime_reconcile_failed')
+                raise ReconcileFailure('project_runtime_reconcile_failed','runtime.reconcile','runtime-reconciler',runtime_reconcile.get('status') or 0,code)
         status="ready" if repo_full else "waiting"
         if event=="project.configuration.changed":msg="Configuração e estado de runtime reconciliados."
         else:msg=("Membros, terminais e integrações reconciliados." if membership else "Projeto e repositório reconciliados.") if repo_full else "Projeto preparado; aguardando criação do repositório."
@@ -279,12 +336,14 @@ def claim(limit):
     con.close();return out
 
 def fail_or_retry(row,exc):
-    rid=row['request_id'];attempt=int(row.get('attempt_count') or 1);maximum=int(row.get('max_attempts') or 5);etype=type(exc).__name__;con=client.connect()
+    rid=row['request_id'];attempt=int(row.get('attempt_count') or 1);maximum=int(row.get('max_attempts') or 5);etype=type(exc).__name__;ctx=error_context(exc);con=client.connect()
+    fields=(etype,ctx['stage'],ctx['upstream'],ctx['status'],ctx['code'],ctx['detail'])
     if attempt>=maximum:
-        con.execute("UPDATE reconcile_requests SET status='dead_letter',dead_lettered_at=?,finished_at=?,message=?,last_error_type=?,lease_owner='',lease_expires_at='',heartbeat_at='',result_json=? WHERE request_id=?",(client.now_utc(),client.now_utc(),'Falha permanente após tentativas.',etype,json.dumps({'error_type':etype,'secrets_exposed':False},separators=(',',':')),rid))
+        result={'error_type':etype,'secrets_exposed':False};result['diagnostic']=ctx
+        con.execute("UPDATE reconcile_requests SET status='dead_letter',dead_lettered_at=?,finished_at=?,message=?,last_error_type=?,last_error_stage=?,last_error_upstream=?,last_error_status=?,last_error_code=?,last_error_detail=?,lease_owner='',lease_expires_at='',heartbeat_at='',result_json=? WHERE request_id=?",(client.now_utc(),client.now_utc(),'Falha permanente após tentativas.',*fields,json.dumps(result,separators=(',',':')),rid))
     else:
         delay=min(300,(2**max(0,attempt-1))*5)+random.randint(0,3)
-        con.execute("UPDATE reconcile_requests SET status='waiting_retry',next_attempt_at=?,message=?,last_error_type=?,lease_owner='',lease_expires_at='',heartbeat_at='' WHERE request_id=?",(iso_after(delay),f'Falha transitória; nova tentativa em {delay}s.',etype,rid))
+        con.execute("UPDATE reconcile_requests SET status='waiting_retry',next_attempt_at=?,message=?,last_error_type=?,last_error_stage=?,last_error_upstream=?,last_error_status=?,last_error_code=?,last_error_detail=?,lease_owner='',lease_expires_at='',heartbeat_at='' WHERE request_id=?",(iso_after(delay),f'Falha transitória; nova tentativa em {delay}s.',*fields,rid))
     con.commit();con.close()
 
 def execute(row):

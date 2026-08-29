@@ -6,15 +6,16 @@ import re
 import sqlite3
 import tempfile
 import uuid
+import hashlib
 from pathlib import Path
 
 DB = Path(os.environ.get("CLOUDIF_PORTAL_DB", "/var/lib/cloudif/portal/cloudif-portal.db"))
 QUEUE = Path(os.environ.get("CLOUDIF_RECONCILE_QUEUE", "/var/lib/cloudif/reconcile-queue/incoming"))
 ALLOWED_EVENTS = {
     "user.created", "user.seen",
-    "project.created", "project.updated", "project.integrated",
+    "project.created", "project.updated", "project.integrated", "project.membership.changed", "project.configuration.changed",
     "repository.created", "repository.updated",
-    "tenant.created", "tenant.ready", "tenant.bound",
+    "tenant.created", "tenant.ready", "tenant.bound", "tenant.membership.changed",
     "reconcile.requested",
 }
 SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{0,62}$")
@@ -89,6 +90,21 @@ def ensure_schema():
       updated_at TEXT NOT NULL
     );
     """)
+    cols={r[1] for r in con.execute("PRAGMA table_info(reconcile_requests)")}
+    additions={
+      "attempt_count":"INTEGER NOT NULL DEFAULT 0","max_attempts":"INTEGER NOT NULL DEFAULT 5",
+      "next_attempt_at":"TEXT NOT NULL DEFAULT ''","lease_owner":"TEXT NOT NULL DEFAULT ''",
+      "lease_expires_at":"TEXT NOT NULL DEFAULT ''","heartbeat_at":"TEXT NOT NULL DEFAULT ''",
+      "partition_key":"TEXT NOT NULL DEFAULT ''","coalesce_key":"TEXT NOT NULL DEFAULT ''",
+      "dead_lettered_at":"TEXT NOT NULL DEFAULT ''","last_error_type":"TEXT NOT NULL DEFAULT ''",
+      "last_error_stage":"TEXT NOT NULL DEFAULT ''","last_error_upstream":"TEXT NOT NULL DEFAULT ''",
+      "last_error_status":"INTEGER NOT NULL DEFAULT 0","last_error_code":"TEXT NOT NULL DEFAULT ''",
+      "last_error_detail":"TEXT NOT NULL DEFAULT ''"
+    }
+    for name,kind in additions.items():
+        if name not in cols: con.execute(f"ALTER TABLE reconcile_requests ADD COLUMN {name} {kind}")
+    con.execute("CREATE INDEX IF NOT EXISTS idx_reconcile_due ON reconcile_requests(status,next_attempt_at,created_at)")
+    con.execute("CREATE INDEX IF NOT EXISTS idx_reconcile_partition ON reconcile_requests(partition_key,status,created_at)")
     con.commit()
     con.close()
 
@@ -97,6 +113,22 @@ def _safe_slug(value):
     value = str(value or "").strip().lower()
     return value if not value or SLUG_RE.fullmatch(value) else ""
 
+
+SENSITIVE_KEYS={"token","password","secret","authorization","api_key","access_token","refresh_token","token_hash"}
+def _contains_secret(value):
+    if isinstance(value,dict):
+        return any(str(k).strip().lower() in SENSITIVE_KEYS or _contains_secret(v) for k,v in value.items())
+    if isinstance(value,list): return any(_contains_secret(v) for v in value)
+    return False
+
+def _partition(event_type,username,project,tenant):
+    if project:return "project:"+project
+    if tenant:return "tenant:"+tenant
+    if username:return "user:"+username.lower()
+    return "global:"+event_type
+
+def _coalesce(event_type,username,project,tenant):
+    return hashlib.sha256((event_type+"|"+username+"|"+project+"|"+tenant).encode()).hexdigest()
 
 def enqueue(event_type, actor="", username="", project="", tenant="", payload=None, dedupe_seconds=30):
     ensure_schema()
@@ -108,7 +140,8 @@ def enqueue(event_type, actor="", username="", project="", tenant="", payload=No
     tenant = _safe_slug(tenant)
     actor = str(actor or "portal").strip()[:200]
     payload = payload if isinstance(payload, dict) else {}
-    created = now_utc()
+    if _contains_secret(payload): raise ValueError("payload contém campo sensível")
+    created = now_utc(); partition_key=_partition(event_type,username,project,tenant); coalesce_key=_coalesce(event_type,username,project,tenant)
     con = connect()
     cutoff = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(seconds=max(0, int(dedupe_seconds)))).replace(microsecond=0).isoformat().replace("+00:00", "Z")
     old = con.execute("""
@@ -123,9 +156,10 @@ def enqueue(event_type, actor="", username="", project="", tenant="", payload=No
     request_id = str(uuid.uuid4())
     con.execute("""
       INSERT INTO reconcile_requests(
-        request_id,created_at,event_type,actor,username,project,tenant,status,message,payload_json,result_json
-      ) VALUES(?,?,?,?,?,?,?,?,?,?,?)
-    """, (request_id, created, event_type, actor, username, project, tenant, "queued", "Mensagem recebida pela interface.", json.dumps(payload, ensure_ascii=False), "{}"))
+        request_id,created_at,event_type,actor,username,project,tenant,status,message,payload_json,result_json,
+        attempt_count,max_attempts,next_attempt_at,partition_key,coalesce_key
+      ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+    """, (request_id, created, event_type, actor, username, project, tenant, "queued", "Mensagem recebida pela interface.", json.dumps(payload, ensure_ascii=False), "{}",0,5,created,partition_key,coalesce_key))
     con.commit(); con.close()
     QUEUE.mkdir(parents=True, exist_ok=True)
     marker = {"request_id": request_id, "created_at": created, "event_type": event_type}

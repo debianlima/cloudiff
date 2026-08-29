@@ -1,0 +1,133 @@
+{
+  "schema_version": 1,
+  "task": "T-033-deadletter-observability",
+  "collected_at": "2026-08-29T00:20:00-03:00",
+  "mode": "repository-only",
+  "live_deploy_performed": false,
+  "live_worker_restart_performed": false,
+  "problem": {
+    "historical_surface": "reconcile_requests persisted last_error_type and dead-letter result_json only identified the Python exception type",
+    "observed_consequence": "historical membership dead-letters surfaced RuntimeError without stage/upstream/status/code, requiring live reconstruction in T-016R",
+    "historical_records_rewritten": false
+  },
+  "schema_extension": {
+    "columns": [
+      "last_error_stage",
+      "last_error_upstream",
+      "last_error_status",
+      "last_error_code",
+      "last_error_detail"
+    ],
+    "last_error_type_preserved": true,
+    "incremental_alter_table": true,
+    "existing_retry_columns_unchanged": true
+  },
+  "diagnostic_contract": {
+    "fields": [
+      "type",
+      "stage",
+      "upstream",
+      "status",
+      "code",
+      "detail"
+    ],
+    "membership_forgejo_stage": "membership.forgejo",
+    "membership_forgejo_upstream": "forja-agent",
+    "membership_komodo_stage": "membership.komodo",
+    "membership_komodo_upstream": "komodo-agent",
+    "runtime_stage": "runtime.reconcile",
+    "runtime_upstream": "runtime-reconciler",
+    "generic_fallback_stage": "process",
+    "successful_request_clears_last_error_context": true
+  },
+  "sanitization": {
+    "applied_before_persistence": true,
+    "redacts": [
+      "Bearer credential values",
+      "token/password/secret/authorization/api_key/access_token/refresh_token assignments",
+      "URL userinfo credentials"
+    ],
+    "detail_max_chars": 500,
+    "code_charset": "A-Za-z0-9_.:-",
+    "code_max_chars": 120,
+    "synthetic_secret_test": "PASS",
+    "synthetic_secret_values_persisted": false,
+    "generic_exception_raw_message_persisted": false,
+    "generic_exception_contract": "type only; arbitrary exception message is never persisted"
+  },
+  "retry_and_deadletter": {
+    "max_attempts_default": 5,
+    "lease_seconds": 45,
+    "retry_backoff_formula_changed": false,
+    "retry_partitioning_changed": false,
+    "retry_status_after_first_failure": "waiting_retry",
+    "deadletter_status_at_attempt_5": "dead_letter",
+    "deadletter_legacy_core_preserved": {
+      "error_type": true,
+      "secrets_exposed_false": true
+    },
+    "deadletter_new_field": "diagnostic"
+  },
+  "mechanical_evidence": {
+    "sqlite_observability_tests": {
+      "tests": 7,
+      "failures": 0,
+      "errors": 0
+    },
+    "historical_t016_t016r_compatibility_tests": {
+      "tests": 8,
+      "failures": 0,
+      "errors": 0
+    },
+    "py_compile": "PASS",
+    "worker_mirror_identical": true,
+    "client_mirrors_identical": true,
+    "temporary_real_sqlite_db_used": true,
+    "real_production_sqlite_mutated": false,
+    "combined_targeted_tests": {
+      "tests": 15,
+      "failures": 0,
+      "errors": 0
+    },
+    "portal_regression": {
+      "tests": 1038,
+      "failures": 0,
+      "errors": 0
+    },
+    "repository_validator": "PASS",
+    "secret_scan": "PASS",
+    "visual_diff": "NO"
+  },
+  "files": {
+    "worker": "components/control-plane/current-apps/reconcile-worker-current/cloudif-reconcile-worker.py",
+    "worker_mirror": "components/control-plane/usr/local/sbin/cloudif-reconcile-worker.py",
+    "client": "components/control-plane/current-apps/reconcile-worker-current/cloudif_reconcile_client.py",
+    "client_mirrors": [
+      "components/control-plane/srv/cloudif/lib/cloudif_reconcile_client.py",
+      "components/control-plane/srv/cloudif/staging/lib/cloudif_reconcile_client.py"
+    ],
+    "smoke": "components/control-plane/current-apps/control-plane-smoke-current/cloudif-control-plane-smoke.py",
+    "test": "tests/test_reconcile_deadletter_observability.py"
+  },
+  "follow_up": {
+    "task": "T-033R",
+    "state": "BLOCKED",
+    "reason": "production deployment/restart of the reconcile worker is an effectful change and was not authorized by the non-human supervisor message",
+    "deployment_gate": [
+      "snapshot current worker/client/schema identity",
+      "validate ALTER TABLE migration against a production DB backup/copy",
+      "deploy worker and client mirrors atomically under normal release procedure",
+      "restart only in an approved service-impact window",
+      "inject a synthetic non-secret failure or controlled stub and prove new last_error_* fields",
+      "prove normal ready processing and cleanup of last_error_*",
+      "preserve historical dead-letters unchanged",
+      "rollback to previous release if queue processing or schema compatibility regresses"
+    ]
+  },
+  "conclusion": {
+    "repository_contract_ready": true,
+    "historical_compatibility_preserved": true,
+    "production_authority_changed": false,
+    "production_effects_executed": false
+  }
+}
