@@ -3155,7 +3155,7 @@ class Handler(BaseHTTPRequestHandler):
 # CloudIFF v143 — colaboradores do Forgejo reconciliados pela ACL central
 
 def reconcile_project_membership(payload):
-    slug=safe_slug(payload.get('project') or payload.get('project_slug') or payload.get('slug') or '')
+    slug=_v118_slug(payload.get('project') or payload.get('project_slug') or payload.get('slug') or '')
     if not slug:return {'ok':False,'error':'invalid_project'}
     project=load_project(slug) or {}
     access=payload.get('access') if isinstance(payload.get('access'),dict) else {}

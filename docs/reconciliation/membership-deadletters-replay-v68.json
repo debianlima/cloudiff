@@ -1,0 +1,131 @@
+{
+  "schema_version": 1,
+  "collected_at": "2026-08-28T21:07:00-03:00",
+  "human_authorization": {
+    "replay_two_membership_events": true,
+    "authorization_source": "current human conversation",
+    "scope": "replay the two historical project.membership.changed dead-letters and make the minimal correction required for successful reconciliation"
+  },
+  "original_deadletters": [
+    {
+      "request_id": "d9112e78-52e4-455a-b486-6344e6121ccf",
+      "project": "laboratorio-de-hardware",
+      "status_after_replay": "dead_letter",
+      "preserved": true
+    },
+    {
+      "request_id": "b5ddfdf0-5a7d-4f25-9d95-9c1ff983c4d4",
+      "project": "silvipro-jt-2026",
+      "status_after_replay": "dead_letter",
+      "preserved": true
+    }
+  ],
+  "first_replay_generation": [
+    {
+      "request_id": "22b6f164-66a4-469c-8dc9-53a36e23a9b7",
+      "project": "laboratorio-de-hardware",
+      "attempts": 5,
+      "final_status": "dead_letter",
+      "finished_at": "2026-08-29T00:02:55Z"
+    },
+    {
+      "request_id": "d7edfb69-775a-4694-88a7-7962e01a3366",
+      "project": "silvipro-jt-2026",
+      "attempts": 5,
+      "final_status": "dead_letter",
+      "finished_at": "2026-08-29T00:02:55Z"
+    }
+  ],
+  "root_cause": {
+    "component": "cloudif-forja-agent",
+    "endpoint": "/project/membership/reconcile",
+    "error_type": "NameError",
+    "error_message": "name 'safe_slug' is not defined",
+    "worker_surface_error": "RemoteDisconnected",
+    "worker_aggregate_error": "RuntimeError: project_membership_reconcile_failed",
+    "historical_compatibility": "the same undefined helper is present in the live membership implementation used by the replay; historical rows themselves did not preserve enough detail to prove that every August 5/7 failure had this exact cause"
+  },
+  "fix": {
+    "repository_file": "components/runtime/current-apps/forja-agent-current/cloudif-forja-agent.py",
+    "change": "safe_slug(...) -> _v118_slug(...)",
+    "defined_helper_preexists": true,
+    "repository_patched_file_sha256": "e45c566e5731c09bdcc01b03480d3e9af48ab154a20e4eba21b1961ceff79185",
+    "live_base_release": "/srv/cloudif/app-releases/forja-agent/platform-v25-system-fixture-20260821",
+    "live_base_file_sha256": "67c1b4ba2673333775957bad68796241f19debe9be858f5a7fa9ed991a086194",
+    "live_fixed_release": "/srv/cloudif/app-releases/forja-agent/t016r-membership-safe-slug-20260828",
+    "live_fixed_file_sha256": "5e3735486e962ecba2d49761bcdd666b9d5232393e4cc51850280cfdd980db39",
+    "live_release_derived_from_live_base": true,
+    "whole_repository_file_deployed": false,
+    "rollback_release": "/srv/cloudif/app-releases/forja-agent/platform-v25-system-fixture-20260821",
+    "service_health_after_restart_http": 200
+  },
+  "post_fix_direct_validation": {
+    "laboratorio-de-hardware": {
+      "membership_ok": true,
+      "forgejo_ok": true,
+      "forgejo_http": 200,
+      "komodo_ok": true,
+      "tenant_access_ok": true,
+      "onboarding_ok": false
+    },
+    "silvipro-jt-2026": {
+      "membership_ok": true,
+      "forgejo_ok": true,
+      "forgejo_http": 200,
+      "komodo_ok": true,
+      "tenant_access_ok": true,
+      "onboarding_ok": false
+    }
+  },
+  "successful_replay_generation": [
+    {
+      "replay_of": "d9112e78-52e4-455a-b486-6344e6121ccf",
+      "request_id": "55fca358-37d5-41e1-a5e4-cc428ea921e7",
+      "project": "laboratorio-de-hardware",
+      "status": "ready",
+      "attempts": 1,
+      "finished_at": "2026-08-29T00:06:40Z",
+      "forgejo_ok": true,
+      "forgejo_added": [],
+      "forgejo_removed": [],
+      "komodo_ok": true,
+      "terminals_created": [],
+      "tenant_access_ok": true,
+      "onboarding_ok": false
+    },
+    {
+      "replay_of": "b5ddfdf0-5a7d-4f25-9d95-9c1ff983c4d4",
+      "request_id": "b9503a2f-d1f4-48e5-a74a-a3c9b41eb06d",
+      "project": "silvipro-jt-2026",
+      "status": "ready",
+      "attempts": 1,
+      "finished_at": "2026-08-29T00:06:41Z",
+      "forgejo_ok": true,
+      "forgejo_added": [],
+      "forgejo_removed": [],
+      "komodo_ok": true,
+      "terminals_created": [],
+      "tenant_access_ok": true,
+      "onboarding_ok": false
+    }
+  ],
+  "final_state": {
+    "successful_replay_active_requests": 0,
+    "original_deadletters_preserved": 2,
+    "failed_replay_deadletters_preserved": 2,
+    "successful_replays_ready": 2,
+    "membership_state_converged": true,
+    "membership_effects_idempotent_in_observed_replay": true,
+    "onboarding_issue_separate": true,
+    "onboarding_follow_up": "T-031"
+  },
+  "conclusions": {
+    "human_authorized_effect_executed": true,
+    "deadletters_mutated_in_place": false,
+    "replay_completed": true,
+    "minimal_forja_fix_required": true,
+    "historical_rows_preserved": true,
+    "onboarding_declared_fixed": false,
+    "frozen_portal_visual_change": false
+  }
+}

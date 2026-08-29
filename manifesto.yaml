@@ -1,5 +1,5 @@
 projeto: cloudiff-v2
-versao_contrato: 67
+versao_contrato: 68
 namespace_fechado: true
 entradas:
   - id: 1
@@ -12389,14 +12389,55 @@ entradas:
     aceite: portao-mecanico/backend-integracao
     status: aceito
 
+  - id: 1549
+    caminho: components/runtime/current-apps/forja-agent-current/cloudif-forja-agent.py
+    proposito: corrige NameError no endpoint project membership reconcile usando o normalizador de slug existente
+    tipo: backend-integracao
+    consome: [reconcile-worker/membership, forja-agent/project-membership]
+    produz: runtime/forja-membership-reconcile
+    aceite: tests/test_forja_membership_replay_fix.py
+    status: aceito
+  - id: 1553
+    caminho: components/runtime/usr/local/sbin/cloudif-forja-agent.py
+    proposito: mantem mirror runtime byte-identico ao Forja Agent corrigido para membership reconcile
+    tipo: backend-integracao
+    consome: [components/runtime/current-apps/forja-agent-current/cloudif-forja-agent.py]
+    produz: runtime-mirror/forja-membership-reconcile
+    aceite: portal/tests/test_forgejo_merge_sha_resolution.py + portal/tests/test_forja_change_set_proposal.py
+    status: aceito
+  - id: 1550
+    caminho: tests/test_forja_membership_replay_fix.py
+    proposito: impede regressao do helper de slug ausente no replay de membership
+    tipo: backend-integracao
+    consome: [components/runtime/current-apps/forja-agent-current/cloudif-forja-agent.py]
+    produz: teste/forja-membership-replay-fix
+    aceite: portao-mecanico/backend-integracao
+    status: aceito
+  - id: 1551
+    caminho: docs/reconciliation/membership-deadletters-replay-v68.json
+    proposito: registra autorizacao humana replay causa live correção deploy e resultado final dos dois eventos
+    tipo: documentacao-estrutural
+    consome: [evidencia/membership-deadletters-readonly-v66, runtime/forja-membership-reconcile]
+    produz: evidencia/membership-deadletters-replay-v68
+    aceite: tests/test_membership_deadletters_replay_evidence.py
+    status: aceito
+  - id: 1552
+    caminho: tests/test_membership_deadletters_replay_evidence.py
+    proposito: exige preservar deadletters originais e comprovar sucesso dos novos requests apos correção
+    tipo: backend-integracao
+    consome: [evidencia/membership-deadletters-replay-v68]
+    produz: teste/membership-deadletters-replay
+    aceite: portao-mecanico/backend-integracao
+    status: aceito
+
 trabalho_compartilhado:
   projeto: cloudiff
   caminho: /srv/mcp-workspace/tmp/cloudiff-ui-audit-wireguard
-  unidade: T-021-admin-observability-live
-  descricao: autoridade observacional read-only C++ provada via consumidor Portal; recovery write nao exercido
+  unidade: T-016R-membership-deadletters-replay
+  descricao: replay humano autorizado concluido apos correcao minima do NameError no Forja Agent; historico preservado
   agente: Redes-GPT
-  atualizado_em: '2026-08-28T19:58:00-03:00'
-  concluido_em: '2026-08-28T19:58:00-03:00'
-  previsao_termino: '2026-08-28T20:30:00-03:00'
+  atualizado_em: '2026-08-28T21:09:00-03:00'
+  concluido_em: '2026-08-28T21:09:00-03:00'
+  previsao_termino: '2026-08-28T22:00:00-03:00'
   zona_exclusao: []
   estado: concluido
