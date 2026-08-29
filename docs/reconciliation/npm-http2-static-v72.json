@@ -1,0 +1,88 @@
+{
+  "schema_version": 1,
+  "task": "T-035-npm-http2-static",
+  "collected_at": "2026-08-29T03:45:26-03:00",
+  "mode": "repository-only",
+  "live_deploy_performed": false,
+  "live_nginx_reload_performed": false,
+  "contract": {
+    "base": 71,
+    "current": 72
+  },
+  "skill_reconciliation": {
+    "project_skill": "cloudiff@0.1.27",
+    "method_before": "desenvolvedor-de-software@14",
+    "method_after": "desenvolvedor-de-software@15",
+    "catalog_head": "047c1e9e9556d8e2f5126950a0248d2625de4547",
+    "method_delta_commit": "50b43e3",
+    "delta_inventory": "PASS",
+    "learning_preserved": "PASS",
+    "regra_anterior": "regras CloudIFF v71 + desenvolvedor-de-software@14",
+    "regra_nova": "supersessao minima autorizada adicionada em desenvolvedor-de-software@15",
+    "escopo_do_conflito": "nenhum conflito real identificado",
+    "autorizacao_humana": "nao requerida para regra aditiva sem supersessao",
+    "trecho_substituido": null,
+    "trechos_preservados": "todos os gates, protecoes e garantias CloudIFF v71"
+  },
+  "problem": {
+    "file": "components/proxy/srv/cloudif/proxy/npm/data/nginx/custom/http.conf",
+    "server_name": "admin.cloudiff.duckdns.org",
+    "legacy_directives": [
+      "listen 443 ssl http2;",
+      "listen [::]:443 ssl http2;"
+    ],
+    "upstream_reference": "nginx 1.25.1: http2 parameter of listen is deprecated",
+    "official_source": "https://mailman.nginx.org/pipermail/nginx-announce/2023/BYSVLPUZESCZHJMTDD25QD7ZKZYADAR2.html"
+  },
+  "static_correction": {
+    "before_sha256": "741fa5c57ca84a9f41aceabd2beddb075d801b50749e2c23614e1b80c5e3dca8",
+    "after_sha256": "bded528e89cf2d925936518d7a53410076b59c783bd089597f49d5dd73d52827",
+    "listen_ipv4": "listen 443 ssl;",
+    "listen_ipv6": "listen [::]:443 ssl;",
+    "http2": "http2 on;",
+    "tls_certificate_paths_changed": false,
+    "server_name_changed": false,
+    "proxy_upstream_changed": false
+  },
+  "mechanical_evidence": {
+    "pytest_initially_available_on_host": false,
+    "direct_pretest": "FAIL_EXPECTED",
+    "direct_pretest_reason": "legacy listen ssl http2 syntax present",
+    "post_patch_test_attempt_1": "FAIL_TEST_HELPER_SELECTED_HTTP_BLOCK",
+    "post_patch_test_attempt_2": "FAIL_TEST_EXPECTED_WRONG_UPSTREAM",
+    "test_helper_corrected_to_https_block": true,
+    "expected_upstream_corrected_from_observed_config": true,
+    "direct_posttest": "PASS",
+    "pytest_ephemeral_venv_version": "9.1.1",
+    "targeted_pytest": {
+      "tests": 1,
+      "failures": 0,
+      "errors": 0
+    },
+    "legacy_http2_listen_count_after": 0,
+    "repository_validator": "PASS",
+    "diff_check": "PASS",
+    "secret_shape_scan": "PASS",
+    "visual_diff": "NO"
+  },
+  "read_only_live_baseline": {
+    "url": "https://admin.cloudiff.duckdns.org/",
+    "observed_protocol": "HTTP/2",
+    "status": 302,
+    "server_header": "openresty",
+    "location_prefix": "/outpost.goauthentik.io/start",
+    "meaning": "baseline only; repository correction not deployed"
+  },
+  "webdev_observability": {
+    "fixed_link_http_status": 403,
+    "direct_link": "timeout",
+    "evidence_feed": "UNAVAILABLE",
+    "acl_bypass_attempted": false
+  },
+  "conclusion": {
+    "static_repository_correction_ready": true,
+    "production_authority_changed": false,
+    "production_effects_executed": false,
+    "reload_requires_separate_gate": true
+  }
+}

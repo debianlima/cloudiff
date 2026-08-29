@@ -34,8 +34,8 @@ compoe:
 referencia:
 - id: desenvolvedor-de-software
   fonte: debianlima/competencias-catalogo:metodo/desenvolvedor-de-software/SKILL.md
-  versao_fixada: '14'
-  delta_lido_ate: 2a641bfe597377a55711ea0804c602ea999fda07
+  versao_fixada: '15'
+  delta_lido_ate: 047c1e9e9556d8e2f5126950a0248d2625de4547
   estado: reconciliado
 - id: github-incremental-reconciliation
   fonte: debianlima/competencias-catalogo:metodo/github-incremental-reconciliation/SKILL.md

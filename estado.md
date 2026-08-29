@@ -1,4 +1,4 @@
-# Estado — 2026-08-28 — contrato v71
+# Estado — 2026-08-29 — contrato v72
 
 ## Decisões vigentes
 - `FrozenPortalInterface` permanece requisito mestre; a correção desta unidade não altera HTML, CSS, JS visual, textos, botões ou layout.
@@ -17,59 +17,67 @@
 - Confiar apenas na árvore de uma release de skills já existente como prova do artefato recebido — superado na v45 pelo gate do TAR recebido.
 
 ## Decisões humanas pendentes
-- Nenhuma decisão humana adicional para aceitar o nó Faro.
-- Cutover definitivo do Portal para Faro permanece uma unidade posterior e deve respeitar os portões de portal shadow/FrozenPortalInterface; não foi executado implicitamente nesta unidade.
+- T-034R — hardening durável e eventual rotação do `NPM data/keys.json` alteram permissão/credencial e podem invalidar sessões; exigem autorização humana.
+- T-036R — substituir marcadores frágeis do UI security gate por invariantes semânticos muda critério de aceite; exige decisão humana antes de correção/deploy.
+- T-029R — implantação HA pfSense permanece humana por envolver VM/firewall/roteamento, inventário de IPs e WAN/TI.
+- Cutover definitivo do Portal para Faro permanece unidade humana posterior e deve respeitar portal shadow/FrozenPortalInterface.
 
 ## Decisões fechadas nesta emenda
-- T-033 homologou no repositório observabilidade causal para retry/dead-letter do reconcile worker sem deploy live.
-- O schema acrescenta `last_error_stage`, `last_error_upstream`, `last_error_status`, `last_error_code` e `last_error_detail` por migração incremental; `last_error_type` permanece compatível.
-- Membership distingue `membership.forgejo`/`forja-agent` e `membership.komodo`/`komodo-agent`; runtime usa `runtime.reconcile`/`runtime-reconciler`.
-- Dead-letter preserva `error_type` e `secrets_exposed=false`, acrescentando `diagnostic`. Sucesso limpa os campos `last_error_*`.
-- Sanitização remove Bearer, assignments sensíveis e URL userinfo. Exceções genéricas nunca persistem `str(exc)`, somente o tipo.
-- Política operacional não mudou: `max_attempts=5`, `lease=45s`, particionamento e backoff preservados.
-- SQLite temporário real: 7/7 PASS; T-016/T-016R: 8/8 PASS; Portal: 1038/1038; validator/mirrors/secret scan PASS; `VISUAL_DIFF=NO`.
-- T-033R permanece BLOCKED: deploy/restart live do worker é frente effectful separada e não foi autorizado pelo BOT.
+- T-033 permaneceu homologada no contrato v71; a retomada confirmou evidência SQLite 7/7 e testes semânticos já presentes no HEAD remoto, sem reabrir seu working tree antigo.
+- T-035 homologou a correção estática do warning HTTP/2 NPM: `listen 443 ssl http2`/IPv6 foram substituídos por `listen ... ssl` + `http2 on` somente no bloco HTTPS de `admin.cloudiff.duckdns.org`.
+- Nginx 1.25.1 é a origem normativa do warning: o parâmetro `http2` de `listen` é deprecated e a diretiva por servidor é a forma atual.
+- O delta `desenvolvedor-de-software@14 -> @15` foi reconciliado como aditivo: `DELTA_INVENTORY=PASS`, `LEARNING_PRESERVED=PASS`, nenhuma regra CloudIFF substituída e referência avançada ao catálogo `047c1e9e...`.
+- T-035 não alterou certificados, `server_name`, upstream, layout ou autoridade produtiva; `VISUAL_DIFF=NO` e nenhum reload/deploy live foi executado.
+- Teste semântico: pretest direto falhou como esperado; após correção e endurecimento do helper, teste direto PASS e `pytest` 1/1 PASS em venv efêmero. Validator PASS, `diff --check` PASS e secret-shape scan PASS.
+- Baseline pública read-only continuou HTTP/2 302 via OpenResty/Authenik; não é evidência de deploy da correção.
+- O canal webdev não pôde receber evidência: link fixo 403 e link direto timeout; nenhum bypass de ACL foi tentado.
 
 ## Pendências técnicas não humanas
 - T-033R BLOCKED: deploy do worker/client enriquecidos exige gate effectful separado e autorização adequada.
-- T-034R BLOCKED: hardening/rotação do `NPM data/keys.json` requer autorização humana.
-- T-036R BLOCKED: corrigir/deployar o contrato do UI security gate requer decisão humana.
-- T-028 BLOCKED: falta identificar o nó/cluster Proxmox do pfSense para ler lifecycle host-side.
-- T-029R BLOCKED: implantação HA pfSense depende de autorização humana, inventário de IPs, WAN/TI e nó Proxmox.
-- T-035 READY: warning HTTP/2 NPM pode ser tratado estaticamente; reload fica separado.
+- T-028 BLOCKED: guest pfSense é KVM/QEMU e Proxmox VE é fortemente suportado por OUI/SMBIOS, porém o nó/cluster exato e o gatilho externo do boot 2026-08-28 13:12:48 -03 seguem `NAO_DECLARADO`; nenhum endpoint/log PVE autorizado existe no inventário atual.
 - T-022/T-023/T-024/T-025/T-032 permanecem dependentes de wiring/releases externas.
+- Reload/deploy da correção HTTP/2 NPM é gate effectful separado; T-035 termina sem executá-lo.
 
 ## Trabalho compartilhado
-- ponteiro: `manifesto.yaml.trabalho_compartilhado` — unidade `T-033-deadletter-observability`, concluída; nenhuma zona de exclusão permanece ativa.
+- ponteiro: `manifesto.yaml.trabalho_compartilhado` — unidade `T-035-npm-http2-static`, concluída; nenhuma zona de exclusão permanece ativa.
 
 ## Competências ativas nesta unidade
-- `cloudiff@0.1.27` — skill raiz; L036 homologado.
-- `desenvolvedor-de-software@14` — método PGH.
+- `cloudiff@0.1.27` — skill raiz; nenhuma nova aprendizagem de projeto foi promovida nesta unidade.
+- `desenvolvedor-de-software@15` — método PGH, reconciliado antes da geração.
 - `github-incremental-reconciliation@7` — reconciliação incremental.
 - `governanca-ontologica-de-skills@1.0.4` — governança.
-- `telemetry-data-visualization@2` — macro global; coletor indisponível.
+- `telemetry-data-visualization@2` — macro global; coletor PGH de unidade indisponível.
 
 ## Falhas de portão por tipo de entrada
-- `backend-integracao`: fixture inicial de migração era irrealmente incompleto; corrigido para representar o schema pre-T-033 antes do aceite.
-- `repository-validator`: `py_compile` criou `__pycache__`, fixture tinha URL autenticada sintética literal e README tinha blank line extra; todos removidos/corrigidos antes do aceite.
+- `infraestrutura`: `pytest` não existia no host de perfil `registro`; teste foi primeiro executado diretamente pelo Python, depois repetido com `pytest 9.1.1` em venv efêmero.
+- `infraestrutura`: helper inicial selecionava o bloco HTTP porque o mesmo `server_name` aparece duas vezes; corrigido para exigir `listen 443`.
+- `infraestrutura`: primeira expectativa de upstream do teste era incorreta; substituída pelo upstream observado no contrato versionado, sem alterar a configuração para casar com o teste.
+- `repository-validator`: `__pycache__` gerado pelo pytest efêmero foi removido antes do PASS.
+- `observabilidade`: webdev fixo 403 e direto timeout; evidência externa não pôde ser alimentada.
 
 ## Divergências da última reconciliação
 ### Corrigidas
-- Worker e mirror byte-idênticos; client e dois mirrors byte-idênticos.
-- Evidência v71 e teste SQLite real cobrem retry, dead-letter, sanitização, migração e limpeza no sucesso.
-- Compatibilidade histórica T-016/T-016R preservada.
-- `cloudiff@0.1.27` registra L036; `VISUAL_DIFF=NO`.
+- `desenvolvedor-de-software` avançou de 14 para 15 após leitura do único delta remoto (`50b43e3`); preservação integral confirmada.
+- O único uso legado de `listen ... ssl http2` no `custom/http.conf` caiu de 2 para 0; `http2 on` ficou no bloco HTTPS.
+- T-034R e T-036R foram reclassificados explicitamente como decisões humanas pendentes, não trabalho técnico executável.
+- T-028 foi reconciliado com o inventário atual de dotfiles: Proxmox provável, nó/cluster ainda não identificados.
 
 ### Pendentes de autorização ou capacidade
-- T-033R não deployado; produção continua sob o worker anterior até gate effectful separado.
+- T-034R: autorização humana para hardening/rotação/restart do NPM.
+- T-036R: decisão humana sobre nova semântica do UI security gate e posterior deploy/re-run.
+- T-028: inventariar/fornecer endpoint do nó/cluster Proxmox que possui o UUID da VM pfSense; então ler task log, `qemu-server` e journal host-side de 13:05–13:15 -03.
+- Webdev: restaurar caminho observável autorizado para alimentar `evidence/` sem contornar ACL.
 
 ## Entradas aceitas nesta unidade
-- 1558 `docs/reconciliation/reconcile-deadletter-observability-v71.json`.
-- 1559 `tests/test_reconcile_deadletter_observability.py`.
-- 179 `skills/cloudiff/SKILL.md` — `cloudiff@0.1.27`, L036.
-- 2 `competencias.yaml` — skill raiz 0.1.27.
-- 9 `estado.md` — snapshot v71.
-- 10 `manifesto.yaml` — contrato v71 e zona liberada.
+- 823 `components/proxy/srv/cloudif/proxy/npm/data/nginx/custom/http.conf` — correção HTTP/2 estática.
+- 1560 `tests/test_npm_http2_static_warning.py` — teste semântico 1/1 PASS.
+- 1561 `docs/reconciliation/npm-http2-static-v72.json` — evidência T-035.
+- 2 `competencias.yaml` — referência método @15.
+- 179 `skills/cloudiff/SKILL.md` — referência método @15, skill permanece 0.1.27.
+- 9 `estado.md` — snapshot v72.
+- 10 `manifesto.yaml` — contrato v72 e zona liberada.
 
 ## Próxima unidade
-- T-035: localizar e preparar correção estática do warning HTTP/2 NPM; sem reload/deploy live.
+- Nenhuma frente independente permanece READY no estado observado.
+- Próximo gate técnico de T-028: obter/inventariar o endpoint Proxmox que possui o UUID da VM pfSense; sem isso o gatilho externo permanece `NAO_DECLARADO`.
+- T-034R/T-036R/T-029R aguardam humano; T-022/T-023/T-024/T-025 dependem de sistemas/releases externos.
