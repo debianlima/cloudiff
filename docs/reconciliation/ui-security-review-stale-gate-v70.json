@@ -1,0 +1,114 @@
+{
+  "schema_version": 1,
+  "task": "T-036-ui-security-review-failed-diagnostico",
+  "collected_at": "2026-08-28T22:46:00-03:00",
+  "mode": "read-only",
+  "mutation_performed": false,
+  "service_restart_performed": false,
+  "unit": {
+    "name": "cloudif-ui-security-review.service",
+    "type": "oneshot",
+    "active_state": "failed",
+    "sub_state": "failed",
+    "result": "exit-code",
+    "exec_main_code": 1,
+    "exec_main_status": 1,
+    "failed_execution_started_utc": "2026-08-28T20:59:31Z",
+    "failed_execution_finished_utc": "2026-08-28T20:59:31Z",
+    "runner": "/usr/local/sbin/cloudif-ui-security-review-run.sh",
+    "gate": "/usr/local/sbin/cloudif-secure-release-gate.sh",
+    "live_test": "/srv/cloudif/tests/cloudif-ui-security-tests.py"
+  },
+  "current_report": {
+    "path": "/srv/cloudif/documentacao/security-reviews/review-20260828-205931.log",
+    "tests": 20,
+    "failures": 5,
+    "failed_checks": ["novo_layout", "hero_professor", "chip_professor", "admin_visivel_admin", "chip_admin"],
+    "passed_role_or_access_checks": ["professor_http", "admin_http", "admin_visivel_professor", "logout", "skip_link", "aria_current"],
+    "passed_security_header_checks": [
+      "cache-control",
+      "x-content-type-options",
+      "x-frame-options",
+      "referrer-policy",
+      "permissions-policy",
+      "content-security-policy",
+      "single_content-security-policy",
+      "single_x-frame-options",
+      "single_referrer-policy"
+    ],
+    "ui_test_exit_short_circuits_remaining_gate": true,
+    "full_secure_release_gate_passed_in_current_execution": false
+  },
+  "live_portal_structure": {
+    "professor_http": 200,
+    "admin_http": 200,
+    "old_markers_present": {
+      "nav_class_nav": false,
+      "class_app": false,
+      "main_class_page": false,
+      "class_page_head": false,
+      "class_profile_card": false,
+      "profile_role_professor": false,
+      "profile_role_administrator": false,
+      "administracao_do_ad": false
+    },
+    "current_markers_present": {
+      "skip_link": true,
+      "aria_current": true,
+      "administracao_label": true,
+      "enterprise_nav": true,
+      "ui143_nav": true,
+      "profile_chip": true,
+      "portal_hero": true,
+      "main_conteudo_principal": true
+    },
+    "admin_role_class_present": true,
+    "professor_role_class_present": true
+  },
+  "repository_alignment": {
+    "live_gate_sha256": "87bbd00ad9ebd762747366b91ce625a0da68dd85c2b4e9b5f8e1b2346cf1460d",
+    "repository_gate_sha256": "87bbd00ad9ebd762747366b91ce625a0da68dd85c2b4e9b5f8e1b2346cf1460d",
+    "live_and_repository_gate_identical": true,
+    "gate_last_change_commit": "74fe4786bacdc79dd8bb4d9315ee64475e544e59",
+    "gate_last_change_at": "2026-08-07T16:56:02Z",
+    "gate_last_change_subject": "Align UI security gate with canonical portal shell",
+    "repository_contract_test": "portal/tests/test_ui_security_gate_contract.py",
+    "contract_test_requires_obsolete_markers": true,
+    "contract_test_forbids_current_live_markers": ["portal-hero", "profile-chip teacher"],
+    "static_suite_can_pass_while_periodic_live_gate_fails": true
+  },
+  "timeline": {
+    "last_observed_ui_subtest_20_of_20": "2026-08-27T23:26:23Z",
+    "portal_restart_between_reports": "2026-08-28T04:35:43Z",
+    "first_observed_current_series_5_failures": "2026-08-28T05:29:04Z",
+    "same_five_failures_observed_at": [
+      "2026-08-28T05:29:04Z",
+      "2026-08-28T11:31:03Z",
+      "2026-08-28T14:54:50Z",
+      "2026-08-28T20:59:31Z"
+    ],
+    "portal_restart_proven_as_root_cause": false,
+    "note": "restart lies between the last green UI subtest and first five-failure report, but no initiating deployment/config change was proven in this unit"
+  },
+  "diagnosis": {
+    "security_header_regression_proven": false,
+    "live_portal_http_failure_proven": false,
+    "stale_ui_marker_contract_proven": true,
+    "repository_and_live_gate_are_both_stale_relative_to_current_portal": true,
+    "unit_failure_classification": "security-review gate contract drift / brittle UI marker assertions",
+    "frozen_portal_visual_change_by_this_unit": false
+  },
+  "follow_up": {
+    "task": "T-036R",
+    "state": "BLOCKED",
+    "requires_human_authorization": true,
+    "reason": "changing security gate acceptance semantics and deploying/re-running it in production is an effectful governance decision",
+    "recommended_scope": [
+      "replace brittle CSS class and exact-label checks with semantic navigation/role/access invariants for the current frozen Portal",
+      "preserve all existing security-header assertions",
+      "update portal/tests/test_ui_security_gate_contract.py in the same change so static tests cannot institutionalize stale live markers",
+      "prove the current frozen Portal without changing visual assets",
+      "deploy the corrected gate only after review, then run the oneshot and require the complete secure-release-gate to reach its final PASS marker"
+    ]
+  }
+}

@@ -1,4 +1,4 @@
-# Estado — 2026-08-28 — contrato v69
+# Estado — 2026-08-28 — contrato v70
 
 ## Decisões vigentes
 - `FrozenPortalInterface` permanece requisito mestre; a correção desta unidade não altera HTML, CSS, JS visual, textos, botões ou layout.
@@ -8,7 +8,7 @@
 - O onboarding Faro está aceito: 4 vCPU online, identidade própria, PKI/NATS individual, agent não-root, heartbeat direto para Hospedagem, reconciliação/resiliência e rollback já possuem evidência mecânica.
 - O heartbeat atual do Faro observa capabilities `inventory`, `health`, `telemetry-host`, `portal-host` e `agent-auto-update`; `build` e `runtime` continuam excluídas do perfil Faro.
 - O caminho crítico Faro é `10.62.91.5 -> NATS 10.62.92.7:14222 -> cloudiff-control -> PostgreSQL`; Forja e Maurício não participam do heartbeat crítico.
-- Releases de agent-skills permanecem imutáveis; o runtime Faro continua na release instalada `cloudiff@0.1.4`, enquanto a skill de projeto usada nesta unidade é `cloudiff@0.1.25`.
+- Releases de agent-skills permanecem imutáveis; o runtime Faro continua na release instalada `cloudiff@0.1.4`, enquanto a skill de projeto usada nesta unidade é `cloudiff@0.1.26`.
 
 ## Decisões superadas
 - Salto obrigatório via `172.16.0.1` para acessar máquinas do laboratório — superado em 28/08/2026 pela nova orientação da TI comunicada pelo operador; acesso operacional passa a ser direto pelo conector Labiff, mantendo pfSense/MikroTik apenas como equipamentos de rede quando necessário.
@@ -21,51 +21,53 @@
 - Cutover definitivo do Portal para Faro permanece uma unidade posterior e deve respeitar os portões de portal shadow/FrozenPortalInterface; não foi executado implicitamente nesta unidade.
 
 ## Decisões fechadas nesta emenda
-- T-031 provou a causa da falha atual de onboarding sem executar reconcile manual nem alterar runtime: o `cloudif-supabase-release-agent.service` falhava em `226/NAMESPACE` porque `/srv/cloudif/managed-backups/releases`, declarado em `ReadWritePaths`, não existia.
-- No último ciclo falho, Forja e Komodo responderam HTTP 200; a falha ocorreu depois, no acesso ao Supabase Release Agent.
-- Trabalho concorrente criou/restaurou o path `0700 root:root` e reiniciou o Release Agent às 01:04:37 UTC. O inspect Supabase voltou a 200 às 01:04:49/51 e o onboarding passou 2/2 às 01:04:51, mantendo `ready=2` nos ciclos seguintes.
-- A correção live não é atribuída a T-031; esta unidade foi read-only. O ator exato além de `cti via sudo` permanece `NAO DECLARADO`.
-- A causa T-031 não reclassifica automaticamente os dead-letters históricos de 05/08 e 07/08.
+- T-036 diagnosticou `cloudif-ui-security-review.service` em failed sem restart: exit 1 é causado por 5 assertions de layout/role markers obsoletos no `cloudif-ui-security-tests.py`.
+- O report atual mantém professor/admin HTTP 200, skip-link/aria/logout e todos os headers/policies de segurança esperados em PASS; não há prova de regressão desses controles.
+- O Portal live usa `enterprise-nav/ui143-nav`, `profile-chip` e `portal-hero`, enquanto o gate exige `nav/app/page/profile-card/profile-role` e `Administração do AD`.
+- O gate live e o versionado têm o mesmo SHA; `portal/tests/test_ui_security_gate_contract.py` também institucionaliza os marcadores antigos, portanto a suíte estática pode ficar verde enquanto a revisão periódica live falha.
+- Houve restart do Portal às 04:35:43 UTC entre o último UI subtest 20/20 observado e a primeira série 5-failures, mas T-036 não declarou o restart como causa raiz do drift.
+- Nenhuma alteração visual, gate live ou restart foi executado. T-036R fica bloqueada por decisão humana para mudar semântica de aceitação do security gate em produção.
 
 ## Pendências técnicas não humanas
-- T-034 READY: analisar consumidores/runtime UID-GID de `/srv/cloudif/proxy/npm/data/keys.json` antes de qualquer hardening de permissão.
-- T-028 READY: investigar em leitura o gatilho externo do reboot pfSense no hypervisor; não tocar no pfSense.
-- T-033 READY: melhorar observabilidade do reconcile worker para persistir etapa/upstream/erro sanitizado.
-- T-035 READY: tratar warning de sintaxe HTTP/2 NPM em unidade separada.
-- T-023/T-025/T-032 permanecem dependentes de releases futuras; T-024 depende de wiring explícito.
+- T-034R BLOCKED: hardening/rotação de `NPM data/keys.json` requer autorização humana.
+- T-036R BLOCKED: corrigir o contrato do UI security gate e reexecutar a oneshot requer decisão humana sobre semântica do gate live.
+- T-028 READY: investigar read-only o gatilho externo do reboot pfSense; não tocar no pfSense.
+- T-029 READY: arquitetura de redução de SPOF, sem implantação.
+- T-030/T-033/T-035 READY: documentação, observabilidade e warning NPM.
+- T-022/T-023/T-024/T-025/T-032 permanecem dependentes de wiring/releases externas.
 
 ## Trabalho compartilhado
-- ponteiro: `manifesto.yaml.trabalho_compartilhado` — unidade `T-031-project-onboarding-diagnostico`, concluída; nenhuma zona de exclusão permanece ativa.
+- ponteiro: `manifesto.yaml.trabalho_compartilhado` — unidade `T-036-ui-security-review-failed-diagnostico`, concluída; nenhuma zona de exclusão permanece ativa.
 
 ## Competências ativas nesta unidade
-- `cloudiff@0.1.25` — skill raiz; L034 homologado.
+- `cloudiff@0.1.26` — skill raiz; L035 homologado.
 - `desenvolvedor-de-software@14` — método PGH.
 - `github-incremental-reconciliation@7` — reconciliação incremental.
 - `governanca-ontologica-de-skills@1.0.4` — governança.
 - `telemetry-data-visualization@2` — macro global; coletor indisponível.
 
 ## Falhas de portão por tipo de entrada
-- `systemd-sandbox`: `ReadWritePaths` apontava para diretório ausente; unit falhava antes do ExecStart com 226/NAMESPACE.
-- `observabilidade`: consumer reportava apenas `URLError`, exigindo correlação com journal do upstream para localizar o namespace failure.
+- `ui-security-review`: contrato live prende classes/labels antigos e falha 5/20 apesar de HTTP/headers de segurança verdes.
+- `contract-test`: teste estático do gate valida os mesmos marcadores obsoletos e impede detectar o drift antes do runtime.
 
 ## Divergências da última reconciliação
 ### Corrigidas
-- Entrada 1554 fixa a cadeia causal e separa a recuperação concorrente da ação desta unidade.
-- Entrada 1555 exige evidência de 226/NAMESPACE, path ausente, inspect 200 pós-recuperação e onboarding 2/2.
-- `cloudiff@0.1.25` registra L034; `VISUAL_DIFF=NO`.
+- Entrada 1556 fixa a causa observada da unit failed sem confundir drift UI com regressão de headers.
+- Entrada 1557 impede overclaim de segurança e exige registrar que o próprio contract test está stale.
+- `cloudiff@0.1.26` registra L035; `VISUAL_DIFF=NO`.
 
 ### Pendentes de autorização ou capacidade
-- Nenhuma mutação adicional no onboarding é necessária enquanto health/ready permanecerem verdes.
-- Hardening NPM T-034 exige análise de consumidores e decisão humana antes de chmod/chown.
+- T-036R: alterar critérios do gate e executar/deployar a correção live somente após decisão humana.
+- T-034R: hardening da chave JWT NPM também aguarda autorização humana.
 
 ## Entradas aceitas nesta unidade
-- 1554 `docs/reconciliation/project-onboarding-urllerror-v69.json`.
-- 1555 `tests/test_project_onboarding_urllerror_evidence.py`.
-- 179 `skills/cloudiff/SKILL.md` — `cloudiff@0.1.25`, L034.
-- 2 `competencias.yaml` — skill raiz 0.1.25.
-- 9 `estado.md` — snapshot v69.
-- 10 `manifesto.yaml` — contrato v69 e zona liberada.
+- 1556 `docs/reconciliation/ui-security-review-stale-gate-v70.json`.
+- 1557 `tests/test_ui_security_review_stale_gate_evidence.py`.
+- 179 `skills/cloudiff/SKILL.md` — `cloudiff@0.1.26`, L035.
+- 2 `competencias.yaml` — skill raiz 0.1.26.
+- 9 `estado.md` — snapshot v70.
+- 10 `manifesto.yaml` — contrato v70 e zona liberada.
 
 ## Próxima unidade
-- T-034: análise read-only do `NPM data/keys.json` e seus consumidores antes de decisão de hardening.
-- T-028: diagnóstico read-only do hypervisor, sem tocar no pfSense.
+- T-028: investigação read-only do hypervisor, sem tocar no pfSense.
+- T-029: pré-estudo/arquitetura de redundância pfSense, sem implantação.

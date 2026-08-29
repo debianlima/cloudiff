@@ -1,5 +1,5 @@
 projeto: cloudiff-v2
-versao_contrato: 69
+versao_contrato: 70
 namespace_fechado: true
 entradas:
   - id: 1
@@ -12447,14 +12447,31 @@ entradas:
     aceite: portao-mecanico/backend-integracao
     status: aceito
 
+  - id: 1556
+    caminho: docs/reconciliation/ui-security-review-stale-gate-v70.json
+    proposito: registra causa da unit ui-security-review failed como contrato de marcadores obsoleto frente ao Portal live, preservando headers e sem restart
+    tipo: documentacao-estrutural
+    consome: [ui-security-gate, portal/frozen-live-shell]
+    produz: evidencia/ui-security-review-stale-gate-v70
+    aceite: tests/test_ui_security_review_stale_gate_evidence.py
+    status: aceito
+  - id: 1557
+    caminho: tests/test_ui_security_review_stale_gate_evidence.py
+    proposito: exige distinguir regressao de seguranca de drift de marcadores UI e impede atribuir a falha a headers quando eles permanecem verdes
+    tipo: backend-integracao
+    consome: [evidencia/ui-security-review-stale-gate-v70, ui-security-gate]
+    produz: teste/ui-security-review-stale-gate
+    aceite: portao-mecanico/backend-integracao
+    status: aceito
+
 trabalho_compartilhado:
   projeto: cloudiff
   caminho: /srv/mcp-workspace/tmp/cloudiff-ui-audit-wireguard
-  unidade: T-031-project-onboarding-diagnostico
-  descricao: causa do URLError provada como 226/NAMESPACE do Supabase Release Agent por ReadWritePaths ausente; recuperacao concorrente preservada
+  unidade: T-036-ui-security-review-failed-diagnostico
+  descricao: unit failed diagnosticada como drift de contrato de marcadores UI; headers permanecem verdes e nenhum restart foi feito
   agente: Redes-GPT
-  atualizado_em: '2026-08-28T22:20:00-03:00'
-  concluido_em: '2026-08-28T22:20:00-03:00'
-  previsao_termino: '2026-08-28T22:45:00-03:00'
+  atualizado_em: '2026-08-28T22:49:00-03:00'
+  concluido_em: '2026-08-28T22:49:00-03:00'
+  previsao_termino: '2026-08-28T23:10:00-03:00'
   zona_exclusao: []
   estado: concluido
