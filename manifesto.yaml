@@ -1,5 +1,5 @@
 projeto: cloudiff-v2
-versao_contrato: 72
+versao_contrato: 73
 namespace_fechado: true
 entradas:
   - id: 1
@@ -12498,14 +12498,35 @@ entradas:
     aceite: portao-mecanico/documentacao-estrutural
     status: aceito
 
+  - id: 1562
+    caminho: tests/test_cloudiff_main_line_reconciliation.py
+    proposito: prova preservacao dos 33 commits homologados, absorcao do main-only cleanup, governanca 1.0.5 e identidade unica da Project-Skill
+    tipo: documentacao-estrutural
+    consome: [git/main, git/audit-ui-overview-alias-fix, skill/cloudiff]
+    produz: teste/cloudiff-main-line-reconciliation
+    aceite: portao-mecanico/documentacao-estrutural
+    status: pendente
+  - id: 1563
+    caminho: docs/reconciliation/cloudiff-main-line-reconciliation-v73.json
+    proposito: registra inventario, refs, deltas, gates e fechamento da reconciliacao da linha CloudIFF para PGH 2.0
+    tipo: documentacao-estrutural
+    consome: [teste/cloudiff-main-line-reconciliation]
+    produz: evidencia/cloudiff-main-line-reconciliation-v73
+    aceite: tests/test_cloudiff_main_line_reconciliation.py
+    status: pendente
+
 trabalho_compartilhado:
   projeto: cloudiff
-  caminho: /srv/mcp-workspace/tmp/cloudiff-t035-http2
-  unidade: T-035-npm-http2-static
-  descricao: localizar, testar e corrigir estaticamente diretivas HTTP/2 legadas do NPM; sem reload ou deploy live
+  caminho: /srv/mcp-workspace/tmp/cloudiff-ui-audit-wireguard
+  unidade: T-037-pgh2-main-line-reconciliation
+  descricao: reconciliar branch homologado CloudIFF 0.1.27 com main, preservar 33 commits de aprendizado e absorver limpeza main-only sem runtime/deploy
   agente: Redes-GPT
-  atualizado_em: '2026-08-29T03:40:51-03:00'
-  previsao_termino: '2026-08-29T04:40:51-03:00'
-  zona_exclusao: []
-  concluido_em: '2026-08-29T03:46:36-03:00'
-  estado: concluido
+  atualizado_em: '2026-09-01T19:34:46.205479Z'
+  previsao_termino: '2026-09-01T18:30:00-03:00'
+  zona_exclusao:
+    - manifesto.yaml
+    - estado.md
+    - competencias.yaml
+    - skills/cloudiff/SKILL.md
+    - tests/test_cloudiff_main_line_reconciliation.py
+    - docs/reconciliation/cloudiff-main-line-reconciliation-v73.json
