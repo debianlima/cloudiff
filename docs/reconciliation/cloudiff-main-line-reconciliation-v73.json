@@ -1,14 +1,18 @@
 {
   "contract_version": 73,
   "gates": {
+    "AGENT_SKILLS_SYNC_PORTABILITY": "PASS",
+    "BASELINE_NO_REGRESSION": "PASS",
     "DELTA_INVENTORY": "PASS",
     "DEPENDENCY_REFERENCES": "PENDING",
     "LEARNING_PRESERVED": "PASS",
     "MAIN_ONLY_CLEANUP_PRESERVED": "PENDING_CLOSURE",
+    "MANIFEST_UNIQUE_ID_PATH": "PASS",
     "NO_RUNTIME_DEPLOY": "PASS",
     "PROJECT_SKILL_GATE": "PASS",
     "RECONCILIATION_CLOSURE": "PENDING",
-    "TARGET_LEARNING_PRESERVED": "PASS"
+    "TARGET_LEARNING_PRESERVED": "PASS",
+    "V1_NAMESPACE_AUDIT_REFRESH": "PASS"
   },
   "governance_delta": {
     "classification": "additive",
@@ -16,6 +20,35 @@
     "learning": "candidate line keeps base_homologated_version and NEEDS_REBASE when official advances",
     "source_commit": "a92f68ba79dc46fbae3f79686242693040a15d36",
     "to": "1.0.5"
+  },
+  "inherited_gate_reconciliation": {
+    "agent_skills_sync": {
+      "fix": "extract candidate inside umask 022 subshell; gate forces child umask 077",
+      "offline_owner_fixture": "uses executor uid:gid; production script default remains root:root",
+      "root_cause": "tar extraction inherited executor umask 077, changing expected 0644 to 0600"
+    },
+    "baseline_commit": "32c3900383e619cbacb12af87fb5a4149630d678",
+    "collection_before": {
+      "collected": 1111,
+      "errors": [
+        "tests/test_agent_skills_sync.py",
+        "tests/test_v1_namespace_audit.py"
+      ]
+    },
+    "current_before": {
+      "collected": 1111,
+      "errors": [
+        "tests/test_agent_skills_sync.py",
+        "tests/test_v1_namespace_audit.py"
+      ]
+    },
+    "gnu_patch_test_provider": "GNU patch 2.7.6 extracted user-space from AlmaLinux RPM; no sudo/runtime mutation",
+    "v1_namespace": {
+      "fix": "append path with immutable audit hash, current hash and source commit; original audit remains unchanged",
+      "gate_override_source_commit": "3ebf6a1924b0fe4d4029d137e08d8f79399670c2",
+      "gate_overrides_reconciled": 2,
+      "root_cause": "accepted post-audit change 9fea69f was absent from controlled v1_changed_paths"
+    }
   },
   "inventory": {
     "branch_before": "32c3900383e619cbacb12af87fb5a4149630d678",
@@ -28,6 +61,26 @@
     "commit": "bc4effd53ecd80912ea2a3a4e4b6efb4852af4a9",
     "meaning": "clear completed shared-work block; no product/runtime delta",
     "preservation": "T037 keeps an active reservation during work and must close to trabalho_compartilhado={}."
+  },
+  "manifest_duplicate_reconciliation": {
+    "baseline_had_duplicate_paths": true,
+    "classification": "DECLARATION_ERROR_INHERITED_FROM_BASELINE",
+    "mappings": [
+      {
+        "canonical_id": 1549,
+        "path": "components/runtime/current-apps/forja-agent-current/cloudif-forja-agent.py",
+        "reason": "canonical id 1549 is referenced by homologated commit 3ebf6a; generic V1 id had no trailer reference found",
+        "removed_generic_id": 847
+      },
+      {
+        "canonical_id": 1553,
+        "path": "components/runtime/usr/local/sbin/cloudif-forja-agent.py",
+        "reason": "canonical id 1553 is referenced by homologated commit 3ebf6a; generic V1 id had no trailer reference found",
+        "removed_generic_id": 987
+      }
+    ],
+    "old_evidence_consumers": 0,
+    "tree_files_deleted": false
   },
   "observed_gate_failures": [
     {

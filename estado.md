@@ -57,6 +57,10 @@
 
 ## Divergências da última reconciliação
 ### Corrigidas
+- Manifesto herdava duas declarações duplicadas para o Forja Agent; IDs genéricos V1 `847/987` foram consolidados nos IDs homologados `1549/1553`, que possuem rastro no commit `3ebf6a`; nenhum arquivo de produto foi removido.
+- T-037 provou dois blockers de coleta herdados também no baseline `32c3900`: `agent_skills_sync` e `v1_namespace_audit`; ambos foram classificados como dívida técnica pré-existente, não regressão do merge.
+- `agent_skills_sync`: causa raiz = extração `tar` dependente do umask do serviço (0644 esperado virava 0600 sob umask 077); correção normaliza somente a extração para umask 022 e o teste força 077.
+- `v1_namespace_audit`: `cloudif-control-plane-smoke.py` foi alterado legitimamente no commit `9fea69f` após o audit de 1320 arquivos; o delta agora preserva o hash original e declara a normalização aceita sem reescrever o audit histórico.
 - T-037 inventariou `main=bc4effd53ecd80912ea2a3a4e4b6efb4852af4a9`, linha homologada pré-reconciliação `32c3900383e619cbacb12af87fb5a4149630d678` e merge-base `8cc669ae5fba38d7148192b295af632cbd1b9be7`: 33 commits de aprendizado no branch e 1 commit exclusivo de `main`.
 - O commit exclusivo de `main` remove somente um bloco `trabalho_compartilhado` concluído; sua semântica é preservada no fechamento T-037, quando o bloco ativo volta a `{}`.
 - `governanca-ontologica-de-skills` avançou 1.0.4 -> 1.0.5 após leitura do delta `a92f68b`: candidatas preservam `base_homologated_version` e usam `NEEDS_REBASE` quando a linha oficial avança; nenhuma aprendizagem CloudIFF foi removida.

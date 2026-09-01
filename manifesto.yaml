@@ -6747,14 +6747,6 @@ entradas:
     produz: evidencia/v1-file-0662
     aceite: portao-mecanico/v1-audit-file
     status: aceito
-  - id: 847
-    caminho: components/runtime/current-apps/forja-agent-current/cloudif-forja-agent.py
-    proposito: "arquivo V1 auditado; contexto funcional documentado pelo README ancestral components/runtime/current-apps/forja-agent-current/README.md"
-    tipo: runtime
-    consome: []
-    produz: evidencia/v1-file-0663
-    aceite: portao-mecanico/v1-audit-file
-    status: aceito
   - id: 848
     caminho: components/runtime/current-apps/komodo-agent-current/README.md
     proposito: "arquivo V1 auditado; contexto funcional documentado pelo README ancestral components/runtime/current-apps/komodo-agent-current/README.md"
@@ -7865,14 +7857,6 @@ entradas:
     tipo: infraestrutura
     consome: []
     produz: evidencia/v1-file-0802
-    aceite: portao-mecanico/v1-audit-file
-    status: aceito
-  - id: 987
-    caminho: components/runtime/usr/local/sbin/cloudif-forja-agent.py
-    proposito: "arquivo V1 auditado; contexto funcional documentado pelo README ancestral components/runtime/usr/local/sbin/README.md"
-    tipo: infraestrutura
-    consome: []
-    produz: evidencia/v1-file-0803
     aceite: portao-mecanico/v1-audit-file
     status: aceito
   - id: 988

@@ -9,11 +9,13 @@ entries=manifest['entradas'];by={e['caminho']:e for e in entries}
 assert audit['tracked_count']==1320 and audit['audited_count']==1320 and len(audit['files'])==1320 and not audit['syntax_errors']
 norm=delta['post_reconciliation_normalization']
 allowed={x['path']:x for x in norm['v1_changed_paths']}
+gate_overrides={x['path']:x for x in norm.get('v1_entry_gate_overrides',[])}
 link_failures={x['path'] for x in audit['markdown_link_errors']}
 assert len(link_failures)==5
 mismatches=[]
 accepted=0
 preexisting=0
+overrides_seen=set()
 for r in audit['files']:
  p=root/r['path'];assert p.is_file(),r['path']
  got=hashlib.sha256(p.read_bytes()).hexdigest()
@@ -22,11 +24,24 @@ for r in audit['files']:
  e=by.get(r['path']);assert e is not None,r['path']
  if r['path'] in link_failures:
   assert e['status']=='preexistente',r['path'];preexisting+=1
+  assert r['path'] not in gate_overrides,r['path']
+  expected_gate='portao-mecanico/v1-audit-file'
  else:
   assert e['status']=='aceito',r['path'];accepted+=1
- assert e['aceite']=='portao-mecanico/v1-audit-file',r['path']
+  meta=gate_overrides.get(r['path'])
+  if meta:
+   overrides_seen.add(r['path'])
+   assert meta['previous_gate']=='portao-mecanico/v1-audit-file',r['path']
+   assert meta['status']=='aceito',r['path']
+   assert subprocess.run(['git','-C',str(root),'merge-base','--is-ancestor',audit['git_head'],meta['source_commit']]).returncode==0,r['path']
+   assert subprocess.run(['git','-C',str(root),'merge-base','--is-ancestor',meta['source_commit'],'HEAD']).returncode==0,r['path']
+   expected_gate=meta['current_gate']
+  else:
+   expected_gate='portao-mecanico/v1-audit-file'
+ assert e['aceite']==expected_gate,r['path']
 assert accepted==1315 and preexisting==5
 assert set(mismatches)==set(allowed), (mismatches,allowed)
+assert overrides_seen==set(gate_overrides), (overrides_seen,gate_overrides)
 # Prove original audited bytes remain recoverable in Git history for every controlled normalization.
 for rel,meta in allowed.items():
  original=subprocess.check_output(['git','-C',str(root),'show',f"{audit['git_head']}:{rel}"])

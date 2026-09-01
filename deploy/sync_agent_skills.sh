@@ -79,7 +79,9 @@ validate_extracted(){
 extract_candidate(){
   local dir=$1
   install -d -m 0755 "$dir"
-  tar -xzf "$ARCHIVE" -C "$dir"
+  # Service umasks vary by profile (e.g. 077 under hardened MCP workers).
+  # Normalize extraction to 022 so the signed mode+hash manifest is deterministic.
+  ( umask 022; tar -xzf "$ARCHIVE" -C "$dir" )
   validate_extracted "$dir"
 }
 

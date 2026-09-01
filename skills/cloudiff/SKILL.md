@@ -308,3 +308,15 @@ Em 2026-08-29, T-033 corrigiu a lacuna que obrigou T-016/T-016R a reconstruir um
 **Evita:** apagar dezenas de unidades homologadas por tratar branch default como autoridade superior ao estado reconciliado.
 
 **Plataforma/pressupostos:** Git com refs remotas acessíveis, gates CloudIFF verdes e nenhuma zona exclusiva viva no `main`.
+
+### T-037 — gates offline devem neutralizar diferenças de umask e preservar audits históricos
+
+**Sintomas observáveis:** `test_agent_skills_sync.py` falhava com `new_manifest_mismatch` apenas em executor hardened (0644 -> 0600); `test_v1_namespace_audit.py` falhava porque uma mudança aceita posterior ao audit não estava no delta controlado.
+
+**Portões:** entradas 176/177/181/184 em 2026-09-01; `tests/test_agent_skills_sync.py` e `tests/test_v1_namespace_audit.py`.
+
+**Regra acionável:** extração validada por manifesto de modo+hash deve usar umask determinístico dentro do próprio helper, e auditoria histórica imutável nunca é reescrita para casar com bytes novos — mudanças aceitas posteriores entram no delta com hash histórico, hash atual e commit de origem.
+
+**Evita:** falsos negativos dependentes de perfil e apagamento da proveniência de uma auditoria antiga.
+
+**Plataforma/pressupostos:** Linux/POSIX, GNU tar, Git history disponível; sem deploy/runtime no gate offline.

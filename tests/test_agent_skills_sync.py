@@ -25,7 +25,8 @@ def archive(tree:Path,out:Path):
         for p in sorted(tree.rglob('*')):t.add(p,arcname=p.relative_to(tree).as_posix(),recursive=False)
 
 def run(args,env,ok=True):
-    r=subprocess.run([str(script),*args],text=True,capture_output=True,env=env)
+    def restrictive_umask(): os.umask(0o077)
+    r=subprocess.run([str(script),*args],text=True,capture_output=True,env=env,preexec_fn=restrictive_umask)
     if ok: assert r.returncode==0,(r.returncode,r.stdout,r.stderr)
     else: assert r.returncode!=0,(r.stdout,r.stderr)
     return r
@@ -36,7 +37,7 @@ with tempfile.TemporaryDirectory() as td:
     os.symlink(base,skills/'current')
     bm=t/'baseline.txt';nm=t/'new.txt';manifest(base,bm);manifest(newsrc,nm)
     arc=t/'new.tar.gz';archive(newsrc,arc)
-    env=os.environ.copy();env.update(CLOUDIFF_AGENT_SKILLS_ROOT=str(skills),CLOUDIFF_AGENT_SKILLS_ALLOWED_HOSTS=os.uname().nodename.split('.')[0],CLOUDIFF_AGENT_SKILLS_OWNER='root:root')
+    env=os.environ.copy();env.update(CLOUDIFF_AGENT_SKILLS_ROOT=str(skills),CLOUDIFF_AGENT_SKILLS_ALLOWED_HOSTS=os.uname().nodename.split('.')[0],CLOUDIFF_AGENT_SKILLS_OWNER=f'{os.getuid()}:{os.getgid()}')
     cur0=os.path.realpath(skills/'current')
     r=run(['dry-run',str(arc),'release-2',str(bm),str(nm)],env);assert 'DRY_RUN_PASS' in r.stdout;assert os.path.realpath(skills/'current')==cur0;assert not (rels/'release-2').exists()
     r=run(['install',str(arc),'release-2',str(bm),str(nm)],env);assert 'SYNC=PASS' in r.stdout;assert os.path.realpath(skills/'current')==str(rels/'release-2');assert os.path.realpath(skills/'previous')==str(base)

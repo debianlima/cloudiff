@@ -1,46 +1,9 @@
 {
-  "schema_version": 1,
-  "v1": {
-    "repository": "debianlima/cloudiff",
-    "head": "10a76d589525e4b4ee681f62274e585250d49429",
-    "tracked_files": 1320,
-    "audited_files": 1320,
-    "syntax_errors": 0,
-    "duplicate_groups": 84,
-    "broken_local_markdown_links": 5
-  },
-  "v2": {
-    "source": "/srv/cloudif-v2",
-    "contract_version": 38,
-    "path_collisions_with_v1": 0
-  },
-  "gates": {
-    "DELTA_INVENTORY": "PASS",
-    "LEARNING_PRESERVED": "PASS",
-    "NORMALIZATION_ALLOWED": "YES",
-    "RECONCILIATION_CLOSURE": "PASS",
-    "DEPENDENCY_REFERENCES": "PASS"
-  },
-  "frozen_interface": {
-    "status": "master-invariant",
-    "assets_sha256": {
-      "portal/design/README.md": "275f6f45bc4ddad7fe7ab6ef2e8d0456a4c02288c989e19ef9b458cf2faa2074",
-      "portal/design/app.js": "f4fd13dc69872956ad47200cb6b9a27a510ed613b3a72595344cf1496b2efb8b",
-      "portal/design/base.css": "6335ceaea27b2d6145d847231dfb55cc456ffe71db50982e096e878db6289453",
-      "portal/design/components.css": "c663abc955bc91280e11e97bd984e4641ffde266ba4a14e072e967aae398926c",
-      "portal/design/tokens.css": "09823c9b79433f4b0a9a340436b176f22b248d88792d91e72ae38e67ac3272d9",
-      "portal/ui/README.md": "763d8bb7b1f6ca29b5d8cb02fed924a8977af66c80c59ade5f63dae905c2410c",
-      "portal/ui/__init__.py": "f6951578abf65a74e31e63352dde71444566e7da98c1a63c2335044b07e0a493",
-      "portal/ui/components.py": "72412c37ffe0d9b75d2738b8f3bf8154936d8adb95ef58368f2589106e4de9b8",
-      "portal/ui/icons.py": "42e112aef9fcc6bae52062a2c8f46707d9f234a25f4e8331ae63ade16cab524b",
-      "portal/ui/shell.py": "6acc3a8ed1e93d93bc9e09bc988f3058154da44aa77c66e3a3a614e89ceb2938"
-    },
-    "surfaces": [
-      "Visão geral",
-      "Publicações",
-      "Projetos",
-      "Bancos e tenants"
-    ]
+  "catalog": {
+    "normalized_head": "7cf8efc3b345584a24e277cf4c04eee4c5a5177d",
+    "project_skill": "debianlima/cloudiff:skills/cloudiff/SKILL.md",
+    "project_skill_version": "0.1.1",
+    "repository": "debianlima/competencias-catalogo"
   },
   "correspondence_groups": [
     "governance-and-skills",
@@ -55,48 +18,40 @@
     "network-pki-distribution",
     "legacy-retirement-and-backup"
   ],
+  "frozen_interface": {
+    "assets_sha256": {
+      "portal/design/README.md": "275f6f45bc4ddad7fe7ab6ef2e8d0456a4c02288c989e19ef9b458cf2faa2074",
+      "portal/design/app.js": "f4fd13dc69872956ad47200cb6b9a27a510ed613b3a72595344cf1496b2efb8b",
+      "portal/design/base.css": "6335ceaea27b2d6145d847231dfb55cc456ffe71db50982e096e878db6289453",
+      "portal/design/components.css": "c663abc955bc91280e11e97bd984e4641ffde266ba4a14e072e967aae398926c",
+      "portal/design/tokens.css": "09823c9b79433f4b0a9a340436b176f22b248d88792d91e72ae38e67ac3272d9",
+      "portal/ui/README.md": "763d8bb7b1f6ca29b5d8cb02fed924a8977af66c80c59ade5f63dae905c2410c",
+      "portal/ui/__init__.py": "f6951578abf65a74e31e63352dde71444566e7da98c1a63c2335044b07e0a493",
+      "portal/ui/components.py": "72412c37ffe0d9b75d2738b8f3bf8154936d8adb95ef58368f2589106e4de9b8",
+      "portal/ui/icons.py": "42e112aef9fcc6bae52062a2c8f46707d9f234a25f4e8331ae63ade16cab524b",
+      "portal/ui/shell.py": "6acc3a8ed1e93d93bc9e09bc988f3058154da44aa77c66e3a3a614e89ceb2938"
+    },
+    "status": "master-invariant",
+    "surfaces": [
+      "Visão geral",
+      "Publicações",
+      "Projetos",
+      "Bancos e tenants"
+    ]
+  },
+  "gates": {
+    "DELTA_INVENTORY": "PASS",
+    "DEPENDENCY_REFERENCES": "PASS",
+    "LEARNING_PRESERVED": "PASS",
+    "NORMALIZATION_ALLOWED": "YES",
+    "RECONCILIATION_CLOSURE": "PASS"
+  },
   "notes": [
     "V1 and V2 had zero path collisions at inventory time; union is additive before semantic normalization.",
     "Normalization never decides which content wins; it runs after learning preservation."
   ],
-  "unified": {
-    "total_files": 1493,
-    "official_validator": "PASS",
-    "portal_test_suite": {
-      "status": "PASS",
-      "tests": 1008,
-      "skipped": 1
-    },
-    "frozen_ui_hashes": {
-      "status": "PASS",
-      "count": 10
-    },
-    "v2_yaml": "PASS",
-    "faro_node_preparation": "PASS",
-    "agent_update_offline": "PASS"
-  },
-  "skill_reconciliation": {
-    "catalog_copy_head": "8d06515e8cd6946063325d337d9c80bc837fd8ef",
-    "catalog_copy_path": "projeto/cloudiff/SKILL.md",
-    "DELTA_INVENTORY": "PASS",
-    "LEARNING_PRESERVED": "PASS",
-    "canonical_skill_version": "0.1.1"
-  },
-  "catalog": {
-    "repository": "debianlima/competencias-catalogo",
-    "normalized_head": "7cf8efc3b345584a24e277cf4c04eee4c5a5177d",
-    "project_skill": "debianlima/cloudiff:skills/cloudiff/SKILL.md",
-    "project_skill_version": "0.1.1"
-  },
   "post_reconciliation_normalization": {
     "phase": "v39-namespace-normalization",
-    "v1_changed_paths": [
-      {
-        "path": ".gitignore",
-        "audit_sha256": "d03efa6272e9099c4084a70812e51b2c8ee7b9778e954dec97482d2f6bf075f3",
-        "reason": "preserve global *.sql ignore while allowing exactly six accepted CloudIFF v2 schema/test SQL source artifacts"
-      }
-    ],
     "recovered_v2_accepted_paths": [
       {
         "path": "sql/001_bootstrap.sql",
@@ -128,6 +83,195 @@
         "sha256": "8b81e5b61d7bc0d43cfb4e4afd9bdd0516b90921392882ebe959a42b1b5a11f5",
         "source": "/srv/cloudif-v2"
       }
+    ],
+    "v1_changed_paths": [
+      {
+        "audit_sha256": "d03efa6272e9099c4084a70812e51b2c8ee7b9778e954dec97482d2f6bf075f3",
+        "path": ".gitignore",
+        "reason": "preserve global *.sql ignore while allowing exactly six accepted CloudIFF v2 schema/test SQL source artifacts"
+      },
+      {
+        "audit_sha256": "8a52659f62a29d3372731482995129dc741736ee7464e432dd77e6c821f99a48",
+        "current_sha256": "2c9558e95224a87459d93f9cc20cf3fe2458d20ef505d9b23a5b87805eac13ea",
+        "path": "components/control-plane/current-apps/control-plane-smoke-current/cloudif-control-plane-smoke.py",
+        "reason": "post-audit accepted change enriched deadletter diagnostics; preserve original audited bytes through git history while admitting the later accepted normalization",
+        "source_commit": "9fea69f6424ad061d7b8cd73ecdd80f28f4e4980"
+      },
+      {
+        "audit_sha256": "fe137bac9bcced4c4083f0f917ccaf9b9d4c8d4b3aa71a1a5f56cec37a39767a",
+        "current_sha256": "c8bfac8c94f28af4e51d1bca84e3882e224d0ca6afce0e8a267f020c18968ec5",
+        "path": "components/control-plane/current-apps/portal-current/cloudif-admin-portal-base.py",
+        "reason": "post-audit accepted change (cloudiff: reconcilia disponibilidade dos bancos); preserve immutable audit bytes and admit later accepted state",
+        "source_commit": "60f4e067dd9ab394dff398978f24b6f6ce285cf2"
+      },
+      {
+        "audit_sha256": "db7e0d10ad83aab01ea904a7a4a44ef831b2ddc7001a62174c00ed6179695147",
+        "current_sha256": "659b69e025c04edd0aa1e4e2952341e4b2e5334fcde14b6050410e575d14be40",
+        "path": "components/control-plane/current-apps/portal-current/cloudif_portal_publications.py",
+        "reason": "post-audit accepted change (cloudiff: preserva estado parcial apos publish); preserve immutable audit bytes and admit later accepted state",
+        "source_commit": "4900ac767fd071ecbb0216a3c9860fd3660a67c8"
+      },
+      {
+        "audit_sha256": "3d50f2eac5efd605d7bfbbdac8c95f0ba5ec65d781e11c7e12d531af4d1e31a2",
+        "current_sha256": "b3acfcc21a2843083abcfaa3c7b9243f3d60550dc6bf1a2223618c7489fbc79c",
+        "path": "components/control-plane/current-apps/reconcile-worker-current/README.md",
+        "reason": "post-audit accepted change (cloudiff: enriquece diagnostico de deadletters); preserve immutable audit bytes and admit later accepted state",
+        "source_commit": "9fea69f6424ad061d7b8cd73ecdd80f28f4e4980"
+      },
+      {
+        "audit_sha256": "81d7cebb5198a743166a6673230ce6795ab81f9acbe0f23bd5dacf0282ea8770",
+        "current_sha256": "8f3b7263fa8cdbd7bf28f09b32e9338db0cba901d6981ebb82e62c148557e645",
+        "path": "components/control-plane/current-apps/reconcile-worker-current/cloudif-reconcile-worker.py",
+        "reason": "post-audit accepted change (cloudiff: enriquece diagnostico de deadletters); preserve immutable audit bytes and admit later accepted state",
+        "source_commit": "9fea69f6424ad061d7b8cd73ecdd80f28f4e4980"
+      },
+      {
+        "audit_sha256": "17238845de4ec7faf1e5a7dae77a87edf4a851a9c4deb6aad615ff0369d48389",
+        "current_sha256": "586681c3412353b2ad4cf0db983ad76cb542f9f9c6b1a9b68ce6f58f930adefb",
+        "path": "components/control-plane/current-apps/reconcile-worker-current/cloudif_reconcile_client.py",
+        "reason": "post-audit accepted change (cloudiff: enriquece diagnostico de deadletters); preserve immutable audit bytes and admit later accepted state",
+        "source_commit": "9fea69f6424ad061d7b8cd73ecdd80f28f4e4980"
+      },
+      {
+        "audit_sha256": "db7e0d10ad83aab01ea904a7a4a44ef831b2ddc7001a62174c00ed6179695147",
+        "current_sha256": "659b69e025c04edd0aa1e4e2952341e4b2e5334fcde14b6050410e575d14be40",
+        "path": "components/control-plane/srv/cloudif/lib/cloudif_portal_publications.py",
+        "reason": "post-audit accepted change (cloudiff: preserva estado parcial apos publish); preserve immutable audit bytes and admit later accepted state",
+        "source_commit": "4900ac767fd071ecbb0216a3c9860fd3660a67c8"
+      },
+      {
+        "audit_sha256": "4407bd7c216ad7229e99c4518ac1a611ca91d625e8402426bbb1584782ee9005",
+        "current_sha256": "1ae42e1e7d668474915e85bfa5f2efaadd404403265aa32988b74fae25c99e6e",
+        "path": "components/control-plane/srv/cloudif/lib/cloudif_portal_v2_coexist.py",
+        "reason": "post-audit accepted change (cloudiff: prova efeito do backup remoto); preserve immutable audit bytes and admit later accepted state",
+        "source_commit": "68c74b0aa5e3343b566b5d7c88b62b1fd13ba108"
+      },
+      {
+        "audit_sha256": "9306afa1884792f7d79ed7f4c5dc4bc98bc8e8c2cf8e9263138af86a457592fa",
+        "current_sha256": "6958484f6a75a1be3f4ee8677f6a1dea3ec75adf72ab239fd744580ca7c8c58f",
+        "path": "components/control-plane/srv/cloudif/lib/cloudif_project_acl_module.py",
+        "reason": "post-audit accepted change (cloudiff: preserva reconciliacao duravel da ACL); preserve immutable audit bytes and admit later accepted state",
+        "source_commit": "0313219730dda7a9a58f26a8030a5fd0daa3cd52"
+      },
+      {
+        "audit_sha256": "dc7bf8e5ee910edfb2ad31b8f5499044245f02491caaf64d5cf2b0942350063d",
+        "current_sha256": "7996b5f4c68c6aa9cec6b13e7ff2c322eca2f14dc6cc97ebdeb2500f88fc445e",
+        "path": "components/control-plane/srv/cloudif/lib/cloudif_project_action_safe.py",
+        "reason": "post-audit accepted change (cloudiff: valida provisionamento antes da escrita); preserve immutable audit bytes and admit later accepted state",
+        "source_commit": "90d33fd527ba464aa9af00ef7bab16ff1226c99c"
+      },
+      {
+        "audit_sha256": "17238845de4ec7faf1e5a7dae77a87edf4a851a9c4deb6aad615ff0369d48389",
+        "current_sha256": "586681c3412353b2ad4cf0db983ad76cb542f9f9c6b1a9b68ce6f58f930adefb",
+        "path": "components/control-plane/srv/cloudif/lib/cloudif_reconcile_client.py",
+        "reason": "post-audit accepted change (cloudiff: enriquece diagnostico de deadletters); preserve immutable audit bytes and admit later accepted state",
+        "source_commit": "9fea69f6424ad061d7b8cd73ecdd80f28f4e4980"
+      },
+      {
+        "audit_sha256": "b6d31eaca82c1ab41a57337d09f070a58d5f61db0df99ca3b8bdc301f198da23",
+        "current_sha256": "586681c3412353b2ad4cf0db983ad76cb542f9f9c6b1a9b68ce6f58f930adefb",
+        "path": "components/control-plane/srv/cloudif/staging/lib/cloudif_reconcile_client.py",
+        "reason": "post-audit accepted change (cloudiff: enriquece diagnostico de deadletters); preserve immutable audit bytes and admit later accepted state",
+        "source_commit": "9fea69f6424ad061d7b8cd73ecdd80f28f4e4980"
+      },
+      {
+        "audit_sha256": "81d7cebb5198a743166a6673230ce6795ab81f9acbe0f23bd5dacf0282ea8770",
+        "current_sha256": "8f3b7263fa8cdbd7bf28f09b32e9338db0cba901d6981ebb82e62c148557e645",
+        "path": "components/control-plane/usr/local/sbin/cloudif-reconcile-worker.py",
+        "reason": "post-audit accepted change (cloudiff: enriquece diagnostico de deadletters); preserve immutable audit bytes and admit later accepted state",
+        "source_commit": "9fea69f6424ad061d7b8cd73ecdd80f28f4e4980"
+      },
+      {
+        "audit_sha256": "741fa5c57ca84a9f41aceabd2beddb075d801b50749e2c23614e1b80c5e3dca8",
+        "current_sha256": "bded528e89cf2d925936518d7a53410076b59c783bd089597f49d5dd73d52827",
+        "path": "components/proxy/srv/cloudif/proxy/npm/data/nginx/custom/http.conf",
+        "reason": "post-audit accepted change (cloudiff: moderniza HTTP/2 estatico do NPM); preserve immutable audit bytes and admit later accepted state",
+        "source_commit": "32c3900383e619cbacb12af87fb5a4149630d678"
+      },
+      {
+        "audit_sha256": "d0329556d5c83665a455a0c6f82321b6e4dcd6a11bc1081a8bb652c54223ad74",
+        "current_sha256": "e45c566e5731c09bdcc01b03480d3e9af48ab154a20e4eba21b1961ceff79185",
+        "path": "components/runtime/current-apps/forja-agent-current/cloudif-forja-agent.py",
+        "reason": "post-audit accepted change (cloudiff: corrige e reprocessa membership deadletters); preserve immutable audit bytes and admit later accepted state",
+        "source_commit": "3ebf6a1924b0fe4d4029d137e08d8f79399670c2"
+      },
+      {
+        "audit_sha256": "d0329556d5c83665a455a0c6f82321b6e4dcd6a11bc1081a8bb652c54223ad74",
+        "current_sha256": "e45c566e5731c09bdcc01b03480d3e9af48ab154a20e4eba21b1961ceff79185",
+        "path": "components/runtime/usr/local/sbin/cloudif-forja-agent.py",
+        "reason": "post-audit accepted change (cloudiff: corrige e reprocessa membership deadletters); preserve immutable audit bytes and admit later accepted state",
+        "source_commit": "3ebf6a1924b0fe4d4029d137e08d8f79399670c2"
+      },
+      {
+        "audit_sha256": "984830dd5a74caee24858021a76288db678b1a553a0d5429192c65edd8c76fe7",
+        "current_sha256": "770d6a8f52a91cb987c5457906a227494b03005b931e66ca304844baf813ea27",
+        "path": "portal/tests/test_backup_remote_global_config.py",
+        "reason": "post-audit accepted change (cloudiff: prova efeito do backup remoto); preserve immutable audit bytes and admit later accepted state",
+        "source_commit": "68c74b0aa5e3343b566b5d7c88b62b1fd13ba108"
+      },
+      {
+        "audit_sha256": "6c6c63d6a296d2dad43fef240aac966e3cedaadb19e93fd65d493f5991b6e017",
+        "current_sha256": "4c1f6c8d82071d31fe7fe21149ec0de0ffe9e0d4baa0e00ce0a1234b2d23f401",
+        "path": "portal/tests/test_frozen_surfaces_contract.py",
+        "reason": "post-audit accepted change (cloudiff: reconcilia alias da Visao geral); preserve immutable audit bytes and admit later accepted state",
+        "source_commit": "10453c8fd4fb7696a5b4a76498acf4f026a1075f"
+      }
+    ],
+    "v1_entry_gate_overrides": [
+      {
+        "current_gate": "tests/test_forja_membership_replay_fix.py",
+        "path": "components/runtime/current-apps/forja-agent-current/cloudif-forja-agent.py",
+        "previous_gate": "portao-mecanico/v1-audit-file",
+        "reason": "post-audit accepted membership deadletter replay fix replaced generic V1 audit acceptance with a narrower executable gate",
+        "source_commit": "3ebf6a1924b0fe4d4029d137e08d8f79399670c2",
+        "status": "aceito"
+      },
+      {
+        "current_gate": "portal/tests/test_forgejo_merge_sha_resolution.py + portal/tests/test_forja_change_set_proposal.py",
+        "path": "components/runtime/usr/local/sbin/cloudif-forja-agent.py",
+        "previous_gate": "portao-mecanico/v1-audit-file",
+        "reason": "post-audit accepted Forgejo/change-set behavior superseded the generic V1 audit acceptance gate while keeping the entry accepted",
+        "source_commit": "3ebf6a1924b0fe4d4029d137e08d8f79399670c2",
+        "status": "aceito"
+      }
     ]
+  },
+  "schema_version": 1,
+  "skill_reconciliation": {
+    "DELTA_INVENTORY": "PASS",
+    "LEARNING_PRESERVED": "PASS",
+    "canonical_skill_version": "0.1.1",
+    "catalog_copy_head": "8d06515e8cd6946063325d337d9c80bc837fd8ef",
+    "catalog_copy_path": "projeto/cloudiff/SKILL.md"
+  },
+  "unified": {
+    "agent_update_offline": "PASS",
+    "faro_node_preparation": "PASS",
+    "frozen_ui_hashes": {
+      "count": 10,
+      "status": "PASS"
+    },
+    "official_validator": "PASS",
+    "portal_test_suite": {
+      "skipped": 1,
+      "status": "PASS",
+      "tests": 1008
+    },
+    "total_files": 1493,
+    "v2_yaml": "PASS"
+  },
+  "v1": {
+    "audited_files": 1320,
+    "broken_local_markdown_links": 5,
+    "duplicate_groups": 84,
+    "head": "10a76d589525e4b4ee681f62274e585250d49429",
+    "repository": "debianlima/cloudiff",
+    "syntax_errors": 0,
+    "tracked_files": 1320
+  },
+  "v2": {
+    "contract_version": 38,
+    "path_collisions_with_v1": 0,
+    "source": "/srv/cloudif-v2"
   }
 }
