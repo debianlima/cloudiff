@@ -12095,14 +12095,4 @@ entradas:
     aceite: portao-mecanico/backend-integracao
     status: aceito
 
-trabalho_compartilhado:
-  projeto: cloudiff
-  caminho: /srv/cloudif/cloudiff-release-faro
-  unidade: faro-cloudiff-release
-  descricao: fecha onboarding Faro apos capacidade 4 vCPU observada, sem cutover do Portal
-  agente: WORK-SSH
-  atualizado_em: '2026-08-26T17:47:02-03:00'
-  concluido_em: '2026-08-26T17:47:02-03:00'
-  previsao_termino: '2026-08-26T17:47:02-03:00'
-  zona_exclusao: []
-  estado: concluido
+trabalho_compartilhado: {}

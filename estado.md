@@ -1,4 +1,4 @@
-# Estado — 2026-08-26 — contrato v45
+# Estado — 2026-08-31 — contrato v45
 
 ## Decisões vigentes
 - `FrozenPortalInterface` permanece requisito mestre; nenhuma mudança de Portal/UI, navegação ou rotas de usuário foi feita nesta unidade.
@@ -28,7 +28,7 @@
 - LegacyRetirement continua separado e qualquer retirada destrutiva exige seus próprios gates e autorização final.
 
 ## Trabalho compartilhado
-- ponteiro: `manifesto.yaml.trabalho_compartilhado` — unidade `faro-cloudiff-release`, concluída, sem zona de exclusão ativa.
+- ponteiro: `manifesto.yaml.trabalho_compartilhado` — vazio; o bloco concluído `faro-cloudiff-release` foi removido na reconciliação de 31/08/2026 porque não representava trabalho vivo e tinha zona de exclusão vazia.
 
 ## Competências ativas nesta unidade
 - `cloudiff@0.1.5` — skill raiz carregada no início da unidade.
@@ -45,6 +45,7 @@
 
 ## Divergências da última reconciliação
 ### Corrigidas
+- `manifesto.yaml.trabalho_compartilhado`: removido bloco concluído `faro-cloudiff-release` (concluído em 26/08/2026, zona de exclusão vazia); fonte canônica voltou a representar apenas trabalho vivo.
 - `config/faro-node-profile.json`: `observed_resources.vcpu=4`, `resource_gates.vcpu=pass`, recursos `satisfied`.
 - `config/faro-node-reservation.json`: recursos observados reconciliados com heartbeat atual e `vcpu=pass`.
 - `config/faro-validation-01-discovery.json`: CPU atual e `portal-host` observada.
