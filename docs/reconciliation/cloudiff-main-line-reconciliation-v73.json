@@ -1,0 +1,47 @@
+{
+  "contract_version": 73,
+  "gates": {
+    "DELTA_INVENTORY": "PASS",
+    "DEPENDENCY_REFERENCES": "PENDING",
+    "LEARNING_PRESERVED": "PASS",
+    "MAIN_ONLY_CLEANUP_PRESERVED": "PENDING_CLOSURE",
+    "NO_RUNTIME_DEPLOY": "PASS",
+    "PROJECT_SKILL_GATE": "BLOCKED_STALE_EXPECTATION_DEV14",
+    "RECONCILIATION_CLOSURE": "PENDING",
+    "TARGET_LEARNING_PRESERVED": "PASS"
+  },
+  "governance_delta": {
+    "classification": "additive",
+    "from": "1.0.4",
+    "learning": "candidate line keeps base_homologated_version and NEEDS_REBASE when official advances",
+    "source_commit": "a92f68ba79dc46fbae3f79686242693040a15d36",
+    "to": "1.0.5"
+  },
+  "inventory": {
+    "branch_before": "32c3900383e619cbacb12af87fb5a4149630d678",
+    "main_before": "bc4effd53ecd80912ea2a3a4e4b6efb4852af4a9",
+    "main_only_commits": 1,
+    "merge_base": "8cc669ae5fba38d7148192b295af632cbd1b9be7",
+    "target_only_commits": 33
+  },
+  "main_only_delta": {
+    "commit": "bc4effd53ecd80912ea2a3a4e4b6efb4852af4a9",
+    "meaning": "clear completed shared-work block; no product/runtime delta",
+    "preservation": "T037 keeps an active reservation during work and must close to trabalho_compartilhado={}."
+  },
+  "observed_gate_failures": [
+    {
+      "classification": "STALE_GATE_TO_RECONCILE",
+      "gate": "tests/test_cloudiff_project_skill.py",
+      "symptom": "expects desenvolvedor-de-software@14 while active/reference is @15"
+    }
+  ],
+  "runtime_effects": {
+    "database": false,
+    "deploy": false,
+    "network": false,
+    "restart": false
+  },
+  "schema": "cloudiff-main-line-reconciliation/1",
+  "unit": "T-037-pgh2-main-line-reconciliation"
+}

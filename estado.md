@@ -1,4 +1,4 @@
-# Estado — 2026-08-29 — contrato v72
+# Estado — 2026-09-01 — contrato v73
 
 ## Decisões vigentes
 - `FrozenPortalInterface` permanece requisito mestre; a correção desta unidade não altera HTML, CSS, JS visual, textos, botões ou layout.
@@ -39,13 +39,13 @@
 - Reload/deploy da correção HTTP/2 NPM é gate effectful separado; T-035 termina sem executá-lo.
 
 ## Trabalho compartilhado
-- ponteiro: `manifesto.yaml.trabalho_compartilhado` — unidade `T-035-npm-http2-static`, concluída; nenhuma zona de exclusão permanece ativa.
+- ponteiro: `manifesto.yaml.trabalho_compartilhado` — unidade `T-037-pgh2-main-line-reconciliation`, ativa durante a reconciliação.
 
 ## Competências ativas nesta unidade
-- `cloudiff@0.1.27` — skill raiz; nenhuma nova aprendizagem de projeto foi promovida nesta unidade.
+- `cloudiff@0.1.28` — skill raiz; T-037 reconcilia a linha homologada com `main` e a governança 1.0.5.
 - `desenvolvedor-de-software@15` — método PGH, reconciliado antes da geração.
 - `github-incremental-reconciliation@7` — reconciliação incremental.
-- `governanca-ontologica-de-skills@1.0.4` — governança.
+- `governanca-ontologica-de-skills@1.0.5` — governança de candidatas/linhas, reconciliada antes da normalização.
 - `telemetry-data-visualization@2` — macro global; coletor PGH de unidade indisponível.
 
 ## Falhas de portão por tipo de entrada
@@ -57,6 +57,9 @@
 
 ## Divergências da última reconciliação
 ### Corrigidas
+- T-037 inventariou `main=bc4effd53ecd80912ea2a3a4e4b6efb4852af4a9`, linha homologada pré-reconciliação `32c3900383e619cbacb12af87fb5a4149630d678` e merge-base `8cc669ae5fba38d7148192b295af632cbd1b9be7`: 33 commits de aprendizado no branch e 1 commit exclusivo de `main`.
+- O commit exclusivo de `main` remove somente um bloco `trabalho_compartilhado` concluído; sua semântica é preservada no fechamento T-037, quando o bloco ativo volta a `{}`.
+- `governanca-ontologica-de-skills` avançou 1.0.4 -> 1.0.5 após leitura do delta `a92f68b`: candidatas preservam `base_homologated_version` e usam `NEEDS_REBASE` quando a linha oficial avança; nenhuma aprendizagem CloudIFF foi removida.
 - `desenvolvedor-de-software` avançou de 14 para 15 após leitura do único delta remoto (`50b43e3`); preservação integral confirmada.
 - O único uso legado de `listen ... ssl http2` no `custom/http.conf` caiu de 2 para 0; `http2 on` ficou no bloco HTTPS.
 - T-034R e T-036R foram reclassificados explicitamente como decisões humanas pendentes, não trabalho técnico executável.

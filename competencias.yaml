@@ -4,7 +4,7 @@ skill_projeto:
   nome: CloudIFF
   tipo_competencia: projeto
   fonte: skills/cloudiff/SKILL.md
-  versao: 0.1.27
+  versao: 0.1.28
   vinculada_por: usuario em 2026-08-24
   protocolo_governanca: PGH 1.2.0
   compoe:
@@ -28,9 +28,9 @@ skill_projeto:
     delta_lido_ate: 2a641bfe597377a55711ea0804c602ea999fda07
     estado_reconciliacao: ATUAL
   - id: governanca-ontologica-de-skills
-    versao_fixada: 1.0.4
+    versao_fixada: 1.0.5
     fonte: debianlima/competencias-catalogo:metodo/governanca-ontologica-de-skills/SKILL.md
-    delta_lido_ate: 2a641bfe597377a55711ea0804c602ea999fda07
+    delta_lido_ate: a92f68ba79dc46fbae3f79686242693040a15d36
     estado_reconciliacao: ATUAL
   - id: telemetry-data-visualization
     versao_fixada: '2'

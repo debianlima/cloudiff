@@ -12529,4 +12529,5 @@ trabalho_compartilhado:
     - competencias.yaml
     - skills/cloudiff/SKILL.md
     - tests/test_cloudiff_main_line_reconciliation.py
+    - tests/test_cloudiff_project_skill.py
     - docs/reconciliation/cloudiff-main-line-reconciliation-v73.json

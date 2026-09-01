@@ -1,6 +1,6 @@
 ---
 name: cloudiff
-versao: 0.1.27
+versao: 0.1.28
 description: Governa, reconcilia, normaliza e evolui a plataforma CloudIFF V1/Python→V2/C++23 preservando interface homologada,
   contratos, segurança, dados, observabilidade e rollback.
 tipo_competencia: projeto
@@ -44,8 +44,8 @@ referencia:
   estado: reconciliado
 - id: governanca-ontologica-de-skills
   fonte: debianlima/competencias-catalogo:metodo/governanca-ontologica-de-skills/SKILL.md
-  versao_fixada: 1.0.4
-  delta_lido_ate: 2a641bfe597377a55711ea0804c602ea999fda07
+  versao_fixada: 1.0.5
+  delta_lido_ate: a92f68ba79dc46fbae3f79686242693040a15d36
   estado: reconciliado
 - id: telemetry-data-visualization
   fonte: debianlima/competencias-catalogo:dominio/telemetry-data-visualization/SKILL.md
@@ -157,11 +157,11 @@ O plano inicial classificou 444 arquivos Python: 123 serviços/runtime candidato
 
 ### Método obrigatório por unidade
 
-1. carregar `desenvolvedor-de-software@14`;
+1. carregar `desenvolvedor-de-software@15`;
 2. verificar `trabalho_compartilhado`/zona de exclusão;
 3. reconciliar com `github-incremental-reconciliation@7`;
 4. emitir `DELTA_INVENTORY=PASS` e `LEARNING_PRESERVED=PASS`;
-5. aplicar `governanca-ontologica-de-skills@1.0.4` quando tocar skill/catálogo/relação;
+5. aplicar `governanca-ontologica-de-skills@1.0.5` quando tocar skill/catálogo/relação;
 6. normalizar somente o estado conciliado;
 7. executar portões mecânicos independentes;
 8. quando a entrada elegível exigir Faro, implantar e provar no Faro real `10.62.91.5` durante a própria unidade;
@@ -297,3 +297,14 @@ Em 2026-08-28, T-031 reconstruiu a falha repetida do `project-onboarding-reconci
 Em 2026-08-28, T-036 diagnosticou `cloudif-ui-security-review.service` em `failed`: o report live tinha HTTP 200 para professor/admin e todos os headers de segurança esperados verdes, mas 5 checks de UI falhavam porque `cloudif-ui-security-tests.py` ainda exigia `nav/app/page/profile-card/profile-role` e `Administração do AD`, enquanto o Portal live congelado usa `enterprise-nav/ui143-nav`, `profile-chip`, `portal-hero` e o rótulo `Administração`. O gate live e a cópia versionada eram byte-idênticos, e `portal/tests/test_ui_security_gate_contract.py` institucionalizava os mesmos marcadores antigos, inclusive proibindo `portal-hero`/`profile-chip teacher`. Assim, a suíte estática podia permanecer verde enquanto o gate periódico live falhava. Regra: gates de segurança devem afirmar invariantes semânticas (HTTP, papel/visibilidade, skip-link/aria, headers/policies) e apenas pinarem marcadores visuais versionados quando isso for requisito explícito; o teste de contrato do gate deve evoluir junto com a interface congelada. Gate: `tests.test_ui_security_review_stale_gate_evidence`.
 ### L036 — dead-letter diagnóstico deve ser estruturado, sanitizado e não confiar em `str(exc)` genérico
 Em 2026-08-29, T-033 corrigiu a lacuna que obrigou T-016/T-016R a reconstruir um `RuntimeError` sem causa: o reconcile worker passou a persistir `stage`, `upstream`, `status`, `code` e `detail` sanitizado em colunas `last_error_*` e no `diagnostic` do dead-letter, preservando `error_type` e `secrets_exposed=false`. O teste com SQLite real provou retry, dead-letter, migração incremental e limpeza do contexto no sucesso. Bearer, assignments sensíveis e userinfo de URL são redigidos; exceção genérica persiste somente o tipo e nunca `str(exc)`, porque mensagens de biblioteca podem carregar credencial sem rótulo. A política de 5 tentativas, lease e backoff não mudou. Regra: observabilidade de falha persistente deve usar contexto causal explicitamente curado; mensagem arbitrária de exceção não é dado seguro para armazenamento. Gate: `tests.test_reconcile_deadletter_observability` + compatibilidade T-016/T-016R.
+### T-037 — linha homologada pode divergir do default branch
+
+**Sintoma observável:** o catálogo apontava `cloudiff@0.1.27` no commit `32c3900...`, alcançável em branches de auditoria, enquanto `main` estava em `cloudiff@0.1.5`; o grafo tinha 33 commits válidos no branch e 1 commit exclusivo de `main`.
+
+**Portão:** `tests/test_cloudiff_main_line_reconciliation.py`, entrada 1562, 2026-09-01.
+
+**Regra acionável:** quando uma Project-Skill homologada estiver fora do default branch, inventariar ancestralidade e preservar ambos os lados; nunca rebaixar o catálogo para `main` nem promover por fast-forward se houver commits exclusivos em ambos. Reconciliar com merge aditivo e fechar `trabalho_compartilhado` antes de tornar `main` canônico.
+
+**Evita:** apagar dezenas de unidades homologadas por tratar branch default como autoridade superior ao estado reconciliado.
+
+**Plataforma/pressupostos:** Git com refs remotas acessíveis, gates CloudIFF verdes e nenhuma zona exclusiva viva no `main`.
