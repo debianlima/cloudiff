@@ -12519,9 +12519,9 @@ trabalho_compartilhado:
   projeto: cloudiff
   caminho: /srv/mcp-workspace/tmp/cloudiff-ui-audit-wireguard
   unidade: T-037-pgh2-main-line-reconciliation
-  descricao: reconciliar branch homologado CloudIFF 0.1.27 com main, preservar 33 commits de aprendizado e absorver limpeza main-only sem runtime/deploy
+  descricao: reconciliar linha CloudIFF 0.1.27 com main e fechar dois gates herdados mecanicos sem runtime/deploy
   agente: Redes-GPT
-  atualizado_em: '2026-09-01T19:34:46.205479Z'
+  atualizado_em: '2026-09-01T20:07:02.816371Z'
   previsao_termino: '2026-09-01T18:30:00-03:00'
   zona_exclusao:
     - manifesto.yaml
@@ -12531,3 +12531,7 @@ trabalho_compartilhado:
     - tests/test_cloudiff_main_line_reconciliation.py
     - tests/test_cloudiff_project_skill.py
     - docs/reconciliation/cloudiff-main-line-reconciliation-v73.json
+    - deploy/sync_agent_skills.sh
+    - tests/test_agent_skills_sync.py
+    - tests/test_v1_namespace_audit.py
+    - docs/reconciliation/v1-v2-delta.json
