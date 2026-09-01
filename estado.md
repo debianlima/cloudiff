@@ -23,6 +23,8 @@
 - Cutover definitivo do Portal para Faro permanece unidade humana posterior e deve respeitar portal shadow/FrozenPortalInterface.
 
 ## Decisões fechadas nesta emenda
+- T-037 reconciliou `main` com a linha homologada sem perda: ambos os pais permanecem no grafo, CloudIFF avançou para `0.1.28`, e o único delta main-only (limpeza de shared-work) foi preservado.
+- Suíte pré-fechamento no perfil work: 1111/1111 PASS; dois blockers herdados de coleta foram corrigidos mecanicamente antes do fechamento; nenhuma mutação/deploy de runtime foi executada.
 - T-033 permaneceu homologada no contrato v71; a retomada confirmou evidência SQLite 7/7 e testes semânticos já presentes no HEAD remoto, sem reabrir seu working tree antigo.
 - T-035 homologou a correção estática do warning HTTP/2 NPM: `listen 443 ssl http2`/IPv6 foram substituídos por `listen ... ssl` + `http2 on` somente no bloco HTTPS de `admin.cloudiff.duckdns.org`.
 - Nginx 1.25.1 é a origem normativa do warning: o parâmetro `http2` de `listen` é deprecated e a diretiva por servidor é a forma atual.
@@ -39,7 +41,7 @@
 - Reload/deploy da correção HTTP/2 NPM é gate effectful separado; T-035 termina sem executá-lo.
 
 ## Trabalho compartilhado
-- ponteiro: `manifesto.yaml.trabalho_compartilhado` — unidade `T-037-pgh2-main-line-reconciliation`, ativa durante a reconciliação.
+- ponteiro: `manifesto.yaml.trabalho_compartilhado` — `{}`; T-037 liberou a zona após gates locais e suíte pré-fechamento PASS.
 
 ## Competências ativas nesta unidade
 - `cloudiff@0.1.28` — skill raiz; T-037 reconcilia a linha homologada com `main` e a governança 1.0.5.
@@ -76,15 +78,18 @@
 - Webdev: restaurar caminho observável autorizado para alimentar `evidence/` sem contornar ACL.
 
 ## Entradas aceitas nesta unidade
-- 823 `components/proxy/srv/cloudif/proxy/npm/data/nginx/custom/http.conf` — correção HTTP/2 estática.
-- 1560 `tests/test_npm_http2_static_warning.py` — teste semântico 1/1 PASS.
-- 1561 `docs/reconciliation/npm-http2-static-v72.json` — evidência T-035.
-- 2 `competencias.yaml` — referência método @15.
-- 179 `skills/cloudiff/SKILL.md` — referência método @15, skill permanece 0.1.27.
-- 9 `estado.md` — snapshot v72.
-- 10 `manifesto.yaml` — contrato v72 e zona liberada.
+- 176 `deploy/sync_agent_skills.sh` — extração determinística sob umask 022.
+- 177 `tests/test_agent_skills_sync.py` — fixture não-root + umask 077, PASS.
+- 181 `docs/reconciliation/v1-v2-delta.json` — 19 normalizações pós-audit + 2 overrides de gate rastreados.
+- 184 `tests/test_v1_namespace_audit.py` — PASS 1320 arquivos, 1315 aceitos, 5 preexistentes.
+- 1549/1553 — declarações canônicas únicas do Forja Agent; IDs genéricos duplicados 847/987 consolidados.
+- 1562 `tests/test_cloudiff_main_line_reconciliation.py` — gate de fechamento T-037.
+- 1563 `docs/reconciliation/cloudiff-main-line-reconciliation-v73.json` — evidência de reconciliação.
+- 179 `skills/cloudiff/SKILL.md` — `cloudiff@0.1.28`.
+- 2 `competencias.yaml` — governança 1.0.5 e método 15 reconciliados.
+- 9 `estado.md` — snapshot contrato v73.
+- 10 `manifesto.yaml` — namespace único e zona compartilhada liberada.
 
 ## Próxima unidade
-- Nenhuma frente independente permanece READY no estado observado.
-- Próximo gate técnico de T-028: obter/inventariar o endpoint Proxmox que possui o UUID da VM pfSense; sem isso o gatilho externo permanece `NAO_DECLARADO`.
-- T-034R/T-036R/T-029R aguardam humano; T-022/T-023/T-024/T-025 dependem de sistemas/releases externos.
+- Gate externo imediato: suíte final completa deste commit, promoção CAS para `main` se `origin/main` ainda for `bc4effd53ecd80912ea2a3a4e4b6efb4852af4a9`, e sincronização `cloudiff@0.1.28` no catálogo.
+- Depois: retomar o delta `enrior-project@1.0.7`, preservando U53/U54 sem rebaixar o catálogo para `main@1.0.5`.

@@ -1,16 +1,25 @@
 {
+  "closure": {
+    "branch": "audit/ui-overview-alias-fix",
+    "catalog_sync_required_after_main": true,
+    "main_expected_before": "bc4effd53ecd80912ea2a3a4e4b6efb4852af4a9",
+    "runtime_deploy_performed": false,
+    "state": "READY_FOR_FINAL_FULL_SUITE_AND_MAIN_CAS"
+  },
   "contract_version": 73,
   "gates": {
     "AGENT_SKILLS_SYNC_PORTABILITY": "PASS",
     "BASELINE_NO_REGRESSION": "PASS",
     "DELTA_INVENTORY": "PASS",
-    "DEPENDENCY_REFERENCES": "PENDING",
+    "DEPENDENCY_REFERENCES": "PASS",
+    "FULL_PRECLOSURE_SUITE": "PASS_1111",
     "LEARNING_PRESERVED": "PASS",
-    "MAIN_ONLY_CLEANUP_PRESERVED": "PENDING_CLOSURE",
+    "MAIN_ONLY_CLEANUP_PRESERVED": "PASS",
     "MANIFEST_UNIQUE_ID_PATH": "PASS",
     "NO_RUNTIME_DEPLOY": "PASS",
     "PROJECT_SKILL_GATE": "PASS",
-    "RECONCILIATION_CLOSURE": "PENDING",
+    "RECONCILIATION_CLOSURE": "PASS",
+    "SHARED_WORK_RELEASE": "PASS",
     "TARGET_LEARNING_PRESERVED": "PASS",
     "V1_NAMESPACE_AUDIT_REFRESH": "PASS"
   },
@@ -97,5 +106,24 @@
     "restart": false
   },
   "schema": "cloudiff-main-line-reconciliation/1",
+  "test_execution": {
+    "baseline_pre_t037": {
+      "commit": "32c3900383e619cbacb12af87fb5a4149630d678",
+      "excluded_collection_blockers_before_fix": 2,
+      "passed": 1111,
+      "warnings": 1
+    },
+    "current_preclosure": {
+      "commit": "13e88f905a8565af1e73c7ad4f500305a12fa14a",
+      "excluded": "tests/test_cloudiff_main_line_reconciliation.py",
+      "passed": 1111,
+      "warnings": 1
+    },
+    "patch": "GNU patch 2.7.6 extracted user-space from AlmaLinux RPM",
+    "profile": "work",
+    "pytest": "8.4.2 temporary venv",
+    "python": "3.12.13",
+    "warning_classification": "same inherited PytestUnhandledThreadExceptionWarning class; no T037 regression"
+  },
   "unit": "T-037-pgh2-main-line-reconciliation"
 }

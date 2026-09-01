@@ -27,10 +27,14 @@ def main():
     if 'versao: 0.1.28' not in skill: fail('skill-version')
     if 'versao_fixada: 1.0.5' not in skill: fail('governance-ref')
     comp=yaml.safe_load((ROOT/'competencias.yaml').read_text(encoding='utf-8')) or {}
-    rows=comp.get('competencias',comp if isinstance(comp,list) else [])
-    hits=[x for x in rows if isinstance(x,dict) and x.get('id')=='governanca-ontologica-de-skills']
-    if len(hits)!=1 or str(hits[0].get('versao')) not in ('1.0.5','None') and str(hits[0].get('versao_minima'))!='1.0.5': fail('competencias-governance')
+    project=comp.get('skill_projeto') if isinstance(comp,dict) else None
+    refs=(project or {}).get('referencia',[]) if isinstance(project,dict) else []
+    hits=[x for x in refs if isinstance(x,dict) and x.get('id')=='governanca-ontologica-de-skills']
+    if len(hits)!=1 or str(hits[0].get('versao_fixada'))!='1.0.5': fail('competencias-governance')
     m=yaml.safe_load((ROOT/'manifesto.yaml').read_text(encoding='utf-8'))
+    if m.get('trabalho_compartilhado') not in ({},None): fail('shared-work-not-released')
+    tx=ev.get('test_execution') or {}
+    if (tx.get('current_preclosure') or {}).get('passed')!=1111: fail('preclosure-suite')
     ents={int(e['id']):e for e in m.get('entradas',[]) if str(e.get('id','')).isdigit()}
     for i in (1562,1563):
         if ents.get(i,{}).get('status')!='aceito': fail('manifest-entry:'+str(i))
