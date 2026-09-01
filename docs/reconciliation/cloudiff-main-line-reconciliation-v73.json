@@ -6,7 +6,7 @@
     "LEARNING_PRESERVED": "PASS",
     "MAIN_ONLY_CLEANUP_PRESERVED": "PENDING_CLOSURE",
     "NO_RUNTIME_DEPLOY": "PASS",
-    "PROJECT_SKILL_GATE": "BLOCKED_STALE_EXPECTATION_DEV14",
+    "PROJECT_SKILL_GATE": "PASS",
     "RECONCILIATION_CLOSURE": "PENDING",
     "TARGET_LEARNING_PRESERVED": "PASS"
   },
@@ -33,6 +33,7 @@
     {
       "classification": "STALE_GATE_TO_RECONCILE",
       "gate": "tests/test_cloudiff_project_skill.py",
+      "resolution": "test expectation reconciled to active homologated method versions 15 / 1.0.5 after T037 zone extension",
       "symptom": "expects desenvolvedor-de-software@14 while active/reference is @15"
     }
   ],

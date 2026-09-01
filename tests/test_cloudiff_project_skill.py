@@ -18,7 +18,7 @@ assert 'FrozenPortalInterface' in raw
 assert '### L012 — capability de certificado do servidor não vira trust bundle do agente' in raw
 assert '### L013 — `apply` idempotente não reinicia runtime equivalente' in raw
 assert '### L014 — release existente não dispensa prova do artefato recebido' in raw
-for x in ('desenvolvedor-de-software@14','github-incremental-reconciliation@7','governanca-ontologica-de-skills@1.0.4'):
+for x in ('desenvolvedor-de-software@15','github-incremental-reconciliation@7','governanca-ontologica-de-skills@1.0.5'):
  assert x in raw,x
 # Project ontology: exactly two internally-composed CloudIFF skills and thirteen reconciled references.
 compoe=fm.get('compoe') or [];refs=fm.get('referencia') or []
