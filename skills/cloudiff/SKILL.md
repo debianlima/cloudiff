@@ -1,6 +1,6 @@
 ---
 name: cloudiff
-versao: 0.1.5
+versao: 0.1.6
 description: Governa, reconcilia, normaliza e evolui a plataforma CloudIFF V1/Python→V2/C++23 preservando interface homologada,
   contratos, segurança, dados, observabilidade e rollback.
 tipo_competencia: projeto
@@ -157,11 +157,11 @@ O plano inicial classificou 444 arquivos Python: 123 serviços/runtime candidato
 
 ### Método obrigatório por unidade
 
-1. carregar `desenvolvedor-de-software@14`;
+1. carregar `desenvolvedor-de-software@15`;
 2. verificar `trabalho_compartilhado`/zona de exclusão;
 3. reconciliar com `github-incremental-reconciliation@7`;
 4. emitir `DELTA_INVENTORY=PASS` e `LEARNING_PRESERVED=PASS`;
-5. aplicar `governanca-ontologica-de-skills@1.0.4` quando tocar skill/catálogo/relação;
+5. aplicar `governanca-ontologica-de-skills@1.0.5` quando tocar skill/catálogo/relação;
 6. normalizar somente o estado conciliado;
 7. executar portões mecânicos independentes;
 8. quando a entrada elegível exigir Faro, implantar e provar no Faro real `10.62.91.5` durante a própria unidade;
@@ -246,3 +246,5 @@ Na v44, o portão de deploy da entrada 174 reprovou porque duas execuções cons
 
 ### L014 — release existente não dispensa prova do artefato recebido
 Na v45, o sincronizador de skills inicialmente aceitava três estados que quebravam o contrato de release imutável: TAR com FIFO/symlink/hardlink não representado no manifesto; TAR divergente quando a release-alvo já existia; e `current` como diretório comum, que só falhava após criar artefatos de promoção. A correção passou a rejeitar todo membro que não seja arquivo regular/diretório, validar o TAR recebido contra `NEW_MANIFEST` independentemente da existência do alvo e exigir `current`/`previous` como symlinks antes de qualquer mutação. Gate homologado em 2026-08-26: `AGENT_SKILLS_SYNC_OFFLINE=PASS`; hardness dos três casos PASS; e o mesmo SHA `e8e6528af7fed0920d0af28fe2ff7b5c335bce55be3116b7b665c916c4b4483b` produziu `DRY_RUN_PASS -> NOOP -> POINTER_STABLE=PASS` em Forja, Hospedagem, Maurício, Faro e Pelego. Evita confundir idempotência com confiança cega no target existente e preserva a atomicidade do ponteiro. Vale em Linux quando releases são árvores imutáveis identificadas por manifesto e promovidas por symlink.
+### L015 — timeout de homologação deve atravessar o contrato até o build real
+Em 2026-09-03, a homologação H3 de um repositório grande continuou falhando após aumentar apenas o timeout HTTP do Portal: o Portal enviava `timeout=900`, mas o Komodo Agent consumia exclusivamente `build_timeout` e mantinha silenciosamente o `docker build` em 300 s. O sintoma observável era `Remote end closed connection without response`, seguido de `context canceled` no build, sem restart/OOM do agente. A correção homologada envia explicitamente `build_timeout` e mantém no agente compatibilidade com `timeout`; o H3 seguinte concluiu em 9m20s, container saudável, HTTPS 200/TLS válido e candidato imutável gerado. Gate: entrada 987/U05, testes de contrato 21/21, `py_compile`, `diff --check`, secret scan, job H3 `succeeded` e artefato `sha256:e811d342288db5ba3e00583dc5eb15ee48fb223e967839a4602f11900792fcd0`. Evita aumentar timeout na camada errada e confundir fechamento de conexão com falha do Docker/Komodo. Vale para Portal + Komodo Agent quando materialização local da imagem usa `docker build` síncrono.
