@@ -2963,6 +2963,160 @@ def cloudif_proposal_change_set_create(handler, data):
         return json_response(handler,502,{'ok':False,'error':str(error)[:120],'branch_cleaned':cleaned,'main_modified':False})
 
 
+# CloudIF v122 — importação de repositório por Git bundle autenticado
+_CLOUDIF_V122_IMPORT_MAX_BYTES = 256 * 1024 * 1024
+_CLOUDIF_V122_SOURCE_RE = re.compile(r'^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$')
+_CLOUDIF_V122_BRANCH_RE = re.compile(r'^[A-Za-z0-9._/-]{1,120}$')
+_CLOUDIF_V122_SHA_RE = re.compile(r'^[a-f0-9]{40}$')
+_CLOUDIF_V122_DIGEST_RE = re.compile(r'^[a-f0-9]{64}$')
+
+
+def _cloudif_v122_repo_meta(owner, repo):
+    base=_v118_cfg('FORGEJO_URL','https://cloudiff.duckdns.org/git').rstrip('/')
+    token=_v118_cfg('FORGEJO_TOKEN','')
+    url=f"{base}/api/v1/repos/{urllib.parse.quote(owner)}/{urllib.parse.quote(repo)}"
+    st,data=_v118_forgejo_api('GET',url,token,timeout=45)
+    return st,data if isinstance(data,dict) else {}
+
+
+def _cloudif_v122_patch_repo(owner, repo, payload):
+    base=_v118_cfg('FORGEJO_URL','https://cloudiff.duckdns.org/git').rstrip('/')
+    token=_v118_cfg('FORGEJO_TOKEN','')
+    url=f"{base}/api/v1/repos/{urllib.parse.quote(owner)}/{urllib.parse.quote(repo)}"
+    return _v118_forgejo_api('PATCH',url,token,payload=payload,timeout=45)
+
+
+def _cloudif_v122_read_stream(handler, target, size, expected_digest):
+    digest=hashlib.sha256(); remaining=size
+    with open(target,'wb') as out:
+        while remaining>0:
+            chunk=handler.rfile.read(min(1024*1024,remaining))
+            if not chunk:
+                raise ValueError('upload_truncated')
+            out.write(chunk);digest.update(chunk);remaining-=len(chunk)
+        out.flush();os.fsync(out.fileno())
+    actual=digest.hexdigest()
+    if not hmac.compare_digest(actual,expected_digest):
+        raise ValueError('bundle_sha256_mismatch')
+    return actual
+
+
+def _cloudif_v122_import_bundle(handler):
+    if not cloudif_auth_ok(handler):
+        return json_response(handler,403,{'ok':False,'error':'invalid_token'})
+
+    slug=_cloudif_v117_slug(handler.headers.get('X-CloudIF-Project-Slug',''))
+    source_repo=str(handler.headers.get('X-CloudIF-Source-Repository','')).strip()
+    branch=str(handler.headers.get('X-CloudIF-Source-Branch','main')).strip() or 'main'
+    source_commit=str(handler.headers.get('X-CloudIF-Source-Commit','')).strip().lower()
+    expected_digest=str(handler.headers.get('X-CloudIF-Source-SHA256','')).strip().lower()
+    try:size=int(handler.headers.get('Content-Length','0') or '0')
+    except Exception:size=0
+
+    if not slug or not SLUG_RE.fullmatch(slug):
+        return json_response(handler,400,{'ok':False,'error':'invalid_project_slug'})
+    if not _CLOUDIF_V122_SOURCE_RE.fullmatch(source_repo):
+        return json_response(handler,400,{'ok':False,'error':'invalid_source_repository'})
+    if not _CLOUDIF_V122_BRANCH_RE.fullmatch(branch) or '..' in branch or branch.startswith('/') or branch.endswith('/'):
+        return json_response(handler,400,{'ok':False,'error':'invalid_source_branch'})
+    if not _CLOUDIF_V122_SHA_RE.fullmatch(source_commit):
+        return json_response(handler,400,{'ok':False,'error':'invalid_source_commit'})
+    if not _CLOUDIF_V122_DIGEST_RE.fullmatch(expected_digest):
+        return json_response(handler,400,{'ok':False,'error':'invalid_source_sha256'})
+    if size<=0 or size>_CLOUDIF_V122_IMPORT_MAX_BYTES:
+        return json_response(handler,413,{'ok':False,'error':'invalid_bundle_size','max_bytes':_CLOUDIF_V122_IMPORT_MAX_BYTES})
+
+    project=load_project(slug)
+    if not project:
+        return json_response(handler,404,{'ok':False,'error':'project_not_found'})
+    owner=str(project.get('forgejo_owner') or project.get('owner_user') or '').strip()
+    repo=str(project.get('repo_name') or project.get('repo') or _cloudif_v117_repo_name(slug)).strip()
+    if not owner or not repo:
+        return json_response(handler,409,{'ok':False,'error':'target_repository_not_resolved'})
+
+    st,meta=_cloudif_v122_repo_meta(owner,repo)
+    if st!=200:
+        return json_response(handler,409,{'ok':False,'error':'target_repository_not_ready','status':st})
+
+    target_url=_v119_forgejo_repo_git_url(owner,repo)
+    root=tempfile.mkdtemp(prefix='cloudif-import-bundle-')
+    bundle=os.path.join(root,'source.bundle')
+    src=os.path.join(root,'source')
+    backup_branch=f"cloudif-import-backup-{source_commit[:12]}"
+    result={'ok':False,'project_slug':slug,'source_repository':source_repo,'source_branch':branch,'source_commit':source_commit,'target_repo':f'{owner}/{repo}'}
+    try:
+        _cloudif_v122_read_stream(handler,bundle,size,expected_digest)
+        verify=_v119_run(['git','bundle','verify',bundle],timeout=120)
+        if verify.get('returncode')!=0:
+            return json_response(handler,422,{**result,'error':'invalid_git_bundle','detail':verify})
+        clone=_v119_run(['git','clone','--branch',branch,bundle,src],timeout=240)
+        if clone.get('returncode')!=0:
+            return json_response(handler,422,{**result,'error':'bundle_clone_failed','detail':clone})
+        head=_v119_run(['git','rev-parse','HEAD'],cwd=src)
+        imported_head=str(head.get('stdout') or '').strip().lower()
+        if imported_head!=source_commit:
+            return json_response(handler,422,{**result,'error':'source_commit_mismatch','bundle_head':imported_head})
+
+        _v119_run(['git','remote','add','cloudiff-target',target_url],cwd=src)
+        current=_v119_run(['git','ls-remote','cloudiff-target',f'refs/heads/{branch}'],cwd=src,timeout=120)
+        if current.get('returncode')!=0:
+            return json_response(handler,502,{**result,'error':'target_head_lookup_failed','detail':current})
+        fields=(current.get('stdout') or '').strip().split()
+        before=fields[0].lower() if fields else ''
+        result['target_before_commit']=before
+        if before==source_commit:
+            project.update({'source_repository':source_repo,'source_branch':branch,'source_commit':source_commit,'source_imported_at':now()});save_project(project)
+            result.update({'ok':True,'idempotent':True,'target_commit':source_commit,'message':'Fonte já importada; nenhuma alteração necessária.'})
+            return json_response(handler,200,result)
+
+        if before:
+            fetch=_v119_run(['git','fetch','cloudiff-target',f'{branch}:refs/remotes/cloudiff-target/{branch}'],cwd=src,timeout=180)
+            if fetch.get('returncode')!=0:
+                return json_response(handler,502,{**result,'error':'target_backup_fetch_failed','detail':fetch})
+            mkref=_v119_run(['git','branch','-f',backup_branch,f'refs/remotes/cloudiff-target/{branch}'],cwd=src)
+            if mkref.get('returncode')!=0:
+                return json_response(handler,502,{**result,'error':'target_backup_ref_failed','detail':mkref})
+            push_backup=_v119_run(['git','push','cloudiff-target',f'{backup_branch}:{backup_branch}'],cwd=src,timeout=180)
+            if push_backup.get('returncode')!=0:
+                return json_response(handler,502,{**result,'error':'target_backup_push_failed','detail':push_backup})
+            pst,pdata=_cloudif_v122_patch_repo(owner,repo,{'default_branch':backup_branch})
+            if pst not in (200,201):
+                return json_response(handler,502,{**result,'error':'target_default_branch_switch_failed','status':pst,'detail':pdata})
+            delete_main=_v119_run(['git','push','cloudiff-target',f':{branch}'],cwd=src,timeout=180)
+            if delete_main.get('returncode')!=0:
+                _cloudif_v122_patch_repo(owner,repo,{'default_branch':branch})
+                return json_response(handler,502,{**result,'error':'target_branch_delete_failed','detail':delete_main})
+
+        push=_v119_run(['git','push','cloudiff-target',f'HEAD:{branch}'],cwd=src,timeout=300)
+        if push.get('returncode')!=0:
+            if before:
+                _v119_run(['git','push','cloudiff-target',f'{backup_branch}:{branch}'],cwd=src,timeout=180)
+                _cloudif_v122_patch_repo(owner,repo,{'default_branch':branch})
+            return json_response(handler,502,{**result,'error':'target_import_push_failed','detail':push})
+
+        pst,pdata=_cloudif_v122_patch_repo(owner,repo,{'default_branch':branch})
+        if pst not in (200,201):
+            return json_response(handler,502,{**result,'error':'target_default_branch_restore_failed','status':pst,'detail':pdata})
+        if before:
+            _v119_run(['git','push','cloudiff-target',f':{backup_branch}'],cwd=src,timeout=180)
+
+        final=_v119_run(['git','ls-remote','cloudiff-target',f'refs/heads/{branch}'],cwd=src,timeout=120)
+        fields=(final.get('stdout') or '').strip().split();target_commit=fields[0].lower() if fields else ''
+        if target_commit!=source_commit:
+            return json_response(handler,502,{**result,'error':'target_commit_verification_failed','target_commit':target_commit})
+
+        project.update({'source_repository':source_repo,'source_branch':branch,'source_commit':source_commit,'source_imported_at':now()});save_project(project)
+        save_event('source-import',slug,{'source_repository':source_repo,'source_branch':branch,'source_commit':source_commit,'target_repo':f'{owner}/{repo}','target_before_commit':before,'target_commit':target_commit,'time':now(),'bundle_sha256':expected_digest,'bundle_size':size})
+        result.update({'ok':True,'idempotent':False,'target_commit':target_commit,'bundle_sha256':expected_digest,'bundle_size':size,'message':'Git bundle importado no Forgejo com HEAD verificado.'})
+        return json_response(handler,201,result)
+    except ValueError as exc:
+        return json_response(handler,422,{**result,'error':str(exc)})
+    except Exception as exc:
+        return json_response(handler,500,{**result,'error':'source_import_internal_error','detail':type(exc).__name__})
+    finally:
+        shutil.rmtree(root,ignore_errors=True)
+
+
 class Handler(BaseHTTPRequestHandler):
 
     def authorized(self):
@@ -3032,6 +3186,10 @@ class Handler(BaseHTTPRequestHandler):
         return json_response(self, 404, {"ok": False, "error": "not_found"})
 
     def do_POST(self):
+
+        _cloudif_v122_path = self.path.split("?", 1)[0]
+        if _cloudif_v122_path == "/project/import-bundle":
+            return _cloudif_v122_import_bundle(self)
 
         _cloudif_v118_path = self.path.split("?", 1)[0]
         if _cloudif_v118_path == "/project/file/commit":

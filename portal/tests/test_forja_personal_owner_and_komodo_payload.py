@@ -20,4 +20,20 @@ class ForjaPersonalOwnerAndKomodoPayloadTests(unittest.TestCase):
   self.assertIn('"skipped": True',fn)
   self.assertIn('komodo_ok = True',fn)
 
+ def test_project_import_bundle_api_is_authenticated_streaming_and_exact_head(self):
+  source=self.source
+  for marker in (
+   '"/project/import-bundle"',
+   'def _cloudif_v122_import_bundle(handler):',
+   'if not cloudif_auth_ok(handler):',
+   "X-CloudIF-Source-Repository",
+   "X-CloudIF-Source-Commit",
+   "X-CloudIF-Source-SHA256",
+   "_cloudif_v122_read_stream(handler,bundle,size,expected_digest)",
+   "git','bundle','verify",
+   "target_commit!=source_commit",
+   "'idempotent':True",
+  ): self.assertIn(marker,source)
+  self.assertNotIn("git','push','--force",source)
+
 if __name__=='__main__':unittest.main()
