@@ -40,7 +40,7 @@ class AdminProjectDeleteContractTest(unittest.TestCase):
         self.assertIn("normalized.casefold() == expected.casefold()", source)
         self.assertIn("if not _confirmation_matches(slug, confirmation)", source)
         self.assertIn('tenant_preserved', source)
-        self.assertIn('forja_rollback(slug, execute=True)', source)
+        self.assertIn('forja_rollback(slug, execute=True, include_komodo=False)', source)
         self.assertIn('BEGIN IMMEDIATE', source)
         self.assertIn('cloudif-project-state-reconcile.service', source)
 

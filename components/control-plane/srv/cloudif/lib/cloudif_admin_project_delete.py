@@ -478,7 +478,7 @@ def _cleanup_already_deleted(slug, actor, progress):
     progress('Stack e runtime','running','Verificando containers e stack órfãos')
     runtime=_destroy_runtime(slug,tenant,public_number)
     progress('Stack e runtime','done' if runtime.get('ok') else 'failed','Resíduos removidos' if runtime.get('ok') else 'Ainda há resíduos')
-    remote=forja_rollback(slug,execute=True)
+    remote=forja_rollback(slug,execute=True,include_komodo=False)
     agent_identity=_delete_agent_identity(slug); onboarding_state=_delete_onboarding_state(slug); observability=_delete_observability(slug); backup_state=_delete_backup_state(slug)
     removed_paths=[]
     for candidate in glob.glob(str(JOBS / f'*{slug}*')):
@@ -529,7 +529,7 @@ def execute(slug, confirmation, actor, progress=None):
         result={'ok':False,'error':'runtime_destroy_failed','runtime':runtime,'publication':publication,'audit_dir':str(audit)}
         (audit/'result.json').write_text(json.dumps(result,ensure_ascii=False,indent=2)+'\n');return result
     progress('Forgejo e agentes', 'running', 'Removendo repositório e estados dos agentes')
-    remote = forja_rollback(slug, execute=True)
+    remote = forja_rollback(slug, execute=True, include_komodo=False)
     progress('Forgejo e agentes', 'done' if remote.get('ok') else 'failed', f"HTTP {remote.get('status') or '-'}")
     if not remote.get('ok'):
         result = {'ok': False, 'error': 'remote_delete_failed', 'remote': remote, 'audit_dir': str(audit)}

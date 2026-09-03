@@ -13,5 +13,11 @@ class ForjaPersonalOwnerAndKomodoPayloadTests(unittest.TestCase):
   fn=self.source[self.source.index('def trigger_komodo'):self.source.index('def _cloudif_forgejo_signature_ok')]
   for marker in ('"project": slug','"project_slug": slug','"slug": slug','"owner_user": owner','"access": access','"repo_url_original": repo_url'):
    self.assertIn(marker,fn)
+ def test_project_rollback_supports_skipping_komodo_after_runtime_destroy(self):
+  fn=self.source[self.source.index('def cloudif_v117_project_rollback'):self.source.index('# CloudIF v118',self.source.index('def cloudif_v117_project_rollback'))]
+  self.assertIn('skip_komodo =',fn)
+  self.assertIn('if skip_komodo:',fn)
+  self.assertIn('"skipped": True',fn)
+  self.assertIn('komodo_ok = True',fn)
 
 if __name__=='__main__':unittest.main()

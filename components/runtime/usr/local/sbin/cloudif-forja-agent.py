@@ -945,6 +945,10 @@ def cloudif_v117_project_rollback(handler):
     slug = _cloudif_v117_slug(payload.get("project_slug") or payload.get("slug") or payload.get("project") or "")
     execute = bool(payload.get("execute") is True or str(payload.get("mode", "")).lower() == "execute")
     confirm = str(payload.get("confirm", ""))
+    skip_komodo = bool(
+        payload.get("skip_komodo") is True
+        or str(payload.get("skip_komodo", "")).strip().lower() in {"1", "true", "yes", "sim", "on"}
+    )
 
     if not slug:
         return _cloudif_v117_send_json(handler, 400, {"ok": False, "error": "project_slug inválido"})
@@ -1026,16 +1030,27 @@ def cloudif_v117_project_rollback(handler):
         "source": "forja-agent-v117",
     }
 
-    st, data = _cloudif_v117_http_json("POST", komodo_url + "/komodo/project/rollback", token="", payload=kpayload, timeout=30)
-    result["komodo"] = {
-        "attempted": True,
-        "status": st,
-        "response": data,
-    }
+    if skip_komodo:
+        st, data = 204, {}
+        result["komodo"] = {
+            "attempted": False,
+            "skipped": True,
+            "status": "skipped",
+            "reason": "runtime_already_destroyed_by_caller",
+        }
+        komodo_ok = True
+    else:
+        st, data = _cloudif_v117_http_json("POST", komodo_url + "/komodo/project/rollback", token="", payload=kpayload, timeout=30)
+        result["komodo"] = {
+            "attempted": True,
+            "status": st,
+            "response": data,
+        }
+        komodo_ok = st in [200, 201, 202]
 
     result["ok"] = bool(
         (not execute or result["forgejo"].get("deleted") is True or result["forgejo"].get("status") in ["already_absent", "missing_forgejo_token"])
-        and st in [200, 201, 202]
+        and komodo_ok
     )
     state_path = STATE_DIR / f"{slug}.json"
     result["local_state"] = {

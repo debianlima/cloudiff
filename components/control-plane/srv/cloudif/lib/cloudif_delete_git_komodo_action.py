@@ -312,7 +312,7 @@ def _project_repo_identity(slug):
     except Exception: pass
     return identity
 
-def forja_rollback(slug, execute=False):
+def forja_rollback(slug, execute=False, include_komodo=True):
     base, token = forja_config()
     identity=_project_repo_identity(slug)
     payload = {
@@ -322,6 +322,7 @@ def forja_rollback(slug, execute=False):
         "repo": identity.get("repo") or "",
         "repo_url": identity.get("repo_url") or "",
         "owner_kind": identity.get("owner_kind") or "user",
+        "skip_komodo": not bool(include_komodo),
     }
     if execute:
         payload["confirm"] = f"ROLLBACK {slug}"
