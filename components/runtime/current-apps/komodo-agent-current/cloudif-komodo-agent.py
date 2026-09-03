@@ -5386,7 +5386,7 @@ CMD {startup_json}
     # never needs the local build context and cannot silently lose source/.
     build=subprocess.run([
       'docker','build','--pull=false','--tag',image,'--file',str(snap/'Dockerfile.runtime'),str(snap),
-    ],text=True,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,timeout=int(payload.get('build_timeout') or 300))
+    ],text=True,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,timeout=int(payload.get('build_timeout') or payload.get('timeout') or 300))
     if build.returncode!=0:
         tail='\n'.join((build.stdout or '').splitlines()[-24:])[-4000:]
         return send(handler,422,{'ok':False,'error':'publication_image_build_failed','message':'A imagem da publicação não pôde ser materializada a partir da base versionada.','baseRevision':int(snapshot.get('baseRevision') or base.get('base_revision') or 0),'detail':tail,'secretValuesIncluded':False})

@@ -44,6 +44,7 @@ class VersionedUnifiedRuntimePublicationTests(unittest.TestCase):
         latest=self.agent[self.agent.rfind('def cloudif_publication_deploy(handler):'):]
         self.assertNotIn('build:\n      context: .\n      dockerfile: Dockerfile.runtime',latest)
         self.assertIn("'materialization':'local_base_derived'",latest)
+        self.assertIn("payload.get('build_timeout') or payload.get('timeout') or 300",latest)
 
     def test_failed_version_can_refresh_frozen_base_but_ready_version_is_immutable(self):
         latest=self.agent[self.agent.rfind('def cloudif_publication_deploy(handler):'):]
