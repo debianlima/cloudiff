@@ -24,6 +24,7 @@ MemoryDenyWriteExecute=true
 CapabilityBoundingSet=
 RestrictAddressFamilies=AF_INET AF_UNIX
 IPAddressAllow=127.0.0.0/8
+IPAddressAllow=10.62.91.2/32
 IPAddressDeny=any
 UMask=0077
 [Install]

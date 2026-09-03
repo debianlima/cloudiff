@@ -24,7 +24,7 @@ MULTISERVICE_WORKER_INTERVAL=int(os.environ.get('CLOUDIF_MULTISERVICE_BUILD_INTE
 STATIC_BASE='cgr.dev/chainguard/nginx@sha256:d36a7338ffc140bc1e3cd85e2eb9d3419cf8b03b848a2f26cc99db157f1f505d'
 NODE24_BUILDER='node@sha256:a0b9bf06e4e6193cf7a0f58816cc935ff8c2a908f81e6f1a95432d679c54fbfd'
 NODE24_RUNTIME='gcr.io/distroless/nodejs24-debian12@sha256:6afed2f0373317ea4c66843fc7f1d4b4c88ef3e97254b2c5925793c2beb72809'
-ARTIFACT_URL=os.environ.get('CLOUDIF_ARTIFACT_EXECUTOR_URL','http://10.62.91.3').rstrip('/')
+ARTIFACT_URL=os.environ.get('CLOUDIF_ARTIFACT_EXECUTOR_URL','http://10.62.91.2:18216').rstrip('/')
 ARTIFACT_TOKEN=os.environ.get('CLOUDIF_ARTIFACT_EXECUTOR_TOKEN','')
 TOOLCHAIN_CATALOG=Path(os.environ.get('CLOUDIF_TOOLCHAIN_CATALOG','/etc/cloudif/toolchain-catalog-v1.json'))
 HOST=os.environ.get('CLOUDIF_BUILD_HOST','127.0.0.1'); PORT=int(os.environ.get('CLOUDIF_BUILD_PORT','18213'))

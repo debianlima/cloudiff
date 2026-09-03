@@ -2914,7 +2914,7 @@ entradas:
     consome: []
     produz: evidencia/v1-file-0183
     aceite: portao-mecanico/v1-audit-file
-    status: aceito
+    status: em_curso
   - id: 368
     caminho: components/control-plane/current-apps/build-broker-current/cloudif_toolchain_lifecycle.py
     proposito: "arquivo V1 auditado; contexto funcional documentado pelo README ancestral components/control-plane/current-apps/build-broker-current/README.md"
@@ -3746,7 +3746,7 @@ entradas:
     consome: []
     produz: evidencia/v1-file-0287
     aceite: portao-mecanico/v1-audit-file
-    status: aceito
+    status: em_curso
   - id: 472
     caminho: components/control-plane/etc/systemd/system/cloudif-build-worker.service
     proposito: "arquivo V1 auditado; contexto funcional documentado pelo README ancestral components/control-plane/etc/systemd/system/README.md"
@@ -8010,7 +8010,7 @@ entradas:
     consome: []
     produz: evidencia/v1-file-0820
     aceite: portao-mecanico/v1-audit-file
-    status: aceito
+    status: em_curso
   - id: 1005
     caminho: config/control-plane/certificate-monitoring.json
     proposito: "arquivo V1 auditado; contexto funcional documentado pelo README ancestral config/control-plane/README.md"
@@ -9698,7 +9698,7 @@ entradas:
     consome: []
     produz: evidencia/v1-file-1031
     aceite: portao-mecanico/v1-audit-file
-    status: aceito
+    status: em_curso
   - id: 1216
     caminho: portal/tests/test_multiservice_build_mcp_contract.py
     proposito: "arquivo V1 auditado; contexto funcional documentado pelo README ancestral portal/tests/README.md"
@@ -12095,4 +12095,18 @@ entradas:
     aceite: portao-mecanico/backend-integracao
     status: aceito
 
-trabalho_compartilhado: {}
+trabalho_compartilhado:
+  projeto: cloudiff
+  caminho: /tmp/cloudiff-src
+  unidade: U46
+  descricao: corrigir BuildBroker para usar o Artifact Executor real e validar com o canario GRUPix, sem alterar a interface web congelada do CloudIF
+  agente: terminal-oracle
+  atualizado_em: '2026-09-03T11:03:00-03:00'
+  previsao_termino: '2026-09-03T15:00:00-03:00'
+  zona_exclusao:
+    - components/control-plane/current-apps/build-broker-current/cloudif-build-broker.py
+    - portal/tests/test_multiservice_build_broker.py
+    - config/control-plane/build-broker.env.example
+    - components/control-plane/etc/systemd/system/cloudif-build-broker.service
+    - manifesto.yaml
+    - estado.md

@@ -128,11 +128,15 @@ class MultiserviceBuildBrokerTests(unittest.TestCase):
         self.assertNotIn('services', status['payload'])
         self.assertIn(status['status'], {'queued', 'running'})
 
+    def test_default_artifact_executor_targets_forja_runtime(self):
+        self.assertEqual(self.module.ARTIFACT_URL, 'http://10.62.91.2:18216')
+
     def test_unit_reuses_internal_controller_and_workspace_tokens(self):
         unit = UNIT.read_text()
         self.assertIn('cloudif-project-config-controller.service', unit)
         self.assertIn('EnvironmentFile=/etc/cloudif/project-config-controller.env', unit)
         self.assertIn('EnvironmentFile=/etc/cloudif/workspace-broker.env', unit)
+        self.assertIn('IPAddressAllow=10.62.91.2/32', unit)
 
     def test_legacy_static_routes_remain_available(self):
         source = MODULE_PATH.read_text()
