@@ -3046,7 +3046,11 @@ def _cloudif_v122_import_bundle(handler):
     result={'ok':False,'project_slug':slug,'source_repository':source_repo,'source_branch':branch,'source_commit':source_commit,'target_repo':f'{owner}/{repo}'}
     try:
         _cloudif_v122_read_stream(handler,bundle,size,expected_digest)
-        verify=_v119_run(['git','bundle','verify',bundle],timeout=120)
+        verify_repo=os.path.join(root,'verify.git')
+        init_verify=_v119_run(['git','init','--bare',verify_repo],timeout=60)
+        if init_verify.get('returncode')!=0:
+            return json_response(handler,500,{**result,'error':'bundle_verify_repository_init_failed','detail':init_verify})
+        verify=_v119_run(['git','bundle','verify',bundle],cwd=verify_repo,timeout=120)
         if verify.get('returncode')!=0:
             return json_response(handler,422,{**result,'error':'invalid_git_bundle','detail':verify})
         clone=_v119_run(['git','clone','--branch',branch,bundle,src],timeout=240)

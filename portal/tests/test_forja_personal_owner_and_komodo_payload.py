@@ -31,6 +31,8 @@ class ForjaPersonalOwnerAndKomodoPayloadTests(unittest.TestCase):
    "X-CloudIF-Source-SHA256",
    "_cloudif_v122_read_stream(handler,bundle,size,expected_digest)",
    "git','bundle','verify",
+   "git','init','--bare'",
+   "cwd=verify_repo",
    "target_commit!=source_commit",
    "'idempotent':True",
   ): self.assertIn(marker,source)
