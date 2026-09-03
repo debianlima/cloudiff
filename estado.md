@@ -1,83 +1,69 @@
-# Estado — 2026-08-31 — contrato v45
+# Estado — 2026-09-03 — contrato v45
 
 ## Decisões vigentes
-- `FrozenPortalInterface` permanece requisito mestre; nenhuma mudança de Portal/UI, navegação ou rotas de usuário foi feita nesta unidade.
-- Faro é o nó CloudIFF de papel `edge`; seu perfil deseja `portal-host`, mas o cutover do Portal ocorre somente após onboarding Faro e portões de portal shadow.
-- O onboarding Faro está aceito: 4 vCPU online, identidade própria, PKI/NATS individual, agent não-root, heartbeat direto para Hospedagem, reconciliação/resiliência e rollback já possuem evidência mecânica.
-- O heartbeat atual do Faro observa capabilities `inventory`, `health`, `telemetry-host`, `portal-host` e `agent-auto-update`; `build` e `runtime` continuam excluídas do perfil Faro.
-- O caminho crítico Faro é `10.62.91.5 -> NATS 10.62.92.7:14222 -> cloudiff-control -> PostgreSQL`; Forja e Maurício não participam do heartbeat crítico.
-- Releases de agent-skills permanecem imutáveis; o runtime Faro continua na release instalada `cloudiff@0.1.4`, enquanto a skill de projeto usada nesta unidade é `cloudiff@0.1.5`.
+- `FrozenPortalInterface` permanece requisito mestre; a correção operacional de publicação não alterou layout, navegação nem rotas visíveis do Portal.
+- Releases e candidatos de Homologação/Produção permanecem imutáveis; Produção reutiliza exatamente o artefato homologado e exige aprovação crítica conforme a política atual.
+- O projeto CloudIFF `laboratorio-de-hardware` usa owner `iff1742962`, número público `1001` e repositório Forgejo importado do GitHub anonimizado `debianlima/Laboratario-de-Hardware-2025-web`.
+- A origem acadêmica importada está no commit `e55d8455a79f841c6ab83eeed0fe43799144202d`; Preview W1 está sincronizado nesse HEAD.
+- A skill de projeto vigente é `cloudiff@0.1.6`.
 
 ## Decisões superadas
-- Faro bloqueado por `2/4 vCPU` — superado em 26/08/2026 após a TI ampliar a VM e o SO observar CPUs `0-3`.
-- `portal-host` apenas desejada/não observada — superado pelo heartbeat PostgreSQL atual, que já anuncia `portal-host`; isso não equivale a cutover do Portal.
-- Confiar apenas na árvore de uma release de skills já existente como prova do artefato recebido — superado na v45 pelo gate do TAR recebido.
+- Aumentar somente o timeout HTTP do Portal para homologação — superado: o Komodo Agent consumia `build_timeout`, não `timeout`, e mantinha o Docker Build em 300 s.
+- Tratar `Remote end closed connection without response` como indisponibilidade do Komodo — superado pela evidência: serviço sem restart/OOM e build cancelado exatamente no limite interno de 300 s.
+- Considerar o registro do projeto no Portal suficiente para aceite — superado pelo fluxo atual de Preview W, H e P com health e HTTPS independentes.
 
 ## Decisões humanas pendentes
-- Nenhuma decisão humana adicional para aceitar o nó Faro.
-- Cutover definitivo do Portal para Faro permanece uma unidade posterior e deve respeitar os portões de portal shadow/FrozenPortalInterface; não foi executado implicitamente nesta unidade.
+- H001 Publicação P2 do `laboratorio-de-hardware`: a ativação crítica `deployment.production.activate` exige duas decisões humanas distintas de perfil `admin` ou `professor`. A conta owner `iff1742962` não possui `can_decide` no painel de aprovações; o pedido está pendente e não pode ser legitimamente autoaprovado pelo executor.
 
 ## Decisões fechadas nesta emenda
-- Faro atende ao perfil de recurso `4 vCPU / 8 GiB configurados / 200 GiB disco`; os três resource gates estão `pass`.
-- `FARO-T19` passou e a etapa `acceptance` mudou de `partially_verified` para `verified`.
+- O contrato de timeout foi corrigido de ponta a ponta: Portal envia `build_timeout=900` e o Komodo aceita `build_timeout` com fallback compatível para `timeout`.
+- O job H3 concluiu com sucesso após 9m20s de execução, provando que o limite anterior de 300 s era a causa operacional.
+- H3 foi homologado pelo owner após HTTPS 200/TLS válido e health do container.
 
 ## Pendências técnicas não humanas
-- O host Faro mantém `fwupd-refresh.service` falho por indisponibilidade de egress para o serviço externo; o verificador residente retorna `errors=0 warnings=1`. Isso não afeta o runtime CloudIFF/NATS.
-- O inventário de máquina ainda precisa refletir Docker/cAdvisor presentes no Faro; máquina vence o inventário e a reconciliação é a próxima correção de ambiente desta mesma entrega.
-- Permanecem 21 entradas `pendente` e 5 `preexistente` no contrato v45 fora desta unidade; a liberação global do projeto deve selecionar quais delas são release-blocking antes de declarar release final.
-- LegacyRetirement continua separado e qualquer retirada destrutiva exige seus próprios gates e autorização final.
+- Nenhuma pendência técnica em Preview W1 ou Homologação H3: ambos estão saudáveis, HTTPS 200 e terminais preparados.
+- Produção permanece na publicação legada P1 até a aprovação humana crítica de P2; após duas aprovações, resta enfileirar `production/enqueue` e executar os smokes finais de P2.
+- O tenant Supabase, MCP, ACL e demais smokes globais do pedido de substituição continuam como fechamento posterior à promoção P2.
 
 ## Trabalho compartilhado
-- ponteiro: `manifesto.yaml.trabalho_compartilhado` — vazio; o bloco concluído `faro-cloudiff-release` foi removido na reconciliação de 31/08/2026 porque não representava trabalho vivo e tinha zona de exclusão vazia.
+- ponteiro: `manifesto.yaml.trabalho_compartilhado` — vazio após o fechamento técnico desta unidade; nenhuma zona de exclusão permanece reservada.
 
 ## Competências ativas nesta unidade
-- `cloudiff@0.1.5` — skill raiz carregada no início da unidade.
-- `desenvolvedor-de-software@14` — método PGH.
-- `github-incremental-reconciliation@7` — reconciliação incremental antes de normalização/release.
-- `governanca-ontologica-de-skills@1.0.4` — preservação do fecho de skills.
-- `telemetry-data-visualization@2` — macro global.
-- `network-ssh-operations@1` — primeiro salto pfSense e validação multi-host.
+- `cloudiff@0.1.6` — skill raiz do projeto, atualizada com o aprendizado homologado L015.
+- `desenvolvedor-de-software@15` — método PGH vigente.
+- `github-incremental-reconciliation@7` — reconciliação incremental antes de release.
+- `governanca-ontologica-de-skills@1.0.5` — política vigente de skill/ontologia.
+- `telemetry-data-visualization@2` — macro global obrigatória.
 
 ## Falhas de portão por tipo de entrada
-- `infraestrutura/Faro`: documentos de perfil/reserva ainda registravam 2 vCPU apesar do runtime já observar 4; reconciliados para o estado real.
-- `agente/Faro`: evidências antigas omitiam `portal-host`; o PostgreSQL atual comprovou capability e os artefatos foram reconciliados.
-- `verificação`: um gate TLS agregado usava o exit code de `openssl s_client` após EOF; a cadeia estava válida (`Verify return code: 0`). O gate foi corrigido para validar a evidência de cadeia, não o encerramento do cliente de diagnóstico.
+- `publicacao/homologacao`: H3 falhou repetidamente com fechamento remoto porque o Portal aumentava `timeout`, mas o build real continuava limitado por `build_timeout=300` no Komodo Agent.
+- `publicacao/producao`: não há falha técnica observada; existe gate humano deliberado de dupla aprovação para `deployment.production.activate`.
 
 ## Divergências da última reconciliação
 ### Corrigidas
-- `manifesto.yaml.trabalho_compartilhado`: removido bloco concluído `faro-cloudiff-release` (concluído em 26/08/2026, zona de exclusão vazia); fonte canônica voltou a representar apenas trabalho vivo.
-- `config/faro-node-profile.json`: `observed_resources.vcpu=4`, `resource_gates.vcpu=pass`, recursos `satisfied`.
-- `config/faro-node-reservation.json`: recursos observados reconciliados com heartbeat atual e `vcpu=pass`.
-- `config/faro-validation-01-discovery.json`: CPU atual e `portal-host` observada.
-- `config/faro-validation-04-agent-heartbeat.json`: heartbeat atual registra `cpu_count=4` e `portal-host`.
-- `config/faro-validation-06-acceptance.json`: `verification_status=verified` e `FARO-T19=passed`.
+- Portal e Komodo Agent agora compartilham o mesmo contrato de timeout do build de homologação.
+- Preview W1: `healthy=true`, Git `synced`, HEAD `e55d8455a79f841c6ab83eeed0fe43799144202d`.
+- Homologação H3: job `succeeded`, container `cloudif-p1001-d3-web` saudável, HTTPS/TLS válidos e candidato homologado.
+- Repair dashboard do projeto: `running`, `healthy=true`, `issues=[]`, `terminal_ok=true`.
+- Terminais de Preview W1 e Homologação H3 foram preparados via API e retornaram `terminalReady=true`.
 
 ### Pendentes de autorização ou capacidade
-- Nenhuma pendência de capacidade para Faro.
-- Portal cutover permanece deliberadamente fora desta unidade.
+- Aprovação crítica P2 pendente de dois aprovadores humanos com perfil admin/professor. Nenhum bypass técnico é autorizado pelo contrato.
 
 ## Entradas aceitas nesta unidade
-- 9 `estado.md` — snapshot atual do contrato v45.
-- 10 `manifesto.yaml` — estados e trabalho compartilhado reconciliados.
-- 118 `config/faro-validation-01-discovery.json` — descoberta atualizada com 4 vCPU/portal-host observada.
-- 121 `config/faro-validation-04-agent-heartbeat.json` — observed state atual reconciliado.
-- 123 `config/faro-validation-06-acceptance.json` — etapa final `verified`.
-- 124 `tests/test_faro_validation_model.py` — seis etapas verificadas.
-- 126 `config/faro-node-reservation.json` — recurso vCPU aceito.
-- 131 `tests/test_faro_node_preparation.py` — reserva/resource gate atualizados.
-- 140 `config/faro-node-profile.json` — perfil satisfeito.
-- 165 `tests/test_faro_profile.py` — gate 4 vCPU atualizado.
+- 987 — correção do contrato de timeout de homologação/publicação, testes e deploy operacional.
+- `skills/cloudiff/SKILL.md` — L015 homologado e versão incrementada para 0.1.6.
+- `competencias.yaml` — referência da skill de projeto reconciliada para 0.1.6.
+- `estado.md` — snapshot operacional desta unidade.
 
-## Portões Faro
-- `FARO_RUNTIME_GATE=PASS`: 4 vCPU, agent ativo/enabled, updater timer ativo/enabled, NATS TLS válido, cAdvisor loopback-only e somente SSH exposto externamente.
-- `FARO_DB_GATE=PASS`: `node_count=1`, `cpu_count=4`, `portal-host=true`, heartbeat recente.
-- `FARO_VALIDATION_MODEL=PASS`: 6 etapas verificadas, nenhuma parcial.
-- `FARO_PROFILE=PASS` e `FARO_NODE_PREPARATION=PASS`.
-- Suíte oficial: 1008 testes PASS + 1 skip.
-- Frozen UI: 3/3 PASS; nenhum arquivo Portal/UI alterado.
-- Secret scan, `git diff --check` e higiene `__pycache__`: PASS.
+## Portões da unidade
+- `PUBLICATION_TIMEOUT_CONTRACT=PASS`: Portal envia `build_timeout`, Komodo consome `build_timeout`/fallback `timeout`.
+- `UNIT_TESTS=PASS`: 21/21 nos contratos W/H/P e runtime de publicação.
+- `PY_COMPILE=PASS`, `DIFF_CHECK=PASS`, `SECRET_SCAN=PASS`.
+- `PREVIEW_W1=PASS`: HTTP 200/TLS válido, `healthy=true`, Git sincronizado no commit de origem.
+- `HOMOLOGATION_H3=PASS`: job concluído, HTTPS 200/TLS válido, artefato imutável `sha256:e811d342288db5ba3e00583dc5eb15ee48fb223e967839a4602f11900792fcd0`, status `homologated`.
+- `TERMINAL_W1_H3=PASS` e `REPAIR_DASHBOARD=PASS`.
+- `PRODUCTION_P2=BLOCKED_HUMAN_APPROVAL`: solicitação válida criada; política exige dois aprovadores distintos admin/professor.
 
 ## Próxima unidade
-- Reconciliar o inventário descritivo do Faro com Docker/cAdvisor observados.
-- Em seguida, calcular o fecho de liberação global do CloudIFF e separar as 21 entradas pendentes em release-blocking versus trabalho posterior.
-- Portal shadow/cutover para Faro só inicia depois desse fecho e sem alterar a interface homologada antes dos portões próprios.
+- Após a dupla aprovação humana de P2, consultar novamente a autorização, enfileirar `production/enqueue`, validar P2/stable URL/artefato, executar smokes finais e fechar reconciliação global do `laboratorio-de-hardware`.
