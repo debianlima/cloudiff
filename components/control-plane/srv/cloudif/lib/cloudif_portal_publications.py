@@ -2,6 +2,8 @@
 import hashlib, json, re, sqlite3, ssl, time, urllib.error, urllib.request
 from pathlib import Path
 DB=Path('/var/lib/cloudif/portal/cloudif-portal.db')
+HOMOLOGATION_DEPLOY_RUNTIME_TIMEOUT=900
+HOMOLOGATION_DEPLOY_HTTP_TIMEOUT=1020
 
 def _env(path):
     d={}; p=Path(path)
@@ -369,9 +371,9 @@ def create_homologation_candidate(slug,user,progress=None,candidate_number=None)
     pc=_publication_config();summary=pc.environment_summary(slug,'homologation')
     if not summary.get('valid'):raise RuntimeError('O ambiente de Homologação possui variáveis obrigatórias pendentes.')
     runtime=pc.execution_environment(slug,int(summary['environmentRevision']),str(summary.get('environmentDigest') or ''),'homologation');values=runtime.get('values') or {}
-    payload={'project':slug,'public_number':num,'deploy_number':candidate,'commit':str(snap['commit']),'timeout':300,'actor':actor,'base_revision':int(snap['baseRevision']),'base_image':str(snap['baseImage']),'base_image_id':str(snap['baseImageId']),'environment_revision':int(runtime['environmentRevision']),'environment_digest':str(runtime['environmentDigest']),'environment_variables':values}
+    payload={'project':slug,'public_number':num,'deploy_number':candidate,'commit':str(snap['commit']),'timeout':HOMOLOGATION_DEPLOY_RUNTIME_TIMEOUT,'actor':actor,'base_revision':int(snap['baseRevision']),'base_image':str(snap['baseImage']),'base_image_id':str(snap['baseImageId']),'environment_revision':int(runtime['environmentRevision']),'environment_digest':str(runtime['environmentDigest']),'environment_variables':values}
     notify('deploying','Criando candidato imutável de Homologação.')
-    try:dstatus,deployed=_post(ku+'/komodo/publication/deploy',payload,kt,timeout=420)
+    try:dstatus,deployed=_post(ku+'/komodo/publication/deploy',payload,kt,timeout=HOMOLOGATION_DEPLOY_HTTP_TIMEOUT)
     finally:
         if isinstance(values,dict):values.clear();runtime['values']={};payload['environment_variables']={}
     if dstatus//100!=2 or not deployed.get('ok'):raise RuntimeError(_publication_error('deploy',deployed))

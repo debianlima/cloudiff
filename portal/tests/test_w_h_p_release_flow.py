@@ -46,6 +46,13 @@ class WHPReleaseFlowTests(unittest.TestCase):
         self.assertIn("'runtimeDiff':{'changes':runtime_changes[:200]",latest)
         self.assertIn("preview-w{generation}-h{candidate}-runtime",latest)
 
+    def test_large_repository_homologation_has_build_headroom(self):
+        self.assertIn('HOMOLOGATION_DEPLOY_RUNTIME_TIMEOUT=900',PORTAL)
+        self.assertIn('HOMOLOGATION_DEPLOY_HTTP_TIMEOUT=1020',PORTAL)
+        self.assertIn("'timeout':HOMOLOGATION_DEPLOY_RUNTIME_TIMEOUT",PORTAL)
+        self.assertIn("timeout=HOMOLOGATION_DEPLOY_HTTP_TIMEOUT",PORTAL)
+        self.assertGreater(900,300)
+
     def test_publication_uses_exact_homologated_artifact_without_rebuild(self):
         release=RUNTIME[RUNTIME.index('def cloudif_publication_release(handler):'):RUNTIME.index('def cloudif_publication_release_activate(handler):')]
         self.assertIn("source=f'cloudif-p{num}-d{dep}-web'",release)
