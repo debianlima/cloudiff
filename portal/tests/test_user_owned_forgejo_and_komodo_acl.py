@@ -19,6 +19,9 @@ class UserOwnedForgejoAndKomodoAclTests(unittest.TestCase):
  def test_komodo_owner_and_acl_permissions(self):
   for m in ("'level':'Write'","'level':'Execute'","specific:['Terminal','Inspect']","(p.stack_ids||[]).map","{type:'Repo'"):
    self.assertIn(m,self.helper)
+ def test_acl_env_merge_keeps_nonempty_client_token_when_fallback_is_blank(self):
+  self.assertIn("if value or key not in env: env[key]=value",self.acl)
+
  def test_acl_changes_trigger_komodo_sync(self):
   self.assertIn('def sync_komodo_acl',self.acl)
   self.assertIn('/komodo/project/authz-sync',self.acl)

@@ -196,7 +196,8 @@ def sync_komodo_acl(slug):
         try:
             for line in Path(path).read_text().splitlines():
                 if '=' in line and not line.lstrip().startswith('#'):
-                    k,v=line.split('=',1);env[k.strip()]=v.strip().strip('"').strip("'")
+                    k,v=line.split('=',1);key=k.strip();value=v.strip().strip('"').strip("'")
+                    if value or key not in env: env[key]=value
         except Exception:pass
     base=(env.get('KOMODO_AGENT_URL') or 'http://10.62.91.2:18098').rstrip('/');token=env.get('KOMODO_AGENT_TOKEN') or ''
     if not token:return {'ok':False,'error':'komodo_agent_token_missing'}
