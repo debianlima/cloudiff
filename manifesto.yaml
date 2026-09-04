@@ -1,5 +1,5 @@
 projeto: cloudiff-v2
-versao_contrato: 49
+versao_contrato: 50
 namespace_fechado: true
 entradas:
   - id: 1
@@ -12118,5 +12118,13 @@ entradas:
     consome: [evidencia/v1-file-1352, evidencia/v1-file-0392]
     produz: evidencia/approval-dark-history-u15
     aceite: python3 -m unittest portal.tests.test_approval_history_dialog_theme
+    status: aceito
+  - id: 1518
+    caminho: portal/tests/test_reconciliation_mobile_dark_navigation.py
+    proposito: "prova regressiva da navegação Reconciliacao→Codigo/Producao em tema escuro e shell móvel"
+    tipo: interface
+    consome: [evidencia/v1-file-1352, evidencia/v1-file-1517]
+    produz: evidencia/reconciliation-mobile-dark-u16
+    aceite: python3 -m unittest portal.tests.test_reconciliation_mobile_dark_navigation
     status: aceito
 trabalho_compartilhado: {}

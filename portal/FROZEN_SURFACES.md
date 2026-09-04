@@ -28,3 +28,6 @@ A navegação principal deve expor **Aprovações** diretamente em **Painel gera
 ## Aprovações — tema e histórico
 
 A página **Aprovações** mantém o item principal e a navegação contextual já homologados. No tema escuro, o item contextual ativo deve usar os tokens canônicos do IFF (`--iff-wash`/`--iff-dark`) em vez de variáveis legadas indefinidas. Registros históricos não permanecem expandidos no fluxo principal: **Carregar histórico** abre uma janela modal, deixando pendências e **Sempre permitir** imediatamente acessíveis. Esta alteração visual/ergonômica foi autorizada explicitamente na U15 de 2026-09-04.
+## Navegação contextual — Reconciliação, Código e Produção
+
+Os links já existentes em **Reconciliação** não mudam de rota nem função. O estado ativo da navegação contextual usa os tokens globais `--iff-wash`/`--iff-dark` em todos os contextos. Quando o tema escolhido é **Escuro**, o shell canônico continua usando `--paper`/`--ink`. A negativa de acesso a **Produção** preserva HTTP 403 e a mesma autorização, mas é adaptada ao shell canônico em vez de expor a página legacy. Emenda visual autorizada na U16 de 2026-09-04.

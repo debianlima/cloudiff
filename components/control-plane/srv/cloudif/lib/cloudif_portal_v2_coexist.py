@@ -804,7 +804,8 @@ def _install() -> None:
                 if path in PORTAL_PATHS:
                     status, captured_headers, body = capture_legacy(self, previous_get)
                     content_type = header_value(captured_headers, "Content-Type", "text/html; charset=utf-8")
-                    if status == 200 and content_type.lower().startswith("text/html"):
+                    adapt_production_denial = status == 403 and tab == "operacao-producao"
+                    if (status == 200 or adapt_production_denial) and content_type.lower().startswith("text/html"):
                         try:
                             markup = body.decode("utf-8")
                             selected_project = (query.get("project") or [""])[0]
@@ -824,7 +825,7 @@ def _install() -> None:
                                 wizard = admin_wizard_body(owner, user, csrf_token, panel)
                                 adapted_markup = adapted_markup.replace('<h3>Parâmetros de política</h3>', wizard + '<h3>Parâmetros de política</h3>', 1)
                             adapted = adapted_markup.encode("utf-8")
-                            return send(self, 200, "text/html; charset=utf-8", adapted, captured_headers)
+                            return send(self, status, "text/html; charset=utf-8", adapted, captured_headers)
                         except Exception as exc:
                             print(f'cloudif_portal_v2_transform_failed path={path} type={type(exc).__name__}',flush=True)
                             recovery=recovery_page('Não foi possível montar esta tela','O Portal preservou sua sessão, mas interrompeu a renderização antiga para evitar uma interface inconsistente.',self.path)

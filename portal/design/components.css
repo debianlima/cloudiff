@@ -223,8 +223,8 @@
 .project-context-group>div{display:flex;flex-wrap:wrap;gap:5px}
 .project-context-group a{display:inline-flex;align-items:center;min-height:32px;padding:6px 9px;border-radius:8px;color:var(--ink-2);font-size:12px;text-decoration:none}
 .project-context-group a:hover{background:var(--surface);color:var(--ink)}
-.project-context-group a[aria-current="page"]{background:var(--accent-soft);color:var(--accent);font-weight:750}
-.tab-aprovacoes .project-context-group a[aria-current="page"]{background:var(--iff-wash);color:var(--iff-dark);font-weight:750}
+.project-context-group a[aria-current="page"]{background:var(--iff-wash);color:var(--iff-dark);font-weight:750}
+html[data-theme="dark"] body.project-context-route{background:var(--paper)!important;color:var(--ink)!important}
 .project-context-route .page-context{display:none}
 .project-context-content{display:grid;gap:18px}
 .project-context-content>.s98-hero,.project-context-content>.card,.project-context-content>.ci-page,.project-context-content>.publication-shell{margin:0}
