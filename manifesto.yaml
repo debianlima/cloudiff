@@ -1,5 +1,5 @@
 projeto: cloudiff-v2
-versao_contrato: 45
+versao_contrato: 46
 namespace_fechado: true
 entradas:
   - id: 1
@@ -12095,4 +12095,12 @@ entradas:
     aceite: portao-mecanico/backend-integracao
     status: aceito
 
+  - id: 1515
+    caminho: portal/tests/test_komodo_sqlite_concurrency.py
+    proposito: "prova regressiva de concorrência do SQLite de estado do Komodo sob operações paralelas de projeto"
+    tipo: infraestrutura
+    consome: [evidencia/v1-file-0665, evidencia/v1-file-0804]
+    produz: evidencia/project-concurrency-u07
+    aceite: python3 -m unittest portal.tests.test_komodo_sqlite_concurrency
+    status: aceito
 trabalho_compartilhado: {}

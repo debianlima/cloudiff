@@ -1,6 +1,6 @@
 ---
 name: cloudiff
-versao: 0.1.6
+versao: 0.1.7
 description: Governa, reconcilia, normaliza e evolui a plataforma CloudIFF V1/Python→V2/C++23 preservando interface homologada,
   contratos, segurança, dados, observabilidade e rollback.
 tipo_competencia: projeto
@@ -34,38 +34,38 @@ compoe:
 referencia:
 - id: desenvolvedor-de-software
   fonte: debianlima/competencias-catalogo:metodo/desenvolvedor-de-software/SKILL.md
-  versao_fixada: '14'
-  delta_lido_ate: 2a641bfe597377a55711ea0804c602ea999fda07
+  versao_fixada: '15'
+  delta_lido_ate: 5641d1172b1d6249cdc2770555de87c5a3e320c6
   estado: reconciliado
 - id: github-incremental-reconciliation
   fonte: debianlima/competencias-catalogo:metodo/github-incremental-reconciliation/SKILL.md
   versao_fixada: '7'
-  delta_lido_ate: 2a641bfe597377a55711ea0804c602ea999fda07
+  delta_lido_ate: 5641d1172b1d6249cdc2770555de87c5a3e320c6
   estado: reconciliado
 - id: governanca-ontologica-de-skills
   fonte: debianlima/competencias-catalogo:metodo/governanca-ontologica-de-skills/SKILL.md
-  versao_fixada: 1.0.4
-  delta_lido_ate: 2a641bfe597377a55711ea0804c602ea999fda07
+  versao_fixada: 1.0.5
+  delta_lido_ate: 5641d1172b1d6249cdc2770555de87c5a3e320c6
   estado: reconciliado
 - id: telemetry-data-visualization
   fonte: debianlima/competencias-catalogo:dominio/telemetry-data-visualization/SKILL.md
   versao_fixada: '2'
-  delta_lido_ate: 2a641bfe597377a55711ea0804c602ea999fda07
+  delta_lido_ate: 5641d1172b1d6249cdc2770555de87c5a3e320c6
   estado: reconciliado
 - id: distributed-agent-control
   fonte: debianlima/competencias-catalogo:dominio/distributed-agent-control/SKILL.md
   versao_fixada: '1'
-  delta_lido_ate: 2a641bfe597377a55711ea0804c602ea999fda07
+  delta_lido_ate: 5641d1172b1d6249cdc2770555de87c5a3e320c6
   estado: reconciliado
 - id: network-ssh-operations
   fonte: debianlima/competencias-catalogo:dominio/network-ssh-operations/SKILL.md
   versao_fixada: '1'
-  delta_lido_ate: 2a641bfe597377a55711ea0804c602ea999fda07
+  delta_lido_ate: 5641d1172b1d6249cdc2770555de87c5a3e320c6
   estado: reconciliado
 - id: operational-ui-truth
   fonte: debianlima/competencias-catalogo:dominio/operational-ui-truth/SKILL.md
   versao_fixada: '1'
-  delta_lido_ate: 2a641bfe597377a55711ea0804c602ea999fda07
+  delta_lido_ate: 5641d1172b1d6249cdc2770555de87c5a3e320c6
   estado: reconciliado
 - id: cloud-design-patterns
   fonte: github/awesome-copilot:skills/cloud-design-patterns/SKILL.md
@@ -248,3 +248,8 @@ Na v44, o portão de deploy da entrada 174 reprovou porque duas execuções cons
 Na v45, o sincronizador de skills inicialmente aceitava três estados que quebravam o contrato de release imutável: TAR com FIFO/symlink/hardlink não representado no manifesto; TAR divergente quando a release-alvo já existia; e `current` como diretório comum, que só falhava após criar artefatos de promoção. A correção passou a rejeitar todo membro que não seja arquivo regular/diretório, validar o TAR recebido contra `NEW_MANIFEST` independentemente da existência do alvo e exigir `current`/`previous` como symlinks antes de qualquer mutação. Gate homologado em 2026-08-26: `AGENT_SKILLS_SYNC_OFFLINE=PASS`; hardness dos três casos PASS; e o mesmo SHA `e8e6528af7fed0920d0af28fe2ff7b5c335bce55be3116b7b665c916c4b4483b` produziu `DRY_RUN_PASS -> NOOP -> POINTER_STABLE=PASS` em Forja, Hospedagem, Maurício, Faro e Pelego. Evita confundir idempotência com confiança cega no target existente e preserva a atomicidade do ponteiro. Vale em Linux quando releases são árvores imutáveis identificadas por manifesto e promovidas por symlink.
 ### L015 — timeout de homologação deve atravessar o contrato até o build real
 Em 2026-09-03, a homologação H3 de um repositório grande continuou falhando após aumentar apenas o timeout HTTP do Portal: o Portal enviava `timeout=900`, mas o Komodo Agent consumia exclusivamente `build_timeout` e mantinha silenciosamente o `docker build` em 300 s. O sintoma observável era `Remote end closed connection without response`, seguido de `context canceled` no build, sem restart/OOM do agente. A correção homologada envia explicitamente `build_timeout` e mantém no agente compatibilidade com `timeout`; o H3 seguinte concluiu em 9m20s, container saudável, HTTPS 200/TLS válido e candidato imutável gerado. Gate: entrada 987/U05, testes de contrato 21/21, `py_compile`, `diff --check`, secret scan, job H3 `succeeded` e artefato `sha256:e811d342288db5ba3e00583dc5eb15ee48fb223e967839a4602f11900792fcd0`. Evita aumentar timeout na camada errada e confundir fechamento de conexão com falha do Docker/Komodo. Vale para Portal + Komodo Agent quando materialização local da imagem usa `docker build` síncrono.
+### L016 — estado SQLite do Komodo precisa ser concorrente por construção
+Em 2026-09-04, o portão U07 criou projetos em sessões independentes e, enquanto `teste-5` era provisionado, excluiu `teste-3`. A exclusão falhou em `runtime_destroy` com `sqlite3.OperationalError: database is locked`, apesar de os projetos serem distintos. O Komodo Agent executava inicialização/schema SQLite em requisições multithread sem WAL, `busy_timeout` e lock de schema. A correção homologada centraliza conexões com `busy_timeout=30000`, ativa WAL, protege schema com `RLock` e torna a inicialização process-local idempotente. Gate: entrada 849/988/U07, teste com 16 threads e 240 leituras/escritas sem lock, retry real de exclusão durante criação concluído, zero novos `database is locked` após deploy e exclusão simultânea de `teste-4`/`teste-5` concluída em jobs distintos. Evita que operação de um projeto bloqueie ou derrube outra operação independente. Vale em Linux/Python multithread/SQLite no Komodo Agent.
+
+### L017 — recuperação de criação interrompida precisa voltar à última etapa segura
+Na mesma U07, a primeira corrida deixou `teste-5` com Forgejo, Komodo e Supabase prontos, mas sem `template-applied.json`/`managed-runtime.json`; o retry comum chegava a `initial-publication` e ficava irrecuperável porque a etapa de template nunca havia sido materializada. A correção homologada recupera `runtime_template`, `php_version`, `runtime_layout` e `template_kind` do job de criação anterior quando os marcadores duráveis não existem e define `resume_from=template`; o worker reaplica somente o template faltante e continua a publicação sem recriar projeto, repositório ou banco. Gate: entradas 658/659/U07, testes de recuperação 18/18 e recuperação real de `teste-5` até `status=succeeded`, publicação 1017 e HTTPS 200. Evita transformar falha concorrente parcial em projeto sem caminho de convergência. Vale no fluxo Portal→worker de provisionamento com jobs persistidos e etapas idempotentes.
