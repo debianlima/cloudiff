@@ -215,7 +215,13 @@ def chatgpt_config(ep,cid,slug):
  f=oauth_fields(ep,cid,slug);return '\n'.join(['Nome: '+f['name'],'URL MCP: '+ep,'Autenticação: OAuth','Client ID: '+cid,'Client Secret: (deixe vazio)','Authorization URL: '+f['authorization_url'],'Token URL: '+f['token_url'],'Scopes: mcp offline_access','PKCE: S256','Método do token: none','Anexos novos: workspace.artifact.import como tool MCP direta; file top-level via openai/fileParams','Artifact existente: workspace.artifact.upload.file como tool MCP direta; nunca via callCloudIFFProjectTool','Após mudança de ferramentas: execute Scan Tools/Refresh no app MCP'])
 def claude_config(ep,cid,slug):return json.dumps({'name':'cloudiff-'+slug,'transport':'http','url':ep,'oauth':{'client_id':cid,'client_secret':'','token_endpoint_auth_method':'none','code_challenge_method':'S256','scopes':['mcp','offline_access'],'redirect_uri':'https://claude.ai/api/mcp/auth_callback'}},ensure_ascii=False,indent=2)
 def llama_config(ep,cid,slug):return json.dumps({'name':'cloudiff-'+slug,'transport':'streamable-http','url':ep,'auth':{'type':'oauth2','client_id':cid,'client_secret':'','authorization_url':'https://cloudiff.duckdns.org/cloudiff/mcp/oauth/authorize','token_url':'https://cloudiff.duckdns.org/cloudiff/mcp/oauth/token','token_endpoint_auth_method':'none','pkce':'S256','scopes':['mcp','offline_access'],'redirect_uri':'http://127.0.0.1:<porta>/callback'}},ensure_ascii=False,indent=2)
-def render(rows,csrf_token='',approvals=None,can_decide=False):
+def _same_human(value,actor):
+    value=str(value or '').strip().lower();actor=str(actor or '').strip().lower()
+    if not value or not actor:return False
+    if value.startswith('portal:'):value=value.split(':',1)[1]
+    return value==actor
+def render(rows,csrf_token='',approvals=None,can_decide=False,actor_username=''):
+    actor_username=str(actor_username or '').strip()
     approvals = list(approvals or [])
     approvals_by_project = {}
     for approval in approvals:
@@ -230,24 +236,33 @@ def render(rows,csrf_token='',approvals=None,can_decide=False):
             aid = e(item.get('approval_id') or '')
             label = e(item.get('action_label') or item.get('action') or 'Operação')
             reason = e(item.get('reason') or 'Sem justificativa informada.')
-            actions = ''
-            if can_decide:
-                actions = (
-                    '<div class="agent-approval-actions">'
+            actions = '';decision_note=''
+            status=str(item.get('status') or '')
+            requester_is_actor=bool(item.get('two_approvers_required')) and _same_human(item.get('requested_by'),actor_username)
+            first_approver_is_actor=status=='pending_second' and _same_human(item.get('approved_by'),actor_username)
+            if first_approver_is_actor:
+                decision_note='<p class="small"><b>Primeira aprovação registrada por você.</b> Aguardando um segundo administrador ou professor distinto.</p>'
+            elif requester_is_actor and status=='pending':
+                decision_note='<p class="small"><b>Você solicitou esta ativação.</b> A dupla aprovação deve ser dada por outras pessoas autorizadas.</p>'
+            elif can_decide:
+                approve=(
                     '<form method="post" action="/cloudiff/portal/action/approval">'
                     f'<input type="hidden" name="csrf_token" value="{e(csrf_token)}">'
                     f'<input type="hidden" name="approval_id" value="{aid}">'
                     '<input type="hidden" name="operation" value="approve"><input type="hidden" name="return_to" value="agentes">'
                     '<label class="small" style="display:flex;gap:.45rem;align-items:flex-start;margin:.55rem 0"><input type="checkbox" name="always_allow" value="1"><span>Sempre permitir esta ação neste projeto para este agente.</span></label>'
                     '<button class="btn" type="submit">Aceitar</button></form>'
+                )
+                reject='' if status=='pending_second' else (
                     '<form method="post" action="/cloudiff/portal/action/approval">'
                     f'<input type="hidden" name="csrf_token" value="{e(csrf_token)}">'
                     f'<input type="hidden" name="approval_id" value="{aid}">'
                     '<input type="hidden" name="operation" value="reject"><input type="hidden" name="return_to" value="agentes">'
                     '<label>Motivo<input name="rejection_reason" minlength="4" maxlength="500" required></label>'
-                    '<button class="btn danger" type="submit">Rejeitar</button></form></div>'
+                    '<button class="btn danger" type="submit">Rejeitar</button></form>'
                 )
-            cards.append(f'<article class="agent-approval"><div><span class="pill warn">Pendente</span><h4>{label}</h4><p>{reason}</p><small><code>{aid}</code></small></div>{actions}</article>')
+                actions='<div class="agent-approval-actions">'+approve+reject+'</div>'
+            cards.append(f'<article class="agent-approval"><div><span class="pill warn">Pendente</span><h4>{label}</h4><p>{reason}</p>{decision_note}<small><code>{aid}</code></small></div>{actions}</article>')
         return f'<details class="agent-detail agent-approvals" open><summary>Aprovações humanas <span class="pill warn">{len(pending)} pendente(s)</span></summary><div class="agent-detail-body">{"".join(cards)}</div></details>'
 
     def project_card(x):

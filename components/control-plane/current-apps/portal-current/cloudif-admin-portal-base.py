@@ -5850,13 +5850,17 @@ def _ap_human_role(user):
     if 'CloudIF-Professor' in groups:return 'professor'
     return 'aluno'
 def _ap_render(user):
-    try:return _ap_panel.render(_ap_visible(user),_prod_csrf_token(user),_ap_can_decide(user),_ap_visible_policies(user))
+    try:return _ap_panel.render(_ap_visible(user),_prod_csrf_token(user),_ap_can_decide(user),_ap_visible_policies(user),user.get('username') or '')
     except Exception:return '<section class="card"><h2>Aprovações humanas</h2><p class="pill bad">Serviço de aprovações temporariamente indisponível.</p></section>'
 # Dedicated project-context tab; not appended to Todos os projetos.
 if 'Portal' in globals() and not globals().get('_ap_portal_wrapped'):
     _ap_prev_get=Portal.do_GET;_ap_prev_post=Portal.do_POST
     def _ap_send_json(self,code,data):
         body=_ap_json.dumps(data,ensure_ascii=False,separators=(',',':')).encode();self.send_response(code);self.send_header('Content-Type','application/json');self.send_header('Cache-Control','no-store');self.send_header('Content-Length',str(len(body)));self.end_headers();self.wfile.write(body)
+    def _ap_conflict(self,message,return_to=''):
+        target='/cloudiff/portal/?tab='+('agentes' if return_to=='agentes' else 'aprovacoes')
+        body=('<!doctype html><html><body><h1>Decisão não registrada</h1><p>'+html.escape(message)+'</p><p><a href="'+html.escape(target,quote=True)+'">Voltar às aprovações</a></p></body></html>').encode('utf-8')
+        self.send_response(409);self.send_header('Content-Type','text/html; charset=utf-8');self.send_header('Cache-Control','no-store');self.send_header('Content-Length',str(len(body)));self.end_headers();self.wfile.write(body)
     import json as _ap_json
     def _ap_get(self):
         path=urllib.parse.urlparse(self.path).path.rstrip('/')
@@ -5889,7 +5893,12 @@ if 'Portal' in globals() and not globals().get('_ap_portal_wrapped'):
                 elif operation=='reject' and 4<=len(reason)<=500:endpoint='/v1/approvals/'+urllib.parse.quote(aid)+'/reject';payload={'rejected_by':user['username'],'rejection_reason':reason}
                 else:return _cloudif_security_reject(self,'Decisão inválida.',400)
                 code,data=_ap_panel.request(_ap_cfg('CLOUDIF_APPROVAL_URL','http://127.0.0.1:18204'),_ap_cfg('CLOUDIF_APPROVAL_TOKEN',''),'POST',endpoint,payload)
-                if code!=200 or not data.get('ok'):return _cloudif_security_reject(self,'A decisão não pôde ser registrada.',409)
+                if code!=200 or not data.get('ok'):
+                    err=str(data.get('error') or '')
+                    if err=='distinct_second_approver_required':return _ap_conflict(self,'A primeira aprovação já foi registrada por este usuário. A segunda deve ser feita por outro administrador ou professor.',val('return_to'))
+                    if err=='requester_cannot_approve_activation':return _ap_conflict(self,'Quem solicitou a ativação não pode aprová-la. Use outro administrador ou professor autorizado.',val('return_to'))
+                    if err in ('production_approver_role_required','critical_approver_role_required'):return _ap_conflict(self,'Esta decisão exige perfil de administrador ou professor.',val('return_to'))
+                    return _ap_conflict(self,'A decisão não pôde ser registrada porque o estado da aprovação mudou. Recarregue a página antes de tentar novamente.',val('return_to'))
                 log_action(user['username'],'approval_'+operation,aid,0,item['project_slug'],'always_allow='+('1' if always_allow else '0'))
             return_to=val('return_to').strip()
             target='/cloudiff/portal/?tab='+('agentes' if return_to=='agentes' else 'aprovacoes')
@@ -6006,7 +6015,7 @@ if 'Portal' in globals() and not globals().get('_ap_tab_wrapped'):
 # CloudIF AI agents guide BEGIN
 import cloudif_ai_agents_guide as _aig
 def _aig_data(user):return _aig.guide_data(_oi_visible(user))
-def _aig_render(user):return _aig.render(_oi_visible(user),_prod_csrf_token(user),_ap_visible(user),_ap_can_decide(user))
+def _aig_render(user):return _aig.render(_oi_visible(user),_prod_csrf_token(user),_ap_visible(user),_ap_can_decide(user),user.get('username') or '')
 if 'Portal' in globals() and not globals().get('_aig_wrapped'):
     _aig_prev_get=Portal.do_GET
     def _aig_get(self):

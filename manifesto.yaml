@@ -1,5 +1,5 @@
 projeto: cloudiff-v2
-versao_contrato: 47
+versao_contrato: 48
 namespace_fechado: true
 entradas:
   - id: 1
@@ -12102,5 +12102,13 @@ entradas:
     consome: [evidencia/v1-file-0665, evidencia/v1-file-0804]
     produz: evidencia/project-concurrency-u07
     aceite: python3 -m unittest portal.tests.test_komodo_sqlite_concurrency
+    status: aceito
+  - id: 1516
+    caminho: portal/tests/test_approval_panel_actor_consistency.py
+    proposito: "prova regressiva de consistência entre o ator humano, o estado pending_second e as ações exibidas na UI de aprovações"
+    tipo: interface-seguranca
+    consome: [evidencia/v1-file-0391, evidencia/v1-file-0392, evidencia/v1-file-0389]
+    produz: evidencia/approval-ui-actor-consistency-u13
+    aceite: python3 -m unittest portal.tests.test_approval_panel_actor_consistency
     status: aceito
 trabalho_compartilhado: {}
