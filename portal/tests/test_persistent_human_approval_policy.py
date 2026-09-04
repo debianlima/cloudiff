@@ -66,6 +66,16 @@ class PersistentHumanApprovalPolicyTests(unittest.TestCase):
         code,revoked=self.call('POST',f'/v1/approval-policies/{policy_id}/revoke',{'revoked_by':'professor','reason':'Revisar novamente'});self.assertEqual(code,200);self.assertTrue(revoked['revoked'])
         _,future=self.create();self.assertEqual(future['status'],'pending');self.assertFalse(future['policy_applied'])
 
+    def test_portal_requester_namespace_cannot_bypass_dual_approval_identity_check(self):
+        code,created=self.call('POST','/v1/approvals',{'project_slug':'demo','action':'deployment.production.activate','requested_by':'portal:admin-a','requester_role':'owner','ttl_seconds':900,'reason':'Produção','metadata':{}})
+        self.assertEqual(code,201);self.assertEqual(created['status'],'pending')
+        code,denied=self.call('POST',f"/v1/approvals/{created['approval_id']}/approve",{'approved_by':'admin-a','approver_role':'admin'})
+        self.assertEqual(code,409);self.assertEqual(denied['error'],'requester_cannot_approve_activation')
+        code,first=self.call('POST',f"/v1/approvals/{created['approval_id']}/approve",{'approved_by':'admin-b','approver_role':'admin'})
+        self.assertEqual(code,200);self.assertEqual(first['status'],'pending_second')
+        code,same_again=self.call('POST',f"/v1/approvals/{created['approval_id']}/approve",{'approved_by':'portal:admin-b','approver_role':'admin'})
+        self.assertEqual(code,409);self.assertEqual(same_again['error'],'distinct_second_approver_required')
+
     def test_critical_dual_action_activates_policy_only_after_current_dual_flow_finishes(self):
         _,created=self.create('deployment.production.activate');self.assertEqual(created['status'],'pending');self.assertTrue(created['two_approvers_required'])
         _,first=self.call('POST',f"/v1/approvals/{created['approval_id']}/approve",{'approved_by':'prof-a','approver_role':'professor','always_allow':True})

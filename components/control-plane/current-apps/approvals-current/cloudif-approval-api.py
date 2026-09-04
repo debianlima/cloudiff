@@ -18,6 +18,11 @@ def init():
  x.execute('create unique index if not exists idx_approval_reservation on approvals(reservation_id) where reservation_id is not null')
  x.commit();x.close()
 def auth(h):return bool(TOKEN) and hmac.compare_digest(h.get('Authorization',''),'Bearer '+TOKEN)
+def same_human(a,b):
+ a=str(a or '').strip().lower();b=str(b or '').strip().lower()
+ if a.startswith('portal:'):a=a.split(':',1)[1]
+ if b.startswith('portal:'):b=b.split(':',1)[1]
+ return bool(a and b and a==b)
 def expire_rows(x,now):
  x.execute("update approvals set status='approved',reservation_id=NULL,reserved_by=NULL,reserved_at=NULL,reservation_expires_at=NULL where status='reserved' and reservation_expires_at<=? and expires_at>?",(now,now))
  x.execute("update approvals set status='expired',reservation_id=NULL,reserved_by=NULL,reserved_at=NULL,reservation_expires_at=NULL where status in ('pending','pending_second','approved','reserved') and expires_at<=?",(now,))
@@ -66,11 +71,11 @@ class H(BaseHTTPRequestHandler):
     if str(r['action']) in DUAL_APPROVAL_ACTIONS and not str(r['action']).startswith('deployment.production') and approver_role not in {'admin','professor'}:raise ValueError('critical_approver_role_required')
     if r['expires_at']<=now:raise ValueError('expired')
     if int(r['two_approvers_required'] or 0)==1:
-     if approver==r['requested_by']:raise ValueError('requester_cannot_approve_activation')
+     if same_human(approver,r['requested_by']):raise ValueError('requester_cannot_approve_activation')
      if r['status']=='pending':
       x.execute("update approvals set status='pending_second',approved_by=?,approved_at=?,approver_role=? where approval_id=? and status='pending'",(approver,now,approver_role,aid));policy_requested=bool(approval_policy.pending_request(x,aid));x.commit();x.close();self.out(200,{'ok':True,'approval_id':aid,'status':'pending_second','first_approved_by':approver,'two_approvers_required':True,'persistent_policy_requested':policy_requested});return
      if r['status']=='pending_second':
-      if approver==r['approved_by']:raise ValueError('distinct_second_approver_required')
+      if same_human(approver,r['approved_by']):raise ValueError('distinct_second_approver_required')
       x.execute("update approvals set status='approved',second_approved_by=?,second_approved_at=?,second_approver_role=? where approval_id=? and status='pending_second'",(approver,now,approver_role,aid));approved=x.execute('select * from approvals where approval_id=?',(aid,)).fetchone();policy=approval_policy.activate_from_approval(x,approved,now);x.commit();x.close();self.out(200,{'ok':True,'approval_id':aid,'status':'approved','two_approvers_required':True,'persistent_policy_created':bool(policy),'approval_policy_id':policy.get('policy_id') if policy else None});return
      raise ValueError('not_pending_or_expired')
     if r['status']!='pending':raise ValueError('not_pending_or_expired')
