@@ -1,5 +1,5 @@
 projeto: cloudiff-v2
-versao_contrato: 50
+versao_contrato: 51
 namespace_fechado: true
 entradas:
   - id: 1
@@ -12126,5 +12126,13 @@ entradas:
     consome: [evidencia/v1-file-1352, evidencia/v1-file-1517]
     produz: evidencia/reconciliation-mobile-dark-u16
     aceite: python3 -m unittest portal.tests.test_reconciliation_mobile_dark_navigation
+    status: aceito
+  - id: 1519
+    caminho: portal/tests/test_code_dark_badges.py
+    proposito: "prova regressiva dos identificadores e badges remanescentes da aba Codigo no tema escuro"
+    tipo: interface
+    consome: [evidencia/v1-file-1518]
+    produz: evidencia/code-dark-badges-u17
+    aceite: python3 -m unittest portal.tests.test_code_dark_badges
     status: aceito
 trabalho_compartilhado: {}

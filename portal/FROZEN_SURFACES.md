@@ -31,3 +31,6 @@ A página **Aprovações** mantém o item principal e a navegação contextual j
 ## Navegação contextual — Reconciliação, Código e Produção
 
 Os links já existentes em **Reconciliação** não mudam de rota nem função. O estado ativo da navegação contextual usa os tokens globais `--iff-wash`/`--iff-dark` em todos os contextos. Quando o tema escolhido é **Escuro**, o shell canônico continua usando `--paper`/`--ink`. A negativa de acesso a **Produção** preserva HTTP 403 e a mesma autorização, mas é adaptada ao shell canônico em vez de expor a página legacy. Emenda visual autorizada na U16 de 2026-09-04.
+### Código — chips e estados no tema escuro
+
+Na aba **Código**, identificadores `<code>` e badges de estado do módulo legado acompanham o mesmo bridge dark dos cards: identificadores usam `--surface-2`/`--ink-2`; estados positivos usam `--iff-wash`/`--iff-dark`; estados neutros usam `--surface-2`/`--ink-2`. A mudança é limitada a `.tab-git .legacy-content` e foi autorizada na U17 de 2026-09-04.
