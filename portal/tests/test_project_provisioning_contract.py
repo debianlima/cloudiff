@@ -10,6 +10,14 @@ class ProjectProvisioningContractTest(unittest.TestCase):
         block=ACTION[ACTION.index('def check_project'):ACTION.index('def resume_initial_publication')]
         self.assertNotIn('queue_provision_job',block)
         self.assertNotIn('tenant=?',block)
+    def test_sync_and_integrate_do_not_fall_through_to_project_upsert(self):
+        self.assertIn('if action in {"sync", "integrate"}:\n        return integration_project_action(form, user)',ACTION)
+        block=ACTION[ACTION.index('def integration_project_action'):ACTION.index('def resume_initial_publication')]
+        self.assertIn('SELECT slug,tenant,name,description FROM projects WHERE slug=?',block)
+        self.assertNotIn('UPDATE projects SET',block)
+        self.assertNotIn('ensure_tenant_record',block)
+        self.assertIn('sem alterar nome, tenant ou descrição',block)
+
     def test_agent_results_are_persisted(self):
         for marker in ('def persist_portal_state(report):','INSERT INTO project_integrations','comp["stack_id"]','persist_portal_state(report)'):
             self.assertIn(marker,PROVISION)

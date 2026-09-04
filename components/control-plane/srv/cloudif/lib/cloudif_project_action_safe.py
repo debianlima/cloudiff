@@ -546,6 +546,38 @@ def check_project(form, headers):
     finally:
         con.close()
 
+def integration_project_action(form, user):
+    action = val(form, "action", "").strip() or val(form, "op", "").strip()
+    if action not in {"sync", "integrate"}:
+        raise ValueError("Ação de integração inválida.")
+    slug = val(form, "slug", "").strip()
+    if not slug:
+        raise ValueError("Projeto não informado.")
+    con = db()
+    try:
+        row = con.execute("SELECT slug,tenant,name,description FROM projects WHERE slug=?", (slug,)).fetchone()
+        if not row:
+            raise LookupError("Projeto não encontrado.")
+        tenant = str(row["tenant"] or "")
+    finally:
+        con.close()
+    script = os.environ.get("CLOUDIF_PROJECT_INTEGRATION_SCRIPT", "/srv/cloudif/bin/cloudif-project-integrate.sh")
+    cmd = [script, action, slug, tenant, user.get("username", "")]
+    try:
+        result = subprocess.run(cmd, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=180)
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError("project_integration_timeout") from exc
+    if result.returncode:
+        detail = (result.stderr or result.stdout or "")[-500:]
+        raise RuntimeError("project_integration_failed: " + detail)
+    return {
+        "slug": slug,
+        "tenant": tenant,
+        "integration_action": action,
+        "message": ("Projeto sincronizado" if action == "sync" else "Projeto integrado") + " sem alterar nome, tenant ou descrição.",
+    }
+
+
 def resume_initial_publication(form, user):
     from cloudif_project_provision_status import resume_material
     slug=val(form,'slug','').strip()
@@ -586,6 +618,8 @@ def handle_project_action(form, headers):
     if action == "check":
         return check_project(form, headers)
     user = user_from_headers(headers)
+    if action in {"sync", "integrate"}:
+        return integration_project_action(form, user)
     if action == 'resume_initial_publication':
         return resume_initial_publication(form,user)
     return upsert_project(form, user)
