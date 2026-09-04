@@ -12,6 +12,7 @@ import subprocess
 import shutil
 import ssl
 import time
+import threading
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -24,6 +25,15 @@ DB_PATH = BASE_STATE / "komodo-agent.db"
 
 PROJECT_STATE.mkdir(parents=True, exist_ok=True)
 
+_DB_SCHEMA_LOCK = threading.RLock()
+_DB_SCHEMA_READY = False
+_V143_SCHEMA_READY = False
+
+def _db_connect():
+    con = sqlite3.connect(DB_PATH, timeout=30.0)
+    con.execute("pragma busy_timeout=30000")
+    return con
+
 FORGEJO_BASE = "https://cloudiff.duckdns.org/git"
 FORGEJO_PROVIDER = "cloudiff.duckdns.org/git"
 DEFAULT_OWNER = "cloudif"
@@ -34,67 +44,81 @@ def now():
     return time.strftime("%Y-%m-%dT%H:%M:%S%z")
 
 def init_db():
-    con = sqlite3.connect(DB_PATH)
-    con.execute("""
-    create table if not exists deployments (
-        id integer primary key autoincrement,
-        created_at text not null,
-        project text not null,
-        tenant text,
-        actor text,
-        action text not null,
-        status text not null,
-        stack_id text,
-        stack_name text,
-        repo_id text,
-        repo_name text,
-        message text,
-        request_json text,
-        response_json text
-    )
-    """)
-    con.execute("""
-    create table if not exists integrations (
-        project text primary key,
-        tenant text,
-        repo_name text,
-        repo_url text,
-        stack_name text,
-        stack_id text,
-        repo_id text,
-        server_id text,
-        server_name text,
-        status text,
-        message text,
-        updated_at text
-    )
-    """)
-    con.commit()
-    con.close()
+    global _DB_SCHEMA_READY
+    if _DB_SCHEMA_READY:
+        return
+    with _DB_SCHEMA_LOCK:
+        if _DB_SCHEMA_READY:
+            return
+        con = _db_connect()
+        try:
+            con.execute("pragma journal_mode=WAL")
+            con.execute("pragma synchronous=NORMAL")
+            con.execute("""
+            create table if not exists deployments (
+                id integer primary key autoincrement,
+                created_at text not null,
+                project text not null,
+                tenant text,
+                actor text,
+                action text not null,
+                status text not null,
+                stack_id text,
+                stack_name text,
+                repo_id text,
+                repo_name text,
+                message text,
+                request_json text,
+                response_json text
+            )
+            """)
+            con.execute("""
+            create table if not exists integrations (
+                project text primary key,
+                tenant text,
+                repo_name text,
+                repo_url text,
+                stack_name text,
+                stack_id text,
+                repo_id text,
+                server_id text,
+                server_name text,
+                status text,
+                message text,
+                updated_at text
+            )
+            """)
+            con.commit()
+            _DB_SCHEMA_READY = True
+        finally:
+            con.close()
 
 def db_exec(sql, params=()):
     init_db()
-    con = sqlite3.connect(DB_PATH)
-    # CloudIF v107 sqlite bind sanitizer
-    safe_params = []
-    for _v in (params or []):
-        if isinstance(_v, (dict, list)):
-            safe_params.append(json.dumps(_v, ensure_ascii=False))
-        elif isinstance(_v, bool):
-            safe_params.append(1 if _v else 0)
-        else:
-            safe_params.append(_v)
-    con.execute(sql, safe_params)
-    con.commit()
-    con.close()
+    con = _db_connect()
+    try:
+        # CloudIF v107 sqlite bind sanitizer
+        safe_params = []
+        for _v in (params or []):
+            if isinstance(_v, (dict, list)):
+                safe_params.append(json.dumps(_v, ensure_ascii=False))
+            elif isinstance(_v, bool):
+                safe_params.append(1 if _v else 0)
+            else:
+                safe_params.append(_v)
+        con.execute(sql, safe_params)
+        con.commit()
+    finally:
+        con.close()
 
 def db_query(sql, params=()):
     init_db()
-    con = sqlite3.connect(DB_PATH)
-    con.row_factory = sqlite3.Row
-    rows = [dict(x) for x in con.execute(sql, params).fetchall()]
-    con.close()
-    return rows
+    con = _db_connect()
+    try:
+        con.row_factory = sqlite3.Row
+        return [dict(x) for x in con.execute(sql, params).fetchall()]
+    finally:
+        con.close()
 
 def record_deployment(project, tenant, actor, action, status, message="", stack_id="", stack_name="", repo_id="", repo_name="", request=None, response=None):
     db_exec("""
@@ -4446,32 +4470,38 @@ class H(BaseHTTPRequestHandler):
 # CloudIFF v143 — código na raiz, runtime fora do Git e membros reconciliados
 
 def _cloudif_v143_ensure_schema():
-    init_db()
-    con=sqlite3.connect(DB_PATH)
-    cols={r[1] for r in con.execute('pragma table_info(integrations)')}
-    for name,kind in (
-        ('public_number','integer not null default 0'),
-        ('active_deploy','integer not null default 0'),
-        ('runtime_template','text not null default \'node22\''),
-        ('php_version','text not null default \'8.3\''),
-    ):
-        if name not in cols:
-            con.execute(f'alter table integrations add column {name} {kind}')
-    terminal_cols={r[1] for r in con.execute('pragma table_info(project_member_terminals)')}
-    if terminal_cols and 'stack_id' not in terminal_cols:
-        con.execute('drop table project_member_terminals')
-    con.executescript('''
-    create table if not exists publication_runtimes(
-      project text not null,public_number integer not null,deploy_number integer not null,
-      stack_id text not null default '',stack_name text not null default '',container text not null default '',
-      commit_sha text not null default '',status text not null default '',is_active integer not null default 0,
-      updated_at text not null,primary key(project,deploy_number));
-    create table if not exists project_member_terminals(
-      project text not null,username text not null,stack_id text not null,
-      terminal text not null,target_json text not null,updated_at text not null,
-      primary key(project,username,stack_id));
-    ''')
-    con.commit();con.close()
+    global _V143_SCHEMA_READY
+    if _V143_SCHEMA_READY:
+        return
+    with _DB_SCHEMA_LOCK:
+        if _V143_SCHEMA_READY:
+            return
+        init_db()
+        con=_db_connect()
+        cols={r[1] for r in con.execute('pragma table_info(integrations)')}
+        for name,kind in (
+            ('public_number','integer not null default 0'),
+            ('active_deploy','integer not null default 0'),
+            ('runtime_template','text not null default \'node22\''),
+            ('php_version','text not null default \'8.3\''),
+        ):
+            if name not in cols:
+                con.execute(f'alter table integrations add column {name} {kind}')
+        terminal_cols={r[1] for r in con.execute('pragma table_info(project_member_terminals)')}
+        if terminal_cols and 'stack_id' not in terminal_cols:
+            con.execute('drop table project_member_terminals')
+        con.executescript('''
+        create table if not exists publication_runtimes(
+          project text not null,public_number integer not null,deploy_number integer not null,
+          stack_id text not null default '',stack_name text not null default '',container text not null default '',
+          commit_sha text not null default '',status text not null default '',is_active integer not null default 0,
+          updated_at text not null,primary key(project,deploy_number));
+        create table if not exists project_member_terminals(
+          project text not null,username text not null,stack_id text not null,
+          terminal text not null,target_json text not null,updated_at text not null,
+          primary key(project,username,stack_id));
+        ''')
+        con.commit();con.close();_V143_SCHEMA_READY=True
 
 
 def _cloudif_v143_runtime_settings(project):
