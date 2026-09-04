@@ -1,6 +1,6 @@
 ---
 name: cloudiff
-versao: 0.1.7
+versao: 0.1.8
 description: Governa, reconcilia, normaliza e evolui a plataforma CloudIFF V1/Python→V2/C++23 preservando interface homologada,
   contratos, segurança, dados, observabilidade e rollback.
 tipo_competencia: projeto
@@ -253,3 +253,5 @@ Em 2026-09-04, o portão U07 criou projetos em sessões independentes e, enquant
 
 ### L017 — recuperação de criação interrompida precisa voltar à última etapa segura
 Na mesma U07, a primeira corrida deixou `teste-5` com Forgejo, Komodo e Supabase prontos, mas sem `template-applied.json`/`managed-runtime.json`; o retry comum chegava a `initial-publication` e ficava irrecuperável porque a etapa de template nunca havia sido materializada. A correção homologada recupera `runtime_template`, `php_version`, `runtime_layout` e `template_kind` do job de criação anterior quando os marcadores duráveis não existem e define `resume_from=template`; o worker reaplica somente o template faltante e continua a publicação sem recriar projeto, repositório ou banco. Gate: entradas 658/659/U07, testes de recuperação 18/18 e recuperação real de `teste-5` até `status=succeeded`, publicação 1017 e HTTPS 200. Evita transformar falha concorrente parcial em projeto sem caminho de convergência. Vale no fluxo Portal→worker de provisionamento com jobs persistidos e etapas idempotentes.
+### L018 — aprovação crítica expirada precisa ser renovável sem consumir o próximo P
+Em 2026-09-04, o gate final do `teste-sofa` revelou que `production/approval/request` devolvia indefinidamente a autorização P2 expirada porque a linha local ainda estava `pending`. O efeito observável era HTTP 200 com `existing=true`, `status=expired`, deixando a interface sem caminho para obter nova dupla aprovação. A correção homologada consulta o status real do serviço de aprovação: `pending`, `pending_second`, `approved` e `reserved` permanecem idempotentes; `expired`, `rejected` e `cancelled` encerram a autorização anterior e criam outra vinculada ao mesmo `candidateNumber` e ao mesmo `publicationNumber`, recalculando o digest do ambiente atual. Gate: U08, primeira chamada após deploy retornou `renewed=true`, novo `approvalId`, `status=pending`, `publicationNumber=2`; repetição imediata retornou `existing=true` para o novo ID; `production/enqueue` continuou recusado com 403 enquanto a dupla aprovação humana não existir. Evita transformar expiração de TTL em bloqueio permanente e evita pular P2 para P3 apenas por renovar autorização. Vale no Portal W/H/P com Approval Service transacional e numeração P reservada somente por release publicada.
