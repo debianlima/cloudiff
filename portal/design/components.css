@@ -234,7 +234,7 @@ html[data-theme="dark"] .tab-git .legacy-content{
   --ci-muted:var(--ink-3);
   --ci-green-soft:var(--iff-wash);
   --ci-green-dark:var(--iff-dark);
-  --ci-disabled-bg:var(--surface-2);
+  --ci-disabled-bg:var(--surface);
   --ci-disabled-text:var(--ink-3);
 }
 html[data-theme="dark"] .tab-git .legacy-content :is(.ci-section,.ci-step,.ci-project-card,.ci-modal-card,.ci-choice,.ci-menu summary,.ci-menu-body,.ci-menu-body a,.ci-menu-body button){
@@ -243,7 +243,7 @@ html[data-theme="dark"] .tab-git .legacy-content :is(.ci-section,.ci-step,.ci-pr
   border-color:var(--rule)!important;
 }
 html[data-theme="dark"] .tab-git .legacy-content :is(.ci-resource,.ci-table th){
-  background:var(--surface-2)!important;
+  background:var(--paper)!important;
   color:var(--ink)!important;
   border-color:var(--rule)!important;
 }
@@ -251,8 +251,8 @@ html[data-theme="dark"] .tab-git .legacy-content :is(.ci-muted,.ci-step small){c
 html[data-theme="dark"] .tab-git .legacy-content :is(.ci-project-card h4,.ci-section h3,.ci-choice h4){color:var(--ink)!important}
 html[data-theme="dark"] .tab-git .legacy-content .ci-step strong{color:var(--iff-dark)!important}
 html[data-theme="dark"] .tab-git .legacy-content code{
-  background:var(--surface-2)!important;
-  color:var(--ink-2)!important;
+  background:var(--iff-wash)!important;
+  color:var(--iff-dark)!important;
   border-color:var(--rule)!important;
 }
 html[data-theme="dark"] .tab-git .legacy-content :is(.ci-pill-ok,.pill.ok,.badge.ok){
@@ -261,7 +261,7 @@ html[data-theme="dark"] .tab-git .legacy-content :is(.ci-pill-ok,.pill.ok,.badge
   border-color:var(--rule)!important;
 }
 html[data-theme="dark"] .tab-git .legacy-content :is(.ci-pill-off,.ci-pill:not(.ci-pill-ok),.pill:not(.ok),.badge:not(.ok)){
-  background:var(--surface-2)!important;
+  background:var(--surface)!important;
   color:var(--ink-2)!important;
   border-color:var(--rule)!important;
 }
@@ -271,7 +271,7 @@ html[data-theme="dark"] .tab-git .legacy-content :is(.ci-btn-secondary,.btn.ligh
   border-color:var(--rule)!important;
 }
 html[data-theme="dark"] .tab-git .legacy-content :is(input,textarea,select){
-  background:var(--surface-2)!important;
+  background:var(--surface)!important;
   color:var(--ink)!important;
   border-color:var(--rule)!important;
 }
