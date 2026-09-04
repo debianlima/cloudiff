@@ -1,6 +1,6 @@
 ---
 name: cloudiff
-versao: 0.1.11
+versao: 0.1.12
 description: Governa, reconcilia, normaliza e evolui a plataforma CloudIFF V1/Python→V2/C++23 preservando interface homologada,
   contratos, segurança, dados, observabilidade e rollback.
 tipo_competencia: projeto
@@ -267,3 +267,8 @@ Em 2026-09-04, a U15 reproduziu no Chromium real que o item contextual **Aprova�
 
 ### L023 — histórico volumoso de aprovação deve ser carregado sob demanda na própria página
 Na mesma U15, o browser mostrou 18 aprovações históricas expandidas antes da seção **Sempre permitir**, empurrando as políticas persistentes vários milhares de pixels para baixo. A correção mantém somente estados operacionais (`pending`, `pending_second`, `approved`) no fluxo principal e move estados terminais para um `<dialog>` nativo aberto pelo botão **Carregar histórico (N)**; nenhuma API ou regra de aprovação foi alterada. Gate: entrada 1517/U15, navegador real em tema escuro confirmou botão único, **Sempre permitir** visível a cerca de 821 px, modal abrindo com 18 registros e fechando novamente, zero erros JS/rede. Evita que auditoria histórica atrapalhe a decisão atual e as políticas persistentes. Vale no painel server-side `cloudif_approval_panel` com histórico crescente.
+### L024 — módulo legacy claro precisa de bridge dark explícita quando injeta cores hard-coded
+Em 2026-09-04, a U16 reproduziu no Chromium móvel que a aba **Código** preservava o shell escuro, mas os quadros internos do assistente e dos projetos continuavam brancos. O módulo `cloudif_git_komodo_module.py` injeta `#fff`/tons claros em `.ci-section`, `.ci-step`, `.ci-project-card`, menus e formulários; somente trocar o fundo do shell não corrige esses descendentes. A correção homologada foi limitada a `.tab-git .legacy-content` e remapeou as superfícies visíveis para `--surface`, `--surface-2`, `--rule`, `--ink`, `--ink-3`, `--iff-wash` e `--iff-dark`. Gate: entrada 1518/U16, 24/24 testes e navegação real Reconciliação→Código em Chromium 390 px; `whiteCount=0`, fundo do body `rgb(7, 17, 11)`, item Código verde sobre verde escuro e `scrollWidth==clientWidth`. Evita páginas híbridas em que o shell respeita dark mode mas widgets legacy permanecem claros. Vale enquanto o módulo Git/Komodo ainda emite CSS hard-coded.
+
+### L025 — negativa HTTP de uma rota visual deve preservar o status e ainda usar o shell canônico
+Na mesma U16, **Produção** devolvia corretamente HTTP 403 para o usuário, porém o coexist adapter só transformava HTML com status 200; o 403 escapava como página legacy desformatada. A correção permite adaptar especificamente o 403 de `operacao-producao` e devolve o mesmo status original após a transformação. Gate: navegação viva em Chromium dark confirmou título `Produção · CloudIFF`, navegação contextual presente, Produção ativa, mensagem `Projeto não autorizado.`, fundo/cores canônicos e nenhuma exposição da página legacy crua; verificação independente continuou retornando HTTP 403. Evita que segurança correta produza uma experiência visual fora do contrato sem enfraquecer autorização. Vale para negativas HTML intencionais que precisam permanecer fail-closed.
