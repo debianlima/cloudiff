@@ -6512,7 +6512,7 @@ if 'Portal' in globals() and not globals().get('_tenant_always_on_final_wrapped'
             return _cloudif_security_reject(self,'Origem da requisição não autorizada.',403)
         if not _prod_csrf_equal(val('csrf_token'),_prod_csrf_token(user)):
             return _cloudif_security_reject(self,'Token CSRF inválido ou ausente.',403)
-        if not user.get('admin'):
+        if op in ('always_on','always_on_start','always_off') and not user.get('admin'):
             return _cloudif_security_reject(self,'Restrito a administrador.',403)
         if not tenant or not tenant_visible(tenant,user['username'],user['groups']):
             return _cloudif_security_reject(self,'Tenant não autorizado.',403)

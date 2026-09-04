@@ -12,6 +12,9 @@ class TenantAlwaysOnFinalHandlerTests(unittest.TestCase):
  def test_stopped_tenant_is_started(self):
   self.assertIn("if op in ('always_on','always_on_start','keepalive') and not tenant_is_running(tenant):",self.source)
   self.assertIn('docker compose --env-file .env up -d',self.source)
+ def test_keepalive_is_allowed_for_authorized_non_admin_tenant_user(self):
+  self.assertIn("if op in ('always_on','always_on_start','always_off') and not user.get('admin'):",self.source)
+  self.assertIn("if not tenant or not tenant_visible(tenant,user['username'],user['groups']):",self.source)
  def test_action_is_audited(self):
   self.assertIn("log_action(user['username'],op",self.source)
 if __name__=='__main__':unittest.main()

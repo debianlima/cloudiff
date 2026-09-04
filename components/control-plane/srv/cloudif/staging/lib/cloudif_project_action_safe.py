@@ -151,6 +151,39 @@ def ensure_tenant_record(con, tenant, user):
     sql = f"INSERT INTO tenants ({','.join(names)}) VALUES ({','.join(['?']*len(names))})"
     con.execute(sql, [values[n] for n in names])
 
+def ensure_tenant_acl_owner(con, tenant, user):
+    if not tenant or "tenant_acl" not in tables(con):
+        return
+
+    c = cols(con, "tenant_acl")
+    tenant_col = pick(c, ["tenant", "name", "slug"])
+    type_col = pick(c, ["subject_type", "principal_type", "type"])
+    subject_col = pick(c, ["subject", "principal", "user", "username"])
+    if not tenant_col or not subject_col:
+        return
+
+    username = user.get("username", "")
+    if not username:
+        return
+
+    where = f"{tenant_col}=? AND {subject_col}=?"
+    params = [tenant, username]
+    if type_col:
+        where += f" AND {type_col}='user'"
+    exists = con.execute(f"SELECT COUNT(*) FROM tenant_acl WHERE {where}", params).fetchone()[0]
+    if exists:
+        return
+
+    values = {tenant_col: tenant, subject_col: username}
+    if type_col:
+        values[type_col] = "user"
+    names = list(values)
+    con.execute(
+        f"INSERT INTO tenant_acl ({','.join(names)}) VALUES ({','.join(['?']*len(names))})",
+        [values[n] for n in names],
+    )
+
+
 def ensure_project_acl_owner(con, slug, user):
     if "project_acl" not in tables(con):
         return
@@ -259,6 +292,8 @@ def upsert_project(form, user):
             con.execute(sql, [values[n] for n in names])
 
         ensure_tenant_record(con, tenant, user)
+        if val(form, "db_mode", "skip") == "create":
+            ensure_tenant_acl_owner(con, tenant, user)
         ensure_project_acl_owner(con, slug, user)
 
         con.commit()

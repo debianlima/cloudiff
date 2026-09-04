@@ -49,6 +49,25 @@ class ProvisioningPolicyReadmeDarkThemeTest(unittest.TestCase):
         ):
             self.assertIn(marker, action + portal)
 
+    def test_new_tenant_creation_grants_owner_tenant_acl(self):
+        action_path = ROOT / 'components/control-plane/srv/cloudif/lib/cloudif_project_action_safe.py'
+        spec = importlib.util.spec_from_file_location('cloudif_project_action_safe_test', action_path)
+        module = importlib.util.module_from_spec(spec)
+        assert spec and spec.loader
+        spec.loader.exec_module(module)
+        con = sqlite3.connect(':memory:')
+        con.row_factory = sqlite3.Row
+        con.execute('create table tenant_acl (tenant text, subject_type text, subject text)')
+        module.ensure_tenant_acl_owner(con, 'iff0001-testesofa', {'username':'iff0001'})
+        module.ensure_tenant_acl_owner(con, 'iff0001-testesofa', {'username':'iff0001'})
+        rows = con.execute('select tenant,subject_type,subject from tenant_acl').fetchall()
+        con.close()
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(tuple(rows[0]), ('iff0001-testesofa','user','iff0001'))
+        source = action_path.read_text()
+        self.assertIn('if val(form, "db_mode", "skip") == "create":', source)
+        self.assertIn('ensure_tenant_acl_owner(con, tenant, user)', source)
+
     def test_worker_requires_tenant_policy_and_validated_backup_policy(self):
         source = (ROOT / 'components/control-plane/srv/cloudif/lib/cloudif_project_provision_worker.py').read_text()
         for marker in (
