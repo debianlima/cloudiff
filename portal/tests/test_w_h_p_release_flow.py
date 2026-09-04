@@ -51,6 +51,8 @@ class WHPReleaseFlowTests(unittest.TestCase):
         self.assertIn('HOMOLOGATION_DEPLOY_HTTP_TIMEOUT=1020',PORTAL)
         self.assertIn("'timeout':HOMOLOGATION_DEPLOY_RUNTIME_TIMEOUT",PORTAL)
         self.assertIn("'build_timeout':HOMOLOGATION_DEPLOY_RUNTIME_TIMEOUT",PORTAL)
+        self.assertIn('import hashlib, hmac, json',PORTAL)
+        self.assertIn('hmac.compare_digest',PORTAL)
         self.assertIn("payload.get('build_timeout') or payload.get('timeout') or 300",RUNTIME)
         self.assertIn("timeout=HOMOLOGATION_DEPLOY_HTTP_TIMEOUT",PORTAL)
         self.assertGreater(900,300)
