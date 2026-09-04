@@ -1,77 +1,72 @@
-# Estado — 2026-09-04 — contrato v48
+# Estado — 2026-09-04 — contrato v49
 
 ## Decisões vigentes
-- `FrozenPortalInterface` permanece requisito mestre; alterações de navegação e aprovação desta sequência foram emendas explícitas de homologação.
-- `teste-sofa` continua projeto descartável de QA do owner `iff1742962`, tenant `iff1742962-testesofa`, publicação estável P1/1010, Preview W3 e candidato H2 homologado.
-- P2 continua vinculada ao candidato H2 e só pode ser ativada depois de **duas aprovações humanas distintas de admin/professor**, nenhuma delas pertencente ao mesmo usuário que solicitou a ativação.
-- Identidades humanas namespaced como `portal:<username>` são a mesma pessoa que `<username>` para separação de funções; o namespace continua preservado nos registros de auditoria.
-- A UI de Aprovações e a seção correspondente em Conectores exibem ações conforme o ator e o estágio (`pending`/`pending_second`), não apenas conforme o papel global.
-- A skill de projeto vigente passa a `cloudiff@0.1.10`.
+- `FrozenPortalInterface` permanece requisito mestre; a U15 alterou somente a superfície **Aprovações** explicitamente autorizada pelo operador: estado ativo no tema escuro e histórico sob demanda.
+- `teste-sofa` permanece projeto descartável de QA do owner `iff1742962`, tenant `iff1742962-testesofa`, runtime `running`, `healthy=true`, `issues=[]` e terminal OK.
+- P2 continua vinculada ao candidato H2 e exige duas aprovações humanas distintas admin/professor, ambas diferentes do solicitante.
+- A autorização P2 mais recente `apr_dd84dba1cc5f49219d67` expirou sem aprovadores; quando os aprovadores estiverem presentes, o gate deve ser renovado pelo endpoint oficial antes de continuar.
+- A navegação principal de Aprovações permanece como homologada na v47; a U15 não adicionou novas rotas nem itens de menu.
+- A skill de projeto vigente passa a `cloudiff@0.1.11`.
 
 ## Decisões superadas
-- Comparar `requested_by` e `approved_by` como strings cruas — superado após `portal:iff1742962` ter sido tratado como diferente de `iff1742962` na primeira decisão P2.
-- Interpretar a primeira aprovação registrada em `apr_4f9b40c9a80a4611bdcf` como válida — superado: ela explorou involuntariamente a divergência de namespace do próprio solicitante e expirou sem segunda aprovação.
-- Oferecer `Aprovar/Aceitar` novamente ao primeiro aprovador em `pending_second` e devolver erro genérico após o clique — superado por renderização consciente do ator e mensagens de conflito específicas.
+- Usar `--accent`/`--accent-soft` no item ativo da navegação contextual de Aprovações — superado porque esses tokens não existem no escopo global do shell v2 e o tema escuro caía para texto claro sem fundo.
+- Renderizar todo o histórico de aprovações diretamente antes de **Sempre permitir** — superado por carregamento sob demanda em diálogo nativo.
 
 ## Decisões humanas pendentes
-- H001 P2 do `teste-sofa`: autorização vigente `apr_dd84dba1cc5f49219d67` está `pending`, sem primeiro/segundo aprovador. Precisa de dois usuários humanos distintos com perfil admin/professor; o solicitante `iff1742962` não pode ser um deles.
+- H001 P2 do `teste-sofa`: não existe autorização ativa neste momento; a última expirou. Para retomar, renovar P2 e obter duas decisões humanas distintas admin/professor, sem usar o solicitante como aprovador.
 
 ## Decisões fechadas nesta emenda
-- O Approval Service normaliza o prefixo humano `portal:` antes das comparações de segregação de funções.
-- O mesmo normalizador protege também a distinção entre primeiro e segundo aprovador.
-- O Portal não oferece decisão ao solicitante de ativação crítica, nem novamente ao primeiro aprovador durante `pending_second`.
-- O estado `pending_second` oferece somente a segunda aprovação suportada pelo contrato atual; não mostra uma rejeição que o backend recusaria.
-- Formulário obsoleto/double submit retorna “Decisão não registrada” com motivo específico em vez de “Acesso negado” genérico para conflitos conhecidos.
-- `versao_contrato` avançou para 48 e a entrada regressiva 1516 fixa a consistência ator/UI.
+- O ajuste de cor foi escopado a `.tab-aprovacoes`; demais tabs/contextos não foram redesenhados.
+- O item contextual ativo usa `--iff-wash` no fundo e `--iff-dark` no texto, preservando tokens canônicos nos temas claro e escuro.
+- Estados `pending`, `pending_second` e `approved` permanecem no fluxo principal; `expired`, `consumed`, `rejected` e `cancelled` vão para **Carregar histórico**.
+- **Carregar histórico (N)** abre um `<dialog>` nativo e o fecha sem navegação nem request adicional.
+- `versao_contrato` avançou para 49 e a entrada 1517 fixa o comportamento de tema/histórico.
 
 ## Pendências técnicas não humanas
-- Nenhuma pendência técnica conhecida permanece no gate de identidade/UI após os testes e deploys da U13.
-- Após H001: executar P2, validar artefato/HTTPS/terminal/stable URL e então exercitar rollback real para P1.
+- Nenhuma pendência técnica permanece na superfície Aprovações tratada pela U15.
+- A divergência de U14 em **Gerenciar permissões** do Teste Sofá — drawer vazio no navegador — permanece fora do escopo desta correção e deve ser tratada em unidade própria.
+- Após H001: executar P2, validar artefato/HTTPS/terminal/stable URL e exercitar rollback real para P1.
 
 ## Trabalho compartilhado
-- ponteiro: `manifesto.yaml.trabalho_compartilhado` — vazio após o fechamento da U13; nenhuma zona de exclusão permanece reservada.
+- ponteiro: `manifesto.yaml.trabalho_compartilhado` — vazio após o fechamento da U15; nenhuma zona de exclusão permanece reservada.
 
 ## Competências ativas nesta unidade
-- `cloudiff@0.1.10` — skill raiz, atualizada com L020/L021 após homologação.
+- `cloudiff@0.1.11` — skill raiz, atualizada com L022/L023 após homologação viva.
 - `desenvolvedor-de-software@15` — método PGH vigente.
 - `github-incremental-reconciliation@7` — reconciliação incremental.
 - `governanca-ontologica-de-skills@1.0.5` — política vigente.
 - `telemetry-data-visualization@2` — macro global obrigatória.
 
 ## Falhas de portão por tipo de entrada
-- `seguranca/aprovacao`: separação requester/approver podia ser burlada pela diferença textual `portal:user` versus `user`.
-- `interface/aprovacao`: primeiro aprovador recebia novamente ação impossível e via erro genérico ao tentar cumprir a segunda aprovação.
+- `interface/tema`: item contextual ativo de Aprovações em dark resolvia para texto quase branco e fundo transparente porque os tokens usados estavam fora de escopo.
+- `interface/ergonomia`: 18 registros históricos ficavam expandidos antes de **Sempre permitir**, prejudicando a leitura das políticas persistentes.
 
 ## Divergências da última reconciliação
 ### Corrigidas
-- Approval API: comparações de identidade humana usam equivalência de `portal:<user>` e `<user>`.
-- Portal Aprovações e Conectores: requester e primeiro aprovador recebem mensagem explícita sem botões inválidos.
-- Handler de decisão: conflitos conhecidos de dupla aprovação exibem motivo específico.
-- Deploy Portal: `portal-approval-actor-u13-5f8c7f2-20260904` ativo.
-- Deploy Approval Service: `approval-identity-u13-47f1996-20260904` ativo.
-- Teste vivo sintético de identidade passou e sua pendência foi cancelada no final.
-- P2 foi renovada após o fix: `apr_dd84dba1cc5f49219d67`, `pending`, `publicationNumber=2`, sem aprovadores.
-- Reteste real da UI como solicitante: aprovação visível em Aprovações e no card Teste Sofá em Conectores, mensagem “Você solicitou esta ativação”, nenhum botão de decisão; API independente confirma zero aprovadores.
+- `portal/design/components.css`: override dark-safe limitado a `.tab-aprovacoes` com tokens IFF globais.
+- `cloudif_approval_panel.py`: histórico terminal removido do fluxo principal e exposto em `<dialog>` sob demanda.
+- Deploy ativo U15 troca apenas o painel de aprovações e o CSS do shell, preservando os releases vivos anteriores como base e rollback.
+- Navegação viva em Chromium: Projetos → Aprovações manteve `data-theme=dark`; item contextual ativo ficou verde (`rgb(149, 223, 163)`) sobre verde escuro (`rgb(23, 53, 31)`).
+- O browser encontrou exatamente um botão `Carregar histórico (18)`; **Sempre permitir** ficou visível imediatamente abaixo do resumo; o modal abriu com 18 registros e fechou normalmente.
+- Console errors 0, page errors 0, failed requests 0 durante o reteste.
 
-### Pendentes de autorização
-- H001: duas decisões humanas distintas admin/professor, ambas diferentes do solicitante `iff1742962`.
+### Pendentes fora do escopo
+- U14: `Gerenciar permissões` do projeto abriu um drawer sem conteúdo; não foi alterado na U15 por solicitação de limitar a mudança ao menu/painel de Aprovações.
+- H001: P2 precisa ser renovada e decidida por dois humanos autorizados.
 
 ## Entradas aceitas nesta unidade
-- 1516 — regressão de consistência ator/UI para dupla aprovação.
-- 391 — Conectores: ações humanas coerentes com solicitante e primeiro aprovador.
-- 392 — painel dedicado de Aprovações: ações coerentes com o ator.
-- 389 — handler Portal: conflitos de decisão com mensagens específicas e identidade passada aos renderers.
-- Approval Service vigente — normalização de identidade humana para segregação de funções.
-- `skills/cloudiff/SKILL.md` — L020/L021 e versão 0.1.10.
-- `competencias.yaml` — versão da skill 0.1.10.
+- 1517 — regressão do tema escuro e histórico sob demanda de Aprovações.
+- 1352 — navegação contextual reutilizada sem nova rota; correção visual escopada à tab Aprovações.
+- 392 — painel de Aprovações com histórico em diálogo nativo.
+- `portal/FROZEN_SURFACES.md` — emenda visual explicitamente autorizada.
+- `skills/cloudiff/SKILL.md` — L022/L023 e versão 0.1.11.
+- `competencias.yaml` — skill de projeto 0.1.11.
 
 ## Portões da unidade
-- `APPROVAL_UI_TESTS=PASS`: 30/30.
-- `APPROVAL_IDENTITY_TESTS=PASS`: 31/31.
-- `LIVE_IDENTITY_NAMESPACE_GATE=PASS`: requester namespaced não aprova a própria ativação e primeiro aprovador não pode reaparecer como segundo via namespace.
-- `LIVE_REQUESTER_UI=PASS`: P2 real renovada aparece sem botões para o solicitante em ambas as superfícies.
+- `U15_TESTS=PASS`: 27/27 contratos de tema, histórico, aprovação, navegação e superfície congelada.
+- `LIVE_DARK_APPROVALS_HISTORY=PASS`: clique real Projetos→Aprovações em Chromium dark, tokens corretos, diálogo funcional e **Sempre permitir** desobstruído.
 - `PY_COMPILE=PASS`, `DIFF_CHECK=PASS`, `SECRET_SCAN=PASS`.
-- `DELTA_INVENTORY=PASS`, `LEARNING_PRESERVED=PASS`, `RECONCILIATION_CLOSURE=PASS`, `DEPENDENCY_REFERENCES=PASS` após fechamento.
+- `DELTA_INVENTORY=PASS`, `LEARNING_PRESERVED=PASS`: catálogo permaneceu em `9b951d0d2f68a3ead190741fd5e8b4d6cc8e0a84`, sem delta nas skills consumidas.
 
 ## Próxima unidade
-- Observar a primeira aprovação humana da nova P2 por um admin/professor diferente de `iff1742962`; confirmar `pending_second`; depois observar a segunda aprovação por outro usuário distinto e executar P2 + smoke + rollback.
+- Tratar separadamente o drawer vazio de **Gerenciar permissões**; quando houver dois aprovadores humanos disponíveis, renovar P2 e concluir publicação + smoke + rollback.

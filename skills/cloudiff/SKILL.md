@@ -1,6 +1,6 @@
 ---
 name: cloudiff
-versao: 0.1.10
+versao: 0.1.11
 description: Governa, reconcilia, normaliza e evolui a plataforma CloudIFF V1/Python→V2/C++23 preservando interface homologada,
   contratos, segurança, dados, observabilidade e rollback.
 tipo_competencia: projeto
@@ -262,3 +262,8 @@ Em 2026-09-04, a U13 mostrou que uma ativação P2 solicitada como `portal:iff17
 
 ### L021 — UI de dupla aprovação deve refletir o ator e o estágio, não só o papel global
 Na mesma U13, após a primeira aprovação real, a interface ainda oferecia novamente `Aceitar/Aprovar` ao primeiro aprovador e a segunda tentativa terminava numa página genérica `Acesso negado`, embora o backend estivesse em `pending_second`. A correção homologada passa o username ao renderer, oculta ações impossíveis para o solicitante e para o primeiro aprovador, mostra mensagens explícitas de espera e não oferece `Rejeitar` em `pending_second` porque o contrato atual do Approval Service não aceita essa operação. Conflitos de formulário obsoleto recebem mensagem específica. Gate: entrada 1516/U13, 30/30 testes de UI e reteste real da P2 renovada: `portal:iff1742962` vê “Você solicitou esta ativação”, sem botões de decisão, tanto em Aprovações quanto no card do Teste Sofá em Conectores; API independente confirma `pending` e zero aprovadores. Evita botão que promete uma decisão que o backend obrigatoriamente recusará. Vale no Portal server-side com renderers `cloudif_approval_panel` e `cloudif_ai_agents_guide`.
+### L022 — CSS contextual fora da camada legacy deve usar tokens definidos no escopo global
+Em 2026-09-04, a U15 reproduziu no Chromium real que o item contextual **Aprovações** ficava praticamente branco/transparente no tema escuro: `.project-context-group a[aria-current="page"]` usava `--accent`/`--accent-soft`, tokens definidos somente dentro de `.legacy-content`, enquanto a navegação contextual vive fora desse escopo. A correção homologada foi deliberadamente limitada a `.tab-aprovacoes`, usando `--iff-dark` e `--iff-wash`, já definidos em `tokens.css` para claro/escuro. Gate: entrada 1517/U15, 27/27 testes e navegação viva Projetos→Aprovações em tema dark; o item ativo passou a `rgb(149, 223, 163)` sobre `rgb(23, 53, 31)`, sem erro de console, pageerror ou request falhada. Evita declaração CSS inválida que cai silenciosamente para cor herdada e perde o estado ativo em temas alternativos. Vale no shell v2 quando elementos ficam fora do bridge `.legacy-content`.
+
+### L023 — histórico volumoso de aprovação deve ser carregado sob demanda na própria página
+Na mesma U15, o browser mostrou 18 aprovações históricas expandidas antes da seção **Sempre permitir**, empurrando as políticas persistentes vários milhares de pixels para baixo. A correção mantém somente estados operacionais (`pending`, `pending_second`, `approved`) no fluxo principal e move estados terminais para um `<dialog>` nativo aberto pelo botão **Carregar histórico (N)**; nenhuma API ou regra de aprovação foi alterada. Gate: entrada 1517/U15, navegador real em tema escuro confirmou botão único, **Sempre permitir** visível a cerca de 821 px, modal abrindo com 18 registros e fechando novamente, zero erros JS/rede. Evita que auditoria histórica atrapalhe a decisão atual e as políticas persistentes. Vale no painel server-side `cloudif_approval_panel` com histórico crescente.
