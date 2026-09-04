@@ -6766,7 +6766,7 @@ if 'Portal' in globals() and not globals().get('_tenant_always_on_final_wrapped'
         except Exception:return _cloudif_security_reject(self,'Formulário inválido.',400)
         val=lambda k,d='':(form.get(k) or [d])[0].strip()
         op=val('op')
-        if op not in ('always_on','always_on_start','always_off','keepalive'):
+        if op not in ('start','stop','restart','repair','always_on','always_on_start','always_off','keepalive'):
             self.rfile=_tenant_always_io.BytesIO(raw)
             self.headers.replace_header('Content-Length',str(len(raw)))
             return _tenant_always_on_final_prev_post(self)
@@ -6783,6 +6783,19 @@ if 'Portal' in globals() and not globals().get('_tenant_always_on_final_wrapped'
         if not tdir.is_dir() or not (tdir/'.env').is_file():
             return _cloudif_security_reject(self,'Tenant não encontrado.',404)
         rc=0;out='';err=''
+        if op in ('start','stop','restart'):
+            cmdop={'start':'up -d','stop':'stop','restart':'restart'}[op]
+            rc,out,err=run(['bash','-lc',f"cd {str(tdir)!r} && docker compose --env-file .env {cmdop}"],180)
+            log_action(user['username'],op,tenant,rc,out,err)
+            if rc!=0:return _cloudif_security_reject(self,'A ação do banco falhou.',502)
+            return self.redirect('/?tab=bancos')
+        if op=='repair':
+            if not (user.get('admin') or setting_bool('CLOUDIF_STUDENT_CAN_REPAIR',True)):
+                return _cloudif_security_reject(self,'Reparo não permitido.',403)
+            rc,out,err=run(['bash','-lc',f"/usr/local/sbin/cloudif-tenant-ensure-bg.sh {tenant!r} restore {user['username']!r}"],30)
+            log_action(user['username'],op,tenant,rc,out,err)
+            if rc!=0:return _cloudif_security_reject(self,'Não foi possível iniciar o reparo do banco.',502)
+            return self.redirect('/?tab=bancos')
         if op in ('always_on','always_on_start','keepalive') and not tenant_is_running(tenant):
             rc,out,err=run(['bash','-lc',f"cd {str(tdir)!r} && docker compose --env-file .env up -d"],180)
             if rc!=0:

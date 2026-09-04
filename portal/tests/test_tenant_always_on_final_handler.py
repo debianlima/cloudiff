@@ -5,7 +5,7 @@ class TenantAlwaysOnFinalHandlerTests(unittest.TestCase):
  def setUpClass(cls): cls.source=Path('components/control-plane/current-apps/portal-current/cloudif-admin-portal-base.py').read_text()
  def test_final_handler_intercepts_only_always_on(self):
   self.assertIn('def _tenant_always_on_final_post',self.source)
-  self.assertIn("op not in ('always_on','always_on_start','always_off','keepalive')",self.source)
+  self.assertIn("op not in ('start','stop','restart','repair','always_on','always_on_start','always_off','keepalive')",self.source)
   self.assertIn('return _tenant_always_on_final_prev_post(self)',self.source)
  def test_policy_is_exclusive_and_clears_temporary_window(self):
   self.assertIn('always_alive=excluded.always_alive,keepalive_until=excluded.keepalive_until,max_hours=excluded.max_hours',self.source)
@@ -16,6 +16,10 @@ class TenantAlwaysOnFinalHandlerTests(unittest.TestCase):
   self.assertIn("if op in ('always_on','always_on_start','always_off') and not user.get('admin'):",self.source)
   self.assertIn("if not tenant or not tenant_visible(tenant,user['username'],user['groups']):",self.source)
   self.assertIn('SELECT COUNT(*) FROM projects WHERE tenant=? AND lower(owner)=lower(?)',self.source)
+ def test_final_handler_owns_regular_tenant_actions_too(self):
+  self.assertIn("cmdop={'start':'up -d','stop':'stop','restart':'restart'}[op]",self.source)
+  self.assertIn("if op=='repair':",self.source)
+  self.assertIn("CLOUDIF_STUDENT_CAN_REPAIR",self.source)
  def test_action_is_audited(self):
   self.assertIn("log_action(user['username'],op",self.source)
 if __name__=='__main__':unittest.main()
