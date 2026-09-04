@@ -16,6 +16,10 @@ class TenantAlwaysOnFinalHandlerTests(unittest.TestCase):
   self.assertIn("if op in ('always_on','always_on_start','always_off') and not user.get('admin'):",self.source)
   self.assertIn("if not tenant or not tenant_visible(tenant,user['username'],user['groups']):",self.source)
   self.assertIn('SELECT COUNT(*) FROM projects WHERE tenant=? AND lower(owner)=lower(?)',self.source)
+ def test_tenant_restore_timeout_covers_tls_and_role_reconciliation(self):
+  self.assertIn("restore {user['username']!r}\"],120)",self.source)
+  self.assertNotIn("restore {user['username']!r}\"],30)",self.source)
+
  def test_final_handler_owns_regular_tenant_actions_too(self):
   self.assertIn("cmdop={'start':'up -d','stop':'stop','restart':'restart'}[op]",self.source)
   self.assertIn("if op=='repair':",self.source)

@@ -1550,7 +1550,7 @@ main {{ max-width:1240px; margin:24px auto; padding:0 18px; }}
             elif op == "repair":
                 if not (user["admin"] or setting_bool("CLOUDIF_STUDENT_CAN_REPAIR", True)):
                     return self.send_html(page(user, "bancos", '<div class="card"><p class="pill bad">Reparo não permitido.</p></div>'), 403)
-                rc, out, err = run(["bash","-lc",f"/usr/local/sbin/cloudif-tenant-ensure-bg.sh {tenant!r} restore {user['username']!r}"], 30)
+                rc, out, err = run(["bash","-lc",f"/usr/local/sbin/cloudif-tenant-ensure-bg.sh {tenant!r} restore {user['username']!r}"], 120)
 
             log_action(user["username"], op, tenant, rc, out, err)
             return self.redirect("/?tab=bancos")
@@ -1576,7 +1576,7 @@ main {{ max-width:1240px; margin:24px auto; padding:0 18px; }}
             elif op == "render_router":
                 rc, out, err = run(["bash","-lc","/srv/cloudif/bin/cloudif-render-router-sso.sh"], 240)
             elif op == "ensure":
-                rc, out, err = run(["bash","-lc",f"/usr/local/sbin/cloudif-tenant-ensure-bg.sh {tenant!r} restore {user['username']!r}"], 30)
+                rc, out, err = run(["bash","-lc",f"/usr/local/sbin/cloudif-tenant-ensure-bg.sh {tenant!r} restore {user['username']!r}"], 120)
             log_action(user["username"], f"admin_{op}", tenant, rc, out, err)
             return self.redirect("/?tab=admin")
 
@@ -2010,7 +2010,7 @@ def do_POST_v18(self):
         elif op == "repair":
             if not (user["admin"] or setting_bool("CLOUDIF_STUDENT_CAN_REPAIR", True)):
                 return self.send_html(page(user, "bancos", '<div class="card"><p class="pill bad">Reparo não permitido.</p></div>'), 403)
-            rc, out, err = run(["bash","-lc",f"/usr/local/sbin/cloudif-tenant-ensure-bg.sh {tenant!r} restore {user['username']!r}"], 30)
+            rc, out, err = run(["bash","-lc",f"/usr/local/sbin/cloudif-tenant-ensure-bg.sh {tenant!r} restore {user['username']!r}"], 120)
 
         log_action(user["username"], op, tenant, rc, out, err)
         return self.redirect("/?tab=bancos")
@@ -2490,7 +2490,7 @@ def do_POST_v19(self):
             con.close()
 
         elif op == "repair":
-            rc, out, err = run(["bash","-lc",f"/usr/local/sbin/cloudif-tenant-ensure-bg.sh {tenant!r} restore {user['username']!r}"], 30)
+            rc, out, err = run(["bash","-lc",f"/usr/local/sbin/cloudif-tenant-ensure-bg.sh {tenant!r} restore {user['username']!r}"], 120)
 
         elif op == "delete":
             rc, out, err = run(["bash","-lc",f"cd {str(tdir)!r} && docker compose --env-file .env down"], 240)
