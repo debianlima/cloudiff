@@ -91,6 +91,16 @@ class WHPReleaseFlowTests(unittest.TestCase):
         self.assertIn("cfg=_env('/etc/cloudif/approval-service.env')",PORTAL)
         self.assertIn("CLOUDIF_APPROVAL_TOKEN",PORTAL)
 
+    def test_expired_production_approval_is_renewed_without_consuming_next_publication_number(self):
+        request=PORTAL[PORTAL.index('def request_production_activation'):PORTAL.index('def production_approval_status')]
+        self.assertIn("approval_status in {'pending','pending_second','approved','reserved'}",request)
+        self.assertIn("approval_status not in {'expired','rejected','cancelled'}",request)
+        self.assertIn("publication=int(existing['publication_number'])",request)
+        self.assertIn("renewed=True",request)
+        self.assertIn("if renewed:",request)
+        self.assertIn("'renewed':renewed",request)
+        self.assertNotIn("publication=_next_publication(con,slug);con.close();summary",request)
+
     def test_production_is_bound_to_critical_dual_approval(self):
         self.assertIn("'action':'deployment.production.activate'",PORTAL)
         self.assertIn("activationDigest",PORTAL)

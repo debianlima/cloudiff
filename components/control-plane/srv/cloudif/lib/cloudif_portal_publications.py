@@ -567,17 +567,30 @@ def request_production_activation(slug,candidate_number,user,reason='Publicar ca
     candidate=con.execute("select * from publication_candidates where project_slug=? and candidate_number=? and status='homologated'",(slug,int(candidate_number))).fetchone()
     if not candidate:con.close();raise RuntimeError('O candidato precisa estar homologado antes da solicitação de Produção.')
     existing=con.execute("select * from production_activation_requests where project_slug=? and candidate_number=? and status in ('pending','approved','queued') order by publication_number desc limit 1",(slug,int(candidate_number))).fetchone()
+    renewed=False
     if existing:
-        aid=str(existing['approval_id'] or '');con.close();approval=production_approval_status(slug,aid,user) if aid else {'status':str(existing['status'])};return {'ok':True,'existing':True,'candidateNumber':int(candidate_number),'publicationNumber':int(existing['publication_number']),'stageCode':'P'+str(int(existing['publication_number'])),'activationDigest':str(existing['activation_digest']),'approvalId':aid,**approval}
-    publication=_next_publication(con,slug);con.close();summary=_publication_config().environment_summary(slug,'production')
+        aid=str(existing['approval_id'] or '');publication=int(existing['publication_number']);con.close();approval=production_approval_status(slug,aid,user) if aid else {'status':str(existing['status'])};approval_status=str(approval.get('status') or '')
+        if approval_status in {'pending','pending_second','approved','reserved'}:
+            return {'ok':True,'existing':True,'candidateNumber':int(candidate_number),'publicationNumber':publication,'stageCode':'P'+str(publication),'activationDigest':str(existing['activation_digest']),'approvalId':aid,**approval}
+        if approval_status not in {'expired','rejected','cancelled'}:
+            return {'ok':True,'existing':True,'candidateNumber':int(candidate_number),'publicationNumber':publication,'stageCode':'P'+str(publication),'activationDigest':str(existing['activation_digest']),'approvalId':aid,**approval}
+        con=sqlite3.connect(DB);_ensure_schema(con);con.execute('update production_activation_requests set status=?,updated_at=? where project_slug=? and candidate_number=? and publication_number=?',(approval_status,_now(),slug,int(candidate_number),publication));con.commit();con.close();renewed=True
+    else:
+        publication=_next_publication(con,slug);con.close()
+    summary=_publication_config().environment_summary(slug,'production')
     if not summary.get('valid'):raise RuntimeError('O ambiente de Produção possui variáveis obrigatórias pendentes.')
     material,digest=_production_activation_material(slug,candidate,publication,summary);username=(user.get('username') or 'portal').strip().lower();requested_by='portal:'+username;groups={str(x).strip().lower() for x in (user.get('groups') or [])};role='admin' if user.get('admin') or groups.intersection({'cloudif-tenants-admin','cloudif-professor'}) else 'owner'
     metadata={**material,'activationDigest':digest,'content_stored':False,'secret_values_in_metadata':False,'artifact_content_stored':False}
     payload={'project_slug':slug,'action':'deployment.production.activate','requested_by':requested_by,'requester_role':role,'ttl_seconds':1800,'reason':str(reason or '')[:500],'trace_id':'portal-production-'+digest[:20],'metadata':metadata}
     code,data=_approval_call('POST','/v1/approvals',payload)
     if code not in {200,201} or not data.get('ok'):raise RuntimeError('Não foi possível criar a autorização crítica de Produção.')
-    aid=str(data.get('approval_id') or '');now=_now();con=sqlite3.connect(DB);_ensure_schema(con);con.execute('insert into production_activation_requests(project_slug,candidate_number,publication_number,activation_digest,approval_id,requested_by,status,created_at,updated_at) values(?,?,?,?,?,?,?,?,?)',(slug,int(candidate_number),publication,digest,aid,requested_by,str(data.get('status') or 'pending'),now,now));con.commit();con.close()
-    return {'ok':True,'existing':False,'candidateNumber':int(candidate_number),'publicationNumber':publication,'stageCode':'P'+str(publication),'activationDigest':digest,'approvalId':aid,'status':str(data.get('status') or 'pending'),'twoApproversRequired':bool(data.get('two_approvers_required')),'approvalUrl':'/cloudiff/portal/?tab=aprovacoes','policyApplied':bool(data.get('policy_applied')),'secretValuesIncluded':False}
+    aid=str(data.get('approval_id') or '');now=_now();con=sqlite3.connect(DB);_ensure_schema(con)
+    if renewed:
+        con.execute('update production_activation_requests set activation_digest=?,approval_id=?,requested_by=?,status=?,updated_at=? where project_slug=? and candidate_number=? and publication_number=?',(digest,aid,requested_by,str(data.get('status') or 'pending'),now,slug,int(candidate_number),publication))
+    else:
+        con.execute('insert into production_activation_requests(project_slug,candidate_number,publication_number,activation_digest,approval_id,requested_by,status,created_at,updated_at) values(?,?,?,?,?,?,?,?,?)',(slug,int(candidate_number),publication,digest,aid,requested_by,str(data.get('status') or 'pending'),now,now))
+    con.commit();con.close()
+    return {'ok':True,'existing':False,'renewed':renewed,'candidateNumber':int(candidate_number),'publicationNumber':publication,'stageCode':'P'+str(publication),'activationDigest':digest,'approvalId':aid,'status':str(data.get('status') or 'pending'),'twoApproversRequired':bool(data.get('two_approvers_required')),'approvalUrl':'/cloudiff/portal/?tab=aprovacoes','policyApplied':bool(data.get('policy_applied')),'secretValuesIncluded':False}
 
 
 def production_approval_status(slug,approval_id,user):
