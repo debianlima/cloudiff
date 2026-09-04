@@ -69,6 +69,7 @@ class ProjectTerminalDedicatedFlowTests(unittest.TestCase):
         self.assertIn("stack_id=normalize_resource_id(active.get('stack_id'))",audit)
         self.assertIn("str(x.get('name') or '').startswith(terminal+'-')",audit)
         self.assertIn("str(x.get('command') or '').endswith(' '+shell)",audit)
+        self.assertIn("target={'type':'Stack','params':{'stack':stack_id,'service':service}} if stack.get('ok') and stack_id and service",audit)
 
     def test_terminal_errors_never_render_legacy_portal(self):
         portal=PORTAL.read_text();coexist=COEXIST.read_text()

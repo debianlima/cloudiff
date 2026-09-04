@@ -3557,7 +3557,7 @@ def _cloudif_project_audit_data(payload):
             if isinstance(raw_id,dict): raw_id=raw_id.get('$oid') or ''
             server_id=str(raw_id or '')
     container_name=str(container.get('name') or '')
-    target={'type':'Container','params':{'server':server_id,'container':container_name}} if server_id and container_name else {'type':'Stack','params':{'stack':stack_id,'service':service}}
+    target={'type':'Stack','params':{'stack':stack_id,'service':service}} if stack.get('ok') and stack_id and service else {'type':'Container','params':{'server':server_id,'container':container_name}}
     listed,_=komodo_call('read','ListTerminals',{'target':target}); items=listed.get('data') if isinstance(listed.get('data'),list) else []
     item=next((x for x in items if isinstance(x,dict) and x.get('name')==terminal),None)
     if not item:
