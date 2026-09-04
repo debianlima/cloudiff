@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 from __future__ import annotations
-import argparse, datetime as dt, hashlib, json, os, re, shutil, sqlite3, subprocess, tarfile, tempfile, urllib.request
+import argparse, datetime as dt, hashlib, json, os, re, shutil, sqlite3, subprocess, tarfile, tempfile, time, urllib.request
 from pathlib import Path
 
 DB=Path('/var/lib/cloudif/portal/cloudif-portal.db')
 ROOT=Path('/srv/cloudif/managed-backups/projects')
+TENANTS=Path('/srv/cloudif/tenants')
 STATE=Path('/var/lib/cloudif/portal/project-backup-settings.json')
 REMOTE_ENV=Path('/etc/cloudif/project-backup-remote.env')
 
@@ -48,6 +49,35 @@ def db_container(tenant):
     if tenant=='akadmin': candidates.insert(0,'supabase-db')
     names=subprocess.check_output(['docker','ps','-a','--format','{{.Names}}'],text=True).splitlines()
     return next((x for x in candidates if x in names),None)
+def project_db_runtime(tenant):
+    tdir=TENANTS/safe(tenant)
+    compose=next((tdir/name for name in ('docker-compose.yml','docker-compose.yaml','compose.yml','compose.yaml') if (tdir/name).is_file()),None)
+    if compose and (tdir/'.env').is_file():
+        base=['docker','compose','-f',str(compose),'--env-file',str(tdir/'.env')]
+        cid=subprocess.check_output(base+['ps','-q','db'],text=True).strip()
+        was_running=bool(cid and subprocess.check_output(['docker','inspect','-f','{{.State.Running}}',cid],text=True).strip()=='true')
+        if not was_running:
+            subprocess.run(base+['up','-d','db'],check=True,stdout=subprocess.DEVNULL,stderr=subprocess.PIPE,text=True)
+            cid=subprocess.check_output(base+['ps','-q','db'],text=True).strip()
+        if not cid:
+            raise RuntimeError('database_container_not_found')
+        ready=False
+        for _ in range(60):
+            if subprocess.run(['docker','exec',cid,'sh','-lc','pg_isready -U "$POSTGRES_USER" -d postgres'],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL).returncode==0:
+                ready=True;break
+            time.sleep(2)
+        if not ready:
+            if not was_running: subprocess.run(base+['stop','db'],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+            raise RuntimeError('database_not_ready')
+        name=subprocess.check_output(['docker','inspect','-f','{{.Name}}',cid],text=True).strip().lstrip('/') or cid
+        return name,(None if was_running else base+['stop','db'])
+    c=db_container(tenant)
+    if not c:return None,None
+    running=subprocess.check_output(['docker','inspect','-f','{{.State.Running}}',c],text=True).strip()=='true'
+    if not running:raise RuntimeError('database_container_stopped_without_compose')
+    return c,None
+
+
 def container_metadata(names):
     out=[]
     for name in names:
@@ -61,7 +91,7 @@ def container_metadata(names):
         except Exception as e: out.append({'name':name,'error':str(e)[:120]})
     return out
 def make_database(slug,p,dest):
-    tenant=tenant_for(p); c=db_container(tenant)
+    tenant=tenant_for(p); c,restore=project_db_runtime(tenant)
     if not c: return None,{'type':'database','status':'container_not_found','tenant':tenant}
     st=stamp(); tmp=Path(tempfile.mkdtemp(prefix='cloudif-db-'))
     try:
@@ -78,7 +108,9 @@ def make_database(slug,p,dest):
         os.chmod(path,0o600)
         meta={'type':'database','status':'ready','owner':owner_for(p),'project':slug,'tenant':tenant,'container':c,'created_at':now(),'size':path.stat().st_size,'sha256':sha256(path),'filename':path.name}
         write_manifest(path,meta); return path,meta
-    finally: shutil.rmtree(tmp,ignore_errors=True)
+    finally:
+        shutil.rmtree(tmp,ignore_errors=True)
+        if restore: subprocess.run(restore,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
 def remote_publication_metadata(public_numbers):
     env={}
     try:
