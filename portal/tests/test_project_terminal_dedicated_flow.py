@@ -61,6 +61,15 @@ class ProjectTerminalDedicatedFlowTests(unittest.TestCase):
         self.assertIn("getattr(owner,'_rd_agent')('/komodo/project/terminal/ensure'",terminal)
         self.assertIn('publications.ensure_base_workspace(slug,user)',terminal)
 
+    def test_project_audit_resolves_base_stack_to_active_publication_and_user_terminal(self):
+        runtime=(ROOT/'components/runtime/current-apps/komodo-agent-current/cloudif-komodo-agent.py').read_text()
+        audit=runtime[runtime.index('def _cloudif_project_audit_data'):runtime.index('def cloudif_project_runtime_inspect')]
+        self.assertIn("active=_cloudif_active_publication_stack(project,base_stack_id)",audit)
+        self.assertIn("if active.get('ok') and normalize_resource_id(active.get('stack_id')):",audit)
+        self.assertIn("stack_id=normalize_resource_id(active.get('stack_id'))",audit)
+        self.assertIn("str(x.get('name') or '').startswith(terminal+'-')",audit)
+        self.assertIn("str(x.get('command') or '').endswith(' '+shell)",audit)
+
     def test_terminal_errors_never_render_legacy_portal(self):
         portal=PORTAL.read_text();coexist=COEXIST.read_text()
         self.assertNotIn("diagnostic=f'<section class=\"card terminal-unavailable\"",portal)

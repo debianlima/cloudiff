@@ -3478,6 +3478,12 @@ def _cloudif_project_audit_data(payload):
         stack_id=normalize_resource_id(integration.get('stack_id'))
     if not project or not stack_id: return {'ok':False,'error':'invalid_payload','project':project,'stack_id':stack_id}
     requested_stack_id=stack_id
+    integration=find_integration(project) or {}
+    base_stack_id=normalize_resource_id(integration.get('stack_id'))
+    if base_stack_id and stack_id==base_stack_id:
+        active=_cloudif_active_publication_stack(project,base_stack_id)
+        if active.get('ok') and normalize_resource_id(active.get('stack_id')):
+            stack_id=normalize_resource_id(active.get('stack_id'))
     stack,_=komodo_call('read','GetStack',{'stack':stack_id}); data=stack.get('data') if isinstance(stack.get('data'),dict) else {}
     if not stack.get('ok'):
         listed,_=komodo_call('read','ListStacks',{})
@@ -3541,6 +3547,8 @@ def _cloudif_project_audit_data(payload):
     target={'type':'Container','params':{'server':server_id,'container':container_name}} if server_id and container_name else {'type':'Stack','params':{'stack':stack_id,'service':service}}
     listed,_=komodo_call('read','ListTerminals',{'target':target}); items=listed.get('data') if isinstance(listed.get('data'),list) else []
     item=next((x for x in items if isinstance(x,dict) and x.get('name')==terminal),None)
+    if not item:
+        item=next((x for x in items if isinstance(x,dict) and str(x.get('name') or '').startswith(terminal+'-') and str(x.get('command') or '').endswith(' '+shell)),None)
     cmd=str((item or {}).get('command') or '')
     terminal_ok=bool(item and cmd.endswith(' '+shell))
     running=state=='running'
