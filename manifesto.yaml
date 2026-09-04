@@ -1,5 +1,5 @@
 projeto: cloudiff-v2
-versao_contrato: 46
+versao_contrato: 47
 namespace_fechado: true
 entradas:
   - id: 1

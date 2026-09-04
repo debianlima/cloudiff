@@ -12,6 +12,7 @@ class NavigationInformationArchitectureTest(unittest.TestCase):
             (
                 ("resumo", "Visão geral"),
                 ("publicacao", "Publicações"),
+                ("aprovacoes", "Aprovações"),
                 ("projetos", "Projetos"),
                 ("bancos", "Bancos e tenants"),
                 ("backup", "Backup"),
@@ -21,6 +22,13 @@ class NavigationInformationArchitectureTest(unittest.TestCase):
         self.assertNotIn("Projetos", tuple(shell._TAB_GROUPS))
         self.assertNotIn("Dados", tuple(shell._TAB_GROUPS))
         self.assertNotIn("Ferramentas", tuple(shell._TAB_GROUPS))
+
+    def test_approvals_are_discoverable_in_primary_navigation(self):
+        from portal.core.auth import Identity
+        identity = Identity(username="owner", email="owner@example.invalid", groups=frozenset({"CloudIF-Tenants"}))
+        markup = shell._navigation(identity, "projetos")
+        self.assertIn('href="/cloudiff/portal/?tab=aprovacoes">Aprovações</a>', markup)
+        self.assertEqual(markup.count('href="/cloudiff/portal/?tab=aprovacoes"'), 1)
 
     def test_empty_tool_sections_are_removed(self):
         all_tabs = {tab for entries in shell._TAB_GROUPS.values() for tab, _label in entries}

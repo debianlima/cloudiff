@@ -17,7 +17,7 @@ class ProjectCenteredNavigationTest(unittest.TestCase):
         self.assertIn(("projetos", "Projetos"), shell._TAB_GROUPS["Painel geral"])
         self.assertIn(("bancos", "Bancos e tenants"), shell._TAB_GROUPS["Painel geral"])
         global_tabs={tab for entries in shell._TAB_GROUPS.values() for tab,_ in entries}
-        self.assertNotIn("aprovacoes",global_tabs)
+        self.assertIn("aprovacoes",global_tabs)
         self.assertNotIn("documentacao-mcp",global_tabs)
         self.assertNotIn("monitor-telemetria",global_tabs)
 

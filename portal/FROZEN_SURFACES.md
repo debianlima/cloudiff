@@ -22,3 +22,6 @@ Devem permanecer preservados:
 - mensagens visíveis para identidade inexistente ou falha de consulta.
 
 Alterações futuras devem ser pontuais, acompanhadas por testes e sem modificar as superfícies congeladas adjacentes.
+## Navegação principal
+
+A navegação principal deve expor **Aprovações** diretamente em **Painel geral**. A página também pode permanecer no contexto de projeto, mas o acesso ao gate humano não pode depender de o usuário descobrir primeiro uma rota contextual ou um atalho secundário. Esta exceção estrutural foi solicitada explicitamente na homologação U11 de 2026-09-04.

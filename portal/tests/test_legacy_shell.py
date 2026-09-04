@@ -69,7 +69,7 @@ class LegacyShellTest(unittest.TestCase):
     def test_admin_receives_normalized_navigation(self):
         doc = transform(LEGACY, self.admin, "admin")
         expected = {
-            "resumo", "publicacao", "projetos", "bancos", "backup", "agentes",
+            "resumo", "publicacao", "aprovacoes", "projetos", "bancos", "backup", "agentes",
             "admin", "admin-manutencao", "admin-excluir-projeto", "ajuda",
         }
         actual = set(re.findall(r"\?tab=([a-z0-9-]+)", doc))

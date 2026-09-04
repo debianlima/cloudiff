@@ -25,6 +25,7 @@ _TAB_GROUPS: "OrderedDict[str, tuple[tuple[str, str], ...]]" = OrderedDict(
             (
                 ("resumo", "Visão geral"),
                 ("publicacao", "Publicações"),
+                ("aprovacoes", "Aprovações"),
                 ("projetos", "Projetos"),
                 ("bancos", "Bancos e tenants"),
                 ("backup", "Backup"),
