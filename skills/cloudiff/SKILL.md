@@ -1,6 +1,6 @@
 ---
 name: cloudiff
-versao: 0.1.12
+versao: 0.1.13
 description: Governa, reconcilia, normaliza e evolui a plataforma CloudIFF V1/Python→V2/C++23 preservando interface homologada,
   contratos, segurança, dados, observabilidade e rollback.
 tipo_competencia: projeto
@@ -272,3 +272,5 @@ Em 2026-09-04, a U16 reproduziu no Chromium móvel que a aba **Código** preserv
 
 ### L025 — negativa HTTP de uma rota visual deve preservar o status e ainda usar o shell canônico
 Na mesma U16, **Produção** devolvia corretamente HTTP 403 para o usuário, porém o coexist adapter só transformava HTML com status 200; o 403 escapava como página legacy desformatada. A correção permite adaptar especificamente o 403 de `operacao-producao` e devolve o mesmo status original após a transformação. Gate: navegação viva em Chromium dark confirmou título `Produção · CloudIFF`, navegação contextual presente, Produção ativa, mensagem `Projeto não autorizado.`, fundo/cores canônicos e nenhuma exposição da página legacy crua; verificação independente continuou retornando HTTP 403. Evita que segurança correta produza uma experiência visual fora do contrato sem enfraquecer autorização. Vale para negativas HTML intencionais que precisam permanecer fail-closed.
+### L026 — bridge de tema deve usar tokens realmente definidos e ser validada por estilo computado
+Em 2026-09-04, a U17 encontrou os últimos elementos claros da aba **Código** no Chromium móvel: identificadores `<code>` e badges (`Vinculado`, `Configurado`, `Online`) ainda resolviam para fundos claros do CSS legacy. A primeira correção eliminou o branco, mas usou `--surface-2`, token inexistente no design system; o navegador descartou a declaração e produziu fundo transparente. A correção homologada usa somente tokens existentes: identificadores e estados positivos em `--iff-wash`/`--iff-dark`, estados neutros em `--surface`/`--ink-2`. Gate: entrada 1519/U17, 19/19 testes e navegação viva em Chromium dark; `teste-sofa`, tenant, `Vinculado`, `Configurado` e `Online` computaram fundo `rgb(23, 53, 31)`, texto `rgb(149, 223, 163)`, nenhum chip alvo ficou com luminância clara (`lightCount=0`) e não houve overflow horizontal. Evita fixes de tema aparentemente corretos no código mas invalidados silenciosamente pelo CSS por variável ausente. Vale para qualquer bridge entre CSS legacy e tokens do shell v2.
