@@ -602,6 +602,12 @@ def tenant_visible(tenant, username, groups, con=None):
     if con is None:
         con = db()
 
+    owner_link = con.execute("SELECT COUNT(*) FROM projects WHERE tenant=? AND lower(owner)=lower(?)", (tenant, username)).fetchone()[0]
+    if owner_link:
+        if own:
+            con.close()
+        return True
+
     group_set = {g.lower() for g in groups}
     rows = con.execute("SELECT subject_type, subject FROM tenant_acl WHERE tenant=?", (tenant,)).fetchall()
 

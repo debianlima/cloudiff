@@ -15,6 +15,7 @@ class TenantAlwaysOnFinalHandlerTests(unittest.TestCase):
  def test_keepalive_is_allowed_for_authorized_non_admin_tenant_user(self):
   self.assertIn("if op in ('always_on','always_on_start','always_off') and not user.get('admin'):",self.source)
   self.assertIn("if not tenant or not tenant_visible(tenant,user['username'],user['groups']):",self.source)
+  self.assertIn('SELECT COUNT(*) FROM projects WHERE tenant=? AND lower(owner)=lower(?)',self.source)
  def test_action_is_audited(self):
   self.assertIn("log_action(user['username'],op",self.source)
 if __name__=='__main__':unittest.main()
