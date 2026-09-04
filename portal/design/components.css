@@ -224,6 +224,7 @@
 .project-context-group a{display:inline-flex;align-items:center;min-height:32px;padding:6px 9px;border-radius:8px;color:var(--ink-2);font-size:12px;text-decoration:none}
 .project-context-group a:hover{background:var(--surface);color:var(--ink)}
 .project-context-group a[aria-current="page"]{background:var(--accent-soft);color:var(--accent);font-weight:750}
+.tab-aprovacoes .project-context-group a[aria-current="page"]{background:var(--iff-wash);color:var(--iff-dark);font-weight:750}
 .project-context-route .page-context{display:none}
 .project-context-content{display:grid;gap:18px}
 .project-context-content>.s98-hero,.project-context-content>.card,.project-context-content>.ci-page,.project-context-content>.publication-shell{margin:0}
@@ -234,6 +235,7 @@
 .project-context-content .card{border-color:var(--rule);border-radius:var(--r-lg);box-shadow:none}
 @media(max-width:1040px){.project-context-nav{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:620px){.project-context-nav{grid-template-columns:1fr;padding:12px}.project-context-group>div{overflow:auto;flex-wrap:nowrap;padding-bottom:2px}.project-context-group a{white-space:nowrap}}
+.approval-history-toolbar{display:flex;justify-content:flex-end;align-items:center;gap:var(--s2);margin:var(--s3) 0 0}.approval-history-trigger{min-height:36px}.approval-history-dialog{width:min(920px,calc(100vw - 32px));max-height:min(82vh,900px);padding:0;border:1px solid var(--rule);border-radius:var(--r-lg);background:var(--surface);color:var(--ink);box-shadow:0 24px 70px var(--overlay);overflow:hidden}.approval-history-dialog::backdrop{background:var(--overlay)}.approval-history-dialog__head{display:flex;align-items:flex-start;justify-content:space-between;gap:var(--s4);padding:var(--s4) var(--s5);border-bottom:1px solid var(--rule);background:var(--surface);position:sticky;top:0;z-index:2}.approval-history-dialog__head h3{margin:0}.approval-history-dialog__head p{margin:4px 0 0;color:var(--ink-3)}.approval-history-dialog__body{max-height:calc(82vh - 86px);overflow:auto;padding:var(--s4) var(--s5) var(--s5);background:var(--paper)}.approval-history-dialog .backup-item{background:var(--surface)}@media(max-width:620px){.approval-history-toolbar{justify-content:stretch}.approval-history-trigger{width:100%}.approval-history-dialog__head{padding:var(--s4);flex-direction:column}.approval-history-dialog__head form,.approval-history-dialog__head button{width:100%}.approval-history-dialog__body{padding:var(--s3)}}
 
 
 /* Bancos e tenants: ferramentas compactas e permissões sob demanda. */

@@ -1,5 +1,5 @@
 projeto: cloudiff-v2
-versao_contrato: 48
+versao_contrato: 49
 namespace_fechado: true
 entradas:
   - id: 1
@@ -12110,5 +12110,13 @@ entradas:
     consome: [evidencia/v1-file-0391, evidencia/v1-file-0392, evidencia/v1-file-0389]
     produz: evidencia/approval-ui-actor-consistency-u13
     aceite: python3 -m unittest portal.tests.test_approval_panel_actor_consistency
+    status: aceito
+  - id: 1517
+    caminho: portal/tests/test_approval_history_dialog_theme.py
+    proposito: "prova regressiva do tema escuro do menu de Aprovações e do histórico carregado sob demanda"
+    tipo: interface
+    consome: [evidencia/v1-file-1352, evidencia/v1-file-0392]
+    produz: evidencia/approval-dark-history-u15
+    aceite: python3 -m unittest portal.tests.test_approval_history_dialog_theme
     status: aceito
 trabalho_compartilhado: {}
