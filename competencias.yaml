@@ -4,7 +4,7 @@ skill_projeto:
   nome: CloudIFF
   tipo_competencia: projeto
   fonte: skills/cloudiff/SKILL.md
-  versao: 0.1.8
+  versao: 0.1.9
   vinculada_por: usuario em 2026-08-24
   protocolo_governanca: PGH 1.2.0
   compoe:
@@ -20,37 +20,37 @@ skill_projeto:
   - id: desenvolvedor-de-software
     versao_fixada: '15'
     fonte: debianlima/competencias-catalogo:metodo/desenvolvedor-de-software/SKILL.md
-    delta_lido_ate: 5641d1172b1d6249cdc2770555de87c5a3e320c6
+    delta_lido_ate: 9b951d0d2f68a3ead190741fd5e8b4d6cc8e0a84
     estado_reconciliacao: ATUAL
   - id: github-incremental-reconciliation
     versao_fixada: '7'
     fonte: debianlima/competencias-catalogo:metodo/github-incremental-reconciliation/SKILL.md
-    delta_lido_ate: 5641d1172b1d6249cdc2770555de87c5a3e320c6
+    delta_lido_ate: 9b951d0d2f68a3ead190741fd5e8b4d6cc8e0a84
     estado_reconciliacao: ATUAL
   - id: governanca-ontologica-de-skills
     versao_fixada: 1.0.5
     fonte: debianlima/competencias-catalogo:metodo/governanca-ontologica-de-skills/SKILL.md
-    delta_lido_ate: 5641d1172b1d6249cdc2770555de87c5a3e320c6
+    delta_lido_ate: 9b951d0d2f68a3ead190741fd5e8b4d6cc8e0a84
     estado_reconciliacao: ATUAL
   - id: telemetry-data-visualization
     versao_fixada: '2'
     fonte: debianlima/competencias-catalogo:dominio/telemetry-data-visualization/SKILL.md
-    delta_lido_ate: 5641d1172b1d6249cdc2770555de87c5a3e320c6
+    delta_lido_ate: 9b951d0d2f68a3ead190741fd5e8b4d6cc8e0a84
     estado_reconciliacao: ATUAL
   - id: distributed-agent-control
     versao_fixada: '1'
     fonte: debianlima/competencias-catalogo:dominio/distributed-agent-control/SKILL.md
-    delta_lido_ate: 5641d1172b1d6249cdc2770555de87c5a3e320c6
+    delta_lido_ate: 9b951d0d2f68a3ead190741fd5e8b4d6cc8e0a84
     estado_reconciliacao: ATUAL
   - id: network-ssh-operations
     versao_fixada: '1'
     fonte: debianlima/competencias-catalogo:dominio/network-ssh-operations/SKILL.md
-    delta_lido_ate: 5641d1172b1d6249cdc2770555de87c5a3e320c6
+    delta_lido_ate: 9b951d0d2f68a3ead190741fd5e8b4d6cc8e0a84
     estado_reconciliacao: ATUAL
   - id: operational-ui-truth
     versao_fixada: '1'
     fonte: debianlima/competencias-catalogo:dominio/operational-ui-truth/SKILL.md
-    delta_lido_ate: 5641d1172b1d6249cdc2770555de87c5a3e320c6
+    delta_lido_ate: 9b951d0d2f68a3ead190741fd5e8b4d6cc8e0a84
     estado_reconciliacao: ATUAL
   - id: cloud-design-patterns
     versao_fixada: git:318066d2213b510e89b500ed0d53506c54093ddc

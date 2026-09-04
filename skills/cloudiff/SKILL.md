@@ -1,6 +1,6 @@
 ---
 name: cloudiff
-versao: 0.1.8
+versao: 0.1.9
 description: Governa, reconcilia, normaliza e evolui a plataforma CloudIFF V1/Python→V2/C++23 preservando interface homologada,
   contratos, segurança, dados, observabilidade e rollback.
 tipo_competencia: projeto
@@ -35,37 +35,37 @@ referencia:
 - id: desenvolvedor-de-software
   fonte: debianlima/competencias-catalogo:metodo/desenvolvedor-de-software/SKILL.md
   versao_fixada: '15'
-  delta_lido_ate: 5641d1172b1d6249cdc2770555de87c5a3e320c6
+  delta_lido_ate: 9b951d0d2f68a3ead190741fd5e8b4d6cc8e0a84
   estado: reconciliado
 - id: github-incremental-reconciliation
   fonte: debianlima/competencias-catalogo:metodo/github-incremental-reconciliation/SKILL.md
   versao_fixada: '7'
-  delta_lido_ate: 5641d1172b1d6249cdc2770555de87c5a3e320c6
+  delta_lido_ate: 9b951d0d2f68a3ead190741fd5e8b4d6cc8e0a84
   estado: reconciliado
 - id: governanca-ontologica-de-skills
   fonte: debianlima/competencias-catalogo:metodo/governanca-ontologica-de-skills/SKILL.md
   versao_fixada: 1.0.5
-  delta_lido_ate: 5641d1172b1d6249cdc2770555de87c5a3e320c6
+  delta_lido_ate: 9b951d0d2f68a3ead190741fd5e8b4d6cc8e0a84
   estado: reconciliado
 - id: telemetry-data-visualization
   fonte: debianlima/competencias-catalogo:dominio/telemetry-data-visualization/SKILL.md
   versao_fixada: '2'
-  delta_lido_ate: 5641d1172b1d6249cdc2770555de87c5a3e320c6
+  delta_lido_ate: 9b951d0d2f68a3ead190741fd5e8b4d6cc8e0a84
   estado: reconciliado
 - id: distributed-agent-control
   fonte: debianlima/competencias-catalogo:dominio/distributed-agent-control/SKILL.md
   versao_fixada: '1'
-  delta_lido_ate: 5641d1172b1d6249cdc2770555de87c5a3e320c6
+  delta_lido_ate: 9b951d0d2f68a3ead190741fd5e8b4d6cc8e0a84
   estado: reconciliado
 - id: network-ssh-operations
   fonte: debianlima/competencias-catalogo:dominio/network-ssh-operations/SKILL.md
   versao_fixada: '1'
-  delta_lido_ate: 5641d1172b1d6249cdc2770555de87c5a3e320c6
+  delta_lido_ate: 9b951d0d2f68a3ead190741fd5e8b4d6cc8e0a84
   estado: reconciliado
 - id: operational-ui-truth
   fonte: debianlima/competencias-catalogo:dominio/operational-ui-truth/SKILL.md
   versao_fixada: '1'
-  delta_lido_ate: 5641d1172b1d6249cdc2770555de87c5a3e320c6
+  delta_lido_ate: 9b951d0d2f68a3ead190741fd5e8b4d6cc8e0a84
   estado: reconciliado
 - id: cloud-design-patterns
   fonte: github/awesome-copilot:skills/cloud-design-patterns/SKILL.md
@@ -255,3 +255,5 @@ Em 2026-09-04, o portão U07 criou projetos em sessões independentes e, enquant
 Na mesma U07, a primeira corrida deixou `teste-5` com Forgejo, Komodo e Supabase prontos, mas sem `template-applied.json`/`managed-runtime.json`; o retry comum chegava a `initial-publication` e ficava irrecuperável porque a etapa de template nunca havia sido materializada. A correção homologada recupera `runtime_template`, `php_version`, `runtime_layout` e `template_kind` do job de criação anterior quando os marcadores duráveis não existem e define `resume_from=template`; o worker reaplica somente o template faltante e continua a publicação sem recriar projeto, repositório ou banco. Gate: entradas 658/659/U07, testes de recuperação 18/18 e recuperação real de `teste-5` até `status=succeeded`, publicação 1017 e HTTPS 200. Evita transformar falha concorrente parcial em projeto sem caminho de convergência. Vale no fluxo Portal→worker de provisionamento com jobs persistidos e etapas idempotentes.
 ### L018 — aprovação crítica expirada precisa ser renovável sem consumir o próximo P
 Em 2026-09-04, o gate final do `teste-sofa` revelou que `production/approval/request` devolvia indefinidamente a autorização P2 expirada porque a linha local ainda estava `pending`. O efeito observável era HTTP 200 com `existing=true`, `status=expired`, deixando a interface sem caminho para obter nova dupla aprovação. A correção homologada consulta o status real do serviço de aprovação: `pending`, `pending_second`, `approved` e `reserved` permanecem idempotentes; `expired`, `rejected` e `cancelled` encerram a autorização anterior e criam outra vinculada ao mesmo `candidateNumber` e ao mesmo `publicationNumber`, recalculando o digest do ambiente atual. Gate: U08, primeira chamada após deploy retornou `renewed=true`, novo `approvalId`, `status=pending`, `publicationNumber=2`; repetição imediata retornou `existing=true` para o novo ID; `production/enqueue` continuou recusado com 403 enquanto a dupla aprovação humana não existir. Evita transformar expiração de TTL em bloqueio permanente e evita pular P2 para P3 apenas por renovar autorização. Vale no Portal W/H/P com Approval Service transacional e numeração P reservada somente por release publicada.
+### L019 — gate humano crítico precisa ser descobrível na navegação principal
+Em 2026-09-04, durante a U10/U11, a aprovação P2 existia no Approval Service e a página `?tab=aprovacoes` renderizava a solicitação, mas o usuário não conseguiu encontrá-la pela navegação normal: o shell v2 mantinha `Aprovações` apenas na navegação contextual de projeto e em atalhos secundários. O portão de navegação reprovou porque a barra principal de uma sessão owner listava Visão geral, Publicações, Projetos, Bancos e tenants, Backup, Conectores e Ajuda, sem `Aprovações`. A correção homologada inclui `Aprovações` diretamente em `Painel geral` e mantém também o contexto de projeto; RBAC não muda. Gate: entrada 1352/U11, 30/30 testes de shell/arquitetura, deploy `u11-approvals-nav-d824ff6-20260904`, página Projetos HTTP 200 com link primário único para `?tab=aprovacoes`, página Aprovações HTTP 200 com `aria-current=page`, solicitação P2 pendente visível e owner ainda `can_decide=false`. Evita que uma operação tecnicamente correta fique bloqueada porque o usuário não consegue descobrir onde tomar a decisão humana. Vale no Portal v2 server-side shell com Approval Service separado e navegação contextual de projeto.
