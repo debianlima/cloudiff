@@ -2678,7 +2678,7 @@ def docker_ps_rows_v20():
 def service_from_container_v20(tenant, name):
     name = name or ""
 
-    if name == "realtime-dev.supabase-realtime":
+    if tenant == "akadmin" and name == "realtime-dev.supabase-realtime":
         return "realtime"
 
     if tenant == "akadmin":
@@ -2994,7 +2994,7 @@ def docker_ps_rows_v21():
 def service_from_container_v21(tenant, name):
     name = name or ""
 
-    if name == "realtime-dev.supabase-realtime":
+    if tenant == "akadmin" and name == "realtime-dev.supabase-realtime":
         return "realtime"
 
     if tenant == "akadmin":
