@@ -225,6 +225,41 @@
 .project-context-group a:hover{background:var(--surface);color:var(--ink)}
 .project-context-group a[aria-current="page"]{background:var(--iff-wash);color:var(--iff-dark);font-weight:750}
 html[data-theme="dark"] body.project-context-route{background:var(--paper)!important;color:var(--ink)!important}
+/* Código/Git: o módulo legado injeta superfícies claras hard-coded. No shell v2 dark,
+   normalize somente esta tab para os tokens canônicos. */
+html[data-theme="dark"] .tab-git .legacy-content{
+  --ci-card:var(--surface);
+  --ci-border:var(--rule);
+  --ci-text:var(--ink);
+  --ci-muted:var(--ink-3);
+  --ci-green-soft:var(--iff-wash);
+  --ci-green-dark:var(--iff-dark);
+  --ci-disabled-bg:var(--surface-2);
+  --ci-disabled-text:var(--ink-3);
+}
+html[data-theme="dark"] .tab-git .legacy-content :is(.ci-section,.ci-step,.ci-project-card,.ci-modal-card,.ci-choice,.ci-menu summary,.ci-menu-body,.ci-menu-body a,.ci-menu-body button){
+  background:var(--surface)!important;
+  color:var(--ink)!important;
+  border-color:var(--rule)!important;
+}
+html[data-theme="dark"] .tab-git .legacy-content :is(.ci-resource,.ci-table th){
+  background:var(--surface-2)!important;
+  color:var(--ink)!important;
+  border-color:var(--rule)!important;
+}
+html[data-theme="dark"] .tab-git .legacy-content :is(.ci-muted,.ci-step small){color:var(--ink-3)!important}
+html[data-theme="dark"] .tab-git .legacy-content :is(.ci-project-card h4,.ci-section h3,.ci-choice h4){color:var(--ink)!important}
+html[data-theme="dark"] .tab-git .legacy-content .ci-step strong{color:var(--iff-dark)!important}
+html[data-theme="dark"] .tab-git .legacy-content :is(.ci-btn-secondary,.btn.light,.cm-secondary){
+  background:var(--surface)!important;
+  color:var(--ink)!important;
+  border-color:var(--rule)!important;
+}
+html[data-theme="dark"] .tab-git .legacy-content :is(input,textarea,select){
+  background:var(--surface-2)!important;
+  color:var(--ink)!important;
+  border-color:var(--rule)!important;
+}
 .project-context-route .page-context{display:none}
 .project-context-content{display:grid;gap:18px}
 .project-context-content>.s98-hero,.project-context-content>.card,.project-context-content>.ci-page,.project-context-content>.publication-shell{margin:0}

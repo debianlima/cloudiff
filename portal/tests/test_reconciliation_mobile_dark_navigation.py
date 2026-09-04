@@ -13,6 +13,10 @@ class ReconciliationMobileDarkNavigationTests(unittest.TestCase):
         self.assertIn('.project-context-group a[aria-current="page"]{background:var(--iff-wash);color:var(--iff-dark);font-weight:750}',COMPONENTS)
         self.assertNotIn('.project-context-group a[aria-current="page"]{background:var(--accent-soft);color:var(--accent);font-weight:750}',COMPONENTS)
         self.assertIn('html[data-theme="dark"] body.project-context-route{background:var(--paper)!important;color:var(--ink)!important}',COMPONENTS)
+        self.assertIn('html[data-theme="dark"] .tab-git .legacy-content',COMPONENTS)
+        self.assertIn(':is(.ci-section,.ci-step,.ci-project-card,.ci-modal-card,.ci-choice,.ci-menu summary,.ci-menu-body,.ci-menu-body a,.ci-menu-body button)',COMPONENTS)
+        self.assertIn('background:var(--surface)!important',COMPONENTS)
+        self.assertIn('html[data-theme="dark"] .tab-git .legacy-content .ci-step strong{color:var(--iff-dark)!important}',COMPONENTS)
 
     def test_production_denial_is_adapted_without_changing_http_status(self):
         self.assertIn('adapt_production_denial = status == 403 and tab == "operacao-producao"',COEXIST)
