@@ -96,9 +96,21 @@ def _runtime_metadata(slug):
     runtime=str(managed.get('runtime_template') or template.get('runtime_template') or '').strip()
     php=str(managed.get('php_version') or template.get('php_version') or '').strip()
     layout=str(managed.get('layout') or template.get('runtime_layout') or 'managed-root-v1').strip()
-    kind=str(template.get('template_kind') or 'links').strip()
+    kind=str(template.get('template_kind') or '').strip()
+    template_applied=bool(template and kind in {'links','onboarding'})
+    source='durable' if (managed or template) else ''
+    if not (runtime in {'node20','node22','node24'} and php in {'8.2','8.3','8.4'} and layout=='managed-root-v1' and kind in {'links','onboarding'}):
+        for _,_,candidate in _jobs(slug):
+            candidate_kind=str(candidate.get('template_kind') or '').strip()
+            candidate_runtime=str(candidate.get('runtime_template') or '').strip()
+            candidate_php=str(candidate.get('php_version') or '').strip()
+            candidate_layout=str(candidate.get('runtime_layout') or 'managed-root-v1').strip()
+            if candidate_kind in {'links','onboarding'} and candidate_runtime in {'node20','node22','node24'} and candidate_php in {'8.2','8.3','8.4'} and candidate_layout=='managed-root-v1':
+                runtime,php,layout,kind=candidate_runtime,candidate_php,candidate_layout,candidate_kind
+                source='job-fallback'
+                break
     valid=runtime in {'node20','node22','node24'} and php in {'8.2','8.3','8.4'} and layout=='managed-root-v1' and kind in {'links','onboarding'}
-    return {'valid':valid,'runtime_template':runtime,'php_version':php,'runtime_layout':layout,'template_kind':kind}
+    return {'valid':valid,'runtime_template':runtime,'php_version':php,'runtime_layout':layout,'template_kind':kind,'template_applied':template_applied,'source':source}
 
 
 def status(slug):
@@ -168,8 +180,8 @@ def resume_material(slug,user,global_admin=False):
         'create_repo':'0','setup_komodo':'0','template_kind':runtime['template_kind'],
         'runtime_template':runtime['runtime_template'],'runtime_layout':runtime['runtime_layout'],
         'php_version':runtime['php_version'],'role_profile':'project-admin','environment':'project',
-        'status':'queued','current_step':'initial-publication','last_error':'',
+        'status':'queued','current_step':'initial-publication' if runtime.get('template_applied') else 'template','last_error':'',
         'user':{'username':username,'email':str((user or {}).get('email') or ''),'groups':[str(x) for x in ((user or {}).get('groups') or [])]},
-        'created_at':time.strftime('%Y-%m-%dT%H:%M:%S%z'),'resume_from':'initial-publication',
+        'created_at':time.strftime('%Y-%m-%dT%H:%M:%S%z'),'resume_from':'initial-publication' if runtime.get('template_applied') else 'template',
         'public_number':state['publication']['public_number'],'secrets_exposed':False,
     }

@@ -54,6 +54,20 @@ class ProjectProvisionStatusRecoveryTests(unittest.TestCase):
         self.assertTrue(state['publication']['active'])
         self.assertFalse(state['publication']['initial_record'])
 
+    def test_failed_before_template_uses_original_create_job_as_recovery_metadata(self):
+        project=self.module.PROVISION_ROOT/'silvipro2'
+        (project/'managed-runtime.json').unlink();(project/'template-applied.json').unlink()
+        create_job={'action':'create_project','status':'failed','current_step':'provision','slug':'silvipro2','tenant':'iff1860746-silvipro2','runtime_template':'node22','php_version':'8.3','runtime_layout':'managed-root-v1','template_kind':'links'}
+        retry_job={'action':'update_project','status':'failed','current_step':'initial-publication','slug':'silvipro2','tenant':'iff1860746-silvipro2','runtime_template':'node24','php_version':'8.4','runtime_layout':'managed-root-v1','template_kind':'none'}
+        (self.module.JOBDIR/'project-provision-a-silvipro2.json').write_text(json.dumps(create_job))
+        (self.module.JOBDIR/'project-provision-b-silvipro2.json').write_text(json.dumps(retry_job))
+        state=self.module.status('silvipro2')
+        self.assertTrue(state['recoverable']);self.assertEqual(state['recovery_action'],'resume_initial_publication')
+        material=self.module.resume_material('silvipro2',{'username':'iff1860746'})
+        self.assertEqual(material['resume_from'],'template');self.assertEqual(material['current_step'],'template')
+        self.assertEqual(material['runtime_template'],'node22');self.assertEqual(material['php_version'],'8.3')
+        self.assertEqual(material['template_kind'],'links')
+
     def test_running_job_prevents_recovery(self):
         job={'status':'running','current_step':'initial-publication','updated_at':'now','slug':'silvipro2'}
         (self.module.JOBDIR/'project-provision-a-silvipro2.json').write_text(json.dumps(job))

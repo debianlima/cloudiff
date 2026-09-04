@@ -14,15 +14,17 @@ class ProjectProvisionResumeContractTests(unittest.TestCase):
         for marker in ('def resume_initial_publication(form, user):','resume_material(slug,user,global_admin=global_admin)','queue_provision_job(job)',"if action == 'resume_initial_publication':"):
             self.assertIn(marker,ACTION)
 
-    def test_worker_resume_path_runs_only_initial_publication(self):
+    def test_worker_resume_path_reapplies_template_only_when_recovery_starts_before_template(self):
         start=WORKER.index("if str(job.get('action') or '')=='resume_initial_publication':")
         end=WORKER.index('candidates = [',start)
         block=WORKER[start:end]
+        self.assertIn("if str(job.get('resume_from') or '')=='template':",block)
+        self.assertIn("cloudif-project-template-apply.py",block)
         self.assertIn("cloudif-project-initial-publish.py",block)
         self.assertIn("set_state(path,job,'running','initial-publication')",block)
         self.assertIn("result['resume_only']=True",block)
         self.assertIn("enqueue_post_provision(slug,job,'project.membership.changed')",block)
-        for forbidden in ('cloudif-project-provision.sh','cloudif-project-template-apply.py','tenant-policy-ensure','project-backup.py'):
+        for forbidden in ('cloudif-project-provision.sh','tenant-policy-ensure','project-backup.py'):
             self.assertNotIn(forbidden,block)
 
     def test_worker_persists_repo_for_release_and_enqueues_post_provision(self):
@@ -34,7 +36,7 @@ class ProjectProvisionResumeContractTests(unittest.TestCase):
             self.assertIn('from cloudif_project_provision_status import status as provision_status',source)
             self.assertIn("value=\"resume_initial_publication\"",source)
             self.assertIn("if provision_state.get('recoverable') else ''",source)
-            self.assertIn('A retomada executará somente a publicação inicial.',source)
+            self.assertIn('A retomada continuará da última etapa segura sem recriar projeto, repositório ou banco.',source)
             self.assertIn('data-provision-recoverable=',source)
 
     def test_project_state_reconciler_can_read_portal_database(self):

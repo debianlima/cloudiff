@@ -252,6 +252,13 @@ def main():
     }
     try:
         if str(job.get('action') or '')=='resume_initial_publication':
+            if str(job.get('resume_from') or '')=='template':
+                set_state(path,job,'running','template')
+                template_timeout=int(os.environ.get('CLOUDIF_PROJECT_TEMPLATE_TIMEOUT','900'))
+                template_process=run(['/usr/local/sbin/cloudif-project-template-apply.py',str(path)],template_timeout)
+                if template_process.returncode:
+                    raise RuntimeError('template_apply_failed: '+(template_process.stderr or template_process.stdout or '')[-700:])
+                result['template_recovered']=True
             set_state(path,job,'running','initial-publication')
             publication_timeout=int(os.environ.get('CLOUDIF_INITIAL_PUBLICATION_TIMEOUT','9000'))
             process=run(['/usr/local/sbin/cloudif-project-initial-publish.py',str(path)],publication_timeout)
