@@ -37,4 +37,4 @@ Na aba **Código**, identificadores `<code>` e badges de estado do módulo legad
 
 ## Conectores — Conexões remotas (U19)
 
-A superfície congelada de **Conectores** recebe somente um botão adicional, **Conexões remotas**. O botão abre um `<dialog>` sobre a página existente; não cria item de navegação, não substitui cards atuais e não rearranja a arquitetura de informação. O conteúdo do diálogo é carregado da API project-scoped do Portal e segue os tokens/tema já existentes. Esta exceção mínima foi autorizada explicitamente pelo operador em 2026-09-04.
+A superfície congelada de **Conectores** recebe somente um botão adicional, **Conexões remotas**. O botão abre um `<dialog>` sobre a página existente; não cria item de navegação, não substitui cards atuais e não rearranja a arquitetura de informação. O diálogo apresenta o gateway único `:443`, chave temporária entregue uma vez e instruções de túnel por projeto. Nenhuma porta de serviço é exposta diretamente. Esta exceção mínima foi autorizada explicitamente pelo operador em 2026-09-04.

@@ -1,0 +1,39 @@
+Port 10022
+ListenAddress 127.0.0.1
+Protocol 2
+HostKey /etc/ssh/ssh_host_ed25519_key
+PidFile /run/cloudif-remote/sshd.pid
+UsePAM no
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+PubkeyAuthentication yes
+AuthenticationMethods publickey
+AuthorizedKeysFile none
+AuthorizedKeysCommand /usr/local/libexec/cloudif-remote-authorized-key.py %u %t %k
+AuthorizedKeysCommandUser cloudif-authz
+AllowGroups cloudif-remote
+PermitRootLogin no
+AllowTcpForwarding local
+GatewayPorts no
+X11Forwarding no
+AllowAgentForwarding no
+PermitTunnel no
+PermitTTY no
+PermitUserEnvironment no
+ForceCommand /usr/sbin/nologin
+MaxAuthTries 3
+LoginGraceTime 20
+ClientAliveInterval 60
+ClientAliveCountMax 2
+MaxSessions 1
+LogLevel VERBOSE
+
+Match User cifconn-hosp
+    AuthorizedKeysFile /etc/cloudif/remote-connector-authorized_keys
+    AuthorizedKeysCommand none
+    AllowTcpForwarding remote
+    PermitListen 127.0.0.1:*
+    ForceCommand /usr/sbin/nologin
+    PermitTTY no
+    X11Forwarding no
+    AllowAgentForwarding no

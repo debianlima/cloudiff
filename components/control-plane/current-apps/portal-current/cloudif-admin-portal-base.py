@@ -6044,8 +6044,14 @@ if 'Portal' in globals() and not globals().get('_aig_wrapped'):
 # CloudIF project-scoped remote connections BEGIN
 if 'Portal' in globals() and not globals().get('_rc_wrapped'):
     _rc_prev_get=Portal.do_GET;_rc_prev_post=Portal.do_POST
+    def _rc_internal_ok(self):
+        return _rc.verify_internal_request(self.client_address[0],self.headers.get('Authorization') or '',_rc_cfg)
     def _rc_get(self):
         path=urllib.parse.urlparse(self.path).path.rstrip('/')
+        if path in ('/cloudiff/portal/internal/remote-ssh/active-users','/cloudif/portal/internal/remote-ssh/active-users'):
+            if not _rc_internal_ok(self):return _rc_send(self,403,{'ok':False,'error':'internal_denied'})
+            try:return _rc_send(self,200,{'ok':True,'leases':_rc_broker().active_gateway_users(),'secrets_exposed':False})
+            except Exception:return _rc_send(self,503,{'ok':False,'error':'gateway_state_unavailable'})
         if path in ('/cloudiff/portal/api/remote-connections','/cloudif/portal/api/remote-connections','/api/remote-connections'):
             user=self.user()
             try:return _rc_send(self,200,_rc_broker().inventory(_oi_visible(user),user.get('username') or ''))
@@ -6065,11 +6071,11 @@ if 'Portal' in globals() and not globals().get('_rc_wrapped'):
             if not isinstance(payload,dict):raise ValueError('invalid_body')
             broker=_rc_broker();rows=_oi_visible(user);actor=user.get('username') or ''
             if path.endswith('/create'):
-                result=broker.create_lease(rows,actor,str(payload.get('project_slug') or ''),str(payload.get('service') or ''),payload.get('ttl_seconds'))
-                log_action(actor,'remote_connection_create',str(result.get('lease_id') or ''),0,str(result.get('project_slug') or ''),'service='+str(result.get('service') or ''))
-                return _rc_send(self,200,{'ok':True,'lease':{k:result.get(k) for k in ('lease_id','project_slug','service','edge_host','edge_port','status','expires_at','existing')},'secrets_exposed':False})
+                result=broker.create_lease(rows,actor,str(payload.get('project_slug') or ''),payload.get('ttl_seconds'),bool(payload.get('rotate')))
+                log_action(actor,'remote_gateway_create',str(result.get('lease_id') or ''),0,str(result.get('project_slug') or ''),'443-only')
+                return _rc_send(self,200,{'ok':True,'lease':_rc.public_lease_payload(result),'secrets_exposed':False,'credential_delivery':'one-time' if result.get('private_key') else 'not-repeated'})
             result=broker.release(rows,actor,str(payload.get('lease_id') or ''))
-            log_action(actor,'remote_connection_release',str(payload.get('lease_id') or ''),0,'','')
+            log_action(actor,'remote_gateway_release',str(payload.get('lease_id') or ''),0,'','443-only')
             return _rc_send(self,200,result|{'secrets_exposed':False})
         except _rc.BrokerError as e:return _rc_send(self,e.status,{'ok':False,'error':e.code,'message':e.message,'secrets_exposed':False})
         except (ValueError,TypeError):return _rc_send(self,400,{'ok':False,'error':'invalid_request','message':'Requisição inválida.','secrets_exposed':False})

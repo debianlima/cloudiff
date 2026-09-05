@@ -1,0 +1,20 @@
+[Unit]
+Description=Synchronize CloudIFF remote SSH leases from Portal
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/libexec/cloudif-remote-gateway-sync.py
+Restart=always
+RestartSec=2
+RuntimeDirectory=cloudif-remote
+RuntimeDirectoryMode=0755
+RuntimeDirectoryPreserve=yes
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+
+[Install]
+WantedBy=multi-user.target

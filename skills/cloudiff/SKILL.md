@@ -1,6 +1,6 @@
 ---
 name: cloudiff
-versao: 0.1.13
+versao: 0.1.14
 description: Governa, reconcilia, normaliza e evolui a plataforma CloudIFF V1/Python→V2/C++23 preservando interface homologada,
   contratos, segurança, dados, observabilidade e rollback.
 tipo_competencia: projeto
@@ -35,37 +35,37 @@ referencia:
 - id: desenvolvedor-de-software
   fonte: debianlima/competencias-catalogo:metodo/desenvolvedor-de-software/SKILL.md
   versao_fixada: '15'
-  delta_lido_ate: 9b951d0d2f68a3ead190741fd5e8b4d6cc8e0a84
+  delta_lido_ate: 598790074a359b7755fcc50908195476dd0a4d87
   estado: reconciliado
 - id: github-incremental-reconciliation
   fonte: debianlima/competencias-catalogo:metodo/github-incremental-reconciliation/SKILL.md
   versao_fixada: '7'
-  delta_lido_ate: 9b951d0d2f68a3ead190741fd5e8b4d6cc8e0a84
+  delta_lido_ate: 598790074a359b7755fcc50908195476dd0a4d87
   estado: reconciliado
 - id: governanca-ontologica-de-skills
   fonte: debianlima/competencias-catalogo:metodo/governanca-ontologica-de-skills/SKILL.md
   versao_fixada: 1.0.5
-  delta_lido_ate: 9b951d0d2f68a3ead190741fd5e8b4d6cc8e0a84
+  delta_lido_ate: 598790074a359b7755fcc50908195476dd0a4d87
   estado: reconciliado
 - id: telemetry-data-visualization
   fonte: debianlima/competencias-catalogo:dominio/telemetry-data-visualization/SKILL.md
   versao_fixada: '2'
-  delta_lido_ate: 9b951d0d2f68a3ead190741fd5e8b4d6cc8e0a84
+  delta_lido_ate: 598790074a359b7755fcc50908195476dd0a4d87
   estado: reconciliado
 - id: distributed-agent-control
   fonte: debianlima/competencias-catalogo:dominio/distributed-agent-control/SKILL.md
   versao_fixada: '1'
-  delta_lido_ate: 9b951d0d2f68a3ead190741fd5e8b4d6cc8e0a84
+  delta_lido_ate: 598790074a359b7755fcc50908195476dd0a4d87
   estado: reconciliado
 - id: network-ssh-operations
   fonte: debianlima/competencias-catalogo:dominio/network-ssh-operations/SKILL.md
   versao_fixada: '1'
-  delta_lido_ate: 9b951d0d2f68a3ead190741fd5e8b4d6cc8e0a84
+  delta_lido_ate: 598790074a359b7755fcc50908195476dd0a4d87
   estado: reconciliado
 - id: operational-ui-truth
   fonte: debianlima/competencias-catalogo:dominio/operational-ui-truth/SKILL.md
   versao_fixada: '1'
-  delta_lido_ate: 9b951d0d2f68a3ead190741fd5e8b4d6cc8e0a84
+  delta_lido_ate: 598790074a359b7755fcc50908195476dd0a4d87
   estado: reconciliado
 - id: cloud-design-patterns
   fonte: github/awesome-copilot:skills/cloud-design-patterns/SKILL.md
@@ -274,3 +274,11 @@ Em 2026-09-04, a U16 reproduziu no Chromium móvel que a aba **Código** preserv
 Na mesma U16, **Produção** devolvia corretamente HTTP 403 para o usuário, porém o coexist adapter só transformava HTML com status 200; o 403 escapava como página legacy desformatada. A correção permite adaptar especificamente o 403 de `operacao-producao` e devolve o mesmo status original após a transformação. Gate: navegação viva em Chromium dark confirmou título `Produção · CloudIFF`, navegação contextual presente, Produção ativa, mensagem `Projeto não autorizado.`, fundo/cores canônicos e nenhuma exposição da página legacy crua; verificação independente continuou retornando HTTP 403. Evita que segurança correta produza uma experiência visual fora do contrato sem enfraquecer autorização. Vale para negativas HTML intencionais que precisam permanecer fail-closed.
 ### L026 — bridge de tema deve usar tokens realmente definidos e ser validada por estilo computado
 Em 2026-09-04, a U17 encontrou os últimos elementos claros da aba **Código** no Chromium móvel: identificadores `<code>` e badges (`Vinculado`, `Configurado`, `Online`) ainda resolviam para fundos claros do CSS legacy. A primeira correção eliminou o branco, mas usou `--surface-2`, token inexistente no design system; o navegador descartou a declaração e produziu fundo transparente. A correção homologada usa somente tokens existentes: identificadores e estados positivos em `--iff-wash`/`--iff-dark`, estados neutros em `--surface`/`--ink-2`. Gate: entrada 1519/U17, 19/19 testes e navegação viva em Chromium dark; `teste-sofa`, tenant, `Vinculado`, `Configurado` e `Online` computaram fundo `rgb(23, 53, 31)`, texto `rgb(149, 223, 163)`, nenhum chip alvo ficou com luminância clara (`lightCount=0`) e não houve overflow horizontal. Evita fixes de tema aparentemente corretos no código mas invalidados silenciosamente pelo CSS por variável ausente. Vale para qualquer bridge entre CSS legacy e tokens do shell v2.
+### L027 — relay externo 443-only deve separar superfície pública de destinos internos
+Em 2026-09-05, a U19 homologou acesso remoto sem nova porta WAN: `sslh` mantém o listener público único em TCP/443, TLS/HTTPS segue para o Nginx Proxy Manager em `127.0.0.1:10443` e SSH segue para um gateway dedicado em `127.0.0.1:10022`. O Portal Authentik/ACL emite lease curta por projeto e chave Ed25519 temporária entregue uma vez; o gateway usa `permitopen=` e cache local fail-closed para restringir cada sessão aos destinos autorizados. A Hospedagem, que não é roteável diretamente a partir do proxy, mantém um conector SSH de saída pela própria 443 e cria `RemoteForward` apenas enquanto existe lease ativa; o relay de PostgreSQL fica em loopback e some após release/expiração. Gate vivo: HTTPS e SSH compartilharam a 443, Forgejo respondeu `SSH-2.0-Go`, PostgreSQL respondeu ao SSLRequest pelo túnel, destino não declarado foi bloqueado, e release derrubou sessão estabelecida em 21s e removeu o listener reverso. Não confundir “lease temporária” com “porta WAN temporária”: 443 permanece pública; a autorização e os forwards internos é que surgem/somem.
+
+### L028 — auditoria de exposição WAN precisa verificar filtros, não apenas NAT
+Na U19, a porta pública 22 apareceu em varredura externa apesar de não existir NAT WAN para 22. A causa foi uma regra legada de filtro `Allow all ipv4+ipv6 via pfSsh.php`, que aceitava qualquer protocolo para a WAN/self. A regra foi removida com backup prévio; o aceite externo passou a mostrar somente 80 e 443 abertas e 22/2222/5432/54404/6543/10022/10443/18360-18362/24000-24999 fechadas ou filtradas. Regra operacional: política “somente web pública” exige inventário conjunto de NAT, regras de filtro e listeners do próprio firewall, seguido de sonda independente externa. SSH administrativo permanece apenas em redes internas/VPN.
+
+### L029 — scope transitório Docker inativo pode bloquear wake de tenant até ser descarregado
+Durante a homologação PostgreSQL da U19, o banco do tenant `iff1742962-testesofa` falhou ao iniciar porque o scope transitório `docker-<container-id>.scope` estava `inactive (dead)` porém ainda `loaded`; o runtime recusava recriá-lo com “already loaded or has a fragment file”. O reparo seguro foi restrito ao scope daquele container: `systemctl stop`, `systemctl reset-failed`, `systemctl daemon-reload`, confirmar `LoadState=not-found` e então repetir `docker start`. O banco voltou `healthy`; ao fim do teste todo o tenant foi devolvido ao estado parado. Não reiniciar Docker inteiro quando a divergência está isolada a um scope transitório de um container.

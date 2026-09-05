@@ -1,0 +1,10 @@
+[Unit]
+Description=Terminate expired CloudIFF remote SSH sessions
+After=cloudif-remote-gateway.service network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/libexec/cloudif-remote-gateway-reaper.py
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true

@@ -1,0 +1,20 @@
+[Unit]
+Description=CloudIFF Hospedagem outbound SSH/443 relay connector
+After=network-online.target cloudif-admin-portal.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+RuntimeDirectory=cloudif-remote-connector
+RuntimeDirectoryMode=0700
+ExecStart=/usr/bin/ssh -M -S /run/cloudif-remote-connector/master.sock -N -T -p 443 -i /etc/cloudif/remote-connector-ed25519 -o BatchMode=yes -o IdentitiesOnly=yes -o ExitOnForwardFailure=yes -o ServerAliveInterval=20 -o ServerAliveCountMax=3 -o StrictHostKeyChecking=yes -o UserKnownHostsFile=/etc/cloudif/remote-connector-known_hosts cifconn-hosp@cloudiff.duckdns.org
+Restart=always
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadOnlyPaths=/etc/cloudif/remote-connector-ed25519 /etc/cloudif/remote-connector-known_hosts
+
+[Install]
+WantedBy=multi-user.target

@@ -211,25 +211,27 @@ O gateway versionado aceita callbacks HTTP em `127.0.0.1`, `localhost` ou `::1` 
 - [ ] cada projeto usa identidade, token e ACL próprios.
 - [ ] logs do proxy não registram tokens, códigos OAuth ou strings PostgreSQL completas.
 
-## Conexões remotas temporárias (U19)
+## Política WAN pública
 
-O CloudIFF oferece um painel **Conexões remotas** dentro de **Conectores**, sem nova rota de navegação. O painel reutiliza a sessão Authentik e a ACL já aplicada pelo Portal: um usuário só recebe inventário e leases dos projetos que já consegue visualizar.
+A WAN pública permite somente TCP/80 e TCP/443. A porta 22 é exclusivamente de administração interna/VPN e nunca deve ser liberada por regra WAN. Portas de PostgreSQL, Forgejo SSH, Supavisor, containers e relays internos também nunca recebem NAT WAN. A U19 removeu uma regra legada `Allow all ipv4+ipv6 via pfSsh.php` que tornava serviços do próprio firewall alcançáveis externamente apesar de não existir NAT específico para SSH.
 
-Arquitetura homologada:
+O aceite exige verificação por um ponto externo: 80 e 443 abertas; 22 e portas de serviço fechadas/filtradas.
 
-- FRP-Panel `v0.1.37` é o control plane interno, com Master + FRPS no nó `proxy` e clientes nos papéis `runtime` e `control-plane`;
-- o FRPS aceita somente a faixa TCP `24000-24999`;
-- o firewall publica a faixa uma única vez para o nó proxy; portas sem lease ativo não possuem listener FRP;
-- o Portal reserva a porta transacionalmente, cria o proxy pelo API token de privilégio mínimo e grava TTL no banco do Portal;
-- um timer independente revoga leases expirados mesmo que o usuário feche o navegador;
-- o aluno não instala cliente FRP: usa diretamente Git/SSH, IDE ou cliente de banco no host/porta exibidos pelo Portal;
-- o Faro não participa do caminho e não foi modificado.
+## Conexões remotas temporárias — relay 443-only (U19)
 
-### Segurança por serviço
+O CloudIFF oferece **Conexões remotas** como um diálogo dentro de **Conectores**. Não há nova rota de navegação. A sessão Authentik e a ACL existente continuam sendo a fonte de identidade e autorização.
 
-- **Forgejo SSH**: liberado por lease temporário; a autenticação continua sendo a chave SSH cadastrada no Forgejo.
-- **PostgreSQL/Supabase raw TCP**: permanece bloqueado (`tls_required`) enquanto não houver gateway TLS homologado. A abertura de FRP não substitui criptografia/autenticação do protocolo.
-- **MCP, Studio, Komodo, Forgejo HTTPS e demais aplicações web**: continuam usando seus endpoints HTTPS existentes; o painel apenas apresenta os links, sem criar porta TCP paralela.
-- **Preview/Homologação/Produção**: não recebem SSH artificial. Os containers atuais não possuem daemon SSH; acesso administrativo continua pelo terminal/Komodo existente.
+O contrato de rede é **TCP/443 somente**. O pfSense mantém apenas o encaminhamento HTTPS já existente para o proxy; não existe faixa de portas públicas para banco, Git SSH ou containers. No proxy, `sslh` multiplexa o mesmo listener 443: tráfego TLS segue para Nginx Proxy Manager em loopback e tráfego SSH segue para um `sshd` dedicado também em loopback.
 
-A porta é uma **lease**, não uma identidade. Authentik protege o painel; o protocolo remoto mantém sua própria autenticação. Nenhuma senha, token do FRP-Panel ou segredo de banco é retornado pela API do painel.
+Ao ativar o acesso para um projeto, o Portal gera uma chave Ed25519 temporária, armazena apenas a chave pública/fingerprint e entrega a chave privada uma única vez ao navegador autenticado. O usuário usa OpenSSH nativo, DBeaver ou IDE com o gateway `cloudiff.duckdns.org:443`. O `AuthorizedKeysCommand` consulta o Portal por uma API interna autenticada e devolve `permitopen=` apenas para os destinos internos daquele projeto.
+
+A expiração é efetiva em duas camadas: novas autenticações deixam de ser aceitas assim que o lease expira/é liberado e um reaper no gateway encerra sessões de contas temporárias que já não aparecem como ativas no Portal, com cadência de 30 segundos.
+
+### Serviços
+
+- **Forgejo SSH:** tunelado para `10.62.91.2:2222`; a autenticação no Forgejo continua usando a chave SSH normal do usuário.
+- **PostgreSQL/Supabase:** tunelado para a porta `POSTGRES_PORT` específica do tenant; a exposição WAN do PostgreSQL permanece inexistente.
+- **MCP, Studio, Komodo e aplicações web:** continuam nos endpoints HTTPS/443 existentes.
+- **Preview/Homologação/Produção:** não ganham `sshd` artificial nem listener WAN.
+
+A porta 443 não identifica o usuário; a identidade vem do lease autenticado e da chave temporária. Portas internas podem ser fixas/determinísticas, mas jamais são publicadas no firewall. Faro não participa dessa arquitetura.

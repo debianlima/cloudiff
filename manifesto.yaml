@@ -1,5 +1,5 @@
 projeto: cloudiff-v2
-versao_contrato: 52
+versao_contrato: 53
 namespace_fechado: true
 entradas:
   - id: 1
@@ -12142,5 +12142,13 @@ entradas:
     consome: [evidencia/v1-file-1519]
     produz: evidencia/remote-access-broker-u19
     aceite: python3 -m unittest portal.tests.test_remote_connections_broker
+    status: aceito
+  - id: 1521
+    caminho: portal/tests/test_remote_connections_443_relay.py
+    proposito: "prova regressiva do relay 443-only, conector reverso da Hospedagem e ausencia de runtime FRP legado"
+    tipo: infraestrutura-seguranca
+    consome: [evidencia/remote-access-broker-u19]
+    produz: evidencia/remote-access-443-relay-u19
+    aceite: python3 -m unittest portal.tests.test_remote_connections_443_relay
     status: aceito
 trabalho_compartilhado: {}

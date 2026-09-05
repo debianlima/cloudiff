@@ -1,0 +1,21 @@
+[Unit]
+Description=CloudIFF project-scoped SSH remote gateway
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStartPre=/usr/sbin/sshd -t -f /etc/ssh/cloudif-remote-sshd_config
+ExecStart=/usr/sbin/sshd -D -e -f /etc/ssh/cloudif-remote-sshd_config
+Restart=on-failure
+RestartSec=2
+NoNewPrivileges=true
+PrivateTmp=true
+RuntimeDirectory=cloudif-remote
+RuntimeDirectoryMode=0755
+ProtectHome=true
+ProtectSystem=strict
+RestrictSUIDSGID=true
+
+[Install]
+WantedBy=multi-user.target
