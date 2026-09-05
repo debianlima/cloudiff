@@ -1,5 +1,5 @@
 projeto: cloudiff-v2
-versao_contrato: 51
+versao_contrato: 52
 namespace_fechado: true
 entradas:
   - id: 1
@@ -12134,5 +12134,13 @@ entradas:
     consome: [evidencia/v1-file-1518]
     produz: evidencia/code-dark-badges-u17
     aceite: python3 -m unittest portal.tests.test_code_dark_badges
+    status: aceito
+  - id: 1520
+    caminho: portal/tests/test_remote_connections_broker.py
+    proposito: "prova regressiva do broker de conexoes remotas, ACL, TTL, concorrencia e overlay de Conectores"
+    tipo: infraestrutura
+    consome: [evidencia/v1-file-1519]
+    produz: evidencia/remote-access-broker-u19
+    aceite: python3 -m unittest portal.tests.test_remote_connections_broker
     status: aceito
 trabalho_compartilhado: {}

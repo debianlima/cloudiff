@@ -34,3 +34,7 @@ Os links já existentes em **Reconciliação** não mudam de rota nem função. 
 ### Código — chips e estados no tema escuro
 
 Na aba **Código**, identificadores `<code>` e badges de estado do módulo legado acompanham o mesmo bridge dark dos cards: identificadores usam `--surface-2`/`--ink-2`; estados positivos usam `--iff-wash`/`--iff-dark`; estados neutros usam `--surface-2`/`--ink-2`. A mudança é limitada a `.tab-git .legacy-content` e foi autorizada na U17 de 2026-09-04.
+
+## Conectores — Conexões remotas (U19)
+
+A superfície congelada de **Conectores** recebe somente um botão adicional, **Conexões remotas**. O botão abre um `<dialog>` sobre a página existente; não cria item de navegação, não substitui cards atuais e não rearranja a arquitetura de informação. O conteúdo do diálogo é carregado da API project-scoped do Portal e segue os tokens/tema já existentes. Esta exceção mínima foi autorizada explicitamente pelo operador em 2026-09-04.

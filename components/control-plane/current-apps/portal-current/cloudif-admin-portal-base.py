@@ -6014,8 +6014,18 @@ if 'Portal' in globals() and not globals().get('_ap_tab_wrapped'):
 
 # CloudIF AI agents guide BEGIN
 import cloudif_ai_agents_guide as _aig
+import cloudif_remote_connections as _rc
+
+def _rc_cfg(key,default=''):
+    return os.environ.get(key) or setting_value(key,default)
+def _rc_broker():
+    return _rc.RemoteBroker(str(DB),_rc.config_from_env(_rc_cfg))
+def _rc_send(handler,code,data):
+    raw=json.dumps(data,ensure_ascii=False,separators=(',',':')).encode();handler.send_response(code);handler.send_header('Content-Type','application/json');handler.send_header('Cache-Control','no-store');handler.send_header('Pragma','no-cache');handler.send_header('Content-Length',str(len(raw)));handler.end_headers();handler.wfile.write(raw)
 def _aig_data(user):return _aig.guide_data(_oi_visible(user))
-def _aig_render(user):return _aig.render(_oi_visible(user),_prod_csrf_token(user),_ap_visible(user),_ap_can_decide(user),user.get('username') or '')
+def _aig_render(user):
+    csrf=_prod_csrf_token(user)
+    return _aig.render(_oi_visible(user),csrf,_ap_visible(user),_ap_can_decide(user),user.get('username') or '')+_rc.render_dialog(csrf)
 if 'Portal' in globals() and not globals().get('_aig_wrapped'):
     _aig_prev_get=Portal.do_GET
     def _aig_get(self):
@@ -6030,6 +6040,42 @@ if 'Portal' in globals() and not globals().get('_aig_wrapped'):
         return _aig_prev_get(self)
     Portal.do_GET=_aig_get;_aig_wrapped=True
 # CloudIF AI agents guide END
+
+# CloudIF project-scoped remote connections BEGIN
+if 'Portal' in globals() and not globals().get('_rc_wrapped'):
+    _rc_prev_get=Portal.do_GET;_rc_prev_post=Portal.do_POST
+    def _rc_get(self):
+        path=urllib.parse.urlparse(self.path).path.rstrip('/')
+        if path in ('/cloudiff/portal/api/remote-connections','/cloudif/portal/api/remote-connections','/api/remote-connections'):
+            user=self.user()
+            try:return _rc_send(self,200,_rc_broker().inventory(_oi_visible(user),user.get('username') or ''))
+            except Exception:return _rc_send(self,503,{'ok':False,'error':'remote_connections_unavailable','message':'Conexões remotas temporariamente indisponíveis.','secrets_exposed':False})
+        return _rc_prev_get(self)
+    def _rc_post(self):
+        path=urllib.parse.urlparse(self.path).path.rstrip('/')
+        if path not in ('/cloudiff/portal/api/remote-connections/create','/cloudiff/portal/api/remote-connections/release','/cloudif/portal/api/remote-connections/create','/cloudif/portal/api/remote-connections/release','/api/remote-connections/create','/api/remote-connections/release'):
+            return _rc_prev_post(self)
+        if not _cloudif_security_valid_origin(self):return _rc_send(self,403,{'ok':False,'error':'origin_denied','message':'Origem não autorizada.'})
+        user=self.user();csrf=(self.headers.get('X-CSRF-Token') or '').strip()
+        if not _prod_csrf_equal(csrf,_prod_csrf_token(user)):return _rc_send(self,403,{'ok':False,'error':'csrf_denied','message':'Sessão alterada. Recarregue a página.'})
+        try:
+            length=int(self.headers.get('Content-Length','0') or '0')
+            if length<=0 or length>100000:raise ValueError('invalid_body')
+            payload=json.loads(self.rfile.read(length).decode('utf-8'))
+            if not isinstance(payload,dict):raise ValueError('invalid_body')
+            broker=_rc_broker();rows=_oi_visible(user);actor=user.get('username') or ''
+            if path.endswith('/create'):
+                result=broker.create_lease(rows,actor,str(payload.get('project_slug') or ''),str(payload.get('service') or ''),payload.get('ttl_seconds'))
+                log_action(actor,'remote_connection_create',str(result.get('lease_id') or ''),0,str(result.get('project_slug') or ''),'service='+str(result.get('service') or ''))
+                return _rc_send(self,200,{'ok':True,'lease':{k:result.get(k) for k in ('lease_id','project_slug','service','edge_host','edge_port','status','expires_at','existing')},'secrets_exposed':False})
+            result=broker.release(rows,actor,str(payload.get('lease_id') or ''))
+            log_action(actor,'remote_connection_release',str(payload.get('lease_id') or ''),0,'','')
+            return _rc_send(self,200,result|{'secrets_exposed':False})
+        except _rc.BrokerError as e:return _rc_send(self,e.status,{'ok':False,'error':e.code,'message':e.message,'secrets_exposed':False})
+        except (ValueError,TypeError):return _rc_send(self,400,{'ok':False,'error':'invalid_request','message':'Requisição inválida.','secrets_exposed':False})
+        except Exception:return _rc_send(self,503,{'ok':False,'error':'remote_connections_unavailable','message':'Conexões remotas temporariamente indisponíveis.','secrets_exposed':False})
+    Portal.do_GET=_rc_get;Portal.do_POST=_rc_post;_rc_wrapped=True
+# CloudIF project-scoped remote connections END
 
 # CloudIF unique focused sections BEGIN
 import cloudif_portal_sections98 as _focus98

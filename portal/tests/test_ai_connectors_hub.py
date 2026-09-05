@@ -74,6 +74,9 @@ class AIConnectorsHubTests(unittest.TestCase):
         self.assertIn('MCP público + GPT Actions confidencial', html)
         self.assertIn('Client Secret', html)
         self.assertIn('Configuração pronta para copiar', html)
+        self.assertEqual(html.count('id="agent-remote-connections"'), 1)
+        self.assertIn('Conexões remotas', html)
+        self.assertIn('remote-connections-dialog', html)
 
 
 

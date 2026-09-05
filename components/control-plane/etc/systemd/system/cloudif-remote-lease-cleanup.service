@@ -1,0 +1,12 @@
+[Unit]
+Description=Revoke expired CloudIFF remote connection leases
+After=network-online.target cloudif-admin-portal.service
+
+[Service]
+Type=oneshot
+EnvironmentFile=-/etc/cloudif/portal.env
+EnvironmentFile=-/etc/cloudif/remote-access.env
+ExecStart=/usr/bin/python3 /srv/cloudif/app-pointers/portal-current/cloudif_remote_connections.py --db /var/lib/cloudif/portal/cloudif-portal.db
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true

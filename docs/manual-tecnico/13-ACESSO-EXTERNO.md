@@ -210,3 +210,26 @@ O gateway versionado aceita callbacks HTTP em `127.0.0.1`, `localhost` ou `::1` 
 - [ ] as rotas OAuth não passam por um segundo login de borda.
 - [ ] cada projeto usa identidade, token e ACL próprios.
 - [ ] logs do proxy não registram tokens, códigos OAuth ou strings PostgreSQL completas.
+
+## Conexões remotas temporárias (U19)
+
+O CloudIFF oferece um painel **Conexões remotas** dentro de **Conectores**, sem nova rota de navegação. O painel reutiliza a sessão Authentik e a ACL já aplicada pelo Portal: um usuário só recebe inventário e leases dos projetos que já consegue visualizar.
+
+Arquitetura homologada:
+
+- FRP-Panel `v0.1.37` é o control plane interno, com Master + FRPS no nó `proxy` e clientes nos papéis `runtime` e `control-plane`;
+- o FRPS aceita somente a faixa TCP `24000-24999`;
+- o firewall publica a faixa uma única vez para o nó proxy; portas sem lease ativo não possuem listener FRP;
+- o Portal reserva a porta transacionalmente, cria o proxy pelo API token de privilégio mínimo e grava TTL no banco do Portal;
+- um timer independente revoga leases expirados mesmo que o usuário feche o navegador;
+- o aluno não instala cliente FRP: usa diretamente Git/SSH, IDE ou cliente de banco no host/porta exibidos pelo Portal;
+- o Faro não participa do caminho e não foi modificado.
+
+### Segurança por serviço
+
+- **Forgejo SSH**: liberado por lease temporário; a autenticação continua sendo a chave SSH cadastrada no Forgejo.
+- **PostgreSQL/Supabase raw TCP**: permanece bloqueado (`tls_required`) enquanto não houver gateway TLS homologado. A abertura de FRP não substitui criptografia/autenticação do protocolo.
+- **MCP, Studio, Komodo, Forgejo HTTPS e demais aplicações web**: continuam usando seus endpoints HTTPS existentes; o painel apenas apresenta os links, sem criar porta TCP paralela.
+- **Preview/Homologação/Produção**: não recebem SSH artificial. Os containers atuais não possuem daemon SSH; acesso administrativo continua pelo terminal/Komodo existente.
+
+A porta é uma **lease**, não uma identidade. Authentik protege o painel; o protocolo remoto mantém sua própria autenticação. Nenhuma senha, token do FRP-Panel ou segredo de banco é retornado pela API do painel.
