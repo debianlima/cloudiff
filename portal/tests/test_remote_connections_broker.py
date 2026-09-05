@@ -60,6 +60,17 @@ class RemoteConnectionsBrokerTests(unittest.TestCase):
         barrier.wait()
         for t in ts:t.join()
         self.assertFalse(errs);self.assertEqual(len(out),2);self.assertEqual(len({x['edge_port'] for x in out}),2)
+    def test_frp_panel_delete_resolves_shadow_client_id(self):
+        class Driver(mod.FrpPanelDriver):
+            def __init__(self):super().__init__('http://panel','token');self.calls=[]
+            def _request(self,path,payload=None,method='POST'):
+                self.calls.append((path,payload,method))
+                if path.endswith('/list_configs'):
+                    return {'proxy_configs':[{'name':'lease-a','origin_client_id':'cloudiff-broker.c.forja','client_id':'cloudiff-broker.c.forja@7'}]}
+                return {'status':{'code':1}}
+        d=Driver();self.assertTrue(d.delete('lease-a','cloudiff-broker.c.forja'))
+        self.assertEqual(d.calls[-1][1]['clientId'],'cloudiff-broker.c.forja@7')
+
     def test_dialog_is_overlay_and_warns_about_dynamic_ports(self):
         html=mod.render_dialog('csrf-test')
         self.assertIn('<dialog id="remote-connections-dialog"',html);self.assertIn('Conexões remotas',html)

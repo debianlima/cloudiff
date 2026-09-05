@@ -54,8 +54,19 @@ class FrpPanelDriver:
         encoded=base64.b64encode(json.dumps(cfg,separators=(',',':')).encode()).decode()
         self._request('/api/v1/proxy/create_config',{'clientId':client_id,'serverId':self.server_id,'config':encoded,'overwrite':True})
         return name
+    def _effective_client_id(self,name,origin_client_id):
+        body=self._request('/api/v1/proxy/list_configs',{'page':1,'pageSize':200,'keyword':name})
+        for item in body.get('proxy_configs') or body.get('proxyConfigs') or []:
+            if str(item.get('name') or '')!=name:continue
+            origin=str(item.get('origin_client_id') or item.get('originClientId') or '')
+            if origin and origin!=origin_client_id:continue
+            return str(item.get('client_id') or item.get('clientId') or origin_client_id)
+        return origin_client_id
     def delete(self,name,client_id):
-        self._request('/api/v1/proxy/delete_config',{'clientId':client_id,'serverId':self.server_id,'name':name})
+        # FRP-Panel materializes a per-server shadow client (for example origin@1).
+        # delete_config requires that effective id, not the origin client id used at creation.
+        effective=self._effective_client_id(name,client_id)
+        self._request('/api/v1/proxy/delete_config',{'clientId':effective,'serverId':self.server_id,'name':name})
         return True
 
 class RemoteBroker:
