@@ -9,7 +9,7 @@
 - Forgejo SSH usa destino interno direto `10.62.91.2:2222` pelo gateway.
 - PostgreSQL/Supabase usa conector reverso da Hospedagem pela própria 443; o forward do tenant existe apenas enquanto há lease ativa e fica em loopback no proxy.
 - Faro permanece fora do caminho e não foi modificado.
-- A skill de projeto vigente é `cloudiff@0.1.14`.
+- A skill de projeto vigente é `cloudiff@0.1.28`.
 
 ## Decisões superadas
 - FRP-Panel + faixa pública `24000-24999` — superado e removido; a regra NAT experimental e os runtimes FRP foram eliminados.
@@ -35,7 +35,7 @@
 - Deve estar vazio em `manifesto.yaml` após fechamento da U19.
 
 ## Competências ativas na U19
-- `cloudiff@0.1.14`.
+- `cloudiff@0.1.28`.
 - `desenvolvedor-de-software@15`.
 - `github-incremental-reconciliation@7`.
 - `governanca-ontologica-de-skills@1.0.5`.
