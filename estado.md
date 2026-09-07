@@ -32,7 +32,7 @@
 - P2 do Teste Sofá continua dependente de duas aprovações humanas distintas admin/professor.
 
 ## Trabalho compartilhado
-- Deve estar vazio em `manifesto.yaml` após fechamento da U19.
+- ponteiro: `manifesto.yaml.trabalho_compartilhado` — unidade U20, atualizado_em 2026-09-07T03:02:51-03:00.
 
 ## Competências ativas na U19
 - `cloudiff@0.1.28`.
