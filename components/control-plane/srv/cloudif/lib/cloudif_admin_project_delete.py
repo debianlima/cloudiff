@@ -335,6 +335,32 @@ def _destroy_runtime(slug, tenant, public_number=0):
     return _post_json((cfg.get('KOMODO_AGENT_URL') or 'http://10.62.91.2:18098').rstrip('/')+'/komodo/stack/destroy',cfg.get('KOMODO_AGENT_TOKEN',''),{'project':slug,'tenant':tenant,'public_number':int(public_number or 0),'actor':'admin-project-delete'})
 
 
+def _runtime_destroy_satisfied(result):
+    if not isinstance(result,dict): return False
+    if result.get('ok') is True: return True
+    if int(result.get('status') or 0) != 422: return False
+    data=result.get('data') if isinstance(result.get('data'),dict) else {}
+    message=' '.join(str(data.get('message') or '').split()).casefold().rstrip('.')
+    return message == 'projeto não integrado no komodo'.casefold()
+
+
+def _remote_delete_satisfied(result):
+    if not isinstance(result,dict): return False
+    if result.get('ok') is True: return True
+    data=result.get('data') if isinstance(result.get('data'),dict) else {}
+    forgejo=data.get('forgejo') if isinstance(data.get('forgejo'),dict) else {}
+    return forgejo.get('deleted') is True and int(forgejo.get('status') or 0) in {200,202,204}
+
+
+def _accepted_result(result, reason):
+    out=dict(result or {})
+    if out.get('ok') is not True:
+        out['upstream_ok']=False
+        out['ok']=True
+        out['accepted_idempotently']=reason
+    return out
+
+
 def _unpublish(public_number):
     if not public_number: return {'ok':True,'skipped':True}
     cfg=_env('/etc/cloudif/npm-publisher-client.env')
@@ -482,8 +508,12 @@ def _cleanup_already_deleted(slug, actor, progress):
     progress('Publicação e aliases','done' if publication.get('ok') else 'failed',f"HTTP {publication.get('status') or '-'}")
     progress('Stack e runtime','running','Verificando containers e stack órfãos')
     runtime=_destroy_runtime(slug,tenant,public_number)
-    progress('Stack e runtime','done' if runtime.get('ok') else 'failed','Resíduos removidos' if runtime.get('ok') else 'Ainda há resíduos')
+    runtime_ok=_runtime_destroy_satisfied(runtime)
+    progress('Stack e runtime','done' if runtime_ok else 'failed','Resíduos removidos ou já ausentes' if runtime_ok else 'Ainda há resíduos')
+    if runtime_ok: runtime=_accepted_result(runtime,'komodo_project_not_integrated')
     remote=forja_rollback(slug,execute=True,include_komodo=False)
+    remote_ok=_remote_delete_satisfied(remote)
+    if remote_ok: remote=_accepted_result(remote,'forgejo_deleted_after_runtime_destroy')
     agent_identity=_delete_agent_identity(slug); onboarding_state=_delete_onboarding_state(slug); observability=_delete_observability(slug); backup_state=_delete_backup_state(slug)
     removed_paths=[]
     for candidate in glob.glob(str(JOBS / f'*{slug}*')):
@@ -491,7 +521,7 @@ def _cleanup_already_deleted(slug, actor, progress):
         except FileNotFoundError: pass
     provision_dir=PROVISIONING/slug
     if provision_dir.exists(): shutil.rmtree(provision_dir);removed_paths.append(str(provision_dir))
-    ok=bool(publication.get('ok') and runtime.get('ok') and remote.get('ok'))
+    ok=bool(publication.get('ok') and runtime_ok and remote_ok)
     return {'ok':ok,'already_deleted':True,'slug':slug,'actor':actor,'tenant_preserved':tenant,'public_number_reserved':public_number,'publication':publication,'runtime_destroy':runtime,'remote':remote,'agent_identity':agent_identity,'onboarding_state':onboarding_state,'observability':observability,'backup_state':backup_state,'removed_paths':removed_paths,'message':'Projeto já excluído; resíduos verificados e removidos.' if ok else 'Projeto já excluído do Portal, mas ainda há resíduos a verificar.','finished_at':time.strftime('%Y-%m-%dT%H:%M:%S%z')}
 
 
@@ -529,17 +559,21 @@ def execute(slug, confirmation, actor, progress=None):
         (audit/'result.json').write_text(json.dumps(result,ensure_ascii=False,indent=2)+'\n');return result
     progress('Stack e runtime', 'running', 'Removendo stack sem tocar no banco')
     runtime = _destroy_runtime(slug, plan.get('tenant_preserved') or '', public_number)
-    progress('Stack e runtime', 'done' if runtime.get('ok') else 'failed', f"HTTP {runtime.get('status') or '-'}")
-    if not runtime.get('ok'):
+    runtime_ok = _runtime_destroy_satisfied(runtime)
+    progress('Stack e runtime', 'done' if runtime_ok else 'failed', f"HTTP {runtime.get('status') or '-'}")
+    if not runtime_ok:
         result={'ok':False,'error':'runtime_destroy_failed','runtime':runtime,'publication':publication,'audit_dir':str(audit)}
         (audit/'result.json').write_text(json.dumps(result,ensure_ascii=False,indent=2)+'\n');return result
+    runtime = _accepted_result(runtime,'komodo_project_not_integrated')
     progress('Forgejo e agentes', 'running', 'Removendo repositório e estados dos agentes')
     remote = forja_rollback(slug, execute=True, include_komodo=False)
-    progress('Forgejo e agentes', 'done' if remote.get('ok') else 'failed', f"HTTP {remote.get('status') or '-'}")
-    if not remote.get('ok'):
+    remote_ok = _remote_delete_satisfied(remote)
+    progress('Forgejo e agentes', 'done' if remote_ok else 'failed', f"HTTP {remote.get('status') or '-'}")
+    if not remote_ok:
         result = {'ok': False, 'error': 'remote_delete_failed', 'remote': remote, 'audit_dir': str(audit)}
         (audit / 'result.json').write_text(json.dumps(result, ensure_ascii=False, indent=2) + '\n')
         return result
+    remote = _accepted_result(remote,'forgejo_deleted_after_runtime_destroy')
 
     progress('Registros do Portal', 'running', 'Removendo vínculos e ACLs')
     con = sqlite3.connect(DB)
