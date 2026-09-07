@@ -156,8 +156,8 @@ class DefinitiveProjectManagementRendererTest(unittest.TestCase):
         block=self.source[start:]
         self.assertIn('render_projects=_pm197_render',block)
         self.assertNotIn('class="project-line"',block)
-        self.assertIn('class="project-final__grid"',block)
-        self.assertIn('grid-template-columns:repeat(2,minmax(0,1fr))',block)
+        self.assertIn('class="project-overview-strip"',block)
+        self.assertIn('class="project-resource-list"',block)
 
     def test_u21_projects_use_selector_and_one_active_workspace(self):
         block=self.source[self.source.rfind('# CloudIF definitive project management renderer BEGIN'):]
@@ -178,7 +178,7 @@ class DefinitiveProjectManagementRendererTest(unittest.TestCase):
 
     def test_final_renderer_keeps_project_actions(self):
         block=self.source[self.source.rfind('# CloudIF definitive project management renderer BEGIN'):]
-        for label in ('Abrir Studio','Abrir repositório','Abrir terminal','Checar projeto','Gerenciar permissões'):
+        for label in ('Abrir Studio','Abrir repositório','Abrir terminal','Checar estado','Permissões','Publicar','Código'):
             self.assertIn(label,block)
         for removed in ('Sincronizar','Integrar','Editar projeto:'):
             self.assertNotIn(removed,block)
@@ -187,9 +187,10 @@ class DefinitiveProjectManagementRendererTest(unittest.TestCase):
 
     def test_final_renderer_is_collapsible_and_grouped(self):
         block=self.source[self.source.rfind('# CloudIF definitive project management renderer BEGIN'):]
-        self.assertIn('class="project-final"',block)
-        self.assertIn('class="project-owner-final"',block)
-        self.assertIn("'Meus projetos' if owner==user['username']",block)
+        self.assertIn('class="project-workspace-detail"',block)
+        self.assertIn('class="project-workspace-more"',block)
+        self.assertIn("selected not in valid_slugs",block)
+        self.assertIn("item['owner']==user['username']",block)
 
 
     def test_public_directory_and_acl_paths_are_supported(self):

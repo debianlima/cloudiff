@@ -80,12 +80,12 @@ class ProjectPublicationConfigurationV1Tests(unittest.TestCase):
         self.assertIn('approval/status',env);self.assertIn('valores secretos nunca são carregados',portal)
         self.assertIn('open_base_workspace',portal);self.assertIn('canWrite',PUBLICATIONS.read_text())
         final_renderer=portal[portal.index('def _pm197_render'):portal.index('render_projects=_pm197_render')]
-        self.assertIn('W Preview · H Homologation · P Publication',final_renderer)
+        self.assertIn('Preview → Homologação → Produção',final_renderer)
         self.assertNotIn('href=\"/cloudiff/portal/publication/base/{h(slug)}\"',final_renderer);self.assertNotIn('data-release-flow-open',final_renderer);self.assertIn('&amp;open=release',final_renderer)
         self.assertNotIn('name=\"op\" value=\"open_base_workspace\"',final_renderer)
         self.assertNotIn('data-publication-environments data-publication-tool=\"variables\"',final_renderer)
         self.assertIn('&amp;open=variables',final_renderer)
-        self.assertIn('Variáveis por ambiente',final_renderer)
+        self.assertIn('>Variáveis</a>',final_renderer)
         self.assertNotIn('>Gerenciar variáveis</button>',final_renderer)
         self.assertNotIn('project-environments-shell',final_renderer)
         self.assertIn('name=\"csrf_token\" value=\"{h(csrf_token)}\"',final_renderer)
@@ -146,8 +146,8 @@ class ProjectPublicationConfigurationV1Tests(unittest.TestCase):
         self.assertIn('#cloudif-environment-wizard .env-wizard-close{background:transparent!important',portal)
         self.assertIn('.project-tabs button[aria-selected=\"true\"]{background:#176b35!important',portal)
         self.assertIn('html[data-theme=\"dark\"] .project-tabs button{background:#0b1510!important',portal)
-        self.assertIn('project-final__section project-final__publication',portal)
-        self.assertIn('.project-final__publication .project-final__actions form .btn{background:var(--iff,#168821)!important',portal)
+        self.assertIn('class="project-action-stack"',portal)
+        self.assertIn('>Publicar</a>',portal)
 
     def test_configuration_change_uses_partitioned_reconcile_and_runtime_reconciler(self):
         client=RECONCILE_CLIENT.read_text();worker=RECONCILE.read_text();unit=RECONCILE_UNIT.read_text()

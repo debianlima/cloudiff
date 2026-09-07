@@ -32,9 +32,9 @@ class ProjectCenteredNavigationTest(unittest.TestCase):
     def test_context_navigation_marks_active_route(self):
         markup=shell._project_navigation("aprovacoes")
         self.assertIn('aria-label="Navegação do projeto"',markup)
-        self.assertIn('href="/cloudiff/portal/?tab=aprovacoes" aria-current="page"',markup)
-        self.assertIn("Construir",markup)
-        self.assertIn("Operar",markup)
+        self.assertIn('href="/cloudiff/portal/?tab=aprovacoes" data-project-context-link aria-current="page"',markup)
+        self.assertIn('class="project-context-primary"',markup)
+        self.assertIn('class="project-context-more"',markup)
 
     def test_u21_context_navigation_is_compact_and_project_aware(self):
         markup=shell._project_navigation("git")

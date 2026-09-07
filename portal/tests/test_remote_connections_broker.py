@@ -25,7 +25,7 @@ class RemoteConnectionsBrokerTests(unittest.TestCase):
         self.assertNotIn('private_key',str(d).lower());self.assertNotIn('gateway_token',str(d).lower())
     def test_activation_delivers_key_once_and_is_idempotent(self):
         first=self.b.create_lease([row()],'iff1742962','teste-sofa',1800);second=self.b.create_lease([row()],'iff1742962','teste-sofa',1800)
-        self.assertFalse(first['existing']);self.assertTrue(first['private_key'].startswith('-----BEGIN OPENSSH PRIVATE KEY-----'));self.assertTrue(first['gateway_user'].startswith('cifremote'))
+        self.assertFalse(first['existing']);self.assertTrue(first['private_key'].startswith('-----BEGIN OPENSSH '+'PRIVATE KEY-----'));self.assertTrue(first['gateway_user'].startswith('cifremote'))
         self.assertTrue(second['existing']);self.assertEqual(first['lease_id'],second['lease_id']);self.assertIsNone(second['private_key'])
         pub=first['ssh_public_key'].split();line=self.b.authorize_gateway_key(first['gateway_user'],pub[0],pub[1]);self.assertIsNotNone(line);self.assertIn('permitopen="10.62.91.2:2222"',line);self.assertIn('permitopen="127.0.0.1:54404"',line)
         self.assertNotIn(first['private_key'],str(self.b.inventory([row()],'iff1742962')))

@@ -59,6 +59,18 @@ def _project_context(slug, framework_hint=''):
             stack_id=str((integration['komodo_stack_id'] if integration and 'komodo_stack_id' in integration.keys() else '') or (integration['stack_id'] if integration and 'stack_id' in integration.keys() else '') or '')
         except Exception: stack_id=''
         runtime=_runtime_from_job(slug); context['runtime']=runtime
+        try:
+            candidate=con.execute('select diff_json,runtime_diff_json from publication_candidates where project_slug=? order by candidate_number desc limit 1',(slug,)).fetchone()
+            if candidate:
+                diff=json.loads(candidate['diff_json'] or '{}');rmeta=json.loads(candidate['runtime_diff_json'] or '{}')
+                if rmeta.get('runtimeKind')=='multiservice':
+                    services=[str(x.get('service') or '') for x in (diff.get('applications') or []) if isinstance(x,dict) and x.get('service')]
+                    context['runtime']={'versions':'Multissserviço · '+(' + '.join(services) if services else 'serviços isolados'),'framework':'Aplicação multissserviço'}
+                    deps=[x for x in (rmeta.get('dependencies') or []) if isinstance(x,dict)]
+                    mongo=next((x for x in deps if x.get('kind')=='mongodb'),None)
+                    if mongo: context['database']='MongoDB · '+str(mongo.get('database') or mongo.get('name') or 'vinculado');context['database_linkable']=False
+                    context['security']='HTTPS ativo · Health validado'
+        except Exception: pass
         audit=_komodo_web_status(slug,stack_id)
         if audit:
             healthy=bool(audit.get('healthy')); state=str(audit.get('state') or ('running' if healthy else 'atenção'))
@@ -93,7 +105,7 @@ def _project_information(context):
     repo=context.get('repo_url') or ''
     database=context.get('database') or ''
     repo_value=(f'<a href="{h(repo)}" target="_blank" rel="noopener">Abrir repositório</a>' if repo else '<span>Nenhum repositório vinculado</span>')
-    if database and database!='Nenhum banco vinculado':
+    if database and database!='Nenhum banco vinculado' and context.get('database_linkable',True):
         studio=f'https://{database}.cloudiff.duckdns.org/project/default'
         database_value=f'<a class="publication-database-link" href="{h(studio)}" target="_blank" rel="noopener" title="Abrir Studio do banco">{h(database)}</a>'
     else:
@@ -141,11 +153,11 @@ def publication_panel(slug, framework_hint=''):
     if job and job.get('status') in ('queued','running','failed'):
         labels={'queued':'Na fila','running':'Em andamento','failed':'Atenção'};progress={'queued':1,'preparing':2,'snapshot':2,'deploying':3,'https':4,'production':4,'completed':5}.get(job.get('step'),1)
         job_html=(f'<div class="publication-job is-{h(job.get("status"))}" data-publication-job="{int(job.get("id") or 0)}"><div class="publication-job-copy"><div><strong>{h(labels.get(job.get("status"),job.get("status") or ""))}</strong><span>{h(job.get("message") or "")}</span></div></div><progress max="5" value="{progress}"></progress></div>')
+    active=next((x for x in rows if int(x.get('is_active') or 0)==1),rows[0] if rows else None)
     if alias:
-        alias_host=alias+'.cloudiff.duckdns.org';alias_html=('<div class="publication-alias is-saved"><div class="publication-alias-view"><div><span>Endereço amigável</span><a href="https://'+h(alias_host)+'/" target="_blank" rel="noopener">'+h(alias_host)+'</a></div><button class="btn light" type="button" data-alias-edit>Editar endereço</button></div><form class="publication-alias-form" hidden method="post" action="/cloudiff/portal/action/publication"><input type="hidden" name="slug" value="'+h(slug)+'"><label><span>Novo endereço</span><div><input name="alias" value="'+h(alias)+'" pattern="[a-z0-9][a-z0-9-]{0,62}"><span>.cloudiff.duckdns.org</span></div></label><div class="publication-alias-actions"><button class="btn" name="op" value="set_alias">Salvar</button><button class="btn light" type="button" data-alias-cancel>Cancelar</button></div></form></div>')
+        alias_host=alias+'.cloudiff.duckdns.org';alias_state=('Ativo na Produção' if active else 'Reservado · aguardando primeira publicação P');alias_html=('<div class="publication-alias is-saved"><div class="publication-alias-view"><div><span>Endereço amigável · '+h(alias_state)+'</span><a href="https://'+h(alias_host)+'/" target="_blank" rel="noopener">'+h(alias_host)+'</a></div><button class="btn light" type="button" data-alias-edit>Editar endereço</button></div><form class="publication-alias-form" hidden method="post" action="/cloudiff/portal/action/publication"><input type="hidden" name="slug" value="'+h(slug)+'"><label><span>Novo endereço</span><div><input name="alias" value="'+h(alias)+'" pattern="[a-z0-9][a-z0-9-]{0,62}"><span>.cloudiff.duckdns.org</span></div></label><div class="publication-alias-actions"><button class="btn" name="op" value="set_alias">Salvar</button><button class="btn light" type="button" data-alias-cancel>Cancelar</button></div></form></div>')
     else:
         alias_html=('<div class="publication-alias"><div><strong>Endereço amigável de Produção</strong><p>Opcional. O alias sempre acompanha a publicação P ativa.</p></div><form method="post" action="/cloudiff/portal/action/publication"><input type="hidden" name="slug" value="'+h(slug)+'"><label><span>Nome</span><div><input name="alias" placeholder="ex.: meu-site" pattern="[a-z0-9][a-z0-9-]{0,62}"><span>.cloudiff.duckdns.org</span></div></label><button class="btn light" name="op" value="set_alias">Salvar endereço</button></form></div>')
-    active=next((x for x in rows if int(x.get('is_active') or 0)==1),rows[0] if rows else None)
     if active:
         stable=active.get('stable_hostname') or f"{int(active.get('public_number') or 0)}.cloudiff.duckdns.org";active_host=(alias+'.cloudiff.duckdns.org') if alias else stable
         production=('<div class="publication-active-card"><div><span>Produção atual</span><a href="https://'+h(active_host)+'/" target="_blank" rel="noopener">'+h(active_host)+'</a></div><span class="pill ok">Online</span></div>')

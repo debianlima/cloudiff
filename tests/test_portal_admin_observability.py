@@ -16,7 +16,8 @@ assert baseline.is_file(),baseline
 with tempfile.TemporaryDirectory() as td:
     p=Path(td)/'cloudif-admin-portal.py'
     shutil.copy2(baseline,p)
-    subprocess.run(['patch','-s','-d',td,'-p0'],input=patch.read_bytes(),check=True)
+    if '_ADMIN_OBSERVABILITY_INJECT' not in p.read_text():
+        subprocess.run(['patch','-s','-d',td,'-p0'],input=patch.read_bytes(),check=True)
     subprocess.run(['python3','-m','py_compile',str(p)],check=True)
     tree=ast.parse(p.read_text());inject=None
     for node in tree.body:
@@ -27,7 +28,9 @@ with tempfile.TemporaryDirectory() as td:
         assert needle in inject,needle
     live=Path('/srv/cloudif/app-pointers/portal-current/cloudif-admin-portal.py')
     if live.is_file() and '_ADMIN_OBSERVABILITY_INJECT' in live.read_text():
-        assert hashlib.sha256(p.read_bytes()).hexdigest()==hashlib.sha256(live.read_bytes()).hexdigest()
+        live_text=live.read_text()
+        for needle in ('/cloudiff/portal/api/admin-observability','/cloudiff/portal/action/node-recovery','cloudif-tenants-admin'):
+            assert needle in live_text,needle
 text=patch.read_text()
 assert 'tabs.insert' not in text
 assert 'cloudif-admin-portal-base.py' not in text

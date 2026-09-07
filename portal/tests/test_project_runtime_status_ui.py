@@ -18,7 +18,7 @@ class ProjectRuntimeStatusUITests(unittest.TestCase):
     def test_project_and_publication_do_not_auto_reload(self):
         self.assertNotIn("setTimeout(function(){location.reload()},2500)",self.pub)
         self.assertNotIn("setTimeout(()=>location.reload(),5000)",self.base)
-        self.assertIn('Checar projeto',self.base)
+        self.assertIn('Checar estado',self.base)
     def test_healthy_local_container_reconciles_stale_komodo_status(self):
         for marker in ('def _cloudif_v132_local_web_health','local_reconciled','local_health','deploy_status = "completed"'):
             self.assertIn(marker,self.agent)

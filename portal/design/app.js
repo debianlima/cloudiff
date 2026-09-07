@@ -15,6 +15,36 @@
   document.querySelectorAll("[data-theme-choice]").forEach(function(button){button.addEventListener("click",function(){applyTheme(button.dataset.themeChoice,true);var menu=button.closest(".theme-menu");if(menu){menu.removeAttribute("open");}});});
   if(themeMedia){var followSystem=function(){if(selectedTheme()==="system"){applyTheme("system",false);}};if(themeMedia.addEventListener){themeMedia.addEventListener("change",followSystem);}else if(themeMedia.addListener){themeMedia.addListener(followSystem);}}
 
+  function projectContext(){
+    var params=new URLSearchParams(window.location.search);
+    var page=document.querySelector('[data-active-project]');
+    var slug=(page&&page.dataset.activeProject)||params.get('project')||'';
+    var name=(page&&page.dataset.activeProjectName)||'';
+    var saved={};
+    try{saved=JSON.parse(localStorage.getItem('cloudif-project-context')||'{}')||{};}catch(error){saved={};}
+    if(slug){
+      if(!name&&saved.slug===slug){name=saved.name||slug;}
+      if(!name){name=slug;}
+      saved={slug:slug,name:name};
+      try{localStorage.setItem('cloudif-project-context',JSON.stringify(saved));}catch(error){}
+    }else if(saved.slug){slug=saved.slug||'';name=saved.name||saved.slug||'';}
+    document.querySelectorAll('[data-project-current-name]').forEach(function(node){node.textContent=name||'Selecionar projeto';});
+    document.querySelectorAll('[data-project-current-slug]').forEach(function(node){node.textContent=slug||'Escolha o contexto de trabalho';});
+    document.querySelectorAll('[data-project-current-link]').forEach(function(link){var u=new URL(link.href,location.origin);if(slug){u.searchParams.set('project',slug);}link.href=u.pathname+u.search;});
+    document.querySelectorAll('[data-project-context-link]').forEach(function(link){var u=new URL(link.href,location.origin);if(slug){u.searchParams.set('project',slug);}else{u.searchParams.delete('project');}link.href=u.pathname+u.search;});
+    document.querySelectorAll('[data-project-select]').forEach(function(link){link.addEventListener('click',function(){var next={slug:link.dataset.projectSlug||'',name:link.dataset.projectName||link.dataset.projectSlug||''};try{localStorage.setItem('cloudif-project-context',JSON.stringify(next));}catch(error){}});});
+  }
+  projectContext();
+
+  function enableProjectFilter(){
+    var input=document.querySelector('[data-project-filter]');if(!input)return;
+    var rows=Array.prototype.slice.call(document.querySelectorAll('.project-row'));
+    var clear=document.querySelector('[data-project-filter-clear]');
+    function apply(){var q=(input.value||'').trim().toLocaleLowerCase('pt-BR');var shown=0;rows.forEach(function(row){var visible=!q||row.textContent.toLocaleLowerCase('pt-BR').indexOf(q)!==-1;row.hidden=!visible;if(visible)shown++;});if(clear){clear.hidden=!q;}input.setAttribute('aria-label','Buscar entre '+rows.length+' projetos; '+shown+' visíveis');}
+    input.addEventListener('input',apply);if(clear){clear.addEventListener('click',function(){input.value='';apply();input.focus();});}apply();
+  }
+  enableProjectFilter();
+
   var nav=document.getElementById("nav");
   var toggle=document.getElementById("toggle");
   if(!nav||!toggle){return;}

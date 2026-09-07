@@ -83,4 +83,21 @@ class MultiserviceRuntimeConfigContractTests(unittest.TestCase):
         self.assertNotIn('runtime-config',gateway)
 
 
+    def test_portal_publication_bridge_preserves_multiservice_runtime(self):
+        root=Path(__file__).resolve().parents[2]
+        publications=(root/'components/control-plane/current-apps/portal-current/cloudif_portal_publications.py').read_text()
+        ui=(root/'components/control-plane/current-apps/portal-current/cloudif_ui_publications.py').read_text()
+        for marker in (
+            'def _multiservice_clients()',
+            'def _ensure_multiservice_preview(',
+            'def _create_multiservice_homologation_candidate(',
+            'def _publish_multiservice_homologated_candidate(',
+            "runtimeKind':'multiservice'",
+            'multiservice-publication-activate',
+        ):
+            self.assertIn(marker,publications)
+        self.assertIn("rmeta.get('runtimeKind')=='multiservice'",ui)
+        self.assertIn('Ativo na Produção',ui)
+
+
 if __name__=='__main__':unittest.main()

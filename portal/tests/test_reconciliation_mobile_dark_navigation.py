@@ -10,16 +10,16 @@ COEXIST=(ROOT/'components/control-plane/srv/cloudif/lib/cloudif_portal_v2_coexis
 
 class ReconciliationMobileDarkNavigationTests(unittest.TestCase):
     def test_project_context_active_state_uses_global_theme_tokens(self):
-        self.assertIn('.project-context-group a[aria-current="page"]{background:var(--iff-wash);color:var(--iff-dark);font-weight:750}',COMPONENTS)
-        self.assertNotIn('.project-context-group a[aria-current="page"]{background:var(--accent-soft);color:var(--accent);font-weight:750}',COMPONENTS)
-        self.assertIn('html[data-theme="dark"] body.project-context-route{background:var(--paper)!important;color:var(--ink)!important}',COMPONENTS)
+        self.assertIn('.project-context-primary a[aria-current="page"]{background:var(--iff-wash);color:var(--iff-dark);font-weight:750}',COMPONENTS)
+        self.assertNotIn('.project-context-group',COMPONENTS)
+        self.assertIn('html[data-theme="dark"] body.project-context-route{background:var(--paper);color:var(--ink)}',COMPONENTS)
         self.assertIn('html[data-theme="dark"] .tab-git .legacy-content',COMPONENTS)
         self.assertIn(':is(.ci-section,.ci-step,.ci-project-card,.ci-modal-card,.ci-choice,.ci-menu summary,.ci-menu-body,.ci-menu-body a,.ci-menu-body button)',COMPONENTS)
-        self.assertIn('background:var(--surface)!important',COMPONENTS)
-        self.assertIn('html[data-theme="dark"] .tab-git .legacy-content .ci-step strong{color:var(--iff-dark)!important}',COMPONENTS)
+        self.assertIn('background:var(--surface);color:var(--ink);border-color:var(--rule)',COMPONENTS)
+        self.assertIn('html[data-theme="dark"] .tab-git .legacy-content .ci-step strong{color:var(--iff-dark)}',COMPONENTS)
         self.assertIn('html[data-theme="dark"] .tab-git .legacy-content code{',COMPONENTS)
         self.assertIn(':is(.ci-pill-ok,.pill.ok,.badge.ok)',COMPONENTS)
-        self.assertIn('background:var(--iff-wash)!important',COMPONENTS)
+        self.assertIn('background:var(--iff-wash);color:var(--iff-dark);border-color:var(--rule)',COMPONENTS)
         self.assertIn(':is(.ci-pill-off,.ci-pill:not(.ci-pill-ok),.pill:not(.ok),.badge:not(.ok))',COMPONENTS)
 
     def test_production_denial_is_adapted_without_changing_http_status(self):
@@ -33,7 +33,7 @@ class ReconciliationMobileDarkNavigationTests(unittest.TestCase):
         doc=transform(legacy,identity,'operacao-producao')
         self.assertIn('class="tab-operacao-producao project-context-route"',doc)
         self.assertIn('aria-label="Navegação do projeto"',doc)
-        self.assertIn('href="/cloudiff/portal/?tab=operacao-producao" aria-current="page">Produção</a>',doc)
+        self.assertIn('href="/cloudiff/portal/?tab=operacao-producao" data-project-context-link aria-current="page">Produção</a>',doc)
         self.assertIn('Projeto não autorizado.',doc)
         self.assertIn('/cloudiff/portal/assets/components.css',doc)
 

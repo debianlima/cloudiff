@@ -58,6 +58,11 @@ def _confirmation_matches(slug, confirmation):
     return normalized.casefold() == expected.casefold()
 
 
+def confirmation_matches(slug, confirmation):
+    """Public preflight used by the HTTP controller before consuming wizard state."""
+    return _confirmation_matches(slug, confirmation)
+
+
 def _job_write(job_id, data):
     JOB_ROOT.mkdir(parents=True, exist_ok=True)
     target = JOB_ROOT / f'{job_id}.json'
@@ -647,7 +652,15 @@ def render(csrf_token, selected='', result=None, allowed_slugs=None):
         if selected_preview.get('already_deleted'):
             preview_html = f'<section class="card"><span class="pill ok">Projeto já excluído</span><p>{h(selected_preview.get("message"))}</p><p class="small">Tenant preservado: <strong>{h(selected_preview.get("tenant_preserved") or "não informado")}</strong></p></section>'
         else:
-            preview_html = f'<pre style="white-space:pre-wrap;overflow:auto;max-height:360px">{h(json.dumps(selected_preview, ensure_ascii=False, indent=2))}</pre>'
+            project = selected_preview.get('project') or {}
+            local_rows = selected_preview.get('local_rows') or {}
+            local_count = sum(int(value or 0) for value in local_rows.values())
+            preview_html = f'''<section class="project-delete-preview">
+  <div class="project-delete-preview__head"><div><span class="project-delete-kicker">Prévia</span><h2>{h(project.get('name') or selected)}</h2><p><code>{h(selected)}</code></p></div><span class="pill bad">Exclusão definitiva</span></div>
+  <dl class="project-delete-impact"><div><dt>Banco / tenant</dt><dd>{h(selected_preview.get('tenant_preserved') or 'Nenhum vinculado')} <small>será preservado</small></dd></div><div><dt>Registros locais</dt><dd>{local_count}</dd></div><div><dt>Jobs vinculados</dt><dd>{len(selected_preview.get('jobs') or [])}</dd></div><div><dt>Repositório / runtime</dt><dd>serão removidos</dd></div></dl>
+  <p class="project-delete-warning">Revise o projeto acima. A aplicação, publicações, repositório e estados operacionais serão removidos; o banco permanece.</p>
+  <details class="project-delete-technical"><summary>Ver detalhes técnicos da prévia</summary><pre>{h(json.dumps(selected_preview, ensure_ascii=False, indent=2))}</pre></details>
+</section>'''
     form_html = ''
     if selected_preview and selected_preview.get('ok') and not selected_preview.get('already_deleted'):
         form_html = f'''<form id="admin-delete-form" method="post" action="/cloudiff/portal/action/admin-delete-project">

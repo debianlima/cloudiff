@@ -29,16 +29,16 @@ class ReleaseFlowWizardUITests(unittest.TestCase):
         self.assertIn('A ativação direta de artefatos dN foi desativada',BASE)
 
     def test_project_card_redirects_to_publications_and_deep_links_requested_view(self):
-        block=BASE[BASE.index('<section class="project-final__section project-final__publication">'):]
-        block=block[:block.index('</section>')+10]
-        self.assertIn('W Preview · H Homologation · P Publication',block)
+        block=BASE[BASE.index('<article class="project-workspace-detail"'):]
+        block=block[:block.index('</article>')+10]
+        self.assertIn('Preview → Homologação → Produção',block)
         self.assertNotIn('data-release-flow-open',block)
         self.assertNotIn('data-publication-environments',block)
         self.assertIn('?tab=publicacao&amp;project={urllib.parse.quote(slug,safe=',block)
         self.assertIn('&amp;open=release',block)
         self.assertIn('&amp;open=variables',block)
-        self.assertIn('Gerenciar publicação</a>',block)
-        self.assertIn('Variáveis por ambiente</a>',block)
+        self.assertIn('>Publicar</a>',block)
+        self.assertIn('>Variáveis</a>',block)
         self.assertNotIn('/publication/base/',block)
 
     def test_publications_page_auto_opens_release_deep_link(self):

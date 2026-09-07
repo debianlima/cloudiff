@@ -88,7 +88,7 @@ _PROJECT_DESCRIPTIONS = {
 _TAB_TITLES = {tab: label for entries in _TAB_GROUPS.values() for tab, label in entries}
 _TAB_TITLES.update({tab: label for entries in _PROJECT_NAV.values() for tab, label in entries})
 _TAB_TITLES["projetos"] = "Projetos"
-_ASSET_VERSION = "20260809-0210"
+_ASSET_VERSION = "20260907-u21"
 
 _MODULE_TO_TAB = {
     "overview": "resumo",
@@ -144,17 +144,29 @@ def _navigation(identity: Identity, active_tab: str, allowed_modules: set[str] |
 
 
 def _project_navigation(active_tab: str) -> str:
-    groups = []
-    for section, entries in _PROJECT_NAV.items():
-        links = []
-        for tab, label in entries:
-            current = ' aria-current="page"' if tab == active_tab else ""
-            links.append(f'<a href="/cloudiff/portal/?tab={escape(tab)}"{current}>{escape(label)}</a>')
-        groups.append(
-            f'<div class="project-context-group"><span>{escape(section)}</span>'
-            f'<div>{"".join(links)}</div></div>'
+    primary_tabs = ("git", "publicacao", "operacao-producao", "aprovacoes")
+    labels = {tab: label for entries in _PROJECT_NAV.values() for tab, label in entries}
+    secondary = [(tab, labels[tab]) for tab in labels if tab not in primary_tabs]
+
+    def link(tab: str, label: str) -> str:
+        current = ' aria-current="page"' if tab == active_tab else ""
+        return (
+            f'<a href="/cloudiff/portal/?tab={escape(tab)}" data-project-context-link{current}>'
+            f'{escape(label)}</a>'
         )
-    return '<nav class="project-context-nav" aria-label="Navegação do projeto">' + "".join(groups) + "</nav>"
+
+    primary = "".join(link(tab, labels[tab]) for tab in primary_tabs if tab in labels)
+    secondary_links = "".join(link(tab, label) for tab, label in secondary)
+    more_open = " open" if any(tab == active_tab for tab, _label in secondary) else ""
+    return (
+        '<nav class="project-context-nav" aria-label="Navegação do projeto">'
+        '<a class="project-context-current" href="/cloudiff/portal/?tab=projetos" data-project-current-link>'
+        '<span>Projeto</span><strong data-project-current-name>Selecionar projeto</strong>'
+        '<small data-project-current-slug>Escolha o contexto de trabalho</small></a>'
+        f'<div class="project-context-primary">{primary}</div>'
+        f'<details class="project-context-more"{more_open}><summary>Mais</summary>'
+        f'<div>{secondary_links}</div></details></nav>'
+    )
 
 
 def _document(
@@ -196,13 +208,14 @@ def _document(
         '<nav class="nav" id="nav" aria-label="Navegação principal">'
         '<div class="nav-brand"><span class="nav-mark">CI</span>'
         '<span><span class="nav-brand-name">CloudIFF</span>'
-        '<span class="nav-brand-sub">Portal acadêmico</span></span></div>'
-        f'<div class="nav-scroll">{_navigation(identity, active_tab, allowed_modules)}</div>'
-        f'<div class="nav-foot">{escape(_FOOTER)}</div></nav>'
+        '<span class="nav-brand-sub">Cloud workspace</span></span></div>'
+        f'<div class="nav-scroll">{_navigation(identity, active_tab, allowed_modules)}</div></nav>'
         '<div class="main"><header class="bar">'
         '<button class="bar-toggle" id="toggle" aria-label="Abrir navegação" aria-expanded="false" aria-controls="nav">☰</button>'
-        '<span class="scope"><span class="scope-dot"></span>Ambiente acadêmico</span>'
-        '<a class="search" href="/cloudiff/portal/?tab=projetos">Buscar em projetos</a>'
+        '<a class="scope project-scope" href="/cloudiff/portal/?tab=projetos" data-project-current-link>'
+        '<span class="scope-dot"></span><span class="project-scope-copy"><small>Projeto</small>'
+        '<strong data-project-current-name>Selecionar projeto</strong></span></a>'
+        '<span class="bar-spacer"></span>'
         '<details class="theme-menu"><summary class="theme-toggle" aria-label="Selecionar tema">'
         '<span aria-hidden="true">◐</span><span>Tema</span></summary>'
         '<div class="theme-picker" role="group" aria-label="Tema da aplicação">'
