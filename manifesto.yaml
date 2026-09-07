@@ -12151,4 +12151,20 @@ entradas:
     produz: evidencia/remote-access-443-relay-u19
     aceite: python3 -m unittest portal.tests.test_remote_connections_443_relay
     status: aceito
-trabalho_compartilhado: {}
+trabalho_compartilhado:
+  projeto: cloudiff
+  caminho: /srv/mcp-workspace/tmp/cloudiff-u21-remodel-20260907
+  unidade: U21
+  descricao: remodelagem do Portal com seletor de projeto, densidade reduzida, temas claro/escuro e correção de exclusão
+  agente: redes-gpt-5.6-sol
+  atualizado_em: '2026-09-07T03:14:33-03:00'
+  previsao_termino: '2026-09-07T07:14:33-03:00'
+  zona_exclusao:
+    - portal/ui/**
+    - portal/design/**
+    - portal/tests/**
+    - components/control-plane/current-apps/portal-current/**
+    - components/control-plane/srv/cloudif/lib/cloudif_admin_project_delete.py
+    - manifesto.yaml
+    - estado.md
+    - skills/cloudiff/SKILL.md
