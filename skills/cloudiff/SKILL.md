@@ -1,6 +1,6 @@
 ---
 name: cloudiff
-versao: 0.1.28
+versao: 0.1.29
 description: Governa, reconcilia, normaliza e evolui a plataforma CloudIFF V1/Python→V2/C++23 preservando interface homologada,
   contratos, segurança, dados, observabilidade e rollback.
 tipo_competencia: projeto
@@ -67,6 +67,11 @@ referencia:
   versao_fixada: '1'
   delta_lido_ate: c317c960ade32d19659f62934a7f05df569f2b42
   estado: reconciliado
+- id: frontend-design
+  fonte: PracticalSwan/agent-skills:frontend-design/SKILL.md
+  versao_fixada: '2.0'
+  delta_lido_ate: 797f15729ca2d6a9756d7ae29409068cb971ebbf
+  estado: reconciliado
 - id: cloud-design-patterns
   fonte: github/awesome-copilot:skills/cloud-design-patterns/SKILL.md
   versao_fixada: git:318066d2213b510e89b500ed0d53506c54093ddc
@@ -110,6 +115,10 @@ A unidade de verdade combina documentação hierárquica, manifesto/contratos, c
 A auditoria inicial encontrou 1.320 arquivos rastreados no Git V1, enquanto documentação gerada anterior registrava 1.157; o V2 operacional existia fora de um checkout Git próprio. A reconciliação deve preservar ambos os deltas antes de regenerar documentação ou normalizar nomes.
 
 ## 2. Decisões e alternativas descartadas
+
+### Direção estética por competência externa
+
+A competência pública `PracticalSwan/frontend-design@2.0` é a referência de direção estética para unidades de interface/redesign. Ela orienta arte, hierarquia, tipografia, composição e distintividade, mas não substitui contratos, frozen surfaces, Playwright, `operational-ui-truth` nem gates funcionais.
 
 ### FrozenPortalInterface — requisito mestre
 

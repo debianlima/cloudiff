@@ -4,7 +4,7 @@ skill_projeto:
   nome: CloudIFF
   tipo_competencia: projeto
   fonte: skills/cloudiff/SKILL.md
-  versao: 0.1.28
+  versao: 0.1.29
   vinculada_por: usuario em 2026-08-24
   protocolo_governanca: PGH 1.2.0
   compoe:
@@ -51,6 +51,11 @@ skill_projeto:
     versao_fixada: '1'
     fonte: debianlima/competencias-catalogo:dominio/operational-ui-truth/SKILL.md
     delta_lido_ate: c317c960ade32d19659f62934a7f05df569f2b42
+    estado_reconciliacao: ATUAL
+  - id: frontend-design
+    versao_fixada: '2.0'
+    fonte: PracticalSwan/agent-skills:frontend-design/SKILL.md
+    delta_lido_ate: 797f15729ca2d6a9756d7ae29409068cb971ebbf
     estado_reconciliacao: ATUAL
   - id: cloud-design-patterns
     versao_fixada: git:318066d2213b510e89b500ed0d53506c54093ddc
@@ -139,6 +144,20 @@ competencias:
   portao: diff estado declarado/coletado; smoke test; rollback integral disponível
   evidencia: CloudIFF opera em três hosts com Docker, systemd, NPM, Forgejo, Komodo, Supabase e PKI
   instalada_em: 2026-08-20
+- id: direcao-estetica
+  nome: Direção estética de frontend
+  skill: frontend-design
+  ativa_em:
+  - interface
+  - frontend
+  - design-visual
+  - ui-ux
+  - redesign
+  fonte: PracticalSwan/agent-skills@797f15729ca2d6a9756d7ae29409068cb971ebbf:frontend-design/SKILL.md
+  melhora: direção de arte contextual, hierarquia visual, tipografia, composição, responsividade e estados completos sem aparência genérica
+  portao: WCAG 2.2 AA; teclado; larguras representativas; verificação renderizada; gates funcionais do Portal
+  evidencia: decisão humana explícita em 2026-09-07 para usar PracticalSwan como competência de direção estética do CloudIFF; upstream v2.0 com hash e7c8e7fd0bde8eb8a7d9f024fe20eeab4b6cde3f612e8d253334b806c09ca1ff
+  instalada_em: 2026-09-07
 - id: navegacao
   nome: Navegação e regressão visual
   skill: playwright

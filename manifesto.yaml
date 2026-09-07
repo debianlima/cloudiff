@@ -1404,7 +1404,7 @@ entradas:
     status: aceito
   - id: 179
     caminho: skills/cloudiff/SKILL.md
-    proposito: 'skill raiz do projeto CloudIFF: reconciliação incremental, migração C/C++ e interface homologada imutável'
+    proposito: 'skill raiz do projeto CloudIFF: reconciliação incremental, migração C/C++, interface homologada e referências de competência'
     tipo: skill-projeto
     consome: [contrato/lexico, contrato/competencias]
     produz: skill/cloudiff
@@ -12151,16 +12151,4 @@ entradas:
     produz: evidencia/remote-access-443-relay-u19
     aceite: python3 -m unittest portal.tests.test_remote_connections_443_relay
     status: aceito
-trabalho_compartilhado:
-  projeto: cloudiff
-  caminho: /srv/mcp-workspace/tmp/cloudiff-practicalswan-20260907
-  unidade: U20
-  descricao: vincular PracticalSwan/frontend-design@2.0 como referencia de direcao estetica, sem alterar a UI nesta unidade
-  agente: redes-gpt-5.6-sol
-  atualizado_em: '2026-09-07T03:02:51-03:00'
-  previsao_termino: '2026-09-07T04:32:51-03:00'
-  zona_exclusao:
-    - manifesto.yaml
-    - competencias.yaml
-    - estado.md
-    - skills/cloudiff/SKILL.md
+trabalho_compartilhado: {}
