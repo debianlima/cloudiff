@@ -14,7 +14,14 @@ class ProjectDeleteWizardRequiredTests(unittest.TestCase):
   route=self.base[self.base.index('def _admin_project_delete_post'):self.base.index('Portal.do_GET=_admin_project_delete_get')]
   self.assertNotIn('_admin_project_delete.execute(',route)
   self.assertIn('_admin_project_delete.start_job(',route)
+  self.assertIn('_admin_project_delete.confirmation_matches(',route)
+  self.assertLess(route.index('_admin_project_delete.confirmation_matches('),route.index('_admin_project_delete.consume_wizard_token('))
   self.assertIn('wizard_required',route)
+ def test_delete_controller_owns_status_endpoint(self):
+  block=self.base[self.base.index('def _admin_project_delete_get'):self.base.index('Portal.do_GET=_admin_project_delete_get')]
+  self.assertIn('admin-delete-project-status',block)
+  self.assertIn('_admin_project_delete.can_read_job(',block)
+
  def test_legacy_delete_opens_wizard(self):
   self.assertIn('tab=admin-excluir-projeto&amp;slug=',self.legacy)
   self.assertNotIn('name="op" value="delete_git_komodo"',self.legacy)

@@ -159,6 +159,23 @@ class DefinitiveProjectManagementRendererTest(unittest.TestCase):
         self.assertIn('class="project-final__grid"',block)
         self.assertIn('grid-template-columns:repeat(2,minmax(0,1fr))',block)
 
+    def test_u21_projects_use_selector_and_one_active_workspace(self):
+        block=self.source[self.source.rfind('# CloudIF definitive project management renderer BEGIN'):]
+        self.assertIn("def _pm197_render(user,selected='')",block)
+        self.assertIn('class="project-workspace"',block)
+        self.assertIn('class="project-index"',block)
+        self.assertIn('data-project-filter',block)
+        self.assertIn('class="project-row',block)
+        self.assertIn('data-active-project=',block)
+        self.assertIn('class="project-workspace-detail"',block)
+        self.assertNotIn('<details class="project-final"',block)
+        self.assertNotIn('class="project-owner-final"',block)
+
+    def test_u21_project_query_selects_server_rendered_detail(self):
+        block=self.source[self.source.rfind('# CloudIF definitive project management renderer BEGIN'):]
+        self.assertIn("selected=(query.get('project') or [''])[0].strip()",block)
+        self.assertIn('_pm197_render(user,selected=selected)',block)
+
     def test_final_renderer_keeps_project_actions(self):
         block=self.source[self.source.rfind('# CloudIF definitive project management renderer BEGIN'):]
         for label in ('Abrir Studio','Abrir repositório','Abrir terminal','Checar projeto','Gerenciar permissões'):

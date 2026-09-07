@@ -36,6 +36,21 @@ class ProjectCenteredNavigationTest(unittest.TestCase):
         self.assertIn("Construir",markup)
         self.assertIn("Operar",markup)
 
+    def test_u21_context_navigation_is_compact_and_project_aware(self):
+        markup=shell._project_navigation("git")
+        self.assertIn('class="project-context-primary"',markup)
+        self.assertIn('data-project-context-link',markup)
+        self.assertIn('data-project-current-name',markup)
+        self.assertIn('Selecionar projeto',markup)
+        self.assertNotIn('class="project-context-group"',markup)
+
+    def test_u21_shell_uses_cloud_workspace_language(self):
+        doc=shell._document(self.identity,"projetos","Projetos","<p>ok</p>")
+        self.assertIn('data-project-current-name',doc)
+        self.assertIn('Cloud workspace',doc)
+        self.assertNotIn('Portal acadêmico',doc)
+        self.assertNotIn('Ambiente acadêmico',doc)
+
     def test_frozen_publication_does_not_receive_context_navigation(self):
         doc=shell.render_legacy(self.identity,"publicacao","Publicação","<p>conteúdo</p>","","")
         self.assertNotIn('aria-label="Navegação do projeto"',doc)

@@ -31,8 +31,8 @@ def row(aid,status):
 class ApprovalHistoryDialogThemeTests(unittest.TestCase):
     def test_context_active_link_uses_canonical_theme_tokens(self):
         css=COMPONENTS.read_text()
-        self.assertIn('.project-context-group a[aria-current="page"]{background:var(--accent-soft);color:var(--accent);font-weight:750}',css)
-        self.assertIn('.tab-aprovacoes .project-context-group a[aria-current="page"]{background:var(--iff-wash);color:var(--iff-dark);font-weight:750}',css)
+        self.assertIn('.project-context-primary a[aria-current="page"]{background:var(--iff-wash);color:var(--iff-dark);font-weight:750}',css)
+        self.assertNotIn('.project-context-group',css)
         self.assertIn('.approval-history-dialog::backdrop{background:var(--overlay)}',css)
         self.assertIn('background:var(--surface);color:var(--ink)',css)
 
@@ -56,6 +56,13 @@ class ApprovalHistoryDialogThemeTests(unittest.TestCase):
         main=html[:html.index('<dialog id="approval-history-dialog"')]
         self.assertNotIn('apr_old_a',main)
         self.assertNotIn('apr_old_b',main)
+
+
+    def test_u21_canonical_css_uses_no_force_overrides(self):
+        css=Path('portal/design/components.css').read_text()
+        self.assertNotIn('!important',css)
+        self.assertIn('.project-workspace',css)
+        self.assertIn('.project-index',css)
 
 
 if __name__=='__main__':unittest.main()
