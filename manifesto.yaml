@@ -12157,9 +12157,9 @@ trabalho_compartilhado:
   unidade: U21
   descricao: remodelagem do Portal com seletor de projeto, densidade reduzida, temas claro/escuro e correção de exclusão
   agente: redes-gpt-5.6-sol
-  atualizado_em: '2026-09-07T09:56:43-03:00'
-  previsao_termino: '2026-09-07T12:56:44-03:00'
-  prorrogado_em: '2026-09-07T09:56:43-03:00'
+  atualizado_em: '2026-09-07T12:54:49-03:00'
+  previsao_termino: '2026-09-07T15:54:49-03:00'
+  prorrogado_em: '2026-09-07T12:54:49-03:00'
   zona_exclusao:
     - portal/ui/**
     - portal/design/**
