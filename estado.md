@@ -34,6 +34,18 @@
 - Registro adicionado ao catálogo `competencias-catalogo` e vinculado ao CloudIFF como `referencia`, não como cópia local.
 - Nenhum arquivo de UI, CSS ou runtime alterado nesta unidade.
 
+## Evidências U21
+- Remodelagem canônica do Portal consolidada no workspace ativo com seletor compacto de projeto, um único projeto ativo em detalhe, menor densidade visual, temas claro/escuro e correção do fluxo de exclusão.
+- Suíte Portal: **1070/1070 PASS**; `tests/test_portal_admin_observability.py` PASS; `scripts/validate-repository.py` sem erros; `node --jitless --check portal/design/app.js` PASS.
+- Arquitetura de agentes preservada: os agentes CloudIFF v2 permanecem binários C/C++; nenhum runtime Python foi promovido como substituto.
+- Release U21 permanece preparado e não promovido; produção continuou no release anterior durante todo o bloqueio de rede.
+- Netmaker `pgh-p2p` foi reconciliado após testes de failover: `mikrotik-work` voltou a anunciar `172.16.0.0/24`, egress voltou ao PELEGO original e nenhum failover experimental permanece ativo.
+- Evidência T-052 confirmou dois domínios L2 distintos usando `172.16.0.0/24`: o DIR-842 observado pelos PCs não substituiu o pfSense do domínio R-REDES. O caminho correto ao pfSense passa por R-REDES.
+- A overlay legada `10.20.0.0/24` foi aposentada em 04/09/2026 em favor do Netmaker; testes efêmeros dos recoveries antigos `wg0`/`wg-pgh` não receberam handshake e foram removidos sem persistência.
+- Bloqueio operacional atual: **`BLOCKED_CAMPUS_EDGE`**. `pelego-ad` e `mikrotik-work` perderam conectividade no mesmo edge do campus por volta de 13:00 UTC de 07/09/2026; o primeiro salto legítimo ao pfSense ainda não está recuperado.
+- Investigação do hypervisor pfSense continua historicamente bloqueada: guest KVM/QEMU UUID `ae1d9198-4e9a-4fd5-8035-23a662db60cf`, MAC `BC:24:11:D3:4C:5E`, nó/cluster Proxmox ainda não inventariado; T-028 exige acesso read-only autorizado ao DGS-1250 ou fonte de inventário/DNS equivalente.
+- Gate de produção permanece fechado até provar `R-REDES -> pfSense real -> SSH legítimo`; somente depois executar Hospedagem, swap do release imutável U21 e smoke pós-promoção.
+
 ## Pendências fora do escopo
 - U14: drawer vazio de **Gerenciar permissões** do Teste Sofá permanece separado.
 - P2 do Teste Sofá continua dependente de duas aprovações humanas distintas admin/professor.
