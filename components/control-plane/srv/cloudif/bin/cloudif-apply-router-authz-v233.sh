@@ -69,7 +69,7 @@ authz_locations = '''
     }}
 
     location ^~ /outpost.goauthentik.io/ {{
-        proxy_pass http://10.62.91.2:9000/outpost.goauthentik.io/;
+        proxy_pass http://10.250.0.10:9000/outpost.goauthentik.io/;
         proxy_http_version 1.1;
 
         proxy_set_header Host $host;

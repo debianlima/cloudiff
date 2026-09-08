@@ -11,7 +11,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 DOMAIN = os.environ.get("CLOUDIF_DOMAIN", "cloudiff.duckdns.org").lower()
-OUTPOST_URL = os.environ.get("CLOUDIF_AUTHENTIK_OUTPOST", "http://10.62.91.2:9000/outpost.goauthentik.io/auth/nginx")
+OUTPOST_URL = os.environ.get("CLOUDIF_AUTHENTIK_OUTPOST", "http://10.250.0.10:9000/outpost.goauthentik.io/auth/nginx")
 LISTEN_HOST = os.environ.get("CLOUDIF_AUTHZ_LISTEN_HOST", "10.62.92.7")
 LISTEN_PORT = int(os.environ.get("CLOUDIF_AUTHZ_LISTEN_PORT", "18092"))
 
