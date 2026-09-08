@@ -43,7 +43,7 @@ portal_auth = r'''
     # CloudIF portal-auth v1 BEGIN
     location = /cloudiff/portal-auth {
         internal;
-        proxy_pass http://10.250.0.10:9000/outpost.goauthentik.io/auth/nginx;
+        proxy_pass http://10.62.91.2:9000/outpost.goauthentik.io/auth/nginx;
         proxy_pass_request_body off;
         proxy_set_header Content-Length "";
 
