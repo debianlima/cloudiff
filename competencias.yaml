@@ -43,9 +43,9 @@ skill_projeto:
     delta_lido_ate: c317c960ade32d19659f62934a7f05df569f2b42
     estado_reconciliacao: ATUAL
   - id: network-ssh-operations
-    versao_fixada: '1'
+    versao_fixada: '4'
     fonte: debianlima/competencias-catalogo:dominio/network-ssh-operations/SKILL.md
-    delta_lido_ate: c317c960ade32d19659f62934a7f05df569f2b42
+    delta_lido_ate: 1eba0b90647318ff2942ae45ba3c735e3f59d5de
     estado_reconciliacao: ATUAL
   - id: operational-ui-truth
     versao_fixada: '1'
