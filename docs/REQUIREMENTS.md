@@ -174,6 +174,26 @@ Cada módulo tem exatamente quatro arquivos:
 Regra de dependência: `modules/ → ui/ → design/` e `modules/ → core/`. Um módulo
 nunca importa outro módulo.
 
+### 4.1 Requisito R-MOD-1 — modularidade obrigatória
+
+Toda funcionalidade nova ou refatorada deve ser distribuída em módulos coesos por
+responsabilidade. Arquivos orquestradores devem permanecer finos: coordenam fluxo,
+imports e contratos, mas não acumulam simultaneamente regra de negócio, acesso a
+dados, parsing/renderização e integração externa.
+
+Regras obrigatórias para esta base e para as próximas unidades do CloudIFF:
+
+- uma responsabilidade principal por módulo/arquivo;
+- feature nova nasce em módulo próprio quando não pertence claramente a um módulo existente;
+- lógica reutilizável vai para helper compartilhado pequeno, em vez de ser duplicada;
+- adapters/orquestradores importam módulos e preservam compatibilidade, em vez de crescer indefinidamente;
+- ao tocar arquivo legado grande, preferir extrair a responsabilidade alterada para módulo novo antes de acrescentar outra camada de lógica;
+- exceção à modularização exige justificativa técnica registrada no `estado.md` e teste que preserve o contrato;
+- C++ segue a mesma regra: biblioteca/componente nativo por responsabilidade, interface explícita e fallback/rollback quando houver migração de Python.
+
+O gate de arquitetura deve reprovar regressões que removam este requisito ou voltem
+a concentrar uma feature nova em arquivo monolítico sem justificativa explícita.
+
 ---
 
 ## 5. Critérios de aceite por módulo

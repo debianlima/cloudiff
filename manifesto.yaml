@@ -12152,13 +12152,48 @@ entradas:
     aceite: python3 -m unittest portal.tests.test_remote_connections_443_relay
     status: aceito
 
+  - id: 1522
+    caminho: portal/core/publication_summary.py
+    proposito: "modulo coeso da visao resumida e gerenciador individual de Publicacoes, separado do adaptador legacy"
+    tipo: interface
+    consome: [evidencia/v1-file-0923, evidencia/v1-file-1113]
+    produz: evidencia/publication-summary-modular-a9
+    aceite: python3 -m unittest portal.tests.test_publication_management_ui
+    status: aceito
+
+  - id: 1523
+    caminho: portal/core/html_fragments.py
+    proposito: "helpers coesos para extracao balanceada de fragmentos HTML usados pelos adapters legacy"
+    tipo: interface
+    consome: [evidencia/v1-file-0923]
+    produz: evidencia/html-fragments-modular-a9
+    aceite: python3 -m unittest portal.tests.test_publication_management_ui portal.tests.test_grouped_resources
+    status: aceito
+  - id: 1524
+    caminho: portal/core/resource_ownership.py
+    proposito: "leitura coesa e compatível entre schemas de ownership de projetos e tenants, separada do adapter de interface"
+    tipo: interface
+    consome: [evidencia/v1-file-0923]
+    produz: evidencia/resource-ownership-modular-a9
+    aceite: python3 -m unittest portal.tests.test_grouped_resources
+    status: aceito
+
+  - id: 1525
+    caminho: portal/design/publications.css
+    proposito: "stylesheet modular exclusivo da listagem e gerenciamento de Publicacoes"
+    tipo: interface
+    consome: [evidencia/v1-file-0929, evidencia/publication-summary-modular-a9]
+    produz: evidencia/publication-css-modular-a9
+    aceite: python3 -m unittest portal.tests.test_publication_management_ui
+    status: aceito
+
 trabalho_compartilhado:
   projeto: cloudiff
   caminho: /srv/mcp-workspace/cloudiff-a9
   unidade: CLOUDIFF-A9
   descricao: navegacao continua da UI, reproducao/correcao UX e benchmark seletivo de hot paths antes de qualquer migracao C++
   agente: chat:6aa17fc3-93ec-83e9-8d70-75ee0cc56e36
-  atualizado_em: '2026-09-09T22:02:29Z'
+  atualizado_em: '2026-09-09T22:36:36Z'
   previsao_termino: '2026-09-10T00:48:00Z'
   zona_exclusao:
     - manifesto.yaml
@@ -12168,7 +12203,17 @@ trabalho_compartilhado:
     - portal/templates/**
     - portal/static/**
     - portal/tests/**
+    - portal/core/legacy_shell.py
+    - portal/core/resource_ownership.py
+    - portal/core/html_fragments.py
+    - portal/core/publication_summary.py
     - components/control-plane/current-apps/portal-current/cloudif-admin-portal-base.py
     - components/control-plane/srv/cloudif/lib/cloudif_git_komodo_module.py
+    - components/control-plane/srv/cloudif/lib/cloudif_portal_v2_coexist.py
+    - docs/REQUIREMENTS.md
+    - docs/ARCHITECTURE.md
+    - skills/cloudiff/SKILL.md
+    - competencias.yaml
+    - tests/test_cloudiff_project_skill.py
     - deploy/a10-release-gate/rollback.sh
     - deploy/a10-release-gate/preflight-target.sh

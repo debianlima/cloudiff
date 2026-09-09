@@ -88,7 +88,7 @@ _PROJECT_DESCRIPTIONS = {
 _TAB_TITLES = {tab: label for entries in _TAB_GROUPS.values() for tab, label in entries}
 _TAB_TITLES.update({tab: label for entries in _PROJECT_NAV.values() for tab, label in entries})
 _TAB_TITLES["projetos"] = "Projetos"
-_ASSET_VERSION = "20260907-u21"
+_ASSET_VERSION = "20260909-a9p1"
 
 _MODULE_TO_TAB = {
     "overview": "resumo",
@@ -178,6 +178,7 @@ def _document(
     extra_head: str = "",
     tail: str = "",
     allowed_modules: set[str] | None = None,
+    description_override: str | None = None,
 ) -> str:
     initials = escape((identity.username[:2] or "u").upper())
     friendly_group, canonical_group = _primary_group(identity)
@@ -185,12 +186,18 @@ def _document(
     group_id = escape(canonical_group)
     contextual = active_tab in _PROJECT_TABS
     body_class = f'tab-{escape(active_tab)}' + (' project-context-route' if contextual else '')
+    description_text = _PROJECT_DESCRIPTIONS.get(active_tab, "") if description_override is None else description_override
     description = (
-        f'<p class="page-description">{escape(_PROJECT_DESCRIPTIONS.get(active_tab, ""))}</p>'
-        if contextual
+        f'<p class="page-description">{escape(description_text)}</p>'
+        if contextual and description_text
         else ""
     )
     project_nav = _project_navigation(active_tab) if contextual and active_tab != "publicacao" else ""
+    feature_styles = (
+        f'<link rel="stylesheet" href="/cloudiff/portal/assets/publications.css?v={_ASSET_VERSION}">'
+        if active_tab == "publicacao"
+        else ""
+    )
     return (
         '<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">'
         '<meta name="viewport" content="width=device-width,initial-scale=1">'
@@ -203,6 +210,7 @@ def _document(
         f'<link rel="stylesheet" href="/cloudiff/portal/assets/tokens.css?v={_ASSET_VERSION}">'
         f'<link rel="stylesheet" href="/cloudiff/portal/assets/base.css?v={_ASSET_VERSION}">'
         f'<link rel="stylesheet" href="/cloudiff/portal/assets/components.css?v={_ASSET_VERSION}">'
+        f'{feature_styles}'
         f'<script src="/cloudiff/portal/assets/app.js?v={_ASSET_VERSION}" defer></script>'
         f'</head><body class="{body_class}"><a class="skip-link" href="#conteudo-principal">Ir para o conteúdo</a><div class="app">'
         '<nav class="nav" id="nav" aria-label="Navegação principal">'
@@ -249,8 +257,19 @@ def render_legacy(
     body: str,
     legacy_head: str,
     legacy_scripts: str,
+    *,
+    page_title_override: str | None = None,
+    description_override: str | None = None,
 ) -> str:
-    page_title = _TAB_TITLES.get(active_tab, title)
+    page_title = page_title_override or _TAB_TITLES.get(active_tab, title)
     contextual = " project-context-content" if active_tab in _PROJECT_TABS and active_tab != "publicacao" else ""
     wrapped = f'<section class="legacy-content{contextual}" data-legacy-tab="{escape(active_tab)}">{body}</section>'
-    return _document(identity, active_tab, page_title, wrapped, extra_head=legacy_head, tail=legacy_scripts)
+    return _document(
+        identity,
+        active_tab,
+        page_title,
+        wrapped,
+        extra_head=legacy_head,
+        tail=legacy_scripts,
+        description_override=description_override,
+    )

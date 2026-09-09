@@ -71,17 +71,104 @@ class PublicationManagementUITest(unittest.TestCase):
         self.assertIn('Segurança',markup);self.assertIn('HTTPS ativo',markup)
         self.assertIn('Repositório Forge',markup);self.assertIn('https://forge.example/cloudif/demo',markup)
 
-    def test_general_cleaner_matches_individual_structure(self):
+    def test_publication_summary_stays_in_dedicated_module(self):
+        root=Path(__file__).resolve().parents[2]
+        publication_module=root/'portal/core/publication_summary.py'
+        fragments_module=root/'portal/core/html_fragments.py'
+        ownership_module=root/'portal/core/resource_ownership.py'
+        legacy=(root/'portal/core/legacy_shell.py').read_text()
+        manifest=(root/'manifesto.yaml').read_text()
+        self.assertTrue(publication_module.is_file())
+        self.assertTrue(fragments_module.is_file())
+        self.assertTrue(ownership_module.is_file())
+        self.assertIn(
+            'from portal.core.publication_summary import clean_general_publication_body, individual_publication_body',
+            legacy,
+        )
+        self.assertIn('from portal.core.html_fragments import article_spans as _card_spans',legacy)
+        self.assertIn('from portal.core.resource_ownership import load_resource_ownership',legacy)
+        self.assertNotIn('publication-summary-card',legacy)
+        self.assertEqual(
+            legacy.count('from portal.core.publication_summary import clean_general_publication_body, individual_publication_body'),
+            1,
+        )
+        for path in (
+            'portal/core/publication_summary.py',
+            'portal/core/html_fragments.py',
+            'portal/core/resource_ownership.py',
+        ):
+            self.assertIn(f'caminho: {path}',manifest)
+
+    def test_general_publication_page_is_summary_before_management(self):
         from portal.core.legacy_shell import clean_general_publication_body
-        body='<section><div class="page-hero">Meus Projetos Publicação</div><article class="publication-project card"><div class="publication-head"><h2>Demo</h2><code>demo</code></div><div class="publication-grid">Preview Produção</div><div class="publication-flow">Detecção Plano Build Rollback</div><div class="cm-resource"><div class="publication-information">Framework Banco vinculado Segurança Repositório Forge</div></div></article></section>'
+        body=(
+            '<section><div class="page-hero">Meus Projetos Publicação</div>'
+            '<article class="publication-project card"><div class="publication-head"><h2>Demo</h2><code>demo</code></div>'
+            '<div class="publication-grid">Preview Produção</div><div class="publication-flow">Detecção Plano Build Rollback</div>'
+            '<div class="cm-resource publication-manager-resource">'
+            '<div class="publication-information">Framework Banco vinculado Segurança Repositório Forge</div>'
+            '<div class="publication-alias"><form action="/cloudiff/portal/action/publication"><input name="slug" value="demo"><button>Salvar endereço</button></form></div>'
+            '<div class="publication-active-card"><div><span>Site publicado</span><a href="https://demo.cloudiff.duckdns.org/">demo.cloudiff.duckdns.org</a></div><span class="pill ok">d4 ativa</span></div>'
+            '<div class="publication-versions"><button>Ativar esta versão</button></div>'
+            '</div></article></section>'
+        )
         out=clean_general_publication_body(body)
-        self.assertIn('publication-manager',out)
-        self.assertIn('Framework Banco vinculado Segurança Repositório Forge',out)
-        self.assertNotIn('Meus Projetos Publicação',out)
+        self.assertIn('publication-summary-card',out)
+        self.assertIn('Demo',out)
+        self.assertIn('demo.cloudiff.duckdns.org',out)
+        self.assertIn('d4 ativa',out)
+        self.assertIn('Gerenciar publicação',out)
+        self.assertIn('tab=publicacao&amp;project=demo',out)
+        self.assertNotIn('/action/publication',out)
+        self.assertNotIn('Salvar endereço',out)
+        self.assertNotIn('Ativar esta versão',out)
+        self.assertNotIn('Framework Banco vinculado Segurança Repositório Forge',out)
         self.assertNotIn('Preview Produção',out)
         self.assertNotIn('Detecção Plano Build Rollback',out)
 
 
+
+    def test_publication_landing_and_manager_have_distinct_page_context(self):
+        from unittest.mock import patch
+        from portal.core.auth import Identity
+        from portal.core.legacy_shell import transform
+        identity=Identity('alice','alice@example.invalid',frozenset({'CloudIF-Tenants-Admin'}))
+        markup=(
+            '<html><head><title>Publicação</title></head><body><main id="conteudo-principal">'
+            '<section class="publication-shell"><article class="publication-project card">'
+            '<div class="publication-head"><h2>Demo</h2><code>demo</code></div>'
+            '<div class="cm-resource"><form><input name="slug" value="demo"></form></div>'
+            '</article></section></main></body></html>'
+        )
+        with patch('portal.core.legacy_shell._resource_ownership',return_value=({'demo':'alice'},{})):
+            landing=transform(markup,identity,'publicacao')
+            manager=transform(markup,identity,'publicacao',selected_project='demo')
+        self.assertIn('<h1 class="page-title">Publicações</h1>',landing)
+        self.assertIn('Escolha uma publicação para consultar o resumo ou abrir o gerenciamento.',landing)
+        self.assertIn('<h1 class="page-title">Publicação</h1>',manager)
+        self.assertIn('Versões publicadas, endereço ativo e ativação do site.',manager)
+
+    def test_publication_landing_logic_is_kept_in_dedicated_modules(self):
+        root=Path(__file__).resolve().parents[2]
+        legacy=(root/'portal/core/legacy_shell.py').read_text()
+        summary=(root/'portal/core/publication_summary.py').read_text()
+        ownership=(root/'portal/core/resource_ownership.py').read_text()
+        fragments=(root/'portal/core/html_fragments.py').read_text()
+        self.assertIn('from portal.core.publication_summary import clean_general_publication_body, individual_publication_body',legacy)
+        self.assertNotIn('def clean_general_publication_body(',legacy)
+        self.assertNotIn('def individual_publication_body(',legacy)
+        self.assertIn('def clean_general_publication_body(',summary)
+        self.assertIn('def individual_publication_body(',summary)
+        self.assertIn('def load_resource_ownership(',ownership)
+        self.assertIn('def article_spans(',fragments)
+        self.assertIn('def balanced_element_by_class(',fragments)
+
+    def test_publication_css_module_is_exposed_by_v2_asset_allowlist(self):
+        root=Path(__file__).resolve().parents[2]
+        coexist=(root/'components/control-plane/srv/cloudif/lib/cloudif_portal_v2_coexist.py').read_text()
+        shell=(root/'portal/ui/shell.py').read_text()
+        self.assertIn('"publications.css"',coexist)
+        self.assertIn('/cloudiff/portal/assets/publications.css',shell)
 
     def test_unlinked_database_remains_plain_text(self):
         context={'framework':'Django','database':'Nenhum banco vinculado','security':'Aguardando publicação','repo_url':''}

@@ -1,6 +1,6 @@
 ---
 name: cloudiff
-versao: 0.1.35
+versao: 0.1.36
 description: Governa, reconcilia, normaliza e evolui a plataforma CloudIFF V1/Python→V2/C++23 preservando interface homologada,
   contratos, segurança, dados, observabilidade e rollback.
 tipo_competencia: projeto
@@ -133,6 +133,13 @@ Evidência canônica: `portal/FROZEN_SURFACES.md`, `portal/tests/test_frozen_sur
 A reconciliação é aditiva antes de ser redutiva. V1 fornece baseline funcional/visual e rollback; V2 fornece a direção tecnológica. O inventário inicial provou zero colisões de caminho, permitindo união aditiva antes da normalização sem sobrescrever V1.
 
 **Descartado:** big-bang ou substituição V1→V2 em massa.
+
+
+### ModularidadeObrigatoria — feature nova não cresce monólito legado
+
+Toda unidade CloudIFF deve preferir módulos coesos e interfaces explícitas. Arquivos de entrada/orquestração coordenam fluxo e compatibilidade; não devem acumular simultaneamente parsing/renderização, persistência, regra de negócio e integração externa. Ao tocar um arquivo legado grande, extrair a responsabilidade alterada para módulo próprio quando tecnicamente possível. Helper compartilhado pequeno substitui duplicação. Exceção exige justificativa registrada no `estado.md` e teste de contrato. A mesma regra vale para C++: migrar Python para um único arquivo nativo grande não satisfaz modularidade.
+
+**Descartado:** continuar anexando features independentes a arquivos monolíticos porque “já funcionam”. Motivo: aumenta conflito entre agentes, dificulta revisão, isolamento de falhas, testes e migração seletiva.
 
 ### C/C++ é troca de implementação, não de contrato
 
@@ -361,3 +368,5 @@ Em A10, o Portal vivo executava `/srv/cloudif/app-releases/portal/hardness-missi
 A10 confirmou o contrato oficial `config/webdev-workspace.json`: Selenium Chrome/noVNC em Forja, workspace read-only e link fixo `__cloudiff_webdev`. Hospedagem não tinha rota para Forja e o perfil WireGuard recebia 403/não alcançava `10.62.91.2:17900`, coerente com a pendência NAT/allowlist já registrada. Regra: existência do container/browser não equivale a capacidade de validação; o gate visual exige origem permitida + rota até o WebDriver/noVNC. Não ampliar firewall/allowlist apenas para fazer o teste passar.
 ### L057 — candidato do Portal só é válido quando app, lib e pacote v2 vêm do mesmo source set
 Em A10-RELEASE-GATE, um preview parcial foi provado enganoso porque `cloudif_portal_v2_coexist.py` fixa `LIB=/srv/cloudif/lib` e carrega `portal/design` e `portal/ui` desse caminho, enquanto o executável vem de `/srv/cloudif/app-pointers/portal-current`. Assim, trocar apenas o app release pode executar código novo com bridge/assets antigos e produzir sintomas que não pertencem ao candidato versionado. Regra: inventariar e homologar `portal-current`, o overlay `/srv/cloudif/lib` e `/srv/cloudif/lib/portal` como um único source set; pre-state/rollback precisam cobrir os três planos. Se a arquitetura live não oferecer troca atômica coerente dos três, a promoção fica bloqueada até existir mecanismo revisado — nunca “compensar” com cópia parcial durante o cutover. Gate: Chrome 150 aprovou o candidato somente após mount namespace privado com os três payloads do mesmo working tree; bundle `deploy/a10-release-gate/build-candidate.sh` preserva esse conjunto e marca `promotion_authorized=false` até preflight live.
+### L058 — modularidade é requisito de evolução, não preferência estética
+Em 2026-09-09, durante CLOUDIFF-A9, a revisão humana determinou que funcionalidades novas não devem continuar crescendo arquivos monolíticos porque isso confunde agentes, aumenta colisões de edição e dificulta manutenção. A unidade aplicou a regra imediatamente ao ajuste de Publicações: parsing de fragmentos HTML foi isolado em `portal/core/html_fragments.py`, ownership em `portal/core/resource_ownership.py` e resumo/gerenciamento em `portal/core/publication_summary.py`, deixando `legacy_shell.py` como adaptador/orquestrador. Regra: nova responsabilidade nasce em módulo coeso; arquivo legado grande é preferencialmente reduzido ao ser tocado; wrapper de compatibilidade pode permanecer fino. C++ segue a mesma disciplina e só é acionado por hot path medido.

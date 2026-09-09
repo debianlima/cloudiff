@@ -9,7 +9,8 @@
 - Forgejo SSH usa destino interno direto `10.62.91.2:2222` pelo gateway.
 - PostgreSQL/Supabase usa conector reverso da Hospedagem pela própria 443; o forward do tenant existe apenas enquanto há lease ativa e fica em loopback no proxy.
 - Faro permanece fora do caminho e não foi modificado.
-- A skill de projeto vigente é `cloudiff@0.1.35`.
+- A skill de projeto vigente é `cloudiff@0.1.36`.
+- Decisão humana de 09/09/2026: novas funcionalidades e refatorações do CloudIFF devem ser modulares por responsabilidade; adapters/entrypoints apenas orquestram e lógica específica vai para módulo coeso próprio, com gate que impeça regressão monolítica.
 - `PracticalSwan/frontend-design@2.0` é a competência de direção estética para futuras unidades de interface/redesign; não autoriza por si só alterar frozen surfaces.
 
 ## Decisões superadas
@@ -153,3 +154,23 @@
 - O gate `tests/test_cloudiff_project_skill.py` continha drift histórico: hardcodes de `cloudiff@0.1.5`, método `@14`, 13 referências fixas e comparação do working tree atual com hashes do snapshot v1→v2. A implementação dinâmica histórica de `839c9e8` foi restaurada e generalizada: versão/referências derivam do frontmatter, o snapshot preserva sua integridade histórica e `FROZEN_SURFACES.md` continua validando as quatro superfícies congeladas atuais. Gate final: `CLOUDIFF_PROJECT_SKILL=PASS version=0.1.35 compoe=2 referencia=14 anti_cycle=PASS`.
 - Skill reconciliada para `cloudiff@0.1.35` com L057: candidato do Portal só é válido quando app, lib e pacote v2 vêm do mesmo source set. `competencias.yaml` acompanha a mesma versão.
 - Produção não foi promovida. Próximo gate obrigatório: recuperar autenticação SSH legítima no pfSense e Hospedagem; executar `preflight-target.sh` no alvo; somente então revisar mecanismo de cutover coerente e autorização antes de qualquer mudança produtiva. Reserva `A10-RELEASE-GATE` encerrada ao final desta preparação.
+
+## CLOUDIFF-A9 — Publicações: visão resumida antes do gerenciamento (2026-09-09)
+
+- Autorização humana explícita no chat atual para ajustar a superfície **Publicações**, preservando a Visão geral como está.
+- Fluxo novo no candidato isolado: `?tab=publicacao` mostra somente resumo por publicação (projeto, estado, endereço, versão ativa e ação **Gerenciar publicação**); nenhum formulário mutante é renderizado nessa tela.
+- O gerenciador completo permanece em `?tab=publicacao&project=<slug>`, onde os controles de endereço, versões e publicação continuam disponíveis.
+- Compatibilidade de ownership ajustada para schemas em que `projects.created_by` ou `project_tenants` não existem; `owner` existente não é mais perdido por uma exceção de schema.
+- Chrome 151/CDP real validou desktop 1440x900 e mobile 390x844: 2 cards sintéticos, 0 formulários mutantes na lista, 0 overflow, `Meus sites` correto, botão mobile com 44 px; clique abre o gerenciador com formulários administrativos somente no detalhe.
+- Testes focados: `portal.tests.test_publication_management_ui`, `portal.tests.test_grouped_resources` e `portal.tests.test_frozen_surfaces_contract` => 19 testes, OK.
+- Regressão `test_publication*.py`: sem falha funcional nova observada; os erros estruturais dependem de `components/runtime/current-apps/komodo-agent-current/cloudif-komodo-agent.py`, ausente neste checkout.
+- Perfil C++: `clean_general_publication_body` com 100 cards/200 execuções => p50 6,8804 ms (~68,8 us/card); rota HTTP candidata => p50 225,7 ms em 10 requisições. Classificação: **não é hot path CPU relevante**, portanto `cpp_migration=NOT_TRIGGERED` nesta unidade.
+- Produção não foi alterada por esta unidade; candidato de validação permanece isolado em loopback para continuidade da revisão.
+
+## CLOUDIFF-A9 — requisito de arquitetura modular (2026-09-09)
+
+- Decisão humana: modularidade passa a ser requisito do CloudIFF e das próximas unidades do projeto; evitar concentrar novas responsabilidades em arquivos monolíticos.
+- Contrato prescritivo registrado em `docs/REQUIREMENTS.md` (`R-MOD-1`) e `docs/ARCHITECTURE.md`; skill do projeto elevada para `cloudiff@0.1.36` com `ModularidadeObrigatoria` e aprendizado L058.
+- Aplicação imediata no ajuste de Publicações: `portal/core/html_fragments.py`, `portal/core/resource_ownership.py` e `portal/core/publication_summary.py` isolam responsabilidades; `portal/core/legacy_shell.py` permanece como adaptador/orquestrador e caiu para aproximadamente 281 linhas nesta revisão. O CSS específico foi isolado em `portal/design/publications.css` e incluído explicitamente na allowlist de assets do adapter v2.
+- Gate modular/UX final: 22 testes focados OK; `CLOUDIFF_PROJECT_SKILL=PASS version=0.1.36`; Chrome 151 confirmou desktop/mobile com asset modular carregado, `padding=0`, zero overflow e botão mobile de 44 px. `scripts/validate-repository.py` permanece vermelho pelos mesmos 13 paths ausentes do `HEAD`, com `new_errors=[]` e `portal_v2_important=0`.
+- A mesma disciplina vale para C++: componente nativo modular por responsabilidade; migração só após profiling/benchmark que prove hot path, com contrato e rollback/fallback preservados.

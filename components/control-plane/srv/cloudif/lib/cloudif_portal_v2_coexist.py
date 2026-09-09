@@ -25,7 +25,7 @@ from pathlib import Path
 LIB = "/srv/cloudif/lib"
 DESIGN = LIB + "/portal/design"
 ASSET_PREFIXES = ("/cloudiff/portal/assets/", "/cloudif/portal/assets/", "/assets/")
-ASSET_ALLOW = {"tokens.css", "base.css", "components.css", "app.js"}
+ASSET_ALLOW = {"tokens.css", "base.css", "components.css", "publications.css", "app.js"}
 PORTAL_PATHS = {"/", "/cloudif/portal", "/cloudif/portal/", "/cloudiff/portal", "/cloudiff/portal/"}
 NATIVE_READY = {
     ("/cloudiff/portal/api/reconciliation", "GET"),

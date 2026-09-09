@@ -10,11 +10,13 @@ from dataclasses import dataclass
 from html import unescape
 import re
 import os
-import sqlite3
 from collections import OrderedDict
 from html import escape
 
 from portal.core.auth import Identity
+from portal.core.html_fragments import article_spans as _card_spans
+from portal.core.publication_summary import clean_general_publication_body, individual_publication_body
+from portal.core.resource_ownership import load_resource_ownership
 from portal.ui.shell import render_legacy
 
 
@@ -155,89 +157,14 @@ def parse_legacy(markup: str, tab: str) -> LegacyPage:
 _PORTAL_DB = os.environ.get("CLOUDIF_PORTAL_DB", "/var/lib/cloudif/portal/cloudif-portal.db")
 
 
-def _readonly_connection() -> sqlite3.Connection:
-    con = sqlite3.connect(f"file:{_PORTAL_DB}?mode=ro", uri=True)
-    con.row_factory = sqlite3.Row
-    return con
-
-
 def _resource_ownership() -> tuple[dict[str, str], dict[str, str]]:
-    """Return deterministic project and tenant owners without inventing links."""
-    projects: dict[str, str] = {}
-    tenant_candidates: dict[str, list[str]] = {}
-    try:
-        con = _readonly_connection()
-        for row in con.execute("SELECT slug, owner, created_by, tenant FROM projects"):
-            owner = (row["owner"] or row["created_by"] or "").strip()
-            if owner:
-                projects[row["slug"]] = owner
-                tenant = (row["tenant"] or "").strip()
-                if tenant:
-                    tenant_candidates.setdefault(tenant, []).append(owner)
-        for row in con.execute(
-            """SELECT pt.tenant, p.owner, p.created_by
-               FROM project_tenants pt LEFT JOIN projects p ON p.slug=pt.project"""
-        ):
-            owner = (row["owner"] or row["created_by"] or "").strip()
-            tenant = (row["tenant"] or "").strip()
-            if owner and tenant:
-                tenant_candidates.setdefault(tenant, []).append(owner)
-        for row in con.execute(
-            "SELECT tenant, subject FROM tenant_acl WHERE subject_type='user'"
-        ):
-            tenant = (row["tenant"] or "").strip()
-            subject = (row["subject"] or "").strip()
-            if tenant and subject:
-                tenant_candidates.setdefault(tenant, []).append(subject)
-        con.close()
-    except Exception:
-        return projects, {}
-    tenants: dict[str, str] = {}
-    for tenant, candidates in tenant_candidates.items():
-        unique = list(OrderedDict.fromkeys(item for item in candidates if item))
-        if len(unique) == 1:
-            tenants[tenant] = unique[0]
-        elif unique:
-            # Prefer a project owner over extra ACL users; the first candidate is
-            # always sourced from projects/project_tenants when available.
-            tenants[tenant] = unique[0]
-    return projects, tenants
+    return load_resource_ownership(_PORTAL_DB)
 
 
 def _group_label(owner: str, current_user: str, own_label: str = "") -> str:
     if owner == current_user:
         return own_label or f"{owner} · você"
     return owner or "Sem usuário vinculado"
-
-
-def _card_spans(body: str, class_token: str) -> list[tuple[int, int, str]]:
-    """Extract complete article elements, including nested article children."""
-    opening = re.compile(
-        rf'<article\b[^>]*class=["\'][^"\']*\b{re.escape(class_token)}\b[^"\']*["\'][^>]*>',
-        re.I,
-    )
-    tags = re.compile(r'</?article\b[^>]*>', re.I)
-    spans: list[tuple[int, int, str]] = []
-    cursor = 0
-    while True:
-        start_match = opening.search(body, cursor)
-        if not start_match:
-            break
-        depth = 0
-        end = None
-        for tag in tags.finditer(body, start_match.start()):
-            if tag.group(0).lower().startswith('</article'):
-                depth -= 1
-                if depth == 0:
-                    end = tag.end()
-                    break
-            else:
-                depth += 1
-        if end is None:
-            raise ValueError(f"unbalanced article for {class_token}")
-        spans.append((start_match.start(), end, body[start_match.start():end]))
-        cursor = end
-    return spans
 
 
 def _group_cards(body: str, class_token: str, owner_for_card, current_user: str, kind: str, own_label: str = "", resource_scope: str = "") -> str:
@@ -289,69 +216,6 @@ def filter_publication_project(body: str, selected_project: str) -> str:
     return body[:spans[0][0]] + selected[0][2] + body[spans[-1][1]:]
 
 
-def _balanced_element_by_class(markup: str, tag_name: str, class_token: str) -> str:
-    opening = re.compile(
-        rf'<{tag_name}\b[^>]*class=["\'][^"\']*\b{re.escape(class_token)}\b[^"\']*["\'][^>]*>', re.I
-    )
-    start = opening.search(markup)
-    if not start:
-        return ""
-    tags = re.compile(rf'</?{tag_name}\b[^>]*>', re.I)
-    depth = 0
-    for tag in tags.finditer(markup, start.start()):
-        if tag.group(0).lower().startswith(f'</{tag_name}'):
-            depth -= 1
-            if depth == 0:
-                return markup[start.start():tag.end()]
-        else:
-            depth += 1
-    return ""
-
-
-def clean_general_publication_body(body: str) -> str:
-    cards=[]
-    for _start,_end,card in _card_spans(body,"publication-project"):
-        resource=_balanced_element_by_class(card,"div","cm-resource")
-        heading=re.search(r'<h2[^>]*>(.*?)</h2>',card,re.S|re.I)
-        code=re.search(r'<code[^>]*>(.*?)</code>',card,re.S|re.I)
-        title=heading.group(1) if heading else "Projeto"
-        slug=code.group(1) if code else ""
-        if resource:
-            cards.append(
-                '<article class="publication-project card publication-manager">'
-                f'<div class="publication-manager-head"><div><p>Projeto</p><h2>{title}</h2><code>{slug}</code></div></div>{resource}'
-                '</article>'
-            )
-        else:
-            cards.append(card)
-    return ''.join(cards) if cards else body
-
-
-def individual_publication_body(body: str, selected_project: str) -> str:
-    """Return only the selected publication card for the individual manager."""
-    if not selected_project:
-        return body
-    for _start, _end, card in _card_spans(body, "publication-project"):
-        if re.search(
-            r'<input\b[^>]*name=["\']slug["\'][^>]*value=["\']'
-            + re.escape(selected_project)
-            + r'["\']',
-            card,
-            re.I,
-        ):
-            resource = _balanced_element_by_class(card, "div", "cm-resource")
-            heading = re.search(r'<h2[^>]*>(.*?)</h2>', card, re.S | re.I)
-            title = heading.group(1) if heading else escape(selected_project)
-            if resource:
-                return (
-                    '<section class="publication-single"><article class="publication-project card publication-manager">'
-                    f'<div class="publication-manager-head"><div><p>Gerenciar site</p><h2>{title}</h2></div></div>{resource}'
-                    '</article></section>'
-                )
-            return f'<section class="publication-single">{card}</section>'
-    return body
-
-
 def group_resources_by_user(body: str, tab: str, identity: Identity, selected_project: str = "", resource_scope: str = "") -> str:
     """Group only general publication/database screens; the overview is untouched."""
     if tab not in {"publicacao", "bancos"}:
@@ -392,6 +256,7 @@ def transform(markup: str, identity: Identity, tab: str, selected_project: str =
     page = parse_legacy(markup, tab)
     if page.tab == "publicacao":
         body = individual_publication_body(page.body, selected_project) if selected_project else group_resources_by_user(page.body, page.tab, identity, "", resource_scope)
+        landing = not selected_project
         return render_legacy(
             identity=identity,
             active_tab=page.tab,
@@ -399,6 +264,11 @@ def transform(markup: str, identity: Identity, tab: str, selected_project: str =
             body=body,
             legacy_head="",
             legacy_scripts=page.scripts,
+            page_title_override="Publicações" if landing else None,
+            description_override=(
+                "Escolha uma publicação para consultar o resumo ou abrir o gerenciamento."
+                if landing else None
+            ),
         )
     return render_legacy(
         identity=identity,

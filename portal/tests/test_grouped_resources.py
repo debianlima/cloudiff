@@ -1,3 +1,5 @@
+import sqlite3
+import tempfile
 import unittest
 from unittest.mock import patch
 
@@ -8,6 +10,25 @@ from portal.core.legacy_shell import group_resources_by_user
 class GroupedResourcesTest(unittest.TestCase):
     def setUp(self):
         self.identity = Identity("alice", "alice@example.invalid", frozenset({"CloudIF-Tenants-Admin"}))
+
+    def test_resource_ownership_supports_projects_without_created_by_or_project_tenants(self):
+        from pathlib import Path
+        import portal.core.legacy_shell as shell
+        with tempfile.TemporaryDirectory() as tmp:
+            db=Path(tmp)/'portal.db'
+            con=sqlite3.connect(db)
+            con.execute('create table projects(slug text primary key, owner text, tenant text)')
+            con.execute("insert into projects values('demo','alice','')")
+            con.execute('create table tenant_acl(tenant text, subject_type text, subject text)')
+            con.commit();con.close()
+            old=shell._PORTAL_DB
+            try:
+                shell._PORTAL_DB=str(db)
+                projects,tenants=shell._resource_ownership()
+            finally:
+                shell._PORTAL_DB=old
+            self.assertEqual(projects,{'demo':'alice'})
+            self.assertEqual(tenants,{})
 
     @patch("portal.core.legacy_shell._resource_ownership")
     def test_publications_are_grouped_and_current_user_opens(self, ownership):

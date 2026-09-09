@@ -15,6 +15,9 @@ assert project_skill['id']=='cloudiff' and project_skill['tipo_competencia']=='p
 assert project_skill['fonte']=='skills/cloudiff/SKILL.md'
 assert str(project_skill['versao'])==str(fm['versao'])
 assert 'FrozenPortalInterface' in raw
+assert 'ModularidadeObrigatoria' in raw
+assert 'R-MOD-1' in (root/'docs/REQUIREMENTS.md').read_text()
+assert 'Arquitetura modular obrigatória' in (root/'docs/ARCHITECTURE.md').read_text()
 assert '### L012 — capability de certificado do servidor não vira trust bundle do agente' in raw
 assert '### L013 — `apply` idempotente não reinicia runtime equivalente' in raw
 assert '### L014 — release existente não dispensa prova do artefato recebido' in raw
