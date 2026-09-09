@@ -12151,3 +12151,19 @@ entradas:
     produz: evidencia/remote-access-443-relay-u19
     aceite: python3 -m unittest portal.tests.test_remote_connections_443_relay
     status: aceito
+
+trabalho_compartilhado:
+  projeto: cloudiff
+  caminho: /tmp/cloudiff-a9-readonly
+  unidade: CLOUDIFF-A9
+  descricao: navegação contínua do Portal, correções UX reproduzidas e avaliação seletiva de hot paths para eventual migração C++ medida
+  agente: A9
+  atualizado_em: '2026-09-09T07:14:00-03:00'
+  previsao_termino: '2026-09-09T15:57:00-03:00'
+  zona_exclusao:
+    - portal/**
+    - tests/test_portal*.py
+    - tests/test_*ui*.py
+    - manifesto.yaml
+    - estado.md
+    - skills/cloudiff/SKILL.md
