@@ -12164,3 +12164,4 @@ trabalho_compartilhado:
     - estado.md
     - docs/manual-tecnico/13-ACESSO-EXTERNO.md
     - logs/**
+    - deploy/a10-release-gate/**
