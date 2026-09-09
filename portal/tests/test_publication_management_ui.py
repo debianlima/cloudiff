@@ -169,6 +169,8 @@ class PublicationManagementUITest(unittest.TestCase):
         shell=(root/'portal/ui/shell.py').read_text()
         self.assertIn('"publications.css"',coexist)
         self.assertIn('/cloudiff/portal/assets/publications.css',shell)
+        self.assertIn('if active_tab == "publicacao"',shell)
+        self.assertIn('caminho: portal/design/publications.css',(root/'manifesto.yaml').read_text())
 
     def test_unlinked_database_remains_plain_text(self):
         context={'framework':'Django','database':'Nenhum banco vinculado','security':'Aguardando publicação','repo_url':''}
