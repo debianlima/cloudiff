@@ -9,7 +9,7 @@
 - Forgejo SSH usa destino interno direto `10.62.91.2:2222` pelo gateway.
 - PostgreSQL/Supabase usa conector reverso da Hospedagem pela própria 443; o forward do tenant existe apenas enquanto há lease ativa e fica em loopback no proxy.
 - Faro permanece fora do caminho e não foi modificado.
-- A skill de projeto vigente é `cloudiff@0.1.29`.
+- A skill de projeto vigente é `cloudiff@0.1.34`.
 - `PracticalSwan/frontend-design@2.0` é a competência de direção estética para futuras unidades de interface/redesign; não autoriza por si só alterar frozen surfaces.
 
 ## Decisões superadas
@@ -104,3 +104,16 @@
 - A apresentação diferencia `storage.physical_total` do uso de `disk_root`; valores destacados homologados: `backup/bocadesapo` ~3,0 TB físicos e `pelego` ~2,0 TB físicos. Os gráficos `Capacidade física por servidor` e `Uso de memória por servidor` estão presentes no HTML gerado da Visão Geral.
 - Gate pós-restart do Portal: HTTP local `18094` = 200, `7/7` online e renderer contendo Faro, `3.0 TB`, `2.0 TB` e os dois gráficos.
 - Inventário/dotfiles reconciliado em `44a0f7673b1801e16db142d7354963df3fbd5ded`; residentes Linux sincronizados nos sete nós.
+
+## A10 — Portal v2/legacy, UX e hardiness
+
+- Lane isolada `cloudiff-a10`; reserva canônica em `manifesto.yaml.trabalho_compartilhado` antes das alterações funcionais.
+- A10-UX-01: `CloudIF-Professor` recebe o link **Serviços globais**, mas o runtime vivo responde 403; o patch alinha leitura ao papel global sem abrir o formulário mutante de backup, que continua sob `user.admin`.
+- A10-UX-02: confirmação inválida reproduzida sem ação destrutiva como `409 invalid_confirmation` seguida, com o mesmo token, de `409 wizard_required`; o patch valida a confirmação antes de consumir o token single-use.
+- Ajuda: CTA **Abrir Administração** passa a ser emitido somente para `CloudIF-Tenants-Admin`; o texto educativo permanece para os demais perfis.
+- Exclusão/Publicação: mensagens conhecidas viram texto acionável; modal de exclusão bloqueia fechamento desde o POST inicial, recebe/restaura foco; wizard de Publicação fecha com `Escape` e restaura foco.
+- Hardiness vivo: 240 GETs autenticados em cinco personas e oito superfícies produziram zero 5xx/erros de transporte; crawl professor em profundidade 2 encontrou somente os 403 já classificados (Serviços globais, Produção intencional e Administração via CTA corrigido).
+- Regressão candidata antes da aplicação na lane: **1080/1080 PASS**; suíte focal pós-limpeza: **83/83 PASS**; `py_compile` e `git apply --check` PASS.
+- C++ não acionado: a amostra de latência/RSS não provou hot path CPU-bound; o maior custo observado no perfil admin veio acompanhado de payload/escopo global substancialmente maior.
+- Gate visual permanece **NÃO VERIFICADO/BLOQUEANTE PARA ACEITE**: WebDev oficial Selenium/noVNC existe em Forja, porém as origens disponíveis não possuem rota/allowlist funcional até o serviço. Nenhuma regra de rede foi ampliada.
+- Produção permanece inalterada; nenhum deploy/cutover foi autorizado ou executado por A10.

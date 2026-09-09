@@ -5831,7 +5831,8 @@ def _focus98_render(tab,user):
     if tab.startswith('ajuda'):return _focus98.help_page(tab)
     if tab.startswith('admin-'):
         groups=set(user.get('groups') or [])
-        if not (user.get('admin') or 'CloudIF-Tenants-Admin' in groups):return '<section class="card"><h1>Acesso negado</h1><p>Área restrita à administração.</p></section>'
+        professor_global_services = tab == 'admin-manutencao' and 'CloudIF-Professor' in groups
+        if not (user.get('admin') or 'CloudIF-Tenants-Admin' in groups or professor_global_services):return '<section class="card"><h1>Acesso negado</h1><p>Área restrita à administração.</p></section>'
         return _focus98.admin_page(tab)
     raise KeyError(tab)
 if 'Portal' in globals() and not globals().get('_focus98_wrapped'):
@@ -6478,6 +6479,11 @@ if 'Portal' in globals() and not globals().get('_admin_project_delete_wrapped'):
             if not _prod_csrf_equal(val('csrf_token'),_prod_csrf_token(user)):return _cloudif_security_reject(self,'Token CSRF inválido ou ausente.',403)
             slug=val('slug')
             if not _admin_project_delete_allowed(user,slug):return _cloudif_security_reject(self,'Somente o proprietário, CloudIF-Professor ou CloudIF-Tenants-Admin pode excluir este projeto.',403)
+            if not _admin_project_delete.confirmation_matches(slug,val('confirm_text')):
+                result={'ok':False,'error':'invalid_confirmation','expected':'EXCLUIR '+slug}
+                if 'application/json' in (self.headers.get('Accept') or '').lower():
+                    raw=json.dumps(result,ensure_ascii=False).encode();self.send_response(409);self.send_header('Content-Type','application/json');self.send_header('Cache-Control','no-store');self.send_header('Content-Length',str(len(raw)));self.end_headers();self.wfile.write(raw);return
+                return self.send_html(page(user,'admin-excluir-projeto',_admin_project_delete.render(_prod_csrf_token(user),selected=slug,result=result,allowed_slugs=_admin_project_delete_scope(user))),409)
             if not _admin_project_delete.consume_wizard_token(slug,val('wizard_token')):
                 if 'application/json' in (self.headers.get('Accept') or '').lower():
                     raw=json.dumps({'ok':False,'error':'wizard_required'},ensure_ascii=False).encode();self.send_response(409);self.send_header('Content-Type','application/json');self.send_header('Content-Length',str(len(raw)));self.end_headers();self.wfile.write(raw);return

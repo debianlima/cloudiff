@@ -14,9 +14,25 @@ class ProjectDeleteTrackingModalTests(unittest.TestCase):
     def test_modal_reconnects_and_preserves_progress(self):
         for marker in ('Reconectando ao processo','Tentativa ${{attempt+1}} de 75','showReconnect','admin-delete-project-status','Cache-Control'):
             self.assertIn(marker,self.source)
-    def test_modal_cannot_close_while_job_runs(self):
-        self.assertIn('if(activeJob&&!terminal)return',self.source)
+    def test_modal_establishes_and_restores_keyboard_focus(self):
+        for marker in (
+            'aria-describedby="project-delete-subtitle" tabindex="-1"',
+            "dialog=modal.querySelector('.project-delete-dialog')",
+            'opener=document.activeElement',
+            'setTimeout(()=>dialog.focus(),0)',
+            'if(target&&document.contains(target))target.focus()',
+            "if(e.key==='Escape')closeModal()",
+        ):
+            self.assertIn(marker,self.source)
+
+    def test_modal_cannot_close_while_request_or_job_runs(self):
+        self.assertIn('function setClosable(value)',self.source)
+        self.assertIn('setClosable(false);modal.hidden=false',self.source)
+        self.assertIn('if(!terminal)return',self.source)
+        self.assertIn('terminal=!activeJob;setClosable(terminal)',self.source)
+        self.assertIn("x.disabled=!value;x.setAttribute('aria-disabled',String(!value))",self.source)
         self.assertIn('Exclusão em andamento…',self.source)
+        self.assertNotIn('if(activeJob&&!terminal)return',self.source)
     def test_modal_uses_portal_theme_tokens(self):
         for marker in (
             'background:var(--surface',
@@ -30,6 +46,11 @@ class ProjectDeleteTrackingModalTests(unittest.TestCase):
         modal_css = self.source[self.source.index('body.project-delete-modal-open'):self.source.index('</style>', self.source.index('body.project-delete-modal-open'))]
         self.assertNotIn('background:#fff', modal_css)
         self.assertNotIn('color:#111', modal_css)
+
+    def test_modal_translates_confirmation_and_wizard_errors(self):
+        self.assertIn("invalid_confirmation:'A confirmação não confere.", self.source)
+        self.assertIn("wizard_required:'A prévia de exclusão expirou.", self.source)
+        self.assertIn("errorText(job.error||job.detail||payload.error", self.source)
 
     def test_modal_never_polls_an_undefined_job(self):
         for marker in (

@@ -94,6 +94,12 @@ class ReleaseFlowWizardUITests(unittest.TestCase):
         self.assertIn('.nav-link{min-height:44px}',CSS)
         self.assertIn('.btn:focus-visible,.nav-link:focus-visible',CSS)
 
+    def test_release_wizard_closes_with_escape_and_restores_focus(self):
+        self.assertIn("busy:false,opener:null",BASE)
+        self.assertIn("model.opener=button",BASE)
+        self.assertIn("const opener=model.opener;model.opener=null;if(opener&&document.contains(opener))opener.focus()",BASE)
+        self.assertIn("if(e.key==='Escape'&&layer.classList.contains('is-open'))close()",BASE)
+
     def test_wizard_has_dark_theme_safe_tokens_and_mobile_layout(self):
         self.assertIn('_WHP_RELEASE_ASSETS',BASE)
         self.assertIn('cloudif-whp-release-script',BASE)

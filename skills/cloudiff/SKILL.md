@@ -1,6 +1,6 @@
 ---
 name: cloudiff
-versao: 0.1.29
+versao: 0.1.34
 description: Governa, reconcilia, normaliza e evolui a plataforma CloudIFF V1/Python→V2/C++23 preservando interface homologada,
   contratos, segurança, dados, observabilidade e rollback.
 tipo_competencia: projeto
@@ -344,3 +344,18 @@ Durante a homologação PostgreSQL da U19, o banco do tenant `iff1742962-testeso
 
 ### L031 — agente Python só é retirado após substituto C++ provar contrato, performance e procedência
 Em U26, `cloudif-node-metrics.py` foi identificado como legado duplicado enquanto a Hospedagem já mantinha `cloudif-node-metrics-cpp` em shadow desde 27/08/2026, com benchmark de paridade e ganho de latência/RSS. A promoção preserva `/health`, `/metrics` e TCP/18096, adiciona capacidade física dos discos e usa release atômica com manifesto de procedência. Após gate live, o Python deve sair de `/usr/local/sbin` e das árvores `components/*` e permanecer somente em `legacy/retired-agents/python/`. Regra geral: presença de C++ não autoriza remover Python; remoção exige consumidor real, contrato equivalente, teste negativo/positivo, rollback, procedência do binário e observação pós-cutover.
+
+### L052 — confirmação destrutiva deve ser validada antes de consumir token single-use
+Em A10, o bridge assíncrono v2 de exclusão consumia `wizard_token` antes de validar `EXCLUIR <slug>`. No runtime vivo, uma confirmação propositalmente inválida retornou `409 invalid_confirmation`; repetir o mesmo token ainda com texto inválido retornou `409 wizard_required`, provando consumo prematuro sem executar exclusão. Regra: preflight sintático/semântico da confirmação vem antes de qualquer consumo de estado single-use; só depois o token pode ser invalidado e o job criado. O handler base já seguia a ordem correta, portanto bridges/coexistência devem preservar esse contrato em vez de reordená-lo.
+
+### L053 — affordance visível deve casar com autorização real da rota
+Em A10, `CloudIF-Professor` via **Serviços globais** mas recebia 403 ao abrir a rota, e a página Ajuda mostrava **Abrir Administração** para professor mesmo `?tab=admin` sendo restrito a `CloudIF-Tenants-Admin`. Regra: o shell/CTA deve usar a mesma decisão de papel que protege o destino; conteúdo educativo pode permanecer visível, mas botão acionável que inevitavelmente termina em 403 deve ser ocultado. Negativas intencionais congeladas, como Produção, são exceção explícita e preservam 403 dentro do shell canônico.
+
+### L054 — modal assíncrono bloqueia fechamento desde o início da requisição e restaura foco
+Em A10, o modal de exclusão só bloqueava fechamento depois de receber `job_id`; durante o POST inicial, `activeJob=''` permitia fechar a janela mesmo com a criação em curso. A correção considera o estado não terminal desde `submit`, desabilita controles de fechamento até resultado terminal, estabelece foco no diálogo e devolve foco ao acionador ao fechar. O wizard de Publicação também passa a fechar por `Escape` e restaurar foco. Regra: UX assíncrona protege a janela crítica antes de existir identificador de job e mantém o ciclo de foco acessível.
+
+### L055 — release live e `origin/main` precisam ser comparados por procedência antes de classificar defeito
+Em A10, o Portal vivo executava `/srv/cloudif/app-releases/portal/hardness-missing-stack-ux-20260907T055809Z`, cujo `cloudif-admin-portal-base.py` tinha SHA-256 diferente de `origin/main`. Parte dos sintomas vivos já estava corrigida no HEAD e parte era reintroduzida pelo bridge v2. Regra: nunca assumir Git como “mais atual” ou runtime como “mais correto”; registrar release path/hash, comparar contrato e só então classificar como bug do HEAD, drift de deploy ou divergência de coexistência.
+
+### L056 — WebDev oficial só conta como gate visual quando a rota autorizada realmente alcança o Selenium
+A10 confirmou o contrato oficial `config/webdev-workspace.json`: Selenium Chrome/noVNC em Forja, workspace read-only e link fixo `__cloudiff_webdev`. Hospedagem não tinha rota para Forja e o perfil WireGuard recebia 403/não alcançava `10.62.91.2:17900`, coerente com a pendência NAT/allowlist já registrada. Regra: existência do container/browser não equivale a capacidade de validação; o gate visual exige origem permitida + rota até o WebDriver/noVNC. Não ampliar firewall/allowlist apenas para fazer o teste passar.

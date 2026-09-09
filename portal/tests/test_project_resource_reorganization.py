@@ -36,6 +36,19 @@ class ProjectResourceReorganizationTest(unittest.TestCase):
         self.assertIn('Repositórios</a>',self.source)
         self.assertNotIn("if tab=='projetos': body=_admin_resources139_panel(user)+body",self.source)
 
+    def test_professor_can_read_global_services_without_admin_backup_mutation(self):
+        root=self.root
+        coexist=(root/'components/control-plane/srv/cloudif/lib/cloudif_portal_v2_coexist.py').read_text()
+        legacy=(root/'portal/legacy/cloudif-admin-portal-base.py').read_text()
+        for source in (self.source,legacy):
+            focus=source[source.index('def _focus98_render'):source.index("if 'Portal' in globals()",source.index('def _focus98_render'))]
+            self.assertIn("professor_global_services = tab == 'admin-manutencao' and 'CloudIF-Professor' in groups",focus)
+        route=coexist[coexist.index('if path in PORTAL_PATHS and tab == "admin-manutencao"'):]
+        route=route[:route.index('if path in PORTAL_PATHS and tab == "backup"')]
+        self.assertIn('"cloudif-professor"',route)
+        backup=coexist[coexist.index('def _backup_remote_admin_card'):coexist.index('def global_services_body')]
+        self.assertIn("if not user.get('admin')",backup)
+
     def test_framework_install_is_not_faked(self):
         self.assertIn('Inspecionar ambiente',self.source)
         self.assertNotIn('install_framework',self.source)

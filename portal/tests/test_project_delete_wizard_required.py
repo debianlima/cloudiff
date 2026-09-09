@@ -6,6 +6,8 @@ class ProjectDeleteWizardRequiredTests(unittest.TestCase):
  def setUpClass(cls):
   cls.mod=Path('components/control-plane/srv/cloudif/lib/cloudif_admin_project_delete.py').read_text()
   cls.base=Path('components/control-plane/current-apps/portal-current/cloudif-admin-portal-base.py').read_text()
+  cls.portal_legacy=Path('portal/legacy/cloudif-admin-portal-base.py').read_text()
+  cls.v2=Path('components/control-plane/srv/cloudif/lib/cloudif_portal_v2_coexist.py').read_text()
   cls.legacy=Path('components/control-plane/srv/cloudif/lib/cloudif_git_komodo_module.py').read_text()
  def test_wizard_issues_single_use_token(self):
   for marker in ('def issue_wizard_token','def consume_wizard_token','expires_at','wizard_token'):
@@ -21,6 +23,21 @@ class ProjectDeleteWizardRequiredTests(unittest.TestCase):
   block=self.base[self.base.index('def _admin_project_delete_get'):self.base.index('Portal.do_GET=_admin_project_delete_get')]
   self.assertIn('admin-delete-project-status',block)
   self.assertIn('_admin_project_delete.can_read_job(',block)
+
+ def test_v2_async_delete_validates_before_consuming_wizard(self):
+  start=self.v2.index('if value("async") == "1":')
+  end=self.v2.index('self.rfile = BytesIO(raw)',start)
+  block=self.v2[start:end]
+  self.assertIn('confirmation_matches',block)
+  self.assertLess(block.index('confirmation_matches'),block.index('consume_wizard_token'))
+  self.assertIn('invalid_confirmation',block)
+
+ def test_portal_legacy_delete_validates_before_consuming_wizard(self):
+  start=self.portal_legacy.index('def _admin_project_delete_post')
+  end=self.portal_legacy.index('Portal.do_GET=_admin_project_delete_get',start)
+  block=self.portal_legacy[start:end]
+  self.assertIn('_admin_project_delete.confirmation_matches(',block)
+  self.assertLess(block.index('_admin_project_delete.confirmation_matches('),block.index('_admin_project_delete.consume_wizard_token('))
 
  def test_legacy_delete_opens_wizard(self):
   self.assertIn('tab=admin-excluir-projeto&amp;slug=',self.legacy)
