@@ -12151,27 +12151,3 @@ entradas:
     produz: evidencia/remote-access-443-relay-u19
     aceite: python3 -m unittest portal.tests.test_remote_connections_443_relay
     status: aceito
-trabalho_compartilhado:
-  projeto: cloudiff
-  caminho: /srv/mcp-workspace/tmp/cloudiff-a10-visual
-  unidade: A10-VISUAL
-  descricao: validacao visual real WebDev/Selenium, gates de release e revalidacao pos-deploy
-  agente: chatgpt-a10-profile-aline
-  atualizado_em: '2026-09-09T06:35:59Z'
-  previsao_termino: '2026-09-09T09:35:59Z'
-  zona_exclusao:
-    - manifesto.yaml
-    - estado.md
-    - config/webdev-workspace.json
-    - deploy/compose.webdev.yaml
-    - deploy/install_webdev_workspace.sh
-    - components/control-plane/current-apps/portal-current/cloudif-admin-portal-base.py
-    - components/control-plane/srv/cloudif/lib/cloudif_portal_v2_coexist.py
-    - components/control-plane/srv/cloudif/lib/cloudif_admin_project_delete.py
-    - portal/ui/**
-    - portal/design/**
-    - portal/templates/**
-    - portal/static/**
-    - portal/tests/**
-    - skills/cloudiff/SKILL.md
-    - competencias.yaml
