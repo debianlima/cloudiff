@@ -37,7 +37,6 @@ Componentes implantados no plano de controle e no host de hospedagem.
 | [`cloudif-machine-guardian.py`](cloudif-machine-guardian.py) | `.py` | Implementa `send`, `main`. |
 | [`cloudif-machine-harvester.py`](cloudif-machine-harvester.py) | `.py` | Implementa `verify_policy_envelope`, `controller_open`, `run`, `ensure_identity`, `cert_state`, `cert_record` e outros componentes. |
 | [`cloudif-monthly-restore-test.sh`](cloudif-monthly-restore-test.sh) | `.sh` | Script Shell de restauração ou teste de recuperação. |
-| [`cloudif-node-metrics.py`](cloudif-node-metrics.py) | `.py` | Implementa `run`, `network_summary`, `docker_summary`, `metrics`, `H`. |
 | [`cloudif-patch-async-launch-route.sh`](cloudif-patch-async-launch-route.sh) | `.sh` | Automação Shell operacional da plataforma. |
 | [`cloudif-patch-launch-route-v2.sh`](cloudif-patch-launch-route-v2.sh) | `.sh` | Automação Shell operacional da plataforma. |
 | [`cloudif-patch-launch-route.sh`](cloudif-patch-launch-route.sh) | `.sh` | Automação Shell operacional da plataforma. |

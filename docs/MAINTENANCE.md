@@ -27,7 +27,7 @@ Código principal:
 
 - `components/control-plane/current-apps/monitor-current/`
 - `components/control-plane/usr/local/sbin/cloudif-healthcheck.sh`
-- `components/*/usr/local/sbin/cloudif-node-metrics.py`
+- `src/node_metrics/main.cpp` (C++ canônico); Python aposentado em `legacy/retired-agents/python/node-metrics/`
 - units `cloudif-monitor-*`, `cloudif-healthcheck-*` e `cloudif-node-metrics.*`
 
 ## Agentes

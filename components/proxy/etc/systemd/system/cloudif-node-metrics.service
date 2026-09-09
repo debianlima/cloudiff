@@ -1,5 +1,5 @@
 [Unit]
-Description=CloudIF Node Metrics Agent
+Description=CloudIF Node Metrics C++ Agent
 After=network-online.target docker.service
 Wants=network-online.target
 
@@ -7,9 +7,24 @@ Wants=network-online.target
 Type=simple
 Environment=CLOUDIF_METRICS_HOST=0.0.0.0
 Environment=CLOUDIF_METRICS_PORT=18096
-ExecStart=/usr/bin/python3 /usr/local/sbin/cloudif-node-metrics.py
+ExecStart=/opt/cloudif-node-metrics/current/cloudif-node-metrics-cpp
 Restart=always
 RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictRealtime=true
+MemoryDenyWriteExecute=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
+CapabilityBoundingSet=
+AmbientCapabilities=
+UMask=0077
 
 [Install]
 WantedBy=multi-user.target

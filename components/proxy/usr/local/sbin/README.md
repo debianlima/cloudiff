@@ -16,7 +16,6 @@ Componentes implantados no host de proxy e publicação.
 | [`cloudif-machine-executor.py`](cloudif-machine-executor.py) | `.py` | Módulo Python da plataforma. |
 | [`cloudif-machine-guardian.py`](cloudif-machine-guardian.py) | `.py` | Implementa `send`, `main`. |
 | [`cloudif-machine-harvester.py`](cloudif-machine-harvester.py) | `.py` | Implementa `verify_policy_envelope`, `controller_open`, `run`, `ensure_identity`, `cert_state`, `cert_record` e outros componentes. |
-| [`cloudif-node-metrics.py`](cloudif-node-metrics.py) | `.py` | Implementa `run`, `network_summary`, `docker_summary`, `metrics`, `H`. |
 | [`cloudif-npm-backup.sh`](cloudif-npm-backup.sh) | `.sh` | Script Shell de backup, retenção ou sincronização. |
 | [`cloudif-npm-healthcheck.sh`](cloudif-npm-healthcheck.sh) | `.sh` | Automação Shell operacional da plataforma. |
 | [`cloudif-npm-publisher-agent.py`](cloudif-npm-publisher-agent.py) | `.py` | Implementa `env`, `load_state`, `save_state`, `run`, `cert_exists`, `cert_covers` e outros componentes. |

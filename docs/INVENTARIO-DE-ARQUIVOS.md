@@ -398,7 +398,6 @@ Este catálogo descreve **1157 arquivos versionados**. Ele é regenerado pelo sc
 | [`components/control-plane/usr/local/sbin/cloudif-machine-guardian.py`](../components/control-plane/usr/local/sbin/cloudif-machine-guardian.py) | Implementa `send`, `main`. |
 | [`components/control-plane/usr/local/sbin/cloudif-machine-harvester.py`](../components/control-plane/usr/local/sbin/cloudif-machine-harvester.py) | Implementa `verify_policy_envelope`, `controller_open`, `run`, `ensure_identity`, `cert_state`, `cert_record` e outros componentes. |
 | [`components/control-plane/usr/local/sbin/cloudif-monthly-restore-test.sh`](../components/control-plane/usr/local/sbin/cloudif-monthly-restore-test.sh) | Script Shell de restauração ou teste de recuperação. |
-| [`components/control-plane/usr/local/sbin/cloudif-node-metrics.py`](../components/control-plane/usr/local/sbin/cloudif-node-metrics.py) | Implementa `run`, `network_summary`, `docker_summary`, `metrics`, `H`. |
 | [`components/control-plane/usr/local/sbin/cloudif-patch-async-launch-route.sh`](../components/control-plane/usr/local/sbin/cloudif-patch-async-launch-route.sh) | Automação Shell operacional da plataforma. |
 | [`components/control-plane/usr/local/sbin/cloudif-patch-launch-route-v2.sh`](../components/control-plane/usr/local/sbin/cloudif-patch-launch-route-v2.sh) | Automação Shell operacional da plataforma. |
 | [`components/control-plane/usr/local/sbin/cloudif-patch-launch-route.sh`](../components/control-plane/usr/local/sbin/cloudif-patch-launch-route.sh) | Automação Shell operacional da plataforma. |
@@ -490,7 +489,6 @@ Este catálogo descreve **1157 arquivos versionados**. Ele é regenerado pelo sc
 | [`components/proxy/usr/local/sbin/cloudif-machine-executor.py`](../components/proxy/usr/local/sbin/cloudif-machine-executor.py) | Módulo Python da plataforma. |
 | [`components/proxy/usr/local/sbin/cloudif-machine-guardian.py`](../components/proxy/usr/local/sbin/cloudif-machine-guardian.py) | Implementa `send`, `main`. |
 | [`components/proxy/usr/local/sbin/cloudif-machine-harvester.py`](../components/proxy/usr/local/sbin/cloudif-machine-harvester.py) | Implementa `verify_policy_envelope`, `controller_open`, `run`, `ensure_identity`, `cert_state`, `cert_record` e outros componentes. |
-| [`components/proxy/usr/local/sbin/cloudif-node-metrics.py`](../components/proxy/usr/local/sbin/cloudif-node-metrics.py) | Implementa `run`, `network_summary`, `docker_summary`, `metrics`, `H`. |
 | [`components/proxy/usr/local/sbin/cloudif-npm-backup.sh`](../components/proxy/usr/local/sbin/cloudif-npm-backup.sh) | Script Shell de backup, retenção ou sincronização. |
 | [`components/proxy/usr/local/sbin/cloudif-npm-healthcheck.sh`](../components/proxy/usr/local/sbin/cloudif-npm-healthcheck.sh) | Automação Shell operacional da plataforma. |
 | [`components/proxy/usr/local/sbin/cloudif-npm-publisher-agent.py`](../components/proxy/usr/local/sbin/cloudif-npm-publisher-agent.py) | Implementa `env`, `load_state`, `save_state`, `run`, `cert_exists`, `cert_covers` e outros componentes. |
@@ -653,7 +651,6 @@ Este catálogo descreve **1157 arquivos versionados**. Ele é regenerado pelo sc
 | [`components/runtime/usr/local/sbin/cloudif-machine-guardian.py`](../components/runtime/usr/local/sbin/cloudif-machine-guardian.py) | Implementa `send`, `main`. |
 | [`components/runtime/usr/local/sbin/cloudif-machine-harvester.py`](../components/runtime/usr/local/sbin/cloudif-machine-harvester.py) | Implementa `verify_policy_envelope`, `controller_open`, `run`, `ensure_identity`, `cert_state`, `cert_record` e outros componentes. |
 | [`components/runtime/usr/local/sbin/cloudif-mongosh-komodo`](../components/runtime/usr/local/sbin/cloudif-mongosh-komodo) | Arquivo de suporte da plataforma. |
-| [`components/runtime/usr/local/sbin/cloudif-node-metrics.py`](../components/runtime/usr/local/sbin/cloudif-node-metrics.py) | Implementa `run`, `network_summary`, `docker_summary`, `metrics`, `H`. |
 | [`components/runtime/usr/local/sbin/cloudif-release-maintenance`](../components/runtime/usr/local/sbin/cloudif-release-maintenance) | Arquivo de suporte da plataforma. |
 | [`config/README.md`](../config/README.md) | Documentação deste diretório. |
 | [`config/control-plane/README.md`](../config/control-plane/README.md) | Documentação deste diretório. |
@@ -1161,3 +1158,11 @@ Este catálogo descreve **1157 arquivos versionados**. Ele é regenerado pelo sc
 | [`tenant-templates/srv/cloudif/tenants/iff1860746/utils/rotate-new-api-keys.sh`](../tenant-templates/srv/cloudif/tenants/iff1860746/utils/rotate-new-api-keys.sh) | Automação Shell operacional da plataforma. |
 | [`tenant-templates/srv/cloudif/tenants/iff1860746/utils/upgrade-pg17.sh`](../tenant-templates/srv/cloudif/tenants/iff1860746/utils/upgrade-pg17.sh) | Automação Shell operacional da plataforma. |
 | [`tenant-templates/srv/cloudif/tenants/iff1860746/versions.md`](../tenant-templates/srv/cloudif/tenants/iff1860746/versions.md) | Documento técnico ou operacional. |
+
+## U26 — métricas de nó C++
+
+| Caminho | Finalidade |
+| --- | --- |
+| [`src/node_metrics/main.cpp`](../src/node_metrics/main.cpp) | Implementação C++23 canônica do agente de métricas de host. |
+| [`legacy/retired-agents/python/node-metrics/cloudif-node-metrics.py`](../legacy/retired-agents/python/node-metrics/cloudif-node-metrics.py) | Backup histórico do agente Python aposentado; não implantar. |
+| [`legacy/retired-agents/python/node-metrics/README.md`](../legacy/retired-agents/python/node-metrics/README.md) | Política de aposentadoria e referência ao substituto C++. |

@@ -85,3 +85,10 @@
 - `network-ssh-operations@1`.
 - `operational-ui-truth@1`.
 - `telemetry-data-visualization@2`.
+
+## U26 — Node Metrics C++ como autoridade de métricas de host
+
+- O `cloudif-node-metrics-cpp` substitui o agente Python de métricas mantendo `/health`, `/metrics` e TCP/18096; a implementação Python foi retirada das árvores ativas e preservada apenas em `legacy/retired-agents/python/node-metrics/`.
+- A candidata C++ teve shadow live desde 27/08/2026 e benchmark preservado na Hospedagem: paridade funcional do contrato, p50 de `/metrics` em poucos milissegundos contra centenas de milissegundos do Python e menor RSS.
+- U26 acrescenta `storage.physical_total`, `storage.disk_count` e `storage.physical_disks`, permitindo ao Portal distinguir capacidade física instalada do uso do filesystem `/`.
+- Releases live devem usar `/opt/cloudif-node-metrics/releases/<release>/` + `current` atômico e `release-manifest.json` com procedência; nenhum `.py` de node metrics pode permanecer em caminho ativo após cutover aceito.

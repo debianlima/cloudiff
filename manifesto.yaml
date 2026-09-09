@@ -5908,12 +5908,12 @@ entradas:
     aceite: portao-mecanico/v1-audit-file
     status: aceito
   - id: 742
-    caminho: components/control-plane/usr/local/sbin/cloudif-node-metrics.py
-    proposito: "arquivo V1 auditado; contexto funcional documentado pelo README ancestral components/control-plane/usr/local/sbin/README.md"
+    caminho: src/node_metrics/main.cpp
+    proposito: "implementacao canonica C++23 do agente de metricas de no; preserva contrato HTTP e acrescenta capacidade fisica instalada"
     tipo: infraestrutura
     consome: []
-    produz: evidencia/v1-file-0558
-    aceite: portao-mecanico/v1-audit-file
+    produz: runtime/node-metrics-cpp-source
+    aceite: cmake+node_metrics_cpp_self+contrato-http
     status: aceito
   - id: 743
     caminho: components/control-plane/usr/local/sbin/cloudif-patch-async-launch-route.sh
@@ -6644,12 +6644,12 @@ entradas:
     aceite: portao-mecanico/v1-audit-file
     status: aceito
   - id: 834
-    caminho: components/proxy/usr/local/sbin/cloudif-node-metrics.py
-    proposito: "arquivo V1 auditado; contexto funcional documentado pelo README ancestral components/proxy/usr/local/sbin/README.md"
-    tipo: infraestrutura
+    caminho: legacy/retired-agents/python/node-metrics/cloudif-node-metrics.py
+    proposito: "backup historico do agente Python aposentado; proibido para implantacao ativa apos U26"
+    tipo: documentacao
     consome: []
-    produz: evidencia/v1-file-0650
-    aceite: portao-mecanico/v1-audit-file
+    produz: evidencia/legacy-node-metrics-python
+    aceite: arquivo-preservado-fora-da-arvore-ativa
     status: aceito
   - id: 835
     caminho: components/proxy/usr/local/sbin/cloudif-npm-backup.sh
@@ -7948,12 +7948,12 @@ entradas:
     aceite: portao-mecanico/v1-audit-file
     status: aceito
   - id: 997
-    caminho: components/runtime/usr/local/sbin/cloudif-node-metrics.py
-    proposito: "arquivo V1 auditado; contexto funcional documentado pelo README ancestral components/runtime/usr/local/sbin/README.md"
-    tipo: infraestrutura
-    consome: []
-    produz: evidencia/v1-file-0813
-    aceite: portao-mecanico/v1-audit-file
+    caminho: legacy/retired-agents/python/node-metrics/README.md
+    proposito: "tombstone operacional que declara o agente Python aposentado e aponta para o C++ canonico"
+    tipo: documentacao
+    consome: [runtime/node-metrics-cpp-source]
+    produz: evidencia/legacy-node-metrics-python-policy
+    aceite: sem-referencia-de-deploy-ao-python
     status: aceito
   - id: 998
     caminho: components/runtime/usr/local/sbin/cloudif-release-maintenance

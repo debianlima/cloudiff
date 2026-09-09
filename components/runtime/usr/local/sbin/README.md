@@ -21,7 +21,6 @@ Componentes implantados no host de runtime, Forgejo, Komodo e executores.
 | [`cloudif-machine-guardian.py`](cloudif-machine-guardian.py) | `.py` | Implementa `send`, `main`. |
 | [`cloudif-machine-harvester.py`](cloudif-machine-harvester.py) | `.py` | Implementa `verify_policy_envelope`, `controller_open`, `run`, `ensure_identity`, `cert_state`, `cert_record` e outros componentes. |
 | [`cloudif-mongosh-komodo`](cloudif-mongosh-komodo) | `arquivo` | Arquivo de suporte da plataforma. |
-| [`cloudif-node-metrics.py`](cloudif-node-metrics.py) | `.py` | Implementa `run`, `network_summary`, `docker_summary`, `metrics`, `H`. |
 | [`cloudif-release-maintenance`](cloudif-release-maintenance) | `arquivo` | Arquivo de suporte da plataforma. |
 
 > Esta seção é gerada por `scripts/generate-directory-readmes.py`. Conteúdo manual fora dos marcadores é preservado.
