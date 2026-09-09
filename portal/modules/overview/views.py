@@ -88,9 +88,10 @@ def _server_card(node: dict, fmt, fmt_storage) -> str:
         f'<p class="resource-note">{detail}</p>'
         f'<div class="metric-line"><span>Memória</span><b>{fmt(node["mem_used"])} de {fmt(node["mem_total"])}</b></div>{_bar(node["mem_pct"])}'
         f'<div class="metric-line"><span>Capacidade física instalada</span><b>{fmt_storage(node.get("storage_physical_total") or node["disk_total"])}</b></div>'
-        f'<div class="metric-line"><span>Volumes montados</span><b>{fmt_storage(node["disk_used"])} de {fmt_storage(node["disk_total"])}</b></div>{_bar(node["disk_pct"])}'
-        + (f'<p class="resource-note">{fmt_storage(node.get("storage_outside_mounted"))} da capacidade física não está em filesystems montados.</p>'
-           if (node.get("storage_outside_mounted") or 0) > max(5 * 1024**3, 0.05 * (node.get("storage_physical_total") or 0)) else '')
+        f'<p class="resource-note">{int(node.get("storage_disk_count") or 0)} disco(s) físico(s) detectado(s).</p>'
+        f'<div class="metric-line"><span>Sistema (/)</span><b>{fmt_storage(node["disk_used"])} de {fmt_storage(node["disk_total"])}</b></div>{_bar(node["disk_pct"])}'
+        + (f'<p class="resource-note">A capacidade física inclui {fmt_storage(node.get("storage_outside_root"))} além do filesystem raiz; o percentual de uso acima mede somente /.</p>'
+           if (node.get("storage_outside_root") or 0) > max(5 * 1000**3, 0.05 * (node.get("storage_physical_total") or 0)) else '')
         + f'{_network_graph(node)}</article>'
     )
 

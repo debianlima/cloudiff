@@ -72,7 +72,7 @@ def _age_seconds(value: str | None) -> int | None:
 
 def server_metrics() -> dict:
     nodes, total_mem, used_mem = [], 0, 0
-    total_physical, total_mounted, used_mounted = 0, 0, 0
+    total_physical, total_root, used_root = 0, 0, 0
     try:
         con = sqlite3.connect(_DB)
         con.row_factory = sqlite3.Row
@@ -94,30 +94,29 @@ def server_metrics() -> dict:
         total_memory, used_memory = mem.get("total") or 0, mem.get("used") or 0
         legacy_total, legacy_used = disk.get("size") or 0, disk.get("used") or 0
         physical_storage = storage.get("physical_total") or legacy_total
-        mounted_storage = storage.get("mounted_total") or legacy_total
-        mounted_used = storage.get("mounted_used") or legacy_used
-        outside_mounted = storage.get("outside_mounted_filesystems")
-        if outside_mounted is None:
-            outside_mounted = max(0, physical_storage - mounted_storage)
+        mounted_storage = storage.get("mounted_total") or 0
+        mounted_used = storage.get("mounted_used") or 0
+        outside_root = max(0, physical_storage - legacy_total)
         age = _age_seconds(row["updated_at"])
-        healthy_payload = payload.get("ok") is True and total_memory > 0 and physical_storage > 0 and mounted_storage > 0
+        healthy_payload = payload.get("ok") is True and total_memory > 0 and physical_storage > 0 and legacy_total > 0
         online = bool(row["ok"]) and healthy_payload and age is not None and age <= 900
         total_mem += total_memory
         used_mem += used_memory
         total_physical += physical_storage
-        total_mounted += mounted_storage
-        used_mounted += mounted_used
+        total_root += legacy_total
+        used_root += legacy_used
         nodes.append({
             "node": row["node"], "online": online, "stale": age is None or age > 900,
             "error": str(payload.get("error") or ""), "updated_at": row["updated_at"],
             "mem_used": used_memory, "mem_total": total_memory,
             "mem_pct": round(100 * used_memory / total_memory) if total_memory else 0,
-            "disk_used": mounted_used, "disk_total": mounted_storage,
-            "disk_pct": round(100 * mounted_used / mounted_storage) if mounted_storage else 0,
+            "disk_used": legacy_used, "disk_total": legacy_total,
+            "disk_pct": round(100 * legacy_used / legacy_total) if legacy_total else 0,
             "storage_physical_total": physical_storage,
-            "storage_mounted_total": mounted_storage,
-            "storage_mounted_used": mounted_used,
-            "storage_outside_mounted": max(0, outside_mounted or 0),
+            "storage_mounted_total_observed": mounted_storage,
+            "storage_mounted_used_observed": mounted_used,
+            "storage_outside_root": outside_root,
+            "storage_disk_count": len(storage.get("physical_disks") or []),
             "storage_disks": storage.get("physical_disks") or [],
             "storage_filesystems": storage.get("mounted_filesystems") or [],
             "network_rx_bps": network.get("rx_bps"),
@@ -129,9 +128,9 @@ def server_metrics() -> dict:
         "online_count": sum(1 for node in nodes if node["online"]),
         "node_count": len(nodes),
         "agg_mem": f"{_fmt_bytes(used_mem)} / {_fmt_bytes(total_mem)}",
-        "agg_disk": f"{_fmt_storage(used_mounted)} / {_fmt_storage(total_mounted)}",
+        "agg_disk": f"{_fmt_storage(used_root)} / {_fmt_storage(total_root)}",
         "agg_storage_physical": _fmt_storage(total_physical),
-        "agg_storage_mounted": f"{_fmt_storage(used_mounted)} / {_fmt_storage(total_mounted)}",
+        "agg_storage_root": f"{_fmt_storage(used_root)} / {_fmt_storage(total_root)}",
         "fmt": _fmt_bytes,
         "fmt_storage": _fmt_storage,
         "fmt_rate": _fmt_rate,

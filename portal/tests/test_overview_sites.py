@@ -116,9 +116,9 @@ class OverviewSiteCardTest(unittest.TestCase):
             metrics = service.server_metrics()
         node = metrics["nodes"][0]
         self.assertEqual(node["storage_physical_total"], 3 * 1024**4)
-        self.assertEqual(node["disk_total"], 2 * 1024**4)
-        self.assertEqual(node["disk_used"], 200 * 1024**3)
-        self.assertEqual(node["storage_outside_mounted"], 1 * 1024**4)
+        self.assertEqual(node["disk_total"], 100 * 1024**3)
+        self.assertEqual(node["disk_used"], 20 * 1024**3)
+        self.assertEqual(node["storage_outside_root"], 3 * 1024**4 - 100 * 1024**3)
 
     def test_overview_renders_capacity_and_memory_graphs(self):
         from portal.modules.overview.views import overview_body
@@ -129,8 +129,9 @@ class OverviewSiteCardTest(unittest.TestCase):
                 "nodes": [{
                     "node": "backup", "online": True, "stale": False,
                     "mem_used": 4 * 1024**3, "mem_total": 16 * 1024**3, "mem_pct": 25,
-                    "disk_used": 200 * 1024**3, "disk_total": 2 * 1024**4, "disk_pct": 10,
-                    "storage_physical_total": 3 * 1024**4, "storage_outside_mounted": 1 * 1024**4,
+                    "disk_used": 20 * 1024**3, "disk_total": 100 * 1024**3, "disk_pct": 20,
+                    "storage_physical_total": 3 * 1024**4, "storage_outside_root": 3 * 1024**4 - 100 * 1024**3,
+                    "storage_disk_count": 2,
                     "network_rx_bps": 0, "network_tx_bps": 0,
                 }],
                 "fmt": _fmt_bytes, "fmt_storage": _fmt_storage, "fmt_rate": _fmt_rate, "online_count": 1, "node_count": 1,
@@ -141,8 +142,9 @@ class OverviewSiteCardTest(unittest.TestCase):
         self.assertIn("Capacidade física por servidor", markup)
         self.assertIn("Uso de memória por servidor", markup)
         self.assertIn("Capacidade física instalada", markup)
-        self.assertIn("Volumes montados", markup)
-        self.assertIn("não está em filesystems montados", markup)
+        self.assertIn("Sistema (/)", markup)
+        self.assertIn("além do filesystem raiz", markup)
+        self.assertIn("2 disco(s) físico(s)", markup)
         self.assertIn("3.3 TB", markup)
 
 
