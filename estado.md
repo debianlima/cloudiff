@@ -9,7 +9,7 @@
 - Forgejo SSH usa destino interno direto `10.62.91.2:2222` pelo gateway.
 - PostgreSQL/Supabase usa conector reverso da Hospedagem pela própria 443; o forward do tenant existe apenas enquanto há lease ativa e fica em loopback no proxy.
 - Faro permanece fora do caminho e não foi modificado.
-- A skill de projeto vigente é `cloudiff@0.1.34`.
+- A skill de projeto vigente é `cloudiff@0.1.35`.
 - `PracticalSwan/frontend-design@2.0` é a competência de direção estética para futuras unidades de interface/redesign; não autoriza por si só alterar frozen surfaces.
 
 ## Decisões superadas
@@ -78,7 +78,7 @@
 - U27 foi substituída após exceder `previsao_termino` em mais de 30 minutos sem renovação/atividade observável; o bloco original foi registrado fora do repositório antes da troca.
 
 ## Competências ativas na U20
-- `cloudiff@0.1.34`.
+- `cloudiff@0.1.35`.
 - `frontend-design@2.0` (PracticalSwan).
 - `desenvolvedor-de-software@15`.
 - `github-incremental-reconciliation@7`.
@@ -137,3 +137,18 @@
 - Patch versionado em `49a74e64635a1a64872f4850f36f084031bc15bb`, preservado em `origin/cloudiff-a10-visual` e integrado por fast-forward em `main`.
 - Cleanup de homologação: preview `127.0.0.1:18104` e relay A10 `172.21.0.1:18110` removidos; produção permaneceu HTTP 200 e `/srv/cloudif/app-pointers/portal-current` continuou apontando para `/srv/cloudif/app-releases/portal/hardness-missing-stack-ux-20260907T055809Z`.
 - Reserva `A10-VISUAL` liberada canonicamente ao final; nenhum artefato produtivo foi mutado.
+
+## A10-RELEASE-GATE — R-REDES/pfSense e preparação fail-closed
+
+- Reserva canônica `A10-RELEASE-GATE` registrada antes dos artefatos; escopo posteriormente ampliado para `deploy/a10-release-gate/**`, `skills/cloudiff/SKILL.md`, `competencias.yaml` e `tests/test_cloudiff_project_skill.py` antes de tocar esses caminhos.
+- O diagnóstico anterior `BLOCKED_CAMPUS_EDGE` foi superado em 09/09/2026: `10.250.255.254` voltou a responder e se identifica live como **R-REDES** (RB2011/RouterOS 7.22). O mesmo equipamento possui `172.16.0.2/24` em `vlan900-firewall`.
+- R-REDES aprende `172.16.0.1` em ARP como `BC:24:11:D3:4C:5E` e recebe 3/3 pings do pfSense em ~0,6 ms. `ad2` (`10.68.128.253`) usa gateway/rota `10.68.128.254` (R-REDES) para `172.16.0.1`, com ICMP PASS e TCP/22 OPEN. Assim, **R-REDES -> VLAN900 -> pfSense real -> serviço SSH** está provado.
+- O último elo permanece bloqueado por autenticação: o pfSense anuncia `publickey,password,keyboard-interactive`, mas `admin@172.16.0.1` rejeita a credencial operacional disponível mesmo forçando `keyboard-interactive,password`; nenhuma senha/chave foi resetada, importada ou persistida. Novo gate: **`BLOCKED_AUTH_PFSENSE`**.
+- A Hospedagem `10.62.92.7` também é alcançável a partir de `ad2` pelo gateway R-REDES; ICMP e TCP/22 passam, enquanto TCP/18094 externo permanece fechado como esperado. `cti@10.62.92.7` rejeita a credencial operacional e as chaves locais gerenciadas testadas em `BatchMode`, inclusive com negociação explícita `keyboard-interactive,password`. Novo gate adicional: **`BLOCKED_AUTH_HOSPEDAGEM`**.
+- Por causa desses bloqueios de autenticação, `portal-current`/`portal-previous` live não foram revalidados neste ciclo e nenhum snapshot antigo foi promovido a verdade atual.
+- Dependência arquitetural comprovada: `cloudif_portal_v2_coexist.py` fixa `LIB=/srv/cloudif/lib`; portanto um release coerente do Portal exige o mesmo source set para **app em `portal-current` + overlay `/srv/cloudif/lib` + `/srv/cloudif/lib/portal`**. Trocar apenas o symlink do app pode reproduzir candidato falso com bridge/assets antigos.
+- `deploy/a10-release-gate/build-candidate.sh` prepara bundle imutável/hashado desses três planos; `preflight-target.sh` captura current/previous, service metadata, hashes e pre-state sem trocar ponteiro/reiniciar; `rollback.sh` é fail-closed e exige sentinel + integridade do pre-state. Não existe script de promoção/aplicação deliberadamente.
+- Build local validado: 124 arquivos, manifesto SHA-256 completo, `promotion_authorized=false` e `requires_live_preflight=true`; `bash -n`, manifest hash parity, secret scan e `scripts/validate-repository.py` PASS.
+- O gate `tests/test_cloudiff_project_skill.py` continha drift histórico: hardcodes de `cloudiff@0.1.5`, método `@14`, 13 referências fixas e comparação do working tree atual com hashes do snapshot v1→v2. A implementação dinâmica histórica de `839c9e8` foi restaurada e generalizada: versão/referências derivam do frontmatter, o snapshot preserva sua integridade histórica e `FROZEN_SURFACES.md` continua validando as quatro superfícies congeladas atuais. Gate final: `CLOUDIFF_PROJECT_SKILL=PASS version=0.1.35 compoe=2 referencia=14 anti_cycle=PASS`.
+- Skill reconciliada para `cloudiff@0.1.35` com L057: candidato do Portal só é válido quando app, lib e pacote v2 vêm do mesmo source set. `competencias.yaml` acompanha a mesma versão.
+- Produção não foi promovida. Próximo gate obrigatório: recuperar autenticação SSH legítima no pfSense e Hospedagem; executar `preflight-target.sh` no alvo; somente então revisar mecanismo de cutover coerente e autorização antes de qualquer mudança produtiva.

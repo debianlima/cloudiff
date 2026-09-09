@@ -1,6 +1,6 @@
 ---
 name: cloudiff
-versao: 0.1.34
+versao: 0.1.35
 description: Governa, reconcilia, normaliza e evolui a plataforma CloudIFF V1/Python→V2/C++23 preservando interface homologada,
   contratos, segurança, dados, observabilidade e rollback.
 tipo_competencia: projeto
@@ -359,3 +359,5 @@ Em A10, o Portal vivo executava `/srv/cloudif/app-releases/portal/hardness-missi
 
 ### L056 — WebDev oficial só conta como gate visual quando a rota autorizada realmente alcança o Selenium
 A10 confirmou o contrato oficial `config/webdev-workspace.json`: Selenium Chrome/noVNC em Forja, workspace read-only e link fixo `__cloudiff_webdev`. Hospedagem não tinha rota para Forja e o perfil WireGuard recebia 403/não alcançava `10.62.91.2:17900`, coerente com a pendência NAT/allowlist já registrada. Regra: existência do container/browser não equivale a capacidade de validação; o gate visual exige origem permitida + rota até o WebDriver/noVNC. Não ampliar firewall/allowlist apenas para fazer o teste passar.
+### L057 — candidato do Portal só é válido quando app, lib e pacote v2 vêm do mesmo source set
+Em A10-RELEASE-GATE, um preview parcial foi provado enganoso porque `cloudif_portal_v2_coexist.py` fixa `LIB=/srv/cloudif/lib` e carrega `portal/design` e `portal/ui` desse caminho, enquanto o executável vem de `/srv/cloudif/app-pointers/portal-current`. Assim, trocar apenas o app release pode executar código novo com bridge/assets antigos e produzir sintomas que não pertencem ao candidato versionado. Regra: inventariar e homologar `portal-current`, o overlay `/srv/cloudif/lib` e `/srv/cloudif/lib/portal` como um único source set; pre-state/rollback precisam cobrir os três planos. Se a arquitetura live não oferecer troca atômica coerente dos três, a promoção fica bloqueada até existir mecanismo revisado — nunca “compensar” com cópia parcial durante o cutover. Gate: Chrome 150 aprovou o candidato somente após mount namespace privado com os três payloads do mesmo working tree; bundle `deploy/a10-release-gate/build-candidate.sh` preserva esse conjunto e marca `promotion_authorized=false` até preflight live.

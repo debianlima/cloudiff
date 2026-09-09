@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+set -euo pipefail
+ROOT=${CLOUDIFF_SOURCE_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}
+OUT_ROOT=${1:-/tmp/cloudiff-a10-release-candidates}
+cd "$ROOT"
+SHA=$(git rev-parse HEAD)
+SHORT=${SHA:0:12}
+RELEASE_ID="a10-ux-${SHORT}"
+DEST="$OUT_ROOT/$RELEASE_ID"
+ARCHIVE="$OUT_ROOT/$RELEASE_ID.tar.gz"
+[ ! -e "$DEST" ] || { echo "candidate exists: $DEST" >&2; exit 20; }
+install -d -m 0755 "$DEST/payload/app" "$DEST/payload/lib-overlay" "$DEST/payload/portal"
+cp -a components/control-plane/current-apps/portal-current/. "$DEST/payload/app/"
+cp -a components/control-plane/srv/cloudif/lib/. "$DEST/payload/lib-overlay/"
+# Runtime package homologated together; omit tests/docs but keep legacy modules used by bridges.
+tar -C portal \
+  --exclude='./tests' --exclude='./tests/**' \
+  --exclude='./README.md' --exclude='./FROZEN_SURFACES.md' \
+  --exclude='*/README.md' \
+  -cf - . | tar -C "$DEST/payload/portal" -xf -
+find "$DEST" -type d -name __pycache__ -prune -exec rm -rf {} +
+find "$DEST" -type f -name '*.pyc' -delete
+python3 -m py_compile "$DEST/payload/app/cloudif-admin-portal.py" "$DEST/payload/app/cloudif-admin-portal-base.py"
+python3 - <<'PY' "$DEST"
+import pathlib, py_compile, sys
+root=pathlib.Path(sys.argv[1])/'payload'/'portal'
+for p in sorted(root.rglob('*.py')):
+    py_compile.compile(str(p), doraise=True)
+for d in sorted(root.rglob('__pycache__'), reverse=True):
+    for f in d.iterdir(): f.unlink()
+    d.rmdir()
+PY
+python3 - <<'PY' "$DEST" "$SHA" "$RELEASE_ID"
+import hashlib, json, pathlib, sys, datetime
+root=pathlib.Path(sys.argv[1]); sha=sys.argv[2]; rid=sys.argv[3]
+files={}
+for p in sorted((root/'payload').rglob('*')):
+    if p.is_file():
+        files[str(p.relative_to(root))]=hashlib.sha256(p.read_bytes()).hexdigest()
+manifest={
+  'release_id':rid,
+  'source_commit':sha,
+  'created_at':datetime.datetime.now(datetime.timezone.utc).isoformat(),
+  'promotion_authorized':False,
+  'requires_live_preflight':True,
+  'payload_contract':{
+    'app':'/srv/cloudif/app-releases/portal/<release-id>',
+    'lib_overlay':'/srv/cloudif/lib (live inventory required before any replace)',
+    'portal_runtime':'/srv/cloudif/lib/portal (must match this candidate as one homologated set)'
+  },
+  'files':files,
+}
+(root/'release-manifest.json').write_text(json.dumps(manifest,indent=2,sort_keys=True)+"\n")
+PY
+find "$DEST" -type f -print0 | sort -z | xargs -0 sha256sum > "$DEST/SHA256SUMS"
+tar -C "$OUT_ROOT" -czf "$ARCHIVE" "$RELEASE_ID"
+sha256sum "$ARCHIVE" > "$ARCHIVE.sha256"
+printf 'RELEASE_ID=%s\nSOURCE_COMMIT=%s\nDEST=%s\nARCHIVE=%s\n' "$RELEASE_ID" "$SHA" "$DEST" "$ARCHIVE"
