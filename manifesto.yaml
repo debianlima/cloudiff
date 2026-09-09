@@ -12151,20 +12151,3 @@ entradas:
     produz: evidencia/remote-access-443-relay-u19
     aceite: python3 -m unittest portal.tests.test_remote_connections_443_relay
     status: aceito
-trabalho_compartilhado:
-  projeto: cloudiff
-  caminho: /srv/mcp-workspace/tmp/cloudiff-a10-release-gate
-  unidade: A10-RELEASE-GATE
-  descricao: provar caminho R-REDES/pfSense e revalidar current/previous/rollback sem promover sem gates
-  agente: chatgpt-a10-profile-aline
-  atualizado_em: '2026-09-09T13:57:04Z'
-  previsao_termino: '2026-09-09T15:57:04Z'
-  zona_exclusao:
-    - manifesto.yaml
-    - estado.md
-    - docs/manual-tecnico/13-ACESSO-EXTERNO.md
-    - logs/**
-    - deploy/a10-release-gate/**
-    - skills/cloudiff/SKILL.md
-    - competencias.yaml
-    - tests/test_cloudiff_project_skill.py
