@@ -12193,7 +12193,7 @@ trabalho_compartilhado:
   unidade: CLOUDIFF-A9
   descricao: navegacao continua da UI, reproducao/correcao UX e benchmark seletivo de hot paths antes de qualquer migracao C++
   agente: chat:6aa17fc3-93ec-83e9-8d70-75ee0cc56e36
-  atualizado_em: '2026-09-09T22:36:36Z'
+  atualizado_em: '2026-09-09T22:37:24Z'
   previsao_termino: '2026-09-10T00:48:00Z'
   zona_exclusao:
     - manifesto.yaml

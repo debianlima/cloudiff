@@ -4,7 +4,7 @@ skill_projeto:
   nome: CloudIFF
   tipo_competencia: projeto
   fonte: skills/cloudiff/SKILL.md
-  versao: 0.1.36
+  versao: 0.1.37
   vinculada_por: usuario em 2026-08-24
   protocolo_governanca: PGH 1.2.0
   compoe:
@@ -18,9 +18,9 @@ skill_projeto:
     estado_reconciliacao: ATUAL
   referencia:
   - id: desenvolvedor-de-software
-    versao_fixada: '15'
+    versao_fixada: '16'
     fonte: debianlima/competencias-catalogo:metodo/desenvolvedor-de-software/SKILL.md
-    delta_lido_ate: c317c960ade32d19659f62934a7f05df569f2b42
+    delta_lido_ate: f3df818708eeda3d05d36edf1dc3cf4d4f957212
     estado_reconciliacao: ATUAL
   - id: github-incremental-reconciliation
     versao_fixada: '7'
@@ -203,6 +203,5 @@ competencias:
   fonte: saeed-vayghan/gemini-agent-skills@34ca3ca1db04b092c5f86eba155c23e105fc933b:.gemini/skills/cpp-pro/SKILL.md
   melhora: C++20/23, CMake moderno, RAII, warnings, sanitizers, concorrência e otimização mensurável
   portao: CMake/Ninja com Clang; zero warnings em -Wall -Wextra -Wpedantic; ASan/UBSan limpos; CTest aprovado em Debug e Release
-  evidencia: revisão v12 encontrou a entrada build-cpp sem nenhuma competência ativa cobrindo o tipo; cobertura obrigatória
-    antes de reabrir CMake
+  evidencia: revisão v12 encontrou a entrada build-cpp sem nenhuma competência ativa cobrindo o tipo; cobertura obrigatória antes de reabrir CMake
   instalada_em: 2026-08-20

@@ -9,7 +9,7 @@
 - Forgejo SSH usa destino interno direto `10.62.91.2:2222` pelo gateway.
 - PostgreSQL/Supabase usa conector reverso da Hospedagem pela própria 443; o forward do tenant existe apenas enquanto há lease ativa e fica em loopback no proxy.
 - Faro permanece fora do caminho e não foi modificado.
-- A skill de projeto vigente é `cloudiff@0.1.36`.
+- A skill de projeto vigente é `cloudiff@0.1.37`.
 - Decisão humana de 09/09/2026: novas funcionalidades e refatorações do CloudIFF devem ser modulares por responsabilidade; adapters/entrypoints apenas orquestram e lógica específica vai para módulo coeso próprio, com gate que impeça regressão monolítica.
 - `PracticalSwan/frontend-design@2.0` é a competência de direção estética para futuras unidades de interface/redesign; não autoriza por si só alterar frozen surfaces.
 
@@ -170,7 +170,8 @@
 ## CLOUDIFF-A9 — requisito de arquitetura modular (2026-09-09)
 
 - Decisão humana: modularidade passa a ser requisito do CloudIFF e das próximas unidades do projeto; evitar concentrar novas responsabilidades em arquivos monolíticos.
-- Contrato prescritivo registrado em `docs/REQUIREMENTS.md` (`R-MOD-1`) e `docs/ARCHITECTURE.md`; skill do projeto elevada para `cloudiff@0.1.36` com `ModularidadeObrigatoria` e aprendizado L058.
+- Contrato prescritivo registrado em `docs/REQUIREMENTS.md` (`R-MOD-1`) e `docs/ARCHITECTURE.md`; skill do projeto elevada para `cloudiff@0.1.37` com `ModularidadeObrigatoria` e aprendizado L058.
 - Aplicação imediata no ajuste de Publicações: `portal/core/html_fragments.py`, `portal/core/resource_ownership.py` e `portal/core/publication_summary.py` isolam responsabilidades; `portal/core/legacy_shell.py` permanece como adaptador/orquestrador e caiu para aproximadamente 281 linhas nesta revisão. O CSS específico foi isolado em `portal/design/publications.css` e incluído explicitamente na allowlist de assets do adapter v2.
-- Gate modular/UX final: 22 testes focados OK; `CLOUDIFF_PROJECT_SKILL=PASS version=0.1.36`; Chrome 151 confirmou desktop/mobile com asset modular carregado, `padding=0`, zero overflow e botão mobile de 44 px. `scripts/validate-repository.py` permanece vermelho pelos mesmos 13 paths ausentes do `HEAD`, com `new_errors=[]` e `portal_v2_important=0`.
+- Gate modular/UX final: 22 testes focados OK; `CLOUDIFF_PROJECT_SKILL=PASS version=0.1.37`; Chrome 151 confirmou desktop/mobile com asset modular carregado, `padding=0`, zero overflow e botão mobile de 44 px. `scripts/validate-repository.py` permanece vermelho pelos mesmos 13 paths ausentes do `HEAD`, com `new_errors=[]` e `portal_v2_important=0`.
 - A mesma disciplina vale para C++: componente nativo modular por responsabilidade; migração só após profiling/benchmark que prove hot path, com contrato e rollback/fallback preservados.
+- Método global recarregado após homologação da decisão: `desenvolvedor-de-software@16` é a linha homologada vigente para as próximas unidades; referências históricas a v15 permanecem como evidência de unidades anteriores.

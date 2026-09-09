@@ -1,8 +1,7 @@
 ---
 name: cloudiff
-versao: 0.1.36
-description: Governa, reconcilia, normaliza e evolui a plataforma CloudIFF V1/Python→V2/C++23 preservando interface homologada,
-  contratos, segurança, dados, observabilidade e rollback.
+versao: 0.1.37
+description: Governa, reconcilia, normaliza e evolui a plataforma CloudIFF V1/Python→V2/C++23 preservando interface homologada, contratos, segurança, dados, observabilidade e rollback.
 tipo_competencia: projeto
 origem:
   projeto_de_origem: cloudiff
@@ -34,8 +33,8 @@ compoe:
 referencia:
 - id: desenvolvedor-de-software
   fonte: debianlima/competencias-catalogo:metodo/desenvolvedor-de-software/SKILL.md
-  versao_fixada: '15'
-  delta_lido_ate: c317c960ade32d19659f62934a7f05df569f2b42
+  versao_fixada: '16'
+  delta_lido_ate: f3df818708eeda3d05d36edf1dc3cf4d4f957212
   estado: reconciliado
 - id: github-incremental-reconciliation
   fonte: debianlima/competencias-catalogo:metodo/github-incremental-reconciliation/SKILL.md
@@ -173,7 +172,7 @@ O plano inicial classificou 444 arquivos Python: 123 serviços/runtime candidato
 
 ### Método obrigatório por unidade
 
-1. carregar `desenvolvedor-de-software@15`;
+1. carregar `desenvolvedor-de-software@16`;
 2. verificar `trabalho_compartilhado`/zona de exclusão;
 3. reconciliar com `github-incremental-reconciliation@7`;
 4. emitir `DELTA_INVENTORY=PASS` e `LEARNING_PRESERVED=PASS`;
