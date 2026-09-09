@@ -12151,3 +12151,18 @@ entradas:
     produz: evidencia/remote-access-443-relay-u19
     aceite: python3 -m unittest portal.tests.test_remote_connections_443_relay
     status: aceito
+trabalho_compartilhado:
+  projeto: cloudiff
+  caminho: /srv/mcp-workspace/tmp/cloudiff-u27-public-overview-20260909
+  unidade: U27
+  descricao: alinhar renderer publico da Visao Geral ao backend C++/SQLite homologado
+  agente: meu-terminal-oracle
+  atualizado_em: '2026-09-09T03:35:48+00:00'
+  previsao_termino: '2026-09-09T05:35:48+00:00'
+  zona_exclusao:
+    - components/control-plane/srv/cloudif/lib/cloudif_ui_pages.py
+    - components/control-plane/srv/cloudif/staging/lib/cloudif_ui_pages.py
+    - portal/tests/test_overview_sites.py
+    - manifesto.yaml
+    - estado.md
+    - skills/cloudiff/SKILL.md
