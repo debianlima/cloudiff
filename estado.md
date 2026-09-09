@@ -137,3 +137,19 @@
 - Patch versionado em `49a74e64635a1a64872f4850f36f084031bc15bb`, preservado em `origin/cloudiff-a10-visual` e integrado por fast-forward em `main`.
 - Cleanup de homologação: preview `127.0.0.1:18104` e relay A10 `172.21.0.1:18110` removidos; produção permaneceu HTTP 200 e `/srv/cloudif/app-pointers/portal-current` continuou apontando para `/srv/cloudif/app-releases/portal/hardness-missing-stack-ux-20260907T055809Z`.
 - Reserva `A10-VISUAL` liberada canonicamente ao final; nenhum artefato produtivo foi mutado.
+
+## A9 — checkpoint: resiliência de dependências do Portal e decisão C++
+
+- `CLOUDIFF-A9` permanece **RUNNING** na lane `cloudiff-a9-lima-20260909`; `boundary=false`/`handoff_status=NA`, portanto não houve `TURN_RESUME_RECONCILE` nem handoff antecipado.
+- Preflight vivo: `profile-lima` com browser runtime `READY`; Chrome do próprio perfil acessado via CDP local. A sessão pública Authentik não estava autenticada e o WebDev público continuou 403, sem bypass de credenciais/allowlist.
+- Homologação foi feita em preview reversível do renderer canônico, preso a loopback e exposto à Win110 somente por túnel SSH reverso em loopback; produção `18094` não foi alterada.
+- Navegação inicial em admin/professor/aluno retornou HTTP 200, sem erro de console, request failed ou overflow horizontal; foco por teclado alcançou skip-link, navegação, tema e ações principais.
+- Reproduzidos três crashes HTML por dependência ausente: Publicação sem `/etc/cloudif/runtime-policy.json`, Agentes sem onboarding `127.0.0.1:18208` e Reconciliação sem o SQLite de fila. As APIs já eram fail-closed (`503`); apenas as páginas HTML derrubavam a conexão.
+- Patch A9 mantém a API como `503` e faz a página degradar de forma explícita, sem ação: Publicação informa indisponibilidade e “Nenhuma publicação foi executada”; Agentes informa onboarding indisponível e “Nenhuma credencial foi alterada”; Reconciliação informa fila indisponível e “Nenhuma ação foi executada”.
+- Browser real pós-patch: as três páginas retornaram 200 com seus avisos, zero console error/request failed/overflow; APIs `publication`, `agent-guide` e `reconciliation` permaneceram 503, provando que a UX não transforma falha backend em falso sucesso.
+- Sweep canônico pós-patch: 30 superfícies, 29 HTTP 200, zero fatal, zero 5xx e zero overflow. `operacao-producao` retornou 403 esperado porque o preview não contém o projeto autorizado `atalhos-cloudif-iff1860746`; o handler exige essa visibilidade por contrato.
+- Gates locais: `py_compile` PASS; suíte focal 34/34 PASS; UI 74/74 PASS; Portal 29/29 PASS; `git diff --check` PASS.
+- Benchmark A9 (5 requests/rota no preview): `resumo` mediana 314,67 ms, `projetos` 388,98 ms, `bancos` 293,07 ms, `git` 2411,79 ms, `publicacao` 287,84 ms, `agentes` 292,86 ms, `reconciliacao` 200,09 ms; RSS estabilizou em ~53,9 MB.
+- A rota mais lenta (`git`) consumiu apenas ~100 ms de CPU ao longo de 5 requests (~20 ms/request) para ~2,41 s de wall-clock mediano e contém chamadas externas ao cliente Forja. O gargalo observado é de espera/IO, não CPU-bound; **C++ não foi acionado**, pois não há evidência que justifique migração seletiva nem baseline/after responsável a produzir.
+- Rollback permanece trivial: todo patch funcional está isolado na lane A9; produção e release ativo não foram mutados.
+- Próximo gate: continuar a navegação do turno sobre o candidato e, se houver acesso live autorizado ao runtime/WebDev, repetir os mesmos probes contra o runtime observado; qualquer migração C++ futura exige novo hot path CPU-bound medido com latência+RAM antes/depois e fallback preservado.

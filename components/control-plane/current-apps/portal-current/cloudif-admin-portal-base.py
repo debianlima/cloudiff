@@ -5981,7 +5981,11 @@ if 'Portal' in globals() and not globals().get('_rec_tab_wrapped'):
     _rec_prev_get=Portal.do_GET
     def _rec_get(self):
         parsed=urllib.parse.urlparse(self.path);path=parsed.path.rstrip('/');tab=(urllib.parse.parse_qs(parsed.query).get('tab') or [''])[0]
-        if path in ('','/cloudiff/portal','/cloudif/portal') and tab=='reconciliacao':return self.send_html(page(self.user(),'reconciliacao',_rec.render()))
+        if path in ('','/cloudiff/portal','/cloudif/portal') and tab=='reconciliacao':
+            user=self.user()
+            try: body=_rec.render()
+            except Exception: body='<section class="card"><h2>Reconciliação assíncrona</h2><p class="pill bad">Reconciliação temporariamente indisponível.</p><p class="small">A fila não pôde ser consultada. Nenhuma ação foi executada.</p></section>'
+            return self.send_html(page(user,'reconciliacao',body))
         if path in ('/cloudiff/portal/api/reconciliation','/cloudif/portal/api/reconciliation','/api/reconciliation'):
             try:data=_rec.data();code=200
             except Exception:data={'ok':False,'error':'reconciliation_unavailable','secrets_exposed':False};code=503
@@ -6030,7 +6034,10 @@ def _rc_send(handler,code,data):
 def _aig_data(user):return _aig.guide_data(_oi_visible(user))
 def _aig_render(user):
     csrf=_prod_csrf_token(user)
-    return _aig.render(_oi_visible(user),csrf,_ap_visible(user),_ap_can_decide(user),user.get('username') or '')+_rc.render_dialog(csrf)
+    try: identities=_oi_visible(user)
+    except Exception:
+        return '<section class="card"><h2>Agentes de IA e MCP</h2><p class="pill bad">Onboarding temporariamente indisponível.</p><p class="small">As identidades do projeto não puderam ser consultadas. Nenhuma credencial foi alterada.</p></section>'+_rc.render_dialog(csrf)
+    return _aig.render(identities,csrf,_ap_visible(user),_ap_can_decide(user),user.get('username') or '')+_rc.render_dialog(csrf)
 if 'Portal' in globals() and not globals().get('_aig_wrapped'):
     _aig_prev_get=Portal.do_GET
     def _aig_get(self):
@@ -6466,7 +6473,10 @@ if 'Portal' in globals() and not globals().get('_pub110_wrapped'):
     def _pub110_get(self):
         parsed=urllib.parse.urlparse(self.path);path=parsed.path.rstrip('/');tab=(urllib.parse.parse_qs(parsed.query).get('tab') or [''])[0]
         if path in ('','/cloudiff/portal','/cloudif/portal') and tab=='publicacao':
-            user=self.user();return self.send_html(page(user,'publicacao',_pub110.render(user_visible_projects(user['username'],user['groups']))))
+            user=self.user()
+            try: body=_pub110.render(user_visible_projects(user['username'],user['groups']))
+            except Exception: body='<section class="card"><h2>Publicação</h2><p class="pill bad">Publicação temporariamente indisponível.</p><p class="small">A política de runtime ou o broker não pôde ser consultado. Nenhuma publicação foi executada.</p></section>'
+            return self.send_html(page(user,'publicacao',body))
         if path in ('/cloudiff/portal/api/publication','/cloudif/portal/api/publication','/api/publication'):
             try:
                 user=self.user();data=_pub110.data(user_visible_projects(user['username'],user['groups']));code=200
