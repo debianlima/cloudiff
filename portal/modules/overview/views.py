@@ -34,7 +34,48 @@ def _network_graph(node: dict) -> str:
     )
 
 
-def _server_card(node: dict, fmt) -> str:
+def _capacity_chart(metrics: dict) -> str:
+    nodes = [node for node in metrics.get("nodes", []) if (node.get("storage_physical_total") or 0) > 0]
+    peak = max((float(node.get("storage_physical_total") or 0) for node in nodes), default=1.0)
+    rows = []
+    for node in nodes:
+        total = float(node.get("storage_physical_total") or 0)
+        pct = round(100 * total / peak) if peak else 0
+        rows.append(
+            f'<div class="metric-line"><span>{html.escape(str(node.get("node") or "-"))}</span><b>{metrics["fmt_storage"](total)}</b></div>'
+            + _bar(pct)
+        )
+    return (
+        '<article class="resource-card">'
+        '<div class="resource-card-head"><div><p class="resource-kicker">Gráfico</p><h3>Capacidade física por servidor</h3></div></div>'
+        '<p class="resource-note">Compara os discos físicos instalados; a maior capacidade ocupa 100% da escala.</p>'
+        + "".join(rows) + '</article>'
+    )
+
+
+def _memory_chart(metrics: dict) -> str:
+    rows = []
+    for node in metrics.get("nodes", []):
+        if (node.get("mem_total") or 0) <= 0:
+            continue
+        rows.append(
+            f'<div class="metric-line"><span>{html.escape(str(node.get("node") or "-"))}</span>'
+            f'<b>{metrics["fmt"](node.get("mem_used"))} de {metrics["fmt"](node.get("mem_total"))}</b></div>'
+            + _bar(node.get("mem_pct") or 0)
+        )
+    return (
+        '<article class="resource-card">'
+        '<div class="resource-card-head"><div><p class="resource-kicker">Gráfico</p><h3>Uso de memória por servidor</h3></div></div>'
+        '<p class="resource-note">Percentual de memória em uso no momento da última coleta.</p>'
+        + "".join(rows) + '</article>'
+    )
+
+
+def _platform_charts(metrics: dict) -> str:
+    return '<div class="resource-grid">' + _capacity_chart(metrics) + _memory_chart(metrics) + '</div>'
+
+
+def _server_card(node: dict, fmt, fmt_storage) -> str:
     if node["online"]:
         state, detail = '<span class="chip">Disponível</span>', "Coleta recente"
     elif node["stale"]:
@@ -46,8 +87,11 @@ def _server_card(node: dict, fmt) -> str:
         f'<div class="resource-card-head"><div><p class="resource-kicker">Servidor</p><h3>{html.escape(node["node"])}</h3></div>{state}</div>'
         f'<p class="resource-note">{detail}</p>'
         f'<div class="metric-line"><span>Memória</span><b>{fmt(node["mem_used"])} de {fmt(node["mem_total"])}</b></div>{_bar(node["mem_pct"])}'
-        f'<div class="metric-line"><span>Armazenamento</span><b>{fmt(node["disk_used"])} de {fmt(node["disk_total"])}</b></div>{_bar(node["disk_pct"])}'
-        f'{_network_graph(node)}</article>'
+        f'<div class="metric-line"><span>Capacidade física instalada</span><b>{fmt_storage(node.get("storage_physical_total") or node["disk_total"])}</b></div>'
+        f'<div class="metric-line"><span>Volumes montados</span><b>{fmt_storage(node["disk_used"])} de {fmt_storage(node["disk_total"])}</b></div>{_bar(node["disk_pct"])}'
+        + (f'<p class="resource-note">{fmt_storage(node.get("storage_outside_mounted"))} da capacidade física não está em filesystems montados.</p>'
+           if (node.get("storage_outside_mounted") or 0) > max(5 * 1024**3, 0.05 * (node.get("storage_physical_total") or 0)) else '')
+        + f'{_network_graph(node)}</article>'
     )
 
 
@@ -111,7 +155,7 @@ def overview_body(data: dict) -> str:
     for node in metrics["nodes"]:
         node["network_rx_label"] = metrics["fmt_rate"](node.get("network_rx_bps"))
         node["network_tx_label"] = metrics["fmt_rate"](node.get("network_tx_bps"))
-    servers = "".join(_server_card(node, metrics["fmt"]) for node in metrics["nodes"]) or _empty(
+    servers = "".join(_server_card(node, metrics["fmt"], metrics["fmt_storage"]) for node in metrics["nodes"]) or _empty(
         "Métricas indisponíveis", "A coleta da plataforma ainda não enviou dados.", "Ver saúde", f"{BASE}/?tab=monitor-saude"
     )
     others = ""
@@ -130,5 +174,6 @@ def overview_body(data: dict) -> str:
         + '<section class="resource-section" aria-labelledby="my-databases-title"><div class="resource-section-head"><div><p class="ov-eyebrow">Dados</p><h2 id="my-databases-title">Meus bancos</h2><p>Ambientes de dados que você pode usar nos seus projetos.</p></div>'
         f'<a href="{BASE}/?tab=bancos">Gerenciar todos os bancos</a></div><div class="resource-grid">{databases}</div>{others}</section>'
         '<section class="resource-section platform-health" aria-labelledby="platform-title"><div class="resource-section-head"><div><p class="ov-eyebrow">Plataforma</p><h2 id="platform-title">Saúde da plataforma</h2>'
-        f'<p>{metrics["online_count"]} de {metrics["node_count"]} servidores com coleta recente.</p></div><a href="{BASE}/?tab=monitor-saude">Abrir monitoramento</a></div><div class="resource-grid server-grid">{servers}</div></section>'
+        f'<p>{metrics["online_count"]} de {metrics["node_count"]} servidores com coleta recente.</p></div><a href="{BASE}/?tab=monitor-saude">Abrir monitoramento</a></div>'
+        f'{_platform_charts(metrics)}<div class="resource-grid server-grid">{servers}</div></section>'
     )

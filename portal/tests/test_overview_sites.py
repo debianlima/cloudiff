@@ -92,6 +92,59 @@ class OverviewSiteCardTest(unittest.TestCase):
         self.assertIn("operation.value=button.value", source)
         self.assertLess(source.index("operation.value=button.value"), source.index("button.disabled=true"))
 
+    def test_server_metrics_prefers_physical_and_mounted_storage_fields(self):
+        from portal.modules.overview import service
+        import json, sqlite3
+        with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as db_handle:
+            database = db_handle.name
+        con = sqlite3.connect(database)
+        con.execute("create table node_metrics_cache(node text, ok integer, payload text, updated_at text)")
+        payload = {
+            "ok": True,
+            "memory": {"total": 16 * 1024**3, "used": 4 * 1024**3},
+            "disk_root": {"size": 100 * 1024**3, "used": 20 * 1024**3},
+            "storage": {
+                "physical_total": 3 * 1024**4,
+                "mounted_total": 2 * 1024**4,
+                "mounted_used": 200 * 1024**3,
+                "outside_mounted_filesystems": 1 * 1024**4,
+            },
+        }
+        con.execute("insert into node_metrics_cache values(?,?,?,datetime('now'))", ("backup", 1, json.dumps(payload)))
+        con.commit(); con.close()
+        with mock.patch.object(service, "_DB", database):
+            metrics = service.server_metrics()
+        node = metrics["nodes"][0]
+        self.assertEqual(node["storage_physical_total"], 3 * 1024**4)
+        self.assertEqual(node["disk_total"], 2 * 1024**4)
+        self.assertEqual(node["disk_used"], 200 * 1024**3)
+        self.assertEqual(node["storage_outside_mounted"], 1 * 1024**4)
+
+    def test_overview_renders_capacity_and_memory_graphs(self):
+        from portal.modules.overview.views import overview_body
+        from portal.modules.overview.service import _fmt_bytes, _fmt_rate, _fmt_storage
+        data = {
+            "username": "admin",
+            "metrics": {
+                "nodes": [{
+                    "node": "backup", "online": True, "stale": False,
+                    "mem_used": 4 * 1024**3, "mem_total": 16 * 1024**3, "mem_pct": 25,
+                    "disk_used": 200 * 1024**3, "disk_total": 2 * 1024**4, "disk_pct": 10,
+                    "storage_physical_total": 3 * 1024**4, "storage_outside_mounted": 1 * 1024**4,
+                    "network_rx_bps": 0, "network_tx_bps": 0,
+                }],
+                "fmt": _fmt_bytes, "fmt_storage": _fmt_storage, "fmt_rate": _fmt_rate, "online_count": 1, "node_count": 1,
+            },
+            "resources": {"sites": [], "databases": [], "can_view_others": False, "other_sites": 0, "other_databases": 0},
+        }
+        markup = overview_body(data)
+        self.assertIn("Capacidade física por servidor", markup)
+        self.assertIn("Uso de memória por servidor", markup)
+        self.assertIn("Capacidade física instalada", markup)
+        self.assertIn("Volumes montados", markup)
+        self.assertIn("não está em filesystems montados", markup)
+        self.assertIn("3.3 TB", markup)
+
 
 if __name__ == "__main__":
     unittest.main()

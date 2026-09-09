@@ -26,6 +26,19 @@ def _fmt_bytes(n) -> str:
     return "-"
 
 
+def _fmt_storage(n) -> str:
+    """Format storage using decimal disk-capacity units (1 TB = 10^12 bytes)."""
+    try:
+        n = float(n or 0)
+    except (TypeError, ValueError):
+        return "-"
+    for unit in ("B", "KB", "MB", "GB", "TB", "PB"):
+        if n < 1000 or unit == "PB":
+            return f"{n:.0f} {unit}" if unit in ("B", "KB") else f"{n:.1f} {unit}"
+        n /= 1000
+    return "-"
+
+
 def _fmt_rate(value) -> str:
     try:
         value = float(value or 0)
@@ -58,7 +71,8 @@ def _age_seconds(value: str | None) -> int | None:
 
 
 def server_metrics() -> dict:
-    nodes, total_mem, used_mem, total_disk, used_disk = [], 0, 0, 0, 0
+    nodes, total_mem, used_mem = [], 0, 0
+    total_physical, total_mounted, used_mounted = 0, 0, 0
     try:
         con = sqlite3.connect(_DB)
         con.row_factory = sqlite3.Row
@@ -75,23 +89,37 @@ def server_metrics() -> dict:
             payload = {}
         mem = payload.get("memory", {}) or {}
         disk = payload.get("disk_root", {}) or {}
+        storage = payload.get("storage", {}) or {}
         network = payload.get("network", {}) or {}
         total_memory, used_memory = mem.get("total") or 0, mem.get("used") or 0
-        total_storage, used_storage = disk.get("size") or 0, disk.get("used") or 0
+        legacy_total, legacy_used = disk.get("size") or 0, disk.get("used") or 0
+        physical_storage = storage.get("physical_total") or legacy_total
+        mounted_storage = storage.get("mounted_total") or legacy_total
+        mounted_used = storage.get("mounted_used") or legacy_used
+        outside_mounted = storage.get("outside_mounted_filesystems")
+        if outside_mounted is None:
+            outside_mounted = max(0, physical_storage - mounted_storage)
         age = _age_seconds(row["updated_at"])
-        healthy_payload = payload.get("ok") is True and total_memory > 0 and total_storage > 0
+        healthy_payload = payload.get("ok") is True and total_memory > 0 and physical_storage > 0 and mounted_storage > 0
         online = bool(row["ok"]) and healthy_payload and age is not None and age <= 900
         total_mem += total_memory
         used_mem += used_memory
-        total_disk += total_storage
-        used_disk += used_storage
+        total_physical += physical_storage
+        total_mounted += mounted_storage
+        used_mounted += mounted_used
         nodes.append({
             "node": row["node"], "online": online, "stale": age is None or age > 900,
             "error": str(payload.get("error") or ""), "updated_at": row["updated_at"],
             "mem_used": used_memory, "mem_total": total_memory,
             "mem_pct": round(100 * used_memory / total_memory) if total_memory else 0,
-            "disk_used": used_storage, "disk_total": total_storage,
-            "disk_pct": round(100 * used_storage / total_storage) if total_storage else 0,
+            "disk_used": mounted_used, "disk_total": mounted_storage,
+            "disk_pct": round(100 * mounted_used / mounted_storage) if mounted_storage else 0,
+            "storage_physical_total": physical_storage,
+            "storage_mounted_total": mounted_storage,
+            "storage_mounted_used": mounted_used,
+            "storage_outside_mounted": max(0, outside_mounted or 0),
+            "storage_disks": storage.get("physical_disks") or [],
+            "storage_filesystems": storage.get("mounted_filesystems") or [],
             "network_rx_bps": network.get("rx_bps"),
             "network_tx_bps": network.get("tx_bps"),
             "network_total_bps": network.get("total_bps"),
@@ -101,8 +129,11 @@ def server_metrics() -> dict:
         "online_count": sum(1 for node in nodes if node["online"]),
         "node_count": len(nodes),
         "agg_mem": f"{_fmt_bytes(used_mem)} / {_fmt_bytes(total_mem)}",
-        "agg_disk": f"{_fmt_bytes(used_disk)} / {_fmt_bytes(total_disk)}",
+        "agg_disk": f"{_fmt_storage(used_mounted)} / {_fmt_storage(total_mounted)}",
+        "agg_storage_physical": _fmt_storage(total_physical),
+        "agg_storage_mounted": f"{_fmt_storage(used_mounted)} / {_fmt_storage(total_mounted)}",
         "fmt": _fmt_bytes,
+        "fmt_storage": _fmt_storage,
         "fmt_rate": _fmt_rate,
     }
 

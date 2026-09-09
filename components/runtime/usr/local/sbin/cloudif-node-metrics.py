@@ -41,6 +41,90 @@ def network_summary():
         pass
     return {"rx_bytes": rx_total, "tx_bytes": tx_total, "interfaces": interfaces}
 
+_PSEUDO_FS = {
+    "autofs", "bpf", "cgroup", "cgroup2", "configfs", "debugfs", "devpts",
+    "devtmpfs", "efivarfs", "fusectl", "hugetlbfs", "mqueue", "overlay",
+    "proc", "pstore", "securityfs", "squashfs", "sysfs", "tmpfs", "tracefs",
+}
+_REMOTE_FS_PREFIXES = ("9p", "ceph", "cifs", "fuse.sshfs", "glusterfs", "nfs", "smb")
+
+
+def _flatten_mounts(rows):
+    for row in rows or []:
+        yield row
+        yield from _flatten_mounts(row.get("children") or [])
+
+
+def storage_summary():
+    """Describe installed block capacity separately from mounted filesystem use."""
+    physical_disks = []
+    block = run(["lsblk", "-b", "-J", "-o", "NAME,TYPE,SIZE"], 5)
+    if block.get("rc") == 0 and block.get("stdout"):
+        try:
+            stack = list(json.loads(block["stdout"]).get("blockdevices") or [])
+            while stack:
+                item = stack.pop()
+                if item.get("type") == "disk":
+                    try:
+                        size = int(item.get("size") or 0)
+                    except (TypeError, ValueError):
+                        size = 0
+                    if size > 0:
+                        physical_disks.append({"name": str(item.get("name") or ""), "size": size})
+                stack.extend(item.get("children") or [])
+        except (TypeError, ValueError, json.JSONDecodeError):
+            physical_disks = []
+
+    mounted = []
+    mounts = run(["findmnt", "-J", "-b", "-o", "SOURCE,TARGET,FSTYPE,SIZE,USED,AVAIL"], 5)
+    seen_sources = set()
+    if mounts.get("rc") == 0 and mounts.get("stdout"):
+        try:
+            rows = json.loads(mounts["stdout"]).get("filesystems") or []
+            for row in _flatten_mounts(rows):
+                source = str(row.get("source") or "")
+                target = str(row.get("target") or "")
+                fstype = str(row.get("fstype") or "").lower()
+                if not source or fstype in _PSEUDO_FS or fstype.startswith(_REMOTE_FS_PREFIXES):
+                    continue
+                canonical_source = source.split("[", 1)[0]
+                if canonical_source in seen_sources:
+                    continue
+                try:
+                    size = int(row.get("size") or 0)
+                    used = int(row.get("used") or 0)
+                    avail = int(row.get("avail") or 0)
+                except (TypeError, ValueError):
+                    continue
+                if size <= 0:
+                    continue
+                seen_sources.add(canonical_source)
+                mounted.append({
+                    "source": canonical_source,
+                    "target": target,
+                    "fstype": fstype,
+                    "size": size,
+                    "used": max(0, used),
+                    "avail": max(0, avail),
+                })
+        except (TypeError, ValueError, json.JSONDecodeError):
+            mounted = []
+
+    physical_total = sum(item["size"] for item in physical_disks)
+    mounted_total = sum(item["size"] for item in mounted)
+    mounted_used = sum(item["used"] for item in mounted)
+    mounted_avail = sum(item["avail"] for item in mounted)
+    return {
+        "physical_total": physical_total,
+        "mounted_total": mounted_total,
+        "mounted_used": mounted_used,
+        "mounted_avail": mounted_avail,
+        "outside_mounted_filesystems": max(0, physical_total - mounted_total),
+        "physical_disks": sorted(physical_disks, key=lambda item: item["name"]),
+        "mounted_filesystems": sorted(mounted, key=lambda item: item["target"]),
+    }
+
+
 def docker_summary():
     if run(["bash", "-lc", "command -v docker"]).get("rc") != 0:
         return {"available": False, "containers": []}
@@ -61,6 +145,7 @@ def metrics():
     ips = run(["bash", "-lc", "ip -br addr | sed -n '1,40p'"])
     docker = docker_summary()
     network = network_summary()
+    storage = storage_summary()
 
     mem_data = {}
     if mem["stdout"]:
@@ -94,6 +179,7 @@ def metrics():
         "time": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
         "memory": mem_data,
         "disk_root": disk_data,
+        "storage": storage,
         "loadavg": load["stdout"],
         "uptime": uptime["stdout"],
         "ips": ips["stdout"],
