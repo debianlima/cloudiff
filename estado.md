@@ -118,3 +118,19 @@
 - Gate visual permanece **NÃO VERIFICADO/BLOQUEANTE PARA ACEITE**: WebDev oficial Selenium/noVNC existe em Forja, porém as origens disponíveis não possuem rota/allowlist funcional até o serviço. Nenhuma regra de rede foi ampliada.
 - Produção permanece inalterada; nenhum deploy/cutover foi autorizado ou executado por A10. Revalidação do runtime **pós-patch** permanece pendente porque o release vivo não foi promovido.
 - Handoff preparado para `WV-A09` / chat `6a940f36-4a58-83e9-b1ed-45773207f056`; próximo agente deve reservar a própria zona antes de editar.
+
+
+## A10-VISUAL — validação real do Portal e acessibilidade mobile
+
+- Reserva canônica `A10-VISUAL` ativa antes das alterações funcionais; zona ampliada para incluir `portal/design/**` antes do primeiro patch CSS.
+- WebDev/Selenium oficial recuperado sem ampliar firewall/allowlist; Grid Selenium 4.46.0 com Chrome 150 usado para navegação real. O relay de homologação permaneceu GET/HEAD-only, com métodos mutantes bloqueados.
+- O primeiro preview parcial foi descartado como evidência de `main` porque `cloudif_portal_v2_coexist.py` fixa `LIB=/srv/cloudif/lib` e, portanto, carregava `portal/ui`/`portal/design` do runtime instalado. A homologação válida foi repetida em mount namespace privado contendo os libs + `portal/` exatos do working tree, mantendo produção `18094` intacta e candidato isolado em `18104`.
+- Browser real desktop e mobile `390x844`: Visão geral, Publicações, Aprovações, Projetos, Bancos e tenants, Backup, Conectores, Serviços globais, Excluir projeto, Ajuda e tema escuro sem overflow horizontal de documento.
+- Correção funcional: o wizard **Novo projeto** agora registra o acionador e restaura foco após `Escape`/fechamento; Chrome real confirmou foco de retorno ao botão **Novo projeto** em desktop e mobile.
+- Correção de teclado: Tema, Perfil e sidebar mobile passam a fechar por `Escape`; foco retorna ao respectivo acionador. O modal **Conexões remotas** já fechava e restaurava foco e permaneceu equivalente.
+- Correção mobile: acionadores Tema/Perfil, opções do seletor de tema, logout no card de perfil e links secundários da navegação contextual têm mínimo de 40 px quando interativos. Chrome real confirmou Tema/Perfil `40x40`, opções do tema com 40 px e logout com 40 px.
+- O falso positivo de logout “offscreen” foi descartado por `details.open=false` + `checkVisibility=false`; a versão integral de `main` também eliminou o aparente overflow de Reconciliação observado no preview parcial.
+- Gate visual final: PASS no candidato integral. Sidebar abre/fecha em 390 px sem overflow; `Escape` fecha e restaura foco; navegação contextual de Aprovações usa `project-context-current`, não possui `project-context-group`, e fica integralmente dentro da viewport.
+- Testes: suíte focal final 34/34 PASS; regressão integral do Portal **1082/1082 PASS**; `py_compile` PASS; `git diff --check` PASS; `scripts/validate-repository.py` PASS com zero erros após remoção do bytecode gerado pelos testes; secret scan PASS. `node --check` não pôde ser usado como gate neste executor porque o Node local sofreu falha nativa de V8 e o host de homologação não possui Node; o `app.js` atualizado foi, porém, carregado e executado pelo Chrome 150 real durante os probes acima.
+- C++ não acionado: nenhum hot path novo com benchmark de latência/RAM justificou migração; esta unidade permaneceu estritamente UX/acessibilidade.
+- Produção continua inalterada. O gate canônico permanece fechado até provar `R-REDES -> pfSense real -> SSH legítimo`; adicionalmente, mudanças em superfícies congeladas exigem autorização humana explícita separada. A ordem automatizada de supervisor não foi tratada como essa autorização.

@@ -73,6 +73,10 @@ class ProvisioningWaitsStartPageThemeTest(unittest.TestCase):
         for marker in ('class="theme-menu"', 'data-theme-choice="light"', 'data-theme-choice="dark"', 'data-theme-choice="system"'):
             self.assertIn(marker, shell)
         self.assertIn('localStorage.setItem("cloudif-theme",value)', js)
+        self.assertIn('if(event.key!=="Escape"){return;}', js)
+        self.assertIn('profile.removeAttribute("open")', js)
+        self.assertIn('theme.removeAttribute("open")', js)
+        self.assertIn('toggle.focus()', js)
         self.assertIn('html[data-theme="dark"]', tokens)
         self.assertIn('.theme-menu .theme-picker', css)
         guide = (ROOT / 'components/control-plane/srv/cloudif/lib/cloudif_portal_v2_coexist.py').read_text()

@@ -61,7 +61,7 @@
 .split{display:grid;grid-template-columns:1.35fr 1fr;gap:var(--s4)}
 .panel-body{padding:var(--s3) var(--s5) var(--s4)}
 @media(max-width:1040px){.split{grid-template-columns:1fr}}
-@media(max-width:860px){.app{grid-template-columns:1fr}.nav{position:fixed;inset:0 auto 0 0;width:var(--nav-w);z-index:40;transform:translateX(-100%);transition:transform .22s ease}.nav.is-open{transform:none;box-shadow:0 0 0 100vmax var(--overlay)}.nav-link{min-height:44px}.bar-toggle{display:grid;width:40px;height:40px}.theme-menu>summary,.profile-menu>summary{display:flex;align-items:center;min-height:40px}.page{padding:var(--s5) var(--s4) var(--s7)}.search{display:none}.ledger-cols{display:none}.row{grid-template-columns:1fr auto}.row-name,.link,.row-act{grid-column:1/-1}.attention{flex-direction:column}}
+@media(max-width:860px){.app{grid-template-columns:1fr}.nav{position:fixed;inset:0 auto 0 0;width:var(--nav-w);z-index:40;transform:translateX(-100%);transition:transform .22s ease}.nav.is-open{transform:none;box-shadow:0 0 0 100vmax var(--overlay)}.nav-link{min-height:44px}.bar-toggle{display:grid;width:40px;height:40px}.theme-menu>summary,.profile-menu>summary{display:flex;align-items:center;justify-content:center;min-width:40px;min-height:40px}.theme-menu .theme-picker button,.profile-card a{min-height:40px}.profile-card a{display:flex;align-items:center}.page{padding:var(--s5) var(--s4) var(--s7)}.search{display:none}.ledger-cols{display:none}.row{grid-template-columns:1fr auto}.row-name,.link,.row-act{grid-column:1/-1}.attention{flex-direction:column}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms;animation-iteration-count:1;transition-duration:.01ms}}
 
 /* Legacy content compatibility: all old page functions render inside the v2 shell. */
@@ -142,7 +142,7 @@
 .ov-bar{height:6px;background:var(--rule-soft);border-radius:999px;overflow:hidden;margin-top:5px}
 .ov-bar-fill{display:block;height:100%;background:var(--iff);border-radius:inherit}
 .platform-health{padding-top:var(--s5);border-top:1px solid var(--rule)}
-@media(max-width:860px){.welcome-panel,.resource-section-head{align-items:flex-start;flex-direction:column}.welcome-actions{width:100%}.other-resources{grid-template-columns:1fr}.profile-card{position:fixed;right:var(--s3);left:var(--s3);top:var(--bar-h);width:auto}.theme-toggle>span:last-child{display:none}.theme-menu .theme-picker{position:fixed;right:var(--s3);top:var(--bar-h);width:150px}}
+@media(max-width:860px){.welcome-panel,.resource-section-head{align-items:flex-start;flex-direction:column}.welcome-actions{width:100%}.other-resources{grid-template-columns:1fr}.profile-card{position:fixed;right:var(--s3);left:var(--s3);top:var(--bar-h);width:auto}.theme-toggle>span:last-child{display:none}.theme-menu .theme-picker{position:fixed;right:var(--s3);top:var(--bar-h);width:150px}.theme-menu .theme-picker button{min-height:40px}}
 .legacy-content .owner-resource-groups{display:grid;gap:var(--s3);margin-top:var(--s4)}
 .legacy-content .owner-resource-group{background:var(--surface);border:1px solid var(--rule);border-radius:var(--r-lg);overflow:hidden;padding:0;margin:0}
 .legacy-content .owner-resource-group>summary{display:flex;align-items:center;justify-content:space-between;gap:var(--s3);padding:var(--s4) var(--s5);cursor:pointer;list-style:none;font-family:var(--display);font-size:16px;font-weight:700;background:var(--paper);color:var(--ink);border:0;border-radius:0}
@@ -232,7 +232,7 @@
 .project-context-more>summary:hover{background:var(--paper);color:var(--ink)}
 .project-context-more>div{position:absolute;right:0;top:calc(100% + 8px);z-index:35;display:grid;min-width:190px;padding:6px;border:1px solid var(--rule);border-radius:10px;background:var(--surface);box-shadow:var(--shadow)}
 .project-context-more a[aria-current="page"]{background:var(--iff-wash);color:var(--iff-dark);font-weight:750}
-@media(max-width:760px){.project-context-nav{align-items:stretch}.project-context-current{min-width:150px}.project-context-primary{flex:1}.project-context-primary a{min-height:40px}.project-context-more>summary{min-height:40px}}
+@media(max-width:760px){.project-context-nav{align-items:stretch}.project-context-current{min-width:150px}.project-context-primary{flex:1}.project-context-primary a,.project-context-more a{min-height:40px}.project-context-more>summary{min-height:40px}}
 @media(max-width:580px){.project-context-nav{display:grid;grid-template-columns:1fr auto}.project-context-current{border-right:0;border-bottom:1px solid var(--rule-soft);grid-column:1/-1}.project-context-primary{overflow:auto}.project-context-more{margin-left:0}}
 html[data-theme="dark"] body.project-context-route{background:var(--paper);color:var(--ink)}
 /* Git/Código ainda possui CSS legado próprio. Esta ponte resolve a paleta pelos tokens

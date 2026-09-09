@@ -22,6 +22,12 @@ class ReconciliationMobileDarkNavigationTests(unittest.TestCase):
         self.assertIn('background:var(--iff-wash);color:var(--iff-dark);border-color:var(--rule)',COMPONENTS)
         self.assertIn(':is(.ci-pill-off,.ci-pill:not(.ci-pill-ok),.pill:not(.ok),.badge:not(.ok))',COMPONENTS)
 
+    def test_mobile_context_and_topbar_controls_keep_minimum_touch_targets(self):
+        self.assertIn('.theme-menu>summary,.profile-menu>summary{display:flex;align-items:center;justify-content:center;min-width:40px;min-height:40px}',COMPONENTS)
+        self.assertIn('.project-context-primary a,.project-context-more a{min-height:40px}',COMPONENTS)
+        self.assertIn('.theme-menu .theme-picker button,.profile-card a{min-height:40px}',COMPONENTS)
+        self.assertIn('.theme-menu .theme-picker{position:fixed;right:var(--s3);top:var(--bar-h);width:150px}.theme-menu .theme-picker button{min-height:40px}',COMPONENTS)
+
     def test_production_denial_is_adapted_without_changing_http_status(self):
         self.assertIn('adapt_production_denial = status == 403 and tab == "operacao-producao"',COEXIST)
         self.assertIn('if (status == 200 or adapt_production_denial) and content_type.lower().startswith("text/html"):',COEXIST)

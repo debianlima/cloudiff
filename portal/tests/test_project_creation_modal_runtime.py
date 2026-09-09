@@ -15,6 +15,14 @@ class ProjectCreationModalRuntimeTest(unittest.TestCase):
         self.assertIn("document.body.classList.add('cloudif-modal-open')",PORTAL)
         self.assertIn('role="dialog" aria-modal="true"',PORTAL)
 
+    def test_new_project_modal_restores_focus_to_opener(self):
+        for marker in (
+            "target._cloudifOpener=document.activeElement",
+            "if(x.style.display!=='none'&&x._cloudifOpener)opener=x._cloudifOpener",
+            "if(opener&&document.contains(opener))setTimeout(()=>opener.focus(),0)",
+        ):
+            self.assertIn(marker,PORTAL)
+
     def test_new_project_uses_integrated_project_action(self):
         block=PORTAL[PORTAL.rfind('id="pm197_new"'):]
         for marker in (

@@ -61,6 +61,14 @@
     nav.classList.remove("is-open");
     toggle.setAttribute("aria-expanded","false");
   });
+  document.addEventListener("keydown",function(event){
+    if(event.key!=="Escape"){return;}
+    var profile=document.querySelector(".profile-menu[open]");
+    if(profile){profile.removeAttribute("open");var profileTrigger=profile.querySelector("summary");if(profileTrigger){profileTrigger.focus();}event.preventDefault();return;}
+    var theme=document.querySelector(".theme-menu[open]");
+    if(theme){theme.removeAttribute("open");var themeTrigger=theme.querySelector("summary");if(themeTrigger){themeTrigger.focus();}event.preventDefault();return;}
+    if(window.innerWidth<=860&&nav.classList.contains("is-open")){nav.classList.remove("is-open");toggle.setAttribute("aria-expanded","false");toggle.focus();event.preventDefault();}
+  });
   function groupDatabaseCards(){
     var source=document.querySelector('.js-owner-resource-source[data-resource-kind="banco"]');
     if(!source){return;}
