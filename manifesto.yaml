@@ -12162,6 +12162,7 @@ trabalho_compartilhado:
   zona_exclusao:
     - components/control-plane/srv/cloudif/lib/cloudif_ui_pages.py
     - components/control-plane/srv/cloudif/staging/lib/cloudif_ui_pages.py
+    - portal/modules/overview/service.py
     - portal/tests/test_overview_sites.py
     - manifesto.yaml
     - estado.md
