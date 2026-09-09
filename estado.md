@@ -74,11 +74,11 @@
 - P2 do Teste Sofá continua dependente de duas aprovações humanas distintas admin/professor.
 
 ## Trabalho compartilhado
-- ponteiro: `manifesto.yaml.trabalho_compartilhado` — unidade A10, atualizado_em 2026-09-09T06:10:57Z.
+- sem unidade ativa após o fechamento A10; nova unidade deve registrar `manifesto.yaml.trabalho_compartilhado` antes do primeiro artefato.
 - U27 foi substituída após exceder `previsao_termino` em mais de 30 minutos sem renovação/atividade observável; o bloco original foi registrado fora do repositório antes da troca.
 
 ## Competências ativas na U20
-- `cloudiff@0.1.29`.
+- `cloudiff@0.1.34`.
 - `frontend-design@2.0` (PracticalSwan).
 - `desenvolvedor-de-software@15`.
 - `github-incremental-reconciliation@7`.
@@ -113,7 +113,8 @@
 - Ajuda: CTA **Abrir Administração** passa a ser emitido somente para `CloudIF-Tenants-Admin`; o texto educativo permanece para os demais perfis.
 - Exclusão/Publicação: mensagens conhecidas viram texto acionável; modal de exclusão bloqueia fechamento desde o POST inicial, recebe/restaura foco; wizard de Publicação fecha com `Escape` e restaura foco.
 - Hardiness vivo: 240 GETs autenticados em cinco personas e oito superfícies produziram zero 5xx/erros de transporte; crawl professor em profundidade 2 encontrou somente os 403 já classificados (Serviços globais, Produção intencional e Administração via CTA corrigido).
-- Regressão candidata antes da aplicação na lane: **1080/1080 PASS**; suíte focal pós-limpeza: **83/83 PASS**; `py_compile` e `git apply --check` PASS.
+- Fonte integrada em `main@2727e726f79dd36b0692e716943e7ad2fe80523f` e preservada também em `origin/cloudiff-a10`; regressão integral pós-aplicação na lane: **1080/1080 PASS**; suíte focal **83/83 PASS**; `py_compile`, `git diff --check`, secret scan e `scripts/validate-repository.py` PASS.
 - C++ não acionado: a amostra de latência/RSS não provou hot path CPU-bound; o maior custo observado no perfil admin veio acompanhado de payload/escopo global substancialmente maior.
 - Gate visual permanece **NÃO VERIFICADO/BLOQUEANTE PARA ACEITE**: WebDev oficial Selenium/noVNC existe em Forja, porém as origens disponíveis não possuem rota/allowlist funcional até o serviço. Nenhuma regra de rede foi ampliada.
-- Produção permanece inalterada; nenhum deploy/cutover foi autorizado ou executado por A10.
+- Produção permanece inalterada; nenhum deploy/cutover foi autorizado ou executado por A10. Revalidação do runtime **pós-patch** permanece pendente porque o release vivo não foi promovido.
+- Handoff preparado para `WV-A09` / chat `6a940f36-4a58-83e9-b1ed-45773207f056`; próximo agente deve reservar a própria zona antes de editar.

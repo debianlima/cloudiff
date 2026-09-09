@@ -12151,25 +12151,3 @@ entradas:
     produz: evidencia/remote-access-443-relay-u19
     aceite: python3 -m unittest portal.tests.test_remote_connections_443_relay
     status: aceito
-trabalho_compartilhado:
-  projeto: cloudiff
-  caminho: /srv/mcp-workspace/tmp/cloudiff-a10
-  unidade: A10
-  descricao: auditoria continua da UI real Portal v2/legacy, correcoes UX seguras e validacao
-  agente: chatgpt-a10-profile-aline
-  atualizado_em: '2026-09-09T06:12:18Z'
-  previsao_termino: '2026-09-09T08:12:18Z'
-  zona_exclusao:
-    - components/control-plane/current-apps/portal-current/cloudif-admin-portal-base.py
-    - components/control-plane/srv/cloudif/lib/cloudif_admin_project_delete.py
-    - components/control-plane/srv/cloudif/lib/cloudif_portal_v2_coexist.py
-    - portal/legacy/cloudif-admin-portal-base.py
-    - portal/tests/test_canonical_help_videos.py
-    - portal/tests/test_project_delete_tracking_modal.py
-    - portal/tests/test_project_delete_wizard_required.py
-    - portal/tests/test_project_resource_reorganization.py
-    - portal/tests/test_release_flow_wizard_ui.py
-    - skills/cloudiff/SKILL.md
-    - competencias.yaml
-    - manifesto.yaml
-    - estado.md
