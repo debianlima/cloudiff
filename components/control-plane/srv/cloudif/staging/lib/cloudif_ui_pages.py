@@ -1612,27 +1612,88 @@ def render_meter(label, used, total, percent=None):
 </div>
 """
 
-def render_server_metric_section():
-    metrics = server_metrics()
-    servers = metrics.get("servers", [])
-    agg = metrics.get("aggregate", {})
-    source = metrics.get("source") or "sem fonte detectada"
+def _render_byte_meter(label, used, total, formatter, percent=None):
+    if percent is None:
+        try:
+            percent = round(100 * float(used or 0) / float(total or 0)) if float(total or 0) > 0 else 0
+        except Exception:
+            percent = 0
+    try:
+        percent = max(0, min(100, int(float(percent or 0))))
+    except Exception:
+        percent = 0
+    return f"""
+<div class="cm-meter">
+  <div class="cm-meter-line">
+    <span>{h(label)}</span>
+    <span>{h(formatter(used))} / {h(formatter(total))}</span>
+  </div>
+  <div class="cm-meter-bar" role="img" aria-label="{h(label)} {percent}%">
+    <div class="cm-meter-fill" style="width:{percent}%"></div>
+  </div>
+</div>
+"""
 
-    ram_used = agg.get("ram_used_gb") or 0
-    ram_total = agg.get("ram_total_gb") or 0
-    disk_used = agg.get("disk_used_gb") or 0
-    disk_total = agg.get("disk_total_gb") or 0
+
+def _render_single_value_bar(label, value, formatter, percent):
+    try:
+        percent = max(0, min(100, int(float(percent or 0))))
+    except Exception:
+        percent = 0
+    return f"""
+<div class="cm-meter">
+  <div class="cm-meter-line">
+    <span>{h(label)}</span>
+    <span>{h(formatter(value))}</span>
+  </div>
+  <div class="cm-meter-bar" role="img" aria-label="{h(label)} {percent}% da escala">
+    <div class="cm-meter-fill" style="width:{percent}%"></div>
+  </div>
+</div>
+"""
+
+
+def render_server_metric_section():
+    # Fonte canônica da Visão Geral: cache SQLite alimentada pelos agentes C++.
+    # Não usar cloudif_ui_data.server_metrics() aqui: ela existe apenas para
+    # compatibilidade de telas antigas e normaliza o filesystem / como "Disco".
+    from portal.modules.overview import service as overview_service
+
+    metrics = overview_service.server_metrics()
+    servers = metrics.get("nodes", [])
+    fmt = metrics.get("fmt") or (lambda value: str(value or 0))
+    fmt_storage = metrics.get("fmt_storage") or fmt
+
+    physical_peak = max(
+        (float(s.get("storage_physical_total") or 0) for s in servers),
+        default=1.0,
+    )
 
     cards = []
+    capacity_graph = []
+    memory_graph = []
 
     for s in servers:
-        name = s.get("name", "servidor")
-        status = str(s.get("status") or "unknown").lower()
-        online = status in ["online", "ok", "active", "running", "up", "true", "1"]
+        name = s.get("node", "servidor")
+        online = bool(s.get("online"))
+        physical = float(s.get("storage_physical_total") or s.get("disk_total") or 0)
+        capacity_pct = round(100 * physical / physical_peak) if physical_peak else 0
+        disk_count = int(s.get("storage_disk_count") or 0)
+        containers = s.get("container_count")
+        containers_label = "-" if containers is None else str(containers)
 
-        disk_percent = s.get("disk_percent")
-        if disk_percent is None:
-            disk_percent = _pct(s.get("disk_used_gb"), s.get("disk_total_gb"))
+        capacity_graph.append(
+            _render_single_value_bar(name, physical, fmt_storage, capacity_pct)
+        )
+        memory_graph.append(
+            _render_byte_meter(
+                name,
+                s.get("mem_used"),
+                s.get("mem_total"),
+                fmt,
+                s.get("mem_pct"),
+            )
+        )
 
         cards.append(f"""
 <div class="cm-server-card">
@@ -1641,10 +1702,17 @@ def render_server_metric_section():
     {pill(online, "online", "offline")}
   </div>
 
-  {render_meter("RAM", s.get("ram_used_gb"), s.get("ram_total_gb"))}
-  {render_meter("Disco", s.get("disk_used_gb"), s.get("disk_total_gb"), disk_percent)}
+  {_render_byte_meter("RAM", s.get("mem_used"), s.get("mem_total"), fmt, s.get("mem_pct"))}
 
   <div class="cm-server-meta">
+    <div><strong>Capacidade física instalada:</strong> {h(fmt_storage(physical))}</div>
+    <div><strong>Discos físicos:</strong> {disk_count}</div>
+  </div>
+
+  {_render_byte_meter("Sistema (/)", s.get("disk_used"), s.get("disk_total"), fmt_storage, s.get("disk_pct"))}
+
+  <div class="cm-server-meta">
+    <div><strong>Containers:</strong> {h(containers_label)}</div>
     <div><strong>Atualizado:</strong> {h(s.get("updated_at") or "—")}</div>
   </div>
 </div>
@@ -1657,39 +1725,60 @@ def render_server_metric_section():
     <div class="cm-server-name">Agentes</div>
     <span class="cm-pill cm-off">sem dados</span>
   </div>
-  <p class="cm-muted">Nenhum arquivo de métricas dos agentes foi encontrado. Configure o script dos agentes para atualizar <code>/var/lib/cloudif/portal/cloudif-server-metrics.json</code>.</p>
+  <p class="cm-muted">A cache de métricas ainda não recebeu dados dos agentes C++.</p>
 </div>
 """)
+
+    charts = ""
+    if servers:
+        charts = f"""
+<div class="cm-server-grid" style="margin-bottom:18px">
+  <div class="cm-server-card">
+    <div class="cm-server-card-top"><div class="cm-server-name">Capacidade física por servidor</div></div>
+    <p class="cm-muted">Comparação dos discos físicos instalados; a maior capacidade ocupa 100% da escala.</p>
+    {''.join(capacity_graph)}
+  </div>
+  <div class="cm-server-card">
+    <div class="cm-server-card-top"><div class="cm-server-name">Uso de memória por servidor</div></div>
+    <p class="cm-muted">Percentual de RAM utilizada na coleta mais recente.</p>
+    {''.join(memory_graph)}
+  </div>
+</div>
+"""
 
     return f"""
 <section class="cm-server-panel">
   <div class="cm-server-panel-head">
     <div>
       <h3>Servidores CloudIF</h3>
-      <p class="cm-muted">Visão agregada dos agentes das máquinas que compõem a plataforma.</p>
+      <p class="cm-muted">Visão agregada da telemetria dos agentes C++ das máquinas que compõem a plataforma.</p>
     </div>
 
     <div class="cm-server-aggregate">
       <div class="cm-server-agg-card">
         <strong>RAM agregada</strong>
-        <span>{_fmt_gb(ram_used)} / {_fmt_gb(ram_total)}</span>
+        <span>{h(metrics.get("agg_mem") or "-")}</span>
       </div>
-
       <div class="cm-server-agg-card">
-        <strong>Disco agregado</strong>
-        <span>{_fmt_gb(disk_used)} / {_fmt_gb(disk_total)}</span>
+        <strong>Capacidade física agregada</strong>
+        <span>{h(metrics.get("agg_storage_physical") or "-")}</span>
+      </div>
+      <div class="cm-server-agg-card">
+        <strong>Sistema (/) agregado</strong>
+        <span>{h(metrics.get("agg_storage_root") or "-")}</span>
       </div>
     </div>
   </div>
+
+  {charts}
 
   <div class="cm-server-grid">
     {''.join(cards)}
   </div>
 
-  <div class="cm-server-source">Fonte: <code>{h(source)}</code></div>
+  <div class="cm-server-source">Fonte: <code>node_metrics_cache · cloudif-node-metrics-cpp :18096</code></div>
 </section>
 """
-
 
 def render_resumo(user=None):
     content = f"""

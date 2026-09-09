@@ -91,6 +91,7 @@ def server_metrics() -> dict:
         disk = payload.get("disk_root", {}) or {}
         storage = payload.get("storage", {}) or {}
         network = payload.get("network", {}) or {}
+        docker = payload.get("docker", {}) or {}
         total_memory, used_memory = mem.get("total") or 0, mem.get("used") or 0
         legacy_total, legacy_used = disk.get("size") or 0, disk.get("used") or 0
         physical_storage = storage.get("physical_total") or legacy_total
@@ -122,6 +123,7 @@ def server_metrics() -> dict:
             "network_rx_bps": network.get("rx_bps"),
             "network_tx_bps": network.get("tx_bps"),
             "network_total_bps": network.get("total_bps"),
+            "container_count": docker.get("count"),
         })
     return {
         "nodes": nodes,

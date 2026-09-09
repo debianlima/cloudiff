@@ -109,6 +109,7 @@ class OverviewSiteCardTest(unittest.TestCase):
                 "mounted_used": 200 * 1024**3,
                 "outside_mounted_filesystems": 1 * 1024**4,
             },
+            "docker": {"count": 4},
         }
         con.execute("insert into node_metrics_cache values(?,?,?,datetime('now'))", ("backup", 1, json.dumps(payload)))
         con.commit(); con.close()
@@ -119,6 +120,7 @@ class OverviewSiteCardTest(unittest.TestCase):
         self.assertEqual(node["disk_total"], 100 * 1024**3)
         self.assertEqual(node["disk_used"], 20 * 1024**3)
         self.assertEqual(node["storage_outside_root"], 3 * 1024**4 - 100 * 1024**3)
+        self.assertEqual(node["container_count"], 4)
 
     def test_overview_renders_capacity_and_memory_graphs(self):
         from portal.modules.overview.views import overview_body
@@ -146,6 +148,41 @@ class OverviewSiteCardTest(unittest.TestCase):
         self.assertIn("além do filesystem raiz", markup)
         self.assertIn("2 disco(s) físico(s)", markup)
         self.assertIn("3.3 TB", markup)
+
+    def test_modular_public_summary_uses_canonical_cpp_metrics(self):
+        import importlib
+        import sys
+        from portal.modules.overview import service
+        component_lib = Path(__file__).resolve().parents[2] / "components" / "control-plane" / "srv" / "cloudif" / "lib"
+        sys.path.insert(0, str(component_lib))
+        try:
+            pages = importlib.import_module("cloudif_ui_pages")
+            metrics = {
+                "nodes": [{
+                    "node": "backup", "online": True, "updated_at": "2026-09-09T03:30:52+00:00",
+                    "mem_used": 1 * 1024**3, "mem_total": 16 * 1024**3, "mem_pct": 6,
+                    "disk_used": 17 * 1000**3, "disk_total": 979 * 1000**3, "disk_pct": 2,
+                    "storage_physical_total": 3 * 1000**4, "storage_disk_count": 2,
+                    "container_count": 4,
+                }],
+                "agg_mem": "1.0 GB / 16.0 GB",
+                "agg_storage_physical": "3.0 TB",
+                "agg_storage_root": "17.0 GB / 979.0 GB",
+                "fmt": service._fmt_bytes,
+                "fmt_storage": service._fmt_storage,
+            }
+            with mock.patch.object(service, "server_metrics", return_value=metrics):
+                markup = pages.render_server_metric_section()
+        finally:
+            sys.path.pop(0)
+        self.assertIn("Capacidade física por servidor", markup)
+        self.assertIn("Uso de memória por servidor", markup)
+        self.assertIn("Capacidade física instalada:", markup)
+        self.assertIn("Sistema (/)", markup)
+        self.assertIn("3.0 TB", markup)
+        self.assertIn("Containers:</strong> 4", markup)
+        self.assertIn("cloudif-node-metrics-cpp", markup)
+        self.assertNotIn('<span>Disco</span>', markup)
 
 
 if __name__ == "__main__":
