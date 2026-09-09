@@ -12167,3 +12167,4 @@ trabalho_compartilhado:
     - deploy/a10-release-gate/**
     - skills/cloudiff/SKILL.md
     - competencias.yaml
+    - tests/test_cloudiff_project_skill.py
