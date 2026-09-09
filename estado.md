@@ -74,7 +74,8 @@
 - P2 do Teste Sofá continua dependente de duas aprovações humanas distintas admin/professor.
 
 ## Trabalho compartilhado
-- ponteiro: `manifesto.yaml.trabalho_compartilhado` — unidade U21, atualizado_em 2026-09-07T12:54:49-03:00.
+- ponteiro: `manifesto.yaml.trabalho_compartilhado` — unidade A10, atualizado_em 2026-09-09T06:10:57Z.
+- U27 foi substituída após exceder `previsao_termino` em mais de 30 minutos sem renovação/atividade observável; o bloco original foi registrado fora do repositório antes da troca.
 
 ## Competências ativas na U20
 - `cloudiff@0.1.29`.
