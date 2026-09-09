@@ -12158,7 +12158,7 @@ trabalho_compartilhado:
   unidade: CLOUDIFF-A9
   descricao: navegacao continua da UI, reproducao/correcao UX e benchmark seletivo de hot paths antes de qualquer migracao C++
   agente: chat:6aa17fc3-93ec-83e9-8d70-75ee0cc56e36
-  atualizado_em: '2026-09-09T16:18:44Z'
+  atualizado_em: '2026-09-09T22:02:29Z'
   previsao_termino: '2026-09-10T00:48:00Z'
   zona_exclusao:
     - manifesto.yaml
@@ -12168,3 +12168,7 @@ trabalho_compartilhado:
     - portal/templates/**
     - portal/static/**
     - portal/tests/**
+    - components/control-plane/current-apps/portal-current/cloudif-admin-portal-base.py
+    - components/control-plane/srv/cloudif/lib/cloudif_git_komodo_module.py
+    - deploy/a10-release-gate/rollback.sh
+    - deploy/a10-release-gate/preflight-target.sh
