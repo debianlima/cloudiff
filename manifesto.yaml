@@ -12151,33 +12151,3 @@ entradas:
     produz: evidencia/remote-access-443-relay-u19
     aceite: python3 -m unittest portal.tests.test_remote_connections_443_relay
     status: aceito
-trabalho_compartilhado:
-  projeto: cloudiff
-  caminho: /srv/mcp-workspace/tmp/cloudiff-u26-overview-storage-20260908
-  unidade: U26
-  descricao: corrigir armazenamento real e graficos da Visao Geral do Portal
-  agente: meu-terminal-oracle
-  atualizado_em: '2026-09-09T01:41:45+00:00'
-  previsao_termino: '2026-09-09T04:41:45+00:00'
-  zona_exclusao:
-    - CMakeLists.txt
-    - src/node_metrics/**
-    - portal/modules/overview/service.py
-    - portal/modules/overview/views.py
-    - portal/tests/test_overview*.py
-    - components/control-plane/etc/systemd/system/cloudif-node-metrics.service
-    - components/proxy/etc/systemd/system/cloudif-node-metrics.service
-    - components/runtime/etc/systemd/system/cloudif-node-metrics.service
-    - components/control-plane/usr/local/sbin/cloudif-node-metrics.py
-    - components/proxy/usr/local/sbin/cloudif-node-metrics.py
-    - components/runtime/usr/local/sbin/cloudif-node-metrics.py
-    - components/control-plane/usr/local/sbin/README.md
-    - components/proxy/usr/local/sbin/README.md
-    - components/runtime/usr/local/sbin/README.md
-    - legacy/retired-agents/python/**
-    - docs/CATALOGO-DE-SERVICOS.md
-    - docs/INVENTARIO-DE-ARQUIVOS.md
-    - docs/MAINTENANCE.md
-    - manifesto.yaml
-    - estado.md
-    - skills/cloudiff/SKILL.md

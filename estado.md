@@ -92,3 +92,14 @@
 - A candidata C++ teve shadow live desde 27/08/2026 e benchmark preservado na Hospedagem: paridade funcional do contrato, p50 de `/metrics` em poucos milissegundos contra centenas de milissegundos do Python e menor RSS.
 - U26 acrescenta `storage.physical_total`, `storage.disk_count` e `storage.physical_disks`, permitindo ao Portal distinguir capacidade física instalada do uso do filesystem `/`.
 - Releases live devem usar `/opt/cloudif-node-metrics/releases/<release>/` + `current` atômico e `release-manifest.json` com procedência; nenhum `.py` de node metrics pode permanecer em caminho ativo após cutover aceito.
+
+## U26 — fechamento: Visão Geral 7/7 e Node Metrics C++
+
+- Fechamento observado em 09/09/2026: a Visão Geral do Portal opera com `hospedagem`, `forja`, `mauricio`, `faro`, `backup` (`bocadesapo`/`10.68.128.250`), `pelego` (`10.68.128.252`) e `ad2` (`10.68.128.253`), com `node_count=7` e `online_count=7` após restart do `cloudif-admin-portal.service`.
+- O Faro foi incluído como sétimo nó em `10.62.91.5:18096`; o pfSense possui regra restrita `10.62.92.7 -> 10.62.91.5:18096/TCP` com snapshot pré-mudança.
+- Todos os sete nós usam `cloudif-node-metrics-cpp` no endpoint oficial TCP/18096, release atômica `/opt/cloudif-node-metrics/releases/u26-20260909-5fd5d89a/` com `current` e `release-manifest.json` de procedência.
+- O mesmo binário foi construído em Ubuntu 24.04/glibc 2.39 e passou `--self-test` nos sete nós; SHA-256 observado da release: `d663beb57587f7fc3932bb688afa83b88b2169de84da73c0e7d41c50d00e8579`.
+- Nenhum dos sete nós mantém `cloudif-node-metrics.py` em caminho ativo. Onde existia, a cópia pré-cutover foi preservada em `/var/backups/cloudif-retired-agents/python/`; no Faro não havia agente Python legado. O shadow C++ antigo da Hospedagem em `127.0.0.1:18196` foi desligado e arquivado separadamente.
+- A apresentação diferencia `storage.physical_total` do uso de `disk_root`; valores destacados homologados: `backup/bocadesapo` ~3,0 TB físicos e `pelego` ~2,0 TB físicos. Os gráficos `Capacidade física por servidor` e `Uso de memória por servidor` estão presentes no HTML gerado da Visão Geral.
+- Gate pós-restart do Portal: HTTP local `18094` = 200, `7/7` online e renderer contendo Faro, `3.0 TB`, `2.0 TB` e os dois gráficos.
+- Inventário/dotfiles reconciliado em `44a0f7673b1801e16db142d7354963df3fbd5ded`; residentes Linux sincronizados nos sete nós.
