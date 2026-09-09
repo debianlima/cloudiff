@@ -12165,3 +12165,5 @@ trabalho_compartilhado:
     - docs/manual-tecnico/13-ACESSO-EXTERNO.md
     - logs/**
     - deploy/a10-release-gate/**
+    - skills/cloudiff/SKILL.md
+    - competencias.yaml
