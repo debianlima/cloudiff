@@ -12169,6 +12169,7 @@ trabalho_compartilhado:
     - components/control-plane/srv/cloudif/lib/cloudif_portal_v2_coexist.py
     - components/control-plane/srv/cloudif/lib/cloudif_admin_project_delete.py
     - portal/ui/**
+    - portal/design/**
     - portal/templates/**
     - portal/static/**
     - portal/tests/**
