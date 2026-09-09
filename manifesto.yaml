@@ -12153,20 +12153,19 @@ entradas:
     status: aceito
 trabalho_compartilhado:
   projeto: cloudiff
-  caminho: /srv/mcp-workspace/tmp/cloudiff-u21-remodel-20260907
-  unidade: U21
-  descricao: remodelagem do Portal com seletor de projeto, densidade reduzida, temas claro/escuro e correção de exclusão
-  agente: redes-gpt-5.6-sol
-  atualizado_em: '2026-09-07T20:18:04+00:00'
-  previsao_termino: '2026-09-07T22:18:04+00:00'
-  prorrogado_em: '2026-09-07T20:18:04+00:00'
+  caminho: /srv/mcp-workspace/tmp/cloudiff-u26-overview-storage-20260908
+  unidade: U26
+  descricao: corrigir armazenamento real e graficos da Visao Geral do Portal
+  agente: meu-terminal-oracle
+  atualizado_em: '2026-09-09T01:41:45+00:00'
+  previsao_termino: '2026-09-09T04:41:45+00:00'
   zona_exclusao:
-    - portal/ui/**
-    - portal/design/**
-    - portal/tests/**
-    - tests/test_portal_admin_observability.py
-    - components/control-plane/current-apps/portal-current/**
-    - components/control-plane/srv/cloudif/lib/cloudif_admin_project_delete.py
+    - portal/modules/overview/service.py
+    - portal/modules/overview/views.py
+    - portal/tests/test_overview*.py
+    - components/control-plane/usr/local/sbin/cloudif-node-metrics.py
+    - components/proxy/usr/local/sbin/cloudif-node-metrics.py
+    - components/runtime/usr/local/sbin/cloudif-node-metrics.py
     - manifesto.yaml
     - estado.md
     - skills/cloudiff/SKILL.md
