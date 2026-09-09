@@ -12153,17 +12153,21 @@ entradas:
     status: aceito
 trabalho_compartilhado:
   projeto: cloudiff
-  caminho: /srv/mcp-workspace/tmp/cloudiff-u27-public-overview-20260909
-  unidade: U27
-  descricao: alinhar renderer publico da Visao Geral ao backend C++/SQLite homologado
-  agente: meu-terminal-oracle
-  atualizado_em: '2026-09-09T03:35:48+00:00'
-  previsao_termino: '2026-09-09T05:35:48+00:00'
+  caminho: /srv/mcp-workspace/tmp/cloudiff-a10
+  unidade: A10
+  descricao: auditoria continua da UI real Portal v2/legacy, correcoes UX seguras e validacao
+  agente: chatgpt-a10-profile-aline
+  atualizado_em: '2026-09-09T06:10:57Z'
+  previsao_termino: '2026-09-09T08:10:57Z'
   zona_exclusao:
-    - components/control-plane/srv/cloudif/lib/cloudif_ui_pages.py
-    - components/control-plane/srv/cloudif/staging/lib/cloudif_ui_pages.py
-    - portal/modules/overview/service.py
-    - portal/tests/test_overview_sites.py
+    - components/control-plane/current-apps/portal-current/cloudif-admin-portal-base.py
+    - components/control-plane/srv/cloudif/lib/cloudif_admin_project_delete.py
+    - components/control-plane/srv/cloudif/lib/cloudif_portal_v2_coexist.py
+    - portal/legacy/cloudif-admin-portal-base.py
+    - portal/tests/test_canonical_help_videos.py
+    - portal/tests/test_project_delete_tracking_modal.py
+    - portal/tests/test_project_delete_wizard_required.py
+    - portal/tests/test_project_resource_reorganization.py
+    - portal/tests/test_release_flow_wizard_ui.py
     - manifesto.yaml
     - estado.md
-    - skills/cloudiff/SKILL.md
