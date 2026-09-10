@@ -75,7 +75,7 @@
 - P2 do Teste Sofá continua dependente de duas aprovações humanas distintas admin/professor.
 
 ## Trabalho compartilhado
-- sem unidade ativa após o fechamento de `CLOUDIFF-A10-E2E-FOLLOWUP`; nova unidade deve registrar `manifesto.yaml.trabalho_compartilhado` antes do primeiro artefato.
+- sem unidade ativa após o fechamento de `CLOUDIFF-A10-RELEASE-REBUILD`; nova unidade deve registrar `manifesto.yaml.trabalho_compartilhado` antes do primeiro artefato.
 - A reserva textual anterior de CLOUDIFF-A9 expirou em 2026-09-10T00:48:00Z sem renovação canônica posterior; não foi ressuscitada como lock ativo.
 - U27 foi substituída após exceder `previsao_termino` em mais de 30 minutos sem renovação/atividade observável; o bloco original foi registrado fora do repositório antes da troca.
 
@@ -212,3 +212,18 @@
 - Tentativa alternativa pelo WebDev/Selenium oficial também ficou bloqueada: Hospedagem→Forja `10.62.91.2:17900/4444` expirou por timeout. Nenhuma rota/firewall foi ampliada para fabricar o gate.
 - Fonte funcional integrada em `main@c9363101d1725f74b5a9e14fca5dac2d1c273f7b`; produção permanece inalterada e exige gate/autorização de release separado.
 - Skill reconciliada para `cloudiff@0.1.38` com L059/L060; `competencias.yaml` acompanha a mesma versão. C++ permanece `NOT_TRIGGERED`: ambos os defeitos são estado de UI/cleanup de arquivo, sem hot path CPU medido.
+
+
+## CLOUDIFF-A10-RELEASE-REBUILD — candidato pós-patch e hardness dirigido (2026-09-10)
+
+- Unidade curta criada após `CLOUDIFF-A10-E2E-FOLLOWUP` para continuar trabalho executável sem promoção: reconstruir candidato coerente a partir do commit funcional fechado `e16d63aaca9aa726c71ca0022931b776f0e09348` (`cloudiff@0.1.38`).
+- Bundle imutável: `a10-ux-e16d63aaca9a.tar.gz`, SHA-256 `073a872be362f0fad719cab3a5dfdc13c43835e5da9ca380f3f87be7e7e79cb1`; 128 arquivos no manifesto, 147 entradas no archive, zero `__pycache__`/`.pyc`, `promotion_authorized=false`, `requires_live_preflight=true` e paridade de hashes do payload PASS.
+- Coerência fonte→bundle confirmada para app, lib-overlay e `portal/legacy`; o helper `settleProvisionTerminal(data)` e `_remove_user_workspace_env` estão presentes no payload correspondente ao mesmo source set. `build-candidate.sh`, `preflight-target.sh` e `rollback.sh` passaram `bash -n`; hashes observados: build `c833f97140e888711d42fd43eeb501f8463439659d38927f4ba84e338e26e671`, preflight `bab7e8df6f71bb68459b2f7ec7cb22ef8193867ea5000f49c5f7bc4d0ef125d5`, rollback `9bc065b79a414da6d94bc52c3e55810d99400266ced9675bc889d22a31378c0c`.
+- Preflight canônico executado na Hospedagem sem troca de pointer/restart: pre-state em `/srv/cloudif/releases/a10-ux-e16d63aaca9a/pre-state`; `sha256sum -c PRESTATE.SHA256` = RC 0, 11/11 entradas OK, sentinel `PRESTATE_COMPLETE` presente. Estado capturado: `portal-current=/srv/cloudif/app-releases/portal/a10-ux-73dd432fea38`, `portal-previous=/srv/cloudif/app-releases/portal/a10-ux-adabb6ee435a`, `lib/portal` symlink para `lib-releases/portal-v2/a10-ux-73dd432fea38`, 68 hashes de runtime Portal e 74 hashes de libs raiz; serviço live permaneceu `active/running`.
+- Archive staged de forma inativa em `/srv/cloudif/releases/a10-ux-e16d63aaca9a/candidate/` com o mesmo SHA-256; nenhum symlink de produção aponta para esse release.
+- Candidato isolado executado em mount namespace privado, `app + lib-overlay + portal` todos vindos do bundle, DB SQLite copiada por `backup()` e `quick_check=ok`, bind `127.0.0.1:18104`. PID candidato próprio `1939169`; serviço live permaneceu com PID `860577` e pointer antigo.
+- GET autenticado read-only no candidato retornou HTTP 200 para Projetos e o HTML servido continha `settleProvisionTerminal(data)`.
+- Hardness pós-patch dirigido em Chrome real 151.0.7922.75, via túnel SSH local para o loopback candidato: tela Projetos carregou sem sinais de console; sobre o wizard real já renderizado, a função literal do bundle foi aplicada ao estado transitório **Confirmando provisionamento / Reconectando ao provisionador** e produziu `title=Projeto provisionado`, texto de reconciliação, `closeHidden=false`, `provisioning=false`. Evidência preservada no diretório inativo `candidate/evidence/`, incluindo `evidence.json` SHA-256 `7f628f271633893fce49380e8ed262fc83097a72863c8c717220429d0e44dfcc` e screenshot terminal SHA-256 `361d1604e629a11be8765658120ceb7a87f36d2bd54d4ab8587ab1964be50223`.
+- Uma extensão desktop/mobile do probe excedeu timeout e foi explicitamente excluída da evidência de aceite; não foi convertida em PASS. O gate alvo do bug visual, contudo, foi exercitado em browser real contra o candidato coerente.
+- Cleanup do harness PASS: transient unit/paralela `18104`, túnel `18114`, CDP `9243`, DB QA, extraction e runners foram removidos. O Chrome A9 preexistente foi preservado. Permanecem somente bundle imutável, pre-state e evidência necessários para continuidade/rollback.
+- Produção **não foi promovida**. `/srv/cloudif/app-pointers/portal-current` continuou em `a10-ux-73dd432fea38` e `cloudif-admin-portal.service` permaneceu `active/running`. Próximo gate é revisão do cutover + autorização humana explícita de produção; este monitor automatizado não fornece essa autorização.
