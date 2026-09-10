@@ -231,7 +231,7 @@
 
     return jobHtml() + `<section class="release-stage">${stageIntro(
       'P · Produção',
-      active ? 'Produção ativa' : 'Pronto para publicar',
+      active && active.legacy ? 'Produção legada ativa' : active ? 'Produção ativa' : 'Pronto para publicar',
       'Produção recebe exatamente o artefato homologado, sem reconstrução entre H e P.',
       active ? (active.stage_code || 'Ativa') : 'Sem P ativa',
       active ? 'ok' : ''
@@ -306,7 +306,7 @@
       const candidateJob = data.job || {};
       const creatingCandidate = !candidate && candidateJob.operation === 'homologation_candidate' && ['queued', 'running'].includes(candidateJob.status);
       h.textContent = candidate ? (candidate.stage_code + ' · ' + ({ awaiting_homologation: 'aguardando', homologated: 'homologado', rejected: 'rejeitado', published: 'publicado' }[candidate.status] || candidate.status)) : (creatingCandidate ? 'Criando candidato…' : 'Sem candidato');
-      p.textContent = release ? (release.stage_code || 'P ativa') : 'Sem publicação';
+      p.textContent = release ? (release.legacy ? release.stage_code + ' · legado' : (release.stage_code || 'P ativa')) : 'Sem publicação';
     });
   }
 

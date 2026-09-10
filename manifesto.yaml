@@ -12232,6 +12232,8 @@ trabalho_compartilhado:
     - components/control-plane/srv/cloudif/lib/cloudif_publication_permissions.py
     - components/control-plane/srv/cloudif/lib/cloudif_portal_publications.py
     - components/control-plane/current-apps/portal-current/cloudif_portal_publications.py
+    - components/control-plane/current-apps/portal-current/cloudif_ui_publications.py
+    - components/control-plane/srv/cloudif/lib/cloudif_ui_publications.py
     - docs/REQUIREMENTS.md
     - docs/ARCHITECTURE.md
     - skills/cloudiff/SKILL.md
