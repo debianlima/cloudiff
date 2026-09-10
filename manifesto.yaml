@@ -12204,3 +12204,15 @@ entradas:
     produz: evidencia/publication-permissions-a9
     aceite: python3 -m unittest portal.tests.test_publication_permissions portal.tests.test_release_flow_wizard_ui
     status: aceito
+
+trabalho_compartilhado:
+  projeto: cloudiff
+  caminho: /srv/mcp-workspace/cloudiff-a10-skill-ref-reconcile
+  unidade: CLOUDIFF-A10-RELEASE-REFRESH-039
+  descricao: 'reconstruir candidato a partir de cloudiff 0.1.39 e repetir preflight/readiness sem promover producao'
+  agente: chat:6aa0c47a-0420-83e9-94f2-0e655d4c3b4f
+  atualizado_em: '2026-09-10T22:32:06Z'
+  previsao_termino: '2026-09-10T23:17:06Z'
+  zona_exclusao:
+    - manifesto.yaml
+    - estado.md
