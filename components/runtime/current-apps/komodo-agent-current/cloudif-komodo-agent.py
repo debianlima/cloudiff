@@ -4174,7 +4174,9 @@ def cloudif_publication_release(handler):
     if not _cloudif_wait_health(container,75).get('ok'):return send(handler,422,{'ok':False,'error':'production_container_not_healthy','message':'A publicação foi criada, mas o container de Produção não ficou saudável.'})
     network='cloudif-publications';active=f'cloudif-p{num}-active-web';names=subprocess.check_output(['docker','ps','-a','--format','{{.Names}}'],text=True).splitlines();production_containers=[n for n in names if re.match(rf'^cloudif-p{num}-p\d+-publication-web$',n)]
     def aliases(name):
-        try:return json.loads(subprocess.check_output(['docker','inspect',name,'--format','{{json (index .NetworkSettings.Networks "cloudif-publications").Aliases}}'],text=True).strip() or '[]')
+        try:
+            raw = subprocess.check_output(['docker','inspect',name,'--format','{{json (index .NetworkSettings.Networks "cloudif-publications").Aliases}}'],text=True).strip()
+            return json.loads(raw) if raw and raw != 'null' else []
         except Exception:return []
     previous=next((n for n in production_containers if active in aliases(n)),'')
     try:
