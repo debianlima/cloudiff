@@ -157,7 +157,9 @@ def preview(tenant):
         "resources": resources,
         "blockers": blockers,
         "confirmation": f"EXCLUIR BANCO {tenant}",
-        "backup_required": True,
+        "backup_required": False,
+        "backup_policy": "attempt_then_confirm",
+        "backup_override_requires_confirmation": True,
     }
 
 
@@ -322,7 +324,7 @@ def _remove_labeled_resources(compose_projects):
     return removed
 
 
-def execute(tenant, confirmation, actor, progress=None):
+def execute(tenant, confirmation, actor, progress=None, allow_without_backup=False, backup_override_job_id=""):
     progress = progress or (lambda *_args, **_kwargs: None)
     progress("Validação", "running", "Conferindo tenant, vínculos e proteção")
     plan = preview(tenant)
@@ -347,12 +349,31 @@ def execute(tenant, confirmation, actor, progress=None):
         (audit / "tenant-config.tar.gz").chmod(0o600)
 
     backup = _backup_database(tdir, audit)
+    backup_override = None
     if not backup.get("ok"):
-        progress("Backup final", "failed", backup.get("error", "Falha no backup"))
-        result = {"ok": False, "error": "backup_required_failed", "backup": backup, "audit_dir": str(audit)}
-        (audit / "result.json").write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n")
-        return result
-    progress("Backup final", "done", f"{backup['bytes']} bytes protegidos")
+        if not allow_without_backup:
+            detail = backup.get("error", "Falha no backup")
+            progress("Backup final", "failed", f"Backup indisponível: {detail}. Confirme se deseja continuar sem backup.")
+            result = {
+                "ok": False,
+                "error": "backup_confirmation_required",
+                "can_continue_without_backup": True,
+                "backup": backup,
+                "audit_dir": str(audit),
+            }
+            (audit / "result.json").write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n")
+            return result
+        backup_override = {
+            "confirmed_by": actor,
+            "confirmed_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+            "source_job_id": backup_override_job_id,
+            "backup_error": backup.get("error", "backup_failed"),
+        }
+        (audit / "backup-override.json").write_text(json.dumps(backup_override, ensure_ascii=False, indent=2) + "\n")
+        (audit / "backup-override.json").chmod(0o600)
+        progress("Backup final", "done", f"Backup indisponível ({backup_override['backup_error']}); exclusão sem backup confirmada por {actor}.")
+    else:
+        progress("Backup final", "done", f"{backup['bytes']} bytes protegidos")
 
     progress("Containers e volumes", "running", "Derrubando Compose e removendo dados")
     down = _run(["docker", "compose", "--env-file", ".env", "down", "-v", "--remove-orphans"], timeout=900, cwd=tdir)
@@ -407,6 +428,8 @@ def execute(tenant, confirmation, actor, progress=None):
         "tenant": tenant,
         "actor": actor,
         "backup": backup,
+        "backup_skipped": bool(not backup.get("ok")),
+        "backup_override": backup_override,
         "down": {"rc": down.returncode, "stdout": down.stdout[-1500:], "stderr": down.stderr[-1500:]},
         "cleanup": cleanup,
         "registry_removed": registry_removed,
@@ -466,7 +489,14 @@ def run_job_worker(job_id):
         })
         _job_write(job_id, current)
         confirmation = f"EXCLUIR BANCO {tenant}"
-        result = execute(tenant, confirmation, actor, lambda label, status="running", detail="": _worker_update(job_id, label, status, detail))
+        result = execute(
+            tenant,
+            confirmation,
+            actor,
+            lambda label, status="running", detail="": _worker_update(job_id, label, status, detail),
+            allow_without_backup=bool(current.get("allow_without_backup")),
+            backup_override_job_id=str(current.get("backup_override_job_id") or ""),
+        )
         current = job_status(job_id)
         current.update({
             "status": "succeeded" if result.get("ok") else "failed",
@@ -513,7 +543,7 @@ def _launch_worker(job_id):
     return unit
 
 
-def start_job(tenant, confirmation, actor):
+def start_job(tenant, confirmation, actor, allow_without_backup=False, backup_override_job_id=""):
     tenant = (tenant or "").strip().lower()
     JOB_ROOT.mkdir(parents=True, exist_ok=True)
     lock = JOB_ROOT / f".{tenant}.lock"
@@ -531,7 +561,7 @@ def start_job(tenant, confirmation, actor):
                 return current
         if lock.exists() and time.time() - lock.stat().st_mtime > 1800:
             lock.unlink()
-            return start_job(tenant, confirmation, actor)
+            return start_job(tenant, confirmation, actor, allow_without_backup=allow_without_backup, backup_override_job_id=backup_override_job_id)
         return {"ok": False, "error": "tenant_delete_already_running", "tenant": tenant}
 
     expected = f"EXCLUIR BANCO {tenant}"
@@ -539,12 +569,29 @@ def start_job(tenant, confirmation, actor):
         lock.unlink(missing_ok=True)
         return {"ok": False, "error": "confirmation_mismatch", "expected": expected}
 
+    if allow_without_backup:
+        previous = job_status(backup_override_job_id)
+        previous_result = previous.get("result") if isinstance(previous.get("result"), dict) else {}
+        valid_override = bool(
+            previous.get("ok") is True
+            and previous.get("status") == "failed"
+            and previous.get("tenant") == tenant
+            and previous.get("actor") == actor
+            and (previous.get("error") == "backup_confirmation_required" or previous_result.get("error") == "backup_confirmation_required")
+            and previous_result.get("can_continue_without_backup") is True
+        )
+        if not valid_override:
+            lock.unlink(missing_ok=True)
+            return {"ok": False, "error": "backup_override_not_available", "tenant": tenant}
+
     job_id = uuid.uuid4().hex
     now = time.strftime("%Y-%m-%dT%H:%M:%S%z")
     state = {
         "ok": True, "job_id": job_id, "tenant": tenant, "actor": actor,
         "status": "queued", "progress": 0, "current_step": "Validação",
         "steps": [], "started_at": now, "updated_at": now,
+        "allow_without_backup": bool(allow_without_backup),
+        "backup_override_job_id": backup_override_job_id if allow_without_backup else "",
         "unit": _job_unit(job_id),
     }
     _job_write(job_id, state)
@@ -572,8 +619,8 @@ def render_panel(csrf_token, selected=""):
     )
     return f"""
 <section class="card tenant-delete-tool">
-  <div class="section-title"><div><h2>Excluir banco e tenant</h2><p>Operação destrutiva, separada da exclusão de projetos.</p></div><span class="pill warn">Backup obrigatório</span></div>
-  <div class="help"><strong>Proteções:</strong> o tenant administrativo não pode ser removido; tenants vinculados a projetos são bloqueados; um dump lógico final é criado antes dos volumes serem apagados.</div>
+  <div class="section-title"><div><h2>Excluir banco e tenant</h2><p>Operação destrutiva, separada da exclusão de projetos.</p></div><span class="pill warn">Backup recomendado</span></div>
+  <div class="help"><strong>Proteções:</strong> o tenant administrativo não pode ser removido; tenants vinculados a projetos são bloqueados; o sistema tenta criar um dump lógico final. Se o backup estiver indisponível, a exclusão só continua após uma segunda confirmação explícita.</div>
   <form id="tenant-delete-preview-form">
     <input type="hidden" name="csrf_token" value="{csrf_token}">
     <label>Tenant<select name="tenant" required><option value="">Selecione</option>{options}</select></label>
@@ -629,6 +676,7 @@ body.tenant-delete-modal-open{{overflow:hidden}}
 .tenant-delete-progress-wrap progress{{width:100%;height:12px;accent-color:var(--focus,#1b5fbf)}}
 .tenant-delete-terminal{{padding:14px;border-radius:11px;color:var(--ink,#0f1f14)}}
 .tenant-delete-terminal.ok{{background:var(--iff-wash,#eaf4ec);border:1px solid var(--iff,#168821)}}
+.tenant-delete-terminal.warn{{background:var(--warn-wash,#fff7e6);border:1px solid var(--warn,#b7791f)}}
 .tenant-delete-terminal.bad{{background:var(--halt-wash,#faebec);border:1px solid var(--halt,#9c1c24)}}
 @media(max-width:700px){{.tenant-delete-modal{{padding:0}}.tenant-delete-dialog{{width:100%;height:100%;max-height:none;border-radius:0}}.tenant-delete-step{{grid-template-columns:26px 1fr}}.tenant-delete-step>.pill{{grid-column:2;justify-self:start}}}}
 </style>
@@ -638,7 +686,7 @@ body.tenant-delete-modal-open{{overflow:hidden}}
  const modal=document.getElementById('tenant-delete-modal'),body=document.getElementById('tenant-delete-modal-body'),footer=document.getElementById('tenant-delete-modal-footer'),title=document.getElementById('tenant-delete-title'),subtitle=document.getElementById('tenant-delete-subtitle');
  const portal='/cloudiff/portal/',labels=['Validação','Backup final','Containers e volumes','Registry e permissões','Diretório do tenant','Roteador'];
  const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}}[c]));
- let activeJob='',terminal=false,lastJob=null;
+ let activeJob='',terminal=false,lastJob=null,activeTenant='',activeCsrf='';
  const dots=()=>'<span class="tenant-delete-dots" aria-label="Executando"><i></i><i></i><i></i></span>';
  function openModal(){{modal.hidden=false;modal.setAttribute('aria-hidden','false');document.body.classList.add('tenant-delete-modal-open')}}
  function closeModal(){{if(activeJob&&!terminal)return;modal.hidden=true;modal.setAttribute('aria-hidden','true');document.body.classList.remove('tenant-delete-modal-open')}}
@@ -646,7 +694,23 @@ body.tenant-delete-modal-open{{overflow:hidden}}
  async function jsonFetch(url,options={{}}){{const r=await fetch(url,{{credentials:'same-origin',...options}}),type=(r.headers.get('content-type')||'').toLowerCase(),text=await r.text();if(!type.includes('application/json')){{const e=new Error(`A operação não chegou ao serviço de exclusão (HTTP ${{r.status}}).`);e.status=r.status;throw e}}let data;try{{data=JSON.parse(text)}}catch(_e){{throw new Error('O serviço retornou uma resposta incompleta.')}}if(!r.ok){{const e=new Error(data.detail||data.error||`HTTP ${{r.status}}`);e.status=r.status;throw e}}return data}}
  function timeline(job={{}}){{const known=new Map((job.steps||[]).map(x=>[x.label,x]));return labels.map((label,index)=>{{const item=known.get(label)||{{status:'pending',detail:'Aguardando etapa anterior.'}},status=item.status||'pending',icon=status==='done'?'✓':status==='failed'?'!':status==='running'?dots():String(index+1),badge=status==='done'?'Concluído':status==='failed'?'Falhou':status==='running'?'Executando':'Aguardando';return `<li class="tenant-delete-step ${{status}}"><span class="tenant-delete-step-icon">${{icon}}</span><div><strong>${{esc(label)}}</strong><small>${{esc(item.detail||'')}}</small></div><span class="pill ${{status==='done'?'ok':status==='failed'?'bad':'muted'}}">${{badge}}</span></li>`}}).join('')}}
  function preparing(message,detail){{title.textContent='Exclusão iniciada';subtitle.textContent=message;body.innerHTML=`<div class="tenant-delete-live">${{dots()}}<div><strong>${{esc(message)}}</strong><small>${{esc(detail)}}</small></div></div><div class="tenant-delete-progress-wrap"><progress max="100" value="2"></progress><small>O servidor está preparando a operação.</small></div><ol class="tenant-delete-timeline">${{timeline({{steps:[{{label:'Validação',status:'running',detail}}]}})}}</ol>`;footer.innerHTML='<button class="btn light" type="button" disabled>Aguarde…</button>'}}
- function drawJob(job){{lastJob=job;activeJob=['queued','running'].includes(job.status)?job.job_id||activeJob:'';terminal=!activeJob;const progress=Number(job.progress||0),failed=job.status==='failed',done=job.status==='succeeded';title.textContent=done?'Banco removido':failed?'A exclusão falhou':'Exclusão em andamento';subtitle.textContent=done?'Backup protegido e ambiente atualizado.':failed?'O processo foi interrompido com segurança.':job.current_step||'Preparando próxima etapa.';const live=!failed&&!done?`<div class="tenant-delete-live">${{dots()}}<div><strong>${{esc(job.current_step||'Executando')}}</strong><small>O servidor continua trabalhando. Não feche esta janela.</small></div></div>`:'';const terminalBox=done?'<div class="tenant-delete-terminal ok"><strong>Exclusão concluída.</strong><p>O backup final foi criado antes da remoção dos dados.</p></div>':failed?`<div class="tenant-delete-terminal bad"><strong>Não foi possível concluir.</strong><p>${{esc(job.error||job.detail||job.result?.error||'Falha não identificada.')}}</p></div>`:'';body.innerHTML=`${{live}}<div class="tenant-delete-progress-wrap"><progress max="100" value="${{progress}}"></progress><small>${{progress}}% concluído</small></div><ol class="tenant-delete-timeline">${{timeline(job)}}</ol>${{terminalBox}}`;footer.innerHTML=terminal?'<button class="btn" type="button" data-finish>Fechar</button>':'<button class="btn light" type="button" disabled>Exclusão em andamento…</button>';footer.querySelector('[data-finish]')?.addEventListener('click',()=>{{closeModal();location.reload()}})}}
+ function drawJob(job){{
+   lastJob=job;activeJob=['queued','running'].includes(job.status)?job.job_id||activeJob:'';terminal=!activeJob;
+   const progress=Number(job.progress||0),failed=job.status==='failed',done=job.status==='succeeded',result=job.result||{{}},needsOverride=failed&&(job.error==='backup_confirmation_required'||result.error==='backup_confirmation_required')&&result.can_continue_without_backup===true;
+   title.textContent=done?'Banco removido':needsOverride?'Backup indisponível':failed?'A exclusão falhou':'Exclusão em andamento';
+   subtitle.textContent=done?(result.backup_skipped?'Banco removido sem backup, conforme confirmação do usuário.':'Backup protegido e ambiente atualizado.'):needsOverride?'O backup não pôde ser criado. Você decide se cancela ou continua sem backup.':failed?'O processo foi interrompido com segurança.':job.current_step||'Preparando próxima etapa.';
+   const live=!failed&&!done?`<div class="tenant-delete-live">${{dots()}}<div><strong>${{esc(job.current_step||'Executando')}}</strong><small>O servidor continua trabalhando. Não feche esta janela.</small></div></div>`:'';
+   const terminalBox=done?`<div class="tenant-delete-terminal ok"><strong>Exclusão concluída.</strong><p>${{result.backup_skipped?'A exclusão foi concluída sem backup após confirmação explícita.':'O backup final foi criado antes da remoção dos dados.'}}</p></div>`:needsOverride?`<div class="tenant-delete-terminal warn"><strong>Backup não disponível.</strong><p>${{esc(result.backup?.error||'O servidor de backup ou o container do banco não respondeu.')}}</p><p>Se continuar, os dados serão removidos mesmo sem um dump final. Esta decisão ficará registrada no recibo.</p></div>`:failed?`<div class="tenant-delete-terminal bad"><strong>Não foi possível concluir.</strong><p>${{esc(job.error||job.detail||result.error||'Falha não identificada.')}}</p></div>`:'';
+   body.innerHTML=`${{live}}<div class="tenant-delete-progress-wrap"><progress max="100" value="${{progress}}"></progress><small>${{progress}}% concluído</small></div><ol class="tenant-delete-timeline">${{timeline(job)}}</ol>${{terminalBox}}`;
+   if(needsOverride){{
+     footer.innerHTML='<button class="btn light" type="button" data-backup-cancel>Cancelar</button><button class="btn red" type="button" data-backup-continue>Continuar sem backup</button>';
+     footer.querySelector('[data-backup-cancel]').onclick=closeModal;
+     footer.querySelector('[data-backup-continue]').onclick=()=>continueWithoutBackup(job);
+   }}else{{
+     footer.innerHTML=terminal?'<button class="btn" type="button" data-finish>Fechar</button>':'<button class="btn light" type="button" disabled>Exclusão em andamento…</button>';
+     footer.querySelector('[data-finish]')?.addEventListener('click',()=>{{closeModal();location.reload()}});
+   }}
+ }}
  function showReconnect(attempt){{
    title.textContent='Confirmando conclusão';
    subtitle.textContent='O roteador está sendo atualizado. Recuperando o resultado final…';
@@ -654,6 +718,15 @@ body.tenant-delete-modal-open{{overflow:hidden}}
    const previous=body.querySelector('[data-delete-reconnect]');
    if(previous)previous.outerHTML=banner;else body.insertAdjacentHTML('afterbegin',banner);
    footer.innerHTML='<button class="btn light" type="button" disabled>Confirmando resultado…</button>';
+ }}
+ async function continueWithoutBackup(previousJob){{
+   if(!previousJob?.job_id||!activeTenant||!activeCsrf)return;
+   terminal=false;preparing('Continuando sem backup','A sua confirmação foi registrada. O sistema tentará o backup mais uma vez e, se continuar indisponível, seguirá com a exclusão.');
+   const requestBody=new URLSearchParams({{tenant:activeTenant,confirmation:`EXCLUIR BANCO ${{activeTenant}}`,csrf_token:activeCsrf,allow_without_backup:'1',backup_override_job_id:previousJob.job_id}});
+   try{{
+     const job=await jsonFetch(portal,{{method:'POST',headers:{{Accept:'application/json','Content-Type':'application/x-www-form-urlencoded;charset=UTF-8','X-CSRF-Token':activeCsrf,'X-CloudIF-Action':'admin-delete-tenant'}},body:requestBody}});
+     activeJob=job.job_id;drawJob(job);poll(job.job_id);
+   }}catch(err){{activeJob='';terminal=true;drawJob({{status:'failed',progress:100,error:err.message,steps:[{{label:'Backup final',status:'failed',detail:err.message}}]}})}}
  }}
  async function poll(id,attempt=0){{
    const urls=[`${{portal}}?api=admin-delete-tenant-status&job_id=${{encodeURIComponent(id)}}`,`/cloudiff/portal/api/admin-delete-tenant-status?job_id=${{encodeURIComponent(id)}}`];
@@ -681,6 +754,7 @@ body.tenant-delete-modal-open{{overflow:hidden}}
    e.preventDefault();
    const fd=new FormData(form),tenant=String(fd.get('tenant')||'').trim();
    if(!tenant)return;
+   activeTenant=tenant;activeCsrf=String(fd.get('csrf_token')||'');
    activeJob='';terminal=false;openModal();
    preparing('Analisando o banco selecionado','Conferindo vínculos, containers, volumes e proteções. Nenhuma alteração foi feita.');
    try{{
@@ -688,7 +762,7 @@ body.tenant-delete-modal-open{{overflow:hidden}}
      const r=p.resources||{{}},blocked=(p.blockers||[]).length>0;
      title.textContent='Confirmar exclusão definitiva';
      subtitle.textContent=blocked?'Este banco não pode ser removido.':'Revise os recursos e confirme somente quando estiver seguro.';
-     body.innerHTML=`<div class="tenant-delete-preview-grid"><div><small>Projetos vinculados</small><strong>${{(p.linked_projects||[]).length}}</strong></div><div><small>Containers</small><strong>${{(r.containers||[]).length}}</strong></div><div><small>Volumes</small><strong>${{(r.volumes||[]).length}}</strong></div><div><small>Diretório</small><strong>${{p.tenant_dir_present?'Presente':'Ausente'}}</strong></div></div>${{blocked?`<div class="tenant-delete-terminal bad"><strong>Exclusão bloqueada.</strong><p>${{esc((p.blockers||[]).join(', '))}}</p></div>`:`<div class="tenant-delete-confirmation"><div class="tenant-delete-terminal bad"><strong>Esta ação é irreversível.</strong><p>O sistema criará um backup final antes de parar os serviços e apagar os volumes.</p></div><label>Digite exatamente <strong>${{esc(p.confirmation)}}</strong><input id="tenant-delete-confirm" autocomplete="off"></label><p id="tenant-delete-confirm-status">Aguardando a confirmação exata.</p></div>`}}`;
+     body.innerHTML=`<div class="tenant-delete-preview-grid"><div><small>Projetos vinculados</small><strong>${{(p.linked_projects||[]).length}}</strong></div><div><small>Containers</small><strong>${{(r.containers||[]).length}}</strong></div><div><small>Volumes</small><strong>${{(r.volumes||[]).length}}</strong></div><div><small>Diretório</small><strong>${{p.tenant_dir_present?'Presente':'Ausente'}}</strong></div></div>${{blocked?`<div class="tenant-delete-terminal bad"><strong>Exclusão bloqueada.</strong><p>${{esc((p.blockers||[]).join(', '))}}</p></div>`:`<div class="tenant-delete-confirmation"><div class="tenant-delete-terminal bad"><strong>Esta ação é irreversível.</strong><p>O sistema tentará criar um backup final antes de apagar os volumes. Se isso falhar, você poderá cancelar ou confirmar novamente para continuar sem backup.</p></div><label>Digite exatamente <strong>${{esc(p.confirmation)}}</strong><input id="tenant-delete-confirm" autocomplete="off"></label><p id="tenant-delete-confirm-status">Aguardando a confirmação exata.</p></div>`}}`;
      if(blocked){{
        terminal=true;
        footer.innerHTML='<button class="btn" type="button" data-close-blocked>Fechar</button>';
