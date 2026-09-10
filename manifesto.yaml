@@ -12204,19 +12204,3 @@ entradas:
     produz: evidencia/publication-permissions-a9
     aceite: python3 -m unittest portal.tests.test_publication_permissions portal.tests.test_release_flow_wizard_ui
     status: aceito
-
-trabalho_compartilhado:
-  projeto: cloudiff
-  caminho: /srv/mcp-workspace/cloudiff-a10-skill-ref-reconcile
-  unidade: CLOUDIFF-A10-SKILL-REF-RECONCILE
-  descricao: 'reconciliar referencia network-ssh-operations v4 entre skill raiz e competencias antes de release'
-  agente: chat:6aa0c47a-0420-83e9-94f2-0e655d4c3b4f
-  atualizado_em: '2026-09-10T22:26:35Z'
-  previsao_termino: '2026-09-10T23:11:35Z'
-  zona_exclusao:
-    - manifesto.yaml
-    - estado.md
-    - skills/cloudiff/SKILL.md
-    - competencias.yaml
-    - tests/test_cloudiff_project_skill.py
-    - docs/reconciliation/skill-reference-closure-20260910.json

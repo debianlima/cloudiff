@@ -75,7 +75,7 @@
 - P2 do Teste Sofá continua dependente de duas aprovações humanas distintas admin/professor.
 
 ## Trabalho compartilhado
-- `CLOUDIFF-A10-SKILL-REF-RECONCILE` está ativa em `/srv/mcp-workspace/cloudiff-a10-skill-ref-reconcile`, com worktree sparse e reserva canônica antes do primeiro patch.
+- sem unidade ativa após o fechamento de `CLOUDIFF-A10-SKILL-REF-RECONCILE`; nova unidade deve registrar `manifesto.yaml.trabalho_compartilhado` antes do primeiro artefato.
 - A reserva textual anterior de CLOUDIFF-A9 expirou em 2026-09-10T00:48:00Z sem renovação canônica posterior; não foi ressuscitada como lock ativo.
 - U27 foi substituída após exceder `previsao_termino` em mais de 30 minutos sem renovação/atividade observável; o bloco original foi registrado fora do repositório antes da troca.
 
@@ -250,3 +250,4 @@
 - A skill de projeto avançou para `cloudiff@0.1.39`, a referência de rede foi propagada para v4/delta `1eba0b...` e L061 registra o aprendizado. `competencias.yaml` acompanha `0.1.39` sem reordenar nem normalizar as outras referências.
 - O fecho atual está em `docs/reconciliation/skill-reference-closure-20260910.json`: projeções 14/14, referências do catálogo 7/7 e pins externos imutáveis 7/7. Os seis pins históricos do v40 foram reabertos nos commits fixados e bateram os hashes registrados; `frontend-design@2.0` também bateu commit `797f157...` e SHA-256 documentado. Gates desta reconciliação: `RECONCILIATION_CLOSURE=PASS` e `DEPENDENCY_REFERENCES=PASS`.
 - Nenhum runtime/Portal foi alterado por esta unidade e C++ permanece `NOT_TRIGGERED`. Porém, após integrar esta mudança de governança, o candidate `a10-ux-e16d63aaca9a` deixa de representar o HEAD canônico como `source_commit`; ele **não deve ser promovido** sem rebuild/revalidação a partir do novo main, ainda que os bytes de runtime possam vir a ser idênticos.
+- Reconciliação funcional integrada em `main@a045d667b340e242415712917cdc6459c931d4a0`; validação independente do HEAD remoto em árvore completa `/run` passou com `test_cloudiff_project_skill.py` e `scripts/validate-repository.py` `RC=0`, `errors=0`.
