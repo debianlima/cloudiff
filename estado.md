@@ -75,7 +75,7 @@
 - P2 do Teste Sofá continua dependente de duas aprovações humanas distintas admin/professor.
 
 ## Trabalho compartilhado
-- `CLOUDIFF-A10-E2E-FOLLOWUP` está ativa em `/srv/mcp-workspace/cloudiff-a10-e2e-followup`, com reserva canônica em `manifesto.yaml.trabalho_compartilhado` antes das alterações funcionais.
+- sem unidade ativa após o fechamento de `CLOUDIFF-A10-E2E-FOLLOWUP`; nova unidade deve registrar `manifesto.yaml.trabalho_compartilhado` antes do primeiro artefato.
 - A reserva textual anterior de CLOUDIFF-A9 expirou em 2026-09-10T00:48:00Z sem renovação canônica posterior; não foi ressuscitada como lock ativo.
 - U27 foi substituída após exceder `previsao_termino` em mais de 30 minutos sem renovação/atividade observável; o bloco original foi registrado fora do repositório antes da troca.
 
@@ -209,4 +209,6 @@
 - Testes foram escritos antes do patch e reprovaram individualmente (`RC=1/1`); após a correção, os dois focados passaram e a suíte focal executável passou 33/33. Um teste adicional cobre o caso órfão em que somente o `.env` permanece.
 - `py_compile` e `git diff --check` passaram. `scripts/validate-repository.py` voltou ao baseline conhecido de 13 `required path missing`; não há YAML inválido nem bytecode novo após limpeza. Os 5 erros da tentativa de regressão maior eram bootstrap por artefatos ausentes no checkout e não tocaram o código patchado.
 - Gate de browser pós-patch não pôde ser repetido neste executor: `/dev/shm` estava em 99% com processo Chrome antigo de outra unidade; ele não foi encerrado. O E2E real pré-patch permanece evidência causal e a correção ainda não foi promovida ao runtime de produção.
+- Tentativa alternativa pelo WebDev/Selenium oficial também ficou bloqueada: Hospedagem→Forja `10.62.91.2:17900/4444` expirou por timeout. Nenhuma rota/firewall foi ampliada para fabricar o gate.
+- Fonte funcional integrada em `main@c9363101d1725f74b5a9e14fca5dac2d1c273f7b`; produção permanece inalterada e exige gate/autorização de release separado.
 - Skill reconciliada para `cloudiff@0.1.38` com L059/L060; `competencias.yaml` acompanha a mesma versão. C++ permanece `NOT_TRIGGERED`: ambos os defeitos são estado de UI/cleanup de arquivo, sem hot path CPU medido.

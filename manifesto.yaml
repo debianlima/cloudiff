@@ -12204,23 +12204,3 @@ entradas:
     produz: evidencia/publication-permissions-a9
     aceite: python3 -m unittest portal.tests.test_publication_permissions portal.tests.test_release_flow_wizard_ui
     status: aceito
-
-trabalho_compartilhado:
-  projeto: cloudiff
-  caminho: /srv/mcp-workspace/cloudiff-a10-e2e-followup
-  unidade: CLOUDIFF-A10-E2E-FOLLOWUP
-  descricao: 'corrigir gaps comprovados pelo hardness E2E: reconciliacao visual apos provisionamento succeeded e cleanup do user-workspace env na exclusao de tenant'
-  agente: chat:6aa0c47a-0420-83e9-94f2-0e655d4c3b4f
-  atualizado_em: '2026-09-10T21:10:00Z'
-  previsao_termino: '2026-09-10T22:10:00Z'
-  zona_exclusao:
-    - manifesto.yaml
-    - portal/design/**
-    - portal/tests/**
-    - components/control-plane/current-apps/portal-current/cloudif-admin-portal-base.py
-    - portal/legacy/cloudif-admin-portal-base.py
-    - components/control-plane/srv/cloudif/lib/cloudif_admin_tenant_delete.py
-    - estado.md
-    - skills/cloudiff/SKILL.md
-    - competencias.yaml
-    - tests/test_cloudiff_project_skill.py
