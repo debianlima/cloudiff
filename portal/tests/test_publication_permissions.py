@@ -192,6 +192,20 @@ class PublicationPermissionsTests(unittest.TestCase):
         self.assertIn('authorization_checked=True',worker)
         self.assertNotIn("user['admin']=True",worker)
 
+    def test_worker_claim_commits_schema_migration_before_begin_immediate(self):
+        import importlib.util
+        spec=importlib.util.spec_from_file_location('cloudif_portal_publications_claim_test',ROOT/'components/control-plane/srv/cloudif/lib/cloudif_portal_publications.py')
+        module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+        db=Path(self.tmp.name)/'claim-worker.db'
+        module.DB=db
+        self.assertIsNone(module.claim_next_job())
+        con=sqlite3.connect(db)
+        try:
+            row=con.execute("select applied_at from publication_permission_migrations where name='legacy_homologators_v1'").fetchone()
+            self.assertIsNotNone(row)
+        finally:
+            con.close()
+
     def test_release_backend_uses_project_permission_jobs_without_worker_privilege_escalation(self):
         portal=(ROOT/'components/control-plane/current-apps/portal-current/cloudif_portal_publications.py').read_text()
         coexist=(ROOT/'components/control-plane/srv/cloudif/lib/cloudif_portal_v2_coexist.py').read_text()
