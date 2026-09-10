@@ -75,7 +75,7 @@
 - P2 do Teste Sofá continua dependente de duas aprovações humanas distintas admin/professor.
 
 ## Trabalho compartilhado
-- sem unidade ativa após o fechamento de `CLOUDIFF-A10-RELEASE-REBUILD`; nova unidade deve registrar `manifesto.yaml.trabalho_compartilhado` antes do primeiro artefato.
+- `CLOUDIFF-A10-CUTOVER-READINESS` está ativa em `/srv/mcp-workspace/cloudiff-a10-release-rebuild`, com reserva canônica antes do primeiro artefato funcional.
 - A reserva textual anterior de CLOUDIFF-A9 expirou em 2026-09-10T00:48:00Z sem renovação canônica posterior; não foi ressuscitada como lock ativo.
 - U27 foi substituída após exceder `previsao_termino` em mais de 30 minutos sem renovação/atividade observável; o bloco original foi registrado fora do repositório antes da troca.
 
@@ -227,3 +227,14 @@
 - Uma extensão desktop/mobile do probe excedeu timeout e foi explicitamente excluída da evidência de aceite; não foi convertida em PASS. O gate alvo do bug visual, contudo, foi exercitado em browser real contra o candidato coerente.
 - Cleanup do harness PASS: transient unit/paralela `18104`, túnel `18114`, CDP `9243`, DB QA, extraction e runners foram removidos. O Chrome A9 preexistente foi preservado. Permanecem somente bundle imutável, pre-state e evidência necessários para continuidade/rollback.
 - Produção **não foi promovida**. `/srv/cloudif/app-pointers/portal-current` continuou em `a10-ux-73dd432fea38` e `cloudif-admin-portal.service` permaneceu `active/running`. Próximo gate é revisão do cutover + autorização humana explícita de produção; este monitor automatizado não fornece essa autorização.
+
+
+## CLOUDIFF-A10-CUTOVER-READINESS — gate read-only imediatamente antes do cutover (2026-09-10)
+
+- A revisão formal do mecanismo de promoção preserva a decisão anterior de **não** criar script `apply/promote/cutover`: autorização humana e coordenação do cutover continuam separadas da preparação técnica.
+- Novo `deploy/a10-release-gate/cutover-readiness.sh` é somente leitura e recebe `release-id`, SHA-256 esperado do archive e source commit esperado. Ele não cria symlinks, não extrai sobre caminhos ativos, não para/reinicia serviço e não altera pre-state.
+- O PASS exige: archive staged com SHA-256 exato; único `release-manifest.json` coerente com release/source; `promotion_authorized=false`; `requires_live_preflight=true`; `PRESTATE_COMPLETE`; `PRESTATE.SHA256` íntegro; ausência de drift em `portal-current`, `portal-previous`, tipo/link/target de `/srv/cloudif/lib/portal`; hashes do app ativo, portal runtime e root lib overlay iguais ao preflight; serviço `cloudif-admin-portal.service` em `active/running` com PID válido.
+- Teste escrito antes do script e inicialmente vermelho. `tests/test_a10_cutover_readiness.py` cobre 4 cenários: PASS sem mutação, candidate hash divergente, pointer drift e pre-state adulterado. Após a implementação: 4/4 PASS.
+- Gate live read-only executado contra `a10-ux-e16d63aaca9a`: `CUTOVER_READINESS=PASS`, source `e16d63aaca9aa726c71ca0022931b776f0e09348`, archive SHA-256 `073a872be362f0fad719cab3a5dfdc13c43835e5da9ca380f3f87be7e7e79cb1`; current `a10-ux-73dd432fea38`, previous `a10-ux-adabb6ee435a`, `lib/portal` symlink resolvendo para `portal-v2/a10-ux-73dd432fea38`, serviço live com PID 860577.
+- O README do release-gate documenta o novo gate e mantém explícito que ele **não autoriza promoção**.
+- Produção continua inalterada. Próximo gate após integrar este validador continua `BLOCKED_HUMAN_AUTH_PRODUCTION`: uma pessoa autorizada precisa aprovar o cutover coordenado; o supervisor PGH não humano não satisfaz esse gate.
