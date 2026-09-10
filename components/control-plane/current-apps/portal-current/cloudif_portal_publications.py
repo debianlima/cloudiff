@@ -1010,6 +1010,9 @@ def acknowledge_job(slug,job_id,user):
 
 def claim_next_job():
     con=sqlite3.connect(DB,timeout=30);con.row_factory=sqlite3.Row;_ensure_schema(con)
+    # Schema/permission migrations may open an implicit transaction. Claiming a job
+    # intentionally starts its own IMMEDIATE transaction, so close migration work first.
+    con.commit()
     con.execute('begin immediate')
     stale=time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime(time.time()-1800))
     con.execute("update publication_jobs set status='queued',step='queued',message='Job recuperado após reinício do worker.',started_at=null where status='running' and started_at<?",(stale,))
