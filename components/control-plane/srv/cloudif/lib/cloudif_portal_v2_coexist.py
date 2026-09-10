@@ -610,7 +610,7 @@ def _install() -> None:
                 if release_flow_match:
                     try:
                         actor=identity(self.headers);groups=[str(group) for group in actor.groups];lower={group.strip().lower() for group in groups}
-                        user={'username':actor.username,'email':actor.email,'groups':groups,'admin':bool(lower.intersection({'cloudif-tenants-admin','cloudif-professor'}))}
+                        user={'username':actor.username,'email':actor.email,'groups':groups,'admin':'cloudif-tenants-admin' in lower,'professor':'cloudif-professor' in lower}
                         import cloudif_portal_publications as publications
                         slug=release_flow_match.group(1);operation=release_flow_match.group(2) or ''
                         if operation=='approval/status':
@@ -950,7 +950,7 @@ def _install() -> None:
                         self.close_connection=True
                         print(f'cloudif_artifact_upload_content_failed type={type(exc).__name__}',flush=True)
                         return send_json(self,503,{'ok':False,'error':{'message':'O upload foi interrompido antes de ser selado. Você pode tentar novamente.','detail':type(exc).__name__}})
-                release_flow_match = re.fullmatch(r'/cloudiff?/portal/api/projects/([a-z0-9][a-z0-9-]{0,62})/release-flow/(preview/ensure|preview/recreate|preview/terminal|stage/terminal|homologation/enqueue|homologation/approve|homologation/reject|homologation/homologate-and-publish|homologators|production/approval/request|production/enqueue|rollback|job/acknowledge)', parsed.path)
+                release_flow_match = re.fullmatch(r'/cloudiff?/portal/api/projects/([a-z0-9][a-z0-9-]{0,62})/release-flow/(preview/ensure|preview/recreate|preview/terminal|stage/terminal|homologation/enqueue|homologation/approve|homologation/reject|homologation/homologate-and-publish|homologators|permissions|production/approval/request|production/enqueue|production/publish|rollback|job/acknowledge)', parsed.path)
                 if release_flow_match:
                     try:
                         content_length=int(self.headers.get('Content-Length','0') or 0)
@@ -958,7 +958,7 @@ def _install() -> None:
                         if 'application/json' not in (self.headers.get('Content-Type') or '').lower():return send_json(self,415,{'ok':False,'error':{'code':'json_required','message':'Use Content-Type application/json.'}})
                         payload=json.loads(self.rfile.read(content_length) or b'{}')
                         if not isinstance(payload,dict):return send_json(self,400,{'ok':False,'error':{'code':'invalid_json_object'}})
-                        actor=identity(self.headers);groups=[str(group) for group in actor.groups];lower={group.strip().lower() for group in groups};user={'username':actor.username,'email':actor.email,'groups':groups,'admin':bool(lower.intersection({'cloudif-tenants-admin','cloudif-professor'}))}
+                        actor=identity(self.headers);groups=[str(group) for group in actor.groups];lower={group.strip().lower() for group in groups};user={'username':actor.username,'email':actor.email,'groups':groups,'admin':'cloudif-tenants-admin' in lower,'professor':'cloudif-professor' in lower}
                         owner=sys.modules.get(handler_class.__module__);provided=str(self.headers.get('X-CSRF-Token') or payload.pop('csrfToken',payload.pop('csrf_token','')))
                         if not getattr(owner,'_prod_csrf_equal')(provided,getattr(owner,'_prod_csrf_token')(user)):return send_json(self,403,{'ok':False,'error':{'code':'invalid_csrf','message':'Token CSRF inválido ou ausente.'}})
                         import cloudif_portal_publications as publications
@@ -972,6 +972,8 @@ def _install() -> None:
                         elif operation=='homologation/reject':result=publications.homologate_candidate(slug,int(payload.get('candidateNumber') or 0),user,'rejected',str(payload.get('note') or ''))
                         elif operation=='homologation/homologate-and-publish':result=publications.homologate_and_enqueue(slug,int(payload.get('candidateNumber') or 0),user,str(payload.get('note') or ''))
                         elif operation=='homologators':result=publications.set_homologators(slug,user,payload.get('usernames') if isinstance(payload.get('usernames'),list) else [])
+                        elif operation=='permissions':result=publications.set_publication_permissions(slug,user,payload.get('entries') if isinstance(payload.get('entries'),list) else [])
+                        elif operation=='production/publish':result=publications.enqueue_authorized_publication(slug,int(payload.get('candidateNumber') or 0),user)
                         elif operation=='production/approval/request':result=publications.request_production_activation(slug,int(payload.get('candidateNumber') or 0),user,str(payload.get('reason') or 'Publicar candidato homologado em Produção'))
                         elif operation=='production/enqueue':result=publications.enqueue_candidate_publication(slug,int(payload.get('candidateNumber') or 0),user,str(payload.get('approvalId') or ''),str(payload.get('activationDigest') or ''))
                         elif operation=='rollback':result=publications.rollback_publication(slug,int(payload.get('publicationNumber') or 0),user)
