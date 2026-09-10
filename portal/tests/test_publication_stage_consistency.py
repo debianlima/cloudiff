@@ -79,6 +79,24 @@ class PublicationStageConsistencyTests(unittest.TestCase):
         self.assertIn("release.legacy ? release.stage_code + ' · legado'",source)
         self.assertIn("active && active.legacy ? 'Produção legada ativa'",source)
 
+    def test_production_embed_uses_versioned_stage_url_but_external_open_uses_stable_url(self):
+        base=BASE.read_text()
+        for backend in (CANONICAL_BACKEND,APP_BACKEND):
+            source=backend.read_text()
+            self.assertIn("'url':'https://'+str(legacy['version_hostname'])+'/'",source)
+        self.assertIn("embedUrl:publicationSafeSiteUrl(active.url||active.stableUrl||fallback.url||'')",base)
+        self.assertIn("url:publicationSafeSiteUrl(active.stableUrl||active.url||fallback.url||'')",base)
+        self.assertIn("const embedUrl=ctx.embedUrl||ctx.url",base)
+        self.assertIn("iframe src=\"'+envEsc(embedUrl)+'\"",base)
+        self.assertIn("href=\"'+envEsc(ctx.url)+'\"",base)
+
+    def test_homologation_terminal_prefers_accepted_candidate_before_waiting_candidate(self):
+        for backend in (CANONICAL_BACKEND,APP_BACKEND):
+            source=backend.read_text()
+            self.assertIn("status in ('awaiting_homologation','homologated','published')",source)
+            self.assertIn("case when status in ('homologated','published') then 0 else 1 end",source)
+            self.assertIn("candidate_number desc limit 1",source)
+
     def test_switcher_exposes_canonical_p_and_separate_legacy_history(self):
         for path in (CANONICAL_UI,APP_UI):
             source=path.read_text()
