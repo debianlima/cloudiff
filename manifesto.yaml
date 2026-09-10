@@ -12209,7 +12209,7 @@ trabalho_compartilhado:
   projeto: cloudiff
   caminho: /srv/mcp-workspace/cloudiff-a10-e2e-followup
   unidade: CLOUDIFF-A10-E2E-FOLLOWUP
-  descricao: corrigir gaps comprovados pelo hardness E2E: reconciliacao visual apos provisionamento succeeded e cleanup do user-workspace env na exclusao de tenant
+  descricao: 'corrigir gaps comprovados pelo hardness E2E: reconciliacao visual apos provisionamento succeeded e cleanup do user-workspace env na exclusao de tenant'
   agente: chat:6aa0c47a-0420-83e9-94f2-0e655d4c3b4f
   atualizado_em: '2026-09-10T21:10:00Z'
   previsao_termino: '2026-09-10T22:10:00Z'
