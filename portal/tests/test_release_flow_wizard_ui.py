@@ -20,6 +20,18 @@ class ReleaseFlowWizardUITests(unittest.TestCase):
         self.assertNotIn('Abrir aprovação',release)
         self.assertNotIn("post('production/approval/request'",release)
 
+    def test_release_job_shows_real_step_percentage(self):
+        release=RELEASE_JS_PATH.read_text()
+        self.assertIn('function jobProgressPercent(job)',release)
+        self.assertIn('snapshot: 20',release)
+        self.assertIn('deploying: 58',release)
+        self.assertIn('https: 85',release)
+        self.assertIn('completed: 100',release)
+        self.assertIn('class="release-job-percent">${percent}%</span>',release)
+        self.assertIn('progress max="100" value="${percent}"',release)
+        self.assertIn('aria-label="Progresso ${percent}%"',release)
+        self.assertIn('.release-job-percent',PUBLICATION_CSS)
+
     def test_homologation_tab_shows_candidate_creation_progress(self):
         release=RELEASE_JS_PATH.read_text()
         self.assertIn("job.operation === 'homologation_candidate'",release)
