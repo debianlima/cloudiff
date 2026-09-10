@@ -12,13 +12,32 @@ class ReleaseFlowWizardUITests(unittest.TestCase):
     def test_release_permissions_are_managed_inside_the_publication_flow(self):
         release=RELEASE_JS_PATH.read_text()
         self.assertIn('data-release-permissions',release)
-        self.assertIn('Permissões',release)
+        self.assertIn('Autorizar homologação',release)
         self.assertNotIn('data-release-refresh',release)
         self.assertIn('Quem pode homologar e publicar',release)
         self.assertIn("post('permissions'",release)
         self.assertIn("post('production/publish'",release)
         self.assertNotIn('Abrir aprovação',release)
         self.assertNotIn("post('production/approval/request'",release)
+
+    def test_preview_has_manual_refresh_without_reintroducing_old_prepare_buttons(self):
+        release=RELEASE_JS_PATH.read_text()
+        self.assertIn('data-release-action="preview-refresh"',release)
+        self.assertIn('Atualizar Preview',release)
+        self.assertIn('async function refreshPreview()',release)
+        self.assertIn("post('preview/ensure', {})",release)
+        self.assertIn('Atualizando Preview…',release)
+        self.assertNotIn('preview-auto-retry',release)
+        self.assertNotIn('Tentar preparar Preview',release)
+
+    def test_homologation_authorization_button_opens_existing_permission_manager(self):
+        release=RELEASE_JS_PATH.read_text()
+        self.assertIn('data-release-permissions>Autorizar homologação</button>',release)
+        self.assertIn('Autorizar homologação e publicação',release)
+        self.assertIn('Quem pode homologar e publicar',release)
+        self.assertIn('data-permission-homologate',release)
+        self.assertIn('data-permission-publish',release)
+        self.assertNotIn('data-release-refresh',release)
 
     def test_release_job_shows_real_step_percentage(self):
         release=RELEASE_JS_PATH.read_text()
