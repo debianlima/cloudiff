@@ -20,6 +20,11 @@ class ProjectDeleteConfirmationNormalizationTests(unittest.TestCase):
     def test_surrounding_and_repeated_whitespace_are_normalized(self):
         self.assertTrue(MATCHES('silvipro', '  EXCLUIR   silvipro  '))
 
+    def test_invisible_unicode_formatting_does_not_break_exact_confirmation(self):
+        self.assertTrue(MATCHES('grupix', 'EXCLUIR​ grupix'))
+        self.assertTrue(MATCHES('grupix', '﻿EXCLUIR grupix'))
+        self.assertTrue(MATCHES('grupix', 'ＥＸＣＬＵＩＲ grupix'))
+
     def test_phrase_still_requires_keyword_and_complete_slug(self):
         self.assertFalse(MATCHES('silvipro', 'silvipro'))
         self.assertFalse(MATCHES('silvipro', 'EXCLUIR silvi'))
