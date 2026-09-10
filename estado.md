@@ -75,7 +75,7 @@
 - P2 do Teste Sofá continua dependente de duas aprovações humanas distintas admin/professor.
 
 ## Trabalho compartilhado
-- sem unidade ativa após o fechamento de `CLOUDIFF-A10-SKILL-REF-RECONCILE`; nova unidade deve registrar `manifesto.yaml.trabalho_compartilhado` antes do primeiro artefato.
+- sem unidade ativa após o fechamento de `CLOUDIFF-A10-RELEASE-REFRESH-039`; nova unidade deve registrar `manifesto.yaml.trabalho_compartilhado` antes do primeiro artefato.
 - A reserva textual anterior de CLOUDIFF-A9 expirou em 2026-09-10T00:48:00Z sem renovação canônica posterior; não foi ressuscitada como lock ativo.
 - U27 foi substituída após exceder `previsao_termino` em mais de 30 minutos sem renovação/atividade observável; o bloco original foi registrado fora do repositório antes da troca.
 
@@ -251,3 +251,15 @@
 - O fecho atual está em `docs/reconciliation/skill-reference-closure-20260910.json`: projeções 14/14, referências do catálogo 7/7 e pins externos imutáveis 7/7. Os seis pins históricos do v40 foram reabertos nos commits fixados e bateram os hashes registrados; `frontend-design@2.0` também bateu commit `797f157...` e SHA-256 documentado. Gates desta reconciliação: `RECONCILIATION_CLOSURE=PASS` e `DEPENDENCY_REFERENCES=PASS`.
 - Nenhum runtime/Portal foi alterado por esta unidade e C++ permanece `NOT_TRIGGERED`. Porém, após integrar esta mudança de governança, o candidate `a10-ux-e16d63aaca9a` deixa de representar o HEAD canônico como `source_commit`; ele **não deve ser promovido** sem rebuild/revalidação a partir do novo main, ainda que os bytes de runtime possam vir a ser idênticos.
 - Reconciliação funcional integrada em `main@a045d667b340e242415712917cdc6459c931d4a0`; validação independente do HEAD remoto em árvore completa `/run` passou com `test_cloudiff_project_skill.py` e `scripts/validate-repository.py` `RC=0`, `errors=0`.
+
+
+## CLOUDIFF-A10-RELEASE-REFRESH-039 — candidate após reconciliação `cloudiff@0.1.39` (2026-09-10)
+
+- A unidade foi aberta porque a reconciliação da skill avançou o source canônico e tornou `a10-ux-e16d63aaca9a` inadequado para promoção por procedência. O candidate anterior permanece apenas como evidência histórica e **não deve ser promovido**.
+- Novo candidate imutável: `a10-ux-f1269df31165`, `source_commit=f1269df31165d8694d7a11dea34e2b4f149c783c`, archive SHA-256 `959d2fc0ff30437efeec5af6998bcc715a7dbbeeebf8c10b8bc5f27e482dc050`, 128 arquivos no manifesto, 147 entradas no archive, zero bytecode, `promotion_authorized=false` e `requires_live_preflight=true`.
+- O build ocorreu em worktree temporária detached no tmpfs `/run`, preservando o filesystem raiz em 100%; nenhum checkout A9 foi modificado.
+- Preflight novo executado na Hospedagem para esse `release_id`: pre-state em `/srv/cloudif/releases/a10-ux-f1269df31165/pre-state`, `PRESTATE.SHA256` 11/11 íntegro, current `a10-ux-73dd432fea38`, previous `a10-ux-adabb6ee435a` e `lib/portal` resolvendo para `portal-v2/a10-ux-73dd432fea38`.
+- Archive staged apenas em `/srv/cloudif/releases/a10-ux-f1269df31165/candidate/`. `cutover-readiness.sh` retornou PASS para o novo SHA/source sem trocar pointer ou reiniciar serviço; o Portal live permaneceu `active/running` com PID 860577.
+- O mapa completo dos 128 arquivos/hashes de payload do novo candidate é idêntico ao de `a10-ux-e16d63aaca9a`: `PAYLOAD_HASHMAP_EQUAL=TRUE`, digest canônico `369a313c4bee8025f16911225a4151ed8a293f494107896e1d634d17bd038a47`. Assim, o hardness dirigido em Chrome 151 do candidate anterior aplica-se byte a byte ao novo payload.
+- A transferência de evidência foi registrada sem fingir novo browser run: `/srv/cloudif/releases/a10-ux-f1269df31165/candidate/evidence/browser-equivalence.json`, SHA-256 `ea8e8c8283dc2cfa4e13c4a7a55424fa97d65b56625d296031c464ff54e8684c`, referencia a evidência original SHA-256 `7f628f271633893fce49380e8ed262fc83097a72863c8c717220429d0e44dfcc`.
+- Produção permanece **inalterada** em `a10-ux-73dd432fea38`. Próximo gate continua `BLOCKED_HUMAN_AUTH_PRODUCTION`: imediatamente antes de qualquer cutover humano autorizado, repetir `cutover-readiness.sh`; depois coordenar app + root-lib + portal, executar smoke e rollback se necessário.
