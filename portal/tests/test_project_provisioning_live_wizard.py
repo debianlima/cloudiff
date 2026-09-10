@@ -51,6 +51,18 @@ class ProjectProvisioningLiveWizardTests(unittest.TestCase):
         ):
             self.assertIn(marker, self.source)
 
+    def test_successful_poll_settles_reconnect_ui_without_reload(self):
+        for marker in (
+            "function settleProvisionTerminal(data)",
+            "if(data.status==='succeeded')",
+            "provisioning=false",
+            "headTitle.textContent='Projeto provisionado'",
+            "closeButton.hidden=false",
+            "settleProvisionTerminal(d)",
+        ):
+            self.assertIn(marker, self.source)
+        self.assertIn("drawLive(d);", self.source)
+
 
 if __name__ == '__main__':
     unittest.main()

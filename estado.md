@@ -9,7 +9,7 @@
 - Forgejo SSH usa destino interno direto `10.62.91.2:2222` pelo gateway.
 - PostgreSQL/Supabase usa conector reverso da Hospedagem pela própria 443; o forward do tenant existe apenas enquanto há lease ativa e fica em loopback no proxy.
 - Faro permanece fora do caminho e não foi modificado.
-- A skill de projeto vigente é `cloudiff@0.1.37`.
+- A skill de projeto vigente é `cloudiff@0.1.38`.
 - Decisão humana de 09/09/2026: novas funcionalidades e refatorações do CloudIFF devem ser modulares por responsabilidade; adapters/entrypoints apenas orquestram e lógica específica vai para módulo coeso próprio, com gate que impeça regressão monolítica.
 - `PracticalSwan/frontend-design@2.0` é a competência de direção estética para futuras unidades de interface/redesign; não autoriza por si só alterar frozen surfaces.
 
@@ -75,7 +75,8 @@
 - P2 do Teste Sofá continua dependente de duas aprovações humanas distintas admin/professor.
 
 ## Trabalho compartilhado
-- sem unidade ativa após o fechamento A10; nova unidade deve registrar `manifesto.yaml.trabalho_compartilhado` antes do primeiro artefato.
+- `CLOUDIFF-A10-E2E-FOLLOWUP` está ativa em `/srv/mcp-workspace/cloudiff-a10-e2e-followup`, com reserva canônica em `manifesto.yaml.trabalho_compartilhado` antes das alterações funcionais.
+- A reserva textual anterior de CLOUDIFF-A9 expirou em 2026-09-10T00:48:00Z sem renovação canônica posterior; não foi ressuscitada como lock ativo.
 - U27 foi substituída após exceder `previsao_termino` em mais de 30 minutos sem renovação/atividade observável; o bloco original foi registrado fora do repositório antes da troca.
 
 ## Competências ativas na U20
@@ -198,3 +199,14 @@
 - Gate desta extensão: 41 testes focados PASS (`publication_permissions`, `release_flow_wizard_ui`, `publication_management_ui`), `py_compile` e `git diff --check` PASS; enqueue direto validado em DB temporário com `authorization_mode=project_permission`, sem criação de `production_activation_requests`.
 
 - Compatibilidade refinada: ao publicar pelo novo `project_permission`, approvals genéricos pendentes anteriores do mesmo projeto são cancelados/superseded; isso evita que H3 ou candidatos antigos continuem aparecendo como pendência ativa quando o usuário já está publicando por H4 ou posterior.
+
+
+## CLOUDIFF-A10-E2E-FOLLOWUP — gaps comprovados pelo hardness E2E (2026-09-10)
+
+- Hardness E2E anterior comprovou duas divergências: após um polling transitório, o backend de criação chegou a `status=succeeded` mas o cabeçalho do modal permaneceu em **Confirmando provisionamento / reconectando ao provisionador** até reload; e a exclusão administrativa de tenant concluiu sem remover `/var/lib/cloudif/user-workspaces/<tenant>.env`.
+- Correção do modal: `settleProvisionTerminal(data)` assenta explicitamente título, texto, botão de fechar e flag `provisioning` em `succeeded/failed` depois de `drawLive(d)`, preservando o retry existente. Mirrors current/legacy recebem o mesmo contrato.
+- Correção de tenant: a prévia inclui o `.env` gerenciado como presença; a exclusão remove somente o caminho exato do tenant, falha fechado se não conseguir removê-lo e o gate final exige sua ausência. A auditoria não copia o conteúdo do arquivo; grava somente metadados técnicos de remoção.
+- Testes foram escritos antes do patch e reprovaram individualmente (`RC=1/1`); após a correção, os dois focados passaram e a suíte focal executável passou 33/33. Um teste adicional cobre o caso órfão em que somente o `.env` permanece.
+- `py_compile` e `git diff --check` passaram. `scripts/validate-repository.py` voltou ao baseline conhecido de 13 `required path missing`; não há YAML inválido nem bytecode novo após limpeza. Os 5 erros da tentativa de regressão maior eram bootstrap por artefatos ausentes no checkout e não tocaram o código patchado.
+- Gate de browser pós-patch não pôde ser repetido neste executor: `/dev/shm` estava em 99% com processo Chrome antigo de outra unidade; ele não foi encerrado. O E2E real pré-patch permanece evidência causal e a correção ainda não foi promovida ao runtime de produção.
+- Skill reconciliada para `cloudiff@0.1.38` com L059/L060; `competencias.yaml` acompanha a mesma versão. C++ permanece `NOT_TRIGGERED`: ambos os defeitos são estado de UI/cleanup de arquivo, sem hot path CPU medido.

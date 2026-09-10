@@ -21,6 +21,8 @@ assert 'Arquitetura modular obrigatória' in (root/'docs/ARCHITECTURE.md').read_
 assert '### L012 — capability de certificado do servidor não vira trust bundle do agente' in raw
 assert '### L013 — `apply` idempotente não reinicia runtime equivalente' in raw
 assert '### L014 — release existente não dispensa prova do artefato recebido' in raw
+assert '### L059 — polling terminal precisa assentar o estado visual após reconexão transitória' in raw
+assert '### L060 — exclusão de tenant inclui workspace env gerenciado e audita metadados, nunca conteúdo' in raw
 reference_versions={r['id']:str(r['versao_fixada']) for r in (fm.get('referencia') or [])}
 for rid in ('desenvolvedor-de-software','github-incremental-reconciliation','governanca-ontologica-de-skills'):
  expected=f"{rid}@{reference_versions[rid]}"; assert expected in raw,expected

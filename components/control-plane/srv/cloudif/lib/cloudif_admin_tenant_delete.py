@@ -4,6 +4,7 @@ from __future__ import annotations
 import csv
 import gzip
 import fcntl
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -26,6 +27,7 @@ AUDIT_ROOT = BASE / "admin-tenant-deletions"
 JOB_ROOT = AUDIT_ROOT / ".jobs"
 JOB_RECEIPTS = AUDIT_ROOT / ".job-receipts"
 LOCK_ROOT = Path("/run/cloudif-operation-locks")
+USER_WORKSPACES = Path(os.environ.get("CLOUDIF_USER_WORKSPACES", "/var/lib/cloudif/user-workspaces"))
 ROUTER_RENDER = BASE / "bin" / "cloudif-render-router-sso.sh"
 PROTECTED = frozenset({"akadmin"})
 TENANT_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,62}$")
@@ -136,7 +138,8 @@ def preview(tenant):
     compose_projects = _compose_project_names(tenant, tdir)
     resources = _docker_resources(compose_projects)
     protected = tenant in PROTECTED
-    present = bool(registry_row or tdir.exists() or resources["containers"] or resources["volumes"])
+    user_workspace_env = USER_WORKSPACES / f"{tenant}.env"
+    present = bool(registry_row or tdir.exists() or resources["containers"] or resources["volumes"] or user_workspace_env.exists())
     blockers = []
     if protected:
         blockers.append("protected_platform_tenant")
@@ -152,6 +155,8 @@ def preview(tenant):
         "tenant_dir_present": tdir.is_dir(),
         "registry_present": registry_row is not None,
         "registry": registry_row or {},
+        "user_workspace_env": str(user_workspace_env),
+        "user_workspace_env_present": user_workspace_env.exists(),
         "linked_projects": projects,
         "compose_projects": compose_projects,
         "resources": resources,
@@ -161,6 +166,30 @@ def preview(tenant):
         "backup_policy": "attempt_then_confirm",
         "backup_override_requires_confirmation": True,
     }
+
+
+def _remove_user_workspace_env(tenant, audit):
+    """Remove only the managed per-tenant workspace env; audit metadata, never contents."""
+    path = USER_WORKSPACES / f"{tenant}.env"
+    result = {"ok": True, "path": str(path), "present": path.exists(), "removed": False}
+    if not path.exists():
+        return result
+    try:
+        stat = path.stat()
+        digest = hashlib.sha256()
+        with path.open("rb") as stream:
+            for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                digest.update(chunk)
+        result.update({"bytes": stat.st_size, "sha256": digest.hexdigest()})
+        path.unlink()
+        result["removed"] = not path.exists()
+        result["ok"] = result["removed"]
+        if not result["removed"]:
+            result["error"] = "user_workspace_env_still_present"
+    except OSError as exc:
+        result.update({"ok": False, "error": "user_workspace_env_remove_failed", "detail": type(exc).__name__})
+    _atomic_json(audit / "user-workspace-env.json", result)
+    return result
 
 
 def _remove_registry_row(tenant, audit):
@@ -386,7 +415,13 @@ def execute(tenant, confirmation, actor, progress=None, allow_without_backup=Fal
         (audit / "result.json").write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n")
         return result
 
-    progress("Registry e permissões", "running", "Removendo cadastro, ACL e políticas")
+    progress("Registry e permissões", "running", "Removendo cadastro, ACL, políticas e workspace gerenciado")
+    user_workspace_cleanup = _remove_user_workspace_env(tenant, audit)
+    if not user_workspace_cleanup.get("ok"):
+        progress("Registry e permissões", "failed", "Falha ao remover workspace gerenciado do tenant")
+        result = {"ok": False, "error": "user_workspace_cleanup_failed", "user_workspace_cleanup": user_workspace_cleanup, "audit_dir": str(audit)}
+        (audit / "result.json").write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n")
+        return result
     registry_removed = _remove_registry_row(tenant, audit)
     portal_removed = _delete_tenant_rows(PORTAL_DB, tenant)
     onboarding_removed = _delete_tenant_rows(ONBOARDING_DB, tenant)
@@ -419,6 +454,7 @@ def execute(tenant, confirmation, actor, progress=None, allow_without_backup=Fal
         "tenant_not_found" in (final.get("blockers") or [])
         and not final.get("tenant_dir_present")
         and not final.get("registry_present")
+        and not final.get("user_workspace_env_present")
         and not any((final.get("resources") or {}).values())
         and portal_residual == 0
         and onboarding_residual == 0
@@ -433,6 +469,7 @@ def execute(tenant, confirmation, actor, progress=None, allow_without_backup=Fal
         "down": {"rc": down.returncode, "stdout": down.stdout[-1500:], "stderr": down.stderr[-1500:]},
         "cleanup": cleanup,
         "registry_removed": registry_removed,
+        "user_workspace_cleanup": user_workspace_cleanup,
         "portal_removed": portal_removed,
         "onboarding_removed": onboarding_removed,
         "platform_removed": platform_removed,

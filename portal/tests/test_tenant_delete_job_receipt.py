@@ -77,8 +77,8 @@ class TenantDeleteJobReceiptTests(unittest.TestCase):
     def test_explicit_backup_override_continues_and_is_written_to_audit_receipt(self):
         with tempfile.TemporaryDirectory() as root:
             base=Path(root);tdir=base/'tenants'/'teste';tdir.mkdir(parents=True)
-            old={name:getattr(self.mod,name) for name in ('AUDIT_ROOT','TENANTS','preview','_backup_database','_run','_remove_labeled_resources','_docker_resources','_remove_registry_row','_delete_tenant_rows','_purge_platform_database_tenant','_remove_proxy_tenant','_tenant_reference_count')}
-            self.mod.AUDIT_ROOT=base/'audit';self.mod.TENANTS=base/'tenants'
+            old={name:getattr(self.mod,name) for name in ('AUDIT_ROOT','TENANTS','USER_WORKSPACES','preview','_backup_database','_run','_remove_labeled_resources','_docker_resources','_remove_registry_row','_delete_tenant_rows','_purge_platform_database_tenant','_remove_proxy_tenant','_tenant_reference_count')}
+            self.mod.AUDIT_ROOT=base/'audit';self.mod.TENANTS=base/'tenants';self.mod.USER_WORKSPACES=base/'user-workspaces'
             preview_calls={'n':0}
             def fake_preview(tenant):
                 preview_calls['n']+=1
@@ -145,6 +145,87 @@ class TenantDeleteJobReceiptTests(unittest.TestCase):
         route=Path('components/control-plane/srv/cloudif/lib/cloudif_portal_v2_coexist.py').read_text()
         self.assertIn('allow_without_backup=value("allow_without_backup") == "1"',route)
         self.assertIn('backup_override_job_id=value("backup_override_job_id")',route)
+
+    def test_preview_treats_orphan_workspace_env_as_managed_presence(self):
+        with tempfile.TemporaryDirectory() as root:
+            base = Path(root)
+            tenant = 'teste'
+            workspace = base / 'user-workspaces'
+            workspace.mkdir()
+            (workspace / f'{tenant}.env').write_text('SENSITIVE_SENTINEL=value\n')
+            old = {name: getattr(self.mod, name) for name in (
+                'TENANTS', 'USER_WORKSPACES', '_registry_rows', '_linked_projects',
+                '_compose_project_names', '_docker_resources',
+            )}
+            self.mod.TENANTS = base / 'tenants'
+            self.mod.USER_WORKSPACES = workspace
+            self.mod._registry_rows = lambda: ([], [])
+            self.mod._linked_projects = lambda value: []
+            self.mod._compose_project_names = lambda value, tdir: []
+            self.mod._docker_resources = lambda projects: {'containers': [], 'networks': [], 'volumes': []}
+            try:
+                result = self.mod.preview(tenant)
+                self.assertTrue(result['ok'], result)
+                self.assertTrue(result['user_workspace_env_present'])
+                self.assertNotIn('tenant_not_found', result['blockers'])
+            finally:
+                for name, value in old.items():
+                    setattr(self.mod, name, value)
+
+    def test_delete_removes_and_verifies_managed_user_workspace_env_without_copying_secret(self):
+        with tempfile.TemporaryDirectory() as root:
+            base = Path(root)
+            tenant = 'teste'
+            workspace = base / 'user-workspaces'
+            workspace.mkdir()
+            env_path = workspace / f'{tenant}.env'
+            env_path.write_text('SENSITIVE_SENTINEL=never-copy-this-value\n')
+            old = {name: getattr(self.mod, name) for name in (
+                'AUDIT_ROOT', 'TENANTS', 'USER_WORKSPACES', 'preview', '_backup_database', '_run',
+                '_remove_labeled_resources', '_docker_resources', '_remove_registry_row',
+                '_delete_tenant_rows', '_purge_platform_database_tenant', '_remove_proxy_tenant',
+                '_tenant_reference_count',
+            )}
+            self.mod.AUDIT_ROOT = base / 'audit'
+            self.mod.TENANTS = base / 'tenants'
+            self.mod.USER_WORKSPACES = workspace
+            (self.mod.TENANTS / tenant).mkdir(parents=True)
+            calls = {'preview': 0}
+            def fake_preview(value):
+                calls['preview'] += 1
+                if calls['preview'] == 1:
+                    return {
+                        'ok': True, 'tenant': value, 'confirmation': 'EXCLUIR BANCO '+value,
+                        'compose_projects': [], 'resources': {}, 'linked_projects': [],
+                        'user_workspace_env_present': True,
+                    }
+                return {
+                    'ok': False, 'tenant': value, 'blockers': ['tenant_not_found'],
+                    'tenant_dir_present': False, 'registry_present': False, 'resources': {},
+                    'user_workspace_env_present': env_path.exists(),
+                }
+            try:
+                self.mod.preview = fake_preview
+                self.mod._backup_database = lambda *a, **k: {'ok': True, 'bytes': 256, 'path': str(base/'backup.gz')}
+                self.mod._run = lambda cmd, *a, **k: subprocess.CompletedProcess(cmd, 0, '', '')
+                self.mod._remove_labeled_resources = lambda x: {'containers': [], 'networks': [], 'volumes': [], 'errors': []}
+                self.mod._docker_resources = lambda x: {'containers': [], 'networks': [], 'volumes': []}
+                self.mod._remove_registry_row = lambda *a: []
+                self.mod._delete_tenant_rows = lambda *a: {}
+                self.mod._purge_platform_database_tenant = lambda *a: {'ok': True}
+                self.mod._remove_proxy_tenant = lambda *a: {'ok': True}
+                self.mod._tenant_reference_count = lambda *a: 0
+                result = self.mod.execute(tenant, 'EXCLUIR BANCO '+tenant, 'admin')
+                self.assertTrue(result['ok'], result)
+                self.assertFalse(env_path.exists())
+                self.assertTrue(result['user_workspace_cleanup']['removed'])
+                audit = Path(result['audit_dir'])
+                self.assertNotIn('never-copy-this-value', ''.join(
+                    f.read_text(errors='ignore') for f in audit.glob('*.json')
+                ))
+            finally:
+                for name, value in old.items():
+                    setattr(self.mod, name, value)
 
     def test_final_verification_counts_local_references(self):
         source = Path('components/control-plane/srv/cloudif/lib/cloudif_admin_tenant_delete.py').read_text()
