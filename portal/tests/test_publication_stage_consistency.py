@@ -62,15 +62,30 @@ class PublicationStageConsistencyTests(unittest.TestCase):
             self.assertIn("'legacy':True",source)
             self.assertNotIn("'stage_code':'P'+str(int(legacy['deploy_number']))",source)
 
-    def test_homologation_environment_prefers_latest_homologated_candidate(self):
+    def test_homologation_environment_prefers_latest_valid_candidate_even_after_publish(self):
         source=BASE.read_text()
-        self.assertIn("items.find(x=>x.status==='homologated')",source)
+        self.assertIn("items.find(x=>['awaiting_homologation','homologated','published'].includes(x.status))",source)
+        self.assertNotIn("items.find(x=>x.status==='homologated')||items.find(x=>x.status==='awaiting_homologation')",source)
         self.assertNotIn("const item=(release.candidates||[])[0]||null",source)
+        for backend in (CANONICAL_BACKEND,APP_BACKEND):
+            b=backend.read_text()
+            self.assertIn("status in ('awaiting_homologation','homologated','published') order by candidate_number desc limit 1",b)
 
     def test_manager_labels_legacy_production_honestly(self):
         source=RELEASE_JS.read_text()
         self.assertIn("release.legacy ? release.stage_code + ' · legado'",source)
         self.assertIn("active && active.legacy ? 'Produção legada ativa'",source)
+
+    def test_production_embed_uses_versioned_stage_url_but_external_open_uses_stable_url(self):
+        base=BASE.read_text()
+        for backend in (CANONICAL_BACKEND,APP_BACKEND):
+            source=backend.read_text()
+            self.assertIn("'url':'https://'+str(legacy['version_hostname'])+'/'",source)
+        self.assertIn("embedUrl:publicationSafeSiteUrl(active.url||active.stableUrl||fallback.url||'')",base)
+        self.assertIn("url:publicationSafeSiteUrl(active.stableUrl||active.url||fallback.url||'')",base)
+        self.assertIn("const embedUrl=ctx.embedUrl||ctx.url",base)
+        self.assertIn("iframe src=\"'+envEsc(embedUrl)+'\"",base)
+        self.assertIn("href=\"'+envEsc(ctx.url)+'\"",base)
 
     def test_switcher_exposes_canonical_p_and_separate_legacy_history(self):
         for path in (CANONICAL_UI,APP_UI):
