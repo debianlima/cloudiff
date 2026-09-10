@@ -12228,6 +12228,7 @@ trabalho_compartilhado:
     - components/control-plane/current-apps/portal-current/cloudif-admin-portal-base.py
     - components/control-plane/srv/cloudif/lib/cloudif_git_komodo_module.py
     - components/control-plane/srv/cloudif/lib/cloudif_portal_v2_coexist.py
+    - components/control-plane/srv/cloudif/lib/cloudif_admin_project_delete.py
     - components/control-plane/srv/cloudif/lib/cloudif_publication_permissions.py
     - components/control-plane/srv/cloudif/lib/cloudif_portal_publications.py
     - components/control-plane/current-apps/portal-current/cloudif_portal_publications.py
