@@ -10,6 +10,7 @@ audit=json.load(open(root/'docs/reconciliation/v1-1320-audit.json'))
 delta=json.load(open(root/'docs/reconciliation/v1-v2-delta.json'))
 plan=json.load(open(root/'docs/reconciliation/normalization-plan.json'))
 closure=json.load(open(root/'docs/reconciliation/skill-closure-v40.json'))
+current_closure=json.load(open(root/'docs/reconciliation/skill-reference-closure-20260910.json'))
 assert fm['name']=='cloudiff' and fm['tipo_competencia']=='projeto'
 assert project_skill['id']=='cloudiff' and project_skill['tipo_competencia']=='projeto'
 assert project_skill['fonte']=='skills/cloudiff/SKILL.md'
@@ -36,6 +37,14 @@ for x in compoe:
 for r in refs:
  for k in ('id','fonte','versao_fixada','delta_lido_ate','estado'):assert r.get(k), (r.get('id'),k)
  assert r['estado']=='reconciliado' and r['versao_fixada']!='NAO DECLARADO' and 'NAO DECLARADO' not in r['fonte']
+# Current project reference projections must be byte-for-byte equivalent on identity/version/provenance.
+competencia_refs={r['id']:r for r in (project_skill.get('referencia') or [])}
+assert set(competencia_refs)=={r['id'] for r in refs}
+for r in refs:
+ c=competencia_refs[r['id']]
+ assert c['fonte']==r['fonte'],r['id']
+ assert str(c['versao_fixada'])==str(r['versao_fixada']),r['id']
+ assert c['delta_lido_ate']==r['delta_lido_ate'],r['id']
 # Anti-cycle for the local composition graph: composed nodes do not point back to root or to each other.
 for x in compoe:
  sfm=yaml.safe_load((root/x['fonte']).read_text().split('---',2)[1]) or {}
@@ -48,6 +57,17 @@ for x in compoe:
 assert closure['contract_version']==40 and closure['project_skill_after']=='0.1.2'
 assert closure['gates']['DELTA_INVENTORY']=='PASS' and closure['gates']['LEARNING_PRESERVED']=='PASS' and closure['gates']['SOURCE_HASH_PARITY']=='PASS' and closure['gates']['CATALOG_SYNC']=='PASS' and closure['gates']['RECONCILIATION_CLOSURE']=='PASS' and closure['gates']['DEPENDENCY_REFERENCES']=='PASS'
 assert closure['catalog']['commit']=='998b6256ad7d5e6e43fa1e3477cd83e86bef2632'
+assert current_closure['project_skill_after']==str(fm['versao'])
+assert current_closure['references']['skill_vs_competencias_total']==len(refs)
+assert current_closure['references']['skill_vs_competencias_pass']==len(refs)
+assert current_closure['references']['catalog_references_pass']==current_closure['references']['catalog_references_total']==7
+assert current_closure['references']['external_immutable_pins_pass']==current_closure['references']['external_immutable_pins_total']==7
+assert current_closure['upstream']['delta_result']=='SYNC_NOOP'
+assert current_closure['upstream']['network_skill_version_at_catalog_head']=='4'
+assert current_closure['upstream']['network_skill_blob_at_recorded_delta']==current_closure['upstream']['network_skill_blob_at_catalog_head']
+assert current_closure['gates']['RECONCILIATION_CLOSURE']=='PASS' and current_closure['gates']['DEPENDENCY_REFERENCES']=='PASS'
+assert current_closure['current_hashes']['skills/cloudiff/SKILL.md']==hashlib.sha256((root/'skills/cloudiff/SKILL.md').read_bytes()).hexdigest()
+assert current_closure['current_hashes']['competencias.yaml']==hashlib.sha256((root/'competencias.yaml').read_bytes()).hexdigest()
 refs_by_id={r['id']:r for r in refs}
 for r in closure['external_references']:
  assert r['id'] in refs_by_id,r['id']

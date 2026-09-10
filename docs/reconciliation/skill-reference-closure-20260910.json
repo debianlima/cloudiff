@@ -1,0 +1,84 @@
+{
+  "contract": "cloudiff-project-skill-reference-closure",
+  "date": "2026-09-10",
+  "unit": "CLOUDIFF-A10-SKILL-REF-RECONCILE",
+  "project_skill_before": "0.1.38",
+  "project_skill_after": "0.1.39",
+  "trigger": {
+    "id": "network-ssh-operations",
+    "before_skill_version": "1",
+    "before_skill_delta": "c317c960ade32d19659f62934a7f05df569f2b42",
+    "competencias_version": "4",
+    "competencias_delta": "1eba0b90647318ff2942ae45ba3c735e3f59d5de",
+    "prior_reconciliation_commit": "deeb967bcaf8f01e2c02a9a8894e3b469e952c63"
+  },
+  "upstream": {
+    "catalog_repository": "debianlima/competencias-catalogo",
+    "catalog_head": "c7ac3b6767c8d003088e4c808526b2526c5ef12b",
+    "recorded_delta": "1eba0b90647318ff2942ae45ba3c735e3f59d5de",
+    "network_skill_version_at_recorded_delta": "4",
+    "network_skill_version_at_catalog_head": "4",
+    "network_skill_blob_at_recorded_delta": "7b3d1d28df586b35dff946bb0f1fb3354b5bfd57",
+    "network_skill_blob_at_catalog_head": "7b3d1d28df586b35dff946bb0f1fb3354b5bfd57",
+    "delta_result": "SYNC_NOOP"
+  },
+  "references": {
+    "skill_vs_competencias_total": 14,
+    "skill_vs_competencias_pass": 14,
+    "catalog_references_total": 7,
+    "catalog_references_pass": 7,
+    "external_immutable_pins_total": 7,
+    "external_immutable_pins_pass": 7
+  },
+  "external_pin_evidence": [
+    {
+      "id": "cloud-design-patterns",
+      "commit": "318066d2213b510e89b500ed0d53506c54093ddc",
+      "sha256": "69b0e14a0011137f7253f90b85745eba1710d8849710e3b5b677e3bf9dfe6320"
+    },
+    {
+      "id": "ddia-systems",
+      "commit": "6bac1534f9f256a56fc2b4dd0e70b9a692758966",
+      "sha256": "cdcd71bc1ce854f04921c5ff1a63b06872f96b09ef2f0576c91a33ffc8297012"
+    },
+    {
+      "id": "release-it",
+      "commit": "6bac1534f9f256a56fc2b4dd0e70b9a692758966",
+      "sha256": "747c1130a348ede99b6533de5ec75bb77fb5dd05efc8cef35f0524f7a9f87e7e"
+    },
+    {
+      "id": "platform-engineering",
+      "commit": "ed68466e04c9b5d33898ed5b503fb828f49c3e73",
+      "sha256": "cc6d7700ce5ee717e52d63d7e07f719f613ae6f98e48d6b1249d2e3745f47bee"
+    },
+    {
+      "id": "playwright",
+      "commit": "49f948faa9258a0c61caceaf225e179651397431",
+      "sha256": "0ffaabcc8e0990627c4725f18bf1c7955534a796c1c199e872909de2013ce6a8"
+    },
+    {
+      "id": "cpp-pro",
+      "commit": "34ca3ca1db04b092c5f86eba155c23e105fc933b",
+      "sha256": "524f11741f58c77884123342083b53e488d562b89860e4084ce1e86022712c01"
+    },
+    {
+      "id": "frontend-design",
+      "commit": "797f15729ca2d6a9756d7ae29409068cb971ebbf",
+      "sha256": "e7c8e7fd0bde8eb8a7d9f024fe20eeab4b6cde3f612e8d253334b806c09ca1ff"
+    }
+  ],
+  "current_hashes": {
+    "skills/cloudiff/SKILL.md": "30fb0a6690d830875b12d3014c3de28a5e57c19cc3580206b5dc260bee413c4f",
+    "competencias.yaml": "d026c546192128dd5fe78721897e057616a65a68da3c8e999696bf5a892cef3f"
+  },
+  "gates": {
+    "DELTA_INVENTORY": "PASS",
+    "LEARNING_PRESERVED": "PASS",
+    "NORMALIZATION_ALLOWED": "YES",
+    "REFERENCE_PROJECTION_PARITY": "PASS",
+    "CATALOG_REFERENCES": "PASS",
+    "EXTERNAL_IMMUTABLE_PINS": "PASS",
+    "RECONCILIATION_CLOSURE": "PASS",
+    "DEPENDENCY_REFERENCES": "PASS"
+  }
+}

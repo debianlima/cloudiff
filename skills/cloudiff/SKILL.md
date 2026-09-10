@@ -1,6 +1,6 @@
 ---
 name: cloudiff
-versao: 0.1.38
+versao: 0.1.39
 description: Governa, reconcilia, normaliza e evolui a plataforma CloudIFF V1/Python→V2/C++23 preservando interface homologada, contratos, segurança, dados, observabilidade e rollback.
 tipo_competencia: projeto
 origem:
@@ -58,8 +58,8 @@ referencia:
   estado: reconciliado
 - id: network-ssh-operations
   fonte: debianlima/competencias-catalogo:dominio/network-ssh-operations/SKILL.md
-  versao_fixada: '1'
-  delta_lido_ate: c317c960ade32d19659f62934a7f05df569f2b42
+  versao_fixada: '4'
+  delta_lido_ate: 1eba0b90647318ff2942ae45ba3c735e3f59d5de
   estado: reconciliado
 - id: operational-ui-truth
   fonte: debianlima/competencias-catalogo:dominio/operational-ui-truth/SKILL.md
@@ -375,3 +375,6 @@ Em 2026-09-10, o hardness E2E real criou um projeto descartável e observou o ba
 
 ### L060 — exclusão de tenant inclui workspace env gerenciado e audita metadados, nunca conteúdo
 No mesmo E2E, a exclusão administrativa do tenant concluiu com backup lógico válido, removeu registry, ACL/policy, diretório, containers, volumes e rota, porém deixou `/var/lib/cloudif/user-workspaces/<tenant>.env`. O residual continha configuração sensível e não participava da prévia nem do gate final. Regra: o contrato de remoção de tenant inclui o arquivo exato de workspace gerenciado; a prévia deve considerá-lo presença, o executor deve removê-lo fail-closed e a verificação final deve exigir sua ausência. A auditoria registra somente caminho, tamanho/resultado e fingerprint técnica quando necessária — nunca copia ou loga o conteúdo do `.env`. Gate: teste funcional em diretório temporário prova remoção e ausência de conteúdo-sentinela nos recibos JSON.
+
+### L061 — referência da skill raiz e `competencias.yaml` precisam fechar na mesma versão e delta
+Em 2026-09-10, a preparação de release encontrou `network-ssh-operations` em duas projeções canônicas diferentes: `competencias.yaml` já fixava v4 com `delta_lido_ate=1eba0b...`, enquanto o frontmatter de `skills/cloudiff/SKILL.md` ainda fixava v1 com delta antigo. O teste estrutural anterior não comparava todas as referências atuais e, por isso, a divergência sobrevivia apesar do fechamento histórico v40 continuar verde. A reconciliação consultou o catálogo remoto atual e o commit já registrado em `competencias.yaml`: o índice marca v4 em ambos e o blob da skill é idêntico (`7b3d1d28df586b35dff946bb0f1fb3354b5bfd57`), portanto o upstream fechou como `SYNC_NOOP` e a falha era somente propagação local incompleta. Regra: para cada `referencia`, skill raiz e `competencias.yaml` devem coincidir em `fonte`, `versao_fixada` e `delta_lido_ate`; fechamento histórico não substitui essa paridade corrente. Gate: teste vermelho em `network-ssh-operations` antes do patch e verde após a reconciliação.

@@ -9,7 +9,7 @@
 - Forgejo SSH usa destino interno direto `10.62.91.2:2222` pelo gateway.
 - PostgreSQL/Supabase usa conector reverso da Hospedagem pela própria 443; o forward do tenant existe apenas enquanto há lease ativa e fica em loopback no proxy.
 - Faro permanece fora do caminho e não foi modificado.
-- A skill de projeto vigente é `cloudiff@0.1.38`.
+- A skill de projeto vigente é `cloudiff@0.1.39`.
 - Decisão humana de 09/09/2026: novas funcionalidades e refatorações do CloudIFF devem ser modulares por responsabilidade; adapters/entrypoints apenas orquestram e lógica específica vai para módulo coeso próprio, com gate que impeça regressão monolítica.
 - `PracticalSwan/frontend-design@2.0` é a competência de direção estética para futuras unidades de interface/redesign; não autoriza por si só alterar frozen surfaces.
 
@@ -75,7 +75,7 @@
 - P2 do Teste Sofá continua dependente de duas aprovações humanas distintas admin/professor.
 
 ## Trabalho compartilhado
-- sem unidade ativa após o fechamento de `CLOUDIFF-A10-CUTOVER-READINESS`; nova unidade deve registrar `manifesto.yaml.trabalho_compartilhado` antes do primeiro artefato.
+- `CLOUDIFF-A10-SKILL-REF-RECONCILE` está ativa em `/srv/mcp-workspace/cloudiff-a10-skill-ref-reconcile`, com worktree sparse e reserva canônica antes do primeiro patch.
 - A reserva textual anterior de CLOUDIFF-A9 expirou em 2026-09-10T00:48:00Z sem renovação canônica posterior; não foi ressuscitada como lock ativo.
 - U27 foi substituída após exceder `previsao_termino` em mais de 30 minutos sem renovação/atividade observável; o bloco original foi registrado fora do repositório antes da troca.
 
@@ -239,3 +239,14 @@
 - O README do release-gate documenta o novo gate e mantém explícito que ele **não autoriza promoção**.
 - Produção continua inalterada. Próximo gate após integrar este validador continua `BLOCKED_HUMAN_AUTH_PRODUCTION`: uma pessoa autorizada precisa aprovar o cutover coordenado; o supervisor PGH não humano não satisfaz esse gate.
 - Fonte do gate integrada em `main@cad3dcccbec7ee744d98e68041ac58bc11c9bc5e`; `cutover-readiness.sh` SHA-256 `0c3cc0d4d6fe719f23f36bdf370565b37f3b1fa0c7cb86f29c9cc4866fe0ef99`. A reserva foi liberada após integração; nenhum apply/promote foi criado.
+
+
+## CLOUDIFF-A10-SKILL-REF-RECONCILE — fechamento corrente de referências (2026-09-10)
+
+- A auditoria pré-release encontrou uma divergência que o fechamento histórico v40 não detectava: `competencias.yaml` já fixava `network-ssh-operations@4`/`delta_lido_ate=1eba0b...`, enquanto `skills/cloudiff/SKILL.md` ainda fixava v1/delta `c317c...`.
+- A procedência foi reconstruída sem escolher “o mais novo”: o commit CloudIFF `deeb967bcaf8f01e2c02a9a8894e3b469e952c63` já havia reconciliado a competência de rede para v4 apenas em `competencias.yaml`. No catálogo `debianlima/competencias-catalogo`, tanto o commit registrado `1eba0b90647318ff2942ae45ba3c735e3f59d5de` quanto o HEAD auditado `c7ac3b6767c8d003088e4c808526b2526c5ef12b` declaram v4 e apontam para o mesmo blob `7b3d1d28df586b35dff946bb0f1fb3354b5bfd57`; resultado upstream `SYNC_NOOP`.
+- `linha_homologada` foi respeitada onde o catálogo a declara: `desenvolvedor-de-software@16` e `governanca-ontologica-de-skills@1.0.5` coincidem com linhas `autoridade=carregavel`. O domínio comum `network-ssh-operations` usa a versão canônica do nó do índice e está em v4.
+- Teste de paridade foi escrito antes do patch. A primeira tentativa foi descartada por faltar dependência na worktree sparse; após projetar os artefatos necessários, o vermelho válido foi `AssertionError: network-ssh-operations`. O teste agora compara `fonte`, `versao_fixada` e `delta_lido_ate` de todas as 14 referências da skill raiz contra `competencias.yaml`.
+- A skill de projeto avançou para `cloudiff@0.1.39`, a referência de rede foi propagada para v4/delta `1eba0b...` e L061 registra o aprendizado. `competencias.yaml` acompanha `0.1.39` sem reordenar nem normalizar as outras referências.
+- O fecho atual está em `docs/reconciliation/skill-reference-closure-20260910.json`: projeções 14/14, referências do catálogo 7/7 e pins externos imutáveis 7/7. Os seis pins históricos do v40 foram reabertos nos commits fixados e bateram os hashes registrados; `frontend-design@2.0` também bateu commit `797f157...` e SHA-256 documentado. Gates desta reconciliação: `RECONCILIATION_CLOSURE=PASS` e `DEPENDENCY_REFERENCES=PASS`.
+- Nenhum runtime/Portal foi alterado por esta unidade e C++ permanece `NOT_TRIGGERED`. Porém, após integrar esta mudança de governança, o candidate `a10-ux-e16d63aaca9a` deixa de representar o HEAD canônico como `source_commit`; ele **não deve ser promovido** sem rebuild/revalidação a partir do novo main, ainda que os bytes de runtime possam vir a ser idênticos.
