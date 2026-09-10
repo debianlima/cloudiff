@@ -29,7 +29,7 @@
       <footer class="release-wizard-footer">
         <span>Promova o mesmo artefato do Preview até Produção.</span>
         <div>
-          <button type="button" class="btn light" data-release-permissions>Permissões</button>
+          <button type="button" class="btn light" data-release-permissions>Autorizar homologação</button>
           <button type="button" class="btn light" data-release-close>Fechar</button>
         </div>
       </footer>
@@ -146,10 +146,12 @@
     let action = '';
     if (model.previewPreparing) {
       action = '<button class="btn" type="button" disabled>Preparando Preview automaticamente…</button>';
-    } else if (ready && data.canSubmitHomologation) {
-      action = '<button class="btn" type="button" data-release-action="homologation-create">Enviar Preview para homologação</button>';
-    } else if (model.previewError && data.canSubmitHomologation) {
-      action = '<button class="btn light" type="button" data-release-action="preview-auto-retry">Tentar preparar Preview</button>';
+    } else if (data.canSubmitHomologation) {
+      const refresh = '<button class="btn light" type="button" data-release-action="preview-refresh">Atualizar Preview</button>';
+      const submit = ready
+        ? '<button class="btn" type="button" data-release-action="homologation-create">Enviar Preview para homologação</button>'
+        : '';
+      action = refresh + submit;
     }
     const note = model.previewError
       ? `<div class="release-note"><strong>Preview ainda não ficou pronto.</strong><span>${esc(model.previewError)}</span></div>`
@@ -253,7 +255,7 @@
       ? '<button class="btn" type="button" data-release-action="permissions-save">Salvar permissões</button>'
       : '';
     return `<section class="release-permissions">
-      <div class="release-stage-head"><div><span class="release-kicker">Acesso do projeto</span><h3>Quem pode homologar e publicar</h3><p>Administrador CloudIFF, Professor e dono do projeto têm acesso por padrão. Os demais membros só recebem o que for marcado aqui.</p></div></div>
+      <div class="release-stage-head"><div><span class="release-kicker">Autorização do projeto</span><h3>Autorizar homologação e publicação</h3><p>Quem pode homologar e publicar é definido aqui. Administrador CloudIFF, Professor e dono do projeto têm acesso por padrão; os demais membros só recebem o que for marcado aqui.</p></div></div>
       <div class="release-permission-list">${rows}</div>
       <div class="release-primary-action">${save}<button class="btn light" type="button" data-release-action="permissions-close">Voltar ao fluxo</button></div>
     </section>`;
@@ -384,14 +386,19 @@
   }
 
 
+  async function refreshPreview() {
+    model.previewError = '';
+    return act('preview/ensure', {}, 'Atualizando Preview…');
+  }
+
+
   function bindActions() {
     body.querySelectorAll('[data-release-action]').forEach(button => {
       button.onclick = async () => {
         const action = button.dataset.releaseAction;
         const candidate = Number(button.dataset.candidate || 0);
-        if (action === 'preview-auto-retry') {
-          model.autoPreviewAttempted = false;
-          return ensurePreviewAutomatically();
+        if (action === 'preview-refresh') {
+          return refreshPreview();
         }
         if (action === 'homologation-create') {
           return act('homologation/enqueue', {}, 'Enviando Preview para Homologação…', 'homologation');
