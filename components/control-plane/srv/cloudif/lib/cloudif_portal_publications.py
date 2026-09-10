@@ -335,7 +335,7 @@ def stage_terminal(slug,user,environment='preview'):
     if environment=='production' and not _owner_or_admin(con,slug,user):con.close();raise PermissionError('O terminal de Produção exige o responsável pelo projeto ou administrador.')
     num=_number(con,slug);payload={'project':slug,'public_number':num,'environment':environment,'actor':user.get('username') or 'portal'};expected=''
     if environment=='homologation':
-        row=con.execute("select candidate_number,deploy_number,stage_code,status from publication_candidates where project_slug=? order by candidate_number desc limit 1",(slug,)).fetchone()
+        row=con.execute("select candidate_number,deploy_number,stage_code,status from publication_candidates where project_slug=? and status in ('awaiting_homologation','homologated','published') order by case when status in ('homologated','published') then 0 else 1 end, candidate_number desc limit 1",(slug,)).fetchone()
         if not row:con.close();raise RuntimeError('Nenhum candidato de Homologação está disponível para abrir o terminal.')
         dep=int(row['deploy_number'] or 0);candidate=int(row['candidate_number'] or 0)
         if dep<1 or candidate<1:con.close();raise RuntimeError('O candidato de Homologação não possui runtime válido.')
@@ -479,7 +479,7 @@ def release_flow_status(slug,user):
         except Exception:out['runtimeDiff']={}
         return out
     result={'ok':True,'project':slug,'publicNumber':num,'preview':preview,'candidates':[safe_candidate(x) for x in candidates],'releases':[{**{k:x.get(k) for k in ('publication_number','candidate_number','deploy_number','stage_code','hostname','stable_hostname','artifact_image_id','status','is_active','environment_revision','created_by','created_at','published_at')},'url':'https://'+str(x.get('hostname') or '')+'/' if x.get('hostname') else '','stableUrl':'https://'+str(x.get('stable_hostname') or '')+'/' if x.get('stable_hostname') else ''} for x in releases],'activationRequests':[{k:x.get(k) for k in ('candidate_number','publication_number','activation_digest','approval_id','requested_by','status','created_at','updated_at')} for x in activations],'job':dict(jobrow) if jobrow else None,'homologators':hom,'owner':owner,'canSubmitHomologation':can_submit,'canHomologate':can_homologate,'canPublish':can_publish,'canManagePermissions':bool(permission_state.get('canManagePermissions')),'permissionUsers':permission_state.get('users') or [],'permissionPolicy':permission_state.get('policy') or {},'isAdmin':is_admin,'isProfessor':is_professor,'isOwner':is_owner,'canWrite':can_write,'secretValuesIncluded':False}
-    if not releases and legacy:result['legacyProduction']={'deploy_number':int(legacy['deploy_number']),'stage_code':'D'+str(int(legacy['deploy_number'])),'stableUrl':'https://'+str(legacy['stable_hostname'])+'/','artifact_image_id':'','status':'published','is_active':1,'legacy':True}
+    if not releases and legacy:result['legacyProduction']={'deploy_number':int(legacy['deploy_number']),'stage_code':'D'+str(int(legacy['deploy_number'])),'url':'https://'+str(legacy['version_hostname'])+'/' if legacy['version_hostname'] else 'https://'+str(legacy['stable_hostname'])+'/','stableUrl':'https://'+str(legacy['stable_hostname'])+'/','artifact_image_id':'','status':'published','is_active':1,'legacy':True}
     return result
 
 
