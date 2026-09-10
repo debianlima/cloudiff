@@ -5,6 +5,7 @@ import cloudif_publication_permissions as publication_permissions
 DB=Path('/var/lib/cloudif/portal/cloudif-portal.db')
 HOMOLOGATION_DEPLOY_RUNTIME_TIMEOUT=900
 HOMOLOGATION_DEPLOY_HTTP_TIMEOUT=1020
+LINKED_COMPOSE_PROJECTS={'tuleap-laboratorio-de-hardware'}
 
 def _env(path):
     d={}; p=Path(path)
@@ -62,6 +63,55 @@ def _project_configuration(slug):
 def _is_multiservice_project(slug):
     data=_project_configuration(slug);project=((data.get('configuration') or {}).get('project') or {}) if isinstance(data,dict) else {}
     return str(project.get('type') or '')=='multi-service'
+
+
+def _is_linked_compose_project(slug):
+    if slug not in LINKED_COMPOSE_PROJECTS:return False
+    data=_project_configuration(slug);configuration=(data.get('configuration') or {}) if isinstance(data,dict) else {}
+    project=configuration.get('project') or {};services=configuration.get('services') or {};primary=str(project.get('primaryService') or '')
+    service=services.get(primary) if primary and isinstance(services,dict) else None
+    return bool(str(project.get('type') or '')=='multi-service' and isinstance(service,dict) and str(service.get('runtime') or '')=='compose')
+
+
+def _linked_compose_binding(con,slug):
+    row=con.execute("select komodo_repo_id,komodo_stack_id,komodo_stack_name from project_integrations where project=?",(slug,)).fetchone()
+    if not row:raise RuntimeError('O projeto não possui vínculo Forgejo/Komodo para o Preview.')
+    repo_id=str(row['komodo_repo_id'] or '');stack_id=str(row['komodo_stack_id'] or '');stack_name=str(row['komodo_stack_name'] or '')
+    expected='cloudif-'+slug
+    if not re.fullmatch(r'[a-f0-9]{24}',repo_id) or not re.fullmatch(r'[a-f0-9]{24}',stack_id) or stack_name!=expected:
+        raise RuntimeError('O vínculo Forgejo/Komodo do projeto está inconsistente.')
+    return {'repoId':repo_id,'stackId':stack_id,'stackName':stack_name}
+
+
+def _linked_compose_status(slug,num,binding):
+    import cloudif_git_komodo_module as gk
+    response=gk.v133_komodo_project_status(slug,repo_id=binding['repoId'],stack_id=binding['stackId'],timeout=45)
+    data=response.get('data') if isinstance(response,dict) else {};data=data if isinstance(data,dict) else {}
+    repo=data.get('repo') or {};stack=data.get('stack') or {};runtime=data.get('runtime') or {}
+    if not response.get('ok') or data.get('ok') is not True:raise RuntimeError('O status do stack Forgejo/Komodo está indisponível.')
+    if str(data.get('repo_id') or repo.get('id') or '')!=binding['repoId'] or str(data.get('stack_id') or stack.get('id') or '')!=binding['stackId'] or str(stack.get('name') or '')!=binding['stackName']:
+        raise RuntimeError('O Komodo respondeu com um stack diferente do vínculo do projeto.')
+    deploy_status=str(data.get('deploy_status') or '');running=bool(runtime.get('running'));healthy=bool(running and deploy_status in {'completed','ready'})
+    ident=_stage_identity(num,'preview',1);head=str(repo.get('latest_hash') or '')
+    return {'ok':True,'configured':True,'project':slug,'public_number':int(num),'generation':1,'stageCode':'W1','url':ident['url'],'hostname':ident['hostname'],'healthy':healthy,'status':deploy_status,'runtimeKind':'linked-compose','sourceMode':'forgejo-linked-stack','repoId':binding['repoId'],'stackId':binding['stackId'],'stackName':binding['stackName'],'container':str(runtime.get('container_name') or ''),'servicesCount':int(runtime.get('services_count') or 0),'bridge':f'cloudif-p{num}-w1-preview-web','git':{'status':'synced' if healthy else 'degraded','head':head},'secretValuesIncluded':False,'secretReferencesIncluded':False}
+
+
+def _ensure_linked_compose_preview(slug,num,binding):
+    import cloudif_git_komodo_module as gk
+    deployed=gk.v133_komodo_deploy_linked_current(slug,repo_id=binding['repoId'],stack_id=binding['stackId'],timeout=180)
+    data=deployed.get('data') if isinstance(deployed,dict) else {};data=data if isinstance(data,dict) else {}
+    if not deployed.get('ok') or data.get('ok') is not True or str(data.get('deploy_status') or '') not in {'completed','ready'}:
+        raise RuntimeError('O Komodo não conseguiu atualizar o Preview a partir do Forgejo vinculado.')
+    _,_,npm_token=_clients();pstatus,pdata=_post('http://10.62.91.3/stage',{'public_number':int(num),'stage':'preview','number':1},npm_token,host='cloudif-publisher.internal',timeout=300)
+    if pstatus//100!=2 or pdata.get('ok') is not True:raise RuntimeError(_publication_error('https',pdata))
+    result=_linked_compose_status(slug,num,binding)
+    if not result.get('healthy'):raise RuntimeError('O stack Forgejo/Komodo não ficou saudável após a atualização do Preview.')
+    if not _external_ok(result['hostname']):raise RuntimeError('A URL W1 não respondeu após atualizar o stack Forgejo/Komodo.')
+    result['publisher']={'ok':True};return result
+
+
+def _linked_compose_homologation_error():
+    return RuntimeError('Homologação imutável de stack Compose vinculada ao Forgejo ainda não está habilitada. O Preview W1 usa o stack real do projeto; a plataforma não criará um container genérico no lugar dele.')
 
 
 def _latest_multiservice_build(slug,environment='homologation'):
@@ -443,7 +493,8 @@ def preview_status(slug,user):
     con=sqlite3.connect(DB);con.row_factory=sqlite3.Row;_ensure_schema(con)
     allowed=_project_allowed(con,slug,user) or _can_homologate(con,slug,user)
     if not allowed:con.close();raise PermissionError('Projeto não encontrado ou sem permissão.')
-    num=_number(con,slug);con.close()
+    num=_number(con,slug);linked=_linked_compose_binding(con,slug) if _is_linked_compose_project(slug) else None;con.close()
+    if linked:return _linked_compose_status(slug,num,linked)
     if _is_multiservice_project(slug):
         data=_current_multiservice_preview(slug);ident=_stage_identity(num,'preview',1)
         if not data.get('configured'):return {'ok':True,'configured':False,'project':slug,'public_number':num,'generation':1,'stageCode':'W1','url':ident['url'],'hostname':ident['hostname'],'runtimeKind':'multiservice','secretValuesIncluded':False}
@@ -458,7 +509,8 @@ def preview_status(slug,user):
 def ensure_preview(slug,user):
     con=sqlite3.connect(DB);con.row_factory=sqlite3.Row;_ensure_schema(con);project=_project_allowed(con,slug,user)
     if not project:con.close();raise PermissionError('Projeto não encontrado ou sem permissão.')
-    num=_number(con,slug);con.close()
+    num=_number(con,slug);linked=_linked_compose_binding(con,slug) if _is_linked_compose_project(slug) else None;con.close()
+    if linked:return _ensure_linked_compose_preview(slug,num,linked)
     if _is_multiservice_project(slug):return _ensure_multiservice_preview(slug,num,user)
     pc=_publication_config();summary=pc.environment_summary(slug,'preview')
     if not summary.get('valid'):raise RuntimeError('O ambiente Preview possui variáveis obrigatórias pendentes.')
@@ -479,7 +531,9 @@ def preview_terminal(slug,user):
     from cloudif_project_environment_web import authorization
     auth=authorization(slug,user.get('username') or '',user.get('groups') or [])
     if not auth.get('canWrite'):con.close();raise PermissionError('O terminal do Preview exige permissão de escrita no projeto.')
-    num=_number(con,slug);con.close();ku,kt,_=_clients();status,data=_post(ku+'/komodo/project/preview/terminal',{'project':slug,'public_number':num,'actor':user.get('username') or 'portal'},kt,timeout=60)
+    num=_number(con,slug);linked=_linked_compose_binding(con,slug) if _is_linked_compose_project(slug) else None;con.close()
+    if linked:raise RuntimeError('O terminal deste Preview usa o stack Forgejo/Komodo do projeto. Abra o Terminal do projeto para acessar o serviço vinculado.')
+    ku,kt,_=_clients();status,data=_post(ku+'/komodo/project/preview/terminal',{'project':slug,'public_number':num,'actor':user.get('username') or 'portal'},kt,timeout=60)
     if status//100!=2 or data.get('ok') is not True:raise RuntimeError(str(data.get('message') or 'O terminal do Preview está temporariamente indisponível.'))
     container=str(data.get('container') or '');server_id=str(data.get('server_id') or '');terminal=str(data.get('terminal') or '');generation=int(data.get('generation') or 0)
     expected=f'cloudif-p{num}-w{generation}-preview-web'
@@ -580,6 +634,7 @@ def create_homologation_candidate(slug,user,progress=None,candidate_number=None,
     con=sqlite3.connect(DB);con.row_factory=sqlite3.Row;_ensure_schema(con);project=_project_allowed(con,slug,user) if not authorization_checked else con.execute('select * from projects where slug=?',(slug,)).fetchone()
     if not project:con.close();raise PermissionError('Projeto não encontrado ou sem permissão.')
     num=_number(con,slug);candidate=int(candidate_number or _next_candidate(con,slug));actor=(user.get('username') or 'portal').strip().lower();con.close()
+    if _is_linked_compose_project(slug):raise _linked_compose_homologation_error()
     if _is_multiservice_project(slug):return _create_multiservice_homologation_candidate(slug,num,candidate,actor,progress)
     notify('snapshot','Congelando código e runtime do Preview.')
     ku,kt,nt=_clients();status,snap=_post(ku+'/komodo/project/preview/snapshot',{'project':slug,'public_number':num,'candidate_number':candidate,'actor':actor},kt,timeout=360)

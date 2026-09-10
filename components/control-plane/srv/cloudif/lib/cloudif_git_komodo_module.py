@@ -1173,6 +1173,30 @@ def v133_komodo_deploy_full(slug, repo_id="", stack_id="", timeout=180):
         timeout=timeout,
     )
 
+def v133_komodo_deploy_linked_current(slug, repo_id="", stack_id="", timeout=180):
+    base, token = _v133_komodo_agent()
+    payload = {
+        "project_slug": slug,
+        "deploy": True,
+        "force_reclone": False,
+        "force_clone": False,
+        "wait_for_completion": True,
+        "max_wait_seconds": 90,
+        "poll_interval": 5,
+        "reset_reclone_after": False,
+    }
+    if repo_id:
+        payload["repo_id"] = repo_id
+    if stack_id:
+        payload["stack_id"] = stack_id
+    return _v133_http_json(
+        "POST",
+        base + "/komodo/project/deploy-full",
+        payload=payload,
+        token=token,
+        timeout=timeout,
+    )
+
 def v133_komodo_stack_action(slug, action, stack_id="", timeout=90):
     base, token = _v133_komodo_agent()
     payload = {
