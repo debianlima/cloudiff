@@ -14,11 +14,32 @@ def h(value):
 def _rows(slug):
     try:
         con=sqlite3.connect(DB); con.row_factory=sqlite3.Row
-        rows=[dict(x) for x in con.execute("select * from project_publications where project_slug=? and status='published' order by deploy_number desc",(slug,))]
+        try:
+            canonical=[dict(x) for x in con.execute("""
+                select r.*,c.commit_sha,c.runtime_diff_json
+                  from production_releases r
+                  left join publication_candidates c
+                    on c.project_slug=r.project_slug and c.candidate_number=r.candidate_number
+                 where r.project_slug=? and r.status='published'
+                 order by r.publication_number desc
+            """,(slug,))]
+        except sqlite3.OperationalError:
+            canonical=[]
+        mapped_deploys={int(x.get('deploy_number') or 0) for x in canonical}
+        rows=[]
+        for item in canonical:
+            number=int(item.get('publication_number') or 0)
+            rows.append({**item,'kind':'P','number':number,'version_hostname':item.get('hostname') or '',
+                         'version':item.get('stage_code') or f'P{number}','detail_json':item.get('runtime_diff_json') or '{}'})
+        legacy=[dict(x) for x in con.execute("select * from project_publications where project_slug=? and status='published' order by deploy_number desc",(slug,))]
+        for item in legacy:
+            dep=int(item.get('deploy_number') or 0)
+            if dep in mapped_deploys:
+                continue
+            rows.append({**item,'kind':'D','number':dep,'legacy':True})
         con.close(); return rows
     except Exception:
         return []
-
 def _runtime_from_job(slug):
     paths=sorted(glob.glob('/srv/cloudif/jobs/project-provision-*-'+slug+'.json'),key=lambda x:os.path.getmtime(x),reverse=True)
     for path in paths:
@@ -160,14 +181,22 @@ def publication_panel(slug, framework_hint=''):
         alias_html=('<div class="publication-alias"><div><strong>Endereço amigável de Produção</strong><p>Opcional. O alias sempre acompanha a publicação P ativa.</p></div><form method="post" action="/cloudiff/portal/action/publication"><input type="hidden" name="slug" value="'+h(slug)+'"><label><span>Nome</span><div><input name="alias" placeholder="ex.: meu-site" pattern="[a-z0-9][a-z0-9-]{0,62}"><span>.cloudiff.duckdns.org</span></div></label><button class="btn light" name="op" value="set_alias">Salvar endereço</button></form></div>')
     if active:
         stable=active.get('stable_hostname') or f"{int(active.get('public_number') or 0)}.cloudiff.duckdns.org";active_host=(alias+'.cloudiff.duckdns.org') if alias else stable
-        production=('<div class="publication-active-card"><div><span>Produção atual</span><a href="https://'+h(active_host)+'/" target="_blank" rel="noopener">'+h(active_host)+'</a></div><span class="pill ok">Online</span></div>')
+        active_number=int(active.get('number') or active.get('deploy_number') or 0);active_kind=str(active.get('kind') or 'D')
+        active_label=f'P{active_number}' if active_kind=='P' else f'D{active_number} · legado'
+        production=('<div class="publication-active-card"><div><span>Produção atual · '+h(active_label)+'</span><a href="https://'+h(active_host)+'/" target="_blank" rel="noopener">'+h(active_host)+'</a></div><span class="pill ok">Online</span></div>')
     else:production='<div class="publication-active-card"><div><span>Produção atual</span><strong>Ainda não publicada</strong></div><span class="pill warn">Sem P ativa</span></div>'
     history=''
     if rows:
-        trs=[]
-        for r in rows:
-            dep=int(r.get('deploy_number') or 0);trs.append(f'<tr><td>d{dep}</td><td><code>{h((r.get("commit_sha") or "")[:12])}</code></td><td><a href="https://{h(r.get("version_hostname") or "")}/" target="_blank" rel="noopener">Abrir</a></td><td>{"ativa" if int(r.get("is_active") or 0)==1 else h(r.get("status") or "")}</td></tr>')
-        history='<details class="publication-technical-history"><summary>Alternar entre Publicações</summary><div style="overflow:auto"><table><tr><th>Publicação</th><th>Commit</th><th>Endereço</th><th>Estado</th></tr>'+''.join(trs)+'</table></div></details>'
+        p_rows=[r for r in rows if r.get('kind')=='P'];d_rows=[r for r in rows if r.get('kind')=='D']
+        def table(items,legacy=False):
+            trs=[]
+            for r in items:
+                number=int(r.get('number') or 0);label=(f'D{number}' if legacy else f'P{number}')
+                trs.append(f'<tr><td>{h(label)}</td><td><code>{h((r.get("commit_sha") or "")[:12])}</code></td><td><a href="https://{h(r.get("version_hostname") or "")}/" target="_blank" rel="noopener">Abrir</a></td><td>{"ativa" if int(r.get("is_active") or 0)==1 else h(r.get("status") or "")}</td></tr>')
+            return '<div style="overflow:auto"><table><tr><th>Publicação</th><th>Commit</th><th>Endereço</th><th>Estado</th></tr>'+''.join(trs)+'</table></div>'
+        canonical_html=table(p_rows) if p_rows else '<p class="small">Nenhuma publicação P concluída ainda.</p>'
+        legacy_html=('<details class="publication-legacy-history"><summary>Histórico legado</summary>'+table(d_rows,True)+'</details>') if d_rows else ''
+        history='<details class="publication-technical-history"><summary>Alternar entre Publicações</summary>'+canonical_html+legacy_html+'</details>'
     return '<div class="cm-resource publication-manager-resource">'+configuration+job_html+production+alias_html+history+information+'</div>'
 
 def admin_publications():

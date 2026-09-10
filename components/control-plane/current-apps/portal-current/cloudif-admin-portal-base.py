@@ -4884,7 +4884,7 @@ _CPX_SCRIPT=r"""
      const item=release.preview||{};return {environment,label:'Preview',stageCode:item.stageCode||'W',url:publicationSafeSiteUrl(item.url||fallback.url||''),container:item.container||'',status:item.configured?(item.healthy?'Online':'Atenção'):'Não preparado',exists:Boolean(item.configured||fallback.url)};
    }
    if(environment==='homologation'){
-     const item=(release.candidates||[])[0]||null;if(!item)return {environment,label:'Homologação',stageCode:'H',url:publicationSafeSiteUrl(fallback.url||''),container:'',status:'Sem candidato',exists:Boolean(fallback.url)};
+     const items=release.candidates||[];const item=items.find(x=>x.status==='homologated')||items.find(x=>x.status==='awaiting_homologation')||items[0]||null;if(!item)return {environment,label:'Homologação',stageCode:'H',url:publicationSafeSiteUrl(fallback.url||''),container:'',status:'Sem candidato',exists:Boolean(fallback.url)};
      const deploy=Number(item.deploy_number||0),container=publicNumber&&deploy?'cloudif-p'+publicNumber+'-d'+deploy+'-web':'';return {environment,label:'Homologação',stageCode:item.stage_code||'H'+Number(item.candidate_number||0),url:publicationSafeSiteUrl(item.url||fallback.url||''),container,status:String(item.status||'Candidato'),exists:true};
    }
    const active=(release.releases||[]).find(x=>Number(x.is_active)===1)||release.legacyProduction||null;
