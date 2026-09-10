@@ -123,7 +123,7 @@ def _configuration_controls(slug,rows):
       '<article><span class="publication-stage-code">W</span><div><strong>Preview</strong><small>Workspace vivo</small></div><span class="publication-stage-state" data-release-summary-w>Consultar</span></article>'
       '<article><span class="publication-stage-code">H</span><div><strong>Homologação</strong><small>Candidato imutável</small></div><span class="publication-stage-state" data-release-summary-h>Consultar</span></article>'
       '<article><span class="publication-stage-code">P</span><div><strong>Publicação</strong><small>Produção aprovada</small></div><span class="publication-stage-state" data-release-summary-p>Consultar</span></article>'
-      '</div><div class="publication-release-flow__tools"><button class="btn" type="button" data-release-flow-open data-project-slug="'+h(slug)+'">Gerenciar publicação</button><button class="btn light" type="button" data-publication-environments data-publication-tool="variables" data-project-slug="'+h(slug)+'">Variáveis por ambiente</button></div></section>'
+      '</div><div class="publication-release-flow__tools"><button class="btn" type="button" data-release-flow-open data-project-slug="'+h(slug)+'">Gerenciar publicação</button><button class="btn light" type="button" data-publication-environments data-publication-tool="overview" data-project-slug="'+h(slug)+'">Ambiente de publicação</button></div></section>'
     )
 
 def publication_panel(slug, framework_hint=''):
@@ -138,7 +138,7 @@ def publication_panel(slug, framework_hint=''):
     except Exception:alias=''
     finally:con.close()
     job_html=''
-    if job and job.get('status') in ('queued','running','failed'):
+    if job and job.get('status') in ('queued','running'):
         labels={'queued':'Na fila','running':'Em andamento','failed':'Atenção'};progress={'queued':1,'preparing':2,'snapshot':2,'deploying':3,'https':4,'production':4,'completed':5}.get(job.get('step'),1)
         job_html=(f'<div class="publication-job is-{h(job.get("status"))}" data-publication-job="{int(job.get("id") or 0)}"><div class="publication-job-copy"><div><strong>{h(labels.get(job.get("status"),job.get("status") or ""))}</strong><span>{h(job.get("message") or "")}</span></div></div><progress max="5" value="{progress}"></progress></div>')
     if alias:

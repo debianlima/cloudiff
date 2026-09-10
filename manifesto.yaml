@@ -12187,6 +12187,15 @@ entradas:
     aceite: python3 -m unittest portal.tests.test_publication_management_ui
     status: aceito
 
+  - id: 1526
+    caminho: portal/design/publication-release.js
+    proposito: "gerenciador modular e simplificado do fluxo Preview -> Homologacao -> Producao, sem duplicar ferramentas de ambiente"
+    tipo: interface
+    consome: [evidencia/publication-summary-modular-a9]
+    produz: evidencia/publication-release-simple-a9
+    aceite: python3 -m unittest portal.tests.test_release_flow_wizard_ui portal.tests.test_publication_management_ui
+    status: aceito
+
 trabalho_compartilhado:
   projeto: cloudiff
   caminho: /srv/mcp-workspace/cloudiff-a9

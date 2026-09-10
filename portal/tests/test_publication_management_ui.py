@@ -99,6 +99,13 @@ class PublicationManagementUITest(unittest.TestCase):
         ):
             self.assertIn(f'caminho: {path}',manifest)
 
+    def test_individual_publication_has_back_to_index(self):
+        from portal.core.publication_summary import individual_publication_body
+        body='<article class="publication-project"><h2>Demo</h2><input name="slug" value="demo"><div class="cm-resource">Detalhes</div></article>'
+        out=individual_publication_body(body,'demo')
+        self.assertIn('Voltar às publicações',out)
+        self.assertIn('/cloudiff/portal/?tab=publicacao',out)
+
     def test_general_publication_page_is_summary_before_management(self):
         from portal.core.legacy_shell import clean_general_publication_body
         body=(

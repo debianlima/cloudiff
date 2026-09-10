@@ -95,7 +95,9 @@ def individual_publication_body(body: str, selected_project: str) -> str:
             title = heading.group(1) if heading else escape(selected_project)
             if resource:
                 return (
-                    '<section class="publication-single"><article class="publication-project card publication-manager">'
+                    '<section class="publication-single">'
+                    '<nav class="publication-detail-nav"><a class="btn light" href="/cloudiff/portal/?tab=publicacao">← Voltar às publicações</a></nav>'
+                    '<article class="publication-project card publication-manager">'
                     f'<div class="publication-manager-head"><div><p>Gerenciar site</p><h2>{title}</h2></div></div>{resource}'
                     '</article></section>'
                 )
