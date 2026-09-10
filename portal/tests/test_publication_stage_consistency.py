@@ -62,10 +62,17 @@ class PublicationStageConsistencyTests(unittest.TestCase):
             self.assertIn("'legacy':True",source)
             self.assertNotIn("'stage_code':'P'+str(int(legacy['deploy_number']))",source)
 
-    def test_homologation_environment_prefers_latest_homologated_candidate(self):
+    def test_homologation_environment_prefers_latest_accepted_candidate(self):
         source=BASE.read_text()
-        self.assertIn("items.find(x=>x.status==='homologated')",source)
+        self.assertIn("items.find(x=>['homologated','published'].includes(x.status))",source)
+        self.assertNotIn("items.find(x=>x.status==='homologated')",source)
         self.assertNotIn("const item=(release.candidates||[])[0]||null",source)
+
+    def test_environment_overview_prefers_release_flow_status_over_legacy_overview(self):
+        source=BASE.read_text()
+        self.assertIn("canonicalStatus=ctx.exists?String(ctx.status||''):''",source)
+        self.assertIn("status=envStatusLabels[canonicalStatus]||canonicalStatus||envStatusLabels[item.status]",source)
+        self.assertIn("/online|publicado|homologado/i",source)
 
     def test_manager_labels_legacy_production_honestly(self):
         source=RELEASE_JS.read_text()
