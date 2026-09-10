@@ -12217,3 +12217,4 @@ trabalho_compartilhado:
     - manifesto.yaml
     - estado.md
     - deploy/a10-release-gate/**
+    - tests/test_a10_cutover_readiness.py
