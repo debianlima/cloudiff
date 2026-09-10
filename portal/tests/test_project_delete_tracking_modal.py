@@ -52,6 +52,20 @@ class ProjectDeleteTrackingModalTests(unittest.TestCase):
         self.assertIn("wizard_required:'A prévia de exclusão expirou.", self.source)
         self.assertIn("errorText(job.error||job.detail||payload.error", self.source)
 
+    def test_confirmation_is_validated_live_before_destructive_submit(self):
+        for marker in (
+            'data-delete-confirmation="EXCLUIR {h(selected)}"',
+            'data-project-delete-confirm',
+            'data-project-delete-confirm-status',
+            'normalizeConfirmation',
+            "normalize('NFKC')",
+            'syncConfirmation()',
+            'button.disabled=!ok',
+            'Confirmação reconhecida.',
+            'Digite exatamente ',
+        ):
+            self.assertIn(marker,self.source)
+
     def test_modal_never_polls_an_undefined_job(self):
         for marker in (
             "form.dataset.deleteSubmitting==='1'",
