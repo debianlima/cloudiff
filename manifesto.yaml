@@ -12196,13 +12196,22 @@ entradas:
     aceite: python3 -m unittest portal.tests.test_release_flow_wizard_ui portal.tests.test_publication_management_ui
     status: aceito
 
+  - id: 1527
+    caminho: components/control-plane/srv/cloudif/lib/cloudif_publication_permissions.py
+    proposito: "politica modular de autorizacao de Homologacao e Producao por projeto, separando Admin, Professor, dono e delegacoes explicitas"
+    tipo: seguranca
+    consome: [evidencia/publication-release-simple-a9]
+    produz: evidencia/publication-permissions-a9
+    aceite: python3 -m unittest portal.tests.test_publication_permissions portal.tests.test_release_flow_wizard_ui
+    status: aceito
+
 trabalho_compartilhado:
   projeto: cloudiff
   caminho: /srv/mcp-workspace/cloudiff-a9
   unidade: CLOUDIFF-A9
   descricao: navegacao continua da UI, reproducao/correcao UX e benchmark seletivo de hot paths antes de qualquer migracao C++
   agente: chat:6aa17fc3-93ec-83e9-8d70-75ee0cc56e36
-  atualizado_em: '2026-09-09T22:37:24Z'
+  atualizado_em: '2026-09-10T00:45:48Z'
   previsao_termino: '2026-09-10T00:48:00Z'
   zona_exclusao:
     - manifesto.yaml
@@ -12219,6 +12228,9 @@ trabalho_compartilhado:
     - components/control-plane/current-apps/portal-current/cloudif-admin-portal-base.py
     - components/control-plane/srv/cloudif/lib/cloudif_git_komodo_module.py
     - components/control-plane/srv/cloudif/lib/cloudif_portal_v2_coexist.py
+    - components/control-plane/srv/cloudif/lib/cloudif_publication_permissions.py
+    - components/control-plane/srv/cloudif/lib/cloudif_portal_publications.py
+    - components/control-plane/current-apps/portal-current/cloudif_portal_publications.py
     - docs/REQUIREMENTS.md
     - docs/ARCHITECTURE.md
     - skills/cloudiff/SKILL.md

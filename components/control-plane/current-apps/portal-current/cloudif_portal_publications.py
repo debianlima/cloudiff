@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import hashlib, hmac, json, os, re, sqlite3, ssl, time, urllib.error, urllib.parse, urllib.request
 from pathlib import Path
+import cloudif_publication_permissions as publication_permissions
 DB=Path('/var/lib/cloudif/portal/cloudif-portal.db')
 HOMOLOGATION_DEPLOY_RUNTIME_TIMEOUT=900
 HOMOLOGATION_DEPLOY_HTTP_TIMEOUT=1020
@@ -204,7 +205,7 @@ def _publication_error(stage,data):
 def _project_allowed(con,slug,user):
     row=con.execute('select * from projects where slug=?',(slug,)).fetchone()
     if not row:return None
-    if user.get('admin'):return row
+    if publication_permissions.is_admin(user) or publication_permissions.is_professor(user):return row
     username=(user.get('username') or '').strip().lower()
     groups={str(x).strip().lower() for x in user.get('groups',[]) if str(x).strip()}
     cols=set(row.keys())
@@ -265,8 +266,10 @@ CREATE TABLE IF NOT EXISTS production_activation_requests(
       ('environment',"TEXT NOT NULL DEFAULT 'production'"),('environment_revision','INTEGER NOT NULL DEFAULT 0'),('environment_digest',"TEXT NOT NULL DEFAULT ''"),
       ('operation',"TEXT NOT NULL DEFAULT 'legacy_publish'"),('candidate_number','INTEGER NOT NULL DEFAULT 0'),('publication_number','INTEGER NOT NULL DEFAULT 0'),
       ('approval_id',"TEXT NOT NULL DEFAULT ''"),('activation_digest',"TEXT NOT NULL DEFAULT ''"),
+      ('authorization_mode',"TEXT NOT NULL DEFAULT 'critical_approval'"),('authorization_role',"TEXT NOT NULL DEFAULT ''"),
     ):
         if name not in cols:con.execute(f'alter table publication_jobs add column {name} {kind}')
+    publication_permissions.ensure_schema(con)
 
 def _number(con,slug):
     r=con.execute('select public_number from project_public_ids where project_slug=?',(slug,)).fetchone()
@@ -386,30 +389,48 @@ def _owner_or_admin(con,slug,user):
 
 
 def _can_homologate(con,slug,user):
-    if user.get('admin') or _owner_or_admin(con,slug,user):return True
-    username=(user.get('username') or '').strip().lower()
-    return bool(username and con.execute('select 1 from project_homologators where project_slug=? and username=?',(slug,username)).fetchone())
+    return publication_permissions.can_homologate(con,slug,user)
+
+
+def _can_publish(con,slug,user):
+    return publication_permissions.can_publish(con,slug,user)
+
+
+def _release_permission_role(con,slug,user):
+    if publication_permissions.is_admin(user):return 'admin'
+    if publication_permissions.is_professor(user):return 'professor'
+    if (user.get('username') or '').strip().lower()==_project_owner(con,slug):return 'owner'
+    return 'delegated'
 
 
 def homologators(slug,user):
     con=sqlite3.connect(DB);con.row_factory=sqlite3.Row;_ensure_schema(con)
     if not (_project_allowed(con,slug,user) or _can_homologate(con,slug,user)):con.close();raise PermissionError('Projeto não encontrado ou sem permissão.')
-    owner=_project_owner(con,slug);rows=[str(x['username']) for x in con.execute('select username from project_homologators where project_slug=? order by username',(slug,)).fetchall()];con.close()
-    return {'ok':True,'project':slug,'owner':owner,'homologators':rows,'canHomologate':bool((user.get('username') or '').strip().lower() in set(rows)|({owner} if owner else set()) or user.get('admin'))}
+    owner=_project_owner(con,slug);rows=[str(x['username']) for x in con.execute('select username from project_homologators where project_slug=? order by username',(slug,)).fetchall()];allowed=_can_homologate(con,slug,user);con.close()
+    return {'ok':True,'project':slug,'owner':owner,'homologators':rows,'canHomologate':allowed}
 
 
 def set_homologators(slug,user,usernames):
     con=sqlite3.connect(DB);con.row_factory=sqlite3.Row;_ensure_schema(con)
-    if not _owner_or_admin(con,slug,user):con.close();raise PermissionError('Somente o responsável pelo projeto pode alterar homologadores.')
-    clean=[]
-    for raw in usernames or []:
-        name=str(raw or '').strip().lower()
-        if not name:continue
-        if not re.fullmatch(r'[a-z0-9._@-]{2,128}',name):con.close();raise ValueError('Nome de usuário inválido: '+name[:40])
-        if name not in clean:clean.append(name)
-    con.execute('delete from project_homologators where project_slug=?',(slug,));actor=(user.get('username') or 'portal').strip().lower();created=_now()
-    for name in clean:con.execute('insert into project_homologators(project_slug,username,created_by,created_at) values(?,?,?,?)',(slug,name,actor,created))
-    con.commit();con.close();return {'ok':True,'project':slug,'homologators':clean}
+    if not _project_allowed(con,slug,user):con.close();raise PermissionError('Projeto não encontrado ou sem permissão.')
+    try:result=publication_permissions.replace_homologators(con,slug,user,usernames if isinstance(usernames,list) else [])
+    finally:con.close()
+    return {'ok':True,'project':slug,'homologators':[row['username'] for row in result.get('users',[]) if row.get('homologate') and not row.get('locked')]}
+
+
+def publication_permissions_status(slug,user):
+    con=sqlite3.connect(DB);con.row_factory=sqlite3.Row;_ensure_schema(con)
+    if not _project_allowed(con,slug,user):con.close();raise PermissionError('Projeto não encontrado ou sem permissão.')
+    result=publication_permissions.snapshot(con,slug,user);con.close()
+    return {'ok':True,'project':slug,**result}
+
+
+def set_publication_permissions(slug,user,entries):
+    con=sqlite3.connect(DB);con.row_factory=sqlite3.Row;_ensure_schema(con)
+    if not _project_allowed(con,slug,user):con.close();raise PermissionError('Projeto não encontrado ou sem permissão.')
+    try:result=publication_permissions.set_permissions(con,slug,user,entries if isinstance(entries,list) else [])
+    finally:con.close()
+    return {'ok':True,'project':slug,**result}
 
 
 def _runtime_preview(slug,num,operation,payload=None,timeout=180):
@@ -554,9 +575,9 @@ def _create_multiservice_homologation_candidate(slug,num,candidate,actor,progres
     return {'ok':True,'project':slug,'candidateNumber':candidate,'stageCode':ident['code'],'url':ident['url'],'hostname':ident['hostname'],'commit':str(build.get('archive_sha256') or ''),'parentCommit':str(build.get('ref') or ''),'artifactImageId':artifact_id,'previewGeneration':1,'diff':diff,'runtimeDiff':runtime_meta,'environmentRevision':int(summary.get('environmentRevision') or 0),'secretValuesIncluded':False}
 
 
-def create_homologation_candidate(slug,user,progress=None,candidate_number=None):
+def create_homologation_candidate(slug,user,progress=None,candidate_number=None,authorization_checked=False):
     notify=lambda step,msg: progress(step,msg) if progress else None
-    con=sqlite3.connect(DB);con.row_factory=sqlite3.Row;_ensure_schema(con);project=_project_allowed(con,slug,user)
+    con=sqlite3.connect(DB);con.row_factory=sqlite3.Row;_ensure_schema(con);project=_project_allowed(con,slug,user) if not authorization_checked else con.execute('select * from projects where slug=?',(slug,)).fetchone()
     if not project:con.close();raise PermissionError('Projeto não encontrado ou sem permissão.')
     num=_number(con,slug);candidate=int(candidate_number or _next_candidate(con,slug));actor=(user.get('username') or 'portal').strip().lower();con.close()
     if _is_multiservice_project(slug):return _create_multiservice_homologation_candidate(slug,num,candidate,actor,progress)
@@ -640,11 +661,11 @@ def _publish_multiservice_homologated_candidate(slug,candidate,project,publicati
     return {'ok':True,'project':slug,'candidateNumber':int(candidate['candidate_number']),'publicationNumber':publication,'stageCode':ident['code'],'url':ident['url'],'stableUrl':'https://'+stable+'/','aliasUrl':('https://'+alias+'.cloudiff.duckdns.org/' if alias else ''),'artifactImageId':artifact_id,'sameArtifactAsHomologation':True,'environmentRevision':int(summary.get('environmentRevision') or 0),'membership':{'ok':True,'mode':'multiservice'},'reconcile':queued,'secretValuesIncluded':False}
 
 
-def publish_homologated_candidate(slug,candidate_number,user,progress=None,publication_number=None):
+def publish_homologated_candidate(slug,candidate_number,user,progress=None,publication_number=None,authorization_checked=False):
     notify=lambda step,msg:progress(step,msg) if progress else None
-    con=sqlite3.connect(DB);con.row_factory=sqlite3.Row;_ensure_schema(con);project=_project_allowed(con,slug,user)
+    con=sqlite3.connect(DB);con.row_factory=sqlite3.Row;_ensure_schema(con);project=con.execute('select * from projects where slug=?',(slug,)).fetchone() if authorization_checked else _project_allowed(con,slug,user)
     if not project:con.close();raise PermissionError('Projeto não encontrado ou sem permissão.')
-    if not _owner_or_admin(con,slug,user):con.close();raise PermissionError('Somente o responsável pelo projeto pode publicar em Produção.')
+    if not authorization_checked and not _can_publish(con,slug,user):con.close();raise PermissionError('Você não está autorizado a publicar este projeto em Produção.')
     candidate=con.execute('select * from publication_candidates where project_slug=? and candidate_number=?',(slug,int(candidate_number))).fetchone()
     if not candidate or candidate['status']!='homologated':con.close();raise RuntimeError('O candidato precisa estar homologado antes da publicação.')
     publication=int(publication_number or _next_publication(con,slug));num=int(candidate['public_number']);alias_row=con.execute('select alias from project_publication_aliases where project_slug=?',(slug,)).fetchone();alias=str(alias_row[0]) if alias_row else '';actor=(user.get('username') or 'portal').strip().lower();con.close()
@@ -677,7 +698,7 @@ def publish_homologated_candidate(slug,candidate_number,user,progress=None,publi
 def release_flow_status(slug,user):
     con=sqlite3.connect(DB);con.row_factory=sqlite3.Row;_ensure_schema(con)
     if not (_project_allowed(con,slug,user) or _can_homologate(con,slug,user)):con.close();raise PermissionError('Projeto não encontrado ou sem permissão.')
-    num=_number(con,slug);candidates=[dict(x) for x in con.execute('select * from publication_candidates where project_slug=? order by candidate_number desc limit 20',(slug,)).fetchall()];releases=[dict(x) for x in con.execute('select * from production_releases where project_slug=? order by publication_number desc limit 20',(slug,)).fetchall()];activations=[dict(x) for x in con.execute('select * from production_activation_requests where project_slug=? order by publication_number desc limit 20',(slug,)).fetchall()];hom=[str(x['username']) for x in con.execute('select username from project_homologators where project_slug=? order by username',(slug,)).fetchall()];owner=_project_owner(con,slug)
+    num=_number(con,slug);candidates=[dict(x) for x in con.execute('select * from publication_candidates where project_slug=? order by candidate_number desc limit 20',(slug,)).fetchall()];releases=[dict(x) for x in con.execute('select * from production_releases where project_slug=? order by publication_number desc limit 20',(slug,)).fetchall()];activations=[dict(x) for x in con.execute('select * from production_activation_requests where project_slug=? order by publication_number desc limit 20',(slug,)).fetchall()];hom=[str(x['username']) for x in con.execute('select username from project_homologators where project_slug=? order by username',(slug,)).fetchall()];owner=_project_owner(con,slug);permission_state=publication_permissions.snapshot(con,slug,user);can_submit=bool(_project_allowed(con,slug,user));can_homologate=_can_homologate(con,slug,user);can_publish=_can_publish(con,slug,user);is_owner=bool((user.get('username') or '').strip().lower()==owner);is_admin=publication_permissions.is_admin(user);is_professor=publication_permissions.is_professor(user)
     try:
         from cloudif_project_environment_web import authorization
         can_write=bool(authorization(slug,user.get('username') or '',user.get('groups') or []).get('canWrite'))
@@ -705,7 +726,7 @@ def release_flow_status(slug,user):
         try:out['runtimeDiff']=json.loads(row.get('runtime_diff_json') or '{}')
         except Exception:out['runtimeDiff']={}
         return out
-    result={'ok':True,'project':slug,'publicNumber':num,'preview':preview,'candidates':[safe_candidate(x) for x in candidates],'releases':[{**{k:x.get(k) for k in ('publication_number','candidate_number','deploy_number','stage_code','hostname','stable_hostname','artifact_image_id','status','is_active','environment_revision','created_by','created_at','published_at')},'url':'https://'+str(x.get('hostname') or '')+'/' if x.get('hostname') else '','stableUrl':'https://'+str(x.get('stable_hostname') or '')+'/' if x.get('stable_hostname') else '','runtime':publication_details.get(int(x.get('deploy_number') or 0),{})} for x in releases],'activationRequests':[{k:x.get(k) for k in ('candidate_number','publication_number','activation_digest','approval_id','requested_by','status','created_at','updated_at')} for x in activations],'job':dict(jobrow) if jobrow else None,'homologators':hom,'owner':owner,'canHomologate':bool(user.get('admin') or (user.get('username') or '').strip().lower()==owner or (user.get('username') or '').strip().lower() in set(hom)),'canPublish':bool(user.get('admin') or (user.get('username') or '').strip().lower()==owner),'canWrite':can_write,'secretValuesIncluded':False}
+    result={'ok':True,'project':slug,'publicNumber':num,'preview':preview,'candidates':[safe_candidate(x) for x in candidates],'releases':[{**{k:x.get(k) for k in ('publication_number','candidate_number','deploy_number','stage_code','hostname','stable_hostname','artifact_image_id','status','is_active','environment_revision','created_by','created_at','published_at')},'url':'https://'+str(x.get('hostname') or '')+'/' if x.get('hostname') else '','stableUrl':'https://'+str(x.get('stable_hostname') or '')+'/' if x.get('stable_hostname') else '','runtime':publication_details.get(int(x.get('deploy_number') or 0),{})} for x in releases],'activationRequests':[{k:x.get(k) for k in ('candidate_number','publication_number','activation_digest','approval_id','requested_by','status','created_at','updated_at')} for x in activations],'job':dict(jobrow) if jobrow else None,'homologators':hom,'owner':owner,'canSubmitHomologation':can_submit,'canHomologate':can_homologate,'canPublish':can_publish,'canManagePermissions':bool(permission_state.get('canManagePermissions')),'permissionUsers':permission_state.get('users') or [],'permissionPolicy':permission_state.get('policy') or {},'isAdmin':is_admin,'isProfessor':is_professor,'isOwner':is_owner,'canWrite':can_write,'secretValuesIncluded':False}
     if not releases and legacy:result['legacyProduction']={'publication_number':int(legacy['deploy_number']),'stage_code':'P'+str(int(legacy['deploy_number'])),'stableUrl':'https://'+str(legacy['stable_hostname'])+'/','artifact_image_id':'','status':'published','is_active':1}
     return result
 
@@ -821,7 +842,7 @@ def _production_activation_material(slug,candidate,publication,environment_summa
 
 def request_production_activation(slug,candidate_number,user,reason='Publicar candidato homologado em Produção'):
     con=sqlite3.connect(DB);con.row_factory=sqlite3.Row;_ensure_schema(con);project=_project_allowed(con,slug,user)
-    if not project or not _owner_or_admin(con,slug,user):con.close();raise PermissionError('Somente o responsável pelo projeto pode solicitar Produção.')
+    if not project or not _can_publish(con,slug,user):con.close();raise PermissionError('Você não está autorizado a publicar este projeto em Produção.')
     candidate=con.execute("select * from publication_candidates where project_slug=? and candidate_number=? and status='homologated'",(slug,int(candidate_number))).fetchone()
     if not candidate:con.close();raise RuntimeError('O candidato precisa estar homologado antes da solicitação de Produção.')
     existing=con.execute("select * from production_activation_requests where project_slug=? and candidate_number=? and status in ('pending','approved','queued') order by publication_number desc limit 1",(slug,int(candidate_number))).fetchone()
@@ -899,9 +920,9 @@ def enqueue_homologation(slug,user):
 
 def enqueue_candidate_publication(slug,candidate_number,user,approval_id='',activation_digest=''):
     con=sqlite3.connect(DB);con.row_factory=sqlite3.Row;_ensure_schema(con);project=_project_allowed(con,slug,user)
-    if not project or not _owner_or_admin(con,slug,user):con.close();raise PermissionError('Somente o responsável pelo projeto pode publicar em Produção.')
+    if not project or not _can_publish(con,slug,user):con.close();raise PermissionError('Você não está autorizado a publicar este projeto em Produção.')
     candidate=con.execute("select * from publication_candidates where project_slug=? and candidate_number=? and status='homologated'",(slug,int(candidate_number))).fetchone()
-    request=con.execute("select * from production_activation_requests where project_slug=? and candidate_number=? and approval_id=?",(slug,int(candidate_number),str(approval_id))).fetchone()
+    request=con.execute("select * from production_activation_requests where project_slug=? and candidate_number=? and approval_id=? and status<>'superseded'",(slug,int(candidate_number),str(approval_id))).fetchone()
     if not candidate:con.close();raise RuntimeError('O candidato precisa estar homologado antes da publicação.')
     if not request or not hmac.compare_digest(str(request['activation_digest']),str(activation_digest or '')):con.close();raise PermissionError('approval_binding_mismatch')
     publication=int(request['publication_number']);active=_active_stage_job(con,slug)
@@ -909,7 +930,45 @@ def enqueue_candidate_publication(slug,candidate_number,user,approval_id='',acti
         out={'ok':True,'queued':True,'job_id':int(active['id']),'existing':True,'operation':str(active['operation'] or '')};con.close();return out
     con.close();approval=production_approval_status(slug,str(approval_id),user)
     if approval.get('status')!='approved':raise PermissionError('A autorização crítica de Produção ainda não foi concluída.')
-    actor=(user.get('username') or 'portal').strip().lower();con=sqlite3.connect(DB);_ensure_schema(con);cur=con.execute("insert into publication_jobs(project_slug,actor,status,step,message,created_at,operation,candidate_number,publication_number,environment,approval_id,activation_digest) values(?,?,?,?,?,?,?,?,?,?,?,?)",(slug,actor,'queued','queued','Publicação do candidato homologado e aprovado recebida.',_now(),'production_release',int(candidate_number),publication,'production',str(approval_id),str(activation_digest)));con.execute("update production_activation_requests set status='queued',updated_at=? where project_slug=? and candidate_number=? and publication_number=?",(_now(),slug,int(candidate_number),publication));con.commit();jid=int(cur.lastrowid);con.close();return {'ok':True,'queued':True,'job_id':jid,'candidateNumber':int(candidate_number),'publicationNumber':publication,'stageCode':'P'+str(publication),'approvalId':str(approval_id),'existing':False}
+    actor=(user.get('username') or 'portal').strip().lower();con=sqlite3.connect(DB);_ensure_schema(con);cur=con.execute("insert into publication_jobs(project_slug,actor,status,step,message,created_at,operation,candidate_number,publication_number,environment,approval_id,activation_digest,authorization_mode,authorization_role) values(?,?,?,?,?,?,?,?,?,?,?,?,?,?)",(slug,actor,'queued','queued','Publicação do candidato homologado e aprovado recebida.',_now(),'production_release',int(candidate_number),publication,'production',str(approval_id),str(activation_digest),'critical_approval',_release_permission_role(con,slug,user)));con.execute("update production_activation_requests set status='queued',updated_at=? where project_slug=? and candidate_number=? and publication_number=?",(_now(),slug,int(candidate_number),publication));con.commit();jid=int(cur.lastrowid);con.close();return {'ok':True,'queued':True,'job_id':jid,'candidateNumber':int(candidate_number),'publicationNumber':publication,'stageCode':'P'+str(publication),'approvalId':str(approval_id),'existing':False}
+
+
+def _validate_project_permission_job(slug,candidate_number,publication_number,activation_digest):
+    con=sqlite3.connect(DB);con.row_factory=sqlite3.Row;_ensure_schema(con)
+    candidate=con.execute("select * from publication_candidates where project_slug=? and candidate_number=? and status='homologated'",(slug,int(candidate_number))).fetchone();con.close()
+    if not candidate:raise PermissionError('publication_binding_mismatch')
+    summary=_publication_config().environment_summary(slug,'production')
+    material,digest=_production_activation_material(slug,candidate,int(publication_number),summary)
+    if not hmac.compare_digest(str(digest),str(activation_digest or '')):raise PermissionError('publication_binding_mismatch')
+    return candidate,digest
+
+
+def enqueue_authorized_publication(slug,candidate_number,user):
+    con=sqlite3.connect(DB);con.row_factory=sqlite3.Row;_ensure_schema(con);project=_project_allowed(con,slug,user)
+    if not project or not _can_publish(con,slug,user):con.close();raise PermissionError('Você não está autorizado a publicar este projeto em Produção.')
+    candidate=con.execute("select * from publication_candidates where project_slug=? and candidate_number=? and status='homologated'",(slug,int(candidate_number))).fetchone()
+    if not candidate:con.close();raise RuntimeError('O candidato precisa estar homologado antes da publicação.')
+    active=_active_stage_job(con,slug)
+    if active:
+        out={'ok':True,'queued':True,'job_id':int(active['id']),'existing':True,'operation':str(active['operation'] or '')};con.close();return out
+    publication=_next_publication(con,slug);role=_release_permission_role(con,slug,user);actor=(user.get('username') or 'portal').strip().lower();con.close()
+    summary=_publication_config().environment_summary(slug,'production')
+    if not summary.get('valid'):raise RuntimeError('O ambiente de Produção possui variáveis obrigatórias pendentes.')
+    _material,digest=_production_activation_material(slug,candidate,publication,summary)
+    con=sqlite3.connect(DB);con.row_factory=sqlite3.Row;_ensure_schema(con)
+    legacy_requests=[dict(row) for row in con.execute("select approval_id,requested_by,status from production_activation_requests where project_slug=? and candidate_number=? and status in ('pending','pending_second','approved','reserved')",(slug,int(candidate_number))).fetchall()]
+    con.close()
+    for legacy in legacy_requests:
+        aid=str(legacy.get('approval_id') or '');requester=str(legacy.get('requested_by') or '')
+        if aid and requester:
+            try:_approval_call('POST','/v1/approvals/'+urllib.parse.quote(aid,safe='')+'/cancel',{'requested_by':requester,'cancellation_reason':'Substituída por autorização direta vinculada às permissões do projeto.'})
+            except Exception:pass
+    con=sqlite3.connect(DB);_ensure_schema(con)
+    con.execute("update production_activation_requests set status='superseded',updated_at=? where project_slug=? and candidate_number=? and status in ('pending','pending_second','approved','reserved')",(_now(),slug,int(candidate_number)))
+    cur=con.execute("insert into publication_jobs(project_slug,actor,status,step,message,created_at,operation,candidate_number,publication_number,environment,approval_id,activation_digest,authorization_mode,authorization_role) values(?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+      (slug,actor,'queued','queued','Publicação autorizada pelo papel do usuário no projeto.',_now(),'production_release',int(candidate_number),publication,'production','',digest,'project_permission',role))
+    con.commit();jid=int(cur.lastrowid);con.close()
+    return {'ok':True,'queued':True,'job_id':jid,'candidateNumber':int(candidate_number),'publicationNumber':publication,'stageCode':'P'+str(publication),'authorizationMode':'project_permission','authorizationRole':role,'existing':False}
 
 def homologate_and_enqueue(slug,candidate_number,user,note=''):
     homologate_candidate(slug,candidate_number,user,'approved',note);approval=request_production_activation(slug,candidate_number,user,'Homologar e publicar candidato em Produção')
@@ -970,25 +1029,28 @@ def run_job(job):
     job_id=int(job['id']);slug=job['project_slug'];actor=job['actor']
     user={'username':actor,'groups':[],'admin':False}
     try:
-        con=sqlite3.connect(DB);con.row_factory=sqlite3.Row
-        row=con.execute('select owner,created_by from projects where slug=?',(slug,)).fetchone();con.close()
-        if row and actor not in {(row['owner'] or ''),(row['created_by'] or '')}:user['admin']=True
         def progress(step,message):
             _job_update(job_id,status='running',step=step,message=message)
         operation=str(job.get('operation') or 'legacy_publish')
         if operation=='homologation_candidate':
-            result=create_homologation_candidate(slug,user,progress=progress,candidate_number=int(job.get('candidate_number') or 0));message='Candidato '+str(result.get('stageCode') or '')+' pronto para homologação.'
+            result=create_homologation_candidate(slug,user,progress=progress,candidate_number=int(job.get('candidate_number') or 0),authorization_checked=True);message='Candidato '+str(result.get('stageCode') or '')+' pronto para homologação.'
         elif operation=='production_release':
-            approval_id=str(job.get('approval_id') or '');activation_digest=str(job.get('activation_digest') or '');reservation=''
-            try:
-                _candidate,reservation,_digest=_validate_production_approval(slug,int(job.get('candidate_number') or 0),int(job.get('publication_number') or 0),approval_id,activation_digest,actor)
-                result=publish_homologated_candidate(slug,int(job.get('candidate_number') or 0),user,progress=progress,publication_number=int(job.get('publication_number') or 0));message='Publicação '+str(result.get('stageCode') or '')+' ativada em Produção.'
-                code,finalized=_finalize_production_approval(approval_id,reservation,True)
-                if code!=200 or finalized.get('status')!='consumed':raise RuntimeError('approval_finalize_failed')
-                con=sqlite3.connect(DB);_ensure_schema(con);con.execute("update production_activation_requests set status='consumed',updated_at=? where approval_id=?",(_now(),approval_id));con.commit();con.close()
-            except Exception:
-                if reservation:_finalize_production_approval(approval_id,reservation,False)
-                raise
+            authorization_mode=str(job.get('authorization_mode') or 'critical_approval')
+            activation_digest=str(job.get('activation_digest') or '')
+            if authorization_mode=='project_permission':
+                _validate_project_permission_job(slug,int(job.get('candidate_number') or 0),int(job.get('publication_number') or 0),activation_digest)
+                result=publish_homologated_candidate(slug,int(job.get('candidate_number') or 0),user,progress=progress,publication_number=int(job.get('publication_number') or 0),authorization_checked=True);message='Publicação '+str(result.get('stageCode') or '')+' ativada em Produção.'
+            else:
+                approval_id=str(job.get('approval_id') or '');reservation=''
+                try:
+                    _candidate,reservation,_digest=_validate_production_approval(slug,int(job.get('candidate_number') or 0),int(job.get('publication_number') or 0),approval_id,activation_digest,actor)
+                    result=publish_homologated_candidate(slug,int(job.get('candidate_number') or 0),user,progress=progress,publication_number=int(job.get('publication_number') or 0),authorization_checked=True);message='Publicação '+str(result.get('stageCode') or '')+' ativada em Produção.'
+                    code,finalized=_finalize_production_approval(approval_id,reservation,True)
+                    if code!=200 or finalized.get('status')!='consumed':raise RuntimeError('approval_finalize_failed')
+                    con=sqlite3.connect(DB);_ensure_schema(con);con.execute("update production_activation_requests set status='consumed',updated_at=? where approval_id=?",(_now(),approval_id));con.commit();con.close()
+                except Exception:
+                    if reservation:_finalize_production_approval(approval_id,reservation,False)
+                    raise
         else:
             result=publish_now(slug,user,progress=progress,publication_snapshot=job);message='Site publicado e ativado.'
         _job_update(job_id,status='succeeded',step='completed',message=message,detail=result,finished=True)
@@ -996,6 +1058,7 @@ def run_job(job):
     except Exception as exc:
         _job_update(job_id,status='failed',step='failed',message=str(exc),detail={'error':type(exc).__name__,'message':str(exc)[:800]},finished=True)
         return None
+
 
 def set_alias(slug,alias,user):
     alias=str(alias or '').strip().lower()

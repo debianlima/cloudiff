@@ -29,7 +29,7 @@
       <footer class="release-wizard-footer">
         <span>Promova o mesmo artefato do Preview até Produção.</span>
         <div>
-          <button type="button" class="btn light" data-release-refresh>Atualizar</button>
+          <button type="button" class="btn light" data-release-permissions>Permissões</button>
           <button type="button" class="btn light" data-release-close>Fechar</button>
         </div>
       </footer>
@@ -39,7 +39,7 @@
   const model = {
     slug: '', tab: 'preview', data: null, csrf: '', approval: null,
     poll: null, busy: false, opener: null, autoPreviewAttempted: false,
-    previewPreparing: false, previewError: ''
+    previewPreparing: false, previewError: '', permissionsOpen: false
   };
   const body = layer.querySelector('[data-release-body]');
 
@@ -80,6 +80,7 @@
   }
 
   function selectTab(name) {
+    model.permissionsOpen = false;
     model.tab = ['preview', 'homologation', 'publication'].includes(name) ? name : 'preview';
     layer.querySelectorAll('[data-release-tab]').forEach(button => {
       button.classList.toggle('is-active', button.dataset.releaseTab === model.tab);
@@ -125,9 +126,9 @@
     let action = '';
     if (model.previewPreparing) {
       action = '<button class="btn" type="button" disabled>Preparando Preview automaticamente…</button>';
-    } else if (ready && data.canWrite) {
+    } else if (ready && data.canSubmitHomologation) {
       action = '<button class="btn" type="button" data-release-action="homologation-create">Enviar Preview para homologação</button>';
-    } else if (model.previewError && data.canWrite) {
+    } else if (model.previewError && data.canSubmitHomologation) {
       action = '<button class="btn light" type="button" data-release-action="preview-auto-retry">Tentar preparar Preview</button>';
     }
     const note = model.previewError
@@ -147,14 +148,22 @@
     const candidate = latestCandidate();
     const preview = data.preview || {};
     const previewReady = Boolean(preview.configured && preview.healthy);
+    const job = data.job || {};
+    const creatingCandidate = job.operation === 'homologation_candidate'
+      && ['queued', 'running'].includes(job.status);
     if (!candidate) {
-      const action = previewReady && data.canWrite
-        ? '<button class="btn" type="button" data-release-action="homologation-create">Enviar Preview para homologação</button>'
-        : '<button class="btn" type="button" disabled>Aguardando Preview</button>';
+      const action = creatingCandidate
+        ? '<button class="btn" type="button" disabled>Criando candidato…</button>'
+        : previewReady && data.canSubmitHomologation
+          ? '<button class="btn" type="button" data-release-action="homologation-create">Enviar Preview para homologação</button>'
+          : '<button class="btn" type="button" disabled>Aguardando Preview</button>';
+      const title = creatingCandidate ? 'Criando candidato imutável' : 'Aguardando candidato';
+      const description = creatingCandidate
+        ? (job.message || 'Criando candidato imutável…')
+        : 'Homologação recebe uma cópia imutável do Preview atual.';
+      const badge = creatingCandidate ? 'Candidato em preparação' : 'Sem candidato';
       return jobHtml() + `<section class="release-stage">${stageIntro(
-        'H · Homologação', 'Aguardando candidato',
-        'Homologação recebe uma cópia imutável do Preview atual.',
-        'Sem candidato'
+        'H · Homologação', title, description, badge
       )}<div class="release-primary-action">${action}</div></section>`;
     }
 
@@ -183,19 +192,14 @@
     const data = model.data || {};
     const candidate = (data.candidates || []).find(item => item.status === 'homologated') || latestCandidate();
     const active = activeRelease();
-    const activation = activationFor(candidate);
-    const live = model.approval;
     let action = '';
-    let approval = '';
+    let permissionNote = '';
 
-    if (candidate && candidate.status === 'homologated' && data.canPublish) {
-      if (!activation) {
-        action = `<button class="btn" type="button" data-release-action="production-request" data-candidate="${Number(candidate.candidate_number)}">Publicar em Produção</button>`;
-      } else if (live && live.status === 'approved') {
-        action = `<button class="btn" type="button" data-release-action="production-enqueue" data-candidate="${Number(candidate.candidate_number)}" data-approval="${esc(live.approvalId)}" data-digest="${esc(live.activationDigest)}">Publicar em Produção</button>`;
+    if (candidate && candidate.status === 'homologated') {
+      if (data.canPublish) {
+        action = `<button class="btn" type="button" data-release-action="production-publish" data-candidate="${Number(candidate.candidate_number)}">Publicar em Produção</button>`;
       } else {
-        approval = '<div class="release-note"><strong>Publicação aguardando aprovação.</strong><span>A etapa de Produção continua bloqueada até a autorização necessária.</span></div>';
-        action = '<a class="btn light" href="/cloudiff/portal/?tab=aprovacoes">Abrir aprovação</a>';
+        permissionNote = '<div class="release-note"><strong>Publicação restrita.</strong><span>Peça a um dono, Professor, Administrador ou usuário autorizado deste projeto.</span></div>';
       }
     }
 
@@ -209,12 +213,55 @@
       'Produção recebe exatamente o artefato homologado, sem reconstrução entre H e P.',
       active ? (active.stage_code || 'Ativa') : 'Sem P ativa',
       active ? 'ok' : ''
-    )}${current}${approval}<div class="release-primary-action">${action}</div></section>`;
+    )}${current}${permissionNote}<div class="release-primary-action">${action}</div></section>`;
   }
+
+
+  function renderPermissions() {
+    const data = model.data || {};
+    const users = data.permissionUsers || [];
+    const rows = users.map(item => {
+      const disabled = item.locked || !data.canManagePermissions ? ' disabled' : '';
+      const locked = item.locked ? '<span class="release-permission-lock">Padrão do perfil</span>' : '';
+      return `<div class="release-permission-row" data-release-permission-user="${esc(item.username)}" data-locked="${item.locked ? '1' : '0'}">
+        <div><strong>${esc(item.username)}</strong><small>${esc(item.source || 'Membro do projeto')}</small>${locked}</div>
+        <label><input type="checkbox" data-permission-homologate${item.homologate ? ' checked' : ''}${disabled}> Homologar</label>
+        <label><input type="checkbox" data-permission-publish${item.publish ? ' checked' : ''}${disabled}> Publicar</label>
+      </div>`;
+    }).join('') || '<div class="release-note"><strong>Nenhum membro individual listado.</strong><span>Vincule usuários ao projeto para delegar Homologação ou Produção.</span></div>';
+    const save = data.canManagePermissions
+      ? '<button class="btn" type="button" data-release-action="permissions-save">Salvar permissões</button>'
+      : '';
+    return `<section class="release-permissions">
+      <div class="release-stage-head"><div><span class="release-kicker">Acesso do projeto</span><h3>Quem pode homologar e publicar</h3><p>Administrador CloudIFF, Professor e dono do projeto têm acesso por padrão. Os demais membros só recebem o que for marcado aqui.</p></div></div>
+      <div class="release-permission-list">${rows}</div>
+      <div class="release-primary-action">${save}<button class="btn light" type="button" data-release-action="permissions-close">Voltar ao fluxo</button></div>
+    </section>`;
+  }
+
+  async function savePermissions() {
+    if (!model.data || !model.data.canManagePermissions) return;
+    const entries = [...body.querySelectorAll('[data-release-permission-user]')]
+      .filter(row => row.dataset.locked !== '1')
+      .map(row => ({
+        username: row.dataset.releasePermissionUser,
+        homologate: Boolean(row.querySelector('[data-permission-homologate]')?.checked),
+        publish: Boolean(row.querySelector('[data-permission-publish]')?.checked)
+      }));
+    await post('permissions', { entries });
+    model.permissionsOpen = true;
+    await load();
+  }
+
 
   function render() {
     if (!model.data) {
       body.innerHTML = '<p>Carregando fluxo…</p>';
+      return;
+    }
+    if (model.permissionsOpen) {
+      body.innerHTML = renderPermissions();
+      bindActions();
       return;
     }
     body.innerHTML = model.tab === 'preview'
@@ -234,18 +281,21 @@
       const candidate = (data.candidates || [])[0];
       const release = (data.releases || []).find(item => Number(item.is_active) === 1) || data.legacyProduction;
       w.textContent = preview.configured ? (preview.stageCode + ' · ' + (preview.healthy ? 'online' : 'atenção')) : 'Preparação automática';
-      h.textContent = candidate ? (candidate.stage_code + ' · ' + ({ awaiting_homologation: 'aguardando', homologated: 'homologado', rejected: 'rejeitado', published: 'publicado' }[candidate.status] || candidate.status)) : 'Sem candidato';
+      const candidateJob = data.job || {};
+      const creatingCandidate = !candidate && candidateJob.operation === 'homologation_candidate' && ['queued', 'running'].includes(candidateJob.status);
+      h.textContent = candidate ? (candidate.stage_code + ' · ' + ({ awaiting_homologation: 'aguardando', homologated: 'homologado', rejected: 'rejeitado', published: 'publicado' }[candidate.status] || candidate.status)) : (creatingCandidate ? 'Criando candidato…' : 'Sem candidato');
       p.textContent = release ? (release.stage_code || 'P ativa') : 'Sem publicação';
     });
   }
 
   async function ensurePreviewAutomatically() {
-    if (model.autoPreviewAttempted || model.previewPreparing || !model.data || !model.data.canWrite) return;
+    if (model.autoPreviewAttempted || model.previewPreparing || !model.data || !model.data.canSubmitHomologation) return;
     const preview = model.data.preview || {};
     if (preview.configured && preview.healthy) return;
     model.autoPreviewAttempted = true;
     model.previewPreparing = true;
     model.previewError = '';
+    model.permissionsOpen = false;
     render();
     try {
       await post('preview/ensure', {});
@@ -302,14 +352,7 @@
     if (model.busy) return;
     model.busy = true;
     try {
-      const result = await post('production/approval/request', {
-        candidateNumber: Number(candidate), reason: 'Publicar candidato homologado em Produção'
-      });
-      if (result.status === 'approved') {
-        await post('production/enqueue', {
-          candidateNumber: Number(candidate), approvalId: result.approvalId, activationDigest: result.activationDigest
-        });
-      }
+      await post('production/publish', { candidateNumber: Number(candidate) });
       model.tab = 'publication';
       await load();
     } catch (error) {
@@ -319,6 +362,7 @@
       model.busy = false;
     }
   }
+
 
   function bindActions() {
     body.querySelectorAll('[data-release-action]').forEach(button => {
@@ -341,14 +385,9 @@
           return;
         }
         if (action === 'go-production') return selectTab('publication');
-        if (action === 'production-request') return requestProduction(candidate);
-        if (action === 'production-enqueue') {
-          return act('production/enqueue', {
-            candidateNumber: candidate,
-            approvalId: button.dataset.approval,
-            activationDigest: button.dataset.digest
-          }, 'Publicando em Produção…', 'publication');
-        }
+        if (action === 'production-publish') return requestProduction(candidate);
+        if (action === 'permissions-save') return savePermissions();
+        if (action === 'permissions-close') { model.permissionsOpen = false; return render(); }
       };
     });
   }
@@ -372,7 +411,7 @@
 
   layer.querySelector('.release-wizard-close').onclick = close;
   layer.querySelector('[data-release-close]').onclick = close;
-  layer.querySelector('[data-release-refresh]').onclick = load;
+  layer.querySelector('[data-release-permissions]').onclick = () => { model.permissionsOpen = !model.permissionsOpen; render(); };
   layer.querySelectorAll('[data-release-tab]').forEach(button => button.onclick = () => selectTab(button.dataset.releaseTab));
   layer.addEventListener('click', event => { if (event.target === layer) close(); });
   document.addEventListener('keydown', event => { if (event.key === 'Escape' && layer.classList.contains('is-open')) close(); });

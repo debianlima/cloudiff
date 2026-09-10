@@ -196,6 +196,21 @@ a concentrar uma feature nova em arquivo monolítico sem justificativa explícit
 
 ---
 
+### 4.2 Requisito R-PUB-AUTH — autorização de Homologação e Produção por projeto
+
+O fluxo de Publicações usa autorização vinculada ao projeto, sem exigir uma segunda tela de aprovação para quem já possui a capacidade necessária:
+
+- qualquer usuário atualmente vinculado ao projeto pode preparar o Preview e enviá-lo para Homologação;
+- proprietário do projeto, `CloudIF-Tenants-Admin` e `CloudIF-Professor` podem Homologar e Publicar por padrão;
+- membros individuais do projeto podem receber, de forma independente, as capacidades **Homologar** e **Publicar**;
+- a tela enumera delegações individuais a partir de sujeitos `user` da ACL; sujeitos `group` continuam autorizando acesso ao projeto, mas só podem virar delegação individual quando houver uma identidade `user` explícita, evitando inferência de membros sem diretório confiável;
+- apenas Administrador ou Professor pode alterar essas delegações; a capacidade implícita do Administrador não é revogável pela interface do projeto;
+- delegação individual deixa de valer imediatamente quando o usuário deixa de estar vinculado ao projeto;
+- a publicação direta vincula o job ao candidato homologado, à revisão/digest do ambiente e ao papel de autorização observado no enqueue; o worker não pode elevar o ator a Administrador;
+- endpoints legados de aprovação crítica permanecem para compatibilidade, mas não são o caminho primário do **Gerenciar publicação**.
+
+A UI de **Permissões** fica dentro de Gerenciar publicação e separa quem pode **Homologar** de quem pode **Publicar**. Perfis implícitos aparecem protegidos contra revogação; membros delegados são editáveis.
+
 ## 5. Critérios de aceite por módulo
 
 Um módulo só é considerado pronto quando **todos** os itens abaixo passam:

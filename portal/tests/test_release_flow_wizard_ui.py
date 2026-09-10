@@ -9,6 +9,26 @@ PUBLICATION_CSS=(ROOT/'portal/design/publications.css').read_text()
 RELEASE_JS_PATH=ROOT/'portal/design/publication-release.js'
 
 class ReleaseFlowWizardUITests(unittest.TestCase):
+    def test_release_permissions_are_managed_inside_the_publication_flow(self):
+        release=RELEASE_JS_PATH.read_text()
+        self.assertIn('data-release-permissions',release)
+        self.assertIn('Permissões',release)
+        self.assertNotIn('data-release-refresh',release)
+        self.assertIn('Quem pode homologar e publicar',release)
+        self.assertIn("post('permissions'",release)
+        self.assertIn("post('production/publish'",release)
+        self.assertNotIn('Abrir aprovação',release)
+        self.assertNotIn("post('production/approval/request'",release)
+
+    def test_homologation_tab_shows_candidate_creation_progress(self):
+        release=RELEASE_JS_PATH.read_text()
+        self.assertIn("job.operation === 'homologation_candidate'",release)
+        self.assertIn("['queued', 'running'].includes(job.status)",release)
+        self.assertIn('Criando candidato imutável',release)
+        self.assertIn('Candidato em preparação',release)
+        self.assertIn("job.message || 'Criando candidato imutável…'",release)
+        self.assertIn('disabled>Criando candidato…</button>',release)
+
     def test_release_manager_is_promotion_only(self):
         self.assertTrue(RELEASE_JS_PATH.is_file(), 'release manager must live in a dedicated module')
         release=RELEASE_JS_PATH.read_text()
