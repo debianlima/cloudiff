@@ -12221,3 +12221,6 @@ trabalho_compartilhado:
     - portal/legacy/cloudif-admin-portal-base.py
     - components/control-plane/srv/cloudif/lib/cloudif_admin_tenant_delete.py
     - estado.md
+    - skills/cloudiff/SKILL.md
+    - competencias.yaml
+    - tests/test_cloudiff_project_skill.py
