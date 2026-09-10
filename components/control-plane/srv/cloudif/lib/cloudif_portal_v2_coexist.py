@@ -1291,7 +1291,13 @@ def _install() -> None:
                         if not token_ok:
                             return send_json(self, 403, {"ok": False, "error": "invalid_csrf"})
                         from cloudif_admin_tenant_delete import start_job as start_tenant_job
-                        job = start_tenant_job(value("tenant"), value("confirmation"), user.get("username") or "admin")
+                        job = start_tenant_job(
+                            value("tenant"),
+                            value("confirmation"),
+                            user.get("username") or "admin",
+                            allow_without_backup=value("allow_without_backup") == "1",
+                            backup_override_job_id=value("backup_override_job_id"),
+                        )
                         return send_json(self, 202 if job.get("ok") else 409, job)
                     except Exception as exc:
                         return send_json(self, 500, {"ok": False, "error": type(exc).__name__, "detail": str(exc)[:300]})
