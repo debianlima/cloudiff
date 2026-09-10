@@ -154,6 +154,37 @@ class AIConnectorsHubTests(unittest.TestCase):
         self.assertIn('Todos os containers', source)
         self.assertIn('Repositórios por usuário', source)
 
+    def test_agents_page_fails_soft_when_onboarding_is_unavailable(self):
+        root = Path(__file__).resolve().parents[2]
+        source = (root/'components/control-plane/current-apps/portal-current/cloudif-admin-portal-base.py').read_text()
+        start = source.index('def _aig_render(user):')
+        end = source.index("if 'Portal' in globals() and not globals().get('_aig_wrapped'):", start)
+        namespace = {}
+
+        class Guide:
+            @staticmethod
+            def render(projects, csrf, approvals, can_decide, username):
+                return f'<guide projects="{len(projects)}">{username}:{csrf}:{len(approvals)}:{can_decide}</guide>'
+
+        class RemoteConnections:
+            @staticmethod
+            def render_dialog(csrf):
+                return f'<dialog>{csrf}</dialog>'
+
+        namespace.update({
+            '_prod_csrf_token': lambda user: 'csrf-test',
+            '_oi_visible': lambda user: (_ for _ in ()).throw(ConnectionError('onboarding offline')),
+            '_ap_visible': lambda user: [],
+            '_ap_can_decide': lambda user: True,
+            '_aig': Guide,
+            '_rc': RemoteConnections,
+        })
+        exec(source[start:end], namespace, namespace)
+        html = namespace['_aig_render']({'username': 'a9-ui-gate'})
+        self.assertIn('Onboarding temporariamente indisponível.', html)
+        self.assertIn('<guide projects="0">', html)
+        self.assertIn('<dialog>csrf-test</dialog>', html)
+
     def test_shell_does_not_append_legacy_identity_panel(self):
         source = Path('components/control-plane/srv/cloudif/lib/cloudif_portal_v2_coexist.py').read_text()
         self.assertNotIn('identities = getattr(owner, "_oi_panel")', source)
