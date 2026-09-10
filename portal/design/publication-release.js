@@ -103,6 +103,25 @@
     ) || null;
   }
 
+  function jobProgressPercent(job) {
+    if (!job) return 0;
+    const common = {
+      queued: 5,
+      preparing: 12,
+      snapshot: 20,
+      validating: 30,
+      building: 42,
+      deploying: 58,
+      production: 62,
+      https: 85,
+      promoting: 90,
+      completed: 100
+    };
+    if (job.status === 'succeeded') return 100;
+    if (job.status === 'failed') return 100;
+    return common[String(job.step || '').toLowerCase()] || (job.status === 'running' ? 10 : 5);
+  }
+
   function jobHtml() {
     const job = model.data && model.data.job;
     if (!job || !['queued', 'running'].includes(job.status)) return '';
@@ -110,7 +129,8 @@
       homologation_candidate: 'Preparando Homologação',
       production_release: 'Publicando em Produção'
     };
-    return `<div class="release-job"><strong>${esc(labels[job.operation] || 'Operação em andamento')}</strong><span>${esc(job.message || 'Processando…')}</span><progress></progress></div>`;
+    const percent = jobProgressPercent(job);
+    return `<div class="release-job"><div class="release-job-head"><strong>${esc(labels[job.operation] || 'Operação em andamento')}</strong><span class="release-job-percent">${percent}%</span></div><span>${esc(job.message || 'Processando…')}</span><progress max="100" value="${percent}" aria-label="Progresso ${percent}%"></progress></div>`;
   }
 
   function stageIntro(code, title, text, badge, badgeClass = '') {
