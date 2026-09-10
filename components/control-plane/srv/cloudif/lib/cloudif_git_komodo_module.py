@@ -9,6 +9,7 @@ import urllib.parse
 import urllib.request
 import urllib.error
 from pathlib import Path
+from concurrent.futures import ThreadPoolExecutor
 
 DB = os.environ.get("CLOUDIF_PORTAL_DB", "/var/lib/cloudif/portal/cloudif-portal.db")
 PUBLIC_HOST = os.environ.get("CLOUDIF_PUBLIC_HOST", "cloudiff.duckdns.org")
@@ -176,6 +177,31 @@ def status_komodo():
     health = http_json(a["komodo_url"] + "/health", token=a["komodo_token"], timeout=5)
     status = http_json(a["komodo_url"] + "/status", token=a["komodo_token"], timeout=7)
     return health, status
+
+def integration_status_snapshot():
+    a = agent_urls()
+    probes = {
+        "forja_health": (a["forja_url"] + "/health", a["forja_token"], 5),
+        "forja_status": (a["forja_url"] + "/status", a["forja_token"], 7),
+        "komodo_health": (a["komodo_url"] + "/health", a["komodo_token"], 5),
+        "komodo_status": (a["komodo_url"] + "/status", a["komodo_token"], 7),
+    }
+    try:
+        with ThreadPoolExecutor(max_workers=4, thread_name_prefix="cloudif-integration-status") as pool:
+            futures = {
+                name: pool.submit(http_json, url, token=token, timeout=timeout)
+                for name, (url, token, timeout) in probes.items()
+            }
+            return {name: future.result() for name, future in futures.items()}
+    except Exception:
+        forja_health, forja_status = status_forja()
+        komodo_health, komodo_status = status_komodo()
+        return {
+            "forja_health": forja_health,
+            "forja_status": forja_status,
+            "komodo_health": komodo_health,
+            "komodo_status": komodo_status,
+        }
 
 def ok_any(*items):
     return any(bool(x.get("ok")) for x in items if isinstance(x, dict))
@@ -1672,8 +1698,11 @@ def render_git_komodo_module(project="", tenant="", actor="portal", is_admin=Fal
     project = project or first_project() or DEFAULT_PROJECT
     tenant = infer_project_tenant(project, tenant)
 
-    forja_health, forja_status = status_forja()
-    komodo_health, komodo_status = status_komodo()
+    snapshot = integration_status_snapshot()
+    forja_health = snapshot["forja_health"]
+    forja_status = snapshot["forja_status"]
+    komodo_health = snapshot["komodo_health"]
+    komodo_status = snapshot["komodo_status"]
 
     forja_online = ok_any(forja_health, forja_status)
     komodo_online = ok_any(komodo_health, komodo_status)

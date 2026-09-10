@@ -6030,7 +6030,13 @@ def _rc_send(handler,code,data):
 def _aig_data(user):return _aig.guide_data(_oi_visible(user))
 def _aig_render(user):
     csrf=_prod_csrf_token(user)
-    return _aig.render(_oi_visible(user),csrf,_ap_visible(user),_ap_can_decide(user),user.get('username') or '')+_rc.render_dialog(csrf)
+    try:
+        projects=_oi_visible(user)
+        status=''
+    except Exception:
+        projects=[]
+        status='<section class="card"><h2>Agentes de IA</h2><p class="pill bad">Onboarding temporariamente indisponível.</p><p class="small">As orientações de conexão continuam disponíveis; dados e credenciais de projeto serão carregados quando o serviço voltar.</p></section>'
+    return status+_aig.render(projects,csrf,_ap_visible(user),_ap_can_decide(user),user.get('username') or '')+_rc.render_dialog(csrf)
 if 'Portal' in globals() and not globals().get('_aig_wrapped'):
     _aig_prev_get=Portal.do_GET
     def _aig_get(self):
