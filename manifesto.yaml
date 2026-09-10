@@ -12217,5 +12217,7 @@ trabalho_compartilhado:
     - manifesto.yaml
     - portal/design/**
     - portal/tests/**
+    - components/control-plane/current-apps/portal-current/cloudif-admin-portal-base.py
+    - portal/legacy/cloudif-admin-portal-base.py
     - components/control-plane/srv/cloudif/lib/cloudif_admin_tenant_delete.py
     - estado.md
