@@ -12207,39 +12207,15 @@ entradas:
 
 trabalho_compartilhado:
   projeto: cloudiff
-  caminho: /srv/mcp-workspace/cloudiff-a9
-  unidade: CLOUDIFF-A9
-  descricao: navegacao continua da UI, reproducao/correcao UX e benchmark seletivo de hot paths antes de qualquer migracao C++
-  agente: chat:6aa17fc3-93ec-83e9-8d70-75ee0cc56e36
-  atualizado_em: '2026-09-10T00:45:48Z'
-  previsao_termino: '2026-09-10T00:48:00Z'
+  caminho: /srv/mcp-workspace/cloudiff-a10-e2e-followup
+  unidade: CLOUDIFF-A10-E2E-FOLLOWUP
+  descricao: corrigir gaps comprovados pelo hardness E2E: reconciliacao visual apos provisionamento succeeded e cleanup do user-workspace env na exclusao de tenant
+  agente: chat:6aa0c47a-0420-83e9-94f2-0e655d4c3b4f
+  atualizado_em: '2026-09-10T21:10:00Z'
+  previsao_termino: '2026-09-10T22:10:00Z'
   zona_exclusao:
     - manifesto.yaml
-    - estado.md
     - portal/design/**
-    - portal/ui/**
-    - portal/templates/**
-    - portal/static/**
     - portal/tests/**
-    - portal/core/legacy_shell.py
-    - portal/core/resource_ownership.py
-    - portal/core/html_fragments.py
-    - portal/core/publication_summary.py
-    - components/control-plane/current-apps/portal-current/cloudif-admin-portal-base.py
-    - components/control-plane/srv/cloudif/lib/cloudif_git_komodo_module.py
-    - components/control-plane/srv/cloudif/lib/cloudif_portal_v2_coexist.py
-    - components/runtime/current-apps/komodo-agent-current/cloudif-komodo-agent.py
-    - components/control-plane/srv/cloudif/lib/cloudif_admin_project_delete.py
     - components/control-plane/srv/cloudif/lib/cloudif_admin_tenant_delete.py
-    - components/control-plane/srv/cloudif/lib/cloudif_publication_permissions.py
-    - components/control-plane/srv/cloudif/lib/cloudif_portal_publications.py
-    - components/control-plane/current-apps/portal-current/cloudif_portal_publications.py
-    - components/control-plane/current-apps/portal-current/cloudif_ui_publications.py
-    - components/control-plane/srv/cloudif/lib/cloudif_ui_publications.py
-    - docs/REQUIREMENTS.md
-    - docs/ARCHITECTURE.md
-    - skills/cloudiff/SKILL.md
-    - competencias.yaml
-    - tests/test_cloudiff_project_skill.py
-    - deploy/a10-release-gate/rollback.sh
-    - deploy/a10-release-gate/preflight-target.sh
+    - estado.md
