@@ -12204,17 +12204,3 @@ entradas:
     produz: evidencia/publication-permissions-a9
     aceite: python3 -m unittest portal.tests.test_publication_permissions portal.tests.test_release_flow_wizard_ui
     status: aceito
-
-trabalho_compartilhado:
-  projeto: cloudiff
-  caminho: /srv/mcp-workspace/cloudiff-a10-release-rebuild
-  unidade: CLOUDIFF-A10-CUTOVER-READINESS
-  descricao: 'revisar cutover e adicionar validador read-only de prontidao sem promover producao'
-  agente: chat:6aa0c47a-0420-83e9-94f2-0e655d4c3b4f
-  atualizado_em: '2026-09-10T21:58:00Z'
-  previsao_termino: '2026-09-10T22:40:00Z'
-  zona_exclusao:
-    - manifesto.yaml
-    - estado.md
-    - deploy/a10-release-gate/**
-    - tests/test_a10_cutover_readiness.py

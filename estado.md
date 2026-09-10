@@ -75,7 +75,7 @@
 - P2 do Teste Sofá continua dependente de duas aprovações humanas distintas admin/professor.
 
 ## Trabalho compartilhado
-- `CLOUDIFF-A10-CUTOVER-READINESS` está ativa em `/srv/mcp-workspace/cloudiff-a10-release-rebuild`, com reserva canônica antes do primeiro artefato funcional.
+- sem unidade ativa após o fechamento de `CLOUDIFF-A10-CUTOVER-READINESS`; nova unidade deve registrar `manifesto.yaml.trabalho_compartilhado` antes do primeiro artefato.
 - A reserva textual anterior de CLOUDIFF-A9 expirou em 2026-09-10T00:48:00Z sem renovação canônica posterior; não foi ressuscitada como lock ativo.
 - U27 foi substituída após exceder `previsao_termino` em mais de 30 minutos sem renovação/atividade observável; o bloco original foi registrado fora do repositório antes da troca.
 
@@ -238,3 +238,4 @@
 - Gate live read-only executado contra `a10-ux-e16d63aaca9a`: `CUTOVER_READINESS=PASS`, source `e16d63aaca9aa726c71ca0022931b776f0e09348`, archive SHA-256 `073a872be362f0fad719cab3a5dfdc13c43835e5da9ca380f3f87be7e7e79cb1`; current `a10-ux-73dd432fea38`, previous `a10-ux-adabb6ee435a`, `lib/portal` symlink resolvendo para `portal-v2/a10-ux-73dd432fea38`, serviço live com PID 860577.
 - O README do release-gate documenta o novo gate e mantém explícito que ele **não autoriza promoção**.
 - Produção continua inalterada. Próximo gate após integrar este validador continua `BLOCKED_HUMAN_AUTH_PRODUCTION`: uma pessoa autorizada precisa aprovar o cutover coordenado; o supervisor PGH não humano não satisfaz esse gate.
+- Fonte do gate integrada em `main@cad3dcccbec7ee744d98e68041ac58bc11c9bc5e`; `cutover-readiness.sh` SHA-256 `0c3cc0d4d6fe719f23f36bdf370565b37f3b1fa0c7cb86f29c9cc4866fe0ef99`. A reserva foi liberada após integração; nenhum apply/promote foi criado.
