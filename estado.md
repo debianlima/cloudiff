@@ -196,3 +196,5 @@
 - Segurança do worker: o ator de um job não é promovido artificialmente a Admin; `project_permission` é validado no enqueue e vinculado a candidato, número P e digest do ambiente antes da execução. O modo `critical_approval` antigo permanece compatível.
 - Teste operacional no Tuleap: W1 ficou saudável; job 32 concluiu H3; H3 foi homologado pela identidade da sessão às 00:12:19Z. O estado intermediário `https` revelou um problema de feedback e agora a aba Homologação mostra **Criando candidato imutável / Candidato em preparação** durante o job.
 - Gate desta extensão: 41 testes focados PASS (`publication_permissions`, `release_flow_wizard_ui`, `publication_management_ui`), `py_compile` e `git diff --check` PASS; enqueue direto validado em DB temporário com `authorization_mode=project_permission`, sem criação de `production_activation_requests`.
+
+- Compatibilidade refinada: ao publicar pelo novo `project_permission`, approvals genéricos pendentes anteriores do mesmo projeto são cancelados/superseded; isso evita que H3 ou candidatos antigos continuem aparecendo como pendência ativa quando o usuário já está publicando por H4 ou posterior.

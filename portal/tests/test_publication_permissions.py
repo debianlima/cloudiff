@@ -161,6 +161,9 @@ class PublicationPermissionsTests(unittest.TestCase):
         self.con.execute("""insert into production_activation_requests(
           project_slug,candidate_number,publication_number,activation_digest,approval_id,requested_by,status,created_at,updated_at
         ) values('demo',3,2,?,'apr_1234567890abcdef1234','portal:alice','pending',?,?)""",('d'*64,now,now))
+        self.con.execute("""insert into production_activation_requests(
+          project_slug,candidate_number,publication_number,activation_digest,approval_id,requested_by,status,created_at,updated_at
+        ) values('demo',2,1,?,'apr_abcdef1234567890abcd','portal:alice','pending',?,?)""",('e'*64,now,now))
         self.con.commit()
         class Config:
             @staticmethod
@@ -171,10 +174,11 @@ class PublicationPermissionsTests(unittest.TestCase):
         module._approval_call=lambda method,path,payload=None,timeout=45: (calls.append((method,path,payload)) or (200,{'ok':True,'status':'cancelled'}))
         result=module.enqueue_authorized_publication('demo',3,professor)
         self.assertEqual(result['authorizationMode'],'project_permission')
-        self.assertEqual(len(calls),1)
+        self.assertEqual(len(calls),2)
         self.assertTrue(calls[0][1].endswith('/cancel'))
         self.assertEqual(calls[0][2]['requested_by'],'portal:alice')
         self.assertEqual(self.con.execute("select status from production_activation_requests where approval_id='apr_1234567890abcdef1234'").fetchone()[0],'superseded')
+        self.assertEqual(self.con.execute("select status from production_activation_requests where approval_id='apr_abcdef1234567890abcd'").fetchone()[0],'superseded')
         portal=(ROOT/'components/control-plane/current-apps/portal-current/cloudif_portal_publications.py').read_text()
         self.assertIn("status<>'superseded'",portal)
 

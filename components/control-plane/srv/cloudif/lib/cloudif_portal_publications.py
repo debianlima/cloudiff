@@ -698,7 +698,7 @@ def enqueue_authorized_publication(slug,candidate_number,user):
     if not summary.get('valid'):raise RuntimeError('O ambiente de Produção possui variáveis obrigatórias pendentes.')
     _material,digest=_production_activation_material(slug,candidate,publication,summary)
     con=sqlite3.connect(DB);con.row_factory=sqlite3.Row;_ensure_schema(con)
-    legacy_requests=[dict(row) for row in con.execute("select approval_id,requested_by,status from production_activation_requests where project_slug=? and candidate_number=? and status in ('pending','pending_second','approved','reserved')",(slug,int(candidate_number))).fetchall()]
+    legacy_requests=[dict(row) for row in con.execute("select approval_id,requested_by,status,candidate_number from production_activation_requests where project_slug=? and status in ('pending','pending_second','approved','reserved')",(slug,)).fetchall()]
     con.close()
     for legacy in legacy_requests:
         aid=str(legacy.get('approval_id') or '');requester=str(legacy.get('requested_by') or '')
@@ -706,7 +706,7 @@ def enqueue_authorized_publication(slug,candidate_number,user):
             try:_approval_call('POST','/v1/approvals/'+urllib.parse.quote(aid,safe='')+'/cancel',{'requested_by':requester,'cancellation_reason':'Substituída por autorização direta vinculada às permissões do projeto.'})
             except Exception:pass
     con=sqlite3.connect(DB);_ensure_schema(con)
-    con.execute("update production_activation_requests set status='superseded',updated_at=? where project_slug=? and candidate_number=? and status in ('pending','pending_second','approved','reserved')",(_now(),slug,int(candidate_number)))
+    con.execute("update production_activation_requests set status='superseded',updated_at=? where project_slug=? and status in ('pending','pending_second','approved','reserved')",(_now(),slug))
     cur=con.execute("insert into publication_jobs(project_slug,actor,status,step,message,created_at,operation,candidate_number,publication_number,environment,approval_id,activation_digest,authorization_mode,authorization_role) values(?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
       (slug,actor,'queued','queued','Publicação autorizada pelo papel do usuário no projeto.',_now(),'production_release',int(candidate_number),publication,'production','',digest,'project_permission',role))
     con.commit();jid=int(cur.lastrowid);con.close()
