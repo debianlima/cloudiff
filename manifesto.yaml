@@ -12204,15 +12204,3 @@ entradas:
     produz: evidencia/publication-permissions-a9
     aceite: python3 -m unittest portal.tests.test_publication_permissions portal.tests.test_release_flow_wizard_ui
     status: aceito
-
-trabalho_compartilhado:
-  projeto: cloudiff
-  caminho: /run/cloudiff-a10-release-refresh-agent
-  unidade: CLOUDIFF-A10-RELEASE-REFRESH-AGENT-ONCE
-  descricao: 'reconstruir candidate inativo apos homologacao shadow do cloudiff-agent --once; Producao permanece bloqueada'
-  agente: chat:6aa0c47a-0420-83e9-94f2-0e655d4c3b4f
-  atualizado_em: '2026-09-11T02:34:52Z'
-  previsao_termino: '2026-09-11T03:14:52Z'
-  zona_exclusao:
-    - manifesto.yaml
-    - estado.md

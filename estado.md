@@ -274,3 +274,13 @@
 - Probe direto adicional do `--once` antes da formalização também confirmou `AGENT_ONCE_CONTRACT=PASS`, correspondência de identidade, capabilities e telemetria. O binário continua se identificando como `cloudiff-agent 0.36.0-shadow`.
 - Não houve patch no runtime C++: a implementação existente já satisfazia o contrato. A unidade adicionou somente o gate reproduzível e atualizou a verdade declarativa da entrada 15 para `aceito`.
 - Produção e o candidate de Portal não foram promovidos. A autorização humana de Produção continua explicitamente não concedida.
+
+## CLOUDIFF-A10-RELEASE-REFRESH-AGENT-ONCE — candidate após aceite do agent shadow (2026-09-10)
+
+- A homologação da entrada 15 avançou o source funcional para `16b13b2f3a9b7350edcc21c06994c17731f388d1`; por procedência, `a10-ux-f1269df31165` passa a ser histórico e **não deve ser promovido**.
+- Novo candidate imutável e inativo: `a10-ux-16b13b2f3a9b`, `source_commit=16b13b2f3a9b7350edcc21c06994c17731f388d1`, archive SHA-256 `b70353ede350ee7f8e67fb73be30848435cb0d20203a3adfd5c13de12aff6d46`, 128 arquivos no manifesto, zero bytecode, `promotion_authorized=false` e `requires_live_preflight=true`.
+- O mapa completo dos 128 arquivos/hashes de payload é idêntico ao candidate `a10-ux-f1269df31165`: `PAYLOAD_HASHMAP_EQUAL=TRUE`, digest canônico `369a313c4bee8025f16911225a4151ed8a293f494107896e1d634d17bd038a47`.
+- A equivalência de browser foi encadeada sem fingir novo run: `/srv/cloudif/releases/a10-ux-16b13b2f3a9b/candidate/evidence/browser-equivalence.json`, SHA-256 `30b9e070fe81fe9dbd76e851700d889d4a13a920f527c4619376154f4108b83e`, preservando a evidência original de browser SHA-256 `7f628f271633893fce49380e8ed262fc83097a72863c8c717220429d0e44dfcc`.
+- Preflight novo na Hospedagem criou `/srv/cloudif/releases/a10-ux-16b13b2f3a9b/pre-state`; current permaneceu `a10-ux-73dd432fea38`, previous `a10-ux-adabb6ee435a` e `lib/portal` permaneceu coerente com o current.
+- `cutover-readiness.sh` retornou `CUTOVER_READINESS=PASS` para release/source/archive novos; o Portal live permaneceu `active/running`, PID `860577`, sem troca de pointer, restart ou alteração de overlay.
+- A autorização humana de Produção permanece **explicitamente não concedida**. O novo candidate está apenas preparado; qualquer promoção continua bloqueada.
