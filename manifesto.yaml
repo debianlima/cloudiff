@@ -12211,8 +12211,8 @@ trabalho_compartilhado:
   unidade: CLOUDIFF-A10-DERIVE-DIAGRAMS
   descricao: 'corrigir e homologar derivacao Mermaid exclusivamente do manifesto, sem tocar Producao'
   agente: chat:6aa0c47a-0420-83e9-94f2-0e655d4c3b4f
-  atualizado_em: '2026-09-11T02:39:27Z'
-  previsao_termino: '2026-09-11T03:24:27Z'
+  atualizado_em: '2026-09-11T08:26:40Z'
+  previsao_termino: '2026-09-11T09:11:40Z'
   zona_exclusao:
     - manifesto.yaml
     - estado.md
