@@ -120,8 +120,8 @@ entradas:
     tipo: agente
     consome: [cpp/node-identity, contratos/node.schema]
     produz: bin/cloudiff-agent
-    aceite: portao-mecanico/agente
-    status: pendente
+    aceite: ctest --test-dir build -R '^agent_once$' --output-on-failure
+    status: aceito
   - id: 16
     caminho: src/control/main.cpp
     proposito: primeiro cloudiff-control shadow sem autoridade sobre legado
@@ -12204,17 +12204,3 @@ entradas:
     produz: evidencia/publication-permissions-a9
     aceite: python3 -m unittest portal.tests.test_publication_permissions portal.tests.test_release_flow_wizard_ui
     status: aceito
-
-trabalho_compartilhado:
-  projeto: cloudiff
-  caminho: /run/cloudiff-a10-agent-once-acceptance
-  unidade: CLOUDIFF-A10-AGENT-ONCE-ACCEPTANCE
-  descricao: 'formalizar e homologar o gate shadow do cloudiff-agent --once sem tocar Producao'
-  agente: chat:6aa0c47a-0420-83e9-94f2-0e655d4c3b4f
-  atualizado_em: '2026-09-11T02:25:29Z'
-  previsao_termino: '2026-09-11T03:10:29Z'
-  zona_exclusao:
-    - manifesto.yaml
-    - estado.md
-    - CMakeLists.txt
-    - tests/test_agent_once.cmake

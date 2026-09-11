@@ -263,3 +263,14 @@
 - O mapa completo dos 128 arquivos/hashes de payload do novo candidate é idêntico ao de `a10-ux-e16d63aaca9a`: `PAYLOAD_HASHMAP_EQUAL=TRUE`, digest canônico `369a313c4bee8025f16911225a4151ed8a293f494107896e1d634d17bd038a47`. Assim, o hardness dirigido em Chrome 151 do candidate anterior aplica-se byte a byte ao novo payload.
 - A transferência de evidência foi registrada sem fingir novo browser run: `/srv/cloudif/releases/a10-ux-f1269df31165/candidate/evidence/browser-equivalence.json`, SHA-256 `ea8e8c8283dc2cfa4e13c4a7a55424fa97d65b56625d296031c464ff54e8684c`, referencia a evidência original SHA-256 `7f628f271633893fce49380e8ed262fc83097a72863c8c717220429d0e44dfcc`.
 - Produção permanece **inalterada** em `a10-ux-73dd432fea38`. Próximo gate continua `BLOCKED_HUMAN_AUTH_PRODUCTION`: imediatamente antes de qualquer cutover humano autorizado, repetir `cutover-readiness.sh`; depois coordenar app + root-lib + portal, executar smoke e rollback se necessário.
+
+## CLOUDIFF-A10-AGENT-ONCE-ACCEPTANCE — `cloudiff-agent --once` shadow homologado (2026-09-10)
+
+- A entrada 15 (`src/agent/main.cpp`) deixou de permanecer `pendente` apenas por ausência de gate explícito: o comportamento existente foi exercitado em shadow sem instalação persistente e sem mudança em Produção.
+- O gate novo `tests/test_agent_once.cmake`, registrado no CTest como `agent_once`, executa o binário real com `--node-id-file`, `--role shadow` e capabilities declaradas, sem exigir NATS; valida JSON, `node_id`, role, capabilities, revisão numérica e totais positivos de RAM/storage.
+- Hospedagem foi escolhida por capacidade após preflight: CMake 4.2.3, Ninja 1.13.2, Clang 21.1.8, libnats 3.12.0, libuuid 2.41.3, libpq 18.6, OpenSSL 3.5.5 e libarchive 3.8.5, com espaço/memória suficientes. LimaEducation não foi usado para build porque o filesystem estava em 100% e não havia Clang/Ninja no executor local.
+- Debug com `CLOUDIFF_ENABLE_SANITIZERS=ON`: `node_identity`, `heartbeat` e `agent_once` = 3/3 PASS, zero warnings de configure/build; binário SHA-256 `64c673e49a00c60630c21991157bb13184916670b09e25502b806f3f28cbd215`.
+- Release com sanitizers desativados: os mesmos 3/3 testes PASS e zero warnings; binário SHA-256 `6c6b9e626cb8da8553476c8b350eb03e5aa9bef3f867dd4e7d086cca7240e70c`.
+- Probe direto adicional do `--once` antes da formalização também confirmou `AGENT_ONCE_CONTRACT=PASS`, correspondência de identidade, capabilities e telemetria. O binário continua se identificando como `cloudiff-agent 0.36.0-shadow`.
+- Não houve patch no runtime C++: a implementação existente já satisfazia o contrato. A unidade adicionou somente o gate reproduzível e atualizou a verdade declarativa da entrada 15 para `aceito`.
+- Produção e o candidate de Portal não foram promovidos. A autorização humana de Produção continua explicitamente não concedida.
