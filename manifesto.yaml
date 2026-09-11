@@ -12204,15 +12204,3 @@ entradas:
     produz: evidencia/publication-permissions-a9
     aceite: python3 -m unittest portal.tests.test_publication_permissions portal.tests.test_release_flow_wizard_ui
     status: aceito
-
-trabalho_compartilhado:
-  projeto: cloudiff
-  caminho: /run/cloudiff-a10-release-refresh-diagrams
-  unidade: CLOUDIFF-A10-RELEASE-REFRESH-DIAGRAMS
-  descricao: 'reconstruir candidate inativo apos homologacao do gerador de diagramas; Producao permanece bloqueada'
-  agente: chat:6aa0c47a-0420-83e9-94f2-0e655d4c3b4f
-  atualizado_em: '2026-09-11T08:30:16Z'
-  previsao_termino: '2026-09-11T09:10:16Z'
-  zona_exclusao:
-    - manifesto.yaml
-    - estado.md

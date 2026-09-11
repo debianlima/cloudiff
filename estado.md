@@ -292,3 +292,13 @@
 - `tools/derive_diagrams.py` agora lê somente `manifesto.yaml` com YAML estruturado, normaliza `consome`/`produz`, deriva arestas por tokens produzidos/consumidos e monta mapa, dependências, fluxo, progresso e cobertura exclusivamente das entradas canônicas. A seção Faro só existe quando o próprio manifesto contém entradas `faro-validation-*`; a dependência externa em `config/faro-node-reservation.json` foi removida.
 - Gate verde: `python3 -m unittest tests.test_derive_diagrams` = 2/2 PASS; `py_compile` PASS; a saída real atual contém 6 blocos Mermaid e 6 fechamentos, SHA-256 `00a22b50fc7ae7b14fbac60a0c9c7e59988dd877adb4dc4ce244e61196b62f35` na execução pré-fechamento.
 - Nenhum arquivo de runtime/Portal foi alterado e Produção permaneceu intacta. Como o source canônico avançará por tooling/documentação, o candidate `a10-ux-16b13b2f3a9b` deve ser tratado como histórico até um refresh final de procedência.
+
+## CLOUDIFF-A10-RELEASE-REFRESH-DIAGRAMS — candidate final após homologação estrutural (2026-09-11)
+
+- O fechamento `CLOUDIFF-A10-DERIVE-DIAGRAMS` fixou o source funcional em `3007073dee2cf3e0ce05da1fa6c35ed7fbfc730d`; por procedência, `a10-ux-16b13b2f3a9b` e `a10-ux-f1269df31165` permanecem históricos e **não devem ser promovidos**.
+- Candidate inativo atual: `a10-ux-3007073dee2c`, `source_commit=3007073dee2cf3e0ce05da1fa6c35ed7fbfc730d`, archive SHA-256 `ca8b97be44841ba5f02922603aff08d3b2479cc1bec50d6fa06839b788adb41f`, 128 arquivos no manifesto, zero bytecode, `promotion_authorized=false` e `requires_live_preflight=true`.
+- O mapa completo dos 128 arquivos/hashes de payload é idêntico ao candidate anterior: `PAYLOAD_HASHMAP_EQUAL=TRUE`, digest canônico `369a313c4bee8025f16911225a4151ed8a293f494107896e1d634d17bd038a47`.
+- A equivalência de browser foi encadeada sem alegar novo run: `/srv/cloudif/releases/a10-ux-3007073dee2c/candidate/evidence/browser-equivalence.json`, SHA-256 `cbea3e5a9aeccf88dcb6201ee0d9739c7dd9f5fe0bfb79a59e2be08097a38f59`, preservando a evidência original de browser SHA-256 `7f628f271633893fce49380e8ed262fc83097a72863c8c717220429d0e44dfcc`.
+- Preflight criou `/srv/cloudif/releases/a10-ux-3007073dee2c/pre-state`; `cutover-readiness.sh` retornou `CUTOVER_READINESS=PASS` para release/source/archive novos.
+- Produção permaneceu intacta: current `a10-ux-73dd432fea38`, previous `a10-ux-adabb6ee435a`, `lib/portal` coerente com current, serviço `active/running`, PID `860577`; nenhum pointer, overlay ou serviço foi alterado.
+- A autorização humana de Produção segue **explicitamente não concedida**. O candidate está preparado para o futuro gate humano, não para promoção automática.
