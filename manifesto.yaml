@@ -208,8 +208,8 @@ entradas:
     tipo: documentacao-estrutural
     consome: [contrato/manifesto-v2]
     produz: portao/diagramas
-    aceite: portao-mecanico/documentacao-estrutural
-    status: pendente
+    aceite: python3 -m unittest tests.test_derive_diagrams
+    status: aceito
   - id: 27
     caminho: include/cloudiff/nats_client.hpp
     proposito: RAII do cliente NATS com publish e acesso nativo limitado
@@ -12204,17 +12204,3 @@ entradas:
     produz: evidencia/publication-permissions-a9
     aceite: python3 -m unittest portal.tests.test_publication_permissions portal.tests.test_release_flow_wizard_ui
     status: aceito
-
-trabalho_compartilhado:
-  projeto: cloudiff
-  caminho: /run/cloudiff-a10-derive-diagrams
-  unidade: CLOUDIFF-A10-DERIVE-DIAGRAMS
-  descricao: 'corrigir e homologar derivacao Mermaid exclusivamente do manifesto, sem tocar Producao'
-  agente: chat:6aa0c47a-0420-83e9-94f2-0e655d4c3b4f
-  atualizado_em: '2026-09-11T08:26:40Z'
-  previsao_termino: '2026-09-11T09:11:40Z'
-  zona_exclusao:
-    - manifesto.yaml
-    - estado.md
-    - tools/derive_diagrams.py
-    - tests/test_derive_diagrams.py

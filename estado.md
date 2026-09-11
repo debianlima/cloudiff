@@ -284,3 +284,11 @@
 - Preflight novo na Hospedagem criou `/srv/cloudif/releases/a10-ux-16b13b2f3a9b/pre-state`; current permaneceu `a10-ux-73dd432fea38`, previous `a10-ux-adabb6ee435a` e `lib/portal` permaneceu coerente com o current.
 - `cutover-readiness.sh` retornou `CUTOVER_READINESS=PASS` para release/source/archive novos; o Portal live permaneceu `active/running`, PID `860577`, sem troca de pointer, restart ou alteração de overlay.
 - A autorização humana de Produção permanece **explicitamente não concedida**. O novo candidate está apenas preparado; qualquer promoção continua bloqueada.
+
+## CLOUDIFF-A10-DERIVE-DIAGRAMS — Mermaid realmente derivado do manifesto (2026-09-10)
+
+- A entrada 26 estava `pendente` e o gerador anterior violava o próprio contrato: continha topologia Portal/NATS/Faro hardcoded, lia `config/faro-node-reservation.json` e emitia 7 fences Mermaid de abertura contra 9 fechamentos.
+- O teste `tests/test_derive_diagrams.py` foi commitado antes do patch e reprovou com dois sinais independentes: `7 != 9` no balanceamento de fences e presença de `Portal legado` num manifesto sintético que continha apenas `alpha.cpp`/`beta.cpp`.
+- `tools/derive_diagrams.py` agora lê somente `manifesto.yaml` com YAML estruturado, normaliza `consome`/`produz`, deriva arestas por tokens produzidos/consumidos e monta mapa, dependências, fluxo, progresso e cobertura exclusivamente das entradas canônicas. A seção Faro só existe quando o próprio manifesto contém entradas `faro-validation-*`; a dependência externa em `config/faro-node-reservation.json` foi removida.
+- Gate verde: `python3 -m unittest tests.test_derive_diagrams` = 2/2 PASS; `py_compile` PASS; a saída real atual contém 6 blocos Mermaid e 6 fechamentos, SHA-256 `00a22b50fc7ae7b14fbac60a0c9c7e59988dd877adb4dc4ce244e61196b62f35` na execução pré-fechamento.
+- Nenhum arquivo de runtime/Portal foi alterado e Produção permaneceu intacta. Como o source canônico avançará por tooling/documentação, o candidate `a10-ux-16b13b2f3a9b` deve ser tratado como histórico até um refresh final de procedência.
