@@ -394,6 +394,67 @@ def ensure_publication_bridge(payload:Any)->dict:
     return {'ok':True,'bridge':name,'deployment_id':deployment_id,'public_number':public_number,'stage':stage,'number':number,'image_id':PUBLICATION_BRIDGE_IMAGE_ID,'published_ports':[],'read_only':True,'user':'101:101','capabilities':['NET_BIND_SERVICE'],'idempotent':False}
 
 
+def ensure_source_preview_bridge(payload:Any)->dict:
+    if not isinstance(payload,dict) or set(payload)!={'project_slug','public_number','generation'}:raise DeploymentError('invalid_source_preview_bridge_request','Pedido de bridge W1 inválido.',400)
+    slug=str(payload.get('project_slug') or '').strip().lower();public_number=int(payload.get('public_number') or 0);generation=int(payload.get('generation') or 0)
+    if not SLUG_RE.fullmatch(slug) or not (1<=public_number<=999999999 and 1<=generation<=999999):raise DeploymentError('invalid_source_preview_bridge_request','Pedido de bridge W1 inválido.',400)
+    source=compose_source_state(slug);project,_,_,rows=_compose_source_rows(slug);edge_service=str(source.get('edge_service') or '');edge_port=int(source.get('edge_port') or 0)
+    edge_row=next((row for row in rows if str((((row.get('Config') or {}).get('Labels') or {}).get('com.docker.compose.service')) or '')==edge_service),None)
+    if not edge_row:raise DeploymentError('compose_public_edge_missing','Serviço público do Compose não foi localizado.',409)
+    networks=((edge_row.get('NetworkSettings') or {}).get('Networks') or {});project_networks=[];non_public=[]
+    for network_name_source in sorted(networks):
+        if network_name_source==PUBLICATION_NETWORK:continue
+        non_public.append(network_name_source);nrows=_json_rows(docker('network','inspect',network_name_source,timeout=30,check=False));labels=(nrows[0].get('Labels') or {}) if nrows else {}
+        if str(labels.get('com.docker.compose.project') or '')==project:project_networks.append(network_name_source)
+    if len(project_networks)==1:source_network=project_networks[0]
+    elif not project_networks and len(non_public)==1:source_network=non_public[0]
+    elif not non_public and PUBLICATION_NETWORK in networks:source_network=PUBLICATION_NETWORK
+    else:raise DeploymentError('compose_source_network_ambiguous','Não foi possível determinar uma única rede privada para o serviço web do Compose.',409,{'networks':sorted(networks)})
+    image=inspect_image(PUBLICATION_BRIDGE_IMAGE_REF)
+    if str(image.get('Id') or '')!=PUBLICATION_BRIDGE_IMAGE_ID:raise DeploymentError('publication_bridge_image_mismatch','Imagem do bridge diverge do digest homologado.',409)
+    name=f'cloudif-p{public_number}-w{generation}-preview-web';root=PUBLICATION_BRIDGE_ROOT/name;config=root/'nginx.conf';root.mkdir(parents=True,exist_ok=True)
+    config.write_text(_publication_bridge_config({'services':[{'service':edge_service,'port':edge_port}],'routes':[{'pathPrefix':'/','service':edge_service,'stripPrefix':False}]}));os.chmod(config,0o644)
+    labels={'org.cloudiff.source-preview-bridge':'true','org.cloudiff.project':slug,'org.cloudiff.public-number':str(public_number),'org.cloudiff.stage':'preview','org.cloudiff.stage-number':str(generation),'org.cloudiff.source-digest':str(source.get('source_digest') or '')}
+    existing=docker('inspect',name,timeout=30,check=False);legacy=False
+    if existing.returncode==0:
+        row=(json.loads(existing.stdout or '[]') or [{}])[0];current=(row.get('Config') or {}).get('Labels') or {}
+        same_bridge=current.get('org.cloudiff.source-preview-bridge')=='true' and current.get('org.cloudiff.project')==slug
+        legacy=current.get('cloudif.project')==slug and str(current.get('cloudif.public-number') or '')==str(public_number) and current.get('cloudif.stage')=='preview' and str(current.get('cloudif.stage-number') or '')==str(generation)
+        if same_bridge and all(str(current.get(k) or '')==v for k,v in labels.items()) and bool((row.get('State') or {}).get('Running')):
+            return {'ok':True,'bridge':name,'project_slug':slug,'public_number':public_number,'generation':generation,'source_digest':source['source_digest'],'edge_service':edge_service,'edge_port':edge_port,'source_network':source_network,'idempotent':True,'migratedLegacyPreview':False,'secretValuesIncluded':False}
+        if not same_bridge and not legacy:raise DeploymentError('source_preview_bridge_conflict','O alias W1 já pertence a outro runtime.',409)
+    candidate=name+'-candidate-'+str(source.get('source_digest') or '')[:8]
+    docker('rm','-f',candidate,timeout=30,check=False)
+    command=['run','-d','--name',candidate,'--user','101:101','--read-only','--tmpfs','/tmp:rw,noexec,nosuid,size=32m,uid=101,gid=101,mode=1777','--cap-drop','ALL','--cap-add','NET_BIND_SERVICE','--security-opt','no-new-privileges','--pids-limit','128','--memory','128m','--cpus','0.25','--restart','unless-stopped','--network',source_network]
+    for k,v in labels.items():command.extend(['--label',k+'='+v])
+    command.extend(['--mount',f'type=bind,src={config},dst=/etc/nginx/nginx.conf,readonly',PUBLICATION_BRIDGE_IMAGE_REF]);docker(*command,timeout=60)
+    deadline=time.time()+45
+    while time.time()<deadline:
+        health=docker('exec',candidate,'wget','-qO-','http://127.0.0.1/__cloudif_bridge_health',timeout=5,check=False)
+        upstream=docker('exec',candidate,'wget','-qO-','--timeout=5',f'http://{edge_service}:{edge_port}/',timeout=8,check=False)
+        if health.returncode==0 and '"ok":true' in health.stdout and upstream.returncode==0:break
+        time.sleep(.5)
+    else:docker('rm','-f',candidate,timeout=30,check=False);raise DeploymentError('source_preview_bridge_health_failed','Bridge W1 não conseguiu alcançar o serviço web do Compose.',409)
+    backup='';migrated=existing.returncode==0
+    try:
+        if existing.returncode==0:
+            backup=name+'-rollback-'+secrets.token_hex(4);docker('stop',name,timeout=30,check=False);docker('rename',name,backup,timeout=30)
+        docker('rename',candidate,name,timeout=30)
+        if source_network==PUBLICATION_NETWORK:
+            docker('network','disconnect','-f',PUBLICATION_NETWORK,name,timeout=30,check=False);docker('network','connect','--alias',name,PUBLICATION_NETWORK,name,timeout=30)
+        else:docker('network','connect','--alias',name,PUBLICATION_NETWORK,name,timeout=30)
+        health=docker('exec',name,'wget','-qO-','http://127.0.0.1/__cloudif_bridge_health',timeout=8,check=False)
+        if health.returncode!=0 or '"ok":true' not in health.stdout:raise DeploymentError('source_preview_bridge_health_failed','Bridge W1 não ficou saudável após ativação.',409)
+        if backup:docker('rm','-f',backup,timeout=30,check=False)
+    except Exception:
+        docker('rm','-f',name,timeout=30,check=False);docker('rm','-f',candidate,timeout=30,check=False)
+        if backup:
+            docker('rename',backup,name,timeout=30,check=False);docker('start',name,timeout=30,check=False)
+        raise
+    return {'ok':True,'bridge':name,'project_slug':slug,'public_number':public_number,'generation':generation,'source_digest':source['source_digest'],'edge_service':edge_service,'edge_port':edge_port,'source_network':source_network,'idempotent':False,'migratedLegacyPreview':bool(legacy),'replacedPreviousBridge':bool(migrated and not legacy),'secretValuesIncluded':False}
+
+
+
 def activate_publication_bridge(payload:Any)->dict:
     if not isinstance(payload,dict) or set(payload)!={'project_slug','public_number','publication_number'}:raise DeploymentError('invalid_publication_activation_request','Pedido de ativação inválido.',400)
     slug=str(payload.get('project_slug') or '').strip().lower();public_number=int(payload.get('public_number') or 0);number=int(payload.get('publication_number') or 0);target=publication_bridge_name(public_number,'publication',number);alias=f'cloudif-p{public_number}-active-web'
@@ -558,7 +619,7 @@ def _compose_source_rows(slug:str)->tuple[str,Path,str,list[dict]]:
 
 
 def compose_source_state(slug:str)->dict:
-    project,working_dir,commit,rows=_compose_source_rows(slug);safe=[];edges=[]
+    project,working_dir,commit,rows=_compose_source_rows(slug);safe=[];publication_edges=[];fallback_edges=[]
     for row in rows:
         config=row.get('Config') or {};labels=config.get('Labels') or {};service=str(labels.get('com.docker.compose.service') or '')
         mounts=[];destinations=[]
@@ -574,23 +635,34 @@ def compose_source_state(slug:str)->dict:
             mounts.append({'type':kind,'sourceRef':source_ref,'destination':dest,'rw':rw});destinations.append(dest)
         overlay_roots=[]
         networks=((row.get('NetworkSettings') or {}).get('Networks') or {})
-        is_edge=PUBLICATION_NETWORK in networks
+        is_publication=PUBLICATION_NETWORK in networks
         requires_egress=False;network_contract=[]
         for network_name_source in sorted(networks):
             nrows=_json_rows(docker('network','inspect',network_name_source,timeout=30,check=False))
             internal=bool((nrows[0] if nrows else {}).get('Internal'))
             network_contract.append({'name':network_name_source,'internal':internal,'publication':network_name_source==PUBLICATION_NETWORK})
             if network_name_source!=PUBLICATION_NETWORK and not internal:requires_egress=True
-        port=_compose_public_port(row) if is_edge else (_compose_tcp_ports(row)[0] if _compose_tcp_ports(row) else 0)
-        if is_edge:edges.append((service,port))
+        ports=_compose_tcp_ports(row);explicit=str(labels.get('org.cloudiff.public-port') or '')
+        if is_publication:publication_edges.append((service,_compose_public_port(row)))
+        elif explicit.isdigit() and 1<=int(explicit)<=65535:fallback_edges.append((service,int(explicit)))
+        elif 80 in ports:fallback_edges.append((service,80))
+        port=ports[0] if len(ports)==1 else 0
         env=[str(x) for x in (config.get('Env') or [])]
         host=row.get('HostConfig') or {}
-        material={'service':service,'image_id':str(row.get('Image') or ''),'config_hash':str(labels.get('com.docker.compose.config-hash') or ''),'environment_digest':hashlib.sha256(canonical(sorted(env))).hexdigest(),'environment_names':sorted({x.split('=',1)[0] for x in env if '=' in x}),'entrypoint':config.get('Entrypoint') or [],'cmd':config.get('Cmd') or [],'user':str(config.get('User') or ''),'working_dir':str(config.get('WorkingDir') or ''),'mounts':mounts,'rootfs_overlays':overlay_roots,'rootfs_snapshot':'full-export','ports':_compose_tcp_ports(row),'port':port,'source_networks':network_contract,'requires_egress':requires_egress,'cap_add':sorted(str(x) for x in (host.get('CapAdd') or [])),'cap_drop':sorted(str(x) for x in (host.get('CapDrop') or [])),'read_only':bool(host.get('ReadonlyRootfs'))}
+        material={'service':service,'image_id':str(row.get('Image') or ''),'config_hash':str(labels.get('com.docker.compose.config-hash') or ''),'environment_digest':hashlib.sha256(canonical(sorted(env))).hexdigest(),'environment_names':sorted({x.split('=',1)[0] for x in env if '=' in x}),'entrypoint':config.get('Entrypoint') or [],'cmd':config.get('Cmd') or [],'user':str(config.get('User') or ''),'working_dir':str(config.get('WorkingDir') or ''),'mounts':mounts,'rootfs_overlays':overlay_roots,'rootfs_snapshot':'full-export','ports':ports,'port':port,'source_networks':network_contract,'requires_egress':requires_egress,'cap_add':sorted(str(x) for x in (host.get('CapAdd') or [])),'cap_drop':sorted(str(x) for x in (host.get('CapDrop') or [])),'read_only':bool(host.get('ReadonlyRootfs'))}
         material['service_digest']=hashlib.sha256(canonical(material)).hexdigest();safe.append(material)
-    if len(edges)!=1:raise DeploymentError('compose_public_edge_invalid','Stack Compose deve possuir exatamente um serviço ligado à rede cloudif-publications.',409,{'edges':[x[0] for x in edges]})
-    edge_service,edge_port=edges[0];safe=sorted(safe,key=lambda item:item['service'])
+    if publication_edges:
+        if len(publication_edges)!=1:raise DeploymentError('compose_public_edge_invalid','Stack Compose deve possuir exatamente um serviço público.',409,{'edges':[x[0] for x in publication_edges]})
+        edge_service,edge_port=publication_edges[0]
+    else:
+        if len(fallback_edges)!=1:raise DeploymentError('compose_public_edge_invalid','Stack Compose sem rede CloudIFF deve expor exatamente um serviço HTTP em 80/tcp ou declarar org.cloudiff.public-port.',409,{'edges':[x[0] for x in fallback_edges]})
+        edge_service,edge_port=fallback_edges[0]
+    for item in safe:
+        if item.get('service')==edge_service:item['port']=edge_port
+    safe=sorted(safe,key=lambda item:item['service'])
     digest=hashlib.sha256(canonical({'project':project,'source_commit':commit,'edge_service':edge_service,'edge_port':edge_port,'services':safe})).hexdigest()
     return {'ok':True,'source_kind':'linked-compose','project_slug':slug,'compose_project':project,'source_digest':digest,'source_commit':commit,'edge_service':edge_service,'edge_port':edge_port,'services':safe,'service_count':len(safe),'secretValuesIncluded':False,'effectsExecuted':False}
+
 
 
 def _snapshot_safe_status(row:sqlite3.Row)->dict:
@@ -1062,6 +1134,7 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if self.path=='/v1/deployments':return self.out(201,create_deployment(self.body()))
             if self.path=='/v1/compose-snapshots/deploy':return self.out(201,deploy_compose_snapshot(self.body()))
+            if self.path=='/v1/compose-source-preview-bridge':return self.out(201,ensure_source_preview_bridge(self.body()))
             if self.path=='/v1/publication-bridges':return self.out(201,ensure_publication_bridge(self.body()))
             if self.path=='/v1/publication-bridges/activate':return self.out(200,activate_publication_bridge(self.body()))
             return self.out(404,{'ok':False,'error':{'code':'not_found','message':'Rota não encontrada.'}})

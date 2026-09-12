@@ -95,6 +95,28 @@ class ComposeSnapshotPublicationTests(unittest.TestCase):
         self.assertEqual(plan['summary']['edgePort'],8080)
         self.assertFalse(plan['secretValuesIncluded'])
 
+    def test_identity_only_current_config_uses_snapshot_preserved_environment(self):
+        current={'ok':True,'configured':False,'currentRevision':0,'configDigest':None,'toolchainDigest':None,'project':{'slug':'demo','status':'published'}}
+        def executor(method,path,payload=None,timeout=0):
+            if path.startswith('/v1/compose-sources/'):return 200,self.source()
+            raise AssertionError(path)
+        with patch.object(self.broker,'_multiservice_configuration',return_value=current), \
+             patch.object(self.broker,'_multiservice_reconciliation',return_value=None), \
+             patch.object(self.broker,'_deployment_executor_call',side_effect=executor):
+            plan=self.broker._compose_publication_plan({'project_slug':'demo','environment':'homologation','trace_id':'trace-current','source_kind':'linked-compose'})
+        self.assertTrue(plan['execution_allowed'],plan['blockers'])
+        self.assertEqual(plan['operation']['config_revision'],1)
+        self.assertRegex(plan['operation']['config_digest'],r'^[a-f0-9]{64}$')
+        self.assertRegex(plan['operation']['toolchain_digest'],r'^[a-f0-9]{64}$')
+        self.assertEqual(plan['summary']['runtimeEnvironment']['variableNames'],{})
+
+    def test_compose_source_proxy_requires_canonical_project_but_forwards_executor_status(self):
+        with patch.object(self.broker,'_multiservice_configuration',return_value={'ok':True,'project':{'slug':'demo'}}), \
+             patch.object(self.broker,'_deployment_executor_call',return_value=(409,{'ok':False,'error':{'code':'compose_source_not_running'}})) as call:
+            code,data=self.broker._compose_source_proxy('demo')
+        self.assertEqual(code,409);self.assertEqual(data['error']['code'],'compose_source_not_running')
+        call.assert_called_once()
+
     def test_production_requires_existing_snapshot(self):
         plan=self.plan('production')
         self.assertFalse(plan['execution_allowed'])
@@ -117,11 +139,28 @@ class ComposeSnapshotPublicationTests(unittest.TestCase):
         self.assertIn('"force_clone": False',block)
         self.assertIn('base + "/komodo/project/deploy-full"',block)
 
+    def test_linked_binding_prefers_live_komodo_ids_over_stale_database_ids(self):
+        source=PORTAL.read_text()
+        block=source[source.index('def _linked_compose_binding(con,slug):'):source.index('def _linked_compose_status',source.index('def _linked_compose_binding(con,slug):'))]
+        self.assertIn('v133_komodo_project_status(slug,timeout=45)',block)
+        self.assertIn("live_repo_id=str(data.get('repo_id')",block)
+        self.assertIn("live_stack_id=str(data.get('stack_id')",block)
+        self.assertNotIn("return {'repoId':repo_id,'stackId':stack_id",block)
+
+    def test_portal_prepares_source_preview_bridge_before_external_validation(self):
+        source=PORTAL.read_text()
+        self.assertIn('def _compose_source_preview_bridge(slug,num,generation=1):',source)
+        block=source[source.index('def _ensure_linked_compose_preview('):source.index('def _compose_source_preview_bridge(',source.index('def _ensure_linked_compose_preview('))]
+        self.assertIn('bridge=_compose_source_preview_bridge(slug,num,1)',block)
+        self.assertLess(block.index('bridge=_compose_source_preview_bridge'),block.index("_external_ok(result['hostname'])"))
+
     def test_portal_compose_detection_is_generic_not_tuleap_allowlist(self):
         source=PORTAL.read_text()
         self.assertNotIn("LINKED_COMPOSE_PROJECTS={'tuleap-laboratorio-de-hardware'}",source)
         self.assertIn('def _is_linked_compose_project(slug):',source)
-        self.assertIn("str(service.get('runtime') or '')=='compose'",source)
+        self.assertIn('def _compose_source_probe(slug):',source)
+        self.assertIn("'/v1/compose-source?'",source)
+        self.assertIn("code.startswith('compose_')",source)
         self.assertIn('_create_linked_compose_homologation_candidate',source)
         self.assertIn('_publish_linked_compose_homologated_candidate',source)
 
@@ -153,6 +192,31 @@ class ComposeSnapshotPublicationTests(unittest.TestCase):
         self.assertIn("docker('unpause'",block)
         self.assertIn('_compress_rootfs(raw)',block)
         self.assertLess(block.index("docker('unpause'"),block.index('_compress_rootfs(raw)'))
+
+    def test_compose_source_can_select_single_http80_edge_without_publication_network(self):
+        source=EXECUTOR.read_text()
+        block=source[source.index('def compose_source_state('):source.index('def _snapshot_safe_status',source.index('def compose_source_state('))]
+        self.assertIn("elif 80 in ports:fallback_edges.append((service,80))",block)
+        self.assertIn('if publication_edges:',block)
+        self.assertIn("org.cloudiff.public-port",block)
+
+    def test_source_preview_bridge_migrates_only_same_project_legacy_preview_with_rollback(self):
+        source=EXECUTOR.read_text();block=source[source.index('def ensure_source_preview_bridge(payload:Any)->dict:'):source.index('def activate_publication_bridge',source.index('def ensure_source_preview_bridge(payload:Any)->dict:'))]
+        self.assertIn("legacy=current.get('cloudif.project')==slug",block)
+        self.assertIn("raise DeploymentError('source_preview_bridge_conflict'",block)
+        self.assertIn("backup=name+'-rollback-'",block)
+        self.assertIn("docker('rename',backup,name",block)
+        self.assertIn("'migratedLegacyPreview':bool(legacy)",block)
+
+    def test_compose_source_preview_bridge_uses_private_compose_network_and_cloudif_alias(self):
+        source=EXECUTOR.read_text()
+        self.assertIn('def ensure_source_preview_bridge(payload:Any)->dict:',source)
+        block=source[source.index('def ensure_source_preview_bridge(payload:Any)->dict:'):source.index('def activate_publication_bridge',source.index('def ensure_source_preview_bridge(payload:Any)->dict:'))]
+        self.assertIn("com.docker.compose.project",block)
+        self.assertIn("PUBLICATION_NETWORK,name",block)
+        self.assertIn("source_preview_bridge_health_failed",block)
+        self.assertIn("f'cloudif-p{public_number}-w{generation}-preview-web'",block)
+        self.assertIn("'/v1/compose-source-preview-bridge'",source)
 
     def test_executor_exposes_snapshot_source_and_deploy_contracts(self):
         source=EXECUTOR.read_text()

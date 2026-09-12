@@ -81,21 +81,44 @@ def _is_multiservice_project(slug):
     return str(project.get('type') or '')=='multi-service'
 
 
+def _compose_source_probe(slug):
+    client=_multiservice_clients();url=client['deploymentUrl']+'/v1/compose-source?'+urllib.parse.urlencode({'project_slug':slug})
+    status,data=_bearer_json('GET',url,client['deploymentToken'],timeout=50)
+    if status==200 and isinstance(data,dict) and data.get('ok') is True:return {'linked':True,'status':'ready','source':data}
+    error=data.get('error') if isinstance(data,dict) else {};code=str(error.get('code') if isinstance(error,dict) else error or '')
+    if status==404 or code in {'compose_source_not_found','project_configuration_not_found'}:return {'linked':False,'status':'absent','error':code}
+    if status==409 and code.startswith('compose_'):return {'linked':True,'status':'attention','error':code}
+    raise RuntimeError('A detecção do stack Compose está indisponível.')
+
+
 def _is_linked_compose_project(slug):
-    data=_project_configuration(slug);configuration=(data.get('configuration') or {}) if isinstance(data,dict) else {}
-    project=configuration.get('project') or {};services=configuration.get('services') or {};primary=str(project.get('primaryService') or '')
-    service=services.get(primary) if primary and isinstance(services,dict) else None
-    return bool(str(project.get('type') or '')=='multi-service' and isinstance(service,dict) and str(service.get('runtime') or '')=='compose')
+    con=sqlite3.connect(DB);con.row_factory=sqlite3.Row;_ensure_schema(con)
+    try:
+        try:_linked_compose_binding(con,slug)
+        except RuntimeError:return False
+    finally:con.close()
+    return bool(_compose_source_probe(slug).get('linked'))
 
 
 def _linked_compose_binding(con,slug):
-    row=con.execute("select komodo_repo_id,komodo_stack_id,komodo_stack_name from project_integrations where project=?",(slug,)).fetchone()
+    row=con.execute("select komodo_repo_id,komodo_stack_id,komodo_repo_name,komodo_stack_name,repo_name,stack_name from project_integrations where project=?",(slug,)).fetchone()
     if not row:raise RuntimeError('O projeto não possui vínculo Forgejo/Komodo para o Preview.')
-    repo_id=str(row['komodo_repo_id'] or '');stack_id=str(row['komodo_stack_id'] or '');stack_name=str(row['komodo_stack_name'] or '')
     expected='cloudif-'+slug
-    if not re.fullmatch(r'[a-f0-9]{24}',repo_id) or not re.fullmatch(r'[a-f0-9]{24}',stack_id) or stack_name!=expected:
-        raise RuntimeError('O vínculo Forgejo/Komodo do projeto está inconsistente.')
-    return {'repoId':repo_id,'stackId':stack_id,'stackName':stack_name}
+    repo_name=str(row['komodo_repo_name'] or row['repo_name'] or '')
+    stack_name=str(row['komodo_stack_name'] or row['stack_name'] or '')
+    if repo_name!=expected or stack_name!=expected:raise RuntimeError('O vínculo Forgejo/Komodo do projeto está inconsistente.')
+    import cloudif_git_komodo_module as gk
+    response=gk.v133_komodo_project_status(slug,timeout=45)
+    data=response.get('data') if isinstance(response,dict) else {};data=data if isinstance(data,dict) else {}
+    repo=data.get('repo') or {};stack=data.get('stack') or {}
+    live_repo_id=str(data.get('repo_id') or repo.get('id') or '')
+    live_stack_id=str(data.get('stack_id') or stack.get('id') or '')
+    if not response.get('ok') or str(repo.get('name') or '')!=expected or str(stack.get('name') or '')!=expected:
+        raise RuntimeError('O Komodo não confirmou o vínculo canônico do projeto.')
+    if not re.fullmatch(r'[a-f0-9]{24}',live_repo_id) or not re.fullmatch(r'[a-f0-9]{24}',live_stack_id):
+        raise RuntimeError('O Komodo não retornou identidades válidas para o projeto.')
+    return {'repoId':live_repo_id,'stackId':live_stack_id,'repoName':expected,'stackName':expected}
+
 
 
 def _linked_compose_status(slug,num,binding):
@@ -121,8 +144,18 @@ def _ensure_linked_compose_preview(slug,num,binding):
     if pstatus//100!=2 or pdata.get('ok') is not True:raise RuntimeError(_publication_error('https',pdata))
     result=_linked_compose_status(slug,num,binding)
     if not result.get('healthy'):raise RuntimeError('O stack Forgejo/Komodo não ficou saudável após a atualização do Preview.')
+    bridge=_compose_source_preview_bridge(slug,num,1)
     if not _external_ok(result['hostname']):raise RuntimeError('A URL W1 não respondeu após atualizar o stack Forgejo/Komodo.')
-    result['publisher']={'ok':True};return result
+    result['bridge']=str(bridge.get('bridge') or result.get('bridge') or '');result['publisher']={'ok':True};return result
+
+
+def _compose_source_preview_bridge(slug,num,generation=1):
+    client=_multiservice_clients();payload={'project_slug':slug,'public_number':int(num),'generation':int(generation)}
+    status,result=_bearer_json('POST',client['deploymentUrl']+'/v1/compose-source-preview-bridge',client['deploymentToken'],payload,timeout=120)
+    if status//100!=2 or not isinstance(result,dict) or result.get('ok') is not True:raise RuntimeError('A ponte pública W1 do stack Compose não pôde ser preparada.')
+    expected=f'cloudif-p{int(num)}-w{int(generation)}-preview-web'
+    if str(result.get('bridge') or '')!=expected:raise RuntimeError('A ponte pública W1 retornou identidade divergente.')
+    return result
 
 
 def _compose_snapshot_deploy(slug,environment,trace,execution_material,snapshot_id=''):

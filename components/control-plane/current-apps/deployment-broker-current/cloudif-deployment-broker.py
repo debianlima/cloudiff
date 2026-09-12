@@ -440,6 +440,32 @@ def _publication_bridge_activate(payload):
  return code,result
 
 
+def _compose_snapshot_runtime_fallback(slug,environment):
+ empty={};digest=hashlib.sha256(json.dumps(empty,sort_keys=True,separators=(',',':')).encode()).hexdigest()
+ return {
+  'ok':True,'valid':True,'project_slug':slug,'environment':environment,'config_revision':1,'environment_revision':0,
+  'publicRuntimeEnvironment':{},'secretRuntimeReferences':{},'runtimeEnvironmentDigest':digest,'environmentDigest':digest,
+  'secretValuesIncluded':False,'snapshotPreservedEnvironment':True,
+ }
+
+
+def _compose_source_proxy(slug):
+ config=_multiservice_configuration(slug)
+ project=config.get('project') or ((config.get('configuration') or {}).get('project') or {})
+ canonical_slug=str(project.get('slug') or '')
+ if canonical_slug and canonical_slug!=slug:raise LookupError('project_identity_mismatch')
+ return _deployment_executor_call('GET','/v1/compose-sources/'+urllib.parse.quote(slug,safe=''),None,timeout=45)
+
+
+def _compose_source_preview_bridge(payload):
+ if not isinstance(payload,dict) or set(payload)!={'project_slug','public_number','generation'}:raise ValueError('invalid_request')
+ slug=str(payload.get('project_slug') or '').strip().lower();public_number=int(payload.get('public_number') or 0);generation=int(payload.get('generation') or 0)
+ if not SLUG.fullmatch(slug) or not (1<=public_number<=999999999 and 1<=generation<=999999):raise ValueError('invalid_request')
+ code,source=_compose_source_proxy(slug)
+ if code!=200 or not isinstance(source,dict) or source.get('ok') is not True:return code,source
+ return _deployment_executor_call('POST','/v1/compose-source-preview-bridge',{'project_slug':slug,'public_number':public_number,'generation':generation},timeout=90)
+
+
 def _compose_runtime_configuration(slug,environment):
  effective=_effective_environment_internal(slug,environment)
  if not isinstance(effective,dict) or effective.get('ok') is not True or effective.get('valid') is not True:raise ValueError('target_environment_invalid')
@@ -461,14 +487,17 @@ def _compose_publication_plan(payload,include_internal=False):
  if not SLUG.fullmatch(slug) or environment not in DEPLOY_ENVIRONMENTS or not trace or source_kind!='linked-compose':raise ValueError('invalid_request')
  if snapshot_id and not re.fullmatch(r'snap_[a-f0-9]{24}',snapshot_id):raise ValueError('invalid_snapshot_id')
  config=_multiservice_configuration(slug);configuration=config.get('configuration') or {};state=_multiservice_reconciliation(slug);blockers=[]
- project=configuration.get('project') or {};services=configuration.get('services') or {};primary=str(project.get('primaryService') or '');primary_cfg=services.get(primary) if isinstance(services,dict) else None
- if not config.get('configured') or int(config.get('currentRevision') or 0)<1:blockers.append('configuration-required')
- if str(project.get('type') or '')!='multi-service' or not isinstance(primary_cfg,dict) or str(primary_cfg.get('runtime') or '')!='compose':blockers.append('linked-compose-runtime-required')
- if not state:blockers.append('reconciliation-state-missing')
- elif state.get('status')!='ready':blockers.append('reconciliation-not-ready:'+str(state.get('status') or 'unknown'))
+ project=(config.get('project') or configuration.get('project') or {});services=configuration.get('services') or {};primary=str(project.get('primaryService') or '');primary_cfg=services.get(primary) if isinstance(services,dict) else None
+ canonical_slug=str(project.get('slug') or '')
+ if canonical_slug and canonical_slug!=slug:blockers.append('project-identity-mismatch')
+ # Older configured manifests still get their explicit runtime contract validated. Current identity-only records rely on the live Compose source.
+ if services and (str(project.get('type') or '')!='multi-service' or not isinstance(primary_cfg,dict) or str(primary_cfg.get('runtime') or '')!='compose'):blockers.append('linked-compose-runtime-required')
+ configured=bool(config.get('configured')) and int(config.get('currentRevision') or 0)>=1
  runtime=None
- try:runtime=_compose_runtime_configuration(slug,environment)
- except (ValueError,RuntimeError) as error:blockers.append(str(error).replace('_','-'))
+ if configured:
+  try:runtime=_compose_runtime_configuration(slug,environment)
+  except (ValueError,RuntimeError) as error:blockers.append(str(error).replace('_','-'))
+ else:runtime=_compose_snapshot_runtime_fallback(slug,environment)
  source=None;snapshot=None
  if environment=='production' and not snapshot_id:blockers.append('compose-snapshot-required-for-production')
  if snapshot_id:
@@ -477,7 +506,7 @@ def _compose_publication_plan(payload,include_internal=False):
   elif str(snapshot.get('project_slug') or '')!=slug:blockers.append('compose-snapshot-project-mismatch')
   source=snapshot
  elif environment=='homologation':
-  code,source=_deployment_executor_call('GET','/v1/compose-sources/'+urllib.parse.quote(slug,safe=''),None,timeout=45)
+  code,source=_compose_source_proxy(slug)
   if code!=200 or not isinstance(source,dict) or source.get('ok') is not True:blockers.append('compose-source-unavailable');source=None
  if source and str(source.get('source_kind') or '')!='linked-compose':blockers.append('compose-source-kind-mismatch')
  source_digest=str((source or {}).get('source_digest') or '');source_commit=str((source or {}).get('source_commit') or '');snapshot_digest=str((snapshot or {}).get('snapshot_digest') or '')
@@ -486,8 +515,10 @@ def _compose_publication_plan(payload,include_internal=False):
  if snapshot and not SHA256_RE.fullmatch(snapshot_digest):blockers.append('compose-snapshot-digest-invalid')
  runtime_summary=_deployment_runtime_summary(runtime)
  if runtime and runtime_summary.get('secretReferencesPresent') and not SECRET_RESOLVER_TOKEN:blockers.append('secret-resolver-unavailable')
- config_revision=int(config.get('currentRevision') or 0);config_digest=str(config.get('configDigest') or '');toolchain_digest=str(config.get('toolchainDigest') or '')
- if runtime and int(runtime.get('config_revision') or 0) not in {0,config_revision}:blockers.append('target-config-revision-mismatch')
+ config_revision=max(1,int(config.get('currentRevision') or 0));config_digest=str(config.get('configDigest') or '');toolchain_digest=str(config.get('toolchainDigest') or '')
+ if not SHA256_RE.fullmatch(config_digest):config_digest=hashlib.sha256(json.dumps({'mode':'compose-snapshot','project':slug,'revision':config_revision},sort_keys=True,separators=(',',':')).encode()).hexdigest()
+ if not SHA256_RE.fullmatch(toolchain_digest):toolchain_digest=hashlib.sha256(b'cloudif-compose-snapshot-runtime-v1').hexdigest()
+ if configured and runtime and int(runtime.get('config_revision') or 0) not in {0,config_revision}:blockers.append('target-config-revision-mismatch')
  edge_service=str((source or {}).get('edge_service') or '');edge_port=int((source or {}).get('edge_port') or 0)
  routes=[{'pathPrefix':'/','service':edge_service,'stripPrefix':False}] if edge_service and edge_port else []
  if source and (not edge_service or not 1<=edge_port<=65535):blockers.append('compose-public-edge-invalid')
@@ -786,6 +817,13 @@ class H(BaseHTTPRequestHandler):
   if self.path=='/health':return send(self,200,{'ok':True,'service':'cloudif-deployment-broker','mode':'approved-test-promotion'})
   if not auth(self):return send(self,401,{'ok':False,'error':'unauthorized'})
   p=urllib.parse.urlparse(self.path);q=urllib.parse.parse_qs(p.query)
+  if p.path=='/v1/compose-source' and set(q)=={'project_slug'}:
+   slug=str(q['project_slug'][0]).strip().lower()
+   if not SLUG.fullmatch(slug):return send(self,400,{'ok':False,'error':{'code':'invalid_project_slug','message':'project_slug inválido.'}})
+   try:code,result=_compose_source_proxy(slug)
+   except LookupError as error:return send(self,404,{'ok':False,'error':{'code':str(error),'message':'Projeto não encontrado.'}})
+   except RuntimeError as error:return send(self,503,{'ok':False,'error':{'code':str(error),'message':'Fonte Compose indisponível.'}})
+   return send(self,code,result)
   if p.path=='/v1/multiservice-status' and set(q)=={'deployment_id'}:
    deployment_id=str(q['deployment_id'][0])
    if not DEPLOYMENT_ID_RE.fullmatch(deployment_id):return send(self,400,{'ok':False,'error':{'code':'invalid_deployment_id','message':'deployment_id inválido.'}})
@@ -802,6 +840,12 @@ class H(BaseHTTPRequestHandler):
   if not auth(self):return send(self,401,{'ok':False,'error':'unauthorized'})
   try:d=body(self)
   except Exception:return send(self,400,{'ok':False,'error':'invalid_request'})
+  if self.path=='/v1/compose-source-preview-bridge':
+   try:code,result=_compose_source_preview_bridge(d)
+   except ValueError as e:return send(self,400,{'ok':False,'error':{'code':str(e),'message':'Bridge W1 inválido.'}})
+   except LookupError as e:return send(self,404,{'ok':False,'error':{'code':str(e),'message':'Projeto não encontrado.'}})
+   except RuntimeError as e:return send(self,503,{'ok':False,'error':{'code':str(e),'message':'Fonte Compose indisponível.'}})
+   return send(self,code,result)
   if self.path=='/v1/compose-publication-plan':
    try:result=_compose_publication_plan(d)
    except LookupError as e:return send(self,404,{'ok':False,'error':{'code':str(e),'message':'Configuração do projeto não encontrada.'}})
