@@ -4638,6 +4638,8 @@ def _cloudif_executor_proxy(handler,method):
     if method=='GET':
         deployment=re.fullmatch(r'/cloudif/executor/v1/deployments/(dep_[a-f0-9]{24})',path)
         runtime=re.fullmatch(r'/cloudif/executor/v1/projects/([a-z0-9][a-z0-9-]{0,62})/runtime-state',path)
+        compose_source=re.fullmatch(r'/cloudif/executor/v1/compose-sources/([a-z0-9][a-z0-9-]{0,62})',path)
+        compose_snapshot=re.fullmatch(r'/cloudif/executor/v1/compose-snapshots/(snap_[a-f0-9]{24})',path)
         if deployment and not parsed.query:
             downstream='/v1/deployments/'+deployment.group(1)
         elif runtime:
@@ -4646,14 +4648,28 @@ def _cloudif_executor_proxy(handler,method):
             if set(query)!={'environment'} or len(query.get('environment') or [])!=1 or environment not in {'homologation','production'}:
                 return send(handler,400,{'ok':False,'error':'invalid_environment'})
             downstream='/v1/projects/'+runtime.group(1)+'/runtime-state?'+urllib.parse.urlencode({'environment':environment})
-    elif method=='POST' and path==_EXECUTOR_PROXY_PREFIX+'/v1/deployments' and not parsed.query:
+        elif compose_source and not parsed.query:
+            downstream='/v1/compose-sources/'+compose_source.group(1)
+        elif compose_snapshot and not parsed.query:
+            downstream='/v1/compose-snapshots/'+compose_snapshot.group(1)
+    elif method=='POST' and not parsed.query and path in {
+        _EXECUTOR_PROXY_PREFIX+'/v1/deployments',
+        _EXECUTOR_PROXY_PREFIX+'/v1/compose-snapshots/deploy',
+        _EXECUTOR_PROXY_PREFIX+'/v1/compose-source-preview-bridge',
+        _EXECUTOR_PROXY_PREFIX+'/v1/publication-bridges',
+        _EXECUTOR_PROXY_PREFIX+'/v1/publication-bridges/activate',
+    }:
         try:length=int(handler.headers.get('Content-Length','0') or 0)
         except Exception:return send(handler,400,{'ok':False,'error':'invalid_content_length'})
         if length<0 or length>_EXECUTOR_PROXY_MAX_BODY:return send(handler,413,{'ok':False,'error':'request_too_large'})
         try:payload=handler.parse_json()
         except Exception:return send(handler,400,{'ok':False,'error':'invalid_json'})
         if not isinstance(payload,dict):return send(handler,400,{'ok':False,'error':'invalid_request'})
-        downstream='/v1/deployments';timeout=600
+        downstream=path[len(_EXECUTOR_PROXY_PREFIX):]
+        timeout={'/v1/deployments':600,'/v1/compose-snapshots/deploy':1200,'/v1/compose-source-preview-bridge':120,'/v1/publication-bridges':120,'/v1/publication-bridges/activate':60}[downstream]
+    elif method=='DELETE' and not parsed.query:
+        deployment=re.fullmatch(r'/cloudif/executor/v1/deployments/(dep_[a-f0-9]{24})',path)
+        if deployment:downstream='/v1/deployments/'+deployment.group(1);timeout=120
     if not downstream:return send(handler,404,{'ok':False,'error':'not_found'})
     authorized,token=_cloudif_executor_proxy_auth(handler)
     if not authorized:return send(handler,403,{'ok':False,'error':'forbidden'})
@@ -4672,6 +4688,7 @@ def _cloudif_executor_proxy(handler,method):
         return send(handler,error.code,body)
     except Exception as error:
         return send(handler,502,{'ok':False,'error':'executor_proxy_unavailable','error_type':type(error).__name__})
+
 # CloudIF multiservice executor gateway END
 
 class H(BaseHTTPRequestHandler):
@@ -4862,6 +4879,11 @@ class H(BaseHTTPRequestHandler):
             return send(self, 200 if result.get("ok") else 422, result)
 
         return send(self, 404, {"ok": False, "error": "not_found", "path": self.path})
+
+    def do_DELETE(self):
+        if self.path.split("?",1)[0].startswith(_EXECUTOR_PROXY_PREFIX+'/'):
+            return _cloudif_executor_proxy(self,'DELETE')
+        return send(self,404,{"ok":False,"error":"not_found","path":self.path})
 
     def log_message(self, fmt, *args):
         print(time.strftime("[%Y-%m-%dT%H:%M:%S]"), self.client_address[0], fmt % args, flush=True)
