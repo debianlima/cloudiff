@@ -7,6 +7,7 @@ import json
 import os
 import re
 import secrets
+import shlex
 import shutil
 import sqlite3
 import subprocess
@@ -777,8 +778,10 @@ def _restore_volume_archive(archive:Path,volume:str)->None:
 def _health_options(health:dict)->list[str]:
     test=health.get('Test') or []
     if not test:return []
-    if not isinstance(test,list) or len(test)<2 or test[0]!='CMD-SHELL':raise DeploymentError('compose_healthcheck_unsupported','Healthcheck Compose deve usar CMD-SHELL.',409)
-    out=['--health-cmd',str(test[1])]
+    if not isinstance(test,list) or len(test)<2 or test[0] not in {'CMD-SHELL','CMD'}:raise DeploymentError('compose_healthcheck_unsupported','Healthcheck Compose deve usar CMD-SHELL ou CMD.',409)
+    if test[0]=='CMD-SHELL':health_cmd=str(test[1])
+    else:health_cmd='exec '+shlex.join(str(item) for item in test[1:])
+    out=['--health-cmd',health_cmd]
     for key,opt in (('Interval','--health-interval'),('Timeout','--health-timeout'),('StartPeriod','--health-start-period')):
         value=int(health.get(key) or 0)
         if value>0:out.extend([opt,str(value)+'ns'])

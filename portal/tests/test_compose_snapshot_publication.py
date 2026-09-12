@@ -211,6 +211,16 @@ class ComposeSnapshotPublicationTests(unittest.TestCase):
         self.assertIn('_compress_rootfs(raw)',block)
         self.assertLess(block.index("docker('unpause'"),block.index('_compress_rootfs(raw)'))
 
+    def test_compose_healthcheck_supports_cmd_without_shell_expansion(self):
+        source=EXECUTOR.read_text()
+        start=source.index('def _health_options(health:dict)->list[str]:')
+        end=source.index('def _compose_container_ready',start)
+        block=source[start:end]
+        self.assertIn("test[0] not in {'CMD-SHELL','CMD'}",block)
+        self.assertIn("health_cmd='exec '+shlex.join",block)
+        self.assertIn("if test[0]=='CMD-SHELL':health_cmd=str(test[1])",block)
+        self.assertIn('import shlex',source)
+
     def test_bind_restore_uses_isolated_docker_helper_under_executor_sandbox(self):
         source=EXECUTOR.read_text()
         start=source.index('def _extract_tar(archive:Path,target:Path)->None:')
