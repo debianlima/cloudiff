@@ -108,6 +108,15 @@ class ComposeSnapshotPublicationTests(unittest.TestCase):
         self.assertEqual(plan['operation']['snapshot_digest'],'8'*64)
         self.assertEqual(plan['artifactImageId'],'sha256:'+'8'*64)
 
+    def test_linked_preview_helper_refreshes_current_stack_without_reclone(self):
+        source=(ROOT/'components/control-plane/srv/cloudif/lib/cloudif_git_komodo_module.py').read_text()
+        start=source.index('def v133_komodo_deploy_linked_current(')
+        end=source.index('def v133_komodo_stack_action(',start)
+        block=source[start:end]
+        self.assertIn('"force_reclone": False',block)
+        self.assertIn('"force_clone": False',block)
+        self.assertIn('base + "/komodo/project/deploy-full"',block)
+
     def test_portal_compose_detection_is_generic_not_tuleap_allowlist(self):
         source=PORTAL.read_text()
         self.assertNotIn("LINKED_COMPOSE_PROJECTS={'tuleap-laboratorio-de-hardware'}",source)
