@@ -464,15 +464,33 @@ def activate_publication_bridge(payload:Any)->dict:
     if raw.returncode:raise DeploymentError('publication_bridge_not_found','Bridge de publicação não encontrado.',404)
     row=(json.loads(raw.stdout or '[]') or [{}])[0];labels=(row.get('Config') or {}).get('Labels') or {}
     if labels.get('org.cloudiff.publication-bridge')!='true' or labels.get('org.cloudiff.project')!=slug:raise DeploymentError('publication_bridge_mismatch','Bridge não pertence ao projeto.',409)
-    names=docker('ps','-a','--filter','label=org.cloudiff.publication-bridge=true','--filter',f'label=org.cloudiff.public-number={public_number}','--format','{{.Names}}',check=False).stdout.splitlines()
+    network_rows=_json_rows(docker('network','inspect',PUBLICATION_NETWORK,timeout=30))
+    members=((network_rows[0] if network_rows else {}).get('Containers') or {})
+    names=sorted({str(item.get('Name') or '') for item in members.values() if str(item.get('Name') or '')})
+    holders=[]
     for name in names:
-        item=(json.loads(docker('inspect',name).stdout or '[]') or [{}])[0];networks=((item.get('NetworkSettings') or {}).get('Networks') or {});pub=networks.get(PUBLICATION_NETWORK) or {};aliases=pub.get('Aliases') or []
-        if alias in aliases or name==target:
-            docker('network','disconnect','-f',PUBLICATION_NETWORK,name,timeout=30,check=False)
-            args=['network','connect','--alias',name]
-            if name==target:args.extend(['--alias',alias])
-            args.extend([PUBLICATION_NETWORK,name]);docker(*args,timeout=30)
-    return {'ok':True,'project_slug':slug,'public_number':public_number,'publication_number':number,'bridge':target,'active_alias':alias,'secretValuesIncluded':False}
+        item=(json.loads(docker('inspect',name).stdout or '[]') or [{}])[0];networks=((item.get('NetworkSettings') or {}).get('Networks') or {});pub=networks.get(PUBLICATION_NETWORK) or {};aliases=[str(value) for value in (pub.get('Aliases') or []) if str(value)]
+        if alias not in aliases and name!=target:continue
+        holders.append(name)
+        preserved=[]
+        for value in aliases:
+            if value==alias or re.fullmatch(r'[a-f0-9]{12,64}',value):continue
+            if value not in preserved:preserved.append(value)
+        if name not in preserved:preserved.insert(0,name)
+        docker('network','disconnect','-f',PUBLICATION_NETWORK,name,timeout=30,check=False)
+        args=['network','connect']
+        for value in preserved:args.extend(['--alias',value])
+        if name==target:args.extend(['--alias',alias])
+        args.extend([PUBLICATION_NETWORK,name]);docker(*args,timeout=30)
+    target_row=(json.loads(docker('inspect',target).stdout or '[]') or [{}])[0];target_aliases=((((target_row.get('NetworkSettings') or {}).get('Networks') or {}).get(PUBLICATION_NETWORK) or {}).get('Aliases') or [])
+    if alias not in target_aliases:raise DeploymentError('publication_activation_alias_missing','Alias estável não foi aplicado ao bridge canônico.',502)
+    duplicate_holders=[]
+    network_rows=_json_rows(docker('network','inspect',PUBLICATION_NETWORK,timeout=30));members=((network_rows[0] if network_rows else {}).get('Containers') or {})
+    for name in sorted({str(item.get('Name') or '') for item in members.values() if str(item.get('Name') or '')}):
+        item=(json.loads(docker('inspect',name).stdout or '[]') or [{}])[0];pub=(((item.get('NetworkSettings') or {}).get('Networks') or {}).get(PUBLICATION_NETWORK) or {})
+        if alias in (pub.get('Aliases') or []):duplicate_holders.append(name)
+    if duplicate_holders!=[target]:raise DeploymentError('publication_activation_alias_conflict','Alias estável permaneceu associado a mais de um runtime.',502,{'holders':duplicate_holders})
+    return {'ok':True,'project_slug':slug,'public_number':public_number,'publication_number':number,'bridge':target,'active_alias':alias,'previous_alias_holders':[name for name in holders if name!=target],'secretValuesIncluded':False}
 
 
 def _json_rows(result:subprocess.CompletedProcess)->list[dict]:

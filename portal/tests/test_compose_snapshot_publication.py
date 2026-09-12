@@ -211,6 +211,18 @@ class ComposeSnapshotPublicationTests(unittest.TestCase):
         self.assertIn('_compress_rootfs(raw)',block)
         self.assertLess(block.index("docker('unpause'"),block.index('_compress_rootfs(raw)'))
 
+    def test_publication_activation_removes_active_alias_from_legacy_holders(self):
+        source=EXECUTOR.read_text()
+        start=source.index('def activate_publication_bridge(payload:Any)->dict:')
+        end=source.index('def _json_rows',start)
+        block=source[start:end]
+        self.assertIn("docker('network','inspect',PUBLICATION_NETWORK",block)
+        self.assertNotIn("--filter','label=org.cloudiff.publication-bridge=true'",block)
+        self.assertIn("if alias not in aliases and name!=target:continue",block)
+        self.assertIn("if value==alias or re.fullmatch",block)
+        self.assertIn("if duplicate_holders!=[target]",block)
+        self.assertIn("'previous_alias_holders'",block)
+
     def test_compose_healthcheck_supports_cmd_without_shell_expansion(self):
         source=EXECUTOR.read_text()
         start=source.index('def _health_options(health:dict)->list[str]:')
