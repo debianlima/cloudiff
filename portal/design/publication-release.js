@@ -310,6 +310,22 @@
     });
   }
 
+  async function recoverHealthyPreviewAfterEnsureFailure(error, fallbackMessage) {
+    try {
+      await load();
+      const preview = (model.data || {}).preview || {};
+      if (preview.configured && preview.healthy) {
+        model.previewError = '';
+        render();
+        updateSummary(model.slug, model.data);
+        return true;
+      }
+    } catch (_) {}
+    model.previewError = String((error && error.message) || fallbackMessage || 'Não foi possível atualizar o Preview.');
+    render();
+    return false;
+  }
+
   async function ensurePreviewAutomatically() {
     if (model.autoPreviewAttempted || model.previewPreparing || !model.data || !model.data.canSubmitHomologation) return;
     const preview = model.data.preview || {};
@@ -325,8 +341,7 @@
       await load();
     } catch (error) {
       model.previewPreparing = false;
-      model.previewError = String(error.message || 'Não foi possível preparar o Preview automaticamente.');
-      render();
+      await recoverHealthyPreviewAfterEnsureFailure(error, 'Não foi possível preparar o Preview automaticamente.');
     }
   }
 
@@ -387,8 +402,18 @@
 
 
   async function refreshPreview() {
+    if (model.busy) return;
+    model.busy = true;
     model.previewError = '';
-    return act('preview/ensure', {}, 'Atualizando Preview…');
+    body.insertAdjacentHTML('afterbegin', '<div class="release-job"><strong>Atualizando Preview…</strong><progress></progress></div>');
+    try {
+      await post('preview/ensure', {});
+      await load();
+    } catch (error) {
+      await recoverHealthyPreviewAfterEnsureFailure(error, 'Não foi possível atualizar o Preview.');
+    } finally {
+      model.busy = false;
+    }
   }
 
 

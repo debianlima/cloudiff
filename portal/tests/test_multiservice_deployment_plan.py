@@ -133,10 +133,13 @@ class MultiserviceDeploymentPlanTests(unittest.TestCase):
         self.assertIn('DATABASE_URL',plan['summary']['runtimeEnvironment']['secretNames']['api'])
         self.assertNotIn('vault://project/demo/database',str(plan))
 
-    def test_production_requires_enabled_target(self):
-        plan=self.plan(environment='production')
-        self.assertFalse(plan['execution_allowed'])
-        self.assertIn('production-target-not-enabled',plan['blockers'])
+    def test_production_accepts_only_homologation_retarget_at_this_layer(self):
+        runtime=self.runtime_configuration(environment='production')
+        runtime['retargetedFromEnvironment']='homologation'
+        plan=self.plan(environment='production',runtime_configuration=runtime)
+        self.assertTrue(plan['execution_allowed'],plan['blockers'])
+        self.assertNotIn('production-artifact-not-homologated',plan['blockers'])
+        self.assertNotIn('production-target-not-enabled',plan['blockers'])
 
 
 if __name__=='__main__':unittest.main()

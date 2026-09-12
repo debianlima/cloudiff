@@ -75,6 +75,14 @@ class ReleaseFlowWizardUITests(unittest.TestCase):
         self.assertNotIn('Homologar e publicar',release)
         self.assertNotIn('data-env-wizard',release)
 
+    def test_preview_transport_failure_recovers_from_healthy_readback(self):
+        release=RELEASE_JS_PATH.read_text()
+        self.assertIn('recoverHealthyPreviewAfterEnsureFailure',release)
+        self.assertIn('if (preview.configured && preview.healthy)',release)
+        self.assertIn("await recoverHealthyPreviewAfterEnsureFailure(error, 'Não foi possível preparar o Preview automaticamente.')",release)
+        self.assertIn("await recoverHealthyPreviewAfterEnsureFailure(error, 'Não foi possível atualizar o Preview.')",release)
+        self.assertNotIn("return act('preview/ensure', {}, 'Atualizando Preview…')",release)
+
     def test_preview_is_prepared_automatically_in_release_manager(self):
         release=RELEASE_JS_PATH.read_text()
         self.assertIn('ensurePreviewAutomatically',release)

@@ -116,7 +116,10 @@ class MultiserviceDeploymentExecutorTests(unittest.TestCase):
                 self.module.validate_image_labels(payload,payload['applications'][0])
 
     def test_status_never_returns_environment_values(self):
-        con=self.module.db();con.execute('insert into deployments values(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',(
+        con=self.module.db();con.execute('''insert into deployments(
+            deployment_id,project_slug,environment,build_job_id,plan_digest,build_plan_digest,config_revision,config_digest,
+            toolchain_digest,archive_sha256,variables_digest,status,services_json,routes_json,error_json,created_at,updated_at
+        ) values(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',(
             'dep_'+'a'*24,'demo','homologation','build_'+'b'*24,'d'*64,'e'*64,2,'c'*64,'t'*64,'f'*64,'a'*64,
             'failed','[]','[]','{}',1,1));con.commit();con.close()
         status=self.module.status_deployment('dep_'+'a'*24)

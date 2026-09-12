@@ -85,7 +85,7 @@ SECRET_RESOLVER_TOKEN=os.environ.get('CLOUDIF_SECRET_RESOLVER_TOKEN','')
 PROJECT_RECONCILER_URL=os.environ.get('CLOUDIF_PROJECT_CONFIG_RECONCILER_URL','http://127.0.0.1:18229').rstrip('/')
 PROJECT_RECONCILER_TOKEN=os.environ.get('CLOUDIF_PROJECT_CONFIG_RECONCILER_TOKEN','')
 BUILD_BROKER_URL=os.environ.get('CLOUDIF_BUILD_BROKER_URL','http://127.0.0.1:18213').rstrip('/')
-BUILD_BROKER_TOKEN=os.environ.get('CLOUDIF_BUILD_BROKER_TOKEN','')
+BUILD_BROKER_TOKEN=(os.environ.get('CLOUDIF_BUILD_TOKEN') or os.environ.get('CLOUDIF_BUILD_BROKER_TOKEN') or '').strip()
 BUILD_JOB_RE=re.compile(r'^build_[a-f0-9]{24}$')
 SHA256_RE=re.compile(r'^[a-f0-9]{64}$')
 DEPLOY_ENVIRONMENTS={'homologation','production'}
@@ -136,6 +136,29 @@ def _build_runtime_configuration(job_id):
  if code!=200 or not data.get('ok'):raise RuntimeError('multiservice_runtime_configuration_unavailable')
  if data.get('internal') is not True or data.get('secretValuesIncluded') is not False:raise ValueError('runtime_secret_contract_invalid')
  return data
+
+def _effective_environment_internal(slug,environment):
+ path='/v1/projects/'+urllib.parse.quote(str(slug or ''),safe='')+'/environment/effective-internal?'+urllib.parse.urlencode({'environment':environment})
+ code,data=_internal_json('GET',PROJECT_CONFIG_URL+path,PROJECT_CONFIG_TOKEN,timeout=30)
+ if code!=200 or not isinstance(data,dict) or data.get('ok') is not True:raise RuntimeError('target_environment_unavailable')
+ if data.get('secretValuesIncluded') is not False:raise ValueError('target_environment_secret_contract_invalid')
+ if data.get('valid') is not True:raise ValueError('target_environment_invalid')
+ return data
+
+
+def _retarget_runtime_configuration(slug,environment,runtime_configuration):
+ if not isinstance(runtime_configuration,dict):raise ValueError('runtime_configuration_missing')
+ source=str(runtime_configuration.get('environment') or '')
+ if source==environment:return runtime_configuration
+ target=_effective_environment_internal(slug,environment)
+ source_public_build=runtime_configuration.get('publicBuildEnvironment') or {};source_secret_build=runtime_configuration.get('secretBuildReferences') or {}
+ target_public_build=target.get('publicBuildEnvironment') or {};target_secret_build=target.get('secretBuildReferences') or {}
+ if source_public_build!=target_public_build or source_secret_build!=target_secret_build:raise ValueError('build_time_environment_mismatch')
+ if int(target.get('configurationRevision') or 0)!=int(runtime_configuration.get('config_revision') or 0):raise ValueError('target_config_revision_mismatch')
+ retargeted=json.loads(json.dumps(runtime_configuration,ensure_ascii=False,separators=(',',':')))
+ retargeted.update({'environment':environment,'environmentRevision':target.get('environmentRevision'),'publicRuntimeEnvironment':target.get('publicRuntimeEnvironment') or {},'secretRuntimeReferences':target.get('secretRuntimeReferences') or {},'runtimeEnvironmentDigest':target.get('runtimeEnvironmentDigest'),'environmentDigest':target.get('environmentDigest'),'retargetedFromEnvironment':source,'secretValuesIncluded':False})
+ return retargeted
+
 
 def _resolve_runtime_secrets(slug,environment,references):
  if not SECRET_RESOLVER_TOKEN:raise RuntimeError('secret_resolver_unavailable')
@@ -198,6 +221,28 @@ def _deployment_runtime_summary(runtime_configuration):
   'digests':{'build':runtime_configuration.get('buildEnvironmentDigest'),'runtime':runtime_configuration.get('runtimeEnvironmentDigest'),'effective':runtime_configuration.get('environmentDigest')},
   'secretReferencesPresent':any(bool(values) for values in secret.values() if isinstance(values,dict)),
  }
+
+def _managed_deployment_dependencies(configuration,environment,runtime_configuration,applications):
+ dependencies=[];blockers=[];services={str(item.get('service') or '') for item in applications};secret=(runtime_configuration or {}).get('secretRuntimeReferences') or {};public=(runtime_configuration or {}).get('publicRuntimeEnvironment') or {}
+ if not isinstance(secret,dict) or not isinstance(public,dict):raise ValueError('runtime_environment_contract_invalid')
+ for raw in configuration.get('dependencies') or []:
+  if not isinstance(raw,dict):raise ValueError('invalid_managed_dependency')
+  environments=[str(item) for item in (raw.get('environments') or ['homologation','production'])]
+  if environment not in environments:continue
+  kind=str(raw.get('kind') or '');name=str(raw.get('name') or '');service=str(raw.get('service') or '');database=str(raw.get('database') or '');username=str(raw.get('username') or '');mapping=raw.get('variableMap') or {}
+  if kind!='mongodb' or not re.fullmatch(r'[a-z][a-z0-9-]{0,31}',name) or service not in services or set(mapping)!={'host','port','database','username','password'}:raise ValueError('invalid_managed_dependency')
+  normalized_map={str(role):str(value) for role,value in mapping.items()}
+  if len(set(normalized_map.values()))!=5 or any(not re.fullmatch(r'[A-Z_][A-Z0-9_]{0,127}',value) for value in normalized_map.values()):raise ValueError('invalid_managed_dependency')
+  password_name=normalized_map['password'];secret_names=set((secret.get(service) or {}).keys()) if isinstance(secret.get(service) or {},dict) else set()
+  if password_name not in secret_names:blockers.append('dependency-secret-missing:'+name+':'+password_name)
+  generated_names={normalized_map[role] for role in ('host','port','database','username')}
+  secret_collisions=sorted(generated_names&secret_names)
+  if secret_collisions:blockers.append('dependency-generated-variable-secret:'+name+':'+','.join(secret_collisions))
+  public_names=set((public.get(service) or {}).keys()) if isinstance(public.get(service) or {},dict) else set()
+  public_collisions=sorted(generated_names&public_names)
+  if public_collisions:blockers.append('dependency-generated-variable-public:'+name+':'+','.join(public_collisions))
+  dependencies.append({'kind':'mongodb','name':name,'service':service,'database':database,'username':username,'variableMap':normalized_map,'persistent':True})
+ return sorted(dependencies,key=lambda item:item['name']),sorted(set(blockers))
 
 def _deployment_routes(configuration,applications,requested=None):
  names={str(item.get('service') or '') for item in applications}
@@ -319,8 +364,17 @@ def multiservice_plan(payload,include_internal=False):
    except ValueError as error:
     code=str(error);blockers.append('build-not-ready' if code=='multiservice_build_not_ready' else code.replace('_','-'))
    if runtime_configuration is None:blockers.append('build-runtime-configuration-missing')
+   elif str(runtime_configuration.get('environment') or '')!=environment:
+    try:runtime_configuration=_retarget_runtime_configuration(slug,environment,runtime_configuration)
+    except ValueError as error:blockers.append(str(error).replace('_','-'))
+    except RuntimeError as error:blockers.append(str(error).replace('_','-'))
  applications=_multiservice_applications(build)
  runtime_summary=_deployment_runtime_summary(runtime_configuration)
+ dependencies=[]
+ if applications:
+  try:
+   dependencies,dependency_blockers=_managed_deployment_dependencies(configuration,environment,runtime_configuration,applications);blockers.extend(dependency_blockers)
+  except ValueError:dependencies=[];blockers.append('managed-dependencies-invalid')
  if runtime_configuration:
   if str(runtime_configuration.get('project_slug') or '')!=slug:blockers.append('build-project-mismatch')
   if str(runtime_configuration.get('environment') or '')!=environment:blockers.append('build-environment-mismatch')
@@ -332,8 +386,7 @@ def multiservice_plan(payload,include_internal=False):
  try:routes=_deployment_routes(configuration,applications,payload.get('routes')) if applications else []
  except ValueError:routes=[];blockers.append('routes-invalid')
  if environment=='production':
-  cfg=_production_config(slug)
-  if cfg.get('enabled') is not True or cfg.get('production_effects_enabled') is not True:blockers.append('production-target-not-enabled')
+  if str((runtime_configuration or {}).get('retargetedFromEnvironment') or '')!='homologation':blockers.append('production-artifact-not-homologated')
  public_runtime=(runtime_configuration or {}).get('publicRuntimeEnvironment') or {}
  variables_digest=hashlib.sha256(json.dumps(public_runtime,ensure_ascii=False,sort_keys=True,separators=(',',':')).encode()).hexdigest()
  build_result=(build or {}).get('result') or {};build_payload=(build or {}).get('payload') or {}
@@ -343,10 +396,10 @@ def multiservice_plan(payload,include_internal=False):
   'config_revision':int(config.get('currentRevision') or 0),'config_digest':str(config.get('configDigest') or ''),'toolchain_digest':str(config.get('toolchainDigest') or ''),
   'archive_sha256':str((runtime_configuration or {}).get('archive_sha256') or build_payload.get('archive_sha256') or build_result.get('archiveSha256') or ''),
   'environment_digest':str((runtime_configuration or {}).get('environmentDigest') or ''),'runtime_environment_digest':str((runtime_configuration or {}).get('runtimeEnvironmentDigest') or ''),
-  'applications':applications,'routes':routes,'variables_digest':variables_digest,
+  'applications':applications,'routes':routes,'dependencies':dependencies,'variables_digest':variables_digest,
  }
  plan_digest=hashlib.sha256(json.dumps(material,sort_keys=True,separators=(',',':')).encode()).hexdigest();blockers=sorted(set(blockers))
- summary={'technologies':sorted({item['runtime'] for item in applications if item.get('runtime')}),'services':[{'service':item['service'],'runtime':item['runtime'],'port':item['port'],'healthcheck':item['healthcheck']} for item in applications],'routes':routes,'runtimeEnvironment':runtime_summary,'buildJobId':build_job_id,'secretResolutionRequired':bool(runtime_summary.get('secretReferencesPresent')),'secretResolverAvailable':bool(SECRET_RESOLVER_TOKEN),'hooks':[{'phase':phase,'service':item.get('service'),'script':item.get('script')} for phase,items in (configuration.get('hooks') or {}).items() for item in (items or []) if isinstance(item,dict)]}
+ summary={'technologies':sorted({item['runtime'] for item in applications if item.get('runtime')}),'services':[{'service':item['service'],'runtime':item['runtime'],'port':item['port'],'healthcheck':item['healthcheck']} for item in applications],'routes':routes,'dependencies':[{'kind':item['kind'],'name':item['name'],'service':item['service'],'database':item['database'],'username':item['username'],'variableNames':sorted(item['variableMap'].values()),'persistent':True} for item in dependencies],'runtimeEnvironment':runtime_summary,'buildJobId':build_job_id,'secretResolutionRequired':bool(runtime_summary.get('secretReferencesPresent')),'secretResolverAvailable':bool(SECRET_RESOLVER_TOKEN),'hooks':[{'phase':phase,'service':item.get('service'),'script':item.get('script')} for phase,items in (configuration.get('hooks') or {}).items() for item in (items or []) if isinstance(item,dict)]}
  base={'ok':True,'side_effect_free':True,'project_slug':slug,'environment':environment,'build_job_id':build_job_id,'deployment_plan_digest':plan_digest,'operation':material,'summary':summary,'blockers':blockers,'execution_allowed':not blockers,'approval_required':True,'reconciliation':{'status':(state or {}).get('status'),'configRevision':(state or {}).get('configRevision'),'membershipRevision':(state or {}).get('membershipRevision'),'aclDigest':(state or {}).get('aclDigest')},'variables_digest':variables_digest,'secret_values_included':False,'secret_references_included':False,'secretValuesIncluded':False,'secretReferencesIncluded':False,'containers_created':False,'trace_id':trace}
  if include_internal:base['_internal_runtime_configuration']=runtime_configuration
  return base
@@ -365,6 +418,114 @@ def _deployment_executor_call(method,path,payload=None,timeout=300):
   except Exception:value={'ok':False,'error':{'code':'deployment_executor_error','message':'Falha no executor de deploy.'}}
   return error.code,value
  except Exception:return 599,{'ok':False,'error':{'code':'deployment_executor_unavailable','message':'Executor de deploy indisponível.'}}
+
+def _publication_bridge(payload):
+ if not isinstance(payload,dict) or set(payload)!={'project_slug','deployment_id','public_number','stage','number','trace_id'}:raise ValueError('invalid_publication_bridge_request')
+ slug=str(payload.get('project_slug') or '').strip().lower();deployment_id=str(payload.get('deployment_id') or '').strip();stage=str(payload.get('stage') or '').strip().lower();public_number=int(payload.get('public_number') or 0);number=int(payload.get('number') or 0);trace=str(payload.get('trace_id') or '').strip()
+ if not SLUG.fullmatch(slug) or not DEPLOYMENT_ID_RE.fullmatch(deployment_id) or stage not in {'homologation','publication'} or not (1<=public_number<=999999999 and 1<=number<=999999) or not trace:raise ValueError('invalid_publication_bridge_request')
+ code,status=_deployment_executor_call('GET','/v1/deployments/'+urllib.parse.quote(deployment_id,safe=''),None,timeout=30)
+ expected='homologation' if stage=='homologation' else 'production'
+ if code!=200 or status.get('status')!='running' or status.get('project_slug')!=slug or status.get('environment')!=expected:raise ValueError('publication_bridge_deployment_mismatch')
+ code,result=_deployment_executor_call('POST','/v1/publication-bridges',{'project_slug':slug,'deployment_id':deployment_id,'public_number':public_number,'stage':stage,'number':number},timeout=90)
+ if isinstance(result,dict):result['trace_id']=trace;result['secretValuesIncluded']=False
+ return code,result
+
+
+def _publication_bridge_activate(payload):
+ if not isinstance(payload,dict) or set(payload)!={'project_slug','public_number','publication_number','trace_id'}:raise ValueError('invalid_publication_activation_request')
+ slug=str(payload.get('project_slug') or '').strip().lower();public_number=int(payload.get('public_number') or 0);number=int(payload.get('publication_number') or 0);trace=str(payload.get('trace_id') or '').strip()
+ if not SLUG.fullmatch(slug) or not (1<=public_number<=999999999 and 1<=number<=999999) or not trace:raise ValueError('invalid_publication_activation_request')
+ code,result=_deployment_executor_call('POST','/v1/publication-bridges/activate',{'project_slug':slug,'public_number':public_number,'publication_number':number},timeout=60)
+ if isinstance(result,dict):result['trace_id']=trace;result['secretValuesIncluded']=False
+ return code,result
+
+
+def _compose_runtime_configuration(slug,environment):
+ effective=_effective_environment_internal(slug,environment)
+ if not isinstance(effective,dict) or effective.get('ok') is not True or effective.get('valid') is not True:raise ValueError('target_environment_invalid')
+ public=effective.get('publicRuntimeEnvironment') or {};secret=effective.get('secretRuntimeReferences') or {}
+ if not isinstance(public,dict) or not isinstance(secret,dict):raise ValueError('runtime_environment_contract_invalid')
+ return {
+  'project_slug':slug,'environment':environment,'config_revision':int(effective.get('configurationRevision') or effective.get('config_revision') or 0),
+  'environment_revision':int(effective.get('environmentRevision') or 0),
+  'publicRuntimeEnvironment':public,'secretRuntimeReferences':secret,
+  'runtimeEnvironmentDigest':str(effective.get('runtimeEnvironmentDigest') or ''),'environmentDigest':str(effective.get('environmentDigest') or ''),
+  'secretValuesIncluded':False,
+ }
+
+
+def _compose_publication_plan(payload,include_internal=False):
+ allowed={'project_slug','environment','trace_id','source_kind','snapshot_id'}
+ if not isinstance(payload,dict) or not set(payload).issubset(allowed) or not {'project_slug','environment','trace_id'}.issubset(payload):raise ValueError('invalid_request')
+ slug=str(payload.get('project_slug') or '').strip().lower();environment=str(payload.get('environment') or '').strip().lower();trace=str(payload.get('trace_id') or '').strip();source_kind=str(payload.get('source_kind') or 'linked-compose').strip().lower();snapshot_id=str(payload.get('snapshot_id') or '').strip()
+ if not SLUG.fullmatch(slug) or environment not in DEPLOY_ENVIRONMENTS or not trace or source_kind!='linked-compose':raise ValueError('invalid_request')
+ if snapshot_id and not re.fullmatch(r'snap_[a-f0-9]{24}',snapshot_id):raise ValueError('invalid_snapshot_id')
+ config=_multiservice_configuration(slug);configuration=config.get('configuration') or {};state=_multiservice_reconciliation(slug);blockers=[]
+ project=configuration.get('project') or {};services=configuration.get('services') or {};primary=str(project.get('primaryService') or '');primary_cfg=services.get(primary) if isinstance(services,dict) else None
+ if not config.get('configured') or int(config.get('currentRevision') or 0)<1:blockers.append('configuration-required')
+ if str(project.get('type') or '')!='multi-service' or not isinstance(primary_cfg,dict) or str(primary_cfg.get('runtime') or '')!='compose':blockers.append('linked-compose-runtime-required')
+ if not state:blockers.append('reconciliation-state-missing')
+ elif state.get('status')!='ready':blockers.append('reconciliation-not-ready:'+str(state.get('status') or 'unknown'))
+ runtime=None
+ try:runtime=_compose_runtime_configuration(slug,environment)
+ except (ValueError,RuntimeError) as error:blockers.append(str(error).replace('_','-'))
+ source=None;snapshot=None
+ if environment=='production' and not snapshot_id:blockers.append('compose-snapshot-required-for-production')
+ if snapshot_id:
+  code,snapshot=_deployment_executor_call('GET','/v1/compose-snapshots/'+urllib.parse.quote(snapshot_id,safe=''),None,timeout=30)
+  if code!=200 or not isinstance(snapshot,dict) or snapshot.get('ok') is not True:blockers.append('compose-snapshot-not-found');snapshot=None
+  elif str(snapshot.get('project_slug') or '')!=slug:blockers.append('compose-snapshot-project-mismatch')
+  source=snapshot
+ elif environment=='homologation':
+  code,source=_deployment_executor_call('GET','/v1/compose-sources/'+urllib.parse.quote(slug,safe=''),None,timeout=45)
+  if code!=200 or not isinstance(source,dict) or source.get('ok') is not True:blockers.append('compose-source-unavailable');source=None
+ if source and str(source.get('source_kind') or '')!='linked-compose':blockers.append('compose-source-kind-mismatch')
+ source_digest=str((source or {}).get('source_digest') or '');source_commit=str((source or {}).get('source_commit') or '');snapshot_digest=str((snapshot or {}).get('snapshot_digest') or '')
+ if source and not SHA256_RE.fullmatch(source_digest):blockers.append('compose-source-digest-invalid')
+ if source and not re.fullmatch(r'[a-f0-9]{40,64}',source_commit):blockers.append('compose-source-commit-invalid')
+ if snapshot and not SHA256_RE.fullmatch(snapshot_digest):blockers.append('compose-snapshot-digest-invalid')
+ runtime_summary=_deployment_runtime_summary(runtime)
+ if runtime and runtime_summary.get('secretReferencesPresent') and not SECRET_RESOLVER_TOKEN:blockers.append('secret-resolver-unavailable')
+ config_revision=int(config.get('currentRevision') or 0);config_digest=str(config.get('configDigest') or '');toolchain_digest=str(config.get('toolchainDigest') or '')
+ if runtime and int(runtime.get('config_revision') or 0) not in {0,config_revision}:blockers.append('target-config-revision-mismatch')
+ edge_service=str((source or {}).get('edge_service') or '');edge_port=int((source or {}).get('edge_port') or 0)
+ routes=[{'pathPrefix':'/','service':edge_service,'stripPrefix':False}] if edge_service and edge_port else []
+ if source and (not edge_service or not 1<=edge_port<=65535):blockers.append('compose-public-edge-invalid')
+ public_runtime=(runtime or {}).get('publicRuntimeEnvironment') or {};variables_digest=hashlib.sha256(json.dumps(public_runtime,ensure_ascii=False,sort_keys=True,separators=(',',':')).encode()).hexdigest()
+ material={'action':'deployment.compose-snapshot.deploy','source_kind':'linked-compose','project_slug':slug,'environment':environment,'snapshot_id':snapshot_id,'snapshot_digest':snapshot_digest,'source_digest':source_digest,'source_commit':source_commit,'config_revision':config_revision,'config_digest':config_digest,'toolchain_digest':toolchain_digest,'environment_digest':str((runtime or {}).get('environmentDigest') or ''),'runtime_environment_digest':str((runtime or {}).get('runtimeEnvironmentDigest') or ''),'edge_service':edge_service,'edge_port':edge_port,'routes':routes,'variables_digest':variables_digest}
+ plan_digest=hashlib.sha256(json.dumps(material,sort_keys=True,separators=(',',':')).encode()).hexdigest();blockers=sorted(set(blockers));artifact='sha256:'+snapshot_digest if SHA256_RE.fullmatch(snapshot_digest) else ''
+ safe_services=[]
+ for item in (source or {}).get('services') or []:
+  if not isinstance(item,dict):continue
+  safe_services.append({k:item.get(k) for k in ('service','image_id','service_digest','port','ports','environment_names') if k in item})
+ summary={'sourceKind':'linked-compose','snapshotId':snapshot_id,'snapshotDigest':snapshot_digest,'sourceDigest':source_digest,'sourceCommit':source_commit,'edgeService':edge_service,'edgePort':edge_port,'services':safe_services,'routes':routes,'runtimeEnvironment':runtime_summary,'secretResolutionRequired':bool(runtime_summary.get('secretReferencesPresent')),'secretResolverAvailable':bool(SECRET_RESOLVER_TOKEN)}
+ result={'ok':True,'side_effect_free':True,'project_slug':slug,'environment':environment,'source_kind':'linked-compose','snapshot_id':snapshot_id,'deployment_plan_digest':plan_digest,'operation':material,'summary':summary,'artifactImageId':artifact,'blockers':blockers,'execution_allowed':not blockers,'approval_required':True,'variables_digest':variables_digest,'secret_values_included':False,'secret_references_included':False,'secretValuesIncluded':False,'secretReferencesIncluded':False,'containers_created':False,'trace_id':trace}
+ if include_internal:result['_internal_runtime_configuration']=runtime
+ return result
+
+
+def _compose_publication_execute(d,execution_id):
+ allowed={'project_slug','environment','trace_id','source_kind','snapshot_id','deployment_plan_digest'}
+ if not isinstance(d,dict) or not set(d).issubset(allowed) or not {'project_slug','environment','trace_id','deployment_plan_digest'}.issubset(d):raise ValueError('invalid_request')
+ plan_payload={k:d[k] for k in ('project_slug','environment','trace_id')};plan_payload['source_kind']=str(d.get('source_kind') or 'linked-compose')
+ if d.get('snapshot_id'):plan_payload['snapshot_id']=d['snapshot_id']
+ plan=_compose_publication_plan(plan_payload,include_internal=True);digest=str(d.get('deployment_plan_digest') or '').lower()
+ if not SHA256_RE.fullmatch(digest) or not hmac.compare_digest(digest,str(plan.get('deployment_plan_digest') or '')):raise ValueError('deployment_plan_digest_mismatch')
+ if plan.get('execution_allowed') is not True:raise PermissionError('deployment_plan_blocked:'+','.join(plan.get('blockers') or []))
+ runtime=plan.pop('_internal_runtime_configuration',None)
+ if not isinstance(runtime,dict):raise ValueError('runtime_configuration_missing')
+ public=runtime.get('publicRuntimeEnvironment') or {};refs=runtime.get('secretRuntimeReferences') or {};approved_digest=hashlib.sha256(json.dumps(public,ensure_ascii=False,sort_keys=True,separators=(',',':')).encode()).hexdigest()
+ if not hmac.compare_digest(approved_digest,str(plan.get('variables_digest') or '')):raise ValueError('variables_digest_changed')
+ resolved={}
+ try:
+  if any(bool(values) for values in refs.values() if isinstance(values,dict)):resolved=_resolve_runtime_secrets(plan['project_slug'],plan['environment'],refs)
+  variables=_merge_runtime_variables(public,resolved);variables_digest=hashlib.sha256(json.dumps(variables,ensure_ascii=False,sort_keys=True,separators=(',',':')).encode()).hexdigest();op=plan['operation'];deployment_id=_deployment_id(execution_id)
+  payload={'deployment_id':deployment_id,'project_slug':plan['project_slug'],'environment':plan['environment'],'deployment_plan_digest':digest,'config_revision':op['config_revision'],'config_digest':op['config_digest'],'toolchain_digest':op['toolchain_digest'],'source_digest':op['source_digest'],'source_commit':op['source_commit'],'snapshot_id':op['snapshot_id'],'routes':op['routes'],'variables':variables,'variables_digest':variables_digest,'environment_digest':op['environment_digest'],'runtime_environment_digest':op['runtime_environment_digest']}
+  idem_mark_effect(execution_id);code,result=_deployment_executor_call('POST','/v1/compose-snapshots/deploy',payload,timeout=1200)
+ finally:resolved.clear()
+ safe=dict(result) if isinstance(result,dict) else {'ok':False};safe.pop('variables',None);safe['variable_values_returned']=False;safe['secret_values_in_metadata']=False;safe['effect_started']=True;safe['deployment_plan_digest']=digest;safe['source_kind']='linked-compose'
+ return code,safe
+
 
 def _deployment_id(execution_id):
  return 'dep_'+hashlib.sha256(execution_id.encode()).hexdigest()[:24]
@@ -392,7 +553,7 @@ def _multiservice_execute(d,execution_id):
   variables_digest=hashlib.sha256(json.dumps(variables,ensure_ascii=False,sort_keys=True,separators=(',',':')).encode()).hexdigest()
   operation=plan['operation'];deployment_id=_deployment_id(execution_id)
   applications=[{'service':item['service'],'image_id':item['imageId'],'application_digest':item['applicationDigest'],'port':item['port'],'healthcheck':item['healthcheck']} for item in operation['applications']]
-  payload={'deployment_id':deployment_id,'project_slug':plan['project_slug'],'environment':plan['environment'],'build_job_id':build_job_id,'deployment_plan_digest':digest,'build_plan_digest':operation['build_plan_digest'],'config_revision':operation['config_revision'],'config_digest':operation['config_digest'],'toolchain_digest':operation['toolchain_digest'],'archive_sha256':operation['archive_sha256'],'applications':applications,'routes':operation['routes'],'variables':variables,'variables_digest':variables_digest,'runtimeConfiguration':executor_runtime}
+  payload={'deployment_id':deployment_id,'project_slug':plan['project_slug'],'environment':plan['environment'],'build_job_id':build_job_id,'deployment_plan_digest':digest,'build_plan_digest':operation['build_plan_digest'],'config_revision':operation['config_revision'],'config_digest':operation['config_digest'],'toolchain_digest':operation['toolchain_digest'],'archive_sha256':operation['archive_sha256'],'applications':applications,'routes':operation['routes'],'dependencies':operation.get('dependencies') or [],'variables':variables,'variables_digest':variables_digest,'runtimeConfiguration':executor_runtime}
   idem_mark_effect(execution_id);code,result=_deployment_executor_call('POST','/v1/deployments',payload,timeout=600)
  finally:
   resolved.clear()
@@ -641,6 +802,24 @@ class H(BaseHTTPRequestHandler):
   if not auth(self):return send(self,401,{'ok':False,'error':'unauthorized'})
   try:d=body(self)
   except Exception:return send(self,400,{'ok':False,'error':'invalid_request'})
+  if self.path=='/v1/compose-publication-plan':
+   try:result=_compose_publication_plan(d)
+   except LookupError as e:return send(self,404,{'ok':False,'error':{'code':str(e),'message':'Configuração do projeto não encontrada.'}})
+   except RuntimeError as e:return send(self,503,{'ok':False,'error':{'code':str(e),'message':'Serviço interno indisponível.'}})
+   except ValueError as e:return send(self,422,{'ok':False,'error':{'code':str(e),'message':'Plano Compose inválido.'}})
+   return send(self,200,result)
+  if self.path=='/v1/compose-publication-deploy':
+   execution_id=str(d.pop('execution_id','') or '').strip();payload=dict(d)
+   try:istate=idem_begin(execution_id,'deployment.compose-snapshot',payload)
+   except ValueError as error:return send(self,400,{'ok':False,'error':{'code':str(error),'message':'execution_id inválido.'},'effect_started':False})
+   if (cached:=idem_response(istate)):return send(self,cached[0],cached[1])
+   try:code,result=_compose_publication_execute(d,execution_id)
+   except LookupError as error:return send(self,404,idem_finish(execution_id,404,{'ok':False,'error':{'code':str(error)},'effect_started':False}))
+   except PermissionError as error:return send(self,409,idem_finish(execution_id,409,{'ok':False,'error':{'code':'deployment_blocked','message':str(error)},'effect_started':False}))
+   except ValueError as error:return send(self,409,idem_finish(execution_id,409,{'ok':False,'error':{'code':str(error),'message':'O plano Compose mudou ou é incompatível.'},'effect_started':False}))
+   except RuntimeError as error:return send(self,503,idem_finish(execution_id,503,{'ok':False,'error':{'code':str(error)},'effect_started':False}))
+   except Exception as error:return send(self,502,idem_finish(execution_id,502,{'ok':False,'error':{'code':'compose_snapshot_deployment_failed','message':'O deploy do snapshot Compose falhou.'},'error_type':type(error).__name__,'effect_started':True}))
+   return send(self,code,idem_finish(execution_id,code,result))
   if self.path=='/v1/multiservice-plan':
    try:result=_multiservice_deployment_plan(d)
    except LookupError as e:return send(self,404,{'ok':False,'error':{'code':str(e),'message':'Configuração do projeto não encontrada.'}})
@@ -659,6 +838,14 @@ class H(BaseHTTPRequestHandler):
    except RuntimeError as error:return send(self,503,idem_finish(execution_id,503,{'ok':False,'error':{'code':str(error),'message':'Serviço interno indisponível.'},'effect_started':False}))
    except Exception as error:return send(self,502,idem_finish(execution_id,502,{'ok':False,'error':{'code':'multiservice_deployment_failed','message':'O deploy multissserviço falhou.'},'error_type':type(error).__name__,'effect_started':True}))
    return send(self,code,idem_finish(execution_id,code,result))
+  if self.path=='/v1/multiservice-publication-bridge':
+   try:code,result=_publication_bridge(d)
+   except ValueError as e:return send(self,409,{'ok':False,'error':{'code':str(e),'message':'Bridge de publicação incompatível.'}})
+   return send(self,code,result)
+  if self.path=='/v1/multiservice-publication-activate':
+   try:code,result=_publication_bridge_activate(d)
+   except ValueError as e:return send(self,409,{'ok':False,'error':{'code':str(e),'message':'Ativação de publicação incompatível.'}})
+   return send(self,code,result)
   if self.path=='/v1/production-readiness':
    try:
     if set(d)!={'project_slug','trace_id'}:raise ValueError('invalid_request')
