@@ -12218,3 +12218,4 @@ trabalho_compartilhado:
     - components/control-plane/current-apps/portal-current/cloudif_portal_publications.py
     - components/control-plane/srv/cloudif/lib/cloudif_portal_publications.py
     - portal/tests/test_compose_snapshot_publication.py
+    - components/runtime/current-apps/multiservice-deployment-executor-current/cloudif-multiservice-deployment-executor.py

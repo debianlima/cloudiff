@@ -147,6 +147,14 @@ class ComposeSnapshotPublicationTests(unittest.TestCase):
         self.assertIn("live_stack_id=str(data.get('stack_id')",block)
         self.assertNotIn("return {'repoId':repo_id,'stackId':stack_id",block)
 
+    def test_next_candidate_advances_past_failed_homologation_jobs(self):
+        source=PORTAL.read_text()
+        start=source.index('def _next_candidate(con,slug):')
+        end=source.index('def _create_multiservice_homologation_candidate',start)
+        block=source[start:end]
+        self.assertIn("operation='homologation_candidate'",block)
+        self.assertIn('return max(a,b,c)+1',block)
+
     def test_homologation_uses_full_compose_source_commit_not_short_preview_head(self):
         source=PORTAL.read_text()
         start=source.index('def _create_linked_compose_homologation_candidate(')
@@ -202,6 +210,14 @@ class ComposeSnapshotPublicationTests(unittest.TestCase):
         self.assertIn("docker('unpause'",block)
         self.assertIn('_compress_rootfs(raw)',block)
         self.assertLess(block.index("docker('unpause'"),block.index('_compress_rootfs(raw)'))
+
+    def test_compose_source_digest_sorts_mounts_before_hashing(self):
+        source=EXECUTOR.read_text()
+        start=source.index('def compose_source_state(')
+        end=source.index('def _snapshot_safe_status',start)
+        block=source[start:end]
+        self.assertIn("mounts=sorted(mounts,key=lambda item:(item['destination'],item['type'],item['sourceRef'],bool(item['rw'])))",block)
+        self.assertLess(block.index('mounts=sorted('),block.index("material={'service':service"))
 
     def test_compose_source_can_select_single_http80_edge_without_publication_network(self):
         source=EXECUTOR.read_text()

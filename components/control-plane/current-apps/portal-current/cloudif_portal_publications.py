@@ -744,7 +744,10 @@ def recreate_preview(slug,user,source='production'):
 
 
 def _next_candidate(con,slug):
-    a=int(con.execute('select coalesce(max(candidate_number),0) from publication_candidates where project_slug=?',(slug,)).fetchone()[0] or 0);b=int(con.execute('select coalesce(max(deploy_number),0) from project_publications where project_slug=?',(slug,)).fetchone()[0] or 0);return max(a,b)+1
+    a=int(con.execute('select coalesce(max(candidate_number),0) from publication_candidates where project_slug=?',(slug,)).fetchone()[0] or 0)
+    b=int(con.execute('select coalesce(max(deploy_number),0) from project_publications where project_slug=?',(slug,)).fetchone()[0] or 0)
+    c=int(con.execute("select coalesce(max(candidate_number),0) from publication_jobs where project_slug=? and operation='homologation_candidate'",(slug,)).fetchone()[0] or 0)
+    return max(a,b,c)+1
 
 
 def _create_multiservice_homologation_candidate(slug,num,candidate,actor,progress=None):

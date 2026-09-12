@@ -633,6 +633,8 @@ def compose_source_state(slug:str)->dict:
                 source_ref=str(source.relative_to(working_dir))
             else:source_ref=str(item.get('Name') or '')
             mounts.append({'type':kind,'sourceRef':source_ref,'destination':dest,'rw':rw});destinations.append(dest)
+        mounts=sorted(mounts,key=lambda item:(item['destination'],item['type'],item['sourceRef'],bool(item['rw'])))
+        destinations=sorted(destinations)
         overlay_roots=[]
         networks=((row.get('NetworkSettings') or {}).get('Networks') or {})
         is_publication=PUBLICATION_NETWORK in networks
