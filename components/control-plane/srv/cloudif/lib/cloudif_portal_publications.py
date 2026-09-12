@@ -184,8 +184,11 @@ def _create_linked_compose_homologation_candidate(slug,num,candidate,actor,progr
     con=sqlite3.connect(DB);con.row_factory=sqlite3.Row;_ensure_schema(con);binding=_linked_compose_binding(con,slug);con.close()
     source=_linked_compose_status(slug,num,binding)
     if not source.get('healthy'):raise RuntimeError('O Preview W1 vinculado ao Forgejo não está saudável.')
-    source_commit=str((source.get('git') or {}).get('head') or '')
-    if not re.fullmatch(r'[a-f0-9]{40,64}',source_commit):raise RuntimeError('O Preview W1 não possui HEAD Forgejo válido.')
+    probe=_compose_source_probe(slug);source_state=probe.get('source') or {}
+    source_commit=str(source_state.get('source_commit') or '')
+    if not re.fullmatch(r'[a-f0-9]{40,64}',source_commit):raise RuntimeError('A origem Compose não possui commit Forgejo completo válido.')
+    preview_head=str((source.get('git') or {}).get('head') or '')
+    if preview_head and not source_commit.startswith(preview_head):raise RuntimeError('O HEAD exibido no Preview diverge do commit Compose materializado; atualize o Preview e tente novamente.')
     pc=_publication_config();summary=pc.environment_summary(slug,'homologation')
     if not summary.get('valid'):raise RuntimeError('O ambiente de Homologação possui variáveis obrigatórias pendentes.')
     notify('snapshot','Congelando stack Compose, volumes e configuração do Preview W1.')

@@ -147,6 +147,16 @@ class ComposeSnapshotPublicationTests(unittest.TestCase):
         self.assertIn("live_stack_id=str(data.get('stack_id')",block)
         self.assertNotIn("return {'repoId':repo_id,'stackId':stack_id",block)
 
+    def test_homologation_uses_full_compose_source_commit_not_short_preview_head(self):
+        source=PORTAL.read_text()
+        start=source.index('def _create_linked_compose_homologation_candidate(')
+        end=source.index('def _publish_linked_compose_homologated_candidate(',start)
+        block=source[start:end]
+        self.assertIn("probe=_compose_source_probe(slug);source_state=probe.get('source') or {}",block)
+        self.assertIn("source_commit=str(source_state.get('source_commit') or '')",block)
+        self.assertIn("source_commit.startswith(preview_head)",block)
+        self.assertNotIn("source_commit=str((source.get('git') or {}).get('head') or '')",block)
+
     def test_portal_prepares_source_preview_bridge_before_external_validation(self):
         source=PORTAL.read_text()
         self.assertIn('def _compose_source_preview_bridge(slug,num,generation=1):',source)

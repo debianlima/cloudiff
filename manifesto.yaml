@@ -12207,15 +12207,14 @@ entradas:
 
 trabalho_compartilhado:
   projeto: cloudiff
-  caminho: /srv/mcp-workspace/.wt-cloudiff-terminal-oracle-compose-20260912
-  unidade: CLOUDIFF-COMPOSE-PROXY-ERROR-SECRET-FENCE
-  descricao: 'fechar vazamento potencial de payload secreto em HTTPError do proxy Compose sem deploy de Producao'
+  caminho: /tmp/cloudiff-a9-compose-publication-current
+  unidade: CLOUDIFF-A9-CANONICAL-WHP-COMPOSE
+  descricao: 'fechar fluxo canonico W1 -> H -> P para projetos Compose usando source_commit completo do Executor'
   agente: Meu-Terminal-Oracle
-  atualizado_em: '2026-09-12T03:51:30Z'
-  previsao_termino: '2026-09-12T04:36:30Z'
+  atualizado_em: '2026-09-12T13:04:10Z'
+  previsao_termino: '2026-09-12T14:04:10Z'
   zona_exclusao:
     - manifesto.yaml
-    - estado.md
-    - components/runtime/current-apps/komodo-agent-current/cloudif-komodo-agent.py
-    - portal/tests/test_deployment_sensitive_runtime_security.py
-    - docs/reconciliation/compose-proxy-error-secret-fence-20260912.json
+    - components/control-plane/current-apps/portal-current/cloudif_portal_publications.py
+    - components/control-plane/srv/cloudif/lib/cloudif_portal_publications.py
+    - portal/tests/test_compose_snapshot_publication.py
