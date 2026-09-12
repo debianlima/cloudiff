@@ -535,6 +535,26 @@ def _tar_contents(source:Path,target:Path)->None:
     os.chmod(target,0o600)
 
 
+def _tar_container_path(container:str,source_path:str,target:Path)->None:
+    if not container or not source_path.startswith('/') or '\x00' in container or '\x00' in source_path:raise DeploymentError('compose_snapshot_source_invalid','Origem do volume Compose inválida.',409)
+    target.parent.mkdir(parents=True,exist_ok=True)
+    source_path=source_path.rstrip('/') or '/'
+    command=['docker','cp',f'{container}:{source_path}/.','-']
+    try:
+        with target.open('wb') as output:
+            result=subprocess.run(command,stdout=output,stderr=subprocess.PIPE,timeout=900)
+    except subprocess.TimeoutExpired:
+        target.unlink(missing_ok=True)
+        raise DeploymentError('compose_snapshot_archive_timeout','Tempo excedido ao congelar volume Compose.',504,{'container':container,'destination':source_path})
+    if result.returncode:
+        target.unlink(missing_ok=True)
+        error=(result.stderr or b'').decode(errors='replace')[-400:]
+        raise DeploymentError('compose_snapshot_archive_failed','Não foi possível congelar um volume Compose pelo daemon Docker.',502,{'container':container,'destination':source_path,'error':error})
+    if not target.is_file() or target.stat().st_size<=0:raise DeploymentError('compose_snapshot_archive_failed','O daemon Docker não produziu o arquivo do volume Compose.',502,{'container':container,'destination':source_path})
+    os.chmod(target,0o600)
+
+
+
 def _tar_path(source:Path,target:Path)->None:
     target.parent.mkdir(parents=True,exist_ok=True)
     result=subprocess.run(['tar','--numeric-owner','-C',str(source.parent),'-cpf',str(target),source.name],text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=900)
@@ -704,14 +724,17 @@ def create_compose_snapshot(slug:str,expected_source_digest:str,deployment_id:st
             env=[str(x) for x in (config.get('Env') or [])];mount_records=[];safe_mounts=[];destinations=[]
             for index,item in enumerate(row.get('Mounts') or []):
                 kind=str(item.get('Type') or '');dest=str(item.get('Destination') or '');rw=bool(item.get('RW'));source=Path(str(item.get('Source') or '')).resolve();archive=tmp/'artifacts'/service/f'mount-{index}.tar'
-                size=_path_size(source);total+=size
-                if total>COMPOSE_SNAPSHOT_MAX_BYTES:raise DeploymentError('compose_snapshot_too_large','Snapshot Compose excede o limite configurado.',409,{'bytes':total,'limit':COMPOSE_SNAPSHOT_MAX_BYTES})
-                if kind=='volume':_tar_contents(source,archive);source_ref=str(item.get('Name') or '')
+                if kind=='volume':
+                    source_ref=str(item.get('Name') or '')
+                    _tar_container_path(name,dest,archive)
                 elif kind=='bind':
                     try:source_ref=str(source.relative_to(working_dir))
                     except ValueError:raise DeploymentError('compose_bind_outside_checkout','Bind Compose precisa estar dentro do checkout Forgejo.',409,{'service':service,'destination':dest})
+                    _path_size(source)
                     _tar_path(source,archive)
                 else:raise DeploymentError('compose_mount_unsupported','Mount Compose não publicável.',409,{'service':service,'type':kind})
+                total+=archive.stat().st_size
+                if total>COMPOSE_SNAPSHOT_MAX_BYTES:raise DeploymentError('compose_snapshot_too_large','Snapshot Compose excede o limite configurado.',409,{'bytes':total,'limit':COMPOSE_SNAPSHOT_MAX_BYTES})
                 rec={'type':kind,'source_ref':source_ref,'destination':dest,'rw':rw,'archive':str(archive.relative_to(tmp)),'source_name':source.name};mount_records.append(rec);safe_mounts.append({'type':kind,'sourceRef':source_ref,'destination':dest,'rw':rw,**_snapshot_archive_record(archive)});destinations.append(dest)
             rootfs_archive=tmp/'artifacts'/service/'rootfs.tar';_export_rootfs(name,rootfs_archive);total+=rootfs_archive.stat().st_size
             if total>COMPOSE_SNAPSHOT_MAX_BYTES:raise DeploymentError('compose_snapshot_too_large','Snapshot Compose excede o limite configurado.',409,{'bytes':total,'limit':COMPOSE_SNAPSHOT_MAX_BYTES})
@@ -721,6 +744,9 @@ def create_compose_snapshot(slug:str,expected_source_digest:str,deployment_id:st
             private['services'].append({'service':service,'image_id':str(row.get('Image') or ''),'environment':env,'entrypoint':entry,'cmd':cmd,'user':str(config.get('User') or ''),'working_dir':str(config.get('WorkingDir') or ''),'healthcheck':health,'cap_add':[str(x) for x in (host.get('CapAdd') or [])],'cap_drop':[str(x) for x in (host.get('CapDrop') or [])],'security_opt':[str(x) for x in (host.get('SecurityOpt') or [])],'read_only':bool(host.get('ReadonlyRootfs')),'pids_limit':host.get('PidsLimit'),'memory':int(host.get('Memory') or 0),'nano_cpus':int(host.get('NanoCpus') or 0),'shm_size':int(host.get('ShmSize') or 0),'tmpfs':host.get('Tmpfs') or {},'mounts':mount_records,'overlays':overlays,'rootfs':rootfs_record,'ports':_compose_tcp_ports(row),'requires_egress':bool(next((item.get('requires_egress') for item in current.get('services') or [] if item.get('service')==service),False))})
             safe={'service':service,'image_id':str(row.get('Image') or ''),'environment_digest':hashlib.sha256(canonical(sorted(env))).hexdigest(),'environment_names':sorted({x.split('=',1)[0] for x in env if '=' in x}),'mounts':safe_mounts,'rootfs_overlays':safe_overlays,'rootfs':{'sha256':rootfs_record['sha256'],'bytes':rootfs_record['bytes']},'ports':_compose_tcp_ports(row),'port':_compose_public_port(row) if service==current['edge_service'] else (_compose_tcp_ports(row)[0] if _compose_tcp_ports(row) else 0),'requires_egress':bool(next((item.get('requires_egress') for item in current.get('services') or [] if item.get('service')==service),False))}
             safe['service_digest']=hashlib.sha256(canonical(safe)).hexdigest();safe_services.append(safe)
+    except Exception:
+        shutil.rmtree(tmp,ignore_errors=True)
+        raise
     finally:
         for name in reversed(paused):docker('unpause',name,timeout=30,check=False)
     safe_by_service={item['service']:item for item in safe_services}

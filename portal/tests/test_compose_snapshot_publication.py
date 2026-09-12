@@ -211,6 +211,20 @@ class ComposeSnapshotPublicationTests(unittest.TestCase):
         self.assertIn('_compress_rootfs(raw)',block)
         self.assertLess(block.index("docker('unpause'"),block.index('_compress_rootfs(raw)'))
 
+    def test_named_volumes_are_archived_through_paused_container_docker_cp(self):
+        source=EXECUTOR.read_text()
+        self.assertIn('def _tar_container_path(container:str,source_path:str,target:Path)->None:',source)
+        helper=source[source.index('def _tar_container_path(container:str,source_path:str,target:Path)->None:'):source.index('def _tar_path(',source.index('def _tar_container_path(container:str,source_path:str,target:Path)->None:'))]
+        self.assertIn("command=['docker','cp',f'{container}:{source_path}/.','-']",helper)
+        self.assertIn("with target.open('wb') as output",helper)
+        self.assertNotIn('/var/lib/docker/volumes',helper)
+        snap=source[source.index('def create_compose_snapshot('):source.index('def _restore_volume_archive',source.index('def create_compose_snapshot('))]
+        self.assertIn("if kind=='volume':",snap)
+        self.assertIn('_tar_container_path(name,dest,archive)',snap)
+        self.assertIn('total+=archive.stat().st_size',snap)
+        self.assertIn('shutil.rmtree(tmp,ignore_errors=True)',snap)
+
+
     def test_compose_source_digest_sorts_mounts_before_hashing(self):
         source=EXECUTOR.read_text()
         start=source.index('def compose_source_state(')
