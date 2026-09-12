@@ -37,11 +37,11 @@ class PublicationStageConsistencyTests(unittest.TestCase):
           message text,detail_json text);
         ''')
         # Legacy D1 is the production that existed before the W/H/P flow.
-        con.execute("insert into project_publications values(1,'tuleap-laboratorio-de-hardware',1011,1,'d1','legacycommit','1011.cloudiff.duckdns.org','1011-d1.cloudiff.duckdns.org','published',0,'u','t','t','legacy','{}')")
+        con.execute("insert into project_publications values(1,'fixture-publication-project',1999,1,'d1','legacycommit','1999.cloudiff.duckdns.org','1999-d1.cloudiff.duckdns.org','published',0,'u','t','t','legacy','{}')")
         # D7 is the compatibility row written by the successful P2 release and must not appear twice.
-        con.execute("insert into project_publications values(7,'tuleap-laboratorio-de-hardware',1011,7,'P2','0280dbf46d54','1011.cloudiff.duckdns.org','1011-p2-publication.cloudiff.duckdns.org','published',1,'u','t','t','H7 to P2','{\"publicationNumber\":2}')")
-        con.execute("insert into publication_candidates values('tuleap-laboratorio-de-hardware',7,'0280dbf46d54eb3bcceb1582e0b2d6fb92cabc96','{}')")
-        con.execute("insert into production_releases values(2,'tuleap-laboratorio-de-hardware',1011,2,7,7,'P2','1011-p2-publication.cloudiff.duckdns.org','1011.cloudiff.duckdns.org','sha256:x','published',1,0,'','u','t','t')")
+        con.execute("insert into project_publications values(7,'fixture-publication-project',1999,7,'P2','0280dbf46d54','1999.cloudiff.duckdns.org','1999-p2-publication.cloudiff.duckdns.org','published',1,'u','t','t','H7 to P2','{\"publicationNumber\":2}')")
+        con.execute("insert into publication_candidates values('fixture-publication-project',7,'0280dbf46d54eb3bcceb1582e0b2d6fb92cabc96','{}')")
+        con.execute("insert into production_releases values(2,'fixture-publication-project',1999,2,7,7,'P2','1999-p2-publication.cloudiff.duckdns.org','1999.cloudiff.duckdns.org','sha256:x','published',1,0,'','u','t','t')")
         con.commit();con.close()
 
     def tearDown(self): self.tmp.cleanup()
@@ -49,7 +49,7 @@ class PublicationStageConsistencyTests(unittest.TestCase):
     def test_publication_rows_prefer_real_p_and_keep_unmapped_d_as_legacy(self):
         for idx,path in enumerate((CANONICAL_UI,APP_UI)):
             module=load(path,'pub_ui_'+str(idx),self.db)
-            rows=module._rows('tuleap-laboratorio-de-hardware')
+            rows=module._rows('fixture-publication-project')
             self.assertEqual([(r['kind'],r['number']) for r in rows],[('P',2),('D',1)])
             self.assertEqual(rows[0]['version'],'P2')
             self.assertEqual(rows[0]['commit_sha'][:12],'0280dbf46d54')
