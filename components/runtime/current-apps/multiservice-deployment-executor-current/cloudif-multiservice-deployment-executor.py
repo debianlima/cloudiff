@@ -563,9 +563,14 @@ def _tar_path(source:Path,target:Path)->None:
 
 
 def _extract_tar(archive:Path,target:Path)->None:
+    if not archive.is_file():raise DeploymentError('compose_snapshot_restore_failed','Arquivo do snapshot não existe.',502,{'archive':archive.name})
+    image=inspect_image(PUBLICATION_BRIDGE_IMAGE_REF)
+    if str(image.get('Id') or '')!=PUBLICATION_BRIDGE_IMAGE_ID:raise DeploymentError('snapshot_helper_image_mismatch','Imagem auxiliar de restauração diverge do digest homologado.',409)
     target.mkdir(parents=True,exist_ok=True)
-    result=subprocess.run(['tar','--numeric-owner','-C',str(target),'-xpf',str(archive)],text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=900)
-    if result.returncode:raise DeploymentError('compose_snapshot_restore_failed','Não foi possível restaurar um arquivo do snapshot.',502,{'archive':archive.name,'error':result.stderr[-400:]})
+    archive_path=archive.resolve();target_path=target.resolve()
+    command=['run','--rm','--network','none','--user','0:0','--read-only','--cap-drop','ALL','--cap-add','CHOWN','--cap-add','DAC_OVERRIDE','--cap-add','FOWNER','--security-opt','no-new-privileges','--mount',f'type=bind,src={target_path},dst=/restore','--mount',f'type=bind,src={archive_path},dst=/snapshot.tar,readonly','--entrypoint','/bin/sh',PUBLICATION_BRIDGE_IMAGE_REF,'-c','cd /restore && tar --numeric-owner -xpf /snapshot.tar']
+    result=docker(*command,timeout=900,check=False)
+    if result.returncode:raise DeploymentError('compose_snapshot_restore_failed','Não foi possível restaurar um arquivo do snapshot pelo helper Docker.',502,{'archive':archive.name,'error':result.stderr[-400:]})
 
 
 def _compose_overlay_roots(container:str,mount_destinations:list[str])->list[str]:

@@ -12211,8 +12211,8 @@ trabalho_compartilhado:
   unidade: CLOUDIFF-A9-CANONICAL-WHP-COMPOSE
   descricao: 'fechar fluxo canonico W1 -> H -> P para projetos Compose usando source_commit completo do Executor'
   agente: Meu-Terminal-Oracle
-  atualizado_em: '2026-09-12T13:04:10Z'
-  previsao_termino: '2026-09-12T14:04:10Z'
+  atualizado_em: '2026-09-12T13:36:24Z'
+  previsao_termino: '2026-09-12T14:36:24Z'
   zona_exclusao:
     - manifesto.yaml
     - components/control-plane/current-apps/portal-current/cloudif_portal_publications.py

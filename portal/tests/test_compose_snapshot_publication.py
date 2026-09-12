@@ -211,6 +211,22 @@ class ComposeSnapshotPublicationTests(unittest.TestCase):
         self.assertIn('_compress_rootfs(raw)',block)
         self.assertLess(block.index("docker('unpause'"),block.index('_compress_rootfs(raw)'))
 
+    def test_bind_restore_uses_isolated_docker_helper_under_executor_sandbox(self):
+        source=EXECUTOR.read_text()
+        start=source.index('def _extract_tar(archive:Path,target:Path)->None:')
+        end=source.index('def _compose_overlay_roots',start)
+        block=source[start:end]
+        self.assertIn("'--network','none'",block)
+        self.assertIn("'--read-only'",block)
+        self.assertIn("'--cap-drop','ALL'",block)
+        self.assertIn("'--cap-add','CHOWN'",block)
+        self.assertIn("'--cap-add','DAC_OVERRIDE'",block)
+        self.assertIn("'--cap-add','FOWNER'",block)
+        self.assertIn("'--security-opt','no-new-privileges'",block)
+        self.assertIn("f'type=bind,src={target_path},dst=/restore'",block)
+        self.assertIn("f'type=bind,src={archive_path},dst=/snapshot.tar,readonly'",block)
+        self.assertNotIn("subprocess.run(['tar'",block)
+
     def test_named_volumes_are_archived_through_paused_container_docker_cp(self):
         source=EXECUTOR.read_text()
         self.assertIn('def _tar_container_path(container:str,source_path:str,target:Path)->None:',source)
