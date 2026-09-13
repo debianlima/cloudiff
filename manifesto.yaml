@@ -12207,15 +12207,12 @@ entradas:
 
 trabalho_compartilhado:
   projeto: cloudiff
-  caminho: /tmp/cloudiff-a9-compose-publication-current
-  unidade: CLOUDIFF-A9-CANONICAL-WHP-COMPOSE
-  descricao: 'fechar fluxo canonico W1 -> H -> P para projetos Compose usando source_commit completo do Executor'
-  agente: Meu-Terminal-Oracle
-  atualizado_em: '2026-09-12T13:36:24Z'
-  previsao_termino: '2026-09-12T14:36:24Z'
+  caminho: /tmp/cloudiff-a10-priority-hidden-shell-control-plane
+  unidade: CLOUDIFF-A10-PRIORITY-CONTROL-PLANE-HIDDEN-SHELL
+  descricao: 'prioridade total: corrigir pareamento/transporte governado e execução shell em background com hint discreto ao usuário; takeover humano autorizado com estado A9 preservado'
+  agente: A10-Redes/profile-aline
+  atualizado_em: '2026-09-13T14:49:09Z'
+  previsao_termino: '2026-09-13T16:49:09Z'
   zona_exclusao:
     - manifesto.yaml
-    - components/control-plane/current-apps/portal-current/cloudif_portal_publications.py
-    - components/control-plane/srv/cloudif/lib/cloudif_portal_publications.py
-    - portal/tests/test_compose_snapshot_publication.py
-    - components/runtime/current-apps/multiservice-deployment-executor-current/cloudif-multiservice-deployment-executor.py
+    - estado.md
