@@ -210,6 +210,45 @@ class TaigaModuleTests(unittest.TestCase):
             self.assertIn(marker, css)
         self.assertIn('@media(max-width:760px)', css)
 
+
+    def test_professor_gets_per_student_activity_history(self):
+        identity = Identity('prof','prof@example.invalid',frozenset({'CloudIF-Professor'}))
+        data = service.taiga_data(identity, 'beta')
+        actors = data['actors']
+        self.assertEqual({a['username'] for a in actors}, {'alice','bob'})
+        for actor in actors:
+            self.assertEqual(len(actor.get('history') or []), 14)
+            self.assertTrue(all('events' in point for point in actor['history']))
+        markup = views.taiga_body(data)
+        self.assertIn('taiga-student-grid', markup)
+        self.assertGreaterEqual(markup.count('taiga-student-card'), 2)
+        self.assertGreaterEqual(markup.count('taiga-student-spark'), 2)
+        self.assertIn('Ver comparação em tabela', markup)
+
+    def test_student_gets_only_own_activity_history_chart(self):
+        identity = Identity('alice','alice@example.invalid',frozenset({'CloudIF-Aluno'}))
+        data = service.taiga_data(identity, 'alpha')
+        self.assertEqual(data['actors'], [])
+        self.assertEqual(len((data.get('subject') or {}).get('history') or []), 14)
+        markup = views.taiga_body(data)
+        self.assertIn('Meu histórico', markup)
+        self.assertIn('taiga-student-self', markup)
+        self.assertEqual(markup.count('taiga-student-spark'), 1)
+        self.assertNotIn('Ver comparação em tabela', markup)
+
+    def test_student_activity_css_contract_is_professional_and_responsive(self):
+        css = DESIGN.read_text()
+        for marker in ('.taiga-student-grid','.taiga-student-card','.taiga-student-metrics','.taiga-student-spark','.taiga-student-details','.taiga-student-self'):
+            self.assertIn(marker, css)
+        self.assertIn('.taiga-student-card:hover', css)
+        self.assertIn('@media(max-width:760px)', css)
+
+    def test_dashboard_explains_snapshot_refresh_model(self):
+        identity = Identity('prof','prof@example.invalid',frozenset({'CloudIF-Professor'}))
+        markup = views.taiga_body(service.taiga_data(identity, 'beta'))
+        self.assertIn('recalculado ao abrir ou recarregar o projeto', markup)
+        self.assertIn('eventos já coletados em segundo plano', markup)
+
     def test_admin_grants_only_own_access_to_visible_project(self):
         identity = Identity('silviopro','silviopro@example.invalid',frozenset({'CloudIF-Tenants-Admin'}))
         result = service.grant_taiga_access(identity, 'alpha')
