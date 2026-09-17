@@ -16,6 +16,7 @@ SHELL = ROOT / "portal/ui/shell.py"
 WIRING = ROOT / "portal/wiring.py"
 COEXIST = ROOT / "components/control-plane/srv/cloudif/lib/cloudif_portal_v2_coexist.py"
 PROJECTS = ROOT / "portal/modules/projects/service.py"
+DESIGN = ROOT / "portal/design/components.css"
 
 
 class TaigaModuleTests(unittest.TestCase):
@@ -157,8 +158,57 @@ class TaigaModuleTests(unittest.TestCase):
         self.assertEqual(data['taiga_project']['error'], 'taiga_reconciler_credentials_unconfigured')
         markup = views.taiga_body(data)
         self.assertIn('Cliente do broker Faro não configurado', markup)
-        self.assertIn('Atividade do projeto', markup)
+        self.assertIn('Atividade recente', markup)
 
+
+
+    def test_initial_taiga_screen_is_project_catalog_only(self):
+        identity = Identity('alice','alice@example.invalid',frozenset({'CloudIF-Aluno'}))
+        data = service.taiga_data(identity)
+        self.assertIsNone(data['selected_project'])
+        self.assertEqual([p['slug'] for p in data['projects']], ['alpha'])
+        self.assertEqual(data['activity'], [])
+        self.assertEqual(data['dashboard']['history'], [])
+        self.assertFalse(any('/v1/events?' in url for url,_headers in self.calls))
+        self.assertFalse(any('/summary?' in url for url,_headers in self.calls))
+        self.assertFalse(any('/project/status?' in url for url,_headers in self.calls))
+        markup = views.taiga_body(data)
+        self.assertIn('>Projetos</h2>', markup)
+        self.assertIn('Alpha', markup)
+        self.assertIn('Abrir painel', markup)
+        self.assertNotIn('Execução do projeto', markup)
+        self.assertNotIn('Atividade recente', markup)
+
+    def test_selected_project_builds_professional_dashboard_series(self):
+        identity = Identity('prof','prof@example.invalid',frozenset({'CloudIF-Professor'}))
+        data = service.taiga_data(identity, 'beta')
+        dashboard = data['dashboard']
+        self.assertEqual(len(dashboard['history']), 14)
+        self.assertGreaterEqual(dashboard['activity_total'], 1)
+        self.assertTrue(any(row['source'] == 'forgejo' for row in dashboard['sources']))
+        self.assertEqual({row['label'] for row in dashboard['completion']}, {'Tarefas','Histórias','Etapas'})
+        self.assertEqual({row['username'] for row in dashboard['recent_accesses']}, {'alice','bob'})
+        markup = views.taiga_body(data)
+        for text in ('Execução do projeto','Atividade nos últimos 14 dias','Integrações em atividade','Últimos acessos e atividade','Membros do projeto','Atividade recente'):
+            self.assertIn(text, markup)
+        self.assertIn('taiga-history-chart', markup)
+        self.assertIn('taiga-kpi-grid', markup)
+
+    def test_student_dashboard_recent_accesses_are_self_only(self):
+        identity = Identity('alice','alice@example.invalid',frozenset({'CloudIF-Aluno'}))
+        data = service.taiga_data(identity, 'alpha')
+        accesses = data['dashboard']['recent_accesses']
+        self.assertEqual([row['username'] for row in accesses], ['alice'])
+        self.assertEqual(data['privacy']['individual_scope'], 'self')
+        markup = views.taiga_body(data)
+        self.assertIn('Meus indicadores', markup)
+        self.assertNotIn('Membros do projeto', markup)
+
+    def test_taiga_dashboard_has_responsive_design_contract(self):
+        css = DESIGN.read_text()
+        for marker in ('.taiga-project-grid','.taiga-kpi-grid','.taiga-dashboard-grid','.taiga-history-chart','.taiga-integration-grid','.taiga-personal-grid'):
+            self.assertIn(marker, css)
+        self.assertIn('@media(max-width:760px)', css)
 
     def test_admin_grants_only_own_access_to_visible_project(self):
         identity = Identity('silviopro','silviopro@example.invalid',frozenset({'CloudIF-Tenants-Admin'}))
