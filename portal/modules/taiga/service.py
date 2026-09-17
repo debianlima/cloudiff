@@ -213,7 +213,7 @@ def grant_taiga_access(identity, slug: str) -> dict[str, Any]:
     code,data=_http_json_post(url,{"username":identity.username,"email":email,"full_name":identity.username},headers={"Authorization":"Bearer "+token},timeout=15)
     if code!=200 or not isinstance(data,dict) or not data.get("ok"):
         return {"ok":False,"status":code if code in {400,404,409} else 503,"error":str((data or {}).get("error") if isinstance(data,dict) else "taiga_grant_failed")}
-    return {"ok":True,"status":200,"slug":slug,"taiga_username":str(data.get("taiga_username") or identity.username)[:150],"redirect":_TAIGA_URL+"/project/"+urllib.parse.quote(slug,safe="-._~"),"created_user":bool(data.get("created_user")),"created_membership":bool(data.get("created_membership")),"secrets_exposed":False}
+    return {"ok":True,"status":200,"slug":slug,"taiga_username":str(data.get("taiga_username") or identity.username)[:150],"redirect":_TAIGA_URL+"/cloudif-enter/"+urllib.parse.quote(slug,safe="-._~"),"created_user":bool(data.get("created_user")),"created_membership":bool(data.get("created_membership")),"secrets_exposed":False}
 
 
 def _taiga_private_summary(identity, slug: str) -> dict[str, Any]:
@@ -242,7 +242,7 @@ def _taiga_private_summary(identity, slug: str) -> dict[str, Any]:
         "subject": subject,
         "members": members,
         "timeline": timeline[:100],
-        "url": _TAIGA_URL + "/project/" + urllib.parse.quote(str(project.get("slug") or slug), safe="-._~"),
+        "url": _TAIGA_URL + "/cloudif-enter/" + urllib.parse.quote(str(project.get("slug") or slug), safe="-._~"),
         "source": "faro-reconciler",
     }
 

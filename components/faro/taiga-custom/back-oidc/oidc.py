@@ -16,7 +16,7 @@ class TaigaOIDCAuthenticationBackend(OIDCAuthenticationBackend):
 
     AUTHDATA_KEY = "oidc"
     AUTHDATA_SUB_KEY = "oidc_sub"
-    PLACEHOLDER_SUFFIX = "@cloudiff.invalid"
+    PLACEHOLDER_SUFFIX = "@pending.cloudif.invalid"
 
     def get_username(self, claims):
         candidate = claims.get("preferred_username") or claims.get("nickname")
@@ -39,10 +39,12 @@ class TaigaOIDCAuthenticationBackend(OIDCAuthenticationBackend):
 
         username = self.get_username(claims).strip()
         if username:
-            user = self.UserModel.objects.filter(username__iexact=username).first()
+            # Preserve an existing OIDC binding before considering a newly
+            # pre-provisioned Taiga username with the same institutional id.
+            user = self._authdata_user(self.AUTHDATA_KEY, username)
             if user:
                 return [user]
-            user = self._authdata_user(self.AUTHDATA_KEY, username)
+            user = self.UserModel.objects.filter(username__iexact=username).first()
             if user:
                 return [user]
 

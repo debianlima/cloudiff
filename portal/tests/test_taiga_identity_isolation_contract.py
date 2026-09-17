@@ -13,9 +13,9 @@ FRONT_DOCKER=ROOT/'components/faro/taiga-custom/front-session/Dockerfile'
 class TaigaIdentityIsolationContractTests(unittest.TestCase):
     def test_broker_preprovisions_missing_email_with_reserved_placeholder(self):
         src=BROKER.read_text(); ast.parse(src)
-        self.assertIn("username+'@cloudiff.invalid'",src)
+        self.assertIn("username+'@pending.cloudif.invalid'",src)
         self.assertIn("verified_email=not placeholder",src)
-        self.assertIn("current_email.endswith('@cloudiff.invalid')",src)
+        self.assertIn("current_email.endswith('@pending.cloudif.invalid')",src)
         block=src.split('def user_for(spec):',1)[1].split('with transaction.atomic():',1)[0]
         self.assertNotIn("unresolved.append(username); return None",block)
 
@@ -26,9 +26,12 @@ class TaigaIdentityIsolationContractTests(unittest.TestCase):
         sub=src.index('self._authdata_user(self.AUTHDATA_SUB_KEY, sub)')
         username=src.index('username__iexact=username')
         email=src.index('email__iexact=email')
-        self.assertLess(sub,username)
+        authdata=src.index('self._authdata_user(self.AUTHDATA_KEY, username)')
+        self.assertLess(sub,authdata)
+        self.assertLess(authdata,username)
         self.assertLess(username,email)
         self.assertIn('current.endswith(self.PLACEHOLDER_SUFFIX)',src)
+        self.assertIn('@pending.cloudif.invalid',src)
 
     def test_oidc_forces_fresh_idp_login_on_shared_workstations(self):
         src=OIDC_SETTINGS.read_text()
@@ -43,6 +46,24 @@ class TaigaIdentityIsolationContractTests(unittest.TestCase):
         self.assertIn('originalRemove.call(local, key)',src)
         self.assertIn('originalSet.call(session, key, value)',src)
         self.assertNotIn('localStorage.clear()',src)
+
+    def test_runtime_uses_derivative_images_and_clean_entry_route(self):
+        compose=(ROOT/'components/faro/current-apps/taiga-current/compose.yaml').read_text()
+        conf=(ROOT/'components/faro/current-apps/taiga-current/taiga.conf').read_text()
+        self.assertIn('cloudif-local/taiga-back-oidc:6.10.2-c623b753-r4-identity',compose)
+        self.assertIn('cloudif-local/taiga-front-oidc:6.10.3-c623b753-r3-session',compose)
+        self.assertIn('/cloudif-enter/',conf)
+        self.assertIn('localStorage.removeItem("token")',conf)
+        self.assertIn('sessionStorage.removeItem("token")',conf)
+        self.assertIn('sessionid=; Path=/; Max-Age=0',conf)
+        self.assertIn('/oidc/authenticate/?next=/project/$1',conf)
+
+    def test_broker_marks_placeholder_users_as_pending_identity(self):
+        src=BROKER.read_text()
+        self.assertIn('pending_identity=[]',src)
+        self.assertIn("status='waiting_identity' if (unresolved or pending_identity) else 'ready'",src)
+        self.assertIn("'pending_identity':sorted(set(pending_identity))",src)
+        self.assertIn("version':'0.4.0'",src)
 
     def test_derivative_images_are_reproducible(self):
         back=BACK_DOCKER.read_text(); front=FRONT_DOCKER.read_text()

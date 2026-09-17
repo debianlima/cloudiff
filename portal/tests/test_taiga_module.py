@@ -164,7 +164,7 @@ class TaigaModuleTests(unittest.TestCase):
         identity = Identity('silviopro','silviopro@example.invalid',frozenset({'CloudIF-Tenants-Admin'}))
         result = service.grant_taiga_access(identity, 'alpha')
         self.assertTrue(result['ok'])
-        self.assertEqual(result['redirect'], 'https://taiga.cloudiff.duckdns.org/project/alpha')
+        self.assertEqual(result['redirect'], 'https://taiga.cloudiff.duckdns.org/cloudif-enter/alpha')
         self.assertEqual(len(self.post_calls), 1)
         url,payload,headers = self.post_calls[0]
         self.assertTrue(url.endswith('/v1/projects/alpha/access/grant'))
