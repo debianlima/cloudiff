@@ -208,6 +208,14 @@ class TaigaModuleTests(unittest.TestCase):
         self.assertIn('native_taiga', coexist)
         self.assertIn('/cloudiff/portal/pagina/taiga', coexist)
 
+    def test_taiga_post_bridge_does_not_depend_on_get_only_route_query(self):
+        source = COEXIST.read_text()
+        start = source.index('if parsed.path in {"/cloudif/portal/action/taiga-access"')
+        end = source.index('query_action =', start)
+        block = source[start:end]
+        self.assertIn('urllib.parse.parse_qs(parsed.query)', block)
+        self.assertNotIn('route_query.items()', block)
+
     def test_projects_module_was_not_extended_with_taiga_logic(self):
         self.assertNotIn('taiga', PROJECTS.read_text().lower())
 
