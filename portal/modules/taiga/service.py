@@ -277,6 +277,17 @@ def _estimated_active_minutes(events: list[dict[str, Any]], actor: str) -> int:
     return minutes
 
 
+def _events_for_actor(events: list[dict[str, Any]], username: str) -> list[dict[str, Any]]:
+    target=str(username or "").strip().lower()
+    if not target:
+        return []
+    return [item for item in events if str(item.get("delegated_user_id") or item.get("actor_id") or "").strip().lower()==target]
+
+
+def _actor_activity_history(events: list[dict[str, Any]], username: str, days: int = 14) -> list[dict[str, Any]]:
+    return _activity_history(_events_for_actor(events, username), days)
+
+
 def _actor_summary(events: list[dict[str, Any]], taiga_members: list[dict[str, Any]] | None = None) -> list[dict[str, Any]]:
     counts: dict[str, Counter] = defaultdict(Counter)
     last: dict[str, str] = {}
@@ -307,6 +318,7 @@ def _actor_summary(events: list[dict[str, Any]], taiga_members: list[dict[str, A
             "stories_assigned": int(item.get("stories_assigned") or 0),
             "stories_closed": int(item.get("stories_closed") or 0),
             "estimated_active_minutes": _estimated_active_minutes(events, actor),
+            "history": _actor_activity_history(events, actor, 14),
         })
     return out
 
@@ -422,7 +434,11 @@ def taiga_data(identity, selected_slug: str = "") -> dict[str, Any]:
     actors = _actor_summary(events, taiga_project.get("members") or []) if is_global(identity) else []
     subject = taiga_project.get("subject") if isinstance(taiga_project.get("subject"), dict) else None
     if subject is not None:
-        subject = {**subject, "estimated_active_minutes": _estimated_active_minutes(events, identity.username)}
+        subject = {
+            **subject,
+            "estimated_active_minutes": _estimated_active_minutes(events, identity.username),
+            "history": _actor_activity_history(events, identity.username, 14),
+        }
     dashboard=_dashboard_metrics(identity,events,actors,subject,taiga_project)
     return {
         "username": identity.username,

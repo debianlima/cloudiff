@@ -139,27 +139,73 @@ def _recent_accesses(data: dict) -> str:
     return '<div class="table-scroll"><table class="cm-table taiga-table"><thead><tr><th>Usuário</th><th>Papel</th><th>Último login</th><th>Última atividade</th><th>Atividade estimada</th></tr></thead><tbody>'+''.join(rows)+'</tbody></table></div>'
 
 
+def _student_history_chart(history: list[dict], shared_peak: int = 0) -> str:
+    points=history or []
+    peak=max(shared_peak,max((int(item.get("events") or 0) for item in points),default=0),1)
+    bars=[]
+    for item in points:
+        value=int(item.get("events") or 0)
+        height=0 if value<=0 else max(8,round(100*value/peak))
+        bars.append(
+            '<span class="taiga-student-bar" '
+            f'style="height:{height}%" title="{h(item.get("label"))}: {value} evento(s)"></span>'
+        )
+    return '<div class="taiga-student-spark" role="img" aria-label="Atividade do aluno nos últimos 14 dias">'+''.join(bars)+'</div>'
+
+
+def _student_card(actor: dict, shared_peak: int) -> str:
+    total=int(actor.get("total") or 0)
+    tasks_closed=int(actor.get("tasks_closed") or 0);tasks_total=int(actor.get("tasks_assigned") or 0)
+    stories_closed=int(actor.get("stories_closed") or 0);stories_total=int(actor.get("stories_assigned") or 0)
+    minutes=int(actor.get("estimated_active_minutes") or 0)
+    return (
+        '<article class="taiga-student-card">'
+        '<div class="taiga-student-head"><div>'
+        f'<h3>{h(actor.get("full_name") or actor.get("username"))}</h3><p>{h(actor.get("username"))}</p>'
+        f'</div><span class="chip">{h(actor.get("role") or "membro")}</span></div>'
+        '<div class="taiga-student-metrics">'
+        f'<div><span>Tarefas</span><b>{tasks_closed}/{tasks_total}</b></div>'
+        f'<div><span>Histórias</span><b>{stories_closed}/{stories_total}</b></div>'
+        f'<div><span>Eventos</span><b>{total}</b></div>'
+        f'<div><span>Atividade</span><b>{minutes} min</b></div></div>'
+        '<div class="taiga-student-chart-head"><span>Atividade · 14 dias</span>'
+        f'<small>Última: {h(_when(actor.get("last_activity")))}</small></div>'
+        +_student_history_chart(actor.get("history") or [],shared_peak)+
+        '</article>'
+    )
+
+
 def _members(data: dict) -> str:
     if not data.get("can_view_members"):
         subject=data.get("subject") or {}
+        history=subject.get("history") or []
+        peak=max((int(item.get("events") or 0) for item in history),default=1)
         return (
+            '<div class="taiga-student-self">'
             '<div class="taiga-personal-grid">'
             f'<div><span>Tarefas</span><b>{h(subject.get("tasks_closed") or 0)} / {h(subject.get("tasks_assigned") or 0)}</b></div>'
             f'<div><span>Histórias</span><b>{h(subject.get("stories_closed") or 0)} / {h(subject.get("stories_assigned") or 0)}</b></div>'
             f'<div><span>Atividade estimada</span><b>{h(subject.get("estimated_active_minutes") or 0)} min</b></div>'
             f'<div><span>Último login</span><b>{h(_when(subject.get("last_login")))}</b></div></div>'
+            '<div class="resource-card taiga-student-self-chart"><div class="taiga-panel-head"><div><p class="resource-kicker">Meu histórico</p><h3>Atividade nos últimos 14 dias</h3></div></div>'
+            +_student_history_chart(history,peak)+'</div></div>'
         )
+    actors=data.get("actors") or []
+    if not actors:
+        return '<p class="resource-note">Ainda não há atividade individual normalizada para os membros.</p>'
+    shared_peak=max((int(point.get("events") or 0) for actor in actors for point in (actor.get("history") or [])),default=1)
+    cards=''.join(_student_card(actor,shared_peak) for actor in actors)
     rows=[]
-    for a in data.get("actors") or []:
+    for a in actors:
         rows.append(
             '<tr>'
             f'<td><strong>{h(a.get("full_name") or a.get("username"))}</strong><br><small>{h(a.get("username"))}</small></td>'
             f'<td>{h(a.get("role") or "—")}</td><td>{h(a.get("tasks_closed") or 0)}/{h(a.get("tasks_assigned") or 0)}</td>'
             f'<td>{h(a.get("stories_closed") or 0)}/{h(a.get("stories_assigned") or 0)}</td><td>{h(a.get("total") or 0)}</td>'
-            f'<td>{h(_when(a.get("last_activity")))}</td></tr>'
+            f'<td>{h(a.get("estimated_active_minutes") or 0)} min</td><td>{h(_when(a.get("last_activity")))}</td></tr>'
         )
-    if not rows:return '<p class="resource-note">Ainda não há atividade individual normalizada para os membros.</p>'
-    return '<div class="table-scroll"><table class="cm-table taiga-table"><thead><tr><th>Membro</th><th>Papel</th><th>Tarefas</th><th>Histórias</th><th>Eventos</th><th>Última atividade</th></tr></thead><tbody>'+''.join(rows)+'</tbody></table></div>'
+    table='<div class="table-scroll taiga-student-table"><table class="cm-table taiga-table"><thead><tr><th>Aluno</th><th>Papel</th><th>Tarefas</th><th>Histórias</th><th>Eventos</th><th>Atividade</th><th>Última atividade</th></tr></thead><tbody>'+''.join(rows)+'</tbody></table></div>'
+    return '<div class="taiga-student-grid">'+cards+'</div><details class="taiga-student-details"><summary>Ver comparação em tabela</summary>'+table+'</details>'
 
 
 def _timeline(data: dict) -> str:
@@ -199,7 +245,7 @@ def _detail(data: dict) -> str:
         '<section class="resource-section taiga-section"><div class="resource-section-head"><div><p class="ov-eyebrow">Acessos</p><h2>Últimos acessos e atividade</h2><p>'+h(audience)+' · tempo estimado a partir de eventos autenticados.</p></div></div>'+_recent_accesses(data)+'</section>'
         '<section class="resource-section taiga-section"><div class="resource-section-head"><div><p class="ov-eyebrow">Acompanhamento</p><h2>'+('Membros do projeto' if data.get('can_view_members') else 'Meus indicadores')+'</h2><p>Trabalho no Taiga e atividade acadêmica consolidados.</p></div></div>'+_members(data)+'</section>'
         '<section class="resource-section taiga-section"><div class="resource-section-head"><div><p class="ov-eyebrow">Linha do tempo</p><h2>Atividade recente</h2><p>Eventos normalizados de Taiga, Forgejo e Academic Audit. Commits não criam tarefas automaticamente.</p></div></div>'+_timeline(data)+'</section>'
-        '<p class="resource-note taiga-footnote">Atividade estimada é um indicador de uso da plataforma, não uma medição de horas trabalhadas.</p>'
+        '<p class="resource-note taiga-footnote"><b>Atualização:</b> este painel é recalculado ao abrir ou recarregar o projeto a partir dos eventos já coletados em segundo plano. Atividade estimada é um indicador de uso da plataforma, não uma medição de horas trabalhadas.</p>'
     )
 
 
