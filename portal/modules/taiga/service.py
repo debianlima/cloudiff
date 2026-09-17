@@ -13,7 +13,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from collections import Counter, defaultdict
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from portal.core.rbac import is_global
@@ -311,14 +311,107 @@ def _actor_summary(events: list[dict[str, Any]], taiga_members: list[dict[str, A
     return out
 
 
+def _activity_history(events: list[dict[str, Any]], days: int = 14) -> list[dict[str, Any]]:
+    days=max(7,min(int(days or 14),31))
+    parsed=[stamp for stamp in (_parse_ts(item.get("ts")) for item in events) if stamp]
+    end=(max(parsed) if parsed else datetime.now(timezone.utc)).astimezone(timezone.utc).date()
+    start=end-timedelta(days=days-1)
+    buckets={start+timedelta(days=i):{"events":0,"actors":set()} for i in range(days)}
+    for event in events:
+        stamp=_parse_ts(event.get("ts"))
+        if not stamp:
+            continue
+        day=stamp.astimezone(timezone.utc).date()
+        if day not in buckets:
+            continue
+        buckets[day]["events"]+=1
+        actor=str(event.get("delegated_user_id") or event.get("actor_id") or "").strip().lower()
+        if actor and actor not in {"system","portal","mcp","forgejo-webhook"}:
+            buckets[day]["actors"].add(actor)
+    return [{"date":day.isoformat(),"label":day.strftime("%d/%m"),"events":value["events"],"actors":len(value["actors"])} for day,value in sorted(buckets.items())]
+
+
+def _source_breakdown(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    labels={"forgejo":"Forgejo","taiga":"Taiga","mcp":"MCP","portal":"Portal","academic-audit":"Academic Audit"}
+    counter=Counter(str(item.get("source") or "other").strip().lower() for item in events)
+    total=sum(counter.values()) or 1
+    out=[]
+    for source,count in counter.most_common():
+        out.append({"source":source,"label":labels.get(source,source.replace("-"," ").title()),"count":count,"pct":round(100*count/total)})
+    return out
+
+
+def _completion_summary(taiga_project: dict[str, Any]) -> list[dict[str, Any]]:
+    counts=taiga_project.get("counts") if isinstance(taiga_project.get("counts"),dict) else {}
+    rows=[]
+    for key,closed_key,label in (("tasks","tasks_closed","Tarefas"),("userstories","userstories_closed","Histórias"),("milestones","milestones_closed","Etapas")):
+        total=int(counts.get(key) or 0);closed=int(counts.get(closed_key) or 0)
+        rows.append({"key":key,"label":label,"total":total,"closed":closed,"open":max(0,total-closed),"pct":round(100*closed/total) if total else 0})
+    return rows
+
+
+def _recent_accesses(identity, actors: list[dict[str, Any]], subject: dict[str, Any] | None) -> list[dict[str, Any]]:
+    if is_global(identity):
+        rows=[dict(item) for item in actors]
+    elif subject:
+        rows=[{
+            "username":identity.username,
+            "full_name":str(subject.get("full_name") or identity.username)[:200],
+            "role":str(subject.get("role") or "")[:120],
+            "last_login":subject.get("last_login"),
+            "last_activity":subject.get("last_activity"),
+            "estimated_active_minutes":int(subject.get("estimated_active_minutes") or 0),
+            "total":int(subject.get("history_events") or 0),
+        }]
+    else:
+        rows=[]
+    rows.sort(key=lambda item:max(str(item.get("last_activity") or ""),str(item.get("last_login") or "")),reverse=True)
+    return rows[:20]
+
+
+def _dashboard_metrics(identity, events: list[dict[str, Any]], actors: list[dict[str, Any]], subject: dict[str, Any] | None, taiga_project: dict[str, Any]) -> dict[str, Any]:
+    user_ids={str(item.get("delegated_user_id") or item.get("actor_id") or "").strip().lower() for item in events}
+    user_ids={item for item in user_ids if item and item not in {"system","portal","mcp","forgejo-webhook"}}
+    latest=max((str(item.get("ts") or "") for item in events),default="")
+    return {
+        "activity_total":len(events),
+        "active_users":len(user_ids),
+        "latest_activity":latest,
+        "history":_activity_history(events,14),
+        "sources":_source_breakdown(events),
+        "completion":_completion_summary(taiga_project),
+        "recent_accesses":_recent_accesses(identity,actors,subject),
+    }
+
+
 def taiga_data(identity, selected_slug: str = "") -> dict[str, Any]:
     projects = _visible_projects(identity, _DB)
     allowed = {str(p.get("slug") or ""): p for p in projects}
-    slug = selected_slug if selected_slug in allowed else (next(iter(allowed)) if allowed else "")
+    slug = selected_slug if selected_slug in allowed else ""
     selected = allowed.get(slug)
-    events, audit_state = _audit_events(identity, slug) if slug else ([], "no_project")
-    forgejo = _forja_project(identity, slug) if slug else {"ok": False, "error": "no_project", "activity": []}
-    taiga_project = _taiga_private_summary(identity, slug) if slug else {"configured": bool(_read_env(_TAIGA_RECONCILER_ENV).get("TAIGA_RECONCILER_TOKEN")), "ok": False, "error": "no_project"}
+    taiga_health=_taiga_public_health()
+    faro=_faro_taiga_telemetry()
+    if not slug:
+        return {
+            "username":identity.username,
+            "can_view_members":is_global(identity),
+            "projects":projects,
+            "project_count":len(projects),
+            "selected_project":None,
+            "taiga":taiga_health,
+            "faro":faro,
+            "forgejo":{"ok":False,"error":"no_project","activity":[]},
+            "taiga_project":{"configured":bool(_read_env(_TAIGA_RECONCILER_ENV).get("TAIGA_RECONCILER_TOKEN")),"ok":False,"error":"no_project"},
+            "activity":[],
+            "activity_state":"no_project",
+            "actors":[],
+            "subject":None,
+            "dashboard":{"activity_total":0,"active_users":0,"latest_activity":"","history":[],"sources":[],"completion":[],"recent_accesses":[]},
+            "privacy":{"individual_scope":"all-project-members" if is_global(identity) else "self","activity_is_estimated":True},
+        }
+    events, audit_state = _audit_events(identity, slug)
+    forgejo = _forja_project(identity, slug)
+    taiga_project = _taiga_private_summary(identity, slug)
     for item in forgejo.get("activity") or []:
         events.append({"ts": item.get("ts"), "actor_id": item.get("actor") or "", "delegated_user_id": "", "source": item.get("source") or "forgejo", "action": item.get("event") or item.get("action") or "activity", "result": item.get("result") or "success", "duration_ms": 0, "attrs": {k: item.get(k) for k in ("summary","commit","ref","number","version","delivery") if item.get(k) not in (None, "")}})
     for item in taiga_project.get("timeline") or []:
@@ -330,18 +423,21 @@ def taiga_data(identity, selected_slug: str = "") -> dict[str, Any]:
     subject = taiga_project.get("subject") if isinstance(taiga_project.get("subject"), dict) else None
     if subject is not None:
         subject = {**subject, "estimated_active_minutes": _estimated_active_minutes(events, identity.username)}
+    dashboard=_dashboard_metrics(identity,events,actors,subject,taiga_project)
     return {
         "username": identity.username,
         "can_view_members": is_global(identity),
         "projects": projects,
+        "project_count":len(projects),
         "selected_project": selected,
-        "taiga": _taiga_public_health(),
-        "faro": _faro_taiga_telemetry(),
+        "taiga": taiga_health,
+        "faro": faro,
         "forgejo": forgejo,
         "taiga_project": taiga_project,
         "activity": events,
         "activity_state": audit_state,
         "actors": actors,
         "subject": subject,
+        "dashboard":dashboard,
         "privacy": {"individual_scope": "all-project-members" if is_global(identity) else "self", "activity_is_estimated": True},
     }
