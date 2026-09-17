@@ -276,6 +276,68 @@ class TaigaModuleTests(unittest.TestCase):
         self.assertNotIn('settimeout(', combined)
         self.assertNotIn('http-equiv="refresh"', combined)
 
+
+    def test_pagination_uses_four_items_and_clamps_pages(self):
+        items=[{"id":i} for i in range(11)]
+        first=service._paginate(items,1,4)
+        second=service._paginate(items,2,4)
+        last=service._paginate(items,99,4)
+        self.assertEqual([x['id'] for x in first['items']],[0,1,2,3])
+        self.assertEqual((first['start'],first['end'],first['total'],first['pages']),(1,4,11,3))
+        self.assertEqual([x['id'] for x in second['items']],[4,5,6,7])
+        self.assertEqual((second['start'],second['end'],second['page']),(5,8,2))
+        self.assertEqual([x['id'] for x in last['items']],[8,9,10])
+        self.assertEqual(last['page'],3)
+
+    def test_pagination_links_preserve_other_section_page_and_anchor(self):
+        data={
+            'selected_project':{'slug':'agenda-unica'},
+            'pagination':{
+                'accesses':{'page':2,'page_size':4,'total':17,'pages':5,'start':5,'end':8},
+                'activity':{'page':3,'page_size':4,'total':29,'pages':8,'start':9,'end':12},
+            },
+        }
+        markup=views._pagination(data,'accesses','access_page','taiga-accesses')
+        self.assertIn('access_page=1&amp;activity_page=3',markup.replace('&','&amp;'))
+        self.assertIn('#taiga-accesses',markup)
+        self.assertIn('5–8 de 17',markup)
+        self.assertIn('aria-current="page">2</span>',markup)
+
+    def test_pagination_window_grows_without_rendering_every_page(self):
+        self.assertEqual(views._page_numbers(1,10),[1,2,3,4,None,10])
+        self.assertEqual(views._page_numbers(5,10),[1,None,4,5,6,None,10])
+        self.assertEqual(views._page_numbers(10,10),[1,None,7,8,9,10])
+
+    def test_access_and_activity_views_render_only_current_page_items(self):
+        access_items=[]
+        for i in range(9):
+            access_items.append({'username':f'u{i}','full_name':f'User {i}','role':'Aluno','last_login':None,'last_activity':None,'estimated_active_minutes':0})
+        events=[{'ts':'2026-09-16T20:00:00+00:00','actor_id':f'u{i}','source':'taiga','action':f'a{i}','attrs':{}} for i in range(9)]
+        data={
+            'selected_project':{'slug':'alpha'},
+            'dashboard':{'recent_accesses':access_items},
+            'activity':events,
+            'pagination':{
+                'accesses':service._paginate(access_items,2,4),
+                'activity':service._paginate(events,2,4),
+            },
+        }
+        access_markup=views._recent_accesses(data)
+        timeline_markup=views._timeline(data)
+        for i in range(4,8):
+            self.assertIn(f'User {i}',access_markup)
+            self.assertIn(f'a{i}',timeline_markup)
+        self.assertNotIn('User 0',access_markup)
+        self.assertNotIn('a0',timeline_markup)
+        self.assertEqual(access_markup.count('class="taiga-cell-primary"'),4)
+        self.assertEqual(timeline_markup.count('data-label="Quando"'),4)
+
+    def test_pagination_css_is_mobile_friendly(self):
+        css=DESIGN.read_text()
+        for marker in ('.taiga-pagination{','.taiga-page-buttons{','.taiga-page-link{','.taiga-page-link.is-active{'):
+            self.assertIn(marker,css)
+        self.assertIn('@media(max-width:480px)',css)
+
     def test_admin_grants_only_own_access_to_visible_project(self):
         identity = Identity('silviopro','silviopro@example.invalid',frozenset({'CloudIF-Tenants-Admin'}))
         result = service.grant_taiga_access(identity, 'alpha')

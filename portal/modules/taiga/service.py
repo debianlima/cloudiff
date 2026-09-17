@@ -378,7 +378,35 @@ def _recent_accesses(identity, actors: list[dict[str, Any]], subject: dict[str, 
     else:
         rows=[]
     rows.sort(key=lambda item:max(str(item.get("last_activity") or ""),str(item.get("last_login") or "")),reverse=True)
-    return rows[:20]
+    return rows
+
+
+def _safe_page(value: Any) -> int:
+    try:
+        page=int(str(value or "1").strip())
+    except Exception:
+        page=1
+    return max(1,min(page,10000))
+
+
+def _paginate(items: list[Any], page: Any, page_size: int = 4) -> dict[str, Any]:
+    size=max(1,min(int(page_size or 4),100))
+    total=len(items)
+    pages=max(1,(total+size-1)//size)
+    current=min(_safe_page(page),pages)
+    start=(current-1)*size
+    end=min(start+size,total)
+    return {
+        "page":current,
+        "page_size":size,
+        "total":total,
+        "pages":pages,
+        "start":start+1 if total else 0,
+        "end":end,
+        "items":items[start:end],
+        "has_prev":current>1,
+        "has_next":current<pages,
+    }
 
 
 def _dashboard_metrics(identity, events: list[dict[str, Any]], actors: list[dict[str, Any]], subject: dict[str, Any] | None, taiga_project: dict[str, Any]) -> dict[str, Any]:
@@ -396,7 +424,7 @@ def _dashboard_metrics(identity, events: list[dict[str, Any]], actors: list[dict
     }
 
 
-def taiga_data(identity, selected_slug: str = "") -> dict[str, Any]:
+def taiga_data(identity, selected_slug: str = "", *, access_page: Any = 1, activity_page: Any = 1) -> dict[str, Any]:
     projects = _visible_projects(identity, _DB)
     allowed = {str(p.get("slug") or ""): p for p in projects}
     slug = selected_slug if selected_slug in allowed else ""
@@ -419,6 +447,10 @@ def taiga_data(identity, selected_slug: str = "") -> dict[str, Any]:
             "actors":[],
             "subject":None,
             "dashboard":{"activity_total":0,"active_users":0,"latest_activity":"","history":[],"sources":[],"completion":[],"recent_accesses":[]},
+            "pagination":{
+                "accesses":_paginate([],access_page,4),
+                "activity":_paginate([],activity_page,4),
+            },
             "privacy":{"individual_scope":"all-project-members" if is_global(identity) else "self","activity_is_estimated":True},
         }
     events, audit_state = _audit_events(identity, slug)
@@ -440,6 +472,10 @@ def taiga_data(identity, selected_slug: str = "") -> dict[str, Any]:
             "history": _actor_activity_history(events, identity.username, 14),
         }
     dashboard=_dashboard_metrics(identity,events,actors,subject,taiga_project)
+    pagination={
+        "accesses":_paginate(dashboard.get("recent_accesses") or [],access_page,4),
+        "activity":_paginate(events,activity_page,4),
+    }
     return {
         "username": identity.username,
         "can_view_members": is_global(identity),
@@ -455,5 +491,6 @@ def taiga_data(identity, selected_slug: str = "") -> dict[str, Any]:
         "actors": actors,
         "subject": subject,
         "dashboard":dashboard,
+        "pagination":pagination,
         "privacy": {"individual_scope": "all-project-members" if is_global(identity) else "self", "activity_is_estimated": True},
     }
