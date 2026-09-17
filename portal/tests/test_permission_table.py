@@ -41,6 +41,7 @@ class PermissionTableTest(unittest.TestCase):
         ("/cloudiff/portal/pagina/projetos", "GET"),
         ("/cloudiff/portal/pagina/taiga", "GET"),
         ("/cloudiff/portal/api/taiga", "GET"),
+        ("/cloudiff/portal/action/taiga-access", "POST"),
         ("/cloudiff/portal/", "GET"),  # home com barra, equivale a /cloudiff/portal
     }
 
@@ -60,16 +61,25 @@ class PermissionTableTest(unittest.TestCase):
                     self.assertEqual(got, want,
                         f"{ep.method} {ep.path} [{persona}]: v1={want}, v2={got}")
 
-    def test_new_taiga_routes_are_read_only_and_authenticated(self):
+    def test_new_taiga_routes_have_explicit_read_and_grant_permissions(self):
         taiga = [ep for ep in all_endpoints() if ep.module == "taiga"]
         self.assertEqual({(ep.path, ep.method) for ep in taiga}, {
             ("/cloudiff/portal/pagina/taiga", "GET"),
             ("/cloudiff/portal/api/taiga", "GET"),
+            ("/cloudiff/portal/action/taiga-access", "POST"),
         })
-        for ep in taiga:
+        reads=[ep for ep in taiga if ep.method=='GET']
+        for ep in reads:
             for identity in PERSONAS.values():
                 self.assertTrue(ep.guard(identity))
-            self.assertEqual(ep.permission, "taiga.view")
+            self.assertEqual(ep.permission,"taiga.view")
+        grant=next(ep for ep in taiga if ep.method=='POST')
+        self.assertFalse(grant.guard(PERSONAS['aluno']))
+        self.assertTrue(grant.guard(PERSONAS['professor']))
+        self.assertTrue(grant.guard(PERSONAS['admin']))
+        self.assertEqual(grant.permission,"taiga.manage")
+        self.assertTrue(grant.csrf)
+        self.assertTrue(grant.origin)
 
     def test_all_action_routes_declare_csrf(self):
         # A3: CSRF preserved on every /action/ route. F3: publication gains CSRF

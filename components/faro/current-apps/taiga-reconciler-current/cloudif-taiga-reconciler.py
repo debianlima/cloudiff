@@ -110,6 +110,64 @@ def reconcile(payload):
     if not lines:return {'ok':False,'error':'invalid_django_response'}
     try:return json.loads(lines[-1])
     except Exception:return {'ok':False,'error':'invalid_json_response'}
+DJANGO_GRANT_ACCESS = r'''
+import json,sys
+from django.db import transaction
+from taiga.projects.models import Project,Membership
+from taiga.users.models import User
+payload=json.load(sys.stdin)
+slug=str(payload.get('slug') or '').strip().lower()
+username=str(payload.get('username') or '').strip().lower()
+email=str(payload.get('email') or '').strip().lower()
+full_name=str(payload.get('full_name') or username).strip() or username
+p=Project.objects.filter(slug=slug).first()
+if not p:
+    print(json.dumps({'ok':False,'error':'project_not_found','secrets_exposed':False},separators=(',',':')));raise SystemExit()
+u=User.objects.filter(username__iexact=username).first()
+if not u and email:u=User.objects.filter(email__iexact=email).first()
+created_user=False
+if not u:
+    if not email:
+        print(json.dumps({'ok':False,'error':'email_required','secrets_exposed':False},separators=(',',':')));raise SystemExit()
+    u=User.objects.create(username=username,email=email,full_name=full_name,is_active=True,verified_email=True)
+    u.set_unusable_password();u.save(update_fields=['password']);created_user=True
+else:
+    changed=[]
+    if email and not u.email:u.email=email;changed.append('email')
+    if full_name and (not u.full_name or u.full_name==u.username) and u.full_name!=full_name:u.full_name=full_name;changed.append('full_name')
+    if not u.is_active:u.is_active=True;changed.append('is_active')
+    if changed:u.save(update_fields=changed)
+with transaction.atomic():
+    role=p.roles.filter(slug='product-owner').first() or p.roles.filter(computable=True).order_by('order','id').first() or p.roles.first()
+    membership=Membership.objects.filter(project=p,user=u).first()
+    created_membership=False
+    if not membership:
+        membership=Membership.objects.create(project=p,user=u,role=role,is_admin=True,email=u.email or None)
+        created_membership=True
+    else:
+        changes=[]
+        if role and membership.role_id!=role.id:membership.role=role;changes.append('role')
+        if not membership.is_admin:membership.is_admin=True;changes.append('is_admin')
+        if changes:membership.save(update_fields=changes)
+print(json.dumps({'ok':True,'slug':slug,'taiga_username':u.username,'created_user':created_user,'created_membership':created_membership,'is_admin':True,'secrets_exposed':False},separators=(',',':')))
+'''
+
+def grant_access(slug,payload):
+    if not SLUG.fullmatch(slug):return {'ok':False,'error':'invalid_slug'}
+    if not isinstance(payload,dict):return {'ok':False,'error':'invalid_payload'}
+    username=str(payload.get('username') or '').strip().lower()
+    email=str(payload.get('email') or '').strip().lower()
+    full_name=str(payload.get('full_name') or username).strip()
+    if not re.fullmatch(r'[A-Za-z0-9_.@-]{1,150}',username):return {'ok':False,'error':'invalid_username'}
+    if email and (len(email)>320 or '@' not in email):return {'ok':False,'error':'invalid_email'}
+    safe={'slug':slug,'username':username,'email':email[:320],'full_name':full_name[:200]}
+    p=subprocess.run(['docker','exec','-i',CONTAINER,'/opt/venv/bin/python','/taiga-back/manage.py','shell','-c',DJANGO_GRANT_ACCESS],input=json.dumps(safe),text=True,capture_output=True,timeout=60)
+    if p.returncode!=0:return {'ok':False,'error':'django_grant_failed','error_type':'subprocess','returncode':p.returncode}
+    lines=[x for x in p.stdout.splitlines() if x.strip().startswith('{')]
+    if not lines:return {'ok':False,'error':'invalid_django_response'}
+    try:return json.loads(lines[-1])
+    except Exception:return {'ok':False,'error':'invalid_json_response'}
+
 DJANGO_DELETE = r'''
 import json,sys
 from django.db import transaction
@@ -211,7 +269,7 @@ def project_summary(slug,subject='',include_members=False):
 
 
 class H(BaseHTTPRequestHandler):
-    server_version='cloudif-taiga-reconciler/0.3.0'
+    server_version='cloudif-taiga-reconciler/0.3.1'
     def log_message(self,fmt,*args):pass
     def out(self,code,obj):
         b=json.dumps(obj,ensure_ascii=False,separators=(',',':')).encode();self.send_response(code);self.send_header('Content-Type','application/json');self.send_header('Content-Length',str(len(b)));self.end_headers();self.wfile.write(b)
@@ -220,7 +278,7 @@ class H(BaseHTTPRequestHandler):
         return bool(TOKEN) and hmac.compare_digest(got,exp)
     def do_GET(self):
         parsed=urlparse(self.path);path=parsed.path
-        if path=='/health':return self.out(200,{'ok':True,'service':'cloudif-taiga-reconciler','version':'0.3.0'})
+        if path=='/health':return self.out(200,{'ok':True,'service':'cloudif-taiga-reconciler','version':'0.3.1'})
         if not self.auth():return self.out(401,{'ok':False,'error':'unauthorized'})
         sm=re.fullmatch(r'/v1/projects/([a-z0-9][a-z0-9-]{0,62})/summary',path)
         if sm:
@@ -232,6 +290,15 @@ class H(BaseHTTPRequestHandler):
     def do_POST(self):
         path=urlparse(self.path).path
         if not self.auth():return self.out(401,{'ok':False,'error':'unauthorized'})
+        gm=re.fullmatch(r'/v1/projects/([a-z0-9][a-z0-9-]{0,62})/access/grant',path)
+        if gm:
+            n=int(self.headers.get('Content-Length','0') or 0)
+            if n<1 or n>8192:return self.out(413,{'ok':False,'error':'invalid_size'})
+            try:payload=json.loads(self.rfile.read(n))
+            except Exception:return self.out(400,{'ok':False,'error':'invalid_json'})
+            result=grant_access(gm.group(1),payload)
+            status=200 if result.get('ok') else (404 if result.get('error')=='project_not_found' else 400 if result.get('error') in {'invalid_slug','invalid_payload','invalid_username','invalid_email','email_required'} else 502)
+            return self.out(status,result)
         dm=re.fullmatch(r'/v1/projects/([a-z0-9][a-z0-9-]{0,62})/delete',path)
         if dm:
             n=int(self.headers.get('Content-Length','0') or 0)

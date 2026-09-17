@@ -50,7 +50,9 @@ class TaigaModuleTests(unittest.TestCase):
         env.write_text("FORJA_AGENT_URL=http://forja.invalid\nFORJA_AGENT_TOKEN=forja\n")
         service._FORJA_ENV = str(env)
         self.calls = []
+        self.post_calls = []
         self.old_http = service._http_json
+        self.old_http_post = service._http_json_post
 
         def fake_http(url, *, headers=None, timeout=4.0):
             self.calls.append((url, headers or {}))
@@ -90,6 +92,13 @@ class TaigaModuleTests(unittest.TestCase):
             return 503, {"ok":False}
         service._http_json = fake_http
 
+        def fake_http_post(url, payload, *, headers=None, timeout=8.0):
+            self.post_calls.append((url, payload, headers or {}))
+            if '/access/grant' in url:
+                return 200, {"ok": True, "taiga_username": payload.get("username"), "created_user": True, "created_membership": True, "secrets_exposed": False}
+            return 503, {"ok": False, "error": "unexpected"}
+        service._http_json_post = fake_http_post
+
     def tearDown(self):
         service._DB = self.old_db
         projects_service._DB = self.old_projects_db
@@ -97,6 +106,7 @@ class TaigaModuleTests(unittest.TestCase):
         service._FORJA_ENV = self.old_forja
         service._TAIGA_RECONCILER_ENV = self.old_taiga_reconciler_env
         service._http_json = self.old_http
+        service._http_json_post = self.old_http_post
         self.temp.cleanup()
 
     def test_student_sees_only_visible_project_and_own_activity(self):
@@ -148,6 +158,45 @@ class TaigaModuleTests(unittest.TestCase):
         markup = views.taiga_body(data)
         self.assertIn('Cliente do broker Faro não configurado', markup)
         self.assertIn('Atividade do projeto', markup)
+
+
+    def test_admin_grants_only_own_access_to_visible_project(self):
+        identity = Identity('silviopro','silviopro@example.invalid',frozenset({'CloudIF-Tenants-Admin'}))
+        result = service.grant_taiga_access(identity, 'alpha')
+        self.assertTrue(result['ok'])
+        self.assertEqual(result['redirect'], 'https://taiga.cloudiff.duckdns.org/project/alpha')
+        self.assertEqual(len(self.post_calls), 1)
+        url,payload,headers = self.post_calls[0]
+        self.assertTrue(url.endswith('/v1/projects/alpha/access/grant'))
+        self.assertEqual(payload, {'username':'silviopro','email':'silviopro@example.invalid','full_name':'silviopro'})
+        self.assertTrue(headers.get('Authorization','').startswith('Bearer '))
+        self.assertNotIn('Authorization', result)
+
+    def test_professor_cannot_grant_project_outside_visibility(self):
+        identity = Identity('prof','prof@example.invalid',frozenset({'CloudIF-Professor'}))
+        result = service.grant_taiga_access(identity, 'alpha')
+        self.assertFalse(result['ok'])
+        self.assertEqual(result['status'], 403)
+        self.assertEqual(result['error'], 'project_not_visible')
+        self.assertEqual(self.post_calls, [])
+
+    def test_student_cannot_grant_taiga_access(self):
+        identity = Identity('alice','alice@example.invalid',frozenset({'CloudIF-Aluno'}))
+        result = service.grant_taiga_access(identity, 'alpha')
+        self.assertFalse(result['ok'])
+        self.assertEqual(result['status'], 403)
+        self.assertEqual(result['error'], 'forbidden')
+        self.assertEqual(self.post_calls, [])
+
+    def test_global_view_uses_csrf_post_for_open_project(self):
+        identity = Identity('silviopro','silviopro@example.invalid',frozenset({'CloudIF-Tenants-Admin'}))
+        data = service.taiga_data(identity, 'alpha')
+        data['csrf'] = 'csrf-test'
+        markup = views.taiga_body(data)
+        self.assertIn('method="post"', markup)
+        self.assertIn('/cloudiff/portal/action/taiga-access', markup)
+        self.assertIn('name="csrf_token" value="csrf-test"', markup)
+        self.assertIn('name="project" value="alpha"', markup)
 
     def test_navigation_adds_taiga_without_replacing_projects(self):
         shell = SHELL.read_text()
