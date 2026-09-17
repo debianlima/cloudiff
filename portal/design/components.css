@@ -874,3 +874,12 @@ body.cloudif-modal-open{overflow:hidden}
   .taiga-responsive-table td,.taiga-responsive-table .taiga-cell-long{grid-column:1/-1;border-bottom:1px solid var(--rule-soft)}
   .taiga-responsive-table td:last-child{border-bottom:0}
 }
+
+.taiga-pagination{display:flex;align-items:center;justify-content:space-between;gap:var(--s3);margin-top:var(--s3);padding-top:var(--s3);border-top:1px solid var(--rule-soft)}
+.taiga-page-summary{font-family:var(--data);font-size:11px;color:var(--ink-3);white-space:nowrap}
+.taiga-page-buttons{display:flex;align-items:center;justify-content:flex-end;gap:5px;flex-wrap:wrap}
+.taiga-page-link{display:inline-flex;align-items:center;justify-content:center;min-width:34px;height:34px;padding:0 9px;border:1px solid var(--rule);border-radius:9px;background:var(--surface);color:var(--ink-2);font-family:var(--data);font-size:12px;font-weight:700;text-decoration:none}
+.taiga-page-link:hover{border-color:var(--iff);color:var(--iff-dark)}
+.taiga-page-link.is-active{background:var(--iff-dark);border-color:var(--iff-dark);color:var(--surface);pointer-events:none}
+.taiga-page-arrow{font-family:system-ui,sans-serif;font-size:20px;line-height:1}.taiga-page-gap{padding:0 2px;color:var(--ink-3)}
+@media(max-width:480px){.taiga-pagination{align-items:flex-start;flex-direction:column}.taiga-page-buttons{justify-content:flex-start;width:100%}.taiga-page-link{min-width:32px;height:32px;padding:0 8px}}

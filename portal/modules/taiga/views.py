@@ -136,9 +136,60 @@ def _source_chart(data: dict) -> str:
     return ''.join(rows) or '<p class="resource-note">Nenhuma fonte de atividade registrada.</p>'
 
 
+def _page_numbers(current: int, pages: int) -> list[int | None]:
+    if pages <= 7:
+        return list(range(1,pages+1))
+    keep={1,pages,current,max(1,current-1),min(pages,current+1)}
+    if current <= 3:
+        keep.update({2,3,4})
+    if current >= pages-2:
+        keep.update({pages-3,pages-2,pages-1})
+    ordered=sorted(x for x in keep if 1 <= x <= pages)
+    out=[]
+    previous=0
+    for value in ordered:
+        if previous and value-previous>1:
+            out.append(None)
+        out.append(value);previous=value
+    return out
+
+
+def _pagination(data: dict, key: str, param: str, anchor: str) -> str:
+    meta=((data.get("pagination") or {}).get(key) or {})
+    total=int(meta.get("total") or 0);pages=max(1,int(meta.get("pages") or 1));current=max(1,int(meta.get("page") or 1))
+    if total <= int(meta.get("page_size") or 4):
+        return ''
+    slug=str((data.get("selected_project") or {}).get("slug") or "")
+    other_param='activity_page' if param=='access_page' else 'access_page'
+    other_key='activity' if key=='accesses' else 'accesses'
+    other=int((((data.get("pagination") or {}).get(other_key) or {}).get("page") or 1))
+    def href(page:int)->str:
+        query=f'tab=taiga&project={quote(slug,safe="")}&{param}={page}&{other_param}={other}'
+        return f'{BASE}/?{query}#{anchor}'
+    parts=[]
+    if current>1:
+        parts.append(f'<a class="taiga-page-link taiga-page-arrow" href="{href(current-1)}" aria-label="Página anterior">‹</a>')
+    for number in _page_numbers(current,pages):
+        if number is None:
+            parts.append('<span class="taiga-page-gap" aria-hidden="true">…</span>')
+        elif number==current:
+            parts.append(f'<span class="taiga-page-link is-active" aria-current="page">{number}</span>')
+        else:
+            parts.append(f'<a class="taiga-page-link" href="{href(number)}">{number}</a>')
+    if current<pages:
+        parts.append(f'<a class="taiga-page-link taiga-page-arrow" href="{href(current+1)}" aria-label="Próxima página">›</a>')
+    start=int(meta.get("start") or 0);end=int(meta.get("end") or 0)
+    return (
+        '<nav class="taiga-pagination" aria-label="Paginação">'
+        f'<span class="taiga-page-summary">{start}–{end} de {total}</span>'
+        '<div class="taiga-page-buttons">'+''.join(parts)+'</div></nav>'
+    )
+
+
 def _recent_accesses(data: dict) -> str:
     rows=[]
-    for item in (data.get("dashboard") or {}).get("recent_accesses") or []:
+    meta=((data.get("pagination") or {}).get("accesses") or {})
+    for item in meta.get("items") or []:
         rows.append(
             '<tr>'
             f'<td class="taiga-cell-primary" data-label="Usuário"><strong>{h(item.get("full_name") or item.get("username"))}</strong><br><small>{h(item.get("username"))}</small></td>'
@@ -148,7 +199,8 @@ def _recent_accesses(data: dict) -> str:
             f'<td data-label="Atividade estimada">{h(_minutes(item.get("estimated_active_minutes")))}</td></tr>'
         )
     if not rows:return '<div class="resource-empty taiga-empty-compact"><h3>Sem acessos recentes</h3><p>Os acessos aparecerão aqui quando houver eventos autenticados.</p></div>'
-    return '<div class="table-scroll taiga-table-wrap"><table class="cm-table taiga-table taiga-responsive-table"><thead><tr><th>Usuário</th><th>Papel</th><th>Último login</th><th>Última atividade</th><th>Atividade estimada</th></tr></thead><tbody>'+''.join(rows)+'</tbody></table></div>'
+    table='<div class="table-scroll taiga-table-wrap"><table class="cm-table taiga-table taiga-responsive-table"><thead><tr><th>Usuário</th><th>Papel</th><th>Último login</th><th>Última atividade</th><th>Atividade estimada</th></tr></thead><tbody>'+''.join(rows)+'</tbody></table></div>'
+    return table+_pagination(data,'accesses','access_page','taiga-accesses')
 
 
 def _student_history_chart(history: list[dict], shared_peak: int = 0) -> str:
@@ -225,7 +277,8 @@ def _members(data: dict) -> str:
 
 def _timeline(data: dict) -> str:
     rows=[]
-    for event in (data.get("activity") or [])[:40]:
+    meta=((data.get("pagination") or {}).get("activity") or {})
+    for event in meta.get("items") or []:
         actor=event.get("delegated_user_id") or event.get("actor_id") or "sistema";detail=event.get("attrs") or {}
         ref=detail.get("summary") or detail.get("sha") or detail.get("commit") or detail.get("task_ref") or ""
         rows.append(
@@ -237,7 +290,8 @@ def _timeline(data: dict) -> str:
             f'<td class="taiga-cell-long" data-label="Referência">{h(ref)}</td></tr>'
         )
     if not rows:return '<div class="resource-empty taiga-empty-compact"><h3>Sem atividade registrada</h3><p>Commits, Taiga e demais eventos aparecerão aqui conforme forem ocorrendo.</p></div>'
-    return '<div class="table-scroll taiga-table-wrap"><table class="cm-table taiga-table taiga-responsive-table"><thead><tr><th>Quando</th><th>Usuário</th><th>Fonte</th><th>Ação</th><th>Referência</th></tr></thead><tbody>'+''.join(rows)+'</tbody></table></div>'
+    table='<div class="table-scroll taiga-table-wrap"><table class="cm-table taiga-table taiga-responsive-table"><thead><tr><th>Quando</th><th>Usuário</th><th>Fonte</th><th>Ação</th><th>Referência</th></tr></thead><tbody>'+''.join(rows)+'</tbody></table></div>'
+    return table+_pagination(data,'activity','activity_page','taiga-activity')
 
 
 def _integrations(data: dict) -> str:
@@ -264,9 +318,9 @@ def _detail(data: dict) -> str:
         '<section class="resource-card taiga-panel"><div class="taiga-panel-head"><div><p class="resource-kicker">Origem dos eventos</p><h3>Integrações em atividade</h3></div></div>'+_source_chart(data)+'</section>'
         '<section class="resource-card taiga-panel"><div class="taiga-panel-head"><div><p class="resource-kicker">Plataforma</p><h3>Saúde das integrações</h3></div></div>'+_integrations(data)+'</section>'
         '</div>'
-        '<section class="resource-section taiga-section"><div class="resource-section-head"><div><p class="ov-eyebrow">Acessos</p><h2>Últimos acessos e atividade</h2><p>'+h(audience)+' · tempo estimado a partir de eventos autenticados.</p></div></div>'+_recent_accesses(data)+'</section>'
+        '<section id="taiga-accesses" class="resource-section taiga-section"><div class="resource-section-head"><div><p class="ov-eyebrow">Acessos</p><h2>Últimos acessos e atividade</h2><p>'+h(audience)+' · tempo estimado a partir de eventos autenticados.</p></div></div>'+_recent_accesses(data)+'</section>'
         '<section class="resource-section taiga-section"><div class="resource-section-head"><div><p class="ov-eyebrow">Acompanhamento</p><h2>'+('Membros do projeto' if data.get('can_view_members') else 'Meus indicadores')+'</h2><p>Trabalho no Taiga e atividade acadêmica consolidados.</p></div></div>'+_members(data)+'</section>'
-        '<section class="resource-section taiga-section"><div class="resource-section-head"><div><p class="ov-eyebrow">Linha do tempo</p><h2>Atividade recente</h2><p>Eventos normalizados de Taiga, Forgejo e Academic Audit. Commits não criam tarefas automaticamente.</p></div></div>'+_timeline(data)+'</section>'
+        '<section id="taiga-activity" class="resource-section taiga-section"><div class="resource-section-head"><div><p class="ov-eyebrow">Linha do tempo</p><h2>Atividade recente</h2><p>Eventos normalizados de Taiga, Forgejo e Academic Audit. Commits não criam tarefas automaticamente.</p></div></div>'+_timeline(data)+'</section>'
         '<p class="resource-note taiga-footnote"><b>Atualização:</b> este painel é recalculado ao abrir ou recarregar o projeto a partir dos eventos já coletados em segundo plano. Atividade estimada é um indicador de uso da plataforma, não uma medição de horas trabalhadas.</p>'
     )
 

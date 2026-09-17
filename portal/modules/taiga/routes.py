@@ -14,7 +14,12 @@ MODULE = "taiga"
 def _page(request: Request) -> Response:
     from portal.ui import shell
     from portal.wiring import all_endpoints
-    data = service.taiga_data(request.identity, request.q("project"))
+    data = service.taiga_data(
+        request.identity,
+        request.q("project"),
+        access_page=request.q("access_page"),
+        activity_page=request.q("activity_page"),
+    )
     from portal.core.security import csrf_token
     data["csrf"] = csrf_token(request.identity)
     body = views.taiga_body(data)
@@ -23,7 +28,12 @@ def _page(request: Request) -> Response:
 
 
 def _api(request: Request) -> Response:
-    data = service.taiga_data(request.identity, request.q("project"))
+    data = service.taiga_data(
+        request.identity,
+        request.q("project"),
+        access_page=request.q("access_page"),
+        activity_page=request.q("activity_page"),
+    )
     return Response.json_body(json.dumps(data, ensure_ascii=False, separators=(",", ":")).encode())
 
 
