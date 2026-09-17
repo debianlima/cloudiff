@@ -243,6 +243,10 @@ class TaigaModuleTests(unittest.TestCase):
         self.assertIn('.taiga-student-card:hover', css)
         self.assertIn('@media(max-width:760px)', css)
 
+    def test_project_access_source_has_human_friendly_label(self):
+        rows = service._source_breakdown([{'source':'project-access'}])
+        self.assertEqual(rows[0]['label'], 'Ambiente CloudIFF')
+
     def test_dashboard_explains_snapshot_refresh_model(self):
         identity = Identity('prof','prof@example.invalid',frozenset({'CloudIF-Professor'}))
         markup = views.taiga_body(service.taiga_data(identity, 'beta'))

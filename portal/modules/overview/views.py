@@ -181,6 +181,7 @@ def _academic_tracking_card(item: dict) -> str:
         f'<span>Taiga <b>{int(channels.get("taiga") or 0)}</b></span>'
         f'<span>Forgejo <b>{int(channels.get("forgejo") or 0)}</b></span>'
         f'<span>CloudIFF/MCP <b>{int(channels.get("mcp") or 0)}</b></span>'
+        f'<span>Ambiente CloudIFF <b>{int(channels.get("environment") or 0)}</b></span>'
         '</div>'
         f'<a class="btn btn-quiet" href="{BASE}/?tab=taiga&amp;project={quote(str(item.get("slug") or ""),safe="")}">Ver acompanhamento no Taiga</a>'
         '</article>'
@@ -207,7 +208,7 @@ def academic_tracking_body(data: dict) -> str:
         f'<div><span>Eventos · 14d</span><b>{int(tracking.get("events_14d") or 0)}</b></div>'
         '</div>'
         f'<div class="resource-grid academic-project-grid">{cards}</div>'
-        '<p class="resource-note academic-tracking-note"><b>Interpretação:</b> “sem atividade registrada” significa ausência de eventos nas fontes atualmente instrumentadas; não é nota, ranking ou prova de que o aluno não trabalhou. Taiga, Forgejo e CloudIFF/MCP estão consolidados. Acesso à produção e aplicações externas autenticadas ainda exigem instrumentação própria e não são inferidos como zero.</p>'
+        '<p class="resource-note academic-tracking-note"><b>Interpretação:</b> “sem atividade registrada” significa ausência de eventos nas fontes atualmente instrumentadas; não é nota, ranking ou prova de que o aluno não trabalhou. Taiga, Forgejo, CloudIFF/MCP e acesso autenticado ao ambiente do projeto estão consolidados. A produção pública não possui identidade institucional confiável e, por isso, não é atribuída a aluno nem inferida como zero.</p>'
         '</section>'
     )
 

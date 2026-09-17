@@ -114,6 +114,7 @@ def _channel(source: str) -> str:
     source=str(source or "").strip().lower()
     if "forgejo" in source or source in {"git","github"}:return "forgejo"
     if source=="taiga":return "taiga"
+    if source=="project-access":return "environment"
     if source in {"mcp","portal","academic-audit"}:return "mcp"
     return source or "other"
 
@@ -167,6 +168,6 @@ def project_tracking_summary(identity, project: dict[str,Any]) -> dict[str,Any]:
         "tasks_open":max(0,tasks-tasks_closed),
         "stories_open":max(0,stories-stories_closed),
         "last_activity":max([str(event.get("ts") or "") for event in events]+member_stamps,default=""),
-        "channels_14d":{"taiga":int(channels.get("taiga",0)),"forgejo":int(channels.get("forgejo",0)),"mcp":int(channels.get("mcp",0))},
-        "coverage":{"taiga":taiga_ok,"forgejo":forgejo_ok,"mcp":audit_ok,"production_access":False,"external_authenticated_access":False},
+        "channels_14d":{"taiga":int(channels.get("taiga",0)),"forgejo":int(channels.get("forgejo",0)),"mcp":int(channels.get("mcp",0)),"environment":int(channels.get("environment",0))},
+        "coverage":{"taiga":taiga_ok,"forgejo":forgejo_ok,"mcp":audit_ok,"environment_access":True,"production_access":False,"external_authenticated_access":False},
     }
