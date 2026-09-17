@@ -243,6 +243,14 @@ class TaigaModuleTests(unittest.TestCase):
         self.assertIn('.taiga-student-card:hover', css)
         self.assertIn('@media(max-width:760px)', css)
 
+    def test_production_panel_is_aggregate_and_not_user_attributed(self):
+        data={'dashboard':{'production':{'published':True,'window_days':7,'public_requests':120,'public_unique_visitors':13,'errors':2,'last_seen':'2026-09-17T20:00:00Z','primary_host':'beta.cloudiff.duckdns.org'}}}
+        markup=views._production(data)
+        self.assertIn('Requisições externas · 7d',markup)
+        self.assertIn('Visitantes externos · aprox.',markup)
+        self.assertIn('beta.cloudiff.duckdns.org',markup)
+        self.assertIn('visitantes públicos não são atribuídos a alunos',markup)
+
     def test_project_access_source_has_human_friendly_label(self):
         rows = service._source_breakdown([{'source':'project-access'}])
         self.assertEqual(rows[0]['label'], 'Ambiente CloudIFF')

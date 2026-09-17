@@ -313,7 +313,8 @@ def academic_tracking(identity) -> dict:
         "without_activity_7d":sum(int(item.get("without_activity_7d") or 0) for item in good),
         "events_14d":sum(int(item.get("events_14d") or 0) for item in good),
         "instrumented_projects":len(good),
-        "production_access_instrumented":False,
+        "production_requests_7d":sum(int((item.get("production") or {}).get("public_requests") or 0) for item in good),
+        "production_access_instrumented":any(bool((item.get("production") or {}).get("instrumented")) for item in good),
         "external_access_instrumented":False,
     }
 

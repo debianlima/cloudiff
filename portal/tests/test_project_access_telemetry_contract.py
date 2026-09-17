@@ -87,6 +87,8 @@ class ProjectAccessTelemetryContractTests(unittest.TestCase):
         self.assertIn('NoNewPrivileges=true',src)
         self.assertIn('ReadOnlyPaths=/srv/cloudif/router/logs /var/lib/cloudif/portal',src)
         self.assertIn('EnvironmentFile=/etc/cloudif/academic-audit.env',src)
+        self.assertIn('CLOUDIF_PROJECT_ACCESS_PORT=18211',src)
+        self.assertIn("'18211'",COLLECTOR.read_text())
 
 
 if __name__=='__main__':

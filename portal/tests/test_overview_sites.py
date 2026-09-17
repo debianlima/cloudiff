@@ -106,7 +106,7 @@ class OverviewSiteCardTest(unittest.TestCase):
         student=Identity('alice','alice@example.invalid',frozenset({'CloudIF-Aluno'}))
         def fake_summary(_identity, project):
             self.assertEqual(project['slug'],'beta')
-            return {'ok':True,'slug':'beta','name':'Beta','members':5,'active_7d':3,'without_activity_7d':2,'events_14d':18,'tasks_open':4,'stories_open':1,'channels_14d':{'taiga':5,'forgejo':7,'mcp':6,'environment':4}}
+            return {'ok':True,'slug':'beta','name':'Beta','members':5,'active_7d':3,'without_activity_7d':2,'events_14d':18,'tasks_open':4,'stories_open':1,'channels_14d':{'taiga':5,'forgejo':7,'mcp':6,'environment':4},'production':{'instrumented':True,'published':True,'window_days':7,'public_requests':120,'public_unique_visitors':13,'errors':2,'last_seen':'2026-09-17T20:00:00Z','primary_host':'beta.cloudiff.duckdns.org'}}
         with mock.patch.object(service,'_DB',database), mock.patch.object(service,'project_tracking_summary',side_effect=fake_summary) as tracking:
             data=service.academic_tracking(professor)
             self.assertTrue(data['enabled'])
@@ -115,6 +115,7 @@ class OverviewSiteCardTest(unittest.TestCase):
             self.assertEqual(data['active_7d'],3)
             self.assertEqual(data['without_activity_7d'],2)
             self.assertEqual(data['events_14d'],18)
+            self.assertEqual(data['production_requests_7d'],120)
             self.assertEqual(data['projects'][0]['slug'],'beta')
             self.assertEqual(tracking.call_count,1)
             student_data=service.academic_tracking(student)
@@ -125,8 +126,8 @@ class OverviewSiteCardTest(unittest.TestCase):
     def test_academic_tracking_view_is_supportive_and_transparent_about_coverage(self):
         from portal.modules.overview.views import academic_tracking_body
         data={'academic_tracking':{
-            'enabled':True,'project_count':1,'members':5,'active_7d':3,'without_activity_7d':2,'events_14d':18,
-            'projects':[{'ok':True,'slug':'beta','name':'Beta','members':5,'active_7d':3,'without_activity_7d':2,'events_14d':18,'tasks_open':4,'stories_open':1,'last_activity':'2026-09-17T11:00:00Z','channels_14d':{'taiga':5,'forgejo':7,'mcp':6,'environment':4}}]
+            'enabled':True,'project_count':1,'members':5,'active_7d':3,'without_activity_7d':2,'events_14d':18,'production_requests_7d':120,
+            'projects':[{'ok':True,'slug':'beta','name':'Beta','members':5,'active_7d':3,'without_activity_7d':2,'events_14d':18,'tasks_open':4,'stories_open':1,'last_activity':'2026-09-17T11:00:00Z','channels_14d':{'taiga':5,'forgejo':7,'mcp':6,'environment':4},'production':{'instrumented':True,'published':True,'window_days':7,'public_requests':120,'public_unique_visitors':13,'errors':2,'last_seen':'2026-09-17T20:00:00Z','primary_host':'beta.cloudiff.duckdns.org'}}]
         }}
         markup=academic_tracking_body(data)
         self.assertIn('Acompanhamento acadêmico',markup)
@@ -136,9 +137,12 @@ class OverviewSiteCardTest(unittest.TestCase):
         self.assertIn('Taiga <b>5</b>',markup)
         self.assertIn('Forgejo <b>7</b>',markup)
         self.assertIn('CloudIFF/MCP <b>6</b>',markup)
+        self.assertIn('Produção pública · 7d',markup)
+        self.assertIn('120',markup)
+        self.assertIn('Visitantes externos · aprox.',markup)
         self.assertIn('Ambiente CloudIFF <b>4</b>',markup)
         self.assertIn('não é nota, ranking',markup)
-        self.assertIn('produção pública não possui identidade institucional confiável',markup)
+        self.assertIn('produção pública é mostrada apenas de forma agregada/anônima',markup)
         self.assertIn('tab=taiga&amp;project=beta',markup)
 
     def test_academic_tracking_css_is_responsive(self):

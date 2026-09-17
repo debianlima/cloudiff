@@ -166,6 +166,16 @@ def _academic_tracking_card(item: dict) -> str:
             f'<a class="btn btn-quiet" href="{BASE}/?tab=taiga&amp;project={quote(str(item.get("slug") or ""),safe="")}">Abrir no Taiga</a></article>'
         )
     channels=item.get("channels_14d") or {}
+    production=item.get("production") or {}
+    public_requests=production.get("public_requests")
+    public_visitors=production.get("public_unique_visitors")
+    production_html=(
+        '<div class="academic-production">'
+        f'<div><span>Produção pública · {int(production.get("window_days") or 7)}d</span><b>{html.escape(str(public_requests if public_requests is not None else "—"))}</b><small>requisições externas</small></div>'
+        f'<div><span>Visitantes externos · aprox.</span><b>{html.escape(str(public_visitors if public_visitors is not None else "—"))}</b><small>máximo por host</small></div>'
+        f'<div><span>Último acesso público</span><b>{html.escape(_when(production.get("last_seen")))}</b><small>{html.escape(str(production.get("primary_host") or ""))}</small></div>'
+        '</div>'
+    ) if production.get("published") else '<p class="resource-note">Produção pública ainda não mapeada para este projeto.</p>'
     return (
         '<article class="resource-card academic-project-card">'
         f'<div class="resource-card-head"><div><p class="resource-kicker">Acompanhamento</p><h3>{html.escape(str(item.get("name") or item.get("slug") or "Projeto"))}</h3><small>{html.escape(str(item.get("slug") or ""))}</small></div><span class="chip">{int(item.get("events_14d") or 0)} eventos · 14d</span></div>'
@@ -182,7 +192,7 @@ def _academic_tracking_card(item: dict) -> str:
         f'<span>Forgejo <b>{int(channels.get("forgejo") or 0)}</b></span>'
         f'<span>CloudIFF/MCP <b>{int(channels.get("mcp") or 0)}</b></span>'
         f'<span>Ambiente CloudIFF <b>{int(channels.get("environment") or 0)}</b></span>'
-        '</div>'
+        '</div>'+production_html+
         f'<a class="btn btn-quiet" href="{BASE}/?tab=taiga&amp;project={quote(str(item.get("slug") or ""),safe="")}">Ver acompanhamento no Taiga</a>'
         '</article>'
     )
@@ -206,9 +216,10 @@ def academic_tracking_body(data: dict) -> str:
         f'<div><span>Ativos · 7d</span><b>{int(tracking.get("active_7d") or 0)}</b></div>'
         f'<div><span>Sem atividade registrada · 7d</span><b>{int(tracking.get("without_activity_7d") or 0)}</b></div>'
         f'<div><span>Eventos · 14d</span><b>{int(tracking.get("events_14d") or 0)}</b></div>'
+        f'<div><span>Req. produção · 7d</span><b>{int(tracking.get("production_requests_7d") or 0)}</b></div>'
         '</div>'
         f'<div class="resource-grid academic-project-grid">{cards}</div>'
-        '<p class="resource-note academic-tracking-note"><b>Interpretação:</b> “sem atividade registrada” significa ausência de eventos nas fontes atualmente instrumentadas; não é nota, ranking ou prova de que o aluno não trabalhou. Taiga, Forgejo, CloudIFF/MCP e acesso autenticado ao ambiente do projeto estão consolidados. A produção pública não possui identidade institucional confiável e, por isso, não é atribuída a aluno nem inferida como zero.</p>'
+        '<p class="resource-note academic-tracking-note"><b>Interpretação:</b> “sem atividade registrada” significa ausência de eventos nas fontes atualmente instrumentadas; não é nota, ranking ou prova de que o aluno não trabalhou. Taiga, Forgejo, CloudIFF/MCP e acesso autenticado ao ambiente do projeto estão consolidados. A produção pública é mostrada apenas de forma agregada/anônima; ela não possui identidade institucional confiável e não é atribuída a aluno.</p>'
         '</section>'
     )
 

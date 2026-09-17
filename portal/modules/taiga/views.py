@@ -294,6 +294,22 @@ def _timeline(data: dict) -> str:
     return table+_pagination(data,'activity','activity_page','taiga-activity')
 
 
+def _production(data: dict) -> str:
+    item=((data.get("dashboard") or {}).get("production") or {})
+    if not item.get("published"):
+        return '<p class="resource-note">Este projeto ainda não tem publicação pública mapeada.</p>'
+    requests=item.get("public_requests");visitors=item.get("public_unique_visitors")
+    return (
+        '<div class="taiga-production-metrics">'
+        f'<div><span>Requisições externas · {h(item.get("window_days") or 7)}d</span><b>{h(requests if requests is not None else "—")}</b></div>'
+        f'<div><span>Visitantes externos · aprox.</span><b>{h(visitors if visitors is not None else "—")}</b></div>'
+        f'<div><span>Erros públicos</span><b>{h(item.get("errors") or 0)}</b></div>'
+        f'<div><span>Último acesso público</span><b>{h(_when(item.get("last_seen")))}</b></div>'
+        '</div>'
+        f'<p class="resource-note">Host principal: <code>{h(item.get("primary_host") or "—")}</code>. Dados agregados do proxy; visitantes públicos não são atribuídos a alunos.</p>'
+    )
+
+
 def _integrations(data: dict) -> str:
     taiga=data.get("taiga") or {};faro=data.get("faro") or {};forgejo=data.get("forgejo") or {};private=data.get("taiga_project") or {}
     private_error=str(private.get("error") or "")
@@ -317,6 +333,7 @@ def _detail(data: dict) -> str:
         '<section class="resource-card taiga-panel"><div class="taiga-panel-head"><div><p class="resource-kicker">Histórico</p><h3>Atividade nos últimos 14 dias</h3></div><small>Último evento '+h(_when(latest))+'</small></div>'+_history_chart(data)+'</section>'
         '<section class="resource-card taiga-panel"><div class="taiga-panel-head"><div><p class="resource-kicker">Origem dos eventos</p><h3>Integrações em atividade</h3></div></div>'+_source_chart(data)+'</section>'
         '<section class="resource-card taiga-panel"><div class="taiga-panel-head"><div><p class="resource-kicker">Plataforma</p><h3>Saúde das integrações</h3></div></div>'+_integrations(data)+'</section>'
+        '<section class="resource-card taiga-panel"><div class="taiga-panel-head"><div><p class="resource-kicker">Produção</p><h3>Uso público da aplicação</h3></div><span class="chip">Agregado</span></div>'+_production(data)+'</section>'
         '</div>'
         '<section id="taiga-accesses" class="resource-section taiga-section"><div class="resource-section-head"><div><p class="ov-eyebrow">Acessos</p><h2>Últimos acessos e atividade</h2><p>'+h(audience)+' · tempo estimado a partir de eventos autenticados.</p></div></div>'+_recent_accesses(data)+'</section>'
         '<section class="resource-section taiga-section"><div class="resource-section-head"><div><p class="ov-eyebrow">Acompanhamento</p><h2>'+('Membros do projeto' if data.get('can_view_members') else 'Meus indicadores')+'</h2><p>Trabalho no Taiga e atividade acadêmica consolidados.</p></div></div>'+_members(data)+'</section>'
