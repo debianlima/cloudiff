@@ -20,20 +20,25 @@ by_name={str(x.get('username') or '').strip().lower():x for x in members if str(
 if owner_name and owner_name not in by_name: by_name[owner_name]={'username':owner_name,'email':'','full_name':owner_name,'is_owner':True}
 unresolved=[]; created_users=[]
 def user_for(spec):
-    username=str(spec.get('username') or '').strip().lower(); email=str(spec.get('email') or '').strip().lower(); full=str(spec.get('full_name') or username).strip() or username
+    username=str(spec.get('username') or '').strip().lower(); source_email=str(spec.get('email') or '').strip().lower(); full=str(spec.get('full_name') or username).strip() or username
     if not username:return None
+    placeholder=not bool(source_email)
+    email=source_email or (username+'@cloudiff.invalid')
     u=User.objects.filter(username__iexact=username).first()
     if not u and email:u=User.objects.filter(email__iexact=email).first()
     if not u:
-        if not email:
-            unresolved.append(username); return None
-        u=User.objects.create(username=username,email=email,full_name=full,is_active=True,verified_email=True)
+        u=User.objects.create(username=username,email=email,full_name=full,is_active=True,verified_email=not placeholder)
         u.set_unusable_password();u.save(update_fields=['password'])
         created_users.append(username)
     else:
         changed=[]
-        if email and not u.email:
-            u.email=email;changed.append('email')
+        current_email=str(u.email or '').strip().lower()
+        if source_email and source_email!=current_email and (not current_email or current_email.endswith('@cloudiff.invalid')):
+            collision=User.objects.filter(email__iexact=source_email).exclude(pk=u.pk).exists()
+            if not collision:
+                u.email=source_email;changed.append('email')
+                if hasattr(u,'verified_email') and not u.verified_email:
+                    u.verified_email=True;changed.append('verified_email')
         if full and (not u.full_name or u.full_name==u.username) and u.full_name!=full:
             u.full_name=full;changed.append('full_name')
         if not u.is_active:
@@ -269,7 +274,7 @@ def project_summary(slug,subject='',include_members=False):
 
 
 class H(BaseHTTPRequestHandler):
-    server_version='cloudif-taiga-reconciler/0.3.1'
+    server_version='cloudif-taiga-reconciler/0.3.2'
     def log_message(self,fmt,*args):pass
     def out(self,code,obj):
         b=json.dumps(obj,ensure_ascii=False,separators=(',',':')).encode();self.send_response(code);self.send_header('Content-Type','application/json');self.send_header('Content-Length',str(len(b)));self.end_headers();self.wfile.write(b)
@@ -278,7 +283,7 @@ class H(BaseHTTPRequestHandler):
         return bool(TOKEN) and hmac.compare_digest(got,exp)
     def do_GET(self):
         parsed=urlparse(self.path);path=parsed.path
-        if path=='/health':return self.out(200,{'ok':True,'service':'cloudif-taiga-reconciler','version':'0.3.1'})
+        if path=='/health':return self.out(200,{'ok':True,'service':'cloudif-taiga-reconciler','version':'0.3.2'})
         if not self.auth():return self.out(401,{'ok':False,'error':'unauthorized'})
         sm=re.fullmatch(r'/v1/projects/([a-z0-9][a-z0-9-]{0,62})/summary',path)
         if sm:
