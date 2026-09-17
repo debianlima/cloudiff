@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -21,7 +22,20 @@ def load_forja():
 class ForjaTaigaActivityTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        cls.import_temp = tempfile.TemporaryDirectory()
+        root = Path(cls.import_temp.name)
+        cls.old_env = {key: os.environ.get(key) for key in ("FORJA_STATE_DIR","FORJA_EVENT_DIR","FORJA_ARTIFACT_STAGE_DIR")}
+        os.environ["FORJA_STATE_DIR"] = str(root/"projects")
+        os.environ["FORJA_EVENT_DIR"] = str(root/"events")
+        os.environ["FORJA_ARTIFACT_STAGE_DIR"] = str(root/"artifacts")
         cls.m = load_forja()
+
+    @classmethod
+    def tearDownClass(cls):
+        for key, value in cls.old_env.items():
+            if value is None: os.environ.pop(key, None)
+            else: os.environ[key] = value
+        cls.import_temp.cleanup()
 
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()

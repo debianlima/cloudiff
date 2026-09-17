@@ -19,10 +19,10 @@ import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-ENVFILE = Path("/etc/cloudif/forja-agent.env")
-STATE_DIR = Path("/var/lib/cloudif/forja-agent/projects")
-EVENT_DIR = Path("/var/lib/cloudif/forja-agent/events")
-ARTIFACT_STAGE_DIR = Path("/var/lib/cloudif/forja-agent/artifacts")
+ENVFILE = Path(os.environ.get("FORJA_ENVFILE", "/etc/cloudif/forja-agent.env"))
+STATE_DIR = Path(os.environ.get("FORJA_STATE_DIR", "/var/lib/cloudif/forja-agent/projects"))
+EVENT_DIR = Path(os.environ.get("FORJA_EVENT_DIR", "/var/lib/cloudif/forja-agent/events"))
+ARTIFACT_STAGE_DIR = Path(os.environ.get("FORJA_ARTIFACT_STAGE_DIR", "/var/lib/cloudif/forja-agent/artifacts"))
 STATE_DIR.mkdir(parents=True, exist_ok=True)
 EVENT_DIR.mkdir(parents=True, exist_ok=True)
 ARTIFACT_STAGE_DIR.mkdir(parents=True, exist_ok=True)
