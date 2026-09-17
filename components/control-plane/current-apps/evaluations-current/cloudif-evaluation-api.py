@@ -8,8 +8,9 @@ def c():
 def init():
  os.makedirs(os.path.dirname(DB),exist_ok=True);x=c();x.execute('pragma journal_mode=delete');x.executescript('''create table if not exists rubrics(rubric_id text primary key,name text not null,version integer not null,status text not null,criteria_json text not null,created_by text not null,created_at text not null);create table if not exists evaluations(evaluation_id text primary key,rubric_id text not null,project_slug text not null,student_user text not null,status text not null,score real not null,evidence_json text not null,explanation_json text not null,created_at text not null,reviewed_by text,reviewed_at text,final_score real);create index if not exists idx_eval_student on evaluations(student_user,created_at desc);''');x.commit();x.close()
 def auth(h):return bool(TOKEN) and hmac.compare_digest(h.get('Authorization',''),'Bearer '+TOKEN)
-def audit_events(slug):
- r=urllib.request.Request(AU+'/v1/events?project='+urllib.parse.quote(slug,safe='')+'&limit=500',headers={'Authorization':'Bearer '+AT})
+def audit_events(slug,student):
+ q=urllib.parse.urlencode({'project':slug,'subject':student,'limit':500})
+ r=urllib.request.Request(AU+'/v1/events?'+q,headers={'Authorization':'Bearer '+AT})
  with urllib.request.urlopen(r,timeout=10) as x:return json.load(x).get('events') or []
 class H(BaseHTTPRequestHandler):
  def log_message(self,*a):pass
@@ -36,7 +37,7 @@ class H(BaseHTTPRequestHandler):
   if p=='/v1/evaluations/run':
    rid=str(d.get('rubric_id') or '');slug=str(d.get('project_slug') or '');student=str(d.get('student_user') or '');
    try:
-    x=c();r=x.execute('select * from rubrics where rubric_id=? and status="active"',(rid,)).fetchone();assert r and slug and student;criteria=json.loads(r['criteria_json']);events=audit_events(slug)
+    x=c();r=x.execute('select * from rubrics where rubric_id=? and status="active"',(rid,)).fetchone();assert r and slug and student;criteria=json.loads(r['criteria_json']);events=audit_events(slug,student)
     total=len(events);success=sum(e.get('result')=='success' for e in events);errors=sum(e.get('result')=='error' for e in events);mcp=sum(e.get('source')=='mcp' for e in events);direct=max(0,total-mcp)
     activity=min(100,total*5);success_rate=(success/total*100) if total else 0;independence=(direct/total*100) if total else 0
     score=(activity*float(criteria.get('activity_weight',40))+success_rate*float(criteria.get('success_weight',35))+independence*float(criteria.get('independence_weight',25)))/100
