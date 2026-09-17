@@ -132,8 +132,33 @@ server {{
     }}
 }}''')
  for alias,a in sorted(state.get('aliases',{}).items()):
-  num=int(a['public_number']); dep=int(a['active_deploy'])
+  num=int(a['public_number']); dep=int(a.get('active_deploy') or 0)
   stable_host=f'{alias}.cloudiff.duckdns.org'; stable_target=f'{num}.cloudiff.duckdns.org'
+  if dep<1:
+   hostcert=str(a.get('cert') or '')
+   if hostcert:
+    blocks.append('server {\n'
+     '    listen 80;\n'
+     '    listen [::]:80;\n'
+     f'    server_name {stable_host};\n'
+     '    location ^~ /.well-known/acme-challenge/ { root /data/letsencrypt-acme-challenge; default_type text/plain; }\n'
+     '    location / { return 301 https://$host$request_uri; }\n'
+     '}\n'
+     'server {\n'
+     '    listen 443 ssl;\n'
+     '    listen [::]:443 ssl;\n'
+     '    http2 on;\n'
+     f'    server_name {stable_host};\n'
+     f'    ssl_certificate /etc/letsencrypt/live/{hostcert}/fullchain.pem;\n'
+     f'    ssl_certificate_key /etc/letsencrypt/live/{hostcert}/privkey.pem;\n'
+     '    include conf.d/include/ssl-ciphers.conf;\n'
+     '    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;\n'
+     '    add_header X-Content-Type-Options nosniff always;\n'
+     '    add_header Referrer-Policy no-referrer always;\n'
+     '    default_type text/html;\n'
+     '    location / { return 503 "<!doctype html><html lang=pt-BR><head><meta charset=utf-8><meta name=viewport content=width=device-width,initial-scale=1><title>Aguardando publicação</title></head><body><main><h1>Aguardando publicação</h1><p>Este endereço está reservado e será ativado quando houver uma publicação P ativa.</p></main></body></html>"; }\n'
+     '}')
+   continue
   pairs=[(stable_host,a['cert'],stable_target)]
   versions=a.get('versions',{})
   if not versions and a.get('version_cert'):
@@ -179,6 +204,20 @@ server {{
   subprocess.run(['docker','exec','cloudif-nginx-proxy-manager','nginx','-s','reload'])
   raise
 
+def reserve_alias(state,num,alias):
+ num=int(num);alias=str(alias or '').strip().lower()
+ if not (1<=num<=999999999):raise ValueError('invalid_number')
+ if not re.fullmatch(r'[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?',alias) or alias.isdigit():raise ValueError('invalid_alias')
+ aliases=state.setdefault('aliases',{})
+ if alias in state.get('tenants',{}):raise ValueError('alias_in_use')
+ current=aliases.get(alias)
+ if current and int(current.get('public_number') or 0)!=num:raise ValueError('alias_in_use')
+ stable=f'{alias}.cloudiff.duckdns.org';cert=(current or {}).get('cert') or ensure_cert(f'cloudif-alias-{alias}',[stable])
+ item=aliases.setdefault(alias,{'public_number':num,'active_deploy':0,'cert':cert,'versions':{}})
+ item['public_number']=num;item['active_deploy']=0;item['cert']=cert;item.setdefault('versions',{});item['status']='reserved';item['updated_at']=time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime())
+ return {'ok':True,'alias':alias,'stable_url':'https://'+stable+'/','active':False,'reserved':True}
+
+
 def ensure_alias(state,num,dep,alias):
  if not re.fullmatch(r'[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?',alias) or alias.isdigit(): raise ValueError('invalid_alias')
  aliases=state.setdefault('aliases',{})
@@ -189,8 +228,8 @@ def ensure_alias(state,num,dep,alias):
  cert=ensure_cert(f'cloudif-alias-{alias}',[stable])
  version_cert=ensure_cert(f'cloudif-alias-{alias}-d{dep}',[version])
  item=aliases.setdefault(alias,{'public_number':int(num),'active_deploy':int(dep),'cert':cert,'versions':{}})
- item['public_number']=int(num);item['active_deploy']=int(dep);item['cert']=cert;item.setdefault('versions',{})[str(dep)]={'cert':version_cert};item['updated_at']=time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime())
- return {'ok':True,'alias':alias,'stable_url':'https://'+stable+'/','version_url':'https://'+version+'/'}
+ item['public_number']=int(num);item['active_deploy']=int(dep);item['cert']=cert;item.setdefault('versions',{})[str(dep)]={'cert':version_cert};item['status']='active';item['updated_at']=time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime())
+ return {'ok':True,'alias':alias,'stable_url':'https://'+stable+'/','version_url':'https://'+version+'/','active':True,'reserved':False}
 
 def ensure_version(state,num,dep):
  num=int(num);dep=int(dep)
@@ -214,8 +253,8 @@ def stage_publish(payload):
  state=load_state();result=ensure_stage(state,int(payload.get('public_number')),payload.get('stage'),int(payload.get('number')));render(state);save_state(state);return result
 
 def alias_publish(payload):
- num=int(payload.get('public_number')); dep=int(payload.get('deploy_number')); alias=str(payload.get('alias') or '').strip().lower()
- state=load_state(); result=ensure_alias(state,num,dep,alias); render(state); save_state(state); return result
+ num=int(payload.get('public_number')); dep=int(payload.get('deploy_number') or 0); alias=str(payload.get('alias') or '').strip().lower()
+ state=load_state(); result=(ensure_alias(state,num,dep,alias) if dep>0 else reserve_alias(state,num,alias)); render(state); save_state(state); return result
 
 def publish(payload):
  num=int(payload.get('public_number')); dep=int(payload.get('deploy_number'))
