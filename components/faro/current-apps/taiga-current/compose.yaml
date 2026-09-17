@@ -84,7 +84,7 @@ services:
       timeout: 5s
       retries: 12
   taiga-back:
-    image: cloudif-local/taiga-back-oidc:6.10.2-c623b753-r4-identity
+    image: cloudif-local/taiga-back-oidc:6.10.2-c623b753-r5-identity
     entrypoint: ["/bin/bash", "/cloudif/back-entrypoint.sh"]
     extra_hosts:
       - "authiff.duckdns.org:10.62.91.3"
@@ -96,7 +96,7 @@ services:
       taiga-events-rabbitmq: {condition: service_healthy}
       taiga-async-rabbitmq: {condition: service_healthy}
   taiga-async:
-    image: cloudif-local/taiga-back-oidc:6.10.2-c623b753-r4-identity
+    image: cloudif-local/taiga-back-oidc:6.10.2-c623b753-r5-identity
     extra_hosts:
       - "authiff.duckdns.org:10.62.91.3"
     restart: unless-stopped
@@ -156,7 +156,7 @@ services:
     networks: [taiga]
     depends_on: [taiga-front, taiga-back, taiga-events, taiga-protected]
   taiga-manage:
-    image: cloudif-local/taiga-back-oidc:6.10.2-c623b753-r4-identity
+    image: cloudif-local/taiga-back-oidc:6.10.2-c623b753-r5-identity
     extra_hosts:
       - "authiff.duckdns.org:10.62.91.3"
     profiles: [tools]
