@@ -85,6 +85,67 @@ class OverviewSiteCardTest(unittest.TestCase):
         self.assertIn('width:50%', markup)
 
 
+
+    def test_academic_tracking_is_global_only_and_uses_canonical_visibility(self):
+        from portal.modules.overview import service
+        from portal.core.auth import Identity
+        import sqlite3
+        with tempfile.NamedTemporaryFile(suffix='.db', delete=False) as db_handle:
+            database=db_handle.name
+        con=sqlite3.connect(database)
+        con.executescript("""
+            CREATE TABLE projects(slug TEXT,name TEXT,tenant TEXT,owner TEXT,description TEXT,repo_url TEXT,komodo_status TEXT,status TEXT,updated_at TEXT,repo_name TEXT,stack_name TEXT);
+            CREATE TABLE project_acl(slug TEXT,subject_type TEXT,subject TEXT);
+            CREATE TABLE tenant_acl(tenant TEXT,subject_type TEXT,subject TEXT);
+            INSERT INTO projects VALUES('alpha','Alpha','','alice','','','','active','2026-09-17T10:00:00Z','','');
+            INSERT INTO projects VALUES('beta','Beta','','bob','','','','active','2026-09-17T11:00:00Z','','');
+            INSERT INTO project_acl VALUES('beta','user','prof');
+        """)
+        con.commit();con.close()
+        professor=Identity('prof','prof@example.invalid',frozenset({'CloudIF-Professor'}))
+        student=Identity('alice','alice@example.invalid',frozenset({'CloudIF-Aluno'}))
+        def fake_summary(_identity, project):
+            self.assertEqual(project['slug'],'beta')
+            return {'ok':True,'slug':'beta','name':'Beta','members':5,'active_7d':3,'without_activity_7d':2,'events_14d':18,'tasks_open':4,'stories_open':1,'channels_14d':{'taiga':5,'forgejo':7,'mcp':6}}
+        with mock.patch.object(service,'_DB',database), mock.patch.object(service,'project_tracking_summary',side_effect=fake_summary) as tracking:
+            data=service.academic_tracking(professor)
+            self.assertTrue(data['enabled'])
+            self.assertEqual(data['project_count'],1)
+            self.assertEqual(data['members'],5)
+            self.assertEqual(data['active_7d'],3)
+            self.assertEqual(data['without_activity_7d'],2)
+            self.assertEqual(data['events_14d'],18)
+            self.assertEqual(data['projects'][0]['slug'],'beta')
+            self.assertEqual(tracking.call_count,1)
+            student_data=service.academic_tracking(student)
+            self.assertFalse(student_data['enabled'])
+            self.assertEqual(student_data['projects'],[])
+            self.assertEqual(tracking.call_count,1)
+
+    def test_academic_tracking_view_is_supportive_and_transparent_about_coverage(self):
+        from portal.modules.overview.views import academic_tracking_body
+        data={'academic_tracking':{
+            'enabled':True,'project_count':1,'members':5,'active_7d':3,'without_activity_7d':2,'events_14d':18,
+            'projects':[{'ok':True,'slug':'beta','name':'Beta','members':5,'active_7d':3,'without_activity_7d':2,'events_14d':18,'tasks_open':4,'stories_open':1,'last_activity':'2026-09-17T11:00:00Z','channels_14d':{'taiga':5,'forgejo':7,'mcp':6}}]
+        }}
+        markup=academic_tracking_body(data)
+        self.assertIn('Acompanhamento acadêmico',markup)
+        self.assertIn('Sinais dos projetos',markup)
+        self.assertIn('Ativos · 7d',markup)
+        self.assertIn('Sem atividade registrada · 7d',markup)
+        self.assertIn('Taiga <b>5</b>',markup)
+        self.assertIn('Forgejo <b>7</b>',markup)
+        self.assertIn('CloudIFF/MCP <b>6</b>',markup)
+        self.assertIn('não é nota, ranking',markup)
+        self.assertIn('Acesso à produção e aplicações externas autenticadas ainda exigem instrumentação própria',markup)
+        self.assertIn('tab=taiga&amp;project=beta',markup)
+
+    def test_academic_tracking_css_is_responsive(self):
+        css=(Path(__file__).resolve().parents[1] / 'design' / 'components.css').read_text()
+        for marker in ('.academic-tracking{','.academic-summary-strip{','.academic-project-metrics{','.academic-channel-grid{','.academic-tracking-note{'):
+            self.assertIn(marker,css)
+        self.assertIn('@media(max-width:560px)',css)
+
     def test_publication_submit_preserves_operation_before_disabling_button(self):
         source = (Path(__file__).resolve().parents[1] / "design" / "app.js").read_text()
         self.assertIn("event.submitter", source)

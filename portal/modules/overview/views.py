@@ -7,6 +7,17 @@ from urllib.parse import quote
 BASE = "/cloudiff/portal"
 
 
+def _when(value) -> str:
+    text=str(value or "").strip()
+    if not text:
+        return "—"
+    try:
+        from datetime import datetime
+        return datetime.fromisoformat(text.replace("Z","+00:00")).strftime("%d/%m %H:%M")
+    except Exception:
+        return text.replace("T"," ")[:16]
+
+
 def _bar(pct: int) -> str:
     pct = max(0, min(100, int(pct or 0)))
     return f'<div class="ov-bar"><span class="ov-bar-fill" style="width:{pct}%"></span></div>'
@@ -146,6 +157,61 @@ def sites_body(data: dict) -> str:
     )
 
 
+def _academic_tracking_card(item: dict) -> str:
+    if not item.get("ok"):
+        return (
+            '<article class="resource-card academic-project-card">'
+            f'<div class="resource-card-head"><div><p class="resource-kicker">Projeto</p><h3>{html.escape(str(item.get("name") or item.get("slug") or "Projeto"))}</h3></div><span class="chip is-drift">Dados parciais</span></div>'
+            '<p class="resource-note">O acompanhamento deste projeto não respondeu agora. O projeto continua disponível no Taiga.</p>'
+            f'<a class="btn btn-quiet" href="{BASE}/?tab=taiga&amp;project={quote(str(item.get("slug") or ""),safe="")}">Abrir no Taiga</a></article>'
+        )
+    channels=item.get("channels_14d") or {}
+    return (
+        '<article class="resource-card academic-project-card">'
+        f'<div class="resource-card-head"><div><p class="resource-kicker">Acompanhamento</p><h3>{html.escape(str(item.get("name") or item.get("slug") or "Projeto"))}</h3><small>{html.escape(str(item.get("slug") or ""))}</small></div><span class="chip">{int(item.get("events_14d") or 0)} eventos · 14d</span></div>'
+        '<div class="academic-project-metrics">'
+        f'<div><span>Membros</span><b>{int(item.get("members") or 0)}</b></div>'
+        f'<div><span>Ativos · 7d</span><b>{int(item.get("active_7d") or 0)}</b></div>'
+        f'<div><span>Sem atividade registrada · 7d</span><b>{int(item.get("without_activity_7d") or 0)}</b></div>'
+        f'<div><span>Tarefas abertas</span><b>{int(item.get("tasks_open") or 0)}</b></div>'
+        f'<div><span>Histórias abertas</span><b>{int(item.get("stories_open") or 0)}</b></div>'
+        f'<div><span>Última atividade</span><b>{html.escape(_when(item.get("last_activity")))}</b></div>'
+        '</div>'
+        '<div class="academic-channel-grid">'
+        f'<span>Taiga <b>{int(channels.get("taiga") or 0)}</b></span>'
+        f'<span>Forgejo <b>{int(channels.get("forgejo") or 0)}</b></span>'
+        f'<span>CloudIFF/MCP <b>{int(channels.get("mcp") or 0)}</b></span>'
+        '</div>'
+        f'<a class="btn btn-quiet" href="{BASE}/?tab=taiga&amp;project={quote(str(item.get("slug") or ""),safe="")}">Ver acompanhamento no Taiga</a>'
+        '</article>'
+    )
+
+
+def academic_tracking_body(data: dict) -> str:
+    tracking=data.get("academic_tracking") or {}
+    if not tracking.get("enabled"):
+        return ""
+    projects=tracking.get("projects") or []
+    cards="".join(_academic_tracking_card(item) for item in projects)
+    if not cards:
+        cards='<div class="resource-empty"><h3>Nenhum projeto para acompanhar</h3><p>Os projetos autorizados aparecerão aqui quando estiverem disponíveis.</p></div>'
+    return (
+        '<section class="resource-section academic-tracking" aria-labelledby="academic-tracking-title">'
+        '<div class="resource-section-head"><div><p class="ov-eyebrow">Acompanhamento acadêmico</p><h2 id="academic-tracking-title">Sinais dos projetos</h2><p>Resumo factual das fontes instrumentadas para orientar o acompanhamento. O detalhamento permanece no Taiga.</p></div>'
+        f'<a href="{BASE}/?tab=taiga">Abrir Taiga</a></div>'
+        '<div class="academic-summary-strip">'
+        f'<div><span>Projetos</span><b>{int(tracking.get("project_count") or 0)}</b></div>'
+        f'<div><span>Membros</span><b>{int(tracking.get("members") or 0)}</b></div>'
+        f'<div><span>Ativos · 7d</span><b>{int(tracking.get("active_7d") or 0)}</b></div>'
+        f'<div><span>Sem atividade registrada · 7d</span><b>{int(tracking.get("without_activity_7d") or 0)}</b></div>'
+        f'<div><span>Eventos · 14d</span><b>{int(tracking.get("events_14d") or 0)}</b></div>'
+        '</div>'
+        f'<div class="resource-grid academic-project-grid">{cards}</div>'
+        '<p class="resource-note academic-tracking-note"><b>Interpretação:</b> “sem atividade registrada” significa ausência de eventos nas fontes atualmente instrumentadas; não é nota, ranking ou prova de que o aluno não trabalhou. Taiga, Forgejo e CloudIFF/MCP estão consolidados. Acesso à produção e aplicações externas autenticadas ainda exigem instrumentação própria e não são inferidos como zero.</p>'
+        '</section>'
+    )
+
+
 def overview_body(data: dict) -> str:
     metrics, resources = data["metrics"], data["resources"]
     username = html.escape(data["username"] or "usuário")
@@ -171,6 +237,7 @@ def overview_body(data: dict) -> str:
         '<section class="welcome-panel"><div><p class="ov-eyebrow">Seu espaço acadêmico</p>'
         f'<h2>Olá, {username}.</h2><p>Aqui você encontra o que está publicando, os bancos ligados aos seus projetos e os caminhos mais usados para continuar seu trabalho.</p></div>'
         f'<div class="welcome-actions"><a class="btn btn-quiet" href="{BASE}/?tab=ajuda">Primeiros passos</a></div></section>'
+        + academic_tracking_body(data)
         + sites_body(data)
         + '<section class="resource-section" aria-labelledby="my-databases-title"><div class="resource-section-head"><div><p class="ov-eyebrow">Dados</p><h2 id="my-databases-title">Meus bancos</h2><p>Ambientes de dados que você pode usar nos seus projetos.</p></div>'
         f'<a href="{BASE}/?tab=bancos">Gerenciar todos os bancos</a></div><div class="resource-grid">{databases}</div>{others}</section>'
