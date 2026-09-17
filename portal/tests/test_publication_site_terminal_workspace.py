@@ -97,10 +97,11 @@ class PublicationSiteTerminalWorkspaceTests(unittest.TestCase):
         workspace=BASE[BASE.index('function publicationTerminalRender'):BASE.index('async function publicationVariablesLoad')]
         self.assertIn('publicationTerminalOpen(null,requestId)',workspace)
         self.assertNotIn('Abrir terminal no Komodo</button>',workspace)
-        release=BASE[BASE.index('function renderReleaseTerminal'):BASE.index('async function load()',BASE.index('function renderReleaseTerminal'))]
-        self.assertIn("if(model.view==='terminal')",release)
-        self.assertIn('setTimeout(openStageTerminal,0)',release)
-        self.assertNotIn('data-release-stage-terminal',release)
+        render=BASE[BASE.index('function publicationEnvironmentRender'):BASE.index('async function publicationEnvironmentLoad')]
+        self.assertIn("publicationEnvironmentModel.tool==='terminal'",render)
+        self.assertIn('publicationTerminalRender(requestId)',render)
+        self.assertIn("publicationEnvironmentModel.tool==='site'",render)
+        self.assertIn('publicationSiteRender()',render)
 
     def test_stage_terminal_portal_contract_is_exact_and_production_is_privileged(self):
         block=PUBLICATIONS[PUBLICATIONS.index('def stage_terminal('):PUBLICATIONS.index('def recreate_preview(',PUBLICATIONS.index('def stage_terminal('))]
@@ -125,15 +126,15 @@ class PublicationSiteTerminalWorkspaceTests(unittest.TestCase):
         self.assertIn('/komodo/project/stage/terminal',RUNTIME)
 
     def test_manage_publication_reuses_the_same_site_and_terminal_pattern(self):
-        self.assertIn('class="release-tools"',BASE)
-        for view,label in (('stage','Etapa'),('site','Site'),('terminal','Terminal')):
-            self.assertIn(f'data-release-view="{view}">{label}</button>',BASE)
-        self.assertIn('function renderReleaseSite()',BASE)
-        self.assertIn('function renderReleaseTerminal()',BASE)
-        self.assertIn('function openStageTerminal()',BASE)
-        self.assertIn('function renderEmbeddedTerminal(result,ctx)',BASE)
-        self.assertIn("post('stage/terminal',{environment})",BASE)
-        self.assertIn('.release-tools{display:flex',CSS)
+        self.assertIn('data-publication-environments',UI)
+        self.assertIn('data-publication-tool="overview"',UI)
+        for tool in ('site','terminal'):
+            self.assertIn(f'data-publication-tool="{tool}"',BASE)
+        self.assertIn('function publicationSiteRender()',BASE)
+        self.assertIn('function publicationTerminalRender(requestId)',BASE)
+        self.assertIn('async function publicationTerminalOpen',BASE)
+        self.assertIn("/release-flow/stage/terminal",BASE)
+        self.assertIn('stage-site-preview stage-terminal-embed',BASE)
 
     def test_publisher_allows_only_the_portal_to_frame_managed_sites(self):
         managed=PUBLISHER[PUBLISHER.index('for num_s,p in sorted'):PUBLISHER.index('for alias,a in sorted')]
