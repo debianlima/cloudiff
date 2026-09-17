@@ -17,6 +17,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from portal.core.rbac import is_global
+from portal.core.production_access import project_production_access
 from portal.core.project_visibility import visible_projects as _visible_projects
 
 _DB = os.environ.get("CLOUDIF_PORTAL_DB", "/var/lib/cloudif/portal/cloudif-portal.db")
@@ -472,6 +473,7 @@ def taiga_data(identity, selected_slug: str = "", *, access_page: Any = 1, activ
             "history": _actor_activity_history(events, identity.username, 14),
         }
     dashboard=_dashboard_metrics(identity,events,actors,subject,taiga_project)
+    dashboard["production"]=project_production_access(slug)
     pagination={
         "accesses":_paginate(dashboard.get("recent_accesses") or [],access_page,4),
         "activity":_paginate(events,activity_page,4),

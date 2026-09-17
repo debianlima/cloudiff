@@ -27,7 +27,8 @@ class AcademicTrackingCoreTests(unittest.TestCase):
             ],
             "timeline":[{"ts":now,"actor":"alice","type":"change"}],
         }
-        with mock.patch.object(tracking,"_audit_events",return_value=(audit,True)), mock.patch.object(tracking,"_forgejo_events",return_value=(forgejo,True)), mock.patch.object(tracking,"_taiga_summary",return_value=(taiga,True)):
+        production={'ok':True,'instrumented':True,'published':True,'public_requests':15,'public_unique_visitors':4}
+        with mock.patch.object(tracking,"_audit_events",return_value=(audit,True)), mock.patch.object(tracking,"_forgejo_events",return_value=(forgejo,True)), mock.patch.object(tracking,"_taiga_summary",return_value=(taiga,True)), mock.patch.object(tracking,"project_production_access",return_value=production):
             summary=tracking.project_tracking_summary(identity,{"slug":"alpha","name":"Alpha","status":"active"})
         self.assertTrue(summary["ok"])
         self.assertEqual(summary["members"],2)
@@ -38,7 +39,8 @@ class AcademicTrackingCoreTests(unittest.TestCase):
         self.assertEqual(summary["channels_14d"],{"taiga":1,"forgejo":1,"mcp":2,"environment":1})
         self.assertEqual(summary["events_14d"],5)
         self.assertEqual(summary["last_activity"],now)
-        self.assertFalse(summary["coverage"]["production_access"])
+        self.assertTrue(summary["coverage"]["production_access"])
+        self.assertEqual(summary["production"]["public_requests"],15)
         self.assertFalse(summary["coverage"]["external_authenticated_access"])
 
     def test_student_queries_are_subject_scoped(self):

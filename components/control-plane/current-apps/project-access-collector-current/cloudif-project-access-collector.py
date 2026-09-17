@@ -19,7 +19,7 @@ DB=Path(os.environ.get('CLOUDIF_PROJECT_ACCESS_DB','/var/lib/cloudif/portal/clou
 AUDIT_URL=os.environ.get('CLOUDIF_AUDIT_URL','http://127.0.0.1:18201').rstrip('/')
 AUDIT_TOKEN=os.environ.get('CLOUDIF_AUDIT_TOKEN','').strip()
 HOST=os.environ.get('CLOUDIF_PROJECT_ACCESS_HOST','127.0.0.1')
-PORT=int(os.environ.get('CLOUDIF_PROJECT_ACCESS_PORT','18207'))
+PORT=int(os.environ.get('CLOUDIF_PROJECT_ACCESS_PORT','18211'))
 POLL=max(.1,float(os.environ.get('CLOUDIF_PROJECT_ACCESS_POLL','0.5')))
 WRITE_METHODS={'POST','PUT','PATCH','DELETE'}
 

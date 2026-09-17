@@ -15,6 +15,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from portal.core.rbac import is_global
+from portal.core.production_access import project_production_access
 
 _AUDIT_URL=os.environ.get("CLOUDIF_AUDIT_URL","http://127.0.0.1:18201").rstrip("/")
 _AUDIT_TOKEN=os.environ.get("CLOUDIF_AUDIT_TOKEN","").strip()
@@ -156,6 +157,7 @@ def project_tracking_summary(identity, project: dict[str,Any]) -> dict[str,Any]:
     channels=Counter(_channel(event.get("source")) for event in recent14)
     tasks=int(counts.get("tasks") or 0);tasks_closed=int(counts.get("tasks_closed") or 0)
     stories=int(counts.get("userstories") or 0);stories_closed=int(counts.get("userstories_closed") or 0)
+    production=project_production_access(slug)
     return {
         "ok":bool(audit_ok or forgejo_ok or taiga_ok),
         "slug":slug,
@@ -169,5 +171,6 @@ def project_tracking_summary(identity, project: dict[str,Any]) -> dict[str,Any]:
         "stories_open":max(0,stories-stories_closed),
         "last_activity":max([str(event.get("ts") or "") for event in events]+member_stamps,default=""),
         "channels_14d":{"taiga":int(channels.get("taiga",0)),"forgejo":int(channels.get("forgejo",0)),"mcp":int(channels.get("mcp",0)),"environment":int(channels.get("environment",0))},
-        "coverage":{"taiga":taiga_ok,"forgejo":forgejo_ok,"mcp":audit_ok,"environment_access":True,"production_access":False,"external_authenticated_access":False},
+        "production":production,
+        "coverage":{"taiga":taiga_ok,"forgejo":forgejo_ok,"mcp":audit_ok,"environment_access":True,"production_access":bool(production.get("instrumented")),"external_authenticated_access":False},
     }

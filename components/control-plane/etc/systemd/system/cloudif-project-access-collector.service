@@ -13,7 +13,7 @@ Environment=CLOUDIF_PROJECT_ACCESS_LOG=/srv/cloudif/router/logs/cloudif_project_
 Environment=CLOUDIF_PROJECT_ACCESS_DB=/var/lib/cloudif/portal/cloudif-portal.db
 Environment=CLOUDIF_PROJECT_ACCESS_STATE=/var/lib/cloudif-project-access-collector/state.json
 Environment=CLOUDIF_PROJECT_ACCESS_HOST=127.0.0.1
-Environment=CLOUDIF_PROJECT_ACCESS_PORT=18207
+Environment=CLOUDIF_PROJECT_ACCESS_PORT=18211
 ExecStart=/usr/bin/python3 /srv/cloudif/app-pointers/project-access-collector-current/cloudif-project-access-collector.py
 Restart=on-failure
 RestartSec=2
