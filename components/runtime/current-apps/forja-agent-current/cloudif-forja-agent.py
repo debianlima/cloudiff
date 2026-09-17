@@ -19,10 +19,10 @@ import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-ENVFILE = Path("/etc/cloudif/forja-agent.env")
-STATE_DIR = Path("/var/lib/cloudif/forja-agent/projects")
-EVENT_DIR = Path("/var/lib/cloudif/forja-agent/events")
-ARTIFACT_STAGE_DIR = Path("/var/lib/cloudif/forja-agent/artifacts")
+ENVFILE = Path(os.environ.get("FORJA_ENVFILE", "/etc/cloudif/forja-agent.env"))
+STATE_DIR = Path(os.environ.get("FORJA_STATE_DIR", "/var/lib/cloudif/forja-agent/projects"))
+EVENT_DIR = Path(os.environ.get("FORJA_EVENT_DIR", "/var/lib/cloudif/forja-agent/events"))
+ARTIFACT_STAGE_DIR = Path(os.environ.get("FORJA_ARTIFACT_STAGE_DIR", "/var/lib/cloudif/forja-agent/artifacts"))
 STATE_DIR.mkdir(parents=True, exist_ok=True)
 EVENT_DIR.mkdir(parents=True, exist_ok=True)
 ARTIFACT_STAGE_DIR.mkdir(parents=True, exist_ok=True)
@@ -617,6 +617,8 @@ def _cloudif_forgejo_push_worker(slug, delivery, body):
         "final": final,
     }
     save_event("automation", slug, result)
+    _cloudif_record_activity(slug, {"ts": now(), "source": "deploy", "event": "forgejo-main-deploy", "actor": _cloudif_forgejo_actor(body), "commit": after[:64], "summary": "Deploy automático do push em main", "result": "success" if result["ok"] else "error", "delivery": str(delivery or "")[:128]})
+    project = load_project(slug) or project
     project["last_forgejo_automation_at"] = now()
     project["last_forgejo_automation_ok"] = result["ok"]
     project["last_forgejo_automation_commit"] = after
@@ -671,6 +673,54 @@ def save_event(kind, slug, payload):
     path = d / f"{kind}-{int(time.time())}.json"
     path.write_text(jdump(payload))
     return str(path)
+
+
+def _cloudif_forgejo_actor(body):
+    """Return only a canonical username-like identifier; never e-mail."""
+    if not isinstance(body, dict):
+        return ""
+    for key in ("sender", "pusher", "user"):
+        value = body.get(key)
+        if not isinstance(value, dict):
+            continue
+        actor = str(value.get("login") or value.get("username") or "").strip().lower()
+        if actor:
+            return actor[:128]
+    return ""
+
+
+def _cloudif_forgejo_activity(event, body, delivery=""):
+    body = body if isinstance(body, dict) else {}
+    actor = _cloudif_forgejo_actor(body)
+    entry = {
+        "ts": now(), "source": "forgejo", "event": str(event or "unknown")[:64],
+        "actor": actor, "delivery": str(delivery or "")[:128],
+    }
+    if event == "push":
+        ref = str(body.get("ref") or "")
+        commit = str(body.get("after") or "")
+        head = body.get("head_commit") if isinstance(body.get("head_commit"), dict) else {}
+        message = str(head.get("message") or "").splitlines()[0][:240]
+        entry.update({"ref": ref[:180], "commit": commit[:64], "summary": message})
+    elif event == "pull_request":
+        pr = body.get("pull_request") if isinstance(body.get("pull_request"), dict) else {}
+        entry.update({"action": str(body.get("action") or "")[:48], "number": pr.get("number"), "summary": str(pr.get("title") or "")[:240]})
+    elif event == "release":
+        release = body.get("release") if isinstance(body.get("release"), dict) else {}
+        entry.update({"action": str(body.get("action") or "")[:48], "version": str(release.get("tag_name") or release.get("name") or "")[:120], "summary": str(release.get("name") or release.get("tag_name") or "")[:240]})
+    return entry
+
+
+def _cloudif_record_activity(slug, entry):
+    project = load_project(slug) or {"project_slug": slug}
+    items = [item for item in (project.get("activity") or []) if isinstance(item, dict)]
+    items.append({k: v for k, v in entry.items() if v not in (None, "")})
+    project["activity"] = items[-100:]
+    project["last_activity_at"] = entry.get("ts") or now()
+    if entry.get("actor"):
+        project["last_forgejo_actor"] = entry["actor"]
+    save_project(project)
+    return project
 
 
 # CloudIF v47d auth helper BEGIN
@@ -3234,6 +3284,7 @@ class Handler(BaseHTTPRequestHandler):
             event = self.headers.get("X-Forgejo-Event") or self.headers.get("X-Gitea-Event") or "unknown"
             delivery = self.headers.get("X-Forgejo-Delivery") or self.headers.get("X-Gitea-Delivery") or ""
             save_event("forgejo", slug, {"headers": {"event": event, "delivery": delivery}, "body": raw.decode("utf-8", "ignore")[:5000], "time": now(), "signature_verified": True})
+            project = _cloudif_record_activity(slug, _cloudif_forgejo_activity(event, webhook_body, delivery))
             project["last_forgejo_event_at"] = now()
             project["last_forgejo_event"] = event
             project["last_forgejo_delivery"] = delivery

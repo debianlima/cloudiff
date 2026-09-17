@@ -7,10 +7,10 @@ back to the legacy adapter (A8).
 """
 from __future__ import annotations
 
-from portal.modules import admin, delivery, environments, health, overview, projects
+from portal.modules import admin, delivery, environments, health, overview, projects, taiga
 from portal.registry import Registry, registry
 
-_MODULES = (health, admin, delivery, environments, projects, overview)
+_MODULES = (health, admin, delivery, environments, projects, taiga, overview)
 
 
 def install(target: Registry = registry) -> Registry:

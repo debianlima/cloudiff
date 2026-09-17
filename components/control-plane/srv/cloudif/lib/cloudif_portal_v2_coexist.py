@@ -30,6 +30,7 @@ PORTAL_PATHS = {"/", "/cloudif/portal", "/cloudif/portal/", "/cloudiff/portal", 
 NATIVE_READY = {
     ("/cloudiff/portal/api/reconciliation", "GET"),
     ("/api/reconciliation", "GET"),
+    ("/cloudiff/portal/api/taiga", "GET"),
     ("/cloudiff/portal", "GET"),
     ("/cloudiff/portal/", "GET"),
     ("/", "GET"),
@@ -791,14 +792,15 @@ def _install() -> None:
                     markup = render_legacy(identity(self.headers), "ajuda", "Guia da plataforma", help_body(tenant_admin_allowed(self)), "", "")
                     return send(self, 200, "text/html; charset=utf-8", markup.encode("utf-8"))
                 native_home = path in PORTAL_PATHS and tab in ("", "inicio", "início", "overview")
-                match_path = "/cloudiff/portal" if path == "/" else path
+                native_taiga = path in PORTAL_PATHS and tab == "taiga"
+                match_path = "/cloudiff/portal/pagina/taiga" if native_taiga else ("/cloudiff/portal" if path == "/" else path)
                 native_nonportal = (path, "GET") in NATIVE_READY and path not in PORTAL_PATHS
-                if native_home or native_nonportal:
+                if native_home or native_taiga or native_nonportal:
                     if registry.match(match_path, "GET") is None:
                         wire()
                     if registry.match(match_path, "GET") is not None:
                         request = request_for(self, "GET")
-                        if path == "/":
+                        if path == "/" or native_taiga:
                             request = dataclasses.replace(request, path=match_path)
                         response = handle(request, lambda _request: None)
                         if response is not None:

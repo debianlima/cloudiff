@@ -27,6 +27,7 @@ _TAB_GROUPS: "OrderedDict[str, tuple[tuple[str, str], ...]]" = OrderedDict(
                 ("publicacao", "Publicações"),
                 ("aprovacoes", "Aprovações"),
                 ("projetos", "Projetos"),
+                ("taiga", "Taiga"),
                 ("bancos", "Bancos e tenants"),
                 ("backup", "Backup"),
                 ("agentes", "Conectores"),
@@ -93,6 +94,7 @@ _ASSET_VERSION = "20260909-a9p2"
 _MODULE_TO_TAB = {
     "overview": "resumo",
     "projects": "projetos",
+    "taiga": "taiga",
     "data": "bancos",
     "delivery": "publicacao",
     "environments": "operacao-producao",

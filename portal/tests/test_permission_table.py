@@ -39,6 +39,8 @@ class PermissionTableTest(unittest.TestCase):
     # testes de paridade de visibilidade/execução (feitos contra a v1 viva).
     V2_PAGE_ROUTES = {
         ("/cloudiff/portal/pagina/projetos", "GET"),
+        ("/cloudiff/portal/pagina/taiga", "GET"),
+        ("/cloudiff/portal/api/taiga", "GET"),
         ("/cloudiff/portal/", "GET"),  # home com barra, equivale a /cloudiff/portal
     }
 
@@ -57,6 +59,17 @@ class PermissionTableTest(unittest.TestCase):
                 else:
                     self.assertEqual(got, want,
                         f"{ep.method} {ep.path} [{persona}]: v1={want}, v2={got}")
+
+    def test_new_taiga_routes_are_read_only_and_authenticated(self):
+        taiga = [ep for ep in all_endpoints() if ep.module == "taiga"]
+        self.assertEqual({(ep.path, ep.method) for ep in taiga}, {
+            ("/cloudiff/portal/pagina/taiga", "GET"),
+            ("/cloudiff/portal/api/taiga", "GET"),
+        })
+        for ep in taiga:
+            for identity in PERSONAS.values():
+                self.assertTrue(ep.guard(identity))
+            self.assertEqual(ep.permission, "taiga.view")
 
     def test_all_action_routes_declare_csrf(self):
         # A3: CSRF preserved on every /action/ route. F3: publication gains CSRF

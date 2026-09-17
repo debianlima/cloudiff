@@ -11,66 +11,16 @@ import os
 import sqlite3
 
 _DB = os.environ.get("CLOUDIF_PORTAL_DB", "/var/lib/cloudif/portal/cloudif-portal.db")
-_ADMIN_GROUPS = {g.strip().lower() for g in
-                 os.environ.get("CLOUDIF_ADMIN_GROUP", "CloudIF-Tenants-Admin").split(",") if g.strip()}
-
-
-def _norm(s) -> str:
-    return (s or "").strip().lower()
-
-
-def _is_admin(groups) -> bool:
-    cur = {_norm(g) for g in groups}
-    return bool(_ADMIN_GROUPS & cur) or "domain admins" in cur
-
-
-def _tenant_visible(con, tenant, username, group_set, is_admin) -> bool:
-    if is_admin:
-        return True
-    if _norm(tenant) == _norm(username):
-        return True
-    rows = con.execute("SELECT subject_type, subject FROM tenant_acl WHERE tenant=?", (tenant,)).fetchall()
-    for r in rows:
-        if r["subject_type"] == "user" and _norm(r["subject"]) == _norm(username):
-            return True
-        if r["subject_type"] == "group" and _norm(r["subject"]) in group_set:
-            return True
-    return False
+from portal.core.project_visibility import (
+    is_admin_groups as _is_admin,
+    norm as _norm,
+    tenant_visible as _tenant_visible,
+    visible_projects as _core_visible_projects,
+)
 
 
 def visible_projects(identity) -> list[dict]:
-    username = _norm(identity.username)
-    groups = list(identity.groups)
-    group_set = {_norm(g) for g in groups}
-    is_admin = _is_admin(groups)
-    con = sqlite3.connect(_DB)
-    con.row_factory = sqlite3.Row
-    try:
-        rows = con.execute("SELECT * FROM projects ORDER BY updated_at DESC, name").fetchall()
-        if is_admin:
-            return [_shape(r) for r in rows]
-        out = []
-        for p in rows:
-            if _norm(p["owner"]) == username:
-                out.append(_shape(p)); continue
-            ok = False
-            acl = con.execute("SELECT subject_type, subject FROM project_acl WHERE slug=?", (p["slug"],)).fetchall()
-            for a in acl:
-                if a["subject_type"] == "user" and _norm(a["subject"]) == username:
-                    ok = True
-                if a["subject_type"] == "group" and _norm(a["subject"]) in group_set:
-                    ok = True
-            if ok or (p["tenant"] and _tenant_visible(con, p["tenant"], username, group_set, is_admin)):
-                out.append(_shape(p))
-        return out
-    finally:
-        con.close()
-
-
-def _shape(r) -> dict:
-    keys = ("slug", "name", "tenant", "owner", "description", "repo_url",
-            "komodo_status", "status", "updated_at", "repo_name", "stack_name")
-    return {k: (r[k] if k in r.keys() else None) for k in keys}
+    return _core_visible_projects(identity, _DB)
 
 
 def projects_data(identity) -> dict:

@@ -14,6 +14,7 @@ class NavigationInformationArchitectureTest(unittest.TestCase):
                 ("publicacao", "Publicações"),
                 ("aprovacoes", "Aprovações"),
                 ("projetos", "Projetos"),
+                ("taiga", "Taiga"),
                 ("bancos", "Bancos e tenants"),
                 ("backup", "Backup"),
                 ("agentes", "Conectores"),
@@ -22,6 +23,7 @@ class NavigationInformationArchitectureTest(unittest.TestCase):
         self.assertNotIn("Projetos", tuple(shell._TAB_GROUPS))
         self.assertNotIn("Dados", tuple(shell._TAB_GROUPS))
         self.assertNotIn("Ferramentas", tuple(shell._TAB_GROUPS))
+        self.assertEqual(dict(shell._TAB_GROUPS["Painel geral"])["taiga"], "Taiga")
 
     def test_approvals_are_discoverable_in_primary_navigation(self):
         from portal.core.auth import Identity

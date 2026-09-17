@@ -1,0 +1,25 @@
+[Unit]
+Description=CloudIFF Taiga Project/Membership Reconciler
+After=docker.service cloudif-taiga.service network-online.target
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/cloudif/taiga-reconciler.env
+ExecStart=/usr/bin/python3 /srv/cloudif/app-pointers/taiga-reconciler-current/cloudif-taiga-reconciler.py
+Restart=always
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictRealtime=true
+
+[Install]
+WantedBy=multi-user.target

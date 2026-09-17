@@ -99,7 +99,7 @@ class BuildBoundPreviewDeploymentContractTests(unittest.TestCase):
           "'secretValuesIncluded':False,'secretReferencesIncluded':False",
           "base['_internal_runtime_configuration']=runtime_configuration",
         ):self.assertIn(marker,self.broker)
-        start=self.broker.index('def _deployment_runtime_summary(');end=self.broker.index('def _deployment_routes(',start);block=self.broker[start:end]
+        start=self.broker.index('def _deployment_runtime_summary(');end=self.broker.index('def _managed_deployment_dependencies(',start);block=self.broker[start:end]
         return_block=block[block.rindex('return {'):]
         self.assertNotIn('secretRuntimeReferences',return_block)
         self.assertNotIn('publicRuntimeEnvironment',return_block)
