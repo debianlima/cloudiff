@@ -24,4 +24,4 @@ Superfície v2 independente para acompanhamento do Taiga no CloudIFF.
 
 ## Credencial privada do Taiga
 
-`CLOUDIF_TAIGA_API_TOKEN` é opcional e deve ser materializada server-side por provedor de segredos. Sem ela, a tela degrada de forma segura e continua exibindo projetos, saúde, Faro, Forgejo e Academic Audit.
+As credenciais reais do Taiga permanecem no Faro. O Portal usa somente `/etc/cloudif/taiga-reconciler-client.env`, que contém a URL e o token interno do broker/reconciliador já utilizado pela sincronização de projetos. O broker executa leituras locais no `taiga-back` e devolve apenas dados sanitizados. O OpenBao pode manter cópia de recuperação, mas não é dependência de runtime.

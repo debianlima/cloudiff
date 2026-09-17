@@ -24,6 +24,7 @@ import cloudif_project_config_events as config_events
 LOCK = Path("/run/cloudif-reconcile-worker.lock")
 QUEUE = client.QUEUE
 FORJA_ENV = Path("/etc/cloudif/forja-agent-client.env")
+TAIGA_ENV = Path("/etc/cloudif/taiga-reconciler-client.env")
 
 
 def read_env(path):
@@ -103,6 +104,48 @@ def project_membership_snapshot(project):
     con.close();return {'project':project,'owner':owner,'tenant':tenant,'acl':acl}
 
 
+def taiga_membership_snapshot(project):
+    con=client.connect();row=con.execute('select * from projects where slug=?',(project,)).fetchone()
+    if not row:
+        con.close();raise RuntimeError('project_not_found')
+    keys=set(row.keys());owner=str((row['owner'] if 'owner' in keys else '') or '').strip().lower();name=str((row['name'] if 'name' in keys else '') or project)
+    desired={}
+    release={}
+    for r in con.execute('select username,email,groups_json,enabled from release_users where enabled=1').fetchall():
+        username=str(r['username'] or '').strip().lower()
+        if not username:continue
+        try:groups=[str(x).strip().lower() for x in json.loads(r['groups_json'] or '[]') if str(x).strip()]
+        except Exception:groups=[]
+        release[username]={'email':str(r['email'] or '').strip().lower(),'groups':groups}
+    def add(username,is_owner=False,source='cloudiff'):
+        username=str(username or '').strip().lower()
+        if not username:return
+        meta=release.get(username,{})
+        desired[username]={'username':username,'email':str(meta.get('email') or ''),'full_name':username,'is_owner':bool(is_owner),'source':source}
+    add(owner,True,'owner')
+    acl=[]
+    for r in con.execute('select subject_type,subject from project_acl where slug=? order by id',(project,)).fetchall():
+        kind=str(r['subject_type'] or '').strip().lower();subject=str(r['subject'] or '').strip()
+        acl.append({'type':kind,'subject':subject})
+        if kind=='user':add(subject,subject.strip().lower()==owner,'project_acl')
+        elif kind=='group':
+            g=subject.strip().lower()
+            for username,meta in release.items():
+                if g in set(meta.get('groups') or []):add(username,username==owner,'project_acl_group:'+g)
+    con.close()
+    return {'project':project,'name':name,'owner':owner,'acl':acl,'desired_members':[desired[k] for k in sorted(desired)]}
+
+
+def reconcile_taiga_project(project):
+    cfg=read_env(TAIGA_ENV);base=(cfg.get('TAIGA_RECONCILER_URL') or '').rstrip('/');token=cfg.get('TAIGA_RECONCILER_TOKEN') or ''
+    if not base or not token:return {'ok':False,'error':'taiga_reconciler_credentials_missing'}
+    state=taiga_membership_snapshot(project)
+    payload={'slug':project,'name':state['name'],'description':'Projeto CloudIFF sincronizado automaticamente.','owner':state['owner'],'desired_members':state['desired_members'],'authority':'cloudiff','verification_sources':['forgejo','supabase']}
+    result=internal_post(base,'/v1/projects/'+urllib.parse.quote(project,safe='')+'/reconcile',token,payload,120)
+    result['desired_count']=len(state['desired_members']);result['authority']='cloudiff'
+    return result
+
+
 def tenant_membership_snapshot(tenant):
     users=set();groups=set();con=client.connect()
     for row in con.execute('select subject_type,subject from tenant_acl where tenant=?',(tenant,)).fetchall():
@@ -158,8 +201,23 @@ def reconcile_project_membership(project):
         proc=subprocess.run(['/bin/systemctl','start','cloudif-project-onboarding-reconcile.service'],text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=300)
         onboarding={'ok':proc.returncode==0,'started':proc.returncode==0,'returncode':proc.returncode}
     except Exception as exc:onboarding={'ok':False,'started':False,'error_type':type(exc).__name__}
-    ok=bool(forgejo.get('ok') and komodo.get('ok') and tenant_result.get('ok'))
-    return {'ok':ok,'project':project,'owner':state['owner'],'tenant':state['tenant'],'acl':state['acl'],'forgejo':forgejo,'komodo':komodo,'tenant_access':tenant_result,'onboarding':onboarding}
+    kdata=komodo.get('data') if isinstance(komodo.get('data'),dict) else {}
+    authz=kdata.get('authz') if isinstance(kdata.get('authz'),dict) else {}
+    terminals=kdata.get('terminals') if isinstance(kdata.get('terminals'),dict) else {}
+    raw_errors=terminals.get('errors') if isinstance(terminals.get('errors'),list) else []
+    remaining_errors=[];stale_cleanup=[]
+    for err in raw_errors:
+        detail=(err.get('result') or {}).get('data') if isinstance(err,dict) else {}
+        message=str(detail.get('error') if isinstance(detail,dict) else '')
+        if isinstance(err,dict) and err.get('stage')=='delete_terminal' and 'Did not find any Stack matching' in message:
+            stale_cleanup.append(err)
+        else:
+            remaining_errors.append(err)
+    komodo_pending=bool(authz.get('pending'))
+    komodo_hard_error=bool(remaining_errors) or (not komodo.get('ok') and not komodo_pending)
+    komodo_effective_ok=not komodo_hard_error
+    ok=bool(forgejo.get('ok') and komodo_effective_ok and tenant_result.get('ok'))
+    return {'ok':ok,'pending':komodo_pending,'project':project,'owner':state['owner'],'tenant':state['tenant'],'acl':state['acl'],'forgejo':forgejo,'komodo':komodo,'komodo_pending':komodo_pending,'komodo_missing':authz.get('missing') or [],'stale_terminal_cleanup_ignored':len(stale_cleanup),'komodo_hard_errors':remaining_errors,'tenant_access':tenant_result,'onboarding':onboarding}
 
 
 def update_request(request_id,status,message,result):
@@ -192,8 +250,23 @@ def process(row):
                        VALUES(?,?,?,1,?,?)
                        ON CONFLICT(username) DO UPDATE SET email=excluded.email,groups_json=excluded.groups_json,enabled=1,updated_at=excluded.updated_at""",
                     (username,str(payload.get("email") or "")[:320],json.dumps(groups,ensure_ascii=False),now,now))
-        con.commit(); con.close()
-        update_request(rid,"ready","Usuário habilitado para automação de releases.",{"username":username})
+        con.commit()
+        affected=set()
+        uname=str(username or '').strip().lower()
+        for r in con.execute('select slug from projects where lower(owner)=?',(uname,)).fetchall(): affected.add(str(r['slug']))
+        for r in con.execute("select slug from project_acl where lower(subject_type)='user' and lower(subject)=?",(uname,)).fetchall(): affected.add(str(r['slug']))
+        group_set={str(x).strip().lower() for x in groups if str(x).strip()}
+        if group_set:
+            for r in con.execute("select slug,subject from project_acl where lower(subject_type)='group'").fetchall():
+                if str(r['subject'] or '').strip().lower() in group_set:affected.add(str(r['slug']))
+        con.close()
+        triggered=[]
+        for slug in sorted(affected):
+            try:
+                client.enqueue('project.membership.changed',actor=username or 'user.seen',username=username or '',project=slug,payload={'source':'user.seen','operation':'identity_refresh'},dedupe_seconds=0)
+                triggered.append(slug)
+            except Exception:pass
+        update_request(rid,"ready","Usuário habilitado; projetos relacionados reenfileirados para conciliação.",{"username":username,"triggered_projects":triggered})
         return
     if event in {"project.created","project.updated","project.integrated","project.membership.changed","project.configuration.changed","repository.created","repository.updated","reconcile.requested"}:
         project=row["project"] or str(payload.get("project") or "")
@@ -217,20 +290,32 @@ def process(row):
                          enabled=1,updated_at=excluded.updated_at""",
                     (project,tenant,repo_full,repo_url,now,now))
         con.commit(); con.close()
-        membership=None;runtime_reconcile=None
+        membership=None;runtime_reconcile=None;taiga=None
+        membership_failed=False;taiga_failed=False
         if event=="project.membership.changed":
             membership=reconcile_project_membership(project)
-            if not membership.get('ok'):
-                raise RuntimeError('project_membership_reconcile_failed')
+            membership_failed=not membership.get('ok')
+        if event in {"project.created","project.updated","project.integrated","project.membership.changed","reconcile.requested"}:
+            taiga=reconcile_taiga_project(project)
+            taiga_failed=not taiga.get('ok')
+        if membership_failed:
+            raise RuntimeError('project_membership_reconcile_failed')
+        if taiga_failed:
+            raise RuntimeError('taiga_project_reconcile_failed')
         if event=="project.configuration.changed":
             environment=str(payload.get('environment') or 'production')
             runtime_reconcile=reconcile_project_runtime(project,environment)
             if not runtime_reconcile.get('ok'):raise RuntimeError('project_runtime_reconcile_failed')
-        status="ready" if repo_full else "waiting"
+        taiga_waiting=bool(taiga and isinstance(taiga.get('data'),dict) and taiga['data'].get('status')=='waiting_identity')
+        membership_waiting=bool(membership and membership.get('pending'))
+        status="waiting" if (taiga_waiting or membership_waiting) else ("ready" if repo_full else "waiting")
         if event=="project.configuration.changed":msg="Configuração e estado de runtime reconciliados."
-        else:msg=("Membros, terminais e integrações reconciliados." if membership else "Projeto e repositório reconciliados.") if repo_full else "Projeto preparado; aguardando criação do repositório."
+        elif taiga_waiting:msg="Projeto Taiga garantido; aguardando identidade de um ou mais membros CloudIFF."
+        elif membership_waiting:msg="Forgejo, Supabase/tenant e Taiga reconciliados; aguardando usuário correspondente no Komodo."
+        elif membership:msg="Membros Forgejo, Komodo, Supabase e Taiga reconciliados a partir da ACL CloudIFF."
+        else:msg="Projeto CloudIFF e correspondente Taiga reconciliados." if repo_full else "Projeto preparado; Taiga reconciliado; aguardando criação do repositório."
         configuration_event=config_events.notify(project,event,payload)
-        update_request(rid,status,msg,{"project":project,"tenant":tenant,"repo_full_name":repo_full,"repo_url":repo_url,"membership":membership,"runtime_reconcile":runtime_reconcile,"configuration_event":configuration_event})
+        update_request(rid,status,msg,{"project":project,"tenant":tenant,"repo_full_name":repo_full,"repo_url":repo_url,"membership":membership,"taiga":taiga,"runtime_reconcile":runtime_reconcile,"configuration_event":configuration_event})
         return
     if event in {"tenant.created","tenant.ready","tenant.bound","tenant.membership.changed"}:
         tenant=row["tenant"] or str(payload.get("tenant") or "")

@@ -37,7 +37,7 @@ def _project_picker(data: dict) -> str:
 
 def _integration_cards(data: dict) -> str:
     taiga = data.get("taiga") or {}; faro = data.get("faro") or {}; forgejo = data.get("forgejo") or {}; private = data.get("taiga_project") or {}
-    private_label = "Dados privados conectados" if private.get("ok") else ("Credencial server-side pendente" if not private.get("configured") else "Projeto não localizado")
+    private_label = "Broker local do Faro conectado" if private.get("ok") else ("Cliente do broker Faro não configurado" if not private.get("configured") else "Resumo do projeto indisponível")
     return '<div class="resource-grid">' + ''.join((
         f'<article class="resource-card"><div class="resource-card-head"><div><p class="resource-kicker">Taiga</p><h3>Aplicação</h3></div>{_status(bool(taiga.get("ok")))}</div><p class="resource-note">API pública HTTP {h(taiga.get("http_status"))}. Login institucional via OIDC.</p><a class="btn btn-quiet" target="_blank" rel="noopener" href="{TAIGA}">Abrir no Taiga</a></article>',
         f'<article class="resource-card"><div class="resource-card-head"><div><p class="resource-kicker">Faro</p><h3>Stack Taiga</h3></div>{_status(bool(faro.get("ok")))}</div><p class="resource-note">{len(faro.get("containers") or [])} container(s) Taiga observados · coleta {h(faro.get("updated_at") or "indisponível")}.</p></article>',
@@ -49,7 +49,7 @@ def _integration_cards(data: dict) -> str:
 def _taiga_counts(data: dict) -> str:
     item = data.get("taiga_project") or {}
     if not item.get("ok"):
-        return '<div class="resource-empty"><h3>Resumo privado do Taiga ainda indisponível</h3><p>A tela já está integrada à ACL, Forgejo, Academic Audit e telemetria do Faro. Tarefas e etapas entram automaticamente quando a credencial server-side do Taiga for materializada no ambiente.</p></div>'
+        return '<div class="resource-empty"><h3>Resumo privado do Taiga ainda indisponível</h3><p>A tela já está integrada à ACL, Forgejo, Academic Audit e telemetria do Faro. Tarefas e etapas entram automaticamente quando o broker local do Faro estiver disponível para este projeto.</p></div>'
     counts = item.get("counts") or {}
     labels = (("Tarefas", counts.get("tasks")), ("Histórias", counts.get("userstories")), ("Etapas", counts.get("milestones")), ("Membros", counts.get("members")))
     cards = ''.join(f'<div class="ov-agg"><span>{h(label)}</span><b>{h(value if value is not None else "—")}</b></div>' for label, value in labels)
@@ -70,12 +70,23 @@ def _activity(data: dict) -> str:
 
 def _actors(data: dict) -> str:
     if not data.get("can_view_members"):
-        return '<p class="resource-note">Sua visão individual mostra somente eventos associados ao seu usuário institucional.</p>'
+        subject = data.get("subject") or {}
+        if not subject:
+            return '<p class="resource-note">Sua visão individual mostra somente eventos e trabalho associados ao seu usuário institucional.</p>'
+        return '<div class="ov-aggs">' + ''.join((
+            f'<div class="ov-agg"><span>Tarefas</span><b>{h(subject.get("tasks_closed") or 0)}/{h(subject.get("tasks_assigned") or 0)}</b></div>',
+            f'<div class="ov-agg"><span>Histórias</span><b>{h(subject.get("stories_closed") or 0)}/{h(subject.get("stories_assigned") or 0)}</b></div>',
+            f'<div class="ov-agg"><span>Atividade estimada</span><b>{h(subject.get("estimated_active_minutes") or 0)} min</b></div>',
+            f'<div class="ov-agg"><span>Último login</span><b>{h(subject.get("last_login") or "—")}</b></div>',
+        )) + '</div>'
     actors = data.get("actors") or []
     if not actors:
         return '<p class="resource-note">Ainda não há atividade individual normalizada para os membros deste projeto.</p>'
-    rows = ''.join(f'<tr><td>{h(a.get("username"))}</td><td>{h(a.get("total"))}</td><td>{h(a.get("last_activity"))}</td></tr>' for a in actors)
-    return '<div class="table-scroll"><table class="cm-table"><thead><tr><th>Usuário</th><th>Eventos</th><th>Última atividade</th></tr></thead><tbody>' + rows + '</tbody></table></div>'
+    rows = ''.join(
+        f'<tr><td>{h(a.get("full_name") or a.get("username"))}<br><small>{h(a.get("username"))}</small></td><td>{h(a.get("role") or "—")}</td><td>{h(a.get("tasks_closed") or 0)}/{h(a.get("tasks_assigned") or 0)}</td><td>{h(a.get("stories_closed") or 0)}/{h(a.get("stories_assigned") or 0)}</td><td>{h(a.get("estimated_active_minutes") or 0)} min</td><td>{h(a.get("last_login") or "—")}</td><td>{h(a.get("last_activity") or "—")}</td></tr>'
+        for a in actors
+    )
+    return '<div class="table-scroll"><table class="cm-table"><thead><tr><th>Usuário</th><th>Papel</th><th>Tarefas</th><th>Histórias</th><th>Atividade estimada</th><th>Último login</th><th>Última atividade</th></tr></thead><tbody>' + rows + '</tbody></table></div>'
 
 
 def taiga_body(data: dict) -> str:
@@ -84,7 +95,7 @@ def taiga_body(data: dict) -> str:
     return f'''
 <section class="resource-section" aria-labelledby="taiga-projects"><div class="resource-section-head"><div><p class="ov-eyebrow">Gestão acadêmica</p><h2 id="taiga-projects">Projetos no Taiga</h2><p>Mesma visibilidade e permissionamento dos projetos CloudIFF. Nenhuma ACL é duplicada aqui.</p></div></div>{_project_picker(data)}</section>
 <section class="resource-section"><div class="resource-section-head"><div><p class="ov-eyebrow">Integrações</p><h2>{title}</h2><p>Saúde da aplicação, stack no Faro, Forgejo e leitura privada do Taiga.</p></div></div>{_integration_cards(data)}</section>
-<section class="resource-section"><div class="resource-section-head"><div><p class="ov-eyebrow">Acompanhamento</p><h2>Etapas e trabalho</h2><p>Contadores vêm do Taiga quando a credencial server-side está disponível.</p></div></div>{_taiga_counts(data)}</section>
+<section class="resource-section"><div class="resource-section-head"><div><p class="ov-eyebrow">Acompanhamento</p><h2>Etapas e trabalho</h2><p>Contadores vêm do Taiga por leitura local no Faro; credenciais reais não saem do host.</p></div></div>{_taiga_counts(data)}</section>
 <section class="resource-section"><div class="resource-section-head"><div><p class="ov-eyebrow">Timeline</p><h2>Atividade do projeto</h2><p>Eventos normalizados; commits não criam tarefas automaticamente.</p></div></div>{_activity(data)}</section>
 <section class="resource-section"><div class="resource-section-head"><div><p class="ov-eyebrow">Acompanhamento individual</p><h2>{'Alunos do projeto' if data.get('can_view_members') else 'Meus dados'}</h2><p>Professor/admin veem membros do projeto; alunos veem somente sua própria atividade autenticada.</p></div></div>{_actors(data)}<p class="resource-note">Tempo de atividade, quando disponível, é estimado a partir de eventos autenticados e não representa horas trabalhadas.</p></section>
 '''
