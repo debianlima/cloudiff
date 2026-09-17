@@ -27,6 +27,16 @@ def _when(value) -> str:
         return text.replace("T"," ")[:16]
 
 
+def _minutes(value) -> str:
+    if value in (None, ""):
+        return "—"
+    try:
+        minutes=max(0,int(value))
+    except Exception:
+        return "—"
+    return f"{minutes} min"
+
+
 def _catalog(data: dict) -> str:
     cards=[]
     for project in data.get("projects") or []:
@@ -131,12 +141,14 @@ def _recent_accesses(data: dict) -> str:
     for item in (data.get("dashboard") or {}).get("recent_accesses") or []:
         rows.append(
             '<tr>'
-            f'<td><strong>{h(item.get("full_name") or item.get("username"))}</strong><br><small>{h(item.get("username"))}</small></td>'
-            f'<td>{h(item.get("role") or "—")}</td><td>{h(_when(item.get("last_login")))}</td>'
-            f'<td>{h(_when(item.get("last_activity")))}</td><td>{h(item.get("estimated_active_minutes") or 0)} min</td></tr>'
+            f'<td class="taiga-cell-primary" data-label="Usuário"><strong>{h(item.get("full_name") or item.get("username"))}</strong><br><small>{h(item.get("username"))}</small></td>'
+            f'<td data-label="Papel">{h(item.get("role") or "—")}</td>'
+            f'<td data-label="Último login">{h(_when(item.get("last_login")))}</td>'
+            f'<td data-label="Última atividade">{h(_when(item.get("last_activity")))}</td>'
+            f'<td data-label="Atividade estimada">{h(_minutes(item.get("estimated_active_minutes")))}</td></tr>'
         )
     if not rows:return '<div class="resource-empty taiga-empty-compact"><h3>Sem acessos recentes</h3><p>Os acessos aparecerão aqui quando houver eventos autenticados.</p></div>'
-    return '<div class="table-scroll"><table class="cm-table taiga-table"><thead><tr><th>Usuário</th><th>Papel</th><th>Último login</th><th>Última atividade</th><th>Atividade estimada</th></tr></thead><tbody>'+''.join(rows)+'</tbody></table></div>'
+    return '<div class="table-scroll taiga-table-wrap"><table class="cm-table taiga-table taiga-responsive-table"><thead><tr><th>Usuário</th><th>Papel</th><th>Último login</th><th>Última atividade</th><th>Atividade estimada</th></tr></thead><tbody>'+''.join(rows)+'</tbody></table></div>'
 
 
 def _student_history_chart(history: list[dict], shared_peak: int = 0) -> str:
@@ -199,12 +211,15 @@ def _members(data: dict) -> str:
     for a in actors:
         rows.append(
             '<tr>'
-            f'<td><strong>{h(a.get("full_name") or a.get("username"))}</strong><br><small>{h(a.get("username"))}</small></td>'
-            f'<td>{h(a.get("role") or "—")}</td><td>{h(a.get("tasks_closed") or 0)}/{h(a.get("tasks_assigned") or 0)}</td>'
-            f'<td>{h(a.get("stories_closed") or 0)}/{h(a.get("stories_assigned") or 0)}</td><td>{h(a.get("total") or 0)}</td>'
-            f'<td>{h(a.get("estimated_active_minutes") or 0)} min</td><td>{h(_when(a.get("last_activity")))}</td></tr>'
+            f'<td class="taiga-cell-primary" data-label="Aluno"><strong>{h(a.get("full_name") or a.get("username"))}</strong><br><small>{h(a.get("username"))}</small></td>'
+            f'<td data-label="Papel">{h(a.get("role") or "—")}</td>'
+            f'<td data-label="Tarefas">{h(a.get("tasks_closed") or 0)}/{h(a.get("tasks_assigned") or 0)}</td>'
+            f'<td data-label="Histórias">{h(a.get("stories_closed") or 0)}/{h(a.get("stories_assigned") or 0)}</td>'
+            f'<td data-label="Eventos">{h(a.get("total") or 0)}</td>'
+            f'<td data-label="Atividade">{h(_minutes(a.get("estimated_active_minutes")))}</td>'
+            f'<td data-label="Última atividade">{h(_when(a.get("last_activity")))}</td></tr>'
         )
-    table='<div class="table-scroll taiga-student-table"><table class="cm-table taiga-table"><thead><tr><th>Aluno</th><th>Papel</th><th>Tarefas</th><th>Histórias</th><th>Eventos</th><th>Atividade</th><th>Última atividade</th></tr></thead><tbody>'+''.join(rows)+'</tbody></table></div>'
+    table='<div class="table-scroll taiga-student-table taiga-table-wrap"><table class="cm-table taiga-table taiga-responsive-table"><thead><tr><th>Aluno</th><th>Papel</th><th>Tarefas</th><th>Histórias</th><th>Eventos</th><th>Atividade</th><th>Última atividade</th></tr></thead><tbody>'+''.join(rows)+'</tbody></table></div>'
     return '<div class="taiga-student-grid">'+cards+'</div><details class="taiga-student-details"><summary>Ver comparação em tabela</summary>'+table+'</details>'
 
 
@@ -213,9 +228,16 @@ def _timeline(data: dict) -> str:
     for event in (data.get("activity") or [])[:40]:
         actor=event.get("delegated_user_id") or event.get("actor_id") or "sistema";detail=event.get("attrs") or {}
         ref=detail.get("summary") or detail.get("sha") or detail.get("commit") or detail.get("task_ref") or ""
-        rows.append(f'<tr><td>{h(_when(event.get("ts")))}</td><td>{h(actor)}</td><td><span class="chip">{h(event.get("source"))}</span></td><td>{h(event.get("action"))}</td><td>{h(ref)}</td></tr>')
+        rows.append(
+            '<tr>'
+            f'<td data-label="Quando">{h(_when(event.get("ts")))}</td>'
+            f'<td data-label="Usuário">{h(actor)}</td>'
+            f'<td data-label="Fonte"><span class="chip">{h(event.get("source"))}</span></td>'
+            f'<td data-label="Ação">{h(event.get("action"))}</td>'
+            f'<td class="taiga-cell-long" data-label="Referência">{h(ref)}</td></tr>'
+        )
     if not rows:return '<div class="resource-empty taiga-empty-compact"><h3>Sem atividade registrada</h3><p>Commits, Taiga e demais eventos aparecerão aqui conforme forem ocorrendo.</p></div>'
-    return '<div class="table-scroll"><table class="cm-table taiga-table"><thead><tr><th>Quando</th><th>Usuário</th><th>Fonte</th><th>Ação</th><th>Referência</th></tr></thead><tbody>'+''.join(rows)+'</tbody></table></div>'
+    return '<div class="table-scroll taiga-table-wrap"><table class="cm-table taiga-table taiga-responsive-table"><thead><tr><th>Quando</th><th>Usuário</th><th>Fonte</th><th>Ação</th><th>Referência</th></tr></thead><tbody>'+''.join(rows)+'</tbody></table></div>'
 
 
 def _integrations(data: dict) -> str:
