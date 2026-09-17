@@ -48,6 +48,11 @@ class TaigaOIDCAuthenticationBackend(OIDCAuthenticationBackend):
             if user:
                 return [user]
 
+        # A present institutional username is authoritative. Falling back to
+        # e-mail here can merge two different people when a directory exposes
+        # the same/shared address for multiple principals.
+        if username:
+            return self.UserModel.objects.none()
         email = str(claims.get("email") or "").strip().lower()
         if email:
             user = self.UserModel.objects.filter(email__iexact=email).first()
@@ -101,18 +106,19 @@ class TaigaOIDCAuthenticationBackend(OIDCAuthenticationBackend):
             return None
 
         user = self.UserModel.objects.filter(username__iexact=username).first()
-        if not user and email:
-            user = self.UserModel.objects.filter(email__iexact=email).first()
 
         created = False
         if not user:
-            if not email:
-                return None
+            collision=bool(email and self.UserModel.objects.filter(email__iexact=email).exists())
+            effective_email=email if (email and not collision) else (username+self.PLACEHOLDER_SUFFIX)
             user = self.UserModel.objects.create(
-                email=email,
+                email=effective_email,
                 username=username,
                 full_name=str(claims.get("name") or username),
             )
+            if hasattr(user, "verified_email") and (collision or not email):
+                user.verified_email=False
+                user.save(update_fields=["verified_email"])
             created = True
 
         self._ensure_authdata(user, claims, username)

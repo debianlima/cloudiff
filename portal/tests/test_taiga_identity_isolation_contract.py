@@ -33,6 +33,30 @@ class TaigaIdentityIsolationContractTests(unittest.TestCase):
         self.assertIn('current.endswith(self.PLACEHOLDER_SUFFIX)',src)
         self.assertIn('@pending.cloudif.invalid',src)
 
+
+    def test_broker_never_resolves_a_different_username_by_email(self):
+        src=BROKER.read_text(); ast.parse(src)
+        user_block=src.split('def user_for(spec):',1)[1].split('with transaction.atomic():',1)[0]
+        self.assertNotIn("User.objects.filter(email__iexact=email).first()",user_block)
+        self.assertIn("email_collision=bool(source_email",user_block)
+        self.assertIn("username+'@pending.cloudif.invalid'",user_block)
+        start=src.index("DJANGO_GRANT_ACCESS = r'''")
+        end=src.index("\ndef grant_access",start)
+        grant=src[start:end]
+        self.assertNotIn("if not u and email:u=User.objects.filter(email__iexact=email).first()",grant)
+        self.assertIn("effective_email",grant)
+
+    def test_oidc_does_not_alias_present_username_by_email(self):
+        src=OIDC.read_text(); ast.parse(src)
+        block=src.split('def filter_users_by_claims',1)[1].split('def _ensure_authdata',1)[0]
+        username_none=block.index("if username:\n            return self.UserModel.objects.none()")
+        email_lookup=block.index('email__iexact=email')
+        self.assertLess(username_none,email_lookup)
+        create=src.split('def create_user',1)[1].split('def update_user',1)[0]
+        self.assertNotIn('if not user and email:',create)
+        self.assertIn('collision=bool(email',create)
+        self.assertIn('username+self.PLACEHOLDER_SUFFIX',create)
+
     def test_oidc_forces_fresh_idp_login_on_shared_workstations(self):
         src=OIDC_SETTINGS.read_text()
         self.assertIn('OIDC_AUTH_REQUEST_EXTRA_PARAMS',src)
@@ -50,7 +74,7 @@ class TaigaIdentityIsolationContractTests(unittest.TestCase):
     def test_runtime_uses_derivative_images_and_clean_entry_route(self):
         compose=(ROOT/'components/faro/current-apps/taiga-current/compose.yaml').read_text()
         conf=(ROOT/'components/faro/current-apps/taiga-current/taiga.conf').read_text()
-        self.assertIn('cloudif-local/taiga-back-oidc:6.10.2-c623b753-r4-identity',compose)
+        self.assertIn('cloudif-local/taiga-back-oidc:6.10.2-c623b753-r5-identity',compose)
         self.assertIn('cloudif-local/taiga-front-oidc:6.10.3-c623b753-r3-session',compose)
         self.assertIn('/cloudif-enter/',conf)
         self.assertIn('localStorage.removeItem("token")',conf)
@@ -63,7 +87,7 @@ class TaigaIdentityIsolationContractTests(unittest.TestCase):
         self.assertIn('pending_identity=[]',src)
         self.assertIn("status='waiting_identity' if (unresolved or pending_identity) else 'ready'",src)
         self.assertIn("'pending_identity':sorted(set(pending_identity))",src)
-        self.assertIn("version':'0.4.0'",src)
+        self.assertIn("version':'0.4.1'",src)
 
     def test_derivative_images_are_reproducible(self):
         back=BACK_DOCKER.read_text(); front=FRONT_DOCKER.read_text()

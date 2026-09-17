@@ -22,10 +22,10 @@ unresolved=[]; pending_identity=[]; created_users=[]
 def user_for(spec):
     username=str(spec.get('username') or '').strip().lower(); source_email=str(spec.get('email') or '').strip().lower(); full=str(spec.get('full_name') or username).strip() or username
     if not username:return None
-    placeholder=not bool(source_email)
-    email=source_email or (username+'@pending.cloudif.invalid')
+    email_collision=bool(source_email and User.objects.filter(email__iexact=source_email).exists())
+    placeholder=(not bool(source_email)) or email_collision
+    email=(username+'@pending.cloudif.invalid') if placeholder else source_email
     u=User.objects.filter(username__iexact=username).first()
-    if not u and email:u=User.objects.filter(email__iexact=email).first()
     if not u:
         u=User.objects.create(username=username,email=email,full_name=full,is_active=True,verified_email=not placeholder)
         u.set_unusable_password();u.save(update_fields=['password'])
@@ -131,12 +131,13 @@ p=Project.objects.filter(slug=slug).first()
 if not p:
     print(json.dumps({'ok':False,'error':'project_not_found','secrets_exposed':False},separators=(',',':')));raise SystemExit()
 u=User.objects.filter(username__iexact=username).first()
-if not u and email:u=User.objects.filter(email__iexact=email).first()
 created_user=False
+identity_pending=False
 if not u:
-    if not email:
-        print(json.dumps({'ok':False,'error':'email_required','secrets_exposed':False},separators=(',',':')));raise SystemExit()
-    u=User.objects.create(username=username,email=email,full_name=full_name,is_active=True,verified_email=True)
+    collision=bool(email and User.objects.filter(email__iexact=email).exists())
+    effective_email=email if (email and not collision) else (username+'@pending.cloudif.invalid')
+    identity_pending=collision or not bool(email)
+    u=User.objects.create(username=username,email=effective_email,full_name=full_name,is_active=True,verified_email=not identity_pending)
     u.set_unusable_password();u.save(update_fields=['password']);created_user=True
 else:
     changed=[]
@@ -156,7 +157,7 @@ with transaction.atomic():
         if role and membership.role_id!=role.id:membership.role=role;changes.append('role')
         if not membership.is_admin:membership.is_admin=True;changes.append('is_admin')
         if changes:membership.save(update_fields=changes)
-print(json.dumps({'ok':True,'slug':slug,'taiga_username':u.username,'created_user':created_user,'created_membership':created_membership,'is_admin':True,'secrets_exposed':False},separators=(',',':')))
+print(json.dumps({'ok':True,'slug':slug,'taiga_username':u.username,'created_user':created_user,'created_membership':created_membership,'is_admin':True,'identity_pending':identity_pending or str(u.email or '').lower().endswith('@pending.cloudif.invalid'),'secrets_exposed':False},separators=(',',':')))
 '''
 
 def grant_access(slug,payload):
@@ -276,7 +277,7 @@ def project_summary(slug,subject='',include_members=False):
 
 
 class H(BaseHTTPRequestHandler):
-    server_version='cloudif-taiga-reconciler/0.4.0'
+    server_version='cloudif-taiga-reconciler/0.4.1'
     def log_message(self,fmt,*args):pass
     def out(self,code,obj):
         b=json.dumps(obj,ensure_ascii=False,separators=(',',':')).encode();self.send_response(code);self.send_header('Content-Type','application/json');self.send_header('Content-Length',str(len(b)));self.end_headers();self.wfile.write(b)
@@ -285,7 +286,7 @@ class H(BaseHTTPRequestHandler):
         return bool(TOKEN) and hmac.compare_digest(got,exp)
     def do_GET(self):
         parsed=urlparse(self.path);path=parsed.path
-        if path=='/health':return self.out(200,{'ok':True,'service':'cloudif-taiga-reconciler','version':'0.4.0'})
+        if path=='/health':return self.out(200,{'ok':True,'service':'cloudif-taiga-reconciler','version':'0.4.1'})
         if not self.auth():return self.out(401,{'ok':False,'error':'unauthorized'})
         sm=re.fullmatch(r'/v1/projects/([a-z0-9][a-z0-9-]{0,62})/summary',path)
         if sm:
