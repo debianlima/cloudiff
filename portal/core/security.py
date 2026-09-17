@@ -40,18 +40,49 @@ def csrf_valid(identity: Identity, presented: str) -> bool:
 
 
 def same_origin(headers: dict[str, str], host: str) -> bool:
-    """Reject a form post whose Origin/Referer host differs from the request host.
+    """Validate browser form origin while preserving the hardened v1 contract.
 
-    Reproduces v1 _cloudif_security_valid_origin: a missing Origin AND Referer is
-    treated as same-origin (non-browser client); a present one must match host.
+    Missing Origin/Referer remains accepted for non-browser/internal clients;
+    CSRF and authorization are enforced independently by dispatch.  Mobile
+    Chrome can send ``Origin: null`` for a top-level form navigation, so that
+    case is accepted only when Fetch Metadata confirms a same-site/origin
+    browser context on the CloudIFF public host.
     """
-    target = (host or "").split(":", 1)[0].strip().lower().rstrip(".")
-    for name in ("Origin", "Referer"):
-        raw = (headers.get(name) or headers.get(name.lower()) or "").strip()
-        if not raw:
-            continue
-        rest = raw.split("://", 1)[-1]
-        source = rest.split("/", 1)[0].split(":", 1)[0].strip().lower().rstrip(".")
-        if source and target and source != target:
+    def header(name: str) -> str:
+        return (headers.get(name) or headers.get(name.lower()) or "").strip()
+
+    target = (host or "").split(",", 1)[0].split(":", 1)[0].strip().lower().rstrip(".")
+    forwarded = header("X-Forwarded-Host").split(",", 1)[0].split(":", 1)[0].strip().lower().rstrip(".")
+    public = os.environ.get("CLOUDIF_PUBLIC_HOST", "cloudiff.duckdns.org").split(":", 1)[0].strip().lower().rstrip(".")
+    origin = header("Origin")
+    referer = header("Referer")
+    candidate = origin or referer
+    if not candidate:
+        return True
+
+    fetch_site = header("Sec-Fetch-Site").lower()
+    fetch_mode = header("Sec-Fetch-Mode").lower()
+    request_host_ok = (
+        target == public or target.endswith("." + public)
+        or forwarded == public or forwarded.endswith("." + public)
+    )
+    if candidate.lower() == "null":
+        return (
+            request_host_ok
+            and fetch_site in {"same-origin", "same-site"}
+            and fetch_mode in {"navigate", "same-origin", "cors", "no-cors"}
+        )
+
+    try:
+        from urllib.parse import urlparse
+        parsed = urlparse(candidate)
+        source = (parsed.hostname or "").strip().lower().rstrip(".")
+        if not source or parsed.username or parsed.password:
             return False
-    return True
+        same_cloudif_site = source == public or source.endswith("." + public)
+        if parsed.scheme.lower() == "https" and same_cloudif_site and parsed.port in (None, 443):
+            return True
+        exact_internal = {x for x in (target, forwarded, "127.0.0.1", "localhost") if x}
+        return parsed.scheme.lower() == "http" and source in exact_internal
+    except Exception:
+        return False
