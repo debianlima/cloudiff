@@ -18,12 +18,12 @@ members=payload.get('desired_members') or []
 owner_name=(payload.get('owner') or '').strip().lower()
 by_name={str(x.get('username') or '').strip().lower():x for x in members if str(x.get('username') or '').strip()}
 if owner_name and owner_name not in by_name: by_name[owner_name]={'username':owner_name,'email':'','full_name':owner_name,'is_owner':True}
-unresolved=[]; created_users=[]
+unresolved=[]; pending_identity=[]; created_users=[]
 def user_for(spec):
     username=str(spec.get('username') or '').strip().lower(); source_email=str(spec.get('email') or '').strip().lower(); full=str(spec.get('full_name') or username).strip() or username
     if not username:return None
     placeholder=not bool(source_email)
-    email=source_email or (username+'@cloudiff.invalid')
+    email=source_email or (username+'@pending.cloudif.invalid')
     u=User.objects.filter(username__iexact=username).first()
     if not u and email:u=User.objects.filter(email__iexact=email).first()
     if not u:
@@ -33,7 +33,7 @@ def user_for(spec):
     else:
         changed=[]
         current_email=str(u.email or '').strip().lower()
-        if source_email and source_email!=current_email and (not current_email or current_email.endswith('@cloudiff.invalid')):
+        if source_email and source_email!=current_email and (not current_email or current_email.endswith('@pending.cloudif.invalid')):
             collision=User.objects.filter(email__iexact=source_email).exclude(pk=u.pk).exists()
             if not collision:
                 u.email=source_email;changed.append('email')
@@ -44,6 +44,8 @@ def user_for(spec):
         if not u.is_active:
             u.is_active=True;changed.append('is_active')
         if changed:u.save(update_fields=changed)
+    if str(u.email or '').strip().lower().endswith('@pending.cloudif.invalid'):
+        pending_identity.append(username)
     return u
 with transaction.atomic():
     resolved={}
@@ -94,8 +96,8 @@ with transaction.atomic():
         if uid not in desired_user_ids:
             actual=m.user.username
             m.delete();removed.append(actual)
-    status='waiting_identity' if unresolved else 'ready'
-    print(json.dumps({'ok':True,'status':status,'slug':slug,'project_id':p.id,'project_created':created,'created_users':sorted(created_users),'unresolved':sorted(set(unresolved)),'added':sorted(added),'removed':sorted(removed),'kept':sorted(kept),'desired_count':len(by_name),'secrets_exposed':False},separators=(',',':')))
+    status='waiting_identity' if (unresolved or pending_identity) else 'ready'
+    print(json.dumps({'ok':True,'status':status,'slug':slug,'project_id':p.id,'project_created':created,'created_users':sorted(created_users),'unresolved':sorted(set(unresolved)),'pending_identity':sorted(set(pending_identity)),'added':sorted(added),'removed':sorted(removed),'kept':sorted(kept),'desired_count':len(by_name),'secrets_exposed':False},separators=(',',':')))
 '''
 def reconcile(payload):
     if not isinstance(payload,dict):return {'ok':False,'error':'invalid_payload'}
@@ -274,7 +276,7 @@ def project_summary(slug,subject='',include_members=False):
 
 
 class H(BaseHTTPRequestHandler):
-    server_version='cloudif-taiga-reconciler/0.3.2'
+    server_version='cloudif-taiga-reconciler/0.4.0'
     def log_message(self,fmt,*args):pass
     def out(self,code,obj):
         b=json.dumps(obj,ensure_ascii=False,separators=(',',':')).encode();self.send_response(code);self.send_header('Content-Type','application/json');self.send_header('Content-Length',str(len(b)));self.end_headers();self.wfile.write(b)
@@ -283,7 +285,7 @@ class H(BaseHTTPRequestHandler):
         return bool(TOKEN) and hmac.compare_digest(got,exp)
     def do_GET(self):
         parsed=urlparse(self.path);path=parsed.path
-        if path=='/health':return self.out(200,{'ok':True,'service':'cloudif-taiga-reconciler','version':'0.3.2'})
+        if path=='/health':return self.out(200,{'ok':True,'service':'cloudif-taiga-reconciler','version':'0.4.0'})
         if not self.auth():return self.out(401,{'ok':False,'error':'unauthorized'})
         sm=re.fullmatch(r'/v1/projects/([a-z0-9][a-z0-9-]{0,62})/summary',path)
         if sm:

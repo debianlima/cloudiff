@@ -1,0 +1,174 @@
+x-back-env: &back-env
+  POSTGRES_DB: ${POSTGRES_DB}
+  POSTGRES_USER: ${POSTGRES_USER}
+  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+  POSTGRES_HOST: ${POSTGRES_HOST}
+  POSTGRES_PORT: ${POSTGRES_PORT}
+  POSTGRES_SSLMODE: ${POSTGRES_SSLMODE}
+  TAIGA_SECRET_KEY: ${SECRET_KEY}
+  TAIGA_SITES_SCHEME: ${TAIGA_SCHEME}
+  TAIGA_SITES_DOMAIN: ${TAIGA_DOMAIN}
+  TAIGA_SUBPATH: ${SUBPATH}
+  DEBUG: ${DEBUG}
+  LANGUAGE_CODE: ${LANGUAGE_CODE}
+  PUBLIC_REGISTER_ENABLED: ${PUBLIC_REGISTER_ENABLED}
+  ENABLE_TELEMETRY: ${ENABLE_TELEMETRY}
+  WEBHOOKS_ENABLED: ${WEBHOOKS_ENABLED}
+  WEBHOOKS_ALLOW_PRIVATE_ADDRESS: ${WEBHOOKS_ALLOW_PRIVATE_ADDRESS}
+  WEBHOOKS_ALLOW_REDIRECTS: ${WEBHOOKS_ALLOW_REDIRECTS}
+  SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE}
+  CSRF_COOKIE_SECURE: ${CSRF_COOKIE_SECURE}
+  EMAIL_BACKEND: django.core.mail.backends.${EMAIL_BACKEND}.EmailBackend
+  DEFAULT_FROM_EMAIL: ${EMAIL_DEFAULT_FROM}
+  EMAIL_USE_TLS: ${EMAIL_USE_TLS}
+  EMAIL_USE_SSL: ${EMAIL_USE_SSL}
+  EMAIL_HOST: ${EMAIL_HOST}
+  EMAIL_PORT: ${EMAIL_PORT}
+  EMAIL_HOST_USER: ${EMAIL_HOST_USER}
+  EMAIL_HOST_PASSWORD: ${EMAIL_HOST_PASSWORD}
+  RABBITMQ_USER: ${RABBITMQ_USER}
+  RABBITMQ_PASS: ${RABBITMQ_PASS}
+  TAIGA_EVENTS_RABBITMQ_HOST: taiga-events-rabbitmq
+  TAIGA_ASYNC_RABBITMQ_HOST: taiga-async-rabbitmq
+  CELERY_TIMEZONE: ${CELERY_TIMEZONE}
+  EVENTS_PUSH_BACKEND_URL: ${EVENTS_PUSH_BACKEND_URL}
+  CELERY_BROKER_URL: ${CELERY_BROKER_URL}
+  ENABLE_OIDC_AUTH: ${ENABLE_OIDC_AUTH}
+  OIDC_RP_CLIENT_ID: ${OIDC_RP_CLIENT_ID}
+  OIDC_RP_CLIENT_SECRET: ${OIDC_RP_CLIENT_SECRET}
+  OIDC_RP_SCOPES: ${OIDC_RP_SCOPES}
+  OIDC_RP_SIGN_ALGO: ${OIDC_RP_SIGN_ALGO}
+  OIDC_VERIFY_SSL: ${OIDC_VERIFY_SSL}
+  OIDC_OP_AUTHORIZATION_ENDPOINT: ${OIDC_OP_AUTHORIZATION_ENDPOINT}
+  OIDC_OP_TOKEN_ENDPOINT: ${OIDC_OP_TOKEN_ENDPOINT}
+  OIDC_OP_USER_ENDPOINT: ${OIDC_OP_USER_ENDPOINT}
+  OIDC_OP_JWKS_ENDPOINT: ${OIDC_OP_JWKS_ENDPOINT}
+  PGCONNECT_TIMEOUT: ${PGCONNECT_TIMEOUT:-3}
+  PGTARGETSESSIONATTRS: ${PGTARGETSESSIONATTRS:-read-write}
+
+x-back-volumes: &back-volumes
+  - taiga-static-data:/taiga-back/static
+  - taiga-media-data:/taiga-back/media
+  - ./cloudif-back-entrypoint.sh:/cloudif/back-entrypoint.sh:ro
+  - ./cloudif-async-entrypoint.sh:/cloudif/async-entrypoint.sh:ro
+
+services:
+  taiga-events-rabbitmq:
+    image: cloudif-local/rabbitmq:4.1-eb6736723c5d
+    restart: unless-stopped
+    environment:
+      RABBITMQ_ERLANG_COOKIE: ${RABBITMQ_ERLANG_COOKIE}
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASS}
+      RABBITMQ_DEFAULT_VHOST: ${RABBITMQ_VHOST}
+    volumes: [taiga-events-rabbitmq-data:/var/lib/rabbitmq]
+    networks: [taiga]
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+  taiga-async-rabbitmq:
+    image: cloudif-local/rabbitmq:4.1-eb6736723c5d
+    restart: unless-stopped
+    environment:
+      RABBITMQ_ERLANG_COOKIE: ${RABBITMQ_ERLANG_COOKIE}
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASS}
+      RABBITMQ_DEFAULT_VHOST: ${RABBITMQ_VHOST}
+    volumes: [taiga-async-rabbitmq-data:/var/lib/rabbitmq]
+    networks: [taiga]
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+  taiga-back:
+    image: cloudif-local/taiga-back-oidc:6.10.2-c623b753-r4-identity
+    entrypoint: ["/bin/bash", "/cloudif/back-entrypoint.sh"]
+    extra_hosts:
+      - "authiff.duckdns.org:10.62.91.3"
+    restart: unless-stopped
+    environment: *back-env
+    volumes: *back-volumes
+    networks: [taiga]
+    depends_on:
+      taiga-events-rabbitmq: {condition: service_healthy}
+      taiga-async-rabbitmq: {condition: service_healthy}
+  taiga-async:
+    image: cloudif-local/taiga-back-oidc:6.10.2-c623b753-r4-identity
+    extra_hosts:
+      - "authiff.duckdns.org:10.62.91.3"
+    restart: unless-stopped
+    entrypoint: ["/bin/bash", "/cloudif/async-entrypoint.sh"]
+    environment: *back-env
+    volumes: *back-volumes
+    networks: [taiga]
+    depends_on:
+      taiga-events-rabbitmq: {condition: service_healthy}
+      taiga-async-rabbitmq: {condition: service_healthy}
+  taiga-front:
+    image: cloudif-local/taiga-front-oidc:6.10.3-c623b753-r3-session
+    restart: unless-stopped
+    environment:
+      TAIGA_URL: ${TAIGA_SCHEME}://${TAIGA_DOMAIN}
+      TAIGA_WEBSOCKETS_URL: ${WEBSOCKETS_SCHEME}://${TAIGA_DOMAIN}
+      TAIGA_SUBPATH: ${SUBPATH}
+      DISABLE_ROBOTS: ${DISABLE_ROBOTS}
+      DEBUG: ${DEBUG}
+      DEFAULT_LANGUAGE: ${LANGUAGE_CODE}
+      PUBLIC_REGISTER_ENABLED: ${PUBLIC_REGISTER_ENABLED}
+      ENABLE_OIDC_AUTH: ${ENABLE_OIDC_AUTH}
+      OIDC_MOUNT_POINT: ${OIDC_MOUNT_POINT}
+      OIDC_BUTTON_TEXT: ${OIDC_BUTTON_TEXT}
+      OIDC_BUTTON_IMAGE: ${OIDC_BUTTON_IMAGE}
+    volumes:
+      - ./conf.json:/usr/share/nginx/html/conf.json:ro
+    networks: [taiga]
+  taiga-events:
+    image: cloudif-local/taiga-events:6.10.0-92fc0822564f-cloudiff2
+    restart: unless-stopped
+    environment:
+      RABBITMQ_USER: ${RABBITMQ_USER}
+      RABBITMQ_PASS: ${RABBITMQ_PASS}
+      TAIGA_SECRET_KEY: ${SECRET_KEY}
+      TAIGA_EVENTS_RABBITMQ_HOST: taiga-events-rabbitmq
+      TAIGA_EVENTS_RABBITMQ_URL: ${TAIGA_EVENTS_RABBITMQ_URL}
+      LOG_LEVEL: warn
+    networks: [taiga]
+    depends_on:
+      taiga-events-rabbitmq: {condition: service_healthy}
+  taiga-protected:
+    image: cloudif-local/taiga-protected:6.10.1-fd4568a97a59
+    restart: unless-stopped
+    environment:
+      MAX_AGE: ${ATTACHMENTS_MAX_AGE}
+      SECRET_KEY: ${SECRET_KEY}
+    networks: [taiga]
+  taiga-gateway:
+    image: cloudif-local/nginx:stable-dc5069ad14f1
+    restart: unless-stopped
+    ports: ["${TAIGA_BIND_IP:-10.62.91.5}:${TAIGA_BIND_PORT:-19000}:80"]
+    volumes:
+      - ./taiga.conf:/etc/nginx/conf.d/default.conf:ro
+      - taiga-static-data:/taiga/static:ro
+      - taiga-media-data:/taiga/media:ro
+    networks: [taiga]
+    depends_on: [taiga-front, taiga-back, taiga-events, taiga-protected]
+  taiga-manage:
+    image: cloudif-local/taiga-back-oidc:6.10.2-c623b753-r4-identity
+    extra_hosts:
+      - "authiff.duckdns.org:10.62.91.3"
+    profiles: [tools]
+    entrypoint: ["python", "manage.py"]
+    environment: *back-env
+    volumes: *back-volumes
+    networks: [taiga]
+
+volumes:
+  taiga-static-data:
+  taiga-media-data:
+  taiga-events-rabbitmq-data:
+  taiga-async-rabbitmq-data:
+networks:
+  taiga: {driver: bridge}
