@@ -443,6 +443,7 @@ def taiga_data(identity, selected_slug: str = "", *, access_page: Any = 1, activ
             "faro":faro,
             "forgejo":{"ok":False,"error":"no_project","activity":[]},
             "taiga_project":{"configured":bool(_read_env(_TAIGA_RECONCILER_ENV).get("TAIGA_RECONCILER_TOKEN")),"ok":False,"error":"no_project"},
+            "taiga_member":False,
             "activity":[],
             "activity_state":"no_project",
             "actors":[],
@@ -478,6 +479,14 @@ def taiga_data(identity, selected_slug: str = "", *, access_page: Any = 1, activ
         "accesses":_paginate(dashboard.get("recent_accesses") or [],access_page,4),
         "activity":_paginate(events,activity_page,4),
     }
+    current_username=identity.username.strip().lower()
+    if is_global(identity):
+        taiga_member=any(
+            str(item.get("username") or "").strip().lower()==current_username
+            for item in (taiga_project.get("members") or []) if isinstance(item,dict)
+        )
+    else:
+        taiga_member=bool(subject)
     return {
         "username": identity.username,
         "can_view_members": is_global(identity),
@@ -488,6 +497,7 @@ def taiga_data(identity, selected_slug: str = "", *, access_page: Any = 1, activ
         "faro": faro,
         "forgejo": forgejo,
         "taiga_project": taiga_project,
+        "taiga_member":taiga_member,
         "activity": events,
         "activity_state": audit_state,
         "actors": actors,

@@ -514,10 +514,24 @@ def ensure_base_workspace(slug,user):
     return {'ok':True,'project':slug,'public_number':num,'container':container,'baseRevision':int(base.get('base_revision') or 0),'baseImageId':str(base.get('base_image_id') or ''),'terminalUrl':target,'terminalReady':True,'secretValuesIncluded':False}
 
 def _external_ok(host):
-    req=urllib.request.Request('https://'+host+'/',headers={'User-Agent':'CloudIF-Publication-Validator/1.0'})
-    with urllib.request.urlopen(req,timeout=30,context=ssl.create_default_context()) as r:
-        body=r.read(200000)
-        return r.status==200 and len(body)>0
+    # A newly issued stage certificate can take a few seconds to become the
+    # certificate served by the public edge.  Keep strict CA+hostname checking,
+    # but allow bounded propagation time instead of failing the whole release on
+    # the first transient mismatch.
+    try: attempts=max(1,min(60,int(os.environ.get('CLOUDIF_PUBLICATION_HTTPS_READY_ATTEMPTS','18'))))
+    except Exception: attempts=18
+    try: delay=max(0.0,min(10.0,float(os.environ.get('CLOUDIF_PUBLICATION_HTTPS_READY_INTERVAL','5'))))
+    except Exception: delay=5.0
+    for attempt in range(attempts):
+        req=urllib.request.Request('https://'+host+'/',headers={'User-Agent':'CloudIF-Publication-Validator/1.0'})
+        try:
+            with urllib.request.urlopen(req,timeout=30,context=ssl.create_default_context()) as r:
+                body=r.read(200000)
+                if r.status==200 and len(body)>0:return True
+        except (urllib.error.URLError,ssl.SSLError,OSError,TimeoutError):
+            pass
+        if attempt+1<attempts and delay:time.sleep(delay)
+    return False
 
 
 TARGET_SLUG='atalhos-cloudif-iff1860746'

@@ -69,7 +69,7 @@ def _catalog(data: dict) -> str:
 def _project_header(data: dict) -> str:
     project=data.get("selected_project") or {}; private=data.get("taiga_project") or {}
     slug=str(project.get("slug") or "")
-    if data.get("can_view_members"):
+    if data.get("can_view_members") and not data.get("taiga_member"):
         open_action=(
             f'<form method="post" action="{BASE}/action/taiga-access">'
             f'<input type="hidden" name="csrf_token" value="{h(data.get("csrf") or "")}">'
@@ -77,7 +77,8 @@ def _project_header(data: dict) -> str:
             '<button class="btn" type="submit">Abrir no Taiga</button></form>'
         )
     else:
-        open_action=f'<a class="btn" target="_blank" rel="noopener" href="{h(private.get("url") or TAIGA)}">Abrir no Taiga</a>'
+        # cloudif-enter intentionally clears any stale Taiga browser identity before OIDC.
+        open_action=f'<a class="btn" href="{h(private.get("url") or TAIGA)}">Abrir no Taiga</a>'
     return (
         '<section class="taiga-detail-head">'
         f'<a class="taiga-back" href="{BASE}/?tab=taiga">← Todos os projetos</a>'
