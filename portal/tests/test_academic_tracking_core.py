@@ -15,6 +15,7 @@ class AcademicTrackingCoreTests(unittest.TestCase):
         audit=[
             {"ts":now,"actor":"alice","source":"mcp","action":"workspace.validate"},
             {"ts":now,"actor":"service-bot","source":"mcp","action":"tools/list"},
+            {"ts":now,"actor":"alice","source":"project-access","action":"environment.view"},
         ]
         forgejo=[{"ts":now,"actor":"alice","source":"forgejo","action":"push"}]
         taiga={
@@ -34,8 +35,8 @@ class AcademicTrackingCoreTests(unittest.TestCase):
         self.assertEqual(summary["without_activity_7d"],1)
         self.assertEqual(summary["tasks_open"],2)
         self.assertEqual(summary["stories_open"],2)
-        self.assertEqual(summary["channels_14d"],{"taiga":1,"forgejo":1,"mcp":2})
-        self.assertEqual(summary["events_14d"],4)
+        self.assertEqual(summary["channels_14d"],{"taiga":1,"forgejo":1,"mcp":2,"environment":1})
+        self.assertEqual(summary["events_14d"],5)
         self.assertEqual(summary["last_activity"],now)
         self.assertFalse(summary["coverage"]["production_access"])
         self.assertFalse(summary["coverage"]["external_authenticated_access"])

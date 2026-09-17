@@ -449,3 +449,12 @@ if p.exists():
  p.write_text(s)
 PY
 # CloudIF tenant control v134 post-render normalization END
+
+# CloudIF academic project access telemetry post-render BEGIN
+if [ -x /srv/cloudif/bin/cloudif-apply-router-academic-access-v1.sh ]; then
+  /srv/cloudif/bin/cloudif-apply-router-academic-access-v1.sh /srv/cloudif/router/conf.d/default.conf || {
+    echo "ERRO: CloudIF academic project access post-render falhou" >&2
+    exit 1
+  }
+fi
+# CloudIF academic project access telemetry post-render END

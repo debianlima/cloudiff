@@ -1,0 +1,36 @@
+[Unit]
+Description=CloudIF authenticated project access telemetry collector
+After=network-online.target cloudif-academic-audit.service docker.service
+Wants=network-online.target
+Requires=cloudif-academic-audit.service
+
+[Service]
+Type=simple
+User=cloudif-control
+Group=cloudif-control
+EnvironmentFile=/etc/cloudif/academic-audit.env
+Environment=CLOUDIF_PROJECT_ACCESS_LOG=/srv/cloudif/router/logs/cloudif_project_access.log
+Environment=CLOUDIF_PROJECT_ACCESS_DB=/var/lib/cloudif/portal/cloudif-portal.db
+Environment=CLOUDIF_PROJECT_ACCESS_STATE=/var/lib/cloudif-project-access-collector/state.json
+Environment=CLOUDIF_PROJECT_ACCESS_HOST=127.0.0.1
+Environment=CLOUDIF_PROJECT_ACCESS_PORT=18207
+ExecStart=/usr/bin/python3 /srv/cloudif/app-pointers/project-access-collector-current/cloudif-project-access-collector.py
+Restart=on-failure
+RestartSec=2
+StateDirectory=cloudif-project-access-collector
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictRealtime=true
+ReadOnlyPaths=/srv/cloudif/router/logs /var/lib/cloudif/portal /srv/cloudif/app-releases/project-access-collector /srv/cloudif/app-pointers
+ReadWritePaths=/var/lib/cloudif-project-access-collector
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

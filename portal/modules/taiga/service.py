@@ -344,7 +344,7 @@ def _activity_history(events: list[dict[str, Any]], days: int = 14) -> list[dict
 
 
 def _source_breakdown(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    labels={"forgejo":"Forgejo","taiga":"Taiga","mcp":"MCP","portal":"Portal","academic-audit":"Academic Audit"}
+    labels={"forgejo":"Forgejo","taiga":"Taiga","mcp":"MCP","portal":"Portal","academic-audit":"Academic Audit","project-access":"Ambiente CloudIFF"}
     counter=Counter(str(item.get("source") or "other").strip().lower() for item in events)
     total=sum(counter.values()) or 1
     out=[]
