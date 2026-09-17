@@ -9,14 +9,40 @@ ROUTER_IP="${CLOUDIF_ROUTER_IP:-10.62.92.7}"
 ROUTER_PORT="${CLOUDIF_ROUTER_PORT:-8099}"
 BROKER_PORT="${CLOUDIF_BROKER_PORT:-18091}"
 STAMP="$(date +%F-%H%M%S)"
+LOCK="${CLOUDIF_ROUTER_RENDER_LOCK:-/run/lock/cloudif-router-render.lock}"
+LOCK_TIMEOUT="${CLOUDIF_ROUTER_RENDER_LOCK_TIMEOUT:-300}"
+BACKUP="$BASE/backups/default.conf.bkp-render-subdomain-$STAMP"
+ROLLBACK_ARMED=0
+HAD_CONF=0
 
 test -f "$REGISTRY" || { echo "ERRO: não existe $REGISTRY"; exit 1; }
 
-mkdir -p "$BASE/router/conf.d" "$BASE/router/logs" "$BASE/backups"
+mkdir -p "$BASE/router/conf.d" "$BASE/router/logs" "$BASE/backups" "$(dirname "$LOCK")"
+exec 9>"$LOCK"
+flock -w "$LOCK_TIMEOUT" 9 || { echo "ERRO: timeout aguardando lock do router: $LOCK" >&2; exit 1; }
 
 if [ -f "$CONF" ]; then
-  cp -a "$CONF" "$BASE/backups/default.conf.bkp-render-subdomain-$STAMP"
+  cp -a "$CONF" "$BACKUP"
+  HAD_CONF=1
 fi
+
+rollback_router_render() {
+  rc=$?
+  trap - ERR INT TERM HUP EXIT
+  if [ "$ROLLBACK_ARMED" = "1" ]; then
+    echo "AVISO: render do router interrompido; restaurando estado anterior." >&2
+    if [ "$HAD_CONF" = "1" ] && [ -f "$BACKUP" ]; then
+      cat "$BACKUP" > "$CONF"
+      if docker ps --format '{{.Names}}' | grep -qx cloudif-tenant-router; then
+        docker exec cloudif-tenant-router nginx -t >/dev/null 2>&1 || true
+        docker exec cloudif-tenant-router nginx -s reload >/dev/null 2>&1 || true
+      fi
+    fi
+  fi
+  exit "$rc"
+}
+trap rollback_router_render ERR INT TERM HUP EXIT
+ROLLBACK_ARMED=1
 
 python3 - <<'PY'
 from pathlib import Path
@@ -458,3 +484,18 @@ if [ -x /srv/cloudif/bin/cloudif-apply-router-academic-access-v1.sh ]; then
   }
 fi
 # CloudIF academic project access telemetry post-render END
+
+# CloudIF transactional render closure BEGIN
+for required in \
+  'location = /cloudiff/portal-auth {' \
+  'location @cloudif_portal_forbidden_v134 {' \
+  'location ^~ /cloudiff/portal/ {' \
+  'proxy_pass http://10.62.92.7:18094;'; do
+  grep -Fq "$required" "$CONF" || { echo "ERRO: pós-condição ausente no router: $required" >&2; exit 1; }
+done
+docker exec cloudif-tenant-router nginx -t
+docker exec cloudif-tenant-router nginx -s reload
+ROLLBACK_ARMED=0
+trap - ERR INT TERM HUP EXIT
+echo "OK: render transacional do router fechado com Portal preservado."
+# CloudIF transactional render closure END
