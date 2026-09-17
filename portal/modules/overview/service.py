@@ -5,9 +5,12 @@ import csv
 import json
 import os
 import sqlite3
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 
+from portal.core.project_visibility import visible_projects as canonical_visible_projects
 from portal.core.rbac import is_global
+from portal.core.academic_tracking import project_tracking_summary
 
 _DB = os.environ.get("CLOUDIF_PORTAL_DB", "/var/lib/cloudif/portal/cloudif-portal.db")
 _TENANTS_REGISTRY = os.environ.get("CLOUDIF_TENANTS_REGISTRY", "/srv/cloudif/registry/tenants.csv")
@@ -278,6 +281,43 @@ def aggregate_servers(nodes: list[dict]) -> dict:
     }
 
 
+def academic_tracking(identity) -> dict:
+    if not is_global(identity):
+        return {"enabled":False,"projects":[],"project_count":0,"members":0,"active_7d":0,"without_activity_7d":0,"events_14d":0}
+    try:
+        projects=canonical_visible_projects(identity,_DB)
+    except Exception:
+        projects=[]
+    projects=[project for project in projects if str(project.get("status") or "").strip().lower() not in {"archived","deleted","disabled"}]
+    summaries=[]
+    if projects:
+        workers=min(5,len(projects))
+        with ThreadPoolExecutor(max_workers=workers,thread_name_prefix="overview-academic") as pool:
+            futures={pool.submit(project_tracking_summary,identity,project):project for project in projects}
+            for future in as_completed(futures):
+                project=futures[future]
+                try:
+                    summary=future.result()
+                except Exception:
+                    summary={"ok":False,"slug":project.get("slug"),"name":project.get("name") or project.get("slug"),"error":"tracking_unavailable"}
+                summaries.append(summary)
+    order={str(project.get("slug") or ""):idx for idx,project in enumerate(projects)}
+    summaries.sort(key=lambda item:order.get(str(item.get("slug") or ""),9999))
+    good=[item for item in summaries if item.get("ok")]
+    return {
+        "enabled":True,
+        "projects":summaries,
+        "project_count":len(projects),
+        "members":sum(int(item.get("members") or 0) for item in good),
+        "active_7d":sum(int(item.get("active_7d") or 0) for item in good),
+        "without_activity_7d":sum(int(item.get("without_activity_7d") or 0) for item in good),
+        "events_14d":sum(int(item.get("events_14d") or 0) for item in good),
+        "instrumented_projects":len(good),
+        "production_access_instrumented":False,
+        "external_access_instrumented":False,
+    }
+
+
 def overview_data(identity) -> dict:
     return {
         "username": identity.username,
@@ -285,4 +325,5 @@ def overview_data(identity) -> dict:
         "role_text": _role_text(identity),
         "metrics": server_metrics(),
         "resources": academic_resources(identity),
+        "academic_tracking": academic_tracking(identity),
     }
