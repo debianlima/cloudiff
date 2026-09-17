@@ -77,6 +77,8 @@ class TaigaIdentityIsolationContractTests(unittest.TestCase):
         self.assertIn('cloudif-local/taiga-back-oidc:6.10.2-c623b753-r5-identity',compose)
         self.assertIn('cloudif-local/taiga-front-oidc:6.10.3-c623b753-r3-session',compose)
         self.assertIn('/cloudif-enter/',conf)
+        self.assertIn('location ~ "^/cloudif-enter/([a-z0-9][a-z0-9-]{0,62})$" {',conf)
+        self.assertNotIn('location ~ ^/cloudif-enter/([a-z0-9][a-z0-9-]{0,62})$ {',conf)
         self.assertIn('localStorage.removeItem("token")',conf)
         self.assertIn('sessionStorage.removeItem("token")',conf)
         self.assertIn('sessionid=; Path=/; Max-Age=0',conf)
