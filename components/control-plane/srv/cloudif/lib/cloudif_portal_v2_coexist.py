@@ -1179,7 +1179,7 @@ def _install() -> None:
                     raw=self.rfile.read(content_length);parsed_form=urllib.parse.parse_qs(raw.decode("utf-8","ignore"))
                     form={key:(values or [""])[0] for key,values in parsed_form.items()}
                     actor=identity(self.headers)
-                    request=Request("/cloudiff/portal/action/taiga-access","POST",actor,{key:(values or [""])[0] for key,values in route_query.items()},form,{key:value for key,value in self.headers.items()},getattr(self,"client_address",("",0))[0])
+                    request=Request("/cloudiff/portal/action/taiga-access","POST",actor,{key:(values or [""])[0] for key,values in urllib.parse.parse_qs(parsed.query).items()},form,{key:value for key,value in self.headers.items()},getattr(self,"client_address",("",0))[0])
                     response=handle(request,lambda _request:None)
                     return send_response_object(self,response)
                 query_action = (self.headers.get("X-CloudIF-Action") or (urllib.parse.parse_qs(parsed.query).get("action") or [""])[0]).strip()
