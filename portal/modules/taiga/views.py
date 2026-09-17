@@ -53,7 +53,17 @@ def _taiga_counts(data: dict) -> str:
     counts = item.get("counts") or {}
     labels = (("Tarefas", counts.get("tasks")), ("Histórias", counts.get("userstories")), ("Etapas", counts.get("milestones")), ("Membros", counts.get("members")))
     cards = ''.join(f'<div class="ov-agg"><span>{h(label)}</span><b>{h(value if value is not None else "—")}</b></div>' for label, value in labels)
-    return f'<div class="ov-aggs">{cards}</div><p><a class="btn" target="_blank" rel="noopener" href="{h(item.get("url") or TAIGA)}">Abrir este projeto no Taiga</a></p>'
+    if data.get("can_view_members"):
+        slug=str((data.get("selected_project") or {}).get("slug") or (item.get("project") or {}).get("slug") or "")
+        action=(
+            f'<form method="post" action="{BASE}/action/taiga-access" style="display:inline">'
+            f'<input type="hidden" name="csrf_token" value="{h(data.get("csrf") or "")}">'
+            f'<input type="hidden" name="project" value="{h(slug)}">'
+            '<button class="btn" type="submit">Abrir este projeto no Taiga</button></form>'
+        )
+    else:
+        action=f'<a class="btn" target="_blank" rel="noopener" href="{h(item.get("url") or TAIGA)}">Abrir este projeto no Taiga</a>'
+    return f'<div class="ov-aggs">{cards}</div><p>{action}</p>'
 
 
 def _activity(data: dict) -> str:

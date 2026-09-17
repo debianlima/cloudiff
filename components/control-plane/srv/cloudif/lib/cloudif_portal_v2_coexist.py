@@ -1173,6 +1173,15 @@ def _install() -> None:
                         return send_json(self,409,{"ok":False,"error":{"code":str(exc),"message":"A operação não pode ser concluída neste estado."}})
                     except Exception as exc:
                         return send_json(self,503,{"ok":False,"error":{"code":"environment_api_unavailable","message":"A API de ambiente está temporariamente indisponível.","detail":type(exc).__name__}})
+                if parsed.path in {"/cloudif/portal/action/taiga-access", "/cloudiff/portal/action/taiga-access"}:
+                    content_length=int(self.headers.get("Content-Length","0") or 0)
+                    if content_length<1 or content_length>16384:return send_json(self,413,{"ok":False,"error":"invalid_size"})
+                    raw=self.rfile.read(content_length);parsed_form=urllib.parse.parse_qs(raw.decode("utf-8","ignore"))
+                    form={key:(values or [""])[0] for key,values in parsed_form.items()}
+                    actor=identity(self.headers)
+                    request=Request("/cloudiff/portal/action/taiga-access","POST",actor,{key:(values or [""])[0] for key,values in route_query.items()},form,{key:value for key,value in self.headers.items()},getattr(self,"client_address",("",0))[0])
+                    response=handle(request,lambda _request:None)
+                    return send_response_object(self,response)
                 query_action = (self.headers.get("X-CloudIF-Action") or (urllib.parse.parse_qs(parsed.query).get("action") or [""])[0]).strip()
                 query_routed = parsed.path in PORTAL_PATHS and query_action in {
                     "admin-delete-project", "admin-delete-tenant", "admin-tenant-advanced", "backup-remote-config", "project-backup"

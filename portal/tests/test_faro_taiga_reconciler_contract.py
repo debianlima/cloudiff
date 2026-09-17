@@ -21,6 +21,18 @@ class FaroTaigaReconcilerContractTests(unittest.TestCase):
         self.assertIn("include_members",src)
         self.assertIn("user__pk",src)
         self.assertIn("HistoryEntry",src)
+    def test_global_access_grant_is_additive_and_secret_free(self):
+        src=APP.read_text()
+        self.assertIn("/access/grant",src)
+        self.assertIn("def grant_access",src)
+        start=src.index("DJANGO_GRANT_ACCESS = r'''")
+        end=src.index('\ndef grant_access',start)
+        block=src[start:end]
+        self.assertIn('Membership.objects.filter(project=p,user=u)',block)
+        self.assertIn('is_admin=True',block)
+        self.assertNotIn('.delete(',block)
+        self.assertIn("'secrets_exposed':False",block)
+
     def test_service_uses_root_only_env_and_hardened_unit(self):
         unit=UNIT.read_text(); env=ENV.read_text()
         self.assertIn('EnvironmentFile=/etc/cloudif/taiga-reconciler.env',unit)

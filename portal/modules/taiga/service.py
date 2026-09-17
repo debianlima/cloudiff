@@ -182,6 +182,40 @@ def _audit_events(identity, slug: str, limit: int = 100) -> tuple[list[dict[str,
     return events, "ok"
 
 
+def _http_json_post(url: str, payload: dict[str, Any], *, headers: dict[str, str] | None = None, timeout: float = 8.0) -> tuple[int, Any]:
+    body=json.dumps(payload,ensure_ascii=False,separators=(",", ":")).encode("utf-8")
+    request=urllib.request.Request(url,data=body,method="POST",headers={"Accept":"application/json","Content-Type":"application/json","User-Agent":"CloudIFF-Portal-Taiga/1.0",**(headers or {})})
+    try:
+        with urllib.request.urlopen(request,timeout=timeout) as response:
+            return int(response.status),json.load(response)
+    except urllib.error.HTTPError as error:
+        try:data=json.load(error)
+        except Exception:data={"ok":False,"error":"upstream_http_error"}
+        return int(error.code),data
+    except Exception:
+        return 503,{"ok":False,"error":"upstream_unavailable"}
+
+
+def grant_taiga_access(identity, slug: str) -> dict[str, Any]:
+    slug=str(slug or "").strip().lower()
+    if not is_global(identity):
+        return {"ok":False,"status":403,"error":"forbidden"}
+    allowed={str(p.get("slug") or ""):p for p in _visible_projects(identity,_DB)}
+    if slug not in allowed:
+        return {"ok":False,"status":403,"error":"project_not_visible"}
+    email=str(identity.email or "").strip().lower()
+    if not email:
+        return {"ok":False,"status":409,"error":"identity_email_required"}
+    cfg=_read_env(_TAIGA_RECONCILER_ENV);base=(cfg.get("TAIGA_RECONCILER_URL") or "").rstrip("/");token=(cfg.get("TAIGA_RECONCILER_TOKEN") or "").strip()
+    if not base or not token:
+        return {"ok":False,"status":503,"error":"taiga_reconciler_credentials_unconfigured"}
+    url=base+"/v1/projects/"+urllib.parse.quote(slug,safe="-._~")+"/access/grant"
+    code,data=_http_json_post(url,{"username":identity.username,"email":email,"full_name":identity.username},headers={"Authorization":"Bearer "+token},timeout=15)
+    if code!=200 or not isinstance(data,dict) or not data.get("ok"):
+        return {"ok":False,"status":code if code in {400,404,409} else 503,"error":str((data or {}).get("error") if isinstance(data,dict) else "taiga_grant_failed")}
+    return {"ok":True,"status":200,"slug":slug,"taiga_username":str(data.get("taiga_username") or identity.username)[:150],"redirect":_TAIGA_URL+"/project/"+urllib.parse.quote(slug,safe="-._~"),"created_user":bool(data.get("created_user")),"created_membership":bool(data.get("created_membership")),"secrets_exposed":False}
+
+
 def _taiga_private_summary(identity, slug: str) -> dict[str, Any]:
     cfg = _read_env(_TAIGA_RECONCILER_ENV)
     base = (cfg.get("TAIGA_RECONCILER_URL") or "").rstrip("/")
