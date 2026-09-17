@@ -249,6 +249,33 @@ class TaigaModuleTests(unittest.TestCase):
         self.assertIn('recalculado ao abrir ou recarregar o projeto', markup)
         self.assertIn('eventos já coletados em segundo plano', markup)
 
+
+    def test_mobile_tables_render_semantic_card_labels(self):
+        identity = Identity('prof','prof@example.invalid',frozenset({'CloudIF-Professor'}))
+        markup = views.taiga_body(service.taiga_data(identity, 'beta'))
+        for label in ('data-label="Usuário"','data-label="Papel"','data-label="Último login"','data-label="Última atividade"','data-label="Atividade estimada"'):
+            self.assertIn(label, markup)
+        for label in ('data-label="Quando"','data-label="Fonte"','data-label="Ação"','data-label="Referência"'):
+            self.assertIn(label, markup)
+        self.assertIn('taiga-responsive-table', markup)
+        self.assertIn('taiga-cell-primary', markup)
+
+    def test_mobile_table_css_turns_rows_into_cards(self):
+        css = DESIGN.read_text()
+        self.assertIn('.taiga-responsive-table thead{display:none}', css)
+        self.assertIn('.taiga-responsive-table tr{display:grid', css)
+        self.assertIn('content:attr(data-label)', css)
+        self.assertIn('.taiga-responsive-table .taiga-cell-primary{grid-column:1/-1', css)
+        self.assertIn('@media(max-width:480px)', css)
+
+    def test_taiga_dashboard_does_not_auto_poll(self):
+        view_src = Path(ROOT / 'portal/modules/taiga/views.py').read_text()
+        service_src = Path(ROOT / 'portal/modules/taiga/service.py').read_text()
+        combined=(view_src+'\n'+service_src).lower()
+        self.assertNotIn('setinterval(', combined)
+        self.assertNotIn('settimeout(', combined)
+        self.assertNotIn('http-equiv="refresh"', combined)
+
     def test_admin_grants_only_own_access_to_visible_project(self):
         identity = Identity('silviopro','silviopro@example.invalid',frozenset({'CloudIF-Tenants-Admin'}))
         result = service.grant_taiga_access(identity, 'alpha')
