@@ -1181,6 +1181,19 @@ def _install() -> None:
                     actor=identity(self.headers)
                     request=Request("/cloudiff/portal/action/taiga-access","POST",actor,{key:(values or [""])[0] for key,values in urllib.parse.parse_qs(parsed.query).items()},form,{key:value for key,value in self.headers.items()},getattr(self,"client_address",("",0))[0])
                     response=handle(request,lambda _request:None)
+                    if response is not None and response.status==403:
+                        try:
+                            from portal.core.rbac import is_global as _taiga_is_global
+                            from portal.core.security import csrf_valid as _taiga_csrf_valid, same_origin as _taiga_same_origin
+                            print(
+                                'cloudif_taiga_access_denied actor='+actor.username
+                                +' origin_ok='+str(bool(_taiga_same_origin(request.headers,request.headers.get("Host", "")))).lower()
+                                +' csrf_ok='+str(bool(_taiga_csrf_valid(actor,form.get("csrf_token", "")))).lower()
+                                +' profile_ok='+str(bool(_taiga_is_global(actor))).lower(),
+                                flush=True,
+                            )
+                        except Exception:
+                            print('cloudif_taiga_access_denied diagnostic=unavailable',flush=True)
                     return send_response_object(self,response)
                 query_action = (self.headers.get("X-CloudIF-Action") or (urllib.parse.parse_qs(parsed.query).get("action") or [""])[0]).strip()
                 query_routed = parsed.path in PORTAL_PATHS and query_action in {

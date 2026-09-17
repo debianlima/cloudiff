@@ -378,6 +378,25 @@ class TaigaModuleTests(unittest.TestCase):
         self.assertEqual(result['error'], 'forbidden')
         self.assertEqual(self.post_calls, [])
 
+    def test_global_existing_taiga_member_uses_secure_direct_entry_without_regrant(self):
+        identity = Identity('alice','alice@example.invalid',frozenset({'CloudIF-Tenants-Admin'}))
+        data = service.taiga_data(identity, 'alpha')
+        self.assertTrue(data['taiga_member'])
+        data['csrf'] = 'csrf-test'
+        markup = views.taiga_body(data)
+        self.assertIn('https://taiga.cloudiff.duckdns.org/cloudif-enter/alpha', markup)
+        self.assertNotIn('/cloudiff/portal/action/taiga-access', markup)
+        self.assertNotIn('target="_blank"', markup)
+
+    def test_global_nonmember_still_requires_server_side_grant(self):
+        identity = Identity('silviopro','silviopro@example.invalid',frozenset({'CloudIF-Tenants-Admin'}))
+        data = service.taiga_data(identity, 'alpha')
+        self.assertFalse(data['taiga_member'])
+        data['csrf'] = 'csrf-test'
+        markup = views.taiga_body(data)
+        self.assertIn('method="post"', markup)
+        self.assertIn('/cloudiff/portal/action/taiga-access', markup)
+
     def test_global_view_uses_csrf_post_for_open_project(self):
         identity = Identity('silviopro','silviopro@example.invalid',frozenset({'CloudIF-Tenants-Admin'}))
         data = service.taiga_data(identity, 'alpha')
