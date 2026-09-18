@@ -50,6 +50,15 @@ int main(){
     assert(rendered.find("server_name 1007.cloudiff.duckdns.org;")!=std::string::npos);
     assert(rendered.find("server_name 1007-d3.cloudiff.duckdns.org;")!=std::string::npos);
     assert(rendered.find("server_name 1007-w1-preview.cloudiff.duckdns.org;")!=std::string::npos);
+    const auto stage_pos=rendered.find("server_name 1007-w1-preview.cloudiff.duckdns.org;");
+    const auto stage_end=rendered.find("server_name labhard.cloudiff.duckdns.org;",stage_pos);
+    const auto stage_block=rendered.substr(stage_pos,stage_end-stage_pos);
+    assert(stage_block.find("proxy_hide_header X-Frame-Options;")!=std::string::npos);
+    assert(stage_block.find("proxy_hide_header Content-Security-Policy;")!=std::string::npos);
+    const auto stable_pos=rendered.find("server_name 1007.cloudiff.duckdns.org;");
+    const auto version_pos=rendered.find("server_name 1007-d3.cloudiff.duckdns.org;",stable_pos);
+    const auto stable_block=rendered.substr(stable_pos,version_pos-stable_pos);
+    assert(stable_block.find("proxy_hide_header X-Frame-Options;")==std::string::npos);
     assert(rendered.find("server_name labhard.cloudiff.duckdns.org;")!=std::string::npos);
     assert(rendered.find("proxy_pass http://10.62.91.2:18150;")!=std::string::npos);
     assert(rendered.find("# CloudIF managed publications BEGIN")!=std::string::npos);
