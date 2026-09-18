@@ -691,8 +691,7 @@ def preview_terminal(slug,user):
     from cloudif_project_environment_web import authorization
     auth=authorization(slug,user.get('username') or '',user.get('groups') or [])
     if not auth.get('canWrite'):con.close();raise PermissionError('O terminal do Preview exige permissão de escrita no projeto.')
-    num=_number(con,slug);linked=_linked_compose_binding(con,slug) if _is_linked_compose_project(slug) else None;con.close()
-    if linked:raise RuntimeError('O terminal deste Preview usa o stack Forgejo/Komodo do projeto. Abra o Terminal do projeto para acessar o serviço vinculado.')
+    num=_number(con,slug);con.close()
     ku,kt,_=_clients();status,data=_post(ku+'/komodo/project/preview/terminal',{'project':slug,'public_number':num,'actor':user.get('username') or 'portal'},kt,timeout=60)
     if status//100!=2 or data.get('ok') is not True:raise RuntimeError(str(data.get('message') or 'O terminal do Preview está temporariamente indisponível.'))
     container=str(data.get('container') or '');server_id=str(data.get('server_id') or '');terminal=str(data.get('terminal') or '');generation=int(data.get('generation') or 0)
@@ -715,7 +714,7 @@ def stage_terminal(slug,user,environment='preview'):
     if environment=='production' and not _owner_or_admin(con,slug,user):con.close();raise PermissionError('O terminal de Produção exige o responsável pelo projeto ou administrador.')
     num=_number(con,slug);payload={'project':slug,'public_number':num,'environment':environment,'actor':user.get('username') or 'portal'};expected=''
     if environment=='homologation':
-        row=con.execute("select candidate_number,deploy_number,stage_code,status from publication_candidates where project_slug=? and status in ('awaiting_homologation','homologated','published') order by case when status in ('homologated','published') then 0 else 1 end, candidate_number desc limit 1",(slug,)).fetchone()
+        row=con.execute("select candidate_number,deploy_number,stage_code,status from publication_candidates where project_slug=? and status in ('awaiting_homologation','homologated','published') order by candidate_number desc limit 1",(slug,)).fetchone()
         if not row:con.close();raise RuntimeError('Nenhum candidato de Homologação está disponível para abrir o terminal.')
         dep=int(row['deploy_number'] or 0);candidate=int(row['candidate_number'] or 0)
         if dep<1 or candidate<1:con.close();raise RuntimeError('O candidato de Homologação não possui runtime válido.')

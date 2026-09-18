@@ -62,11 +62,11 @@ class PublicationStageConsistencyTests(unittest.TestCase):
             self.assertIn("'legacy':True",source)
             self.assertNotIn("'stage_code':'P'+str(int(legacy['deploy_number']))",source)
 
-    def test_homologation_environment_prefers_latest_accepted_candidate(self):
+    def test_homologation_environment_prefers_newest_valid_candidate(self):
         source=BASE.read_text()
-        self.assertIn("items.find(x=>['homologated','published'].includes(x.status))",source)
-        self.assertNotIn("items.find(x=>x.status==='homologated')",source)
-        self.assertNotIn("const item=(release.candidates||[])[0]||null",source)
+        self.assertIn("['awaiting_homologation','homologated','published'].includes(x.status)",source)
+        self.assertIn(".sort((a,b)=>Number(b.candidate_number||0)-Number(a.candidate_number||0))",source)
+        self.assertNotIn("items.find(x=>['homologated','published'].includes(x.status))",source)
 
     def test_environment_overview_prefers_release_flow_status_over_legacy_overview(self):
         source=BASE.read_text()
@@ -90,12 +90,12 @@ class PublicationStageConsistencyTests(unittest.TestCase):
         self.assertIn("iframe src=\"'+envEsc(embedUrl)+'\"",base)
         self.assertIn("href=\"'+envEsc(ctx.url)+'\"",base)
 
-    def test_homologation_terminal_prefers_accepted_candidate_before_waiting_candidate(self):
+    def test_homologation_terminal_prefers_newest_valid_candidate(self):
         for backend in (CANONICAL_BACKEND,APP_BACKEND):
             source=backend.read_text()
             self.assertIn("status in ('awaiting_homologation','homologated','published')",source)
-            self.assertIn("case when status in ('homologated','published') then 0 else 1 end",source)
-            self.assertIn("candidate_number desc limit 1",source)
+            self.assertIn("order by candidate_number desc limit 1",source)
+            self.assertNotIn("case when status in ('homologated','published') then 0 else 1 end",source)
 
     def test_switcher_exposes_canonical_p_and_separate_legacy_history(self):
         for path in (CANONICAL_UI,APP_UI):
