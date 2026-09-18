@@ -109,7 +109,7 @@ void NpmPublisherProvider::save_state_locked(){
 }
 std::string NpmPublisherProvider::render_managed_block(const nlohmann::json& state) const{
     std::ostringstream out; out<<"# CloudIF managed publications BEGIN\n";
-    auto pair=[&](const std::string& host,const std::string& cert,const std::string& upstream,const std::string& host_header,bool tenant){
+    auto pair=[&](const std::string& host,const std::string& cert,const std::string& upstream,const std::string& host_header,bool tenant,bool embeddable){
         if(!valid_label(host.substr(0,host.find('.')))||!safe_cert(cert))throw ValidationError("unsafe_render_value");
         out<<"server {\n    listen 80;\n    listen [::]:80;\n    server_name "<<host<<";\n"
            <<"    location ^~ /.well-known/acme-challenge/ { root /data/letsencrypt-acme-challenge; default_type text/plain; }\n"
@@ -125,16 +125,17 @@ std::string NpmPublisherProvider::render_managed_block(const nlohmann::json& sta
         out<<"    location / {\n        proxy_http_version 1.1;\n        proxy_set_header Host "<<host_header<<";\n"
            <<"        proxy_set_header X-Real-IP $remote_addr;\n        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n"
            <<"        proxy_set_header X-Forwarded-Proto https;\n        proxy_set_header X-Forwarded-Host $host;\n"
-           <<"        proxy_set_header Upgrade $http_upgrade;\n        proxy_set_header Connection \"upgrade\";\n"
-           <<"        proxy_pass "<<upstream<<";\n    }\n}\n\n";
+           <<"        proxy_set_header Upgrade $http_upgrade;\n        proxy_set_header Connection \"upgrade\";\n";
+        if(embeddable)out<<"        proxy_hide_header X-Frame-Options;\n        proxy_hide_header Content-Security-Policy;\n";
+        out<<"        proxy_pass "<<upstream<<";\n    }\n}\n\n";
     };
     const auto tenants=state.value("tenants",nlohmann::json::object());
-    for(auto it=tenants.begin();it!=tenants.end();++it){if(it.key()=="aluno")continue;const auto cert=it.value().value("cert","");pair(it.key()+".cloudiff.duckdns.org",cert,"http://10.62.92.7:8099","$host",true);}
+    for(auto it=tenants.begin();it!=tenants.end();++it){if(it.key()=="aluno")continue;const auto cert=it.value().value("cert","");pair(it.key()+".cloudiff.duckdns.org",cert,"http://10.62.92.7:8099","$host",true,false);}
     const auto projects=state.value("projects",nlohmann::json::object());
     std::vector<std::pair<int,std::string>> pkeys;for(auto it=projects.begin();it!=projects.end();++it){try{pkeys.emplace_back(std::stoi(it.key()),it.key());}catch(...){throw ValidationError("invalid_project_state");}}std::sort(pkeys.begin(),pkeys.end());
-    for(const auto& [num,key]:pkeys){const auto& p=projects.at(key);const int active=p.value("active_deploy",0);const std::string scert=p.value("stable_cert","");if(active>0&&!scert.empty())pair(std::to_string(num)+".cloudiff.duckdns.org",scert,"http://10.62.91.2:18150","$host",false);const auto versions=p.value("versions",nlohmann::json::object());std::vector<int> deps;for(auto it=versions.begin();it!=versions.end();++it)deps.push_back(std::stoi(it.key()));std::sort(deps.begin(),deps.end());for(int dep:deps){const auto cert=versions.at(std::to_string(dep)).value("cert","");pair(std::to_string(num)+"-d"+std::to_string(dep)+".cloudiff.duckdns.org",cert,"http://10.62.91.2:18150","$host",false);}}
-    const auto stages=state.value("stages",nlohmann::json::object());for(auto it=stages.begin();it!=stages.end();++it)pair(it.key()+".cloudiff.duckdns.org",it.value().value("cert",""),"http://10.62.91.2:18150","$host",false);
-    const auto aliases=state.value("aliases",nlohmann::json::object());for(auto it=aliases.begin();it!=aliases.end();++it){const auto& a=it.value();const int num=a.value("public_number",0);const int active=a.value("active_deploy",0);pair(it.key()+".cloudiff.duckdns.org",a.value("cert",""),"http://10.62.91.2:18150",std::to_string(num)+".cloudiff.duckdns.org",false);auto versions=a.value("versions",nlohmann::json::object());if(versions.empty()&&a.contains("version_cert")&&active>0)versions[std::to_string(active)]={{"cert",a.value("version_cert","")}};std::vector<int> deps;for(auto v=versions.begin();v!=versions.end();++v)deps.push_back(std::stoi(v.key()));std::sort(deps.begin(),deps.end());for(int dep:deps)pair(std::to_string(dep)+"."+it.key()+".cloudiff.duckdns.org",versions.at(std::to_string(dep)).value("cert",""),"http://10.62.91.2:18150",std::to_string(num)+"-d"+std::to_string(dep)+".cloudiff.duckdns.org",false);}
+    for(const auto& [num,key]:pkeys){const auto& p=projects.at(key);const int active=p.value("active_deploy",0);const std::string scert=p.value("stable_cert","");if(active>0&&!scert.empty())pair(std::to_string(num)+".cloudiff.duckdns.org",scert,"http://10.62.91.2:18150","$host",false,false);const auto versions=p.value("versions",nlohmann::json::object());std::vector<int> deps;for(auto it=versions.begin();it!=versions.end();++it)deps.push_back(std::stoi(it.key()));std::sort(deps.begin(),deps.end());for(int dep:deps){const auto cert=versions.at(std::to_string(dep)).value("cert","");pair(std::to_string(num)+"-d"+std::to_string(dep)+".cloudiff.duckdns.org",cert,"http://10.62.91.2:18150","$host",false,false);}}
+    const auto stages=state.value("stages",nlohmann::json::object());for(auto it=stages.begin();it!=stages.end();++it)pair(it.key()+".cloudiff.duckdns.org",it.value().value("cert",""),"http://10.62.91.2:18150","$host",false,true);
+    const auto aliases=state.value("aliases",nlohmann::json::object());for(auto it=aliases.begin();it!=aliases.end();++it){const auto& a=it.value();const int num=a.value("public_number",0);const int active=a.value("active_deploy",0);pair(it.key()+".cloudiff.duckdns.org",a.value("cert",""),"http://10.62.91.2:18150",std::to_string(num)+".cloudiff.duckdns.org",false,false);auto versions=a.value("versions",nlohmann::json::object());if(versions.empty()&&a.contains("version_cert")&&active>0)versions[std::to_string(active)]={{"cert",a.value("version_cert","")}};std::vector<int> deps;for(auto v=versions.begin();v!=versions.end();++v)deps.push_back(std::stoi(v.key()));std::sort(deps.begin(),deps.end());for(int dep:deps)pair(std::to_string(dep)+"."+it.key()+".cloudiff.duckdns.org",versions.at(std::to_string(dep)).value("cert",""),"http://10.62.91.2:18150",std::to_string(num)+"-d"+std::to_string(dep)+".cloudiff.duckdns.org",false,false);}
     out<<"# CloudIF managed publications END\n";return out.str();
 }
 void NpmPublisherProvider::render_locked(){
