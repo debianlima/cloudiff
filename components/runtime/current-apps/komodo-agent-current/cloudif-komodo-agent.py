@@ -3982,6 +3982,31 @@ def _cloudif_wait_health(container,timeout=60):
     return {'ok':False,'state':last}
 
 
+def _cloudif_bridge_stage_ready(container,project,public_number,stage,stage_number,require_active=False):
+    try:
+        proc=subprocess.run(['docker','inspect',container],text=True,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,timeout=15)
+        if proc.returncode:return {'ok':False,'error':'container_missing'}
+        row=(json.loads(proc.stdout or '[]') or [{}])[0];state=row.get('State') or {};labels=(row.get('Config') or {}).get('Labels') or {}
+        if not state.get('Running') or state.get('Restarting') or state.get('Dead'):return {'ok':False,'error':'container_not_running'}
+        health=(state.get('Health') or {}).get('Status')
+        if health and health!='healthy':return {'ok':False,'error':'container_health_'+str(health)}
+        expected={
+            'org.cloudiff.project':str(project),
+            'org.cloudiff.public-number':str(int(public_number)),
+            'org.cloudiff.stage':str(stage),
+            'org.cloudiff.stage-number':str(int(stage_number)),
+        }
+        if any(str(labels.get(k) or '')!=v for k,v in expected.items()):return {'ok':False,'error':'bridge_labels_invalid'}
+        marker='org.cloudiff.source-preview-bridge' if stage=='preview' else 'org.cloudiff.publication-bridge'
+        if str(labels.get(marker) or '').lower()!='true':return {'ok':False,'error':'bridge_marker_missing'}
+        if require_active:
+            net=((row.get('NetworkSettings') or {}).get('Networks') or {}).get('cloudif-publications') or {}
+            aliases=[str(x) for x in (net.get('Aliases') or [])]
+            if f'cloudif-p{int(public_number)}-active-web' not in aliases:return {'ok':False,'error':'active_alias_missing'}
+        return {'ok':True,'bridge':True,'health':health or 'not-configured'}
+    except Exception as exc:return {'ok':False,'error':'bridge_inspect_'+type(exc).__name__}
+
+
 def _cloudif_preview_create(project,public_number,actor,environment_values,environment_revision,environment_digest,source='current'):
     _cloudif_v143_ensure_schema();project=safe_slug(project);public_number=int(public_number);base_dir=Path('/etc/komodo/stacks')/('cloudif-'+project);checkout=_cloudif_v143_ensure_checkout(project,base_dir)
     if not checkout.get('ok'):return {'ok':False,'error':'preview_workspace_unavailable','message':'Não foi possível montar o repositório local do projeto. Tente novamente em alguns instantes ou procure o administrador.'}
@@ -4067,7 +4092,8 @@ def cloudif_preview_terminal(handler):
     if not row or int(row.get('public_number') or 0)!=num:return send(handler,409,{'ok':False,'error':'preview_not_ready','message':'O Preview ainda não foi preparado.','terminalReady':False,'secretValuesIncluded':False})
     generation=int(row.get('generation') or 1);container=str(row.get('container') or '')
     if container!=f'cloudif-p{num}-w{generation}-preview-web':return send(handler,409,{'ok':False,'error':'preview_container_identity_invalid','terminalReady':False,'secretValuesIncluded':False})
-    if not _cloudif_wait_health(container,2).get('ok'):return send(handler,409,{'ok':False,'error':'preview_not_healthy','message':'O Preview não está saudável para abrir o terminal.','terminalReady':False,'secretValuesIncluded':False})
+    health=_cloudif_wait_health(container,2);bridge=_cloudif_bridge_stage_ready(container,project,num,'preview',generation)
+    if not health.get('ok') and not bridge.get('ok'):return send(handler,409,{'ok':False,'error':'preview_not_healthy','message':'O Preview não está saudável para abrir o terminal.','terminalReady':False,'secretValuesIncluded':False})
     server_id=_cloudif_v143_server_id(project)
     if not server_id:return send(handler,422,{'ok':False,'error':'preview_server_missing','message':'O servidor Komodo do Preview não foi localizado.','terminalReady':False,'secretValuesIncluded':False})
     target=_cloudif_ensure_container_terminal(server_id,container)
@@ -4083,13 +4109,17 @@ def cloudif_stage_terminal(handler):
     try:num=int(payload.get('public_number') or 0);dep=int(payload.get('deploy_number') or 0);publication=int(payload.get('publication_number') or 0);candidate=int(payload.get('candidate_number') or 0)
     except Exception:return send(handler,400,{'ok':False,'error':'invalid_stage_terminal_request','terminalReady':False})
     if not project or num<1 or environment not in {'homologation','production'}:return send(handler,400,{'ok':False,'error':'invalid_stage_terminal_request','terminalReady':False})
-    _cloudif_v143_ensure_schema();container='';stage_code=''
+    _cloudif_v143_ensure_schema();container='';stage_code='';bridge_ready=False
     if environment=='homologation':
         if dep<1 or candidate<1:return send(handler,400,{'ok':False,'error':'invalid_homologation_terminal_request','terminalReady':False})
-        rows=db_query("select * from publication_runtimes where project=? and public_number=? and deploy_number=? and status='ready'",(project,num,dep))
-        if not rows:return send(handler,409,{'ok':False,'error':'homologation_runtime_not_ready','message':'O container da Homologação não está pronto para terminal.','terminalReady':False})
-        container=str(rows[0].get('container') or '');expected=f'cloudif-p{num}-d{dep}-web';stage_code='H'+str(candidate)
-        if container!=expected:return send(handler,409,{'ok':False,'error':'homologation_container_identity_invalid','terminalReady':False})
+        expected=f'cloudif-p{num}-d{dep}-web';rows=db_query("select * from publication_runtimes where project=? and public_number=? and deploy_number=? and status='ready'",(project,num,dep));bridge_ready=False
+        if rows:
+            container=str(rows[0].get('container') or '')
+            if container!=expected:return send(handler,409,{'ok':False,'error':'homologation_container_identity_invalid','terminalReady':False})
+        else:
+            container=expected;bridge=_cloudif_bridge_stage_ready(container,project,num,'homologation',candidate);bridge_ready=bool(bridge.get('ok'))
+            if not bridge_ready:return send(handler,409,{'ok':False,'error':'homologation_runtime_not_ready','message':'O container da Homologação não está pronto para terminal.','terminalReady':False})
+        stage_code='H'+str(candidate)
     elif legacy:
         if dep<1:return send(handler,400,{'ok':False,'error':'invalid_production_terminal_request','terminalReady':False})
         rows=db_query("select * from publication_runtimes where project=? and public_number=? and deploy_number=? and status='ready' and is_active=1",(project,num,dep))
@@ -4098,14 +4128,18 @@ def cloudif_stage_terminal(handler):
         if container!=expected:return send(handler,409,{'ok':False,'error':'production_container_identity_invalid','terminalReady':False})
     else:
         if publication<1:return send(handler,400,{'ok':False,'error':'invalid_production_terminal_request','terminalReady':False})
-        rows=db_query("select * from stage_production_releases where project=? and public_number=? and publication_number=? and status='ready' and is_active=1",(project,num,publication))
-        if not rows:return send(handler,409,{'ok':False,'error':'production_release_not_ready','message':'A publicação ativa não está pronta para terminal.','terminalReady':False})
-        row=rows[0]
-        if candidate and int(row.get('candidate_number') or 0)!=candidate:return send(handler,409,{'ok':False,'error':'production_candidate_identity_invalid','terminalReady':False})
-        if dep and int(row.get('deploy_number') or 0)!=dep:return send(handler,409,{'ok':False,'error':'production_deploy_identity_invalid','terminalReady':False})
-        container=str(row.get('container') or '');expected=f'cloudif-p{num}-p{publication}-publication-web';stage_code='P'+str(publication)
-        if container!=expected:return send(handler,409,{'ok':False,'error':'production_container_identity_invalid','terminalReady':False})
-    if not _cloudif_wait_health(container,2).get('ok'):return send(handler,409,{'ok':False,'error':'stage_container_not_healthy','message':'O container deste ambiente não está saudável para abrir o terminal.','terminalReady':False})
+        expected=f'cloudif-p{num}-p{publication}-publication-web';rows=db_query("select * from stage_production_releases where project=? and public_number=? and publication_number=? and status='ready' and is_active=1",(project,num,publication))
+        if rows:
+            row=rows[0]
+            if candidate and int(row.get('candidate_number') or 0)!=candidate:return send(handler,409,{'ok':False,'error':'production_candidate_identity_invalid','terminalReady':False})
+            if dep and int(row.get('deploy_number') or 0)!=dep:return send(handler,409,{'ok':False,'error':'production_deploy_identity_invalid','terminalReady':False})
+            container=str(row.get('container') or '')
+            if container!=expected:return send(handler,409,{'ok':False,'error':'production_container_identity_invalid','terminalReady':False})
+        else:
+            container=expected;bridge=_cloudif_bridge_stage_ready(container,project,num,'publication',publication,True);bridge_ready=bool(bridge.get('ok'))
+            if not bridge_ready:return send(handler,409,{'ok':False,'error':'production_release_not_ready','message':'A publicação ativa não está pronta para terminal.','terminalReady':False})
+        stage_code='P'+str(publication)
+    if not bridge_ready and not _cloudif_wait_health(container,2).get('ok'):return send(handler,409,{'ok':False,'error':'stage_container_not_healthy','message':'O container deste ambiente não está saudável para abrir o terminal.','terminalReady':False})
     server_id=_cloudif_v143_server_id(project)
     if not server_id:return send(handler,422,{'ok':False,'error':'stage_server_missing','message':'O servidor Komodo deste ambiente não foi localizado.','terminalReady':False})
     target=_cloudif_ensure_container_terminal(server_id,container)
