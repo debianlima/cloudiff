@@ -25,7 +25,8 @@ class ShellTest(unittest.TestCase):
 
     def test_navigation_is_stable_across_native_modules(self):
         doc = shell.render(self.admin, ["overview"], "overview", "Resumo", "<p>ok</p>")
-        self.assertIn('href="/cloudiff/portal/?tab=resumo"', doc)
+        self.assertIn('href="/cloudiff/portal/" aria-current="page">Visão geral</a>', doc)
+        self.assertNotIn('href="/cloudiff/portal/?tab=resumo"', doc)
         self.assertIn('href="/cloudiff/portal/?tab=projetos"', doc)
         self.assertIn('href="/cloudiff/portal/?tab=bancos"', doc)
         self.assertIn('href="/cloudiff/portal/?tab=backup"', doc);self.assertIn('href="/cloudiff/portal/?tab=agentes"', doc)
