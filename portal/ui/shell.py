@@ -133,8 +133,9 @@ def _navigation(identity: Identity, active_tab: str, allowed_modules: set[str] |
         links = []
         for tab, label in entries:
             current = ' aria-current="page"' if tab == active_tab else ""
+            href = "/cloudiff/portal/" if tab == "resumo" else f"/cloudiff/portal/?tab={escape(tab)}"
             links.append(
-                f'<a class="nav-link" href="/cloudiff/portal/?tab={escape(tab)}"{current}>'
+                f'<a class="nav-link" href="{href}"{current}>'
                 f'{escape(label)}</a>'
             )
         output.append(
