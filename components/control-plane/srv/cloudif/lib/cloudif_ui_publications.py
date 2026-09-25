@@ -25,18 +25,19 @@ def _rows(slug):
             """,(slug,))]
         except sqlite3.OperationalError:
             canonical=[]
-        mapped_deploys={int(x.get('deploy_number') or 0) for x in canonical}
         rows=[]
         for item in canonical:
             number=int(item.get('publication_number') or 0)
             rows.append({**item,'kind':'P','number':number,'version_hostname':item.get('hostname') or '',
                          'version':item.get('stage_code') or f'P{number}','detail_json':item.get('runtime_diff_json') or '{}'})
-        legacy=[dict(x) for x in con.execute("select * from project_publications where project_slug=? and status='published' order by deploy_number desc",(slug,))]
-        for item in legacy:
-            dep=int(item.get('deploy_number') or 0)
-            if dep in mapped_deploys:
-                continue
-            rows.append({**item,'kind':'D','number':dep,'legacy':True})
+        # Once a project has canonical P releases, they are authoritative.
+        # Legacy D releases remain available only as a fallback for projects
+        # that have not migrated to the canonical publication pipeline yet.
+        if not canonical:
+            legacy=[dict(x) for x in con.execute("select * from project_publications where project_slug=? and status='published' order by deploy_number desc",(slug,))]
+            for item in legacy:
+                dep=int(item.get('deploy_number') or 0)
+                rows.append({**item,'kind':'D','number':dep,'legacy':True})
         con.close(); return rows
     except Exception:
         return []
