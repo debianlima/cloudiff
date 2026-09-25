@@ -362,19 +362,24 @@ def warmup_path(tenant, username):
 
 def need_warmup_once(tenant, username):
     """
-    Retorna True uma única vez por janela curta.
-    Serve para evitar liberar o Studio no primeiro retorno do Authentik,
-    quando o navegador dispara várias chamadas e o proxy ainda pode estar estabilizando.
+    Retorna True apenas uma vez por estado efetivo do tenant.
+
+    O marcador deixa de expirar por tempo. A implementação anterior voltava a
+    aquecer o mesmo tenant após WARMUP_TTL segundos, fazendo a primeira chamada
+    de API de cada nova janela receber tenant-provisioning em vez de chegar ao
+    Studio/Kong. Agora o warmup só é renovado quando o arquivo de status do
+    tenant muda (criação, restauração ou outra transição administrativa).
     """
     if WARMUP_SECONDS <= 0:
         return False
 
     path = warmup_path(tenant, username)
+    status_mtime = float(read_status(tenant).get("_mtime", 0) or 0)
     now = time.time()
 
     try:
-        mtime = os.path.getmtime(path)
-        if now - mtime <= WARMUP_TTL:
+        marker_mtime = os.path.getmtime(path)
+        if marker_mtime >= status_mtime:
             return False
     except FileNotFoundError:
         pass

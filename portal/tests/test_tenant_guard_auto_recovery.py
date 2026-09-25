@@ -136,6 +136,38 @@ class TenantGuardAutoRecoveryTests(unittest.TestCase):
         self.assertEqual(decision['action'],'blocked')
         write_status.assert_not_called();trigger.assert_not_called()
 
+    def test_warmup_does_not_repeat_only_because_ttl_elapsed(self):
+        tenant='tenant-demo';username='alice'
+        with tempfile.TemporaryDirectory() as temporary:
+            old_dir=self.guard.STATUS_DIR;old_seconds=self.guard.WARMUP_SECONDS;old_ttl=self.guard.WARMUP_TTL
+            self.guard.STATUS_DIR=temporary;self.guard.WARMUP_SECONDS=5;self.guard.WARMUP_TTL=1
+            try:
+                self.guard.write_status(tenant,'none','ready','Tenant pronto.')
+                self.assertTrue(self.guard.need_warmup_once(tenant,username))
+                status_mtime=os.path.getmtime(self.guard.status_path(tenant))
+                marker_path=self.guard.warmup_path(tenant,username)
+                os.utime(marker_path,(status_mtime+5,status_mtime+5))
+                with mock.patch.object(self.guard.time,'time',return_value=status_mtime+3600):
+                    self.assertFalse(self.guard.need_warmup_once(tenant,username))
+            finally:
+                self.guard.STATUS_DIR=old_dir;self.guard.WARMUP_SECONDS=old_seconds;self.guard.WARMUP_TTL=old_ttl
+
+    def test_warmup_rearms_when_tenant_status_changes(self):
+        tenant='tenant-demo';username='alice'
+        with tempfile.TemporaryDirectory() as temporary:
+            old_dir=self.guard.STATUS_DIR;old_seconds=self.guard.WARMUP_SECONDS
+            self.guard.STATUS_DIR=temporary;self.guard.WARMUP_SECONDS=5
+            try:
+                self.guard.write_status(tenant,'none','ready','Tenant pronto.')
+                self.assertTrue(self.guard.need_warmup_once(tenant,username))
+                marker_path=self.guard.warmup_path(tenant,username)
+                marker_mtime=os.path.getmtime(marker_path)
+                status_file=self.guard.status_path(tenant)
+                os.utime(status_file,(marker_mtime+5,marker_mtime+5))
+                self.assertTrue(self.guard.need_warmup_once(tenant,username))
+            finally:
+                self.guard.STATUS_DIR=old_dir;self.guard.WARMUP_SECONDS=old_seconds
+
     def test_warmup_handler_calls_clean_stop_recovery_before_returning(self):
         source=SOURCE.read_text()
         start=source.index('if need_warmup_once(tenant, username):')
