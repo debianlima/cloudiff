@@ -98,6 +98,20 @@ authz_locations = '''
         return 403 'CloudIF: sessão autenticada, mas sem permissão para este tenant.<br>Tenant: $cloudif_tenant<br>Motivo: $cloudif_authz_reason<br>';
     }}
 
+    # CloudIF v257: tenant API failures remain machine-readable.
+    location @cloudif_forbidden_api_v257 {{
+        internal;
+        default_type application/json;
+        add_header Cache-Control "no-store" always;
+        add_header Retry-After "5" always;
+
+        if ($cloudif_authz_reason = tenant-provisioning) {{
+            return 503 '{{"ok":false,"error":"tenant_provisioning","retry_after_seconds":5}}';
+        }}
+
+        return 403 '{{"ok":false,"error":"forbidden"}}';
+    }}
+
     # CloudIF v244 authz locations END
 
 '''.replace('__AUTHZ_UPSTREAM__', authz_upstream).replace('{{', '{').replace('}}', '}')
@@ -125,6 +139,12 @@ auth_snippet = '''        # CloudIF v244 tenant-auth BEGIN
         proxy_set_header X-authentik-groups $authentik_groups;
         # CloudIF v244 tenant-auth END
 '''
+
+api_auth_snippet = auth_snippet.replace(
+    'error_page 403 = @cloudif_forbidden_v244;',
+    'error_page 403 = @cloudif_forbidden_api_v257;',
+    1,
+)
 
 
 # CloudIF v250: tenant ativo abre o Studio; domínio institucional abre o Portal.
@@ -195,7 +215,7 @@ for i, line in enumerate(lines):
         out.append(line)
         lookahead = "\n".join(lines[i:i+55])
         if "CloudIF v244 tenant-auth BEGIN" not in lookahead:
-            out.append(auth_snippet.rstrip("\n"))
+            out.append(api_auth_snippet.rstrip("\n"))
             inserted += 1
         continue
 
