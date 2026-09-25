@@ -46,14 +46,13 @@ class PublicationStageConsistencyTests(unittest.TestCase):
 
     def tearDown(self): self.tmp.cleanup()
 
-    def test_publication_rows_prefer_real_p_and_keep_unmapped_d_as_legacy(self):
+    def test_publication_rows_use_canonical_p_exclusively_after_migration(self):
         for idx,path in enumerate((CANONICAL_UI,APP_UI)):
             module=load(path,'pub_ui_'+str(idx),self.db)
             rows=module._rows('fixture-publication-project')
-            self.assertEqual([(r['kind'],r['number']) for r in rows],[('P',2),('D',1)])
+            self.assertEqual([(r['kind'],r['number']) for r in rows],[('P',2)])
             self.assertEqual(rows[0]['version'],'P2')
             self.assertEqual(rows[0]['commit_sha'][:12],'0280dbf46d54')
-            self.assertTrue(rows[1]['legacy'])
 
     def test_legacy_d_is_never_relabeled_as_p(self):
         for path in (CANONICAL_BACKEND,APP_BACKEND):
