@@ -4206,15 +4206,20 @@ def cloudif_publication_release(handler):
     cmd=['docker','run','-d','--name',container,'--restart','unless-stopped','--network','cloudif-publications','--label','cloudif.project='+project,'--label','cloudif.stage=publication','--label','cloudif.stage-number='+str(publication),'--label','cloudif.candidate-number='+str(candidate),'--health-cmd','curl -fsS http://127.0.0.1/.cloudif-health >/dev/null','--health-interval','5s','--health-timeout','4s','--health-retries','18','--health-start-period','15s','--mount',f'type=bind,src={env_path},dst=/run/cloudif/runtime.env,readonly',image];run=subprocess.run(cmd,text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=120)
     if run.returncode!=0:return send(handler,422,{'ok':False,'error':'production_container_create_failed','message':'Não foi possível iniciar a publicação em Produção.','detail':(run.stderr or run.stdout)[-500:]})
     if not _cloudif_wait_health(container,75).get('ok'):return send(handler,422,{'ok':False,'error':'production_container_not_healthy','message':'A publicação foi criada, mas o container de Produção não ficou saudável.'})
-    network='cloudif-publications';active=f'cloudif-p{num}-active-web';names=subprocess.check_output(['docker','ps','-a','--format','{{.Names}}'],text=True).splitlines();production_containers=[n for n in names if re.match(rf'^cloudif-p{num}-p\d+-publication-web$',n)]
+    network='cloudif-publications';active=f'cloudif-p{num}-active-web';names=subprocess.check_output(['docker','ps','-a','--format','{{.Names}}'],text=True).splitlines()
+    production_containers=[n for n in names if re.match(rf'^cloudif-p{num}-p\d+-publication-web$',n)]
+    legacy_containers=[n for n in names if re.match(rf'^cloudif-p{num}-d\d+-web$',n)]
+    routable_containers=production_containers+legacy_containers
     def aliases(name):
         try:
             raw = subprocess.check_output(['docker','inspect',name,'--format','{{json (index .NetworkSettings.Networks "cloudif-publications").Aliases}}'],text=True).strip()
             return json.loads(raw) if raw and raw != 'null' else []
         except Exception:return []
-    previous=next((n for n in production_containers if active in aliases(n)),'')
+    previous=next((n for n in routable_containers if active in aliases(n)),'')
     try:
-        for name in production_containers:
+        # Canonical P activation must strip the shared active alias from legacy
+        # D containers, otherwise Docker DNS can alternate the stable hostname.
+        for name in routable_containers:
             subprocess.run(['docker','network','disconnect',network,name],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL);c=['docker','network','connect','--alias',name]
             if name==container:c+=['--alias',active]
             c+=[network,name];subprocess.check_call(c)
@@ -4232,8 +4237,10 @@ def cloudif_publication_release_activate(handler):
     if not rows:return send(handler,404,{'ok':False,'error':'production_release_not_found'})
     target=str(rows[0].get('container') or '')
     if not _cloudif_wait_health(target,2).get('ok'):return send(handler,422,{'ok':False,'error':'production_release_not_healthy'})
-    network='cloudif-publications';active=f'cloudif-p{num}-active-web';names=subprocess.check_output(['docker','ps','-a','--format','{{.Names}}'],text=True).splitlines();candidates=[n for n in names if re.match(rf'^cloudif-p{num}-p\d+-publication-web$',n)]
-    for name in candidates:
+    network='cloudif-publications';active=f'cloudif-p{num}-active-web';names=subprocess.check_output(['docker','ps','-a','--format','{{.Names}}'],text=True).splitlines()
+    candidates=[n for n in names if re.match(rf'^cloudif-p{num}-p\d+-publication-web$',n)]
+    legacy=[n for n in names if re.match(rf'^cloudif-p{num}-d\d+-web$',n)]
+    for name in candidates+legacy:
         subprocess.run(['docker','network','disconnect',network,name],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL);cmd=['docker','network','connect','--alias',name]
         if name==target:cmd+=['--alias',active]
         cmd+=[network,name];subprocess.check_call(cmd)
