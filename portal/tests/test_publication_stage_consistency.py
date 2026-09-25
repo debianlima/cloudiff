@@ -11,6 +11,7 @@ CANONICAL_BACKEND=ROOT/'components/control-plane/srv/cloudif/lib/cloudif_portal_
 APP_BACKEND=ROOT/'components/control-plane/current-apps/portal-current/cloudif_portal_publications.py'
 BASE=ROOT/'components/control-plane/current-apps/portal-current/cloudif-admin-portal-base.py'
 RELEASE_JS=ROOT/'portal/design/publication-release.js'
+RUNTIME_AGENT=ROOT/'components/runtime/current-apps/komodo-agent-current/cloudif-komodo-agent.py'
 
 
 def load(path,name,db):
@@ -88,6 +89,27 @@ class PublicationStageConsistencyTests(unittest.TestCase):
         self.assertIn("const embedUrl=ctx.embedUrl||ctx.url",base)
         self.assertIn("iframe src=\"'+envEsc(embedUrl)+'\"",base)
         self.assertIn("href=\"'+envEsc(ctx.url)+'\"",base)
+
+    def test_canonical_activation_detaches_legacy_container_from_active_alias(self):
+        source=RUNTIME_AGENT.read_text()
+        self.assertIn("legacy_containers=[n for n in names if re.match(rf'^cloudif-p{num}-d\\d+-web        for backend in (CANONICAL_BACKEND,APP_BACKEND):
+            source=backend.read_text()
+            self.assertIn("status in ('awaiting_homologation','homologated','published')",source)
+            self.assertIn("order by candidate_number desc limit 1",source)
+            self.assertNotIn("case when status in ('homologated','published') then 0 else 1 end",source)
+
+    def test_switcher_exposes_canonical_p_and_separate_legacy_history(self):
+        for path in (CANONICAL_UI,APP_UI):
+            source=path.read_text()
+            for marker in ('production_releases',"'kind':'P'", "'kind':'D'",'Histórico legado',"f'P{number}'", "f'D{number}'"):
+                self.assertIn(marker,source)
+
+
+if __name__=='__main__': unittest.main()
+,n)]",source)
+        self.assertIn("routable_containers=production_containers+legacy_containers",source)
+        self.assertIn("previous=next((n for n in routable_containers if active in aliases(n)),''",source)
+        self.assertIn("for name in candidates+legacy:",source)
 
     def test_homologation_terminal_prefers_newest_valid_candidate(self):
         for backend in (CANONICAL_BACKEND,APP_BACKEND):
