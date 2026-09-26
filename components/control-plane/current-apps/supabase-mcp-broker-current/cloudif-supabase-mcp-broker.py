@@ -818,23 +818,35 @@ def execution_begin(execution_id: str, ctx: dict, operation: str, digest: str) -
     if not re.fullmatch(r'exec_[a-f0-9]{32}', execution_id):
         raise ValueError('invalid_execution_id')
     now = int(time.time())
-    conn = db_conn(); conn.execute('begin immediate')
-    row = conn.execute('select * from executions where execution_id=?', (execution_id,)).fetchone()
-    if row:
-        conn.commit(); conn.close()
-        if row['project_slug'] != ctx['slug'] or row['operation'] != operation or row['digest'] != digest:
-            raise PermissionError('execution_id_conflict')
-        if row['status'] == 'success':
-            if operation == 'secrets.read':
-                raise PermissionError('secret_delivery_already_consumed')
-            return json.loads(row['result_json'] or '{}')
-        if row['status'] == 'running' and now - int(row['created_at']) < 900:
-            raise RuntimeError('execution_in_progress')
-        conn = db_conn(); conn.execute('begin immediate'); conn.execute('delete from executions where execution_id=?', (execution_id,)); conn.commit(); conn.close()
-    conn = db_conn(); conn.execute('begin immediate')
-    conn.execute('insert into executions(execution_id,project_slug,operation,digest,status,result_json,created_at) values(?,?,?,?,?,?,?)', (execution_id, ctx['slug'], operation, digest, 'running', '{}', now))
-    conn.commit(); conn.close()
-    return None
+    conn = db_conn()
+    try:
+        conn.execute('begin immediate')
+        row = conn.execute('select * from executions where execution_id=?', (execution_id,)).fetchone()
+        if row:
+            if row['project_slug'] != ctx['slug'] or row['operation'] != operation or row['digest'] != digest:
+                conn.rollback()
+                raise PermissionError('execution_id_conflict')
+            if row['status'] == 'success':
+                conn.commit()
+                if operation == 'secrets.read':
+                    raise PermissionError('secret_delivery_already_consumed')
+                return json.loads(row['result_json'] or '{}')
+            if row['status'] == 'running' and now - int(row['created_at']) < 900:
+                conn.rollback()
+                raise RuntimeError('execution_in_progress')
+            conn.execute('delete from executions where execution_id=?', (execution_id,))
+        conn.execute(
+            'insert into executions(execution_id,project_slug,operation,digest,status,result_json,created_at) values(?,?,?,?,?,?,?)',
+            (execution_id, ctx['slug'], operation, digest, 'running', '{}', now),
+        )
+        conn.commit()
+        return None
+    except Exception:
+        if conn.in_transaction:
+            conn.rollback()
+        raise
+    finally:
+        conn.close()
 
 
 def execution_finish(execution_id: str, result: dict, success: bool) -> None:
