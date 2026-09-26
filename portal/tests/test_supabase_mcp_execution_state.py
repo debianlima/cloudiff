@@ -15,6 +15,7 @@ def load_broker():
     fake.sql = types.SimpleNamespace()
     sys.modules.setdefault('psycopg2', fake)
     sys.modules.setdefault('psycopg2.sql', types.ModuleType('psycopg2.sql'))
+    sys.modules.setdefault('requests', types.ModuleType('requests'))
     spec = importlib.util.spec_from_file_location('cloudif_supabase_mcp_broker_test', BROKER)
     mod = importlib.util.module_from_spec(spec)
     assert spec.loader is not None
