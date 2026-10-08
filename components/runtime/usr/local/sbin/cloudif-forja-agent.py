@@ -2337,17 +2337,18 @@ def cloudif_workspace_archive(handler, qs):
     temporary=''
     try:
         fd,temporary=tempfile.mkstemp(prefix='cloudif-forgejo-archive-',suffix='.tar.gz')
-        with urllib.request.urlopen(req, timeout=120) as r, os.fdopen(fd,'wb') as stream:
-            digest=hashlib.sha256();total=0;magic=b''
-            while True:
-                chunk=r.read(1024*1024)
-                if not chunk:break
-                if not magic:magic=chunk[:2]
-                total+=len(chunk)
-                if total>_CLOUDIF_ARCHIVE_MAX:
-                    return cloudif_send_json(handler,413,{'ok':False,'error':'archive_too_large'})
-                digest.update(chunk);stream.write(chunk)
-            stream.flush();os.fsync(stream.fileno())
+        with os.fdopen(fd,'wb') as stream:
+            with urllib.request.urlopen(req, timeout=120) as r:
+                digest=hashlib.sha256();total=0;magic=b''
+                while True:
+                    chunk=r.read(1024*1024)
+                    if not chunk:break
+                    if not magic:magic=chunk[:2]
+                    total+=len(chunk)
+                    if total>_CLOUDIF_ARCHIVE_MAX:
+                        return cloudif_send_json(handler,413,{'ok':False,'error':'archive_too_large'})
+                    digest.update(chunk);stream.write(chunk)
+                stream.flush();os.fsync(stream.fileno())
         if total<2 or magic!=b'\x1f\x8b':
             return cloudif_send_json(handler,502,{'ok':False,'error':'invalid_archive'})
         handler.send_response(200)
