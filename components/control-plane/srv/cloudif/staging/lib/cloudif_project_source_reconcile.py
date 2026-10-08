@@ -24,7 +24,7 @@ from pathlib import Path, PurePosixPath
 
 FORJA_ENV = Path(os.environ.get('CLOUDIF_FORJA_CLIENT_ENV', '/etc/cloudif/forja-agent-client.env'))
 STATE_ROOT = Path(os.environ.get('CLOUDIF_PROJECT_PROVISIONING_ROOT', '/srv/cloudif/provisioning/projects'))
-MAX_ARCHIVE = 20 * 1024 * 1024
+MAX_ARCHIVE = 256 * 1024 * 1024
 MAX_MIGRATED_TEXT = 1024 * 1024
 TEXT_EXTENSIONS = {
     '.js', '.mjs', '.cjs', '.ts', '.tsx', '.jsx', '.json', '.lock', '.md', '.txt',
@@ -98,16 +98,31 @@ def fetch_archive(slug, ref='main'):
         return {'ok': False, 'status': 0, 'error': 'forja_agent_token_missing'}
     query = urllib.parse.urlencode({'slug': str(slug), 'ref': str(ref)})
     req = urllib.request.Request(base + '/project/archive?' + query, headers=_headers(token))
+    temporary = ''
+    keep_temporary = False
     try:
-        with urllib.request.urlopen(req, timeout=45) as response:
-            raw = response.read(MAX_ARCHIVE + 1)
-            if len(raw) > MAX_ARCHIVE:
-                return {'ok': False, 'status': 413, 'error': 'archive_too_large'}
+        with urllib.request.urlopen(req, timeout=120) as response:
+            digest = hashlib.sha256()
+            total = 0
+            fd, temporary = tempfile.mkstemp(prefix='cloudif-source-', suffix='.tar.gz')
+            with os.fdopen(fd, 'wb') as stream:
+                while True:
+                    chunk = response.read(1024 * 1024)
+                    if not chunk:
+                        break
+                    total += len(chunk)
+                    if total > MAX_ARCHIVE:
+                        return {'ok': False, 'status': 413, 'error': 'archive_too_large', 'bytes_read': total}
+                    digest.update(chunk)
+                    stream.write(chunk)
+                stream.flush(); os.fsync(stream.fileno())
+            keep_temporary = True
             return {
                 'ok': response.status == 200,
                 'status': response.status,
-                'raw': raw,
-                'sha256': hashlib.sha256(raw).hexdigest(),
+                'archive_path': temporary,
+                'size': total,
+                'sha256': digest.hexdigest(),
             }
     except urllib.error.HTTPError as exc:
         try:
@@ -117,6 +132,10 @@ def fetch_archive(slug, ref='main'):
         return {'ok': False, 'status': exc.code, 'data': detail}
     except Exception as exc:
         return {'ok': False, 'status': 0, 'error': type(exc).__name__}
+    finally:
+        if temporary and not keep_temporary:
+            try: os.unlink(temporary)
+            except FileNotFoundError: pass
 
 
 def _normal_name(name, root_prefix=''):
@@ -129,11 +148,15 @@ def _normal_name(name, root_prefix=''):
     return str(path)
 
 
-def inspect_archive(raw):
-    """Return repository paths and a bounded set of text contents from a Forgejo tarball."""
+def inspect_archive(source):
+    """Return repository paths and bounded text contents from a streamed Forgejo tarball."""
     paths = set()
     text = {}
-    with tarfile.open(fileobj=io.BytesIO(raw), mode='r:gz') as archive:
+    if isinstance(source, (str, os.PathLike)):
+        archive_ctx = tarfile.open(name=str(source), mode='r:gz')
+    else:
+        archive_ctx = tarfile.open(fileobj=io.BytesIO(source), mode='r:gz')
+    with archive_ctx as archive:
         members = [member for member in archive.getmembers() if member.isfile()]
         first_parts = [PurePosixPath(member.name).parts[0] for member in members if PurePosixPath(member.name).parts]
         root_prefix = first_parts[0] if first_parts and all(part == first_parts[0] for part in first_parts) else ''
@@ -170,11 +193,16 @@ def repository_snapshot(slug, ref='main'):
     if not archive.get('ok'):
         waiting = archive.get('status') in {404, 409, 425, 503}
         return {'ok': False, 'waiting': waiting, 'status': archive.get('status', 0), 'error': archive.get('error') or (archive.get('data') or {}).get('error') or 'archive_unavailable'}
+    archive_path = archive.get('archive_path')
     try:
-        inspected = inspect_archive(archive['raw'])
+        inspected = inspect_archive(archive_path if archive_path else archive.get('raw', b''))
     except Exception as exc:
         return {'ok': False, 'waiting': False, 'status': 502, 'error': 'invalid_repository_archive', 'error_type': type(exc).__name__}
-    return {'ok': True, 'waiting': False, 'status': 200, 'sha256': archive.get('sha256', ''), **inspected}
+    finally:
+        if archive_path:
+            try: os.unlink(archive_path)
+            except FileNotFoundError: pass
+    return {'ok': True, 'waiting': False, 'status': 200, 'sha256': archive.get('sha256', ''), 'archive_size': archive.get('size', 0), **inspected}
 
 
 def _redirect_index(slug):
