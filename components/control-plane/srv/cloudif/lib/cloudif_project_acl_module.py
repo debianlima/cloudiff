@@ -207,6 +207,42 @@ def sync_komodo_acl(slug):
         with urllib.request.urlopen(req,timeout=45) as r:return json.load(r)
     except Exception as exc:return {'ok':False,'error':'komodo_authz_sync_failed','detail':str(exc)[:300]}
 
+def enqueue_membership_reconcile(slug, operation, principal, principal_type, user=None):
+    """Durably request full membership reconciliation after the SQLite ACL commit."""
+    actor = current_actor(user)
+    username = actor.get("username") or actor.get("email") or "portal"
+    try:
+        from cloudif_reconcile_client import enqueue
+        result = enqueue(
+            "project.membership.changed",
+            actor=username,
+            username=username,
+            project=slug,
+            payload={
+                "source": "project_acl",
+                "operation": str(operation or "reconcile"),
+                "principal": str(principal or "")[:200],
+                "principal_type": str(principal_type or "")[:32],
+                "targets": ["forgejo", "komodo", "tenant", "taiga"],
+            },
+            dedupe_seconds=5,
+        )
+        return {"ok": True, "request_id": result.get("request_id", ""), "deduplicated": bool(result.get("deduplicated"))}
+    except Exception as exc:
+        return {"ok": False, "error_type": type(exc).__name__}
+
+
+def _acl_result_message(base, immediate_sync, durable):
+    parts = [base]
+    if not immediate_sync.get("ok"):
+        parts.append("sincronização imediata com o Komodo pendente.")
+    if durable.get("ok"):
+        parts.append("Reconciliação completa enfileirada.")
+    else:
+        parts.append("ACL central salva; reconciliação completa pendente.")
+    return " ".join(parts)
+
+
 def add_acl(slug, principal, principal_type="user", role="access", user=None):
     import time as _time
 
@@ -265,9 +301,9 @@ def add_acl(slug, principal, principal_type="user", role="access", user=None):
 
         c.execute(sql, [values[x] for x in colnames])
         c.commit()
+        durable=enqueue_membership_reconcile(slug, "add", principal, principal_type, user)
         sync=sync_komodo_acl(slug)
-        if not sync.get('ok'): return 'Permissão adicionada; sincronização imediata com o Komodo pendente.'
-        return "Permissão adicionada."
+        return _acl_result_message("Permissão adicionada.", sync, durable)
     finally:
         c.close()
 
@@ -295,11 +331,13 @@ def remove_acl(slug, principal, principal_type="", role="", user=None, row_id=""
                 if is_owner_principal(slug, nrow["principal"], nrow["role"], user):
                     raise RuntimeError("Operação bloqueada: é proibido remover o próprio dono/proprietário do projeto.")
 
+            removed_principal = nrow["principal"] if row else principal
+            removed_type = nrow["type"] if row else principal_type
             c.execute(f"DELETE FROM {table} WHERE {cfg['id_col']}=?", (row_id,))
             c.commit()
+            durable=enqueue_membership_reconcile(slug, "remove", removed_principal, removed_type, user)
             sync=sync_komodo_acl(slug)
-            if not sync.get('ok'): return 'Permissão removida; sincronização imediata com o Komodo pendente.'
-            return "Permissão removida."
+            return _acl_result_message("Permissão removida.", sync, durable)
 
         where = f"{cfg['project_col']}=? AND {cfg['principal_col']}=?"
         params = [slug, principal]
@@ -314,9 +352,9 @@ def remove_acl(slug, principal, principal_type="", role="", user=None, row_id=""
 
         c.execute(f"DELETE FROM {table} WHERE {where}", params)
         c.commit()
+        durable=enqueue_membership_reconcile(slug, "remove", principal, principal_type, user)
         sync=sync_komodo_acl(slug)
-        if not sync.get('ok'): return 'Permissão removida; sincronização imediata com o Komodo pendente.'
-        return "Permissão removida."
+        return _acl_result_message("Permissão removida.", sync, durable)
     finally:
         c.close()
 

@@ -20,6 +20,7 @@ from pathlib import Path
 sys.path.insert(0, "/srv/cloudif/lib")
 import cloudif_reconcile_client as client
 import cloudif_project_config_events as config_events
+import cloudif_project_source_reconcile as source_reconcile
 
 LOCK = Path("/run/cloudif-reconcile-worker.lock")
 QUEUE = client.QUEUE
@@ -220,6 +221,22 @@ def reconcile_project_membership(project):
     return {'ok':ok,'pending':komodo_pending,'project':project,'owner':state['owner'],'tenant':state['tenant'],'acl':state['acl'],'forgejo':forgejo,'komodo':komodo,'komodo_pending':komodo_pending,'komodo_missing':authz.get('missing') or [],'stale_terminal_cleanup_ignored':len(stale_cleanup),'komodo_hard_errors':remaining_errors,'tenant_access':tenant_result,'onboarding':onboarding}
 
 
+
+def enqueue_all_source_reconciliation():
+    con=client.connect()
+    rows=con.execute("select slug from projects where trim(slug)<>'' order by slug").fetchall()
+    con.close()
+    queued=[];failed=[]
+    for row in rows:
+        slug=str(row['slug'] or '').strip()
+        try:
+            item=client.enqueue('project.source.reconcile',actor='project-source-audit',project=slug,payload={'source':'periodic_source_audit','operation':'reconcile'},dedupe_seconds=300)
+            queued.append({'project':slug,'request_id':item.get('request_id',''),'deduplicated':bool(item.get('deduplicated'))})
+        except Exception as exc:
+            failed.append({'project':slug,'error_type':type(exc).__name__})
+    return {'ok':not failed,'projects':len(rows),'queued':queued,'failed':failed}
+
+
 def update_request(request_id,status,message,result):
     con=client.connect()
     con.execute("UPDATE reconcile_requests SET status=?,message=?,result_json=?,finished_at=?,lease_owner='',lease_expires_at='',heartbeat_at='' WHERE request_id=?",
@@ -268,7 +285,7 @@ def process(row):
             except Exception:pass
         update_request(rid,"ready","Usuário habilitado; projetos relacionados reenfileirados para conciliação.",{"username":username,"triggered_projects":triggered})
         return
-    if event in {"project.created","project.updated","project.integrated","project.membership.changed","project.configuration.changed","repository.created","repository.updated","reconcile.requested"}:
+    if event in {"project.created","project.updated","project.integrated","project.membership.changed","project.configuration.changed","project.source.reconcile","repository.created","repository.updated","reconcile.requested"}:
         project=row["project"] or str(payload.get("project") or "")
         if not project:
             raise RuntimeError("projeto ausente")
@@ -290,8 +307,12 @@ def process(row):
                          enabled=1,updated_at=excluded.updated_at""",
                     (project,tenant,repo_full,repo_url,now,now))
         con.commit(); con.close()
-        membership=None;runtime_reconcile=None;taiga=None
+        membership=None;runtime_reconcile=None;taiga=None;source_state=None
         membership_failed=False;taiga_failed=False
+        if event in {"project.created","project.updated","project.integrated","project.source.reconcile","repository.created","repository.updated","reconcile.requested"}:
+            source_state=source_reconcile.reconcile_project(project,apply=True)
+            if not source_state.get('ok') and not source_state.get('waiting'):
+                raise RuntimeError('project_source_reconcile_failed')
         if event=="project.membership.changed":
             membership=reconcile_project_membership(project)
             membership_failed=not membership.get('ok')
@@ -308,14 +329,18 @@ def process(row):
             if not runtime_reconcile.get('ok'):raise RuntimeError('project_runtime_reconcile_failed')
         taiga_waiting=bool(taiga and isinstance(taiga.get('data'),dict) and taiga['data'].get('status')=='waiting_identity')
         membership_waiting=bool(membership and membership.get('pending'))
-        status="waiting" if (taiga_waiting or membership_waiting) else ("ready" if repo_full else "waiting")
+        source_waiting=bool(source_state and source_state.get('waiting'))
+        status="waiting" if (taiga_waiting or membership_waiting or source_waiting) else ("ready" if repo_full else "waiting")
         if event=="project.configuration.changed":msg="Configuração e estado de runtime reconciliados."
+        elif source_waiting:msg="Projeto registrado; aguardando repositório para reconciliar a estrutura de código."
+        elif source_state and source_state.get('changed'):msg="Estrutura do repositório reconciliada sem remover arquivos legados."
+        elif event=="project.source.reconcile":msg="Estrutura do repositório auditada e compatível com o runtime atual."
         elif taiga_waiting:msg="Projeto Taiga garantido; aguardando identidade de um ou mais membros CloudIFF."
         elif membership_waiting:msg="Forgejo, Supabase/tenant e Taiga reconciliados; aguardando usuário correspondente no Komodo."
         elif membership:msg="Membros Forgejo, Komodo, Supabase e Taiga reconciliados a partir da ACL CloudIFF."
         else:msg="Projeto CloudIFF e correspondente Taiga reconciliados." if repo_full else "Projeto preparado; Taiga reconciliado; aguardando criação do repositório."
         configuration_event=config_events.notify(project,event,payload)
-        update_request(rid,status,msg,{"project":project,"tenant":tenant,"repo_full_name":repo_full,"repo_url":repo_url,"membership":membership,"taiga":taiga,"runtime_reconcile":runtime_reconcile,"configuration_event":configuration_event})
+        update_request(rid,status,msg,{"project":project,"tenant":tenant,"repo_full_name":repo_full,"repo_url":repo_url,"membership":membership,"taiga":taiga,"source_reconcile":source_state,"runtime_reconcile":runtime_reconcile,"configuration_event":configuration_event})
         return
     if event in {"tenant.created","tenant.ready","tenant.bound","tenant.membership.changed"}:
         tenant=row["tenant"] or str(payload.get("tenant") or "")
@@ -412,6 +437,7 @@ def main():
     sub.add_parser("init")
     sub.add_parser("drain")
     sub.add_parser("selftest")
+    sub.add_parser("enqueue-all-sources")
     e=sub.add_parser("enqueue"); e.add_argument("--event",required=True); e.add_argument("--actor",default="portal"); e.add_argument("--username",default=""); e.add_argument("--project",default=""); e.add_argument("--tenant",default=""); e.add_argument("--payload",default="{}")
     s=sub.add_parser("status"); s.add_argument("request_id")
     r=sub.add_parser("recent"); r.add_argument("--project",default=""); r.add_argument("--limit",type=int,default=20)
@@ -419,6 +445,7 @@ def main():
     if args.cmd=="init": client.ensure_schema(); print(json.dumps({"ok":True})); return
     if args.cmd=="drain": raise SystemExit(drain())
     if args.cmd=="selftest": print(json.dumps(selftest(),separators=(",",":"))); return
+    if args.cmd=="enqueue-all-sources": print(json.dumps(enqueue_all_source_reconciliation(),ensure_ascii=False,separators=(",",":"))); return
     if args.cmd=="enqueue": print(json.dumps(client.enqueue(args.event,args.actor,args.username,args.project,args.tenant,json.loads(args.payload)),ensure_ascii=False)); return
     if args.cmd=="status": print(json.dumps(client.status(args.request_id) or {"ok":False,"error":"not_found"},ensure_ascii=False)); return
     if args.cmd=="recent": print(json.dumps(client.recent(args.project,args.limit),ensure_ascii=False)); return

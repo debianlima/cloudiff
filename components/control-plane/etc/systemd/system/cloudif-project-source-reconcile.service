@@ -1,0 +1,20 @@
+[Unit]
+Description=Queue non-destructive source reconciliation for all CloudIFF projects
+After=network-online.target cloudif-project-config-controller.service
+Wants=network-online.target
+Requires=cloudif-project-config-controller.service
+
+[Service]
+Type=oneshot
+Environment=PYTHONPATH=/srv/cloudif/lib
+ExecStart=/usr/bin/python3 /srv/cloudif/app-pointers/reconcile-worker-current/cloudif-reconcile-worker.py enqueue-all-sources
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictRealtime=true
+UMask=0077

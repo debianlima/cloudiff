@@ -1,0 +1,13 @@
+[Unit]
+Description=Periodic non-destructive source reconciliation for CloudIFF projects
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=6h
+RandomizedDelaySec=2min
+AccuracySec=30s
+Persistent=true
+Unit=cloudif-project-source-reconcile.service
+
+[Install]
+WantedBy=timers.target

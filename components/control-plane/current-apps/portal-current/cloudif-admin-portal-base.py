@@ -3898,7 +3898,7 @@ if "Portal" in globals():
                             "principal_type":val("principal_type"),
                             "targets":["portal","forgejo","tenant","publication"],
                         },
-                        dedupe_seconds=0,
+                        dedupe_seconds=5,
                     )
                     msg += " Reconciliação de Forgejo, Komodo, terminal, tenant e integrações enfileirada."
                 except Exception:

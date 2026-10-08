@@ -14,5 +14,5 @@ class ProjectRepositoryManualTests(unittest.TestCase):
   for runtime in ("node20","node22","node24"):
    text=self.mod.project_readme("demo","user","tenant-demo",1001,runtime,"8.4");self.assertIn("Apache + PHP 8.4 + Node.js",text)
  def test_template_version_forces_layout_upgrade_for_new_projects(self):
-  source=Path("components/control-plane/usr/local/sbin/cloudif-project-template-apply.py").read_text();self.assertIn("old.get('version') == 12",source);self.assertIn("'version': 12",source)
+  source=Path("components/control-plane/usr/local/sbin/cloudif-project-template-apply.py").read_text();self.assertIn("old.get('version') in (12, 13)",source);self.assertIn("'version': 13",source);self.assertIn("template_already_applied_verified",source)
 if __name__=="__main__":unittest.main()

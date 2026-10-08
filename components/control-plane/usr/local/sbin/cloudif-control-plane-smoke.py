@@ -499,7 +499,7 @@ try:
 except Exception as e:checks.append({'name':'project-capabilities-future-policy','ok':False,'error':type(e).__name__})
 try:
  states={}
- for unit in ('cloudif-project-state-reconcile.timer','cloudif-project-state-reconcile.path'):
+ for unit in ('cloudif-project-state-reconcile.timer','cloudif-project-state-reconcile.path','cloudif-project-source-reconcile.timer'):
   q=subprocess.run(['systemctl','is-active',unit],text=True,capture_output=True,timeout=8);states[unit]=q.stdout.strip()
  legacy={}
  for unit in ('cloudif-project-capabilities.path','cloudif-agent-controller.path','cloudif-project-capabilities.timer','cloudif-agent-controller.timer'):

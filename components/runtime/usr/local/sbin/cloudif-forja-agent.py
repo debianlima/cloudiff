@@ -2308,7 +2308,7 @@ def _v118_register_event(project_slug, repo, branch, path, action, status, commi
 
 
 # CloudIF workspace archive read-only BEGIN
-_CLOUDIF_ARCHIVE_SLUG_RE = re.compile(r'^[a-z0-9][a-z0-9-]{0,62}$')
+_CLOUDIF_ARCHIVE_SLUG_RE = re.compile(r'^[a-z0-9][a-z0-9._-]{0,62}$')
 _CLOUDIF_ARCHIVE_REF_RE = re.compile(r'^[A-Za-z0-9._/-]{1,128}$')
 _CLOUDIF_ARCHIVE_MAX = 20 * 1024 * 1024
 

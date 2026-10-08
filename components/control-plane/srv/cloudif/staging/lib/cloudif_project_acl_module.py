@@ -183,6 +183,27 @@ def is_owner_principal(slug, principal, role="", user=None):
 
     return False
 
+def enqueue_membership_reconcile(slug, operation, principal, principal_type, user=None):
+    actor = current_actor(user)
+    username = actor.get("username") or actor.get("email") or "portal"
+    try:
+        from cloudif_reconcile_client import enqueue
+        result = enqueue(
+            "project.membership.changed", actor=username, username=username, project=slug,
+            payload={"source":"project_acl","operation":str(operation or "reconcile"),
+                     "principal":str(principal or "")[:200],"principal_type":str(principal_type or "")[:32],
+                     "targets":["forgejo","komodo","tenant","taiga"]},
+            dedupe_seconds=5,
+        )
+        return {"ok":True,"request_id":result.get("request_id","")}
+    except Exception as exc:
+        return {"ok":False,"error_type":type(exc).__name__}
+
+
+def _durable_message(base, durable):
+    return base + (" Reconciliação completa enfileirada." if durable.get("ok") else " ACL central salva; reconciliação completa pendente.")
+
+
 def add_acl(slug, principal, principal_type="user", role="access", user=None):
     import time as _time
 
@@ -241,8 +262,8 @@ def add_acl(slug, principal, principal_type="user", role="access", user=None):
 
         c.execute(sql, [values[x] for x in colnames])
         c.commit()
-
-        return "Permissão adicionada."
+        durable=enqueue_membership_reconcile(slug,"add",principal,principal_type,user)
+        return _durable_message("Permissão adicionada.",durable)
     finally:
         c.close()
 
@@ -270,9 +291,12 @@ def remove_acl(slug, principal, principal_type="", role="", user=None, row_id=""
                 if is_owner_principal(slug, nrow["principal"], nrow["role"], user):
                     raise RuntimeError("Operação bloqueada: é proibido remover o próprio dono/proprietário do projeto.")
 
+            removed_principal=nrow["principal"] if row else principal
+            removed_type=nrow["type"] if row else principal_type
             c.execute(f"DELETE FROM {table} WHERE {cfg['id_col']}=?", (row_id,))
             c.commit()
-            return "Permissão removida."
+            durable=enqueue_membership_reconcile(slug,"remove",removed_principal,removed_type,user)
+            return _durable_message("Permissão removida.",durable)
 
         where = f"{cfg['project_col']}=? AND {cfg['principal_col']}=?"
         params = [slug, principal]
@@ -287,7 +311,8 @@ def remove_acl(slug, principal, principal_type="", role="", user=None, row_id=""
 
         c.execute(f"DELETE FROM {table} WHERE {where}", params)
         c.commit()
-        return "Permissão removida."
+        durable=enqueue_membership_reconcile(slug,"remove",principal,principal_type,user)
+        return _durable_message("Permissão removida.",durable)
     finally:
         c.close()
 

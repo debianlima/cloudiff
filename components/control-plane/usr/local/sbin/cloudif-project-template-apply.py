@@ -8,8 +8,12 @@ import urllib.request
 from pathlib import Path
 
 LIB = Path('/srv/cloudif/lib')
+if not LIB.exists():
+    LIB = Path(__file__).resolve().parents[3] / 'srv/cloudif/lib'
 if str(LIB) not in sys.path:
     sys.path.insert(0, str(LIB))
+
+import cloudif_project_source_reconcile as source_reconcile
 
 DB = '/var/lib/cloudif/portal/cloudif-portal.db'
 PLATFORM_NAMES = {
@@ -362,26 +366,51 @@ def main():
     number = public_number(slug)
     state_dir = Path(f'/srv/cloudif/provisioning/projects/{slug}')
     marker = state_dir / 'template-applied.json'
+
+    snapshot = source_reconcile.repository_snapshot(slug)
+    if not snapshot.get('ok'):
+        # With a marker, fail closed: do not risk overwriting a repository that cannot be inspected.
+        if marker.exists() and not readme_only:
+            print(json.dumps({
+                'ok': True, 'skipped': True, 'reason': 'template_marker_present_repository_unverified',
+                'kind': kind, 'project': slug, 'public_number': number,
+                'repository_status': snapshot.get('status', 0),
+            }, ensure_ascii=False))
+            return
+        raise RuntimeError('repository_snapshot_unavailable:' + str(snapshot.get('error') or snapshot.get('status') or 'unknown'))
+
+    existing_paths = set(snapshot.get('paths') or [])
+    # If an old site/ layout is found, migrate non-destructively first. The legacy folder stays in Git.
+    if not readme_only and not ({'index.php','index.html'} & existing_paths) and ({'site/index.php','site/index.html'} & existing_paths):
+        migrated = source_reconcile.reconcile_project(slug, apply=True)
+        if not migrated.get('ok'):
+            raise RuntimeError('legacy_source_reconcile_failed')
+        snapshot = source_reconcile.repository_snapshot(slug)
+        if not snapshot.get('ok'):
+            raise RuntimeError('repository_snapshot_after_migration_unavailable')
+        existing_paths = set(snapshot.get('paths') or [])
+
+    repair_paths = set()
     if marker.exists() and not readme_only:
         try:
             old = json.loads(marker.read_text())
-            if (
+            marker_matches = (
                 old.get('kind') == kind
                 and old.get('runtime_template') == runtime
                 and old.get('php_version', '8.3') == php_version
-                and old.get('version') == 12
-            ):
-                print(json.dumps({
-                    'ok': True,
-                    'skipped': True,
-                    'reason': 'template_already_applied',
-                    'kind': kind,
-                    'project': slug,
-                    'public_number': number,
-                }, ensure_ascii=False))
-                return
+                and old.get('version') in (12, 13)
+            )
+            if marker_matches:
+                expected = {str(item.get('path') or '') for item in (old.get('files') or []) if isinstance(item, dict) and item.get('path')}
+                repair_paths = {path for path in expected if path not in existing_paths}
+                if not repair_paths:
+                    print(json.dumps({
+                        'ok': True, 'skipped': True, 'reason': 'template_already_applied_verified',
+                        'kind': kind, 'project': slug, 'public_number': number,
+                    }, ensure_ascii=False))
+                    return
         except Exception:
-            pass
+            repair_paths = set()
 
     config = read_env('/etc/cloudif/forja-agent-client.env')
     base = (config.get('FORJA_AGENT_URL') or 'http://10.62.91.2:18095').rstrip('/')
@@ -405,6 +434,15 @@ def main():
         build(kind, slug, owner, tenant, number), runtime, php_version
     )
     files.append(('README.md', readme))
+    skipped_existing = []
+    if not readme_only:
+        filtered = []
+        for path, content in files:
+            if path in existing_paths and path not in repair_paths:
+                skipped_existing.append(path)
+                continue
+            filtered.append((path, content))
+        files = filtered
     results = []
     for path, content in files:
         payload = {
@@ -450,11 +488,12 @@ def main():
             'kind': kind,
             'runtime_template': runtime,
             'php_version': php_version,
-            'version': 12,
+            'version': 13,
             'project': slug,
             'public_number': number,
             'applied_at': runtime_meta['updated_at'],
             'files': results,
+            'skipped_existing': skipped_existing,
         }, ensure_ascii=False, indent=2) + '\n')
     print(json.dumps({
         'ok': True,
@@ -462,6 +501,7 @@ def main():
         'project': slug,
         'public_number': number,
         'files': results,
+        'skipped_existing': skipped_existing,
         'runtime': runtime_meta,
         'readme_only': readme_only,
     }, ensure_ascii=False))
