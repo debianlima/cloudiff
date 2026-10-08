@@ -13,6 +13,8 @@ CLIENT = ROOT/'components/control-plane/srv/cloudif/lib/cloudif_reconcile_client
 TEMPLATE = ROOT/'components/control-plane/usr/local/sbin/cloudif-project-template-apply.py'
 SERVICE = ROOT/'components/control-plane/etc/systemd/system/cloudif-project-source-reconcile.service'
 TIMER = ROOT/'components/control-plane/etc/systemd/system/cloudif-project-source-reconcile.timer'
+MEMBERSHIP_SERVICE = ROOT/'components/control-plane/etc/systemd/system/cloudif-project-membership-reconcile.service'
+MEMBERSHIP_TIMER = ROOT/'components/control-plane/etc/systemd/system/cloudif-project-membership-reconcile.timer'
 FORJA = ROOT/'components/runtime/current-apps/forja-agent-current/cloudif-forja-agent.py'
 
 spec = importlib.util.spec_from_file_location('source_reconcile_test', MODULE)
@@ -108,6 +110,17 @@ class ProjectSourceReconciliationTests(unittest.TestCase):
     def test_forja_archive_accepts_all_platform_slug_characters(self):
         text = FORJA.read_text()
         self.assertIn("_CLOUDIF_ARCHIVE_SLUG_RE = re.compile(r'^[a-z0-9][a-z0-9._-]{0,62}$')", text)
+
+    def test_periodic_membership_reconcile_recovers_post_oidc_login(self):
+        worker = WORKER.read_text()
+        self.assertIn('def enqueue_all_membership_reconciliation', worker)
+        self.assertIn('enqueue-all-memberships', worker)
+        self.assertIn('project.membership.changed', worker)
+        self.assertIn('periodic_membership_audit', worker)
+        self.assertIn('enqueue-all-memberships', MEMBERSHIP_SERVICE.read_text())
+        timer = MEMBERSHIP_TIMER.read_text()
+        self.assertIn('OnUnitActiveSec=30min', timer)
+        self.assertIn('Persistent=true', timer)
 
     def test_periodic_service_queues_all_projects(self):
         self.assertIn('enqueue-all-sources', SERVICE.read_text())

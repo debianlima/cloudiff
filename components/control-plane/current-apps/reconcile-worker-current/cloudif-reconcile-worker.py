@@ -228,6 +228,21 @@ def reconcile_project_membership(project):
 
 
 
+def enqueue_all_membership_reconciliation():
+    con=client.connect()
+    rows=con.execute("select slug from projects where trim(slug)<>'' order by slug").fetchall()
+    con.close()
+    queued=[];failed=[]
+    for row in rows:
+        slug=str(row['slug'] or '').strip()
+        try:
+            item=client.enqueue('project.membership.changed',actor='project-membership-audit',project=slug,payload={'source':'periodic_membership_audit','operation':'reconcile'},dedupe_seconds=900)
+            queued.append({'project':slug,'request_id':item.get('request_id',''),'deduplicated':bool(item.get('deduplicated'))})
+        except Exception as exc:
+            failed.append({'project':slug,'error_type':type(exc).__name__})
+    return {'ok':not failed,'projects':len(rows),'queued':queued,'failed':failed}
+
+
 def enqueue_all_source_reconciliation():
     con=client.connect()
     rows=con.execute("select slug from projects where trim(slug)<>'' order by slug").fetchall()
@@ -444,6 +459,7 @@ def main():
     sub.add_parser("drain")
     sub.add_parser("selftest")
     sub.add_parser("enqueue-all-sources")
+    sub.add_parser("enqueue-all-memberships")
     e=sub.add_parser("enqueue"); e.add_argument("--event",required=True); e.add_argument("--actor",default="portal"); e.add_argument("--username",default=""); e.add_argument("--project",default=""); e.add_argument("--tenant",default=""); e.add_argument("--payload",default="{}")
     s=sub.add_parser("status"); s.add_argument("request_id")
     r=sub.add_parser("recent"); r.add_argument("--project",default=""); r.add_argument("--limit",type=int,default=20)
@@ -452,6 +468,7 @@ def main():
     if args.cmd=="drain": raise SystemExit(drain())
     if args.cmd=="selftest": print(json.dumps(selftest(),separators=(",",":"))); return
     if args.cmd=="enqueue-all-sources": print(json.dumps(enqueue_all_source_reconciliation(),ensure_ascii=False,separators=(",",":"))); return
+    if args.cmd=="enqueue-all-memberships": print(json.dumps(enqueue_all_membership_reconciliation(),ensure_ascii=False,separators=(",",":"))); return
     if args.cmd=="enqueue": print(json.dumps(client.enqueue(args.event,args.actor,args.username,args.project,args.tenant,json.loads(args.payload)),ensure_ascii=False)); return
     if args.cmd=="status": print(json.dumps(client.status(args.request_id) or {"ok":False,"error":"not_found"},ensure_ascii=False)); return
     if args.cmd=="recent": print(json.dumps(client.recent(args.project,args.limit),ensure_ascii=False)); return
