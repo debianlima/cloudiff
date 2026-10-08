@@ -2310,7 +2310,7 @@ def _v118_register_event(project_slug, repo, branch, path, action, status, commi
 # CloudIF workspace archive read-only BEGIN
 _CLOUDIF_ARCHIVE_SLUG_RE = re.compile(r'^[a-z0-9][a-z0-9._-]{0,62}$')
 _CLOUDIF_ARCHIVE_REF_RE = re.compile(r'^[A-Za-z0-9._/-]{1,128}$')
-_CLOUDIF_ARCHIVE_MAX = 20 * 1024 * 1024
+_CLOUDIF_ARCHIVE_MAX = max(64 * 1024 * 1024, min(int(os.environ.get('CLOUDIF_ARCHIVE_MAX_BYTES', str(1024 * 1024 * 1024))), 2 * 1024 * 1024 * 1024))
 
 def cloudif_workspace_archive(handler, qs):
     if not cloudif_auth_ok(handler):
@@ -2334,28 +2334,44 @@ def cloudif_workspace_archive(handler, qs):
         return cloudif_send_json(handler, 503, {'ok': False, 'error': 'forgejo_not_configured'})
     url = f"{base}/repos/{urllib.parse.quote(owner, safe='')}/{urllib.parse.quote(repo, safe='')}/archive/{urllib.parse.quote(ref, safe='')}.tar.gz"
     req = urllib.request.Request(url, headers={'Authorization': 'token ' + token, 'Accept': 'application/gzip', 'User-Agent': 'cloudif-forja-agent/archive'})
+    temporary=''
     try:
-        with urllib.request.urlopen(req, timeout=30) as r:
-            raw = r.read(_CLOUDIF_ARCHIVE_MAX + 1)
-            ctype = r.headers.get('Content-Type', '')
+        fd,temporary=tempfile.mkstemp(prefix='cloudif-forgejo-archive-',suffix='.tar.gz')
+        with urllib.request.urlopen(req, timeout=120) as r, os.fdopen(fd,'wb') as stream:
+            digest=hashlib.sha256();total=0;magic=b''
+            while True:
+                chunk=r.read(1024*1024)
+                if not chunk:break
+                if not magic:magic=chunk[:2]
+                total+=len(chunk)
+                if total>_CLOUDIF_ARCHIVE_MAX:
+                    return cloudif_send_json(handler,413,{'ok':False,'error':'archive_too_large'})
+                digest.update(chunk);stream.write(chunk)
+            stream.flush();os.fsync(stream.fileno())
+        if total<2 or magic!=b'\x1f\x8b':
+            return cloudif_send_json(handler,502,{'ok':False,'error':'invalid_archive'})
+        handler.send_response(200)
+        handler.send_header('Content-Type','application/gzip')
+        handler.send_header('Cache-Control','private, no-store')
+        handler.send_header('X-Content-Type-Options','nosniff')
+        handler.send_header('X-CloudIF-Project',slug)
+        handler.send_header('X-CloudIF-Ref',ref)
+        handler.send_header('X-CloudIF-SHA256',digest.hexdigest())
+        handler.send_header('Content-Length',str(total))
+        handler.end_headers()
+        with open(temporary,'rb') as stream:
+            while True:
+                chunk=stream.read(1024*1024)
+                if not chunk:break
+                handler.wfile.write(chunk)
     except urllib.error.HTTPError as e:
-        return cloudif_send_json(handler, 404 if e.code == 404 else 502, {'ok': False, 'error': 'archive_unavailable', 'upstream_status': e.code})
+        return cloudif_send_json(handler,404 if e.code==404 else 502,{'ok':False,'error':'archive_unavailable','upstream_status':e.code})
     except Exception:
-        return cloudif_send_json(handler, 502, {'ok': False, 'error': 'archive_unavailable'})
-    if len(raw) > _CLOUDIF_ARCHIVE_MAX:
-        return cloudif_send_json(handler, 413, {'ok': False, 'error': 'archive_too_large'})
-    if len(raw) < 2 or raw[:2] != b'\x1f\x8b':
-        return cloudif_send_json(handler, 502, {'ok': False, 'error': 'invalid_archive'})
-    digest = hashlib.sha256(raw).hexdigest()
-    handler.send_response(200)
-    handler.send_header('Content-Type', 'application/gzip')
-    handler.send_header('Cache-Control', 'private, no-store')
-    handler.send_header('X-Content-Type-Options', 'nosniff')
-    handler.send_header('X-CloudIF-Project', slug)
-    handler.send_header('X-CloudIF-Ref', ref)
-    handler.send_header('X-CloudIF-SHA256', digest)
-    handler.send_header('Content-Length', str(len(raw)))
-    handler.end_headers();handler.wfile.write(raw)
+        return cloudif_send_json(handler,502,{'ok':False,'error':'archive_unavailable'})
+    finally:
+        if temporary:
+            try:os.unlink(temporary)
+            except FileNotFoundError:pass
 # CloudIF workspace archive read-only END
 
 

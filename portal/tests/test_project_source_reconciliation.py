@@ -86,6 +86,13 @@ class ProjectSourceReconciliationTests(unittest.TestCase):
         self.assertIn("'version': 13", template)
         self.assertIn('legacy_source_reconcile_failed', template)
 
+    def test_forja_archive_streams_large_payloads_via_tempfile(self):
+        forja=Path('components/runtime/current-apps/forja-agent-current/cloudif-forja-agent.py').read_text()
+        self.assertIn("CLOUDIF_ARCHIVE_MAX_BYTES",forja)
+        self.assertIn("tempfile.mkstemp(prefix='cloudif-forgejo-archive-'",forja)
+        self.assertIn("chunk=r.read(1024*1024)",forja)
+        self.assertNotIn("r.read(_CLOUDIF_ARCHIVE_MAX + 1)",forja)
+
     def test_forja_archive_accepts_all_platform_slug_characters(self):
         text = FORJA.read_text()
         self.assertIn("_CLOUDIF_ARCHIVE_SLUG_RE = re.compile(r'^[a-z0-9][a-z0-9._-]{0,62}$')", text)
