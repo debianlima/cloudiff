@@ -24,7 +24,7 @@ from pathlib import Path, PurePosixPath
 
 FORJA_ENV = Path(os.environ.get('CLOUDIF_FORJA_CLIENT_ENV', '/etc/cloudif/forja-agent-client.env'))
 STATE_ROOT = Path(os.environ.get('CLOUDIF_PROJECT_PROVISIONING_ROOT', '/srv/cloudif/provisioning/projects'))
-MAX_ARCHIVE = 256 * 1024 * 1024
+MAX_ARCHIVE = max(64 * 1024 * 1024, min(int(os.environ.get('CLOUDIF_SOURCE_ARCHIVE_MAX_BYTES', str(1024 * 1024 * 1024))), 2 * 1024 * 1024 * 1024))
 MAX_MIGRATED_TEXT = 1024 * 1024
 TEXT_EXTENSIONS = {
     '.js', '.mjs', '.cjs', '.ts', '.tsx', '.jsx', '.json', '.lock', '.md', '.txt',
