@@ -191,7 +191,7 @@ def inspect_archive(source):
 def repository_snapshot(slug, ref='main'):
     archive = fetch_archive(slug, ref)
     if not archive.get('ok'):
-        waiting = archive.get('status') in {404, 409, 425, 503}
+        waiting = archive.get('status') in {404, 409, 413, 425, 503}
         return {'ok': False, 'waiting': waiting, 'status': archive.get('status', 0), 'error': archive.get('error') or (archive.get('data') or {}).get('error') or 'archive_unavailable'}
     archive_path = archive.get('archive_path')
     try:

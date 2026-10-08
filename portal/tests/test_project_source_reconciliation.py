@@ -70,6 +70,18 @@ class ProjectSourceReconciliationTests(unittest.TestCase):
         plan = source.plan_snapshot('demo', snap)
         self.assertEqual([x['path'] for x in plan['actions']], ['README.md'])
 
+    def test_large_archive_is_waiting_not_permanent_failure(self):
+        original = source.fetch_archive
+        source.fetch_archive = lambda slug, ref='main': {'ok': False, 'status': 413, 'error': 'archive_too_large'}
+        try:
+            snap = source.repository_snapshot('large-demo')
+        finally:
+            source.fetch_archive = original
+        self.assertFalse(snap['ok'])
+        self.assertTrue(snap['waiting'])
+        self.assertEqual(snap['status'], 413)
+        self.assertEqual(snap['error'], 'archive_too_large')
+
     def test_reconcile_worker_supports_all_project_source_audit(self):
         worker = WORKER.read_text()
         client = CLIENT.read_text()
