@@ -206,19 +206,25 @@ def reconcile_project_membership(project):
     authz=kdata.get('authz') if isinstance(kdata.get('authz'),dict) else {}
     terminals=kdata.get('terminals') if isinstance(kdata.get('terminals'),dict) else {}
     raw_errors=terminals.get('errors') if isinstance(terminals.get('errors'),list) else []
-    remaining_errors=[];stale_cleanup=[]
+    komodo_pending=bool(authz.get('pending'))
+    remaining_errors=[];stale_cleanup=[];pending_terminal_errors=[]
     for err in raw_errors:
         detail=(err.get('result') or {}).get('data') if isinstance(err,dict) else {}
         message=str(detail.get('error') if isinstance(detail,dict) else '')
-        if isinstance(err,dict) and err.get('stage')=='delete_terminal' and 'Did not find any Stack matching' in message:
+        stage=str(err.get('stage') or '') if isinstance(err,dict) else ''
+        if stage=='delete_terminal' and 'Did not find any Stack matching' in message:
             stale_cleanup.append(err)
+        elif komodo_pending and stage=='create_terminal':
+            pending_terminal_errors.append(err)
         else:
             remaining_errors.append(err)
-    komodo_pending=bool(authz.get('pending'))
+    fdata=forgejo.get('data') if isinstance(forgejo.get('data'),dict) else {}
+    forgejo_pending=bool(fdata.get('pending'))
+    forgejo_effective_ok=bool(forgejo.get('ok') or forgejo_pending)
     komodo_hard_error=bool(remaining_errors) or (not komodo.get('ok') and not komodo_pending)
     komodo_effective_ok=not komodo_hard_error
-    ok=bool(forgejo.get('ok') and komodo_effective_ok and tenant_result.get('ok'))
-    return {'ok':ok,'pending':komodo_pending,'project':project,'owner':state['owner'],'tenant':state['tenant'],'acl':state['acl'],'forgejo':forgejo,'komodo':komodo,'komodo_pending':komodo_pending,'komodo_missing':authz.get('missing') or [],'stale_terminal_cleanup_ignored':len(stale_cleanup),'komodo_hard_errors':remaining_errors,'tenant_access':tenant_result,'onboarding':onboarding}
+    ok=bool(forgejo_effective_ok and komodo_effective_ok and tenant_result.get('ok'))
+    return {'ok':ok,'pending':bool(forgejo_pending or komodo_pending),'project':project,'owner':state['owner'],'tenant':state['tenant'],'acl':state['acl'],'forgejo':forgejo,'forgejo_pending':forgejo_pending,'forgejo_pending_users':fdata.get('pending_users') or [],'komodo':komodo,'komodo_pending':komodo_pending,'komodo_missing':authz.get('missing') or [],'pending_terminal_errors':len(pending_terminal_errors),'stale_terminal_cleanup_ignored':len(stale_cleanup),'komodo_hard_errors':remaining_errors,'tenant_access':tenant_result,'onboarding':onboarding}
 
 
 

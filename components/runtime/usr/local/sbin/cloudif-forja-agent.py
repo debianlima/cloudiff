@@ -3347,6 +3347,10 @@ class Handler(BaseHTTPRequestHandler):
             code, result = finalize_project_release(data)
             return json_response(self, code, result)
 
+        if path == "/identity/lookup":
+            result=authentik_identity_lookup(data)
+            return json_response(self, 200 if result.get("ok") else 502, result)
+
         if path == "/project/membership/reconcile":
             result=reconcile_project_membership(data)
             return json_response(self, 200 if result.get("ok") else 422, result)
@@ -3382,9 +3386,137 @@ class Handler(BaseHTTPRequestHandler):
 
 # CloudIFF v143 — colaboradores do Forgejo reconciliados pela ACL central
 
+def authentik_identity_lookup(payload):
+    q=str(payload.get('q') or '').strip(); stype=str(payload.get('type') or 'all').strip().lower()
+    if stype not in {'all','user','group'}: stype='all'
+    if len(q)<2 or len(q)>120: return {'ok':True,'query':q,'type':stype,'items':[]}
+    script = """
+import json
+from django.db.models import Q
+from authentik.core.models import User, Group
+q = %s
+stype = %s
+out = []
+if stype in ('all','user'):
+    qs = User.objects.filter(is_active=True).filter(Q(username__icontains=q)|Q(name__icontains=q)|Q(email__icontains=q)).order_by('username')[:50]
+    for u in qs:
+        out.append({'type':'user','principal':u.username,'username':u.username,'label':u.username,'full_name':u.name or u.username,'mail':u.email or '','email':u.email or '','groups':sorted(g.name for g in u.ak_groups.all()),'source':'authentik'})
+if stype in ('all','group'):
+    qs = Group.objects.filter(name__icontains=q).order_by('name')[:50]
+    for g in qs:
+        out.append({'type':'group','principal':g.name,'label':g.name,'full_name':g.name,'mail':'','email':'','groups':[],'source':'authentik'})
+print(json.dumps({'ok':True,'query':q,'type':stype,'items':out},ensure_ascii=False,separators=(',',':')))
+""" % (repr(q), repr(stype))
+    try:
+        proc=subprocess.run(['docker','exec','authentik-server-1','ak','shell','-c',script],stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True,timeout=20)
+        if proc.returncode!=0: return {'ok':False,'error':'authentik_lookup_failed','error_type':'subprocess'}
+        lines=[x for x in proc.stdout.splitlines() if x.strip().startswith('{')]
+        if not lines: return {'ok':False,'error':'authentik_lookup_invalid_response'}
+        result=json.loads(lines[-1]); result['secrets_exposed']=False; return result
+    except Exception as exc:
+        return {'ok':False,'error':'authentik_lookup_failed','error_type':type(exc).__name__}
+
+
+def _forgejo_exact_user(username):
+    username=str(username or '').strip().lower()
+    base=forgejo_api_base();token=CFG.get('FORGEJO_TOKEN','')
+    if not username or not base or not token:return {'ok':False,'exists':False,'error':'forgejo_lookup_unavailable'}
+    result=http_json('GET',f'{base}/users/{urllib.parse.quote(username,safe="")}',token=token,timeout=15)
+    if not result.get('ok'):
+        return {'ok':False,'exists':False,'status':result.get('status',0),'error':result.get('error') or 'forgejo_user_not_found'}
+    data=result.get('data') if isinstance(result.get('data'),dict) else {}
+    returned=str(data.get('login') or '').strip().lower()
+    if returned!=username:
+        return {'ok':False,'exists':False,'pending':True,'error':'username_redirect_conflict'}
+    return {'ok':True,'exists':True,'username':username}
+
+
+def _authentik_same_email_users(email):
+    email=str(email or '').strip().lower()
+    if not email:return {'ok':True,'users':[]}
+    result=authentik_identity_lookup({'q':email,'type':'user'})
+    if not result.get('ok'):return {'ok':False,'error':'identity_email_lookup_failed'}
+    users=[]
+    for item in result.get('items') or []:
+        if not isinstance(item,dict):continue
+        candidate=str(item.get('email') or item.get('mail') or '').strip().lower()
+        username=str(item.get('principal') or item.get('username') or '').strip().lower()
+        if candidate==email and username:users.append(username)
+    return {'ok':True,'users':sorted(set(users))}
+
+
+def _forgejo_email_logins(email):
+    email=str(email or '').strip().lower()
+    base=forgejo_api_base();token=CFG.get('FORGEJO_TOKEN','')
+    if not email or not base or not token:return {'ok':True,'logins':[]}
+    result=http_json('GET',f'{base}/users/search?q={urllib.parse.quote(email,safe="")}&limit=50',token=token,timeout=15)
+    if not result.get('ok'):return {'ok':False,'error':'forgejo_email_lookup_failed','status':result.get('status',0)}
+    payload=result.get('data') if isinstance(result.get('data'),dict) else {}
+    items=payload.get('data') if isinstance(payload.get('data'),list) else []
+    logins=[]
+    for item in items:
+        if not isinstance(item,dict):continue
+        if str(item.get('email') or '').strip().lower()==email:
+            login=str(item.get('login') or '').strip().lower()
+            if login:logins.append(login)
+    return {'ok':True,'logins':sorted(set(logins))}
+
+
+def ensure_forgejo_user_from_authentik(username):
+    username=str(username or '').strip().lower()
+    if not username:return {'ok':False,'error':'username_missing'}
+    base=forgejo_api_base();token=CFG.get('FORGEJO_TOKEN','')
+    if not base or not token:return {'ok':False,'error':'forgejo_credentials_missing'}
+    current=_forgejo_exact_user(username)
+    if current.get('ok'):return {'ok':True,'created':False,'username':username}
+    if current.get('pending'):return {'ok':True,'pending':True,'created':False,'username':username,'reason':current.get('error')}
+    if current.get('status') not in (404,):return {'ok':False,'error':'forgejo_user_lookup_failed'}
+
+    ident=authentik_identity_lookup({'q':username,'type':'user'})
+    if not ident.get('ok'):return {'ok':False,'error':'identity_lookup_failed'}
+    exact=[x for x in (ident.get('items') or []) if str(x.get('principal') or x.get('username') or '').strip().lower()==username]
+    if len(exact)!=1:return {'ok':True,'pending':True,'created':False,'username':username,'reason':'identity_not_unique'}
+    row=exact[0];directory_email=str(row.get('email') or row.get('mail') or '').strip().lower();name=str(row.get('full_name') or row.get('name') or username).strip()
+    email_mode='placeholder'
+    create_email=f'{username}@pending.cloudif.invalid'
+    if directory_email:
+        directory_users=_authentik_same_email_users(directory_email)
+        if not directory_users.get('ok'):return {'ok':False,'error':directory_users.get('error') or 'identity_email_lookup_failed'}
+        if directory_users.get('users')==[username]:
+            forgejo_users=_forgejo_email_logins(directory_email)
+            if not forgejo_users.get('ok'):return {'ok':False,'error':forgejo_users.get('error') or 'forgejo_email_lookup_failed'}
+            conflicting=[x for x in forgejo_users.get('logins') or [] if x!=username]
+            if conflicting:
+                return {'ok':True,'pending':True,'created':False,'username':username,'reason':'forgejo_email_conflict'}
+            create_email=directory_email;email_mode='directory_unique'
+        else:
+            email_mode='placeholder_duplicate_directory_email'
+
+    cmd=['docker','exec','cloudif-forgejo','forgejo','admin','user','create','--username',username,'--email',create_email,'--fullname',name,'--random-password','--must-change-password=false']
+    proc=subprocess.run(cmd,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=30)
+    if proc.returncode!=0:
+        verify=_forgejo_exact_user(username)
+        if verify.get('ok'):return {'ok':True,'created':False,'username':username,'email_mode':email_mode}
+        if verify.get('pending'):return {'ok':True,'pending':True,'created':False,'username':username,'reason':verify.get('error')}
+        return {'ok':False,'error':'forgejo_user_create_failed','returncode':proc.returncode}
+    verify=_forgejo_exact_user(username)
+    if verify.get('pending'):return {'ok':True,'pending':True,'created':True,'username':username,'reason':verify.get('error'),'email_mode':email_mode}
+    return {'ok':bool(verify.get('ok')),'created':True,'username':username,'email_mode':email_mode,'sso_linking':'username'}
+
+
+def _forgejo_missing_user_result(result):
+    if not isinstance(result,dict):return False
+    if result.get('status') not in (404,422):return False
+    data=result.get('data')
+    msg=''
+    if isinstance(data,dict):msg=str(data.get('message') or '')
+    else:msg=str(data or result.get('error') or '')
+    return 'user does not exist' in msg.lower()
+
+
 def reconcile_project_membership(payload):
-    slug=safe_slug(payload.get('project') or payload.get('project_slug') or payload.get('slug') or '')
-    if not slug:return {'ok':False,'error':'invalid_project'}
+    slug=str(payload.get('project') or payload.get('project_slug') or payload.get('slug') or '').strip().lower()
+    if not SLUG_RE.fullmatch(slug):return {'ok':False,'error':'invalid_project'}
     project=load_project(slug) or {}
     access=payload.get('access') if isinstance(payload.get('access'),dict) else {}
     owner=str(access.get('owner') or payload.get('owner_user') or project.get('owner_user') or project.get('forgejo_owner') or ((project.get('forgejo') or {}).get('owner') if isinstance(project.get('forgejo'),dict) else '') or '').strip().lower()
@@ -3393,8 +3525,7 @@ def reconcile_project_membership(payload):
         repo_owner,repo_name=repo.split('/',1);owner=owner or repo_owner;repo=repo_name
     if not owner:return {'ok':False,'error':'repo_owner_missing'}
     acl=access.get('acl') if isinstance(access.get('acl'),list) else []
-    desired=set()
-    ignored_groups=[]
+    desired=set();ignored_groups=[]
     for item in acl:
         kind=str(item.get('type') or '').strip().lower();subject=str(item.get('subject') or '').strip().lower()
         if kind=='user' and subject and subject!=owner:desired.add(subject)
@@ -3403,9 +3534,14 @@ def reconcile_project_membership(payload):
     base=forgejo_api_base();token=CFG.get('FORGEJO_TOKEN','')
     if not base or not token:return {'ok':False,'error':'forgejo_credentials_missing'}
     qowner=urllib.parse.quote(owner,safe='');qrepo=urllib.parse.quote(repo,safe='')
-    added=[];existing=[];removed=[];errors=[]
+    added=[];existing=[];removed=[];errors=[];pending_users=[]
     for username in sorted(desired):
         quser=urllib.parse.quote(username,safe='')
+        user_state=ensure_forgejo_user_from_authentik(username)
+        if user_state.get('pending'):
+            pending_users.append({'username':username,'reason':str(user_state.get('reason') or 'identity_pending')[:80]});continue
+        if not user_state.get('ok'):
+            errors.append({'username':username,'operation':'ensure_user','status':422,'detail':{'error':user_state.get('error')}});continue
         check=http_json('GET',f'{base}/repos/{qowner}/{qrepo}/collaborators/{quser}',token=token,timeout=15)
         if check.get('ok'):
             existing.append(username);continue
@@ -3415,12 +3551,13 @@ def reconcile_project_membership(payload):
     for username in sorted(previous-desired):
         quser=urllib.parse.quote(username,safe='')
         result=http_json('DELETE',f'{base}/repos/{qowner}/{qrepo}/collaborators/{quser}',token=token,timeout=20)
-        if result.get('ok') or result.get('status')==404:removed.append(username)
+        if result.get('ok') or result.get('status')==404 or _forgejo_missing_user_result(result):removed.append(username)
         else:errors.append({'username':username,'operation':'remove','status':result.get('status'),'detail':result.get('data') or result.get('error')})
     if not errors:
-        project.update({'project_slug':slug,'owner_user':owner,'forgejo_owner':owner,'managed_collaborators':sorted(desired),'membership_reconciled_at':now()})
+        actual_managed=sorted(set(existing)|set(added))
+        project.update({'project_slug':slug,'owner_user':owner,'forgejo_owner':owner,'managed_collaborators':actual_managed,'membership_reconciled_at':now()})
         save_project(project)
-    return {'ok':not errors,'project':slug,'repo':owner+'/'+repo,'owner':owner,'desired_users':sorted(desired),'added':added,'existing':existing,'removed':removed,'ignored_groups':ignored_groups,'errors':errors}
+    return {'ok':not errors,'pending':bool(pending_users),'project':slug,'repo':owner+'/'+repo,'owner':owner,'desired_users':sorted(desired),'added':added,'existing':existing,'removed':removed,'pending_users':pending_users,'ignored_groups':ignored_groups,'errors':errors}
 # CloudIFF v143 END
 
 
