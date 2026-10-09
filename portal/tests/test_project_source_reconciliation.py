@@ -115,6 +115,7 @@ class ProjectSourceReconciliationTests(unittest.TestCase):
         worker = WORKER.read_text()
         self.assertIn('def enqueue_all_membership_reconciliation', worker)
         self.assertIn('enqueue-all-memberships', worker)
+        self.assertIn("periodic_membership_audit','operation':'reconcile'},dedupe_seconds=0", worker)
         self.assertIn('project.membership.changed', worker)
         self.assertIn('periodic_membership_audit', worker)
         self.assertIn('enqueue-all-memberships', MEMBERSHIP_SERVICE.read_text())

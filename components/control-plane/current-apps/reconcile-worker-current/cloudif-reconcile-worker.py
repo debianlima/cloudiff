@@ -236,7 +236,7 @@ def enqueue_all_membership_reconciliation():
     for row in rows:
         slug=str(row['slug'] or '').strip()
         try:
-            item=client.enqueue('project.membership.changed',actor='project-membership-audit',project=slug,payload={'source':'periodic_membership_audit','operation':'reconcile'},dedupe_seconds=900)
+            item=client.enqueue('project.membership.changed',actor='project-membership-audit',project=slug,payload={'source':'periodic_membership_audit','operation':'reconcile'},dedupe_seconds=0)
             queued.append({'project':slug,'request_id':item.get('request_id',''),'deduplicated':bool(item.get('deduplicated'))})
         except Exception as exc:
             failed.append({'project':slug,'error_type':type(exc).__name__})
