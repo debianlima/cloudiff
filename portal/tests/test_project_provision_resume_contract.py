@@ -31,6 +31,11 @@ class ProjectProvisionResumeContractTests(unittest.TestCase):
         for marker in ('release_settings','repo_full_name=excluded.repo_full_name','def enqueue_post_provision','project_provision_completed','cloudif-reconcile-worker.service'):
             self.assertIn(marker,WORKER)
 
+    def test_new_project_reconciles_membership_after_initial_publication(self):
+        self.assertIn("result['reconciliation'] = enqueue_post_provision(", WORKER)
+        self.assertIn("'project.membership.changed' if result.get('initial_publication') else 'project.updated'", WORKER)
+        self.assertLess(WORKER.index("result['initial_publication'] = json_output"), WORKER.index("result['reconciliation'] = enqueue_post_provision("))
+
     def test_portal_uses_durable_status_and_shows_controlled_resume(self):
         for source in (BASE,LEGACY):
             self.assertIn('from cloudif_project_provision_status import status as provision_status',source)

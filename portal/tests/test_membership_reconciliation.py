@@ -9,6 +9,7 @@ class MembershipReconciliationTests(unittest.TestCase):
         cls.worker=Path('components/control-plane/current-apps/reconcile-worker-current/cloudif-reconcile-worker.py').read_text()
         cls.forja=Path('components/runtime/current-apps/forja-agent-current/cloudif-forja-agent.py').read_text()
         cls.komodo=Path('components/runtime/current-apps/komodo-agent-current/cloudif-komodo-agent.py').read_text()
+        cls.authz=Path('components/runtime/usr/local/sbin/cloudif-komodo-project-authz.py').read_text()
     def test_project_and_tenant_events_are_supported(self):
         self.assertIn('"project.membership.changed"',self.client)
         self.assertIn('"tenant.membership.changed"',self.client)
@@ -26,6 +27,12 @@ class MembershipReconciliationTests(unittest.TestCase):
         for marker in ('project_member_terminals','cloudif_project_membership_reconcile','CreateTerminal','DeleteTerminal','desired_users'):
             self.assertIn(marker,self.komodo)
         self.assertIn('active_publication',self.komodo)
+
+    def test_komodo_only_removes_cloudif_managed_permissions(self):
+        self.assertIn("previous=json.loads(state_path.read_text()).get('targets') or []", self.authz)
+        self.assertIn("for(const old of (p.previous||[]))", self.authz)
+        self.assertIn("if(!keep)d.Permission.deleteOne", self.authz)
+        self.assertNotIn("deleteMany({})", self.authz)
 
     def test_worker_distinguishes_forgejo_and_komodo_waiting_messages(self):
         self.assertIn('aguardando identidade válida no Forgejo',self.worker)
