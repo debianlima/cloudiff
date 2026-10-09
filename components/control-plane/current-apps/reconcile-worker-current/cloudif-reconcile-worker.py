@@ -260,7 +260,7 @@ def enqueue_all_source_reconciliation():
 
 def update_request(request_id,status,message,result):
     con=client.connect()
-    con.execute("UPDATE reconcile_requests SET status=?,message=?,result_json=?,finished_at=?,lease_owner='',lease_expires_at='',heartbeat_at='' WHERE request_id=?",
+    con.execute("UPDATE reconcile_requests SET status=?,message=?,result_json=?,finished_at=?,last_error_type='',next_attempt_at='',lease_owner='',lease_expires_at='',heartbeat_at='' WHERE request_id=?",
                 (status,message[:4000],json.dumps(result,ensure_ascii=False,default=str)[:100000],client.now_utc(),request_id))
     con.commit(); con.close()
 
