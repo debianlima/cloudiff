@@ -349,6 +349,8 @@ def process(row):
             runtime_reconcile=reconcile_project_runtime(project,environment)
             if not runtime_reconcile.get('ok'):raise RuntimeError('project_runtime_reconcile_failed')
         taiga_waiting=bool(taiga and isinstance(taiga.get('data'),dict) and taiga['data'].get('status')=='waiting_identity')
+        forgejo_waiting=bool(membership and membership.get('forgejo_pending'))
+        komodo_waiting=bool(membership and membership.get('komodo_pending'))
         membership_waiting=bool(membership and membership.get('pending'))
         source_waiting=bool(source_state and source_state.get('waiting'))
         status="waiting" if (taiga_waiting or membership_waiting or source_waiting) else ("ready" if repo_full else "waiting")
@@ -357,7 +359,10 @@ def process(row):
         elif source_state and source_state.get('changed'):msg="Estrutura do repositório reconciliada sem remover arquivos legados."
         elif event=="project.source.reconcile":msg="Estrutura do repositório auditada e compatível com o runtime atual."
         elif taiga_waiting:msg="Projeto Taiga garantido; aguardando identidade de um ou mais membros CloudIFF."
-        elif membership_waiting:msg="Forgejo, Supabase/tenant e Taiga reconciliados; aguardando usuário correspondente no Komodo."
+        elif forgejo_waiting and komodo_waiting:msg="Supabase/tenant e Taiga reconciliados; aguardando identidade no Forgejo e primeiro login no Komodo."
+        elif forgejo_waiting:msg="Komodo, Supabase/tenant e Taiga reconciliados; aguardando identidade válida no Forgejo."
+        elif komodo_waiting:msg="Forgejo, Supabase/tenant e Taiga reconciliados; aguardando primeiro login do usuário no Komodo."
+        elif membership_waiting:msg="Membros parcialmente reconciliados; aguardando identidade externa."
         elif membership:msg="Membros Forgejo, Komodo, Supabase e Taiga reconciliados a partir da ACL CloudIFF."
         else:msg="Projeto CloudIFF e correspondente Taiga reconciliados." if repo_full else "Projeto preparado; Taiga reconciliado; aguardando criação do repositório."
         configuration_event=config_events.notify(project,event,payload)

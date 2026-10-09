@@ -27,4 +27,8 @@ class MembershipReconciliationTests(unittest.TestCase):
             self.assertIn(marker,self.komodo)
         self.assertIn('active_publication',self.komodo)
 
+    def test_worker_distinguishes_forgejo_and_komodo_waiting_messages(self):
+        self.assertIn('aguardando identidade válida no Forgejo',self.worker)
+        self.assertIn('aguardando primeiro login do usuário no Komodo',self.worker)
+
 if __name__=='__main__':unittest.main()

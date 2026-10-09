@@ -100,4 +100,9 @@ class MembershipIdentityPendingTests(unittest.TestCase):
             self.assertIn(marker,source)
 
 
+    def test_missing_directory_identity_is_distinct_from_duplicate_identity(self):
+        source=FORJA.read_text()
+        self.assertIn("reason':'identity_not_found'",source)
+        self.assertIn("reason':'identity_not_unique'",source)
+
 if __name__=='__main__':unittest.main()

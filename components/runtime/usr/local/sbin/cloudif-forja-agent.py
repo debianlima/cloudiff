@@ -3492,7 +3492,8 @@ def ensure_forgejo_user_from_authentik(username):
     ident=authentik_identity_lookup({'q':username,'type':'user'})
     if not ident.get('ok'):return {'ok':False,'error':'identity_lookup_failed'}
     exact=[x for x in (ident.get('items') or []) if str(x.get('principal') or x.get('username') or '').strip().lower()==username]
-    if len(exact)!=1:return {'ok':True,'pending':True,'created':False,'username':username,'reason':'identity_not_unique'}
+    if not exact:return {'ok':True,'pending':True,'created':False,'username':username,'reason':'identity_not_found'}
+    if len(exact)>1:return {'ok':True,'pending':True,'created':False,'username':username,'reason':'identity_not_unique'}
     row=exact[0];directory_email=str(row.get('email') or row.get('mail') or '').strip().lower();name=str(row.get('full_name') or row.get('name') or username).strip()
     email_mode='placeholder'
     create_email=f'{username}@pending.cloudif.invalid'
