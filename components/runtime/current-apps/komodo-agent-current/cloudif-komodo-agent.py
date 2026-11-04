@@ -4996,13 +4996,14 @@ def _cloudif_v143_runtime_settings(project):
         state={}
     runtime=state.get('runtime') if isinstance(state.get('runtime'),dict) else {}
     template=str(runtime.get('runtime_template') or state.get('runtime_template') or 'node22').strip().lower()
-    php=str(runtime.get('php_version') or state.get('php_version') or '8.3').strip()
+    php=str(runtime.get('php_version') or state.get('php_version') or 'latest').strip().lower()
     if template not in {'node20','node22','node24'}:template='node22'
-    if php not in {'8.2','8.3','8.4'}:php='8.3'
+    if php not in {'latest','8.2','8.3','8.4','8.5'}:php='latest'
     return {'layout':'managed-root-v1','runtime_template':template,'node':template.replace('node',''),'php':php}
 
 
 def _cloudif_v143_base_files(php,node):
+    php_from='php:apache' if php=='latest' else f'php:{php}-apache'
     apache='''<VirtualHost *:80>
   DocumentRoot /var/www/html
   DirectoryIndex index.php index.html
@@ -5058,14 +5059,15 @@ if [ -f api/server.js ]; then
 fi
 exec sh -c 'while :; do sleep 3600; done'
 '''
-    dockerfile=f'''FROM php:{php}-apache
+    dockerfile=f'''FROM {php_from}
 ARG NODE_MAJOR={node}
 RUN apt-get update \\
  && apt-get install -y --no-install-recommends ca-certificates curl gnupg supervisor libpq-dev libpng-dev libjpeg62-turbo-dev libfreetype6-dev libzip-dev libicu-dev default-mysql-client postgresql-client unzip git \\
  && curl -fsSL https://deb.nodesource.com/setup_${{NODE_MAJOR}}.x | bash - \\
  && apt-get install -y --no-install-recommends nodejs \\
  && docker-php-ext-configure gd --with-freetype --with-jpeg \\
- && docker-php-ext-install -j"$(nproc)" pdo pdo_mysql mysqli pdo_pgsql pgsql gd intl zip opcache \\
+ && docker-php-ext-install -j"$(nproc)" pdo pdo_mysql mysqli pdo_pgsql pgsql gd intl zip \\
+ && (php -m | grep -Fqx 'Zend OPcache' || docker-php-ext-install -j"$(nproc)" opcache) \\
  && a2enmod rewrite headers proxy proxy_http expires \\
  && rm -rf /var/lib/apt/lists/*
 COPY apache-vhost.conf /etc/apache2/sites-available/000-default.conf
@@ -5081,19 +5083,27 @@ CMD ["/usr/bin/supervisord","-n","-c","/etc/supervisor/supervisord.conf"]
 
 
 def _cloudif_v143_ensure_base_image(php,node,no_cache=False):
+    php=str(php or 'latest').strip().lower()
     tag=f'cloudif/runtime-apache-php{php}-node{node}:v2'
     inspect=subprocess.run(['docker','image','inspect',tag],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
-    if inspect.returncode==0 and not no_cache:
-        return {'ok':True,'image':tag,'created':False}
+    if php!='latest' and inspect.returncode==0 and not no_cache:
+        return {'ok':True,'image':tag,'created':False,'resolved_php_version':php}
     root=BASE_STATE/'runtime-bases'/f'php{php}-node{node}'
     root.mkdir(parents=True,exist_ok=True)
     for name,content in _cloudif_v143_base_files(php,node).items():
         path=root/name;path.write_text(content,encoding='utf-8');path.chmod(0o755 if name=='node-runner.sh' else 0o644)
-    cmd=['docker','build','-t',tag]
+    cmd=['docker','build']
+    if php=='latest':cmd.append('--pull')
     if no_cache:cmd.append('--no-cache')
-    cmd.append(str(root))
+    cmd.extend(['-t',tag,str(root)])
     proc=subprocess.run(cmd,text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=2400)
-    return {'ok':proc.returncode==0,'image':tag,'created':proc.returncode==0,'returncode':proc.returncode,'detail':(proc.stderr or proc.stdout)[-1600:]}
+    if proc.returncode!=0:
+        return {'ok':False,'image':tag,'created':False,'returncode':proc.returncode,'detail':(proc.stderr or proc.stdout)[-1600:]}
+    resolved=subprocess.run(['docker','run','--rm','--entrypoint','php',tag,'-r','echo PHP_VERSION;'],text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=30)
+    resolved_version=resolved.stdout.strip() if resolved.returncode==0 else ''
+    if not re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+',resolved_version):
+        return {'ok':False,'image':tag,'created':True,'returncode':resolved.returncode,'error':'php_version_resolution_failed','detail':(resolved.stderr or resolved.stdout)[-800:]}
+    return {'ok':True,'image':tag,'created':True,'returncode':0,'resolved_php_version':resolved_version,'detail':(proc.stderr or proc.stdout)[-1600:]}
 
 
 _CLOUDIF_BASE_EDITOR_RE=re.compile(r'^cloudif-p([1-9][0-9]*)-base-editor$')
@@ -5146,8 +5156,9 @@ def _cloudif_project_base_ensure(project,public_number,actor='portal'):
         subprocess.run(['docker','start',workspace],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=30)
     row=_cloudif_project_base_row(project)
     if not row:
+        observed_php=str(shared.get('resolved_php_version') or runtime['php'])
         db_exec('''insert into project_base_state(project,public_number,workspace_container,current_revision,current_image,current_image_id,runtime_template,php_version,updated_at,updated_by)
-          values(?,?,?,0,'','',?,?,?,?)''',(project,public_number,workspace,runtime['runtime_template'],runtime['php'],now(),str(actor or 'portal')[:128]))
+          values(?,?,?,0,'','',?,?,?,?)''',(project,public_number,workspace,runtime['runtime_template'],observed_php,now(),str(actor or 'portal')[:128]))
     integration=find_integration(project) or {};server_id=normalize_resource_id(integration.get('server_id'))
     if not server_id:
         servers=_cloudif_v131_list_items((_cloudif_v131_core_call('read','ListServers',{}).get('data')))
@@ -5156,7 +5167,7 @@ def _cloudif_project_base_ensure(project,public_number,actor='portal'):
     if not server_id:return {'ok':False,'error':'base_workspace_server_missing'}
     terminal=_cloudif_ensure_container_terminal(server_id,workspace)
     if not terminal.get('ok'):return {'ok':False,'error':'base_workspace_terminal_failed'}
-    status=_cloudif_project_base_status(project,public_number);status.update({'created':created,'shared_base':shared['image'],'server_id':server_id,'terminal':terminal.get('terminal'),'terminal_created':bool(terminal.get('created'))});return status
+    status=_cloudif_project_base_status(project,public_number);status.update({'created':created,'shared_base':shared['image'],'php_requested':runtime['php'],'php_resolved_version':str(shared.get('resolved_php_version') or status.get('php_version') or ''),'server_id':server_id,'terminal':terminal.get('terminal'),'terminal_created':bool(terminal.get('created'))});return status
 
 
 def _cloudif_project_base_snapshot(project,public_number,actor='publication'):
@@ -5170,12 +5181,13 @@ def _cloudif_project_base_snapshot(project,public_number,actor='publication'):
     image_id=inspect.stdout.strip() if inspect.returncode==0 else ''
     if not re.fullmatch(r'sha256:[a-f0-9]{64}',image_id):return {'ok':False,'error':'base_snapshot_digest_missing'}
     runtime=_cloudif_v143_runtime_settings(project);created=now();actor=str(actor or 'publication')[:128]
+    observed_php=str(row.get('php_version') or runtime['php'])
     db_exec('''insert into project_base_revisions(project,revision,image,image_id,runtime_template,php_version,created_at,created_by)
-      values(?,?,?,?,?,?,?,?)''',(project,revision,tag,image_id,runtime['runtime_template'],runtime['php'],created,actor))
+      values(?,?,?,?,?,?,?,?)''',(project,revision,tag,image_id,runtime['runtime_template'],observed_php,created,actor))
     db_exec('''insert into project_base_state(project,public_number,workspace_container,current_revision,current_image,current_image_id,runtime_template,php_version,updated_at,updated_by)
       values(?,?,?,?,?,?,?,?,?,?) on conflict(project) do update set public_number=excluded.public_number,workspace_container=excluded.workspace_container,
       current_revision=excluded.current_revision,current_image=excluded.current_image,current_image_id=excluded.current_image_id,runtime_template=excluded.runtime_template,
-      php_version=excluded.php_version,updated_at=excluded.updated_at,updated_by=excluded.updated_by''',(project,int(public_number),workspace,revision,tag,image_id,runtime['runtime_template'],runtime['php'],created,actor))
+      php_version=excluded.php_version,updated_at=excluded.updated_at,updated_by=excluded.updated_by''',(project,int(public_number),workspace,revision,tag,image_id,runtime['runtime_template'],observed_php,created,actor))
     return {'ok':True,'project':project,'public_number':int(public_number),'base_revision':revision,'base_image':tag,'base_image_id':image_id,'workspace_container':workspace,'created_at':created,'secretValuesIncluded':False,'environmentValuesIncluded':False}
 
 

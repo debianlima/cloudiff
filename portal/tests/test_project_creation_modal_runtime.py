@@ -42,6 +42,14 @@ class ProjectCreationModalRuntimeTest(unittest.TestCase):
         self.assertIn('"php_version": job.get("php_version")',PROVISION)
         self.assertIn('"runtime_layout": job.get("runtime_layout") or "managed-root-v1"',PROVISION)
 
+    def test_new_project_php_is_automatic_latest_stable(self):
+        block=PORTAL[PORTAL.rfind('id="pm197_new"'):]
+        self.assertIn('name="php_version" value="latest"',block)
+        self.assertIn('PHP estável mais recente',block)
+        self.assertNotIn('<select name="php_version"',block)
+        self.assertIn('php_version = "latest" if action == "create_project"',ACTION)
+        self.assertIn('"php_version": job.get("php_version") or "latest"',PROVISION)
+
     def test_repository_template_contains_only_root_source(self):
         spec=importlib.util.spec_from_file_location('tpl',TEMPLATE)
         module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)

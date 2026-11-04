@@ -1179,7 +1179,7 @@ def komodo(job, report):
         "description": job.get("description") or "",
         "tenant": tenant or "unknown",
         "runtime_template": job.get("runtime_template") or "node22",
-        "php_version": job.get("php_version") or "8.3",
+        "php_version": job.get("php_version") or "latest",
         "runtime_layout": job.get("runtime_layout") or "managed-root-v1",
         "containers": containers,
 
