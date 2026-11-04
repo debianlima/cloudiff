@@ -28,9 +28,11 @@ class UnifiedProjectRuntimeTests(unittest.TestCase):
   self.assertFalse(any(name.startswith('site/') or name.startswith('.cloudif/') for name in names))
   for forbidden in ('Dockerfile','docker-compose.yml','.env','nginx.conf'):
    self.assertNotIn(forbidden,names)
- def test_wizard_only_selects_node_and_php_versions(self):
+ def test_wizard_selects_node_and_uses_latest_php(self):
   self.assertIn('Todo projeto recebe Apache, PHP e Node.js em um container isolado',self.portal)
   self.assertIn('<select name="runtime_template" required>',self.portal)
+  self.assertIn('name="php_version" value="latest"',self.portal)
+  self.assertNotIn('<select name="php_version"',self.portal)
   self.assertNotIn('value="static-nginx" checked',self.portal)
  def test_new_jobs_are_marked_managed_root(self):
   self.assertIn('"runtime_layout": "managed-root-v1"',self.action)

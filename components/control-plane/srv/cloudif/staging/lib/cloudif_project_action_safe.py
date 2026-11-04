@@ -304,8 +304,8 @@ def upsert_project(form, user):
     allowed_runtimes = {"node20", "node22", "node24"}
     if runtime_template not in allowed_runtimes:
         raise ValueError("Tecnologia web não homologada.")
-    php_version = val(form, "php_version", "8.3").strip()
-    if php_version not in {"8.2", "8.3", "8.4"}:
+    php_version = "latest" if action == "create_project" else val(form, "php_version", "latest").strip().lower()
+    if php_version not in {"latest", "8.2", "8.3", "8.4", "8.5"}:
         raise ValueError("Versão do PHP não homologada.")
 
     job = {

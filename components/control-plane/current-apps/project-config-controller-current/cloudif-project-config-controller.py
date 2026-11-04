@@ -41,10 +41,10 @@ SENSITIVE_VALUE_RE = re.compile(
     r'(?:--|_)(?:password|secret|token|api[-_]?key)=\S+)'
 )
 TOOLCHAIN_HOOKS = {'preBuild', 'postBuild'}
-RUNTIME_DEFAULTS = {'static': None, 'node': '24', 'php': '8.4', 'docker': None, 'compose': None}
+RUNTIME_DEFAULTS = {'static': None, 'node': '24', 'php': 'latest', 'docker': None, 'compose': None}
 RUNTIME_ALLOWED_VERSIONS = {
     'node': {'20', '22', '24'},
-    'php': {'8.2', '8.3', '8.4'},
+    'php': {'latest', '8.2', '8.3', '8.4', '8.5'},
 }
 DOC_BASE = 'manifest-v1'
 

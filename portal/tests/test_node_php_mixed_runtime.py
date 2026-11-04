@@ -10,11 +10,16 @@ class NodePhpMixedRuntimeTests(unittest.TestCase):
   cls.agent=Path('components/runtime/current-apps/komodo-agent-current/cloudif-komodo-agent.py').read_text()
  def test_supported_combinations_are_validated_without_git_infra(self):
   for node in ('node20','node22','node24'):
-   for php in ('8.2','8.3','8.4'):
+   for php in ('latest','8.2','8.3','8.4','8.5'):
     files=dict(self.mod.runtime_overlay(node,php))
     self.assertEqual(set(files),{'api/server.js','api/package.json'})
   self.assertIn("if template not in {'node20','node22','node24'}",self.agent)
-  self.assertIn("if php not in {'8.2','8.3','8.4'}",self.agent)
+  self.assertIn("if php not in {'latest','8.2','8.3','8.4','8.5'}",self.agent)
+  self.assertIn("php_from='php:apache' if php=='latest'",self.agent)
+  self.assertIn("if php=='latest':cmd.append('--pull')",self.agent)
+  self.assertIn('resolved_php_version',self.agent)
+  self.assertIn("grep -Fqx 'Zend OPcache'",self.agent)
+  self.assertIn("observed_php=str(row.get('php_version') or runtime['php'])",self.agent)
  def test_generated_platform_runtime_serves_root_and_api(self):
   for marker in ('DocumentRoot /var/www/html','ProxyPass /api/','pdo_pgsql','mysqli','COPY --chown=www-data:www-data source/ /var/www/html/'):
    self.assertIn(marker,self.agent)

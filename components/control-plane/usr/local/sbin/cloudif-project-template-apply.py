@@ -298,12 +298,12 @@ Crie tabelas e políticas RLS no Supabase Studio. Métodos de conexão não apre
 '''
 
 
-def runtime_overlay(template, php_version='8.3'):
+def runtime_overlay(template, php_version='latest'):
     template = (template or 'node22').strip().lower()
-    php_version = str(php_version or '8.3').strip()
+    php_version = str(php_version or 'latest').strip().lower()
     if template not in ('node20', 'node22', 'node24'):
         template = 'node22'
-    if php_version not in ('8.2', '8.3', '8.4'):
+    if php_version not in ('latest', '8.2', '8.3', '8.4', '8.5'):
         raise ValueError('unsupported_php_version')
     return [
         (
@@ -334,7 +334,7 @@ def _source_path(name):
     return name
 
 
-def merge_runtime(files, template, php_version='8.3'):
+def merge_runtime(files, template, php_version='latest'):
     merged = {}
     for name, content in files:
         target = _source_path(name)
@@ -355,7 +355,7 @@ def main():
     readme_only = '--readme-only' in sys.argv[2:]
     kind = job.get('template_kind', 'none')
     runtime = job.get('runtime_template', 'node22')
-    php_version = job.get('php_version', '8.3')
+    php_version = job.get('php_version', 'latest')
     if kind not in ('onboarding', 'links'):
         print(json.dumps({'skipped': True, 'kind': kind}))
         return
@@ -397,7 +397,7 @@ def main():
             marker_matches = (
                 old.get('kind') == kind
                 and old.get('runtime_template') == runtime
-                and old.get('php_version', '8.3') == php_version
+                and old.get('php_version', 'latest') == php_version
                 and old.get('version') in (12, 13)
             )
             if marker_matches:
