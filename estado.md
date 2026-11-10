@@ -355,3 +355,19 @@
 
 - **Taiga r13 API cache hardening (live, 2026-11-10):** source `main@b33f14bb71a93b121517b33dbde886ab32a2078f`; release `/srv/cloudif/app-releases/taiga-faro-r13-api-cache-hardening-20261110T190204Z`; `taiga-current` aponta para r13 e `taiga-previous` preserva r12. Apenas `taiga-gateway` foi recriado; backend/frontend/dados permaneceram inalterados. `/api/` público agora retorna `Cache-Control: private, no-store, no-cache, must-revalidate`, `Pragma: no-cache`, `Expires: 0` e `Vary: Authorization, Cookie`; API 200, `prompt=login`, plugin de isolamento, reset de entrada, root bootstrap no-store e mídia privada no-store continuam PASS. `SHA256SUMS` da release PASS, `cloudif-taiga-gate` PASS e sem Traceback/Internal Server Error/conflito OIDC nos logs pós-cutover consultados.
 - Primeira tentativa r13 em `/srv/cloudif/app-releases/taiga-faro-r13-api-cache-hardening-20261110T190136Z` abortou antes de qualquer troca de ponteiro devido a bug local no helper `atomic_link` do script de promoção (`set -u`); runtime permaneceu em r12/API 200. O helper foi corrigido e a segunda promoção concluiu com rollback automático armado e não acionado. Diretório abortado foi preservado como evidência e não é apontado por nenhum ponteiro.
+
+
+## A10 Portal shared-session identity hardening — live Hospedagem (2026-11-10)
+
+- Capability operacional comprovada em `maquina:hospedagem`: SSH `cti` + sudo root; nenhuma credencial foi persistida no projeto/log de estado.
+- Release Portal promovido: `a10-ux-a491520d7cea`, source `a491520d7cea22f6dc6cd08e4b0a12308cfa8757`, archive SHA-256 `871fc2702e9ab4d7b306017dcabff840aa59f80889efa394331a8d8a1d6b0877`.
+- Preflight/readiness A10: PASS. Pre-state íntegro em `/srv/cloudif/releases/a10-ux-a491520d7cea/pre-state`; rollback oficial preservado.
+- Ponteiros live: `portal-current -> /srv/cloudif/app-releases/portal/a10-ux-a491520d7cea`; `portal-previous -> /srv/cloudif/app-releases/portal/a10-ux-9be7389712b1`; `/srv/cloudif/lib/portal -> /srv/cloudif/lib-releases/portal-v2/a10-ux-a491520d7cea`.
+- `lib-overlay` do candidato era byte-idêntico ao live (44/44), portanto nenhum arquivo raiz de `/srv/cloudif/lib` foi substituído no cutover.
+- Serviço `cloudif-admin-portal.service`: active/running; health local `/health` e `/cloudiff/portal/health` = HTTP 200.
+- Runtime Portal contém `X-authentik-uid`, `issuer|subject` como principal estável, logout pelo `default-invalidation-flow` global e fallback legado por username apenas quando UID não é fornecido.
+- Prova CSRF em runtime: mesmo username com UID A/B gera tokens diferentes; username renomeado mantendo UID A gera o mesmo token. Somente hashes truncados foram observados, sem exposição de segredo/token.
+- Router de Hospedagem atualizado pelo script canônico `cloudif-apply-router-portal-v1.sh`; backup preservado em `/srv/cloudif/backups/apply-router-portal-direct-auth-20261110-193457`; `nginx -t` PASS; `authentik_uid` presente no live e `X-authentik-uid` encaminhado ao Portal.
+- Gates públicos pós-cutover: requisição não autenticada continua `302 -> /outpost.goauthentik.io/start`; headers `X-authentik-*` forjados não concedem acesso; tentativa com `X-Original-URI` não contorna forward-auth; todos PASS.
+- Journal pós-cutover apresentou `BrokenPipeError` às 19:36:29 UTC em conexão `127.0.0.1`, correlacionado ao smoke sintético administrativo que foi abortado por timeout. Não houve erro correspondente no router nem falha de health; classificado como artefato do teste local, não regressão de produção.
+- Rollback: `portal-previous` preserva o release anterior, pre-state A10 está íntegro e o backup do router está disponível. Nenhum rollback foi necessário.
