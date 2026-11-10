@@ -331,3 +331,5 @@
 
 - Auditoria live Faro encontrou quatro `AuthData(key=oidc)` legados que sombreavam usernames pertencentes a outros Users; todos apontavam para usuários sem memberships, enquanto os owners atuais tinham membership e e-mail institucional coerente. Snapshot lógico root-only foi criado em `/srv/cloudif/backups/taiga-identity/20261110T175552Z/`; os quatro bindings foram reatribuídos transacionalmente aos owners atuais e a pós-auditoria ficou `OIDC_USERNAME_BINDING_MISMATCH=0`, `SHADOW_COLLISIONS=0`, memberships duplicados `0`.
 - Backend subsequente sobe para `r7-identity` e passa a negar explicitamente qualquer nova colisão alias-vs-username antes de escolher usuário.
+
+- Portal identity hardening: `Identity` agora aceita `subject`/`issuer` opcionais; o monólito captura `X-authentik-uid` do Proxy Provider e o CSRF usa `issuer|subject` quando disponível, preservando username como fallback legado. O edge público foi testado contra headers Authentik forjados e redirecionou para autenticação, comprovando que o cliente não consegue conceder identidade por esses headers. ACLs existentes continuam por username nesta etapa; migração de ACL fica separada e reversível.

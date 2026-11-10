@@ -1361,7 +1361,9 @@ class Portal(BaseHTTPRequestHandler):
         username = (self.headers.get("X-authentik-username") or self.headers.get("X-Authentik-Username") or "unknown").strip().lower()
         email = (self.headers.get("X-authentik-email") or self.headers.get("X-Authentik-Email") or "").strip().lower()
         groups = parse_groups(self.headers.get("X-authentik-groups") or self.headers.get("X-Authentik-Groups") or "")
-        return {"username": username, "email": email, "groups": groups, "admin": is_admin(groups)}
+        subject = (self.headers.get("X-authentik-uid") or self.headers.get("X-Authentik-Uid") or "").strip()
+        issuer = setting_value("CLOUDIF_AUTHENTIK_ISSUER", "https://authiff.duckdns.org").strip().rstrip("/")
+        return {"username": username, "email": email, "groups": groups, "subject": subject, "issuer": issuer, "admin": is_admin(groups)}
 
     def send_html(self, body, code=200):
         data = body.encode()
@@ -1725,6 +1727,13 @@ def auth_start_url(target):
         return target
     start = setting_value("CLOUDIF_AUTHENTIK_START_URL", "https://cloudiff.duckdns.org/outpost.goauthentik.io/start")
     return start.rstrip("/") + "?rd=" + urllib.parse.quote(target, safe="")
+
+
+def auth_logout_url():
+    return setting_value(
+        "CLOUDIF_AUTHENTIK_GLOBAL_LOGOUT_URL",
+        "https://authiff.duckdns.org/if/flow/default-invalidation-flow/?next=https%3A%2F%2Fcloudiff.duckdns.org%2Fcloudiff%2Fportal%2F",
+    )
 
 def supabase_studio_url(tenant):
     path = setting_value("CLOUDIF_SUPABASE_STUDIO_PATH", "/project/default")
@@ -4539,6 +4548,10 @@ if not _PROD_CSRF_SECRET:
 
 def _prod_csrf_username(user):
     if isinstance(user, dict):
+        subject=str(user.get("subject") or "").strip()
+        issuer=str(user.get("issuer") or "").strip().rstrip("/")
+        if subject:
+            return ((issuer+"|") if issuer else "")+subject
         return str(user.get("username") or user.get("email") or "anonymous").strip().lower()
     return str(user or "anonymous").strip().lower()
 
@@ -4629,7 +4642,7 @@ def _prod_ui_label_forms(doc):
 def _prod_ui_enhance(doc):
     doc=doc.replace('<body>','<body><a class="skip-link" href="#conteudo-principal">Pular para o conteúdo principal</a>',1)
     doc=doc.replace('<nav class="tabs">','<nav class="tabs" aria-label="Navegação principal">',1)
-    doc=doc.replace('</nav>','<a class="btn logout-btn" href="/outpost.goauthentik.io/sign_out" aria-label="Sair do CloudIF">Sair</a></nav>',1)
+    doc=doc.replace('</nav>',f'<a class="btn logout-btn" href="{html.escape(auth_logout_url(), quote=True)}" aria-label="Sair do CloudIF">Sair</a></nav>',1)
     doc=doc.replace('</nav>\n\n  ', '</nav>\n\n  <main id="conteudo-principal" tabindex="-1">',1)
     doc=doc.replace('\n\n  <div class="footer">','</main>\n\n  <div class="footer" role="contentinfo">',1)
     doc=doc.replace('</head>',_PROD_UI_CSS+'\n</head>',1)
@@ -6183,7 +6196,7 @@ def _nav95_render(user,current):
     out+=_nav95_group('Publicar','',deploy,current,{x[0] for x in deploy},True)
     out+=_nav95_group('Monitorar','',monitor,current,{x[0] for x in monitor},True)
     out+=_nav141_system_group(sections,current,all_system).replace('<span>Sistema</span>','<span>Mais</span>')
-    out+='<a class="btn logout-btn" href="/outpost.goauthentik.io/sign_out" aria-label="Sair do CloudIF">Sair</a></nav>'
+    out+=f'<a class="btn logout-btn" href="{html.escape(auth_logout_url(), quote=True)}" aria-label="Sair do CloudIF">Sair</a></nav>'
     return out
 if 'page' in globals() and not globals().get('_nav95_wrapped'):
     _nav95_prev_page=page

@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from collections import OrderedDict
 from html import escape
+import os
 
 from portal.core.auth import Identity
 from portal.core.rbac import is_admin, is_global
@@ -90,6 +91,13 @@ _TAB_TITLES = {tab: label for entries in _TAB_GROUPS.values() for tab, label in 
 _TAB_TITLES.update({tab: label for entries in _PROJECT_NAV.values() for tab, label in entries})
 _TAB_TITLES["projetos"] = "Projetos"
 _ASSET_VERSION = "20260909-a9p2"
+
+
+def _auth_logout_url() -> str:
+    return os.environ.get(
+        "CLOUDIF_AUTHENTIK_GLOBAL_LOGOUT_URL",
+        "https://authiff.duckdns.org/if/flow/default-invalidation-flow/?next=https%3A%2F%2Fcloudiff.duckdns.org%2Fcloudiff%2Fportal%2F",
+    ).strip()
 
 _MODULE_TO_TAB = {
     "overview": "resumo",
@@ -239,7 +247,7 @@ def _document(
         '</summary><div class="profile-card">'
         f'<p class="profile-role">{group}</p><strong>{escape(identity.username)}</strong>'
         f'<span>{escape(identity.email or "E-mail não informado")}</span>'
-        '<a href="/outpost.goauthentik.io/sign_out">Sair da plataforma</a></div></details>'
+        f'<a href="{escape(_auth_logout_url(), quote=True)}">Sair da plataforma</a></div></details>'
         '</header>'
         f'<main class="page" id="conteudo-principal"><div class="page-head"><p class="eyebrow">{group}</p>'
         f'<h1 class="page-title">{escape(title)}</h1>{description}</div>'

@@ -29,7 +29,7 @@ def csrf_token(identity: Identity) -> str:
             secret = "cloudif-portal-csrf-testing"
         else:
             raise RuntimeError("CLOUDIF_CSRF_SECRET ausente")
-    msg = identity.username.strip().lower().encode("utf-8")
+    msg = identity.principal.encode("utf-8")
     return hmac.new(secret.encode("utf-8"), msg, hashlib.sha256).hexdigest()
 
 
