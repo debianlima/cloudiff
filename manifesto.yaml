@@ -12205,18 +12205,4 @@ entradas:
     aceite: python3 -m unittest portal.tests.test_publication_permissions portal.tests.test_release_flow_wizard_ui
     status: aceito
 
-trabalho_compartilhado:
-  projeto: cloudiff
-  caminho: /srv/mcp-workspace/cloudiff-identity-fix
-  unidade: CLOUDIFF-IDENTITY-SESSION-HARDENING
-  descricao: 'corrigir isolamento de sessão compartilhada, binding OIDC fail-closed, entrada segura Taiga e cache privado; preservar rollout reversível'
-  agente: Meu Terminal Oracle
-  atualizado_em: '2026-11-10T16:26:24Z'
-  previsao_termino: '2026-11-10T20:26:24Z'
-  zona_exclusao:
-    - manifesto.yaml
-    - estado.md
-    - components/faro/taiga-custom/**
-    - components/faro/current-apps/taiga-current/**
-    - components/proxy/srv/cloudif/proxy/npm/data/nginx/custom/http_top.conf
-    - portal/tests/test_taiga_identity_isolation_contract.py
+trabalho_compartilhado: null
