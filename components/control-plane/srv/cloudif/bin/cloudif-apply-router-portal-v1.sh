@@ -116,12 +116,14 @@ portal = r'''
         auth_request_set $authentik_username $upstream_http_x_authentik_username;
         auth_request_set $authentik_email $upstream_http_x_authentik_email;
         auth_request_set $authentik_groups $upstream_http_x_authentik_groups;
+        auth_request_set $authentik_uid $upstream_http_x_authentik_uid;
 
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-authentik-username $authentik_username;
         proxy_set_header X-authentik-email $authentik_email;
         proxy_set_header X-authentik-groups $authentik_groups;
+        proxy_set_header X-authentik-uid $authentik_uid;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto https;
@@ -145,12 +147,14 @@ portal = r'''
         auth_request_set $authentik_username $upstream_http_x_authentik_username;
         auth_request_set $authentik_email $upstream_http_x_authentik_email;
         auth_request_set $authentik_groups $upstream_http_x_authentik_groups;
+        auth_request_set $authentik_uid $upstream_http_x_authentik_uid;
 
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-authentik-username $authentik_username;
         proxy_set_header X-authentik-email $authentik_email;
         proxy_set_header X-authentik-groups $authentik_groups;
+        proxy_set_header X-authentik-uid $authentik_uid;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto https;

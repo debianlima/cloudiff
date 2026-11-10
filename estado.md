@@ -333,3 +333,5 @@
 - Backend subsequente sobe para `r7-identity` e passa a negar explicitamente qualquer nova colisão alias-vs-username antes de escolher usuário.
 
 - Portal identity hardening: `Identity` agora aceita `subject`/`issuer` opcionais; o monólito captura `X-authentik-uid` do Proxy Provider e o CSRF usa `issuer|subject` quando disponível, preservando username como fallback legado. O edge público foi testado contra headers Authentik forjados e redirecionou para autenticação, comprovando que o cliente não consegue conceder identidade por esses headers. ACLs existentes continuam por username nesta etapa; migração de ACL fica separada e reversível.
+
+- Router identity propagation hardening: o forward-auth canônico agora captura `X-authentik-uid` do outpost e o repassa ao Portal/MCP autenticado, permitindo que o `subject` estável introduzido no Portal seja efetivamente usado. O edge público já rejeitava headers Authentik forjados; contrato de regressão cobre `default.conf` e geradores de router.

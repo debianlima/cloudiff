@@ -127,6 +127,7 @@ auth_snippet = '''        # CloudIF v244 tenant-auth BEGIN
         auth_request_set $authentik_username $upstream_http_x_authentik_username;
         auth_request_set $authentik_email $upstream_http_x_authentik_email;
         auth_request_set $authentik_groups $upstream_http_x_authentik_groups;
+        auth_request_set $authentik_uid $upstream_http_x_authentik_uid;
         auth_request_set $cloudif_authz_reason $upstream_http_x_cloudif_authz_reason;
         auth_request_set $cloudif_tenant $upstream_http_x_cloudif_tenant;
         auth_request_set $cloudif_provision_action $upstream_http_x_cloudif_provision_action;
@@ -137,6 +138,7 @@ auth_snippet = '''        # CloudIF v244 tenant-auth BEGIN
         proxy_set_header X-authentik-username $authentik_username;
         proxy_set_header X-authentik-email $authentik_email;
         proxy_set_header X-authentik-groups $authentik_groups;
+        proxy_set_header X-authentik-uid $authentik_uid;
         # CloudIF v244 tenant-auth END
 '''
 
