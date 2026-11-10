@@ -1,0 +1,12 @@
+[Unit]
+Description=Refresh CloudIFF Portal identity directory cache every 10 minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=10min
+RandomizedDelaySec=30s
+Persistent=true
+Unit=cloudif-portal-directory-sync.service
+
+[Install]
+WantedBy=timers.target

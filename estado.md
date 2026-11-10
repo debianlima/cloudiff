@@ -371,3 +371,14 @@
 - Gates públicos pós-cutover: requisição não autenticada continua `302 -> /outpost.goauthentik.io/start`; headers `X-authentik-*` forjados não concedem acesso; tentativa com `X-Original-URI` não contorna forward-auth; todos PASS.
 - Journal pós-cutover apresentou `BrokenPipeError` às 19:36:29 UTC em conexão `127.0.0.1`, correlacionado ao smoke sintético administrativo que foi abortado por timeout. Não houve erro correspondente no router nem falha de health; classificado como artefato do teste local, não regressão de produção.
 - Rollback: `portal-previous` preserva o release anterior, pre-state A10 está íntegro e o backup do router está disponível. Nenhum rollback foi necessário.
+
+
+## Directory cache + identity picker — implementação (2026-11-10)
+
+- Incidente reproduzido no projeto `mvplanner`: chamadas reais de `/cloudiff/portal/api/ad-search` retornaram HTTP 504 durante busca por aluno; o módulo interativo percorria LDAP/wbinfo/getent síncronos e ignorava o AD Agent já homologado.
+- AD Agent `10.68.128.252:18097` observado saudável; `iff20222920038` resolve como Pedro Henrique Miranda de Oliveira. `iff20222920151`, citado no print, corresponde a Welington Peres Léo, reforçando a necessidade de seleção visual nome+matrícula.
+- Authentik local observado com 1.275 usuários, 1.246 `iff*`, 7 grupos e LDAP `Samba4 Pelego` ativo. Foi utilizada service account preexistente `cloudif-directory-cache`, com role `CloudIF Directory Cache Reader` contendo apenas `authentik_core.view_user` e `authentik_core.view_group`; token permanece fora do Git em `/etc/cloudif/portal-directory.env` root-only.
+- Novo cache derivado separado em `/var/lib/cloudif/portal/directory-cache.db`; não lê/escreve `project_acl`/`tenant_acl`. Snapshot Authentik é substituído transacionalmente, com lock de sync; timer canônico a cada 10 min e botão manual iniciam refresh. Request interativo usa cache local e AD Agent como fallback curto; LDAP/getent antigos ficam opt-in (`CLOUDIF_DIRECTORY_LEGACY_FALLBACK`).
+- Simulação real em cache temporário: 1.273 usuários ativos + 7 grupos; sync completo ~33 s; buscas locais ~1–5 ms; Pedro por nome/login retorna `iff20222920038`; `iff3546365` retorna `is_admin=true` e grupos `CloudIF-Professor` + `CloudIF-Tenants-Admin`.
+- UI de permissões passa a listar identidades ao abrir, filtrar Todos/Usuários/Grupos, paginar 50 por página e oferecer `Atualizar lista de usuários`; somente usuários `CloudIF-Tenants-Admin` recebem destaque visual `Administrador CloudIFF`.
+- `iff3546365` já estava, no estado real do Authentik, membro de `CloudIF-Professor` e `CloudIF-Tenants-Admin`; nenhuma duplicação/mutação de grupo foi necessária.

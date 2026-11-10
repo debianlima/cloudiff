@@ -12205,4 +12205,21 @@ entradas:
     aceite: python3 -m unittest portal.tests.test_publication_permissions portal.tests.test_release_flow_wizard_ui
     status: aceito
 
-trabalho_compartilhado: null
+trabalho_compartilhado:
+  projeto: cloudiff
+  caminho: /srv/mcp-workspace/cloudiff-identity-fix
+  unidade: CLOUDIFF-DIRECTORY-CACHE-IDENTITY-PICKER
+  descricao: 'implementar cache Authentik de usuarios/grupos, sincronizacao manual/automatica, seletor paginado e destaque de administradores; preservar AD Agent como fallback'
+  agente: Meu Terminal Oracle
+  atualizado_em: '2026-11-10T21:17:43Z'
+  previsao_termino: '2026-11-11T01:17:43Z'
+  zona_exclusao:
+    - manifesto.yaml
+    - estado.md
+    - components/control-plane/srv/cloudif/lib/cloudif_ad_directory_module.py
+    - components/control-plane/srv/cloudif/lib/cloudif_directory_cache.py
+    - components/control-plane/srv/cloudif/lib/cloudif_project_acl_module.py
+    - components/control-plane/current-apps/portal-current/**
+    - portal/**
+    - deploy/systemd/cloudif-portal-directory-*
+    - portal/tests/test_directory_cache_*

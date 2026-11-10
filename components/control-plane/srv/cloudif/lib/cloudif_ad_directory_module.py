@@ -1013,35 +1013,74 @@ def _classic_ad_search_results(q, stype, user, diag):
 
     return _dedup(all_items)
 
-def search(q, stype="all", user=None, diagnostics=False):
+def _cache_module():
+    import cloudif_directory_cache
+    return cloudif_directory_cache
+
+
+def directory_status():
+    try:
+        return _cache_module().status()
+    except Exception as exc:
+        return {"ready": False, "stale": True, "error": str(exc)}
+
+
+def sync_cache():
+    return _cache_module().start_sync_background()
+
+
+def search(q, stype="all", user=None, diagnostics=False, page=1, page_size=50):
+    """Search the derived Authentik cache, then the AD Agent on a cache miss.
+
+    The legacy LDAP/wbinfo/getent path is opt-in only. It was kept for recovery,
+    but it is no longer on the interactive request path because repeated LDAP
+    timeouts caused the Nginx 504s observed by professors.
+    """
     q = str(q or "").strip()
     stype = str(stype or "all").lower().strip()
     user = user or {}
-
     if stype not in ["all", "user", "group"]:
         stype = "all"
 
     diag = {
-        "commands": {
-            "wbinfo": bool(shutil.which("wbinfo")),
-            "samba-tool": bool(shutil.which("samba-tool")),
-            "getent": bool(shutil.which("getent")),
-            "ldapsearch": bool(shutil.which("ldapsearch")),
-            "dig": bool(shutil.which("dig")),
-            "host": bool(shutil.which("host")),
-        },
         "sources_used": [],
         "sqlite_acl_disabled_for_search": True,
-        "note": "project_acl/tenant_acl são ignorados na busca; usados apenas para listar permissões atuais."
+        "legacy_fallback_enabled": setting_value("CLOUDIF_DIRECTORY_LEGACY_FALLBACK", "0").lower() in {"1","true","yes","on"},
+        "note": "project_acl/tenant_acl não alimentam o diretório; o cache Authentik é uma projeção somente para seleção de identidade.",
     }
 
-    if len(q) < 2:
-        payload = {"ok": True, "query": q, "type": stype, "count": 0, "items": []}
+    try:
+        payload = _cache_module().search(q, stype, page=page, page_size=page_size)
+        if payload.get("items") or not q:
+            diag["sources_used"].append("authentik-cache")
+            if diagnostics:
+                payload["diagnostics"] = diag
+            return payload
+        diag["cache_miss"] = True
+    except Exception as exc:
+        payload = {"ok": True, "query": q, "type": stype, "page": int(page or 1), "page_size": int(page_size or 50), "count": 0, "total": 0, "items": []}
+        diag["cache_error"] = str(exc)
+
+    # Cache miss: consult the already-homologated AD Agent with a short timeout.
+    try:
+        live = _cache_module().ad_agent_search(q, stype, timeout=2.5)
+    except Exception as exc:
+        live = []
+        diag["ad_agent_error"] = str(exc)
+    if live:
+        diag["sources_used"].append("ad-agent-live")
+        payload.update({"count": len(live), "total": len(live), "items": live, "page": 1, "pages": 1})
         if diagnostics:
-            payload["diagnostics"] = {**diag, "reason": "query too short"}
+            payload["diagnostics"] = diag
         return payload
 
-    sources = [
+    if not diag["legacy_fallback_enabled"]:
+        if diagnostics:
+            payload["diagnostics"] = diag
+        return payload
+
+    # Explicit recovery path only; intentionally not enabled in production by default.
+    legacy_sources = [
         ("classic-ad-search", lambda: _classic_ad_search_results(q, stype, user, diag)),
         ("ldapsearch", lambda: _ldap_results(q, stype, user, diag)),
         ("wbinfo", lambda: _wbinfo_results(stype)),
@@ -1049,44 +1088,21 @@ def search(q, stype="all", user=None, diagnostics=False):
         ("getent", lambda: _getent_results(stype)),
         ("authentik-header", lambda: _authentik_header_results(user, stype)),
     ]
-
     items = []
-
-    for name, fn in sources:
+    for name, fn in legacy_sources:
         try:
             found = fn()
-        except Exception as e:
-            diag[name + "_error"] = str(e)
+        except Exception as exc:
+            diag[name + "_error"] = str(exc)
             found = []
-
         if found:
             diag["sources_used"].append(name)
             items.extend(found)
-
-    items = _dedup(items)
-    filtered = _filter(items, q)
-
-    filtered.sort(key=lambda x: (
-        0 if x.get("source") == "classic-ad-search" else 1,
-        0 if x.get("source") == "ldapsearch" else 1,
-        0 if "cloudif" in x.get("principal", "").lower() else 1,
-        0 if x.get("type") == "group" else 1,
-        x.get("principal", "").lower(),
-    ))
-
-    payload = {
-        "ok": True,
-        "query": q,
-        "type": stype,
-        "count": len(filtered[:80]),
-        "items": filtered[:80],
-    }
-
+    filtered = _filter(_dedup(items), q)
+    filtered.sort(key=lambda x: (0 if x.get("type") == "user" else 1, x.get("principal", "").lower()))
+    payload.update({"count": len(filtered[:80]), "total": len(filtered[:80]), "items": filtered[:80], "page": 1, "pages": 1})
     if diagnostics:
-        diag["total_before_filter"] = len(items)
-        diag["total_after_filter"] = len(filtered)
         payload["diagnostics"] = diag
-
     return payload
 
 
