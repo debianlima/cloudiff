@@ -13,7 +13,23 @@ mkdir -p "$BKDIR"
   exit 1
 }
 
-cp -a "$CONF" "$BKDIR/default.conf.bkp-$NOW"
+BACKUP="$BKDIR/default.conf.bkp-$NOW"
+cp -a "$CONF" "$BACKUP"
+
+rollback_portal_router() {
+  rc=$?
+  trap - ERR INT TERM HUP
+  if [ -f "$BACKUP" ]; then
+    cp -a "$BACKUP" "$CONF"
+    if docker ps --format '{{.Names}}' | grep -qx "$ROUTER"; then
+      docker exec "$ROUTER" nginx -t >/dev/null 2>&1 || true
+      docker exec "$ROUTER" nginx -s reload >/dev/null 2>&1 || docker restart "$ROUTER" >/dev/null 2>&1 || true
+    fi
+  fi
+  echo "ROLLBACK: configuração do portal restaurada após falha (rc=$rc)." >&2
+  exit "$rc"
+}
+trap rollback_portal_router ERR INT TERM HUP
 
 python3 - "$CONF" <<'PY'
 from pathlib import Path
@@ -178,5 +194,6 @@ PY
 
 docker exec "$ROUTER" nginx -t
 docker exec "$ROUTER" nginx -s reload || docker restart "$ROUTER"
+trap - ERR INT TERM HUP
 
 echo "OK: portal com Authentik direto aplicado ao router."
