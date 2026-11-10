@@ -445,11 +445,18 @@ def render_acl_modal(slug, user=None):
     <div><h4>Adicionar permissão</h4><p>Pesquise uma identidade real no diretório institucional.</p></div>
   </div>
 
-<div class="cm-field acl-search-field">
-  <label>Buscar usuário ou grupo</label>
-  <input id="acl_search_{h(modal_id)}" placeholder="Digite login, matrícula, nome completo ou grupo" autocomplete="off">
+<div class="acl-directory-launch">
+  <button id="acl_directory_open_{h(modal_id)}" class="cm-btn" type="button">Selecionar usuário ou grupo</button>
+  <span id="acl_directory_status_{h(modal_id)}" class="acl-directory-status">Catálogo institucional</span>
+</div>
+<div id="acl_directory_panel_{h(modal_id)}" class="acl-directory-panel" hidden>
+  <div class="acl-directory-toolbar">
+    <div class="cm-field acl-search-field"><label>Buscar no catálogo</label><input id="acl_search_{h(modal_id)}" placeholder="Nome, matrícula, e-mail ou grupo" autocomplete="off"></div>
+    <div class="cm-field acl-directory-filter-field"><label>Mostrar</label><select id="acl_directory_filter_{h(modal_id)}"><option value="all">Todos</option><option value="user">Usuários</option><option value="group">Grupos</option></select></div>
+    <button id="acl_directory_refresh_{h(modal_id)}" class="cm-btn light" type="button">Atualizar lista</button>
+  </div>
   <div id="acl_results_{h(modal_id)}" class="acl-search-results"></div>
-  <div class="acl-search-help">Clique em um resultado para preencher automaticamente o usuário/grupo e o tipo de permissão.</div>
+  <div class="acl-directory-footer"><button id="acl_directory_more_{h(modal_id)}" class="cm-btn light" type="button" hidden>Carregar mais</button><span class="acl-search-help">O catálogo é derivado do Authentik/AD. O acesso só é concedido após confirmar “Adicionar permissão”.</span></div>
 </div>
 
 <form class="acl-add-form" method="post" action="/cloudiff/portal/action/project_acl" onsubmit="return cloudifValidateAclSelection_{h(modal_id)}()">
@@ -483,162 +490,75 @@ def render_acl_modal(slug, user=None):
 
 <script>
 (function(){{
-  var search = document.getElementById("acl_search_{h(modal_id)}");
-  var principalView = document.getElementById("acl_principal_{h(modal_id)}");
-  var principalHidden = document.getElementById("acl_principal_hidden_{h(modal_id)}");
-  var typeView = document.getElementById("acl_principal_type_view_{h(modal_id)}");
-  var typeHidden = document.getElementById("acl_principal_type_hidden_{h(modal_id)}");
-  var results = document.getElementById("acl_results_{h(modal_id)}");
-  var timer = null;
-  var projectSlug = "{h(slug)}";
+  var search=document.getElementById("acl_search_{h(modal_id)}");
+  var openBtn=document.getElementById("acl_directory_open_{h(modal_id)}");
+  var panel=document.getElementById("acl_directory_panel_{h(modal_id)}");
+  var refreshBtn=document.getElementById("acl_directory_refresh_{h(modal_id)}");
+  var moreBtn=document.getElementById("acl_directory_more_{h(modal_id)}");
+  var filter=document.getElementById("acl_directory_filter_{h(modal_id)}");
+  var status=document.getElementById("acl_directory_status_{h(modal_id)}");
+  var principalView=document.getElementById("acl_principal_{h(modal_id)}");
+  var principalHidden=document.getElementById("acl_principal_hidden_{h(modal_id)}");
+  var typeView=document.getElementById("acl_principal_type_view_{h(modal_id)}");
+  var typeHidden=document.getElementById("acl_principal_type_hidden_{h(modal_id)}");
+  var results=document.getElementById("acl_results_{h(modal_id)}");
+  var timer=null,page=1,pageSize=50,total=0,csrfToken="",projectSlug="{h(slug)}";
+  if(!search||!openBtn||!panel||!refreshBtn||!moreBtn||!filter||!status||!principalView||!principalHidden||!typeView||!typeHidden||!results)return;
 
-  if(!search || !principalView || !principalHidden || !typeView || !typeHidden || !results) return;
-
-  function esc(v){{
-    return String(v || '').replace(/[&<>"']/g, function(c){{
-      return {{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}}[c];
-    }});
+  function esc(v){{return String(v||'').replace(/[&<>"']/g,function(c){{return {{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}}[c];}});}}
+  function attr(v){{return esc(v).replace(/"/g,'&quot;');}}
+  function cleanPrincipal(v){{return String(v||'').trim().split(/\\s+/)[0]||'';}}
+  function renderMessage(msg){{results.innerHTML='<div class="acl-result-dropdown"><div class="acl-result-item" role="note"><div class="acl-result-meta">'+esc(msg)+'</div></div></div>';}}
+  function setCacheStatus(cache){{
+    if(!cache||!cache.available){{status.textContent='Catálogo ainda não sincronizado';return;}}
+    var when=cache.synced_at?new Date(cache.synced_at).toLocaleString():'horário indisponível';
+    status.textContent=String(cache.users||0)+' usuários · '+String(cache.groups||0)+' grupos · atualizado '+when;
+  }}
+  function selectPrincipal(txt,typ){{
+    txt=cleanPrincipal(txt);typ=String(typ||'').trim();if(!txt)return;
+    principalView.value=txt;principalHidden.value=txt;if(typ){{typeView.value=typ;typeHidden.value=typ;}}
+    search.value=txt;panel.hidden=true;status.textContent='Selecionado: '+txt;
+  }}
+  function renderItems(arr,append){{
+    if(!arr||!arr.length){{if(!append)renderMessage('Nenhum resultado encontrado. Use “Atualizar lista” ou pesquise novamente para consultar o AD ao vivo.');return;}}
+    var html=arr.map(function(x){{
+      var label=x.principal||x.username||x.uid||x.cn||x.name||x.email||x.group||x.label||'';
+      var type=x.type||'',full=x.full_name||x.displayName||x.display_name||x.cn||x.name||label,mail=x.mail||x.email||'',source=x.source||'';
+      var groups=Array.isArray(x.groups)?x.groups:[],admin=!!x.admin;
+      var adminBadge=admin?'<span class="acl-admin-badge">Administrador CloudIFF</span>':'';
+      var groupHtml=groups.length?'<div class="acl-result-groups">'+groups.slice(0,8).map(function(g){{return '<span class="acl-result-group">'+esc(g)+'</span>';}}).join('')+(groups.length>8?'<span class="acl-result-group">+'+(groups.length-8)+'</span>':'')+'</div>':'';
+      return '<button type="button" class="acl-result-item'+(admin?' is-admin':'')+'" data-principal="'+attr(label)+'" data-type="'+attr(type)+'">'+
+        '<div class="acl-result-main"><span class="acl-result-principal">'+esc(full)+'</span><span class="acl-result-type">'+esc(type||'principal')+'</span>'+adminBadge+'</div>'+
+        '<div class="acl-result-meta"><div><strong>Identificador:</strong> '+esc(label)+'</div>'+(mail?'<div><strong>E-mail:</strong> '+esc(mail)+'</div>':'')+(source?'<div><strong>Fonte:</strong> '+esc(source)+'</div>':'')+'</div>'+groupHtml+'</button>';
+    }}).join('');
+    if(append){{var box=results.querySelector('.acl-result-dropdown');if(box)box.insertAdjacentHTML('beforeend',html);else results.innerHTML='<div class="acl-result-dropdown">'+html+'</div>';}}
+    else results.innerHTML='<div class="acl-result-dropdown">'+html+'</div>';
+  }}
+  function loadDirectory(q,requestedPage,append){{
+    page=requestedPage||1;if(!append)renderMessage('Carregando catálogo...');
+    var endpoint=new URL('api/ad-search',window.location.href);
+    endpoint.searchParams.set('q',q||'');endpoint.searchParams.set('type',filter.value||'all');endpoint.searchParams.set('slug',projectSlug);endpoint.searchParams.set('page',String(page));endpoint.searchParams.set('page_size',String(pageSize));
+    return fetch(endpoint.toString(),{{headers:{{'Accept':'application/json'}},credentials:'same-origin'}})
+      .then(function(r){{var ct=r.headers.get('content-type')||'';if(ct.indexOf('application/json')<0)throw new Error('O catálogo não retornou JSON (HTTP '+r.status+').');return r.json();}})
+      .then(function(data){{if(!data||data.ok===false)throw new Error((data&&data.error)||'Catálogo indisponível.');csrfToken=data.csrf_token||csrfToken;total=Number(data.total||data.count||0);setCacheStatus(data.cache||{{}});renderItems(data.items||data.results||[],append);moreBtn.hidden=(page*pageSize>=total)||!(data.items||[]).length;return data;}})
+      .catch(function(err){{renderMessage(err&&err.message?err.message:'Catálogo indisponível.');moreBtn.hidden=true;throw err;}});
   }}
 
-  function attr(v){{
-    return esc(v).replace(/"/g, '&quot;');
-  }}
-
-  function cleanPrincipal(txt){{
-    txt = (txt || "").trim();
-    if(!txt) return "";
-    return txt.split(/\\s+/)[0];
-  }}
-
-  function renderMessage(msg){{
-    results.innerHTML =
-      '<div class="acl-result-dropdown">' +
-        '<div class="acl-result-item" role="note">' +
-          '<div class="acl-result-meta">' + esc(msg) + '</div>' +
-        '</div>' +
-      '</div>';
-  }}
-
-  function selectPrincipal(txt, typ){{
-    txt = cleanPrincipal(txt);
-    typ = (typ || "").trim();
-
-    if(!txt) return;
-
-    principalView.value = txt;
-    principalHidden.value = txt;
-
-    if(typ){{
-      typeView.value = typ;
-      typeHidden.value = typ;
-    }}
-
-    results.innerHTML = "";
-    search.value = txt;
-  }}
-
-  function renderItems(arr){{
-    if(!arr || !arr.length){{
-      renderMessage("Nenhum resultado encontrado no diretório real.");
-      return;
-    }}
-
-    results.innerHTML = '<div class="acl-result-dropdown">' + arr.map(function(x){{
-      var label = x.principal || x.username || x.samaccountname || x.sAMAccountName || x.uid || x.cn || x.name || x.email || x.group || x.label || "";
-      var type = x.type || "";
-      var full = x.full_name || x.displayName || x.display_name || x.cn || x.name || "";
-      var mail = x.mail || x.email || "";
-      var source = x.source || "";
-      var groups = Array.isArray(x.groups) ? x.groups : [];
-
-      var groupHtml = groups.length
-        ? '<div class="acl-result-groups">' + groups.slice(0, 8).map(function(g){{
-            return '<span class="acl-result-group">' + esc(g) + '</span>';
-          }}).join('') + (groups.length > 8 ? '<span class="acl-result-group">+' + (groups.length - 8) + '</span>' : '') + '</div>'
-        : '<div class="acl-result-groups"><span class="acl-result-group">sem grupos retornados</span></div>';
-
-      return '<button type="button" class="acl-result-item" data-principal="' + attr(label) + '" data-type="' + attr(type) + '">' +
-        '<div class="acl-result-main">' +
-          '<span class="acl-result-principal">' + esc(label) + '</span>' +
-          '<span class="acl-result-type">' + esc(type || "principal") + '</span>' +
-        '</div>' +
-        '<div class="acl-result-meta">' +
-          (full ? '<div><strong>Nome completo:</strong> ' + esc(full) + '</div>' : '<div><strong>Nome completo:</strong> não retornado</div>') +
-          (mail ? '<div><strong>E-mail:</strong> ' + esc(mail) + '</div>' : '') +
-          (source ? '<div><strong>Fonte:</strong> ' + esc(source) + '</div>' : '') +
-        '</div>' +
-        groupHtml +
-      '</button>';
-    }}).join('') + '</div>';
-  }}
-
-  results.addEventListener("click", function(ev){{
-    var item = ev.target.closest ? ev.target.closest(".acl-result-item[data-principal]") : null;
-    if(!item) return;
-
-    ev.preventDefault();
-    ev.stopPropagation();
-
-    var txt = item.getAttribute("data-principal") || "";
-    var typ = item.getAttribute("data-type") || "";
-
-    selectPrincipal(txt, typ);
-  }}, true);
-
-  window.cloudifValidateAclSelection_{h(modal_id)} = function(){{
-    if(!principalHidden.value || !typeHidden.value){{
-      renderMessage("Selecione um usuário ou grupo no resultado da busca antes de adicionar a permissão.");
-      return false;
-    }}
-    return true;
-  }};
-
-  search.addEventListener("input", function(){{
-    clearTimeout(timer);
-    var q = search.value.trim();
-
-    principalView.value = "";
-    principalHidden.value = "";
-    typeView.value = "";
-    typeHidden.value = "";
-
-    if(!q){{
-      results.innerHTML = "";
-      return;
-    }}
-
-    results.innerHTML = '<div class="acl-result-dropdown"><div class="acl-result-item" role="note"><div class="acl-result-meta">Pesquisando...</div></div></div>';
-
-    timer = setTimeout(function(){{
-      var endpoint = new URL("api/ad-search", window.location.href);
-      endpoint.searchParams.set("q", q);
-      endpoint.searchParams.set("type", "all");
-      endpoint.searchParams.set("slug", projectSlug);
-
-      fetch(endpoint.toString(), {{
-        headers: {{"Accept": "application/json"}},
-        credentials: "same-origin"
-      }})
-        .then(function(r){{
-          var ct = r.headers.get("content-type") || "";
-          if(ct.indexOf("application/json") < 0){{
-            throw new Error("A API retornou uma resposta não JSON. A tela legada não será exibida aqui.");
-          }}
-          return r.json();
-        }})
-        .then(function(data){{
-          if(data && data.ok === false){{
-            renderMessage(data.error || "Busca não autorizada.");
-            return;
-          }}
-
-          var arr = Array.isArray(data) ? data : (data.items || data.results || []);
-          renderItems(arr);
-        }})
-        .catch(function(err){{
-          renderMessage(err && err.message ? err.message : "Busca indisponível.");
-        }});
-    }}, 500);
+  results.addEventListener('click',function(ev){{var item=ev.target.closest?ev.target.closest('.acl-result-item[data-principal]'):null;if(!item)return;ev.preventDefault();ev.stopPropagation();selectPrincipal(item.getAttribute('data-principal')||'',item.getAttribute('data-type')||'');}},true);
+  window.cloudifValidateAclSelection_{h(modal_id)}=function(){{if(!principalHidden.value||!typeHidden.value){{renderMessage('Selecione um usuário ou grupo no catálogo antes de adicionar a permissão.');panel.hidden=false;return false;}}return true;}};
+  openBtn.addEventListener('click',function(){{panel.hidden=!panel.hidden;if(!panel.hidden){{search.focus();loadDirectory(search.value.trim(),1,false).catch(function(){{}});}}}});
+  search.addEventListener('input',function(){{clearTimeout(timer);principalView.value='';principalHidden.value='';typeView.value='';typeHidden.value='';timer=setTimeout(function(){{loadDirectory(search.value.trim(),1,false).catch(function(){{}});}},220);}});
+  filter.addEventListener('change',function(){{loadDirectory(search.value.trim(),1,false).catch(function(){{}});}});
+  moreBtn.addEventListener('click',function(){{loadDirectory(search.value.trim(),page+1,true).catch(function(){{}});}});
+  refreshBtn.addEventListener('click',function(){{
+    if(!csrfToken){{loadDirectory(search.value.trim(),1,false).catch(function(){{}});return;}}
+    refreshBtn.disabled=true;status.textContent='Sincronizando com Authentik...';
+    var endpoint=new URL('action/directory-cache-sync',window.location.href),body=new URLSearchParams();body.set('slug',projectSlug);body.set('csrf_token',csrfToken);
+    fetch(endpoint.toString(),{{method:'POST',credentials:'same-origin',headers:{{'Accept':'application/json','Content-Type':'application/x-www-form-urlencoded;charset=UTF-8','X-CSRF-Token':csrfToken}},body:body.toString()}})
+      .then(function(r){{return r.json().then(function(x){{if(!r.ok||x.ok===false)throw new Error(x.error||'Falha ao sincronizar.');return x;}});}})
+      .then(function(){{status.textContent='Lista atualizada.';return loadDirectory(search.value.trim(),1,false);}})
+      .catch(function(err){{renderMessage(err&&err.message?err.message:'Falha ao sincronizar catálogo.');}})
+      .finally(function(){{refreshBtn.disabled=false;}});
   }});
 
   // Autoabre este modal após redirect de ADD/REMOVE: ?acl=<slug>&msg=...
@@ -694,10 +614,27 @@ def render_acl_modal(slug, user=None):
 #{h(modal_id)} .acl-form-actions{{display:flex;justify-content:flex-end;margin:2px 0 0}}
 #{h(modal_id)} .acl-form-actions .cm-btn{{width:auto;min-width:170px}}
 #{h(modal_id)} .pill{{white-space:nowrap}}
+#{h(modal_id)} .acl-directory-launch{{display:flex;align-items:center;gap:10px;flex-wrap:wrap}}
+#{h(modal_id)} .acl-directory-status{{font-size:.72rem;color:var(--c-muted,#64748b)}}
+#{h(modal_id)} .acl-directory-panel{{display:grid;gap:12px;padding:14px;border:1px solid var(--c-border,#dce3ed);border-radius:10px;background:var(--c-surface-2,#f8fafc)}}
+#{h(modal_id)} .acl-directory-toolbar{{display:grid;grid-template-columns:minmax(0,1fr) 150px auto;gap:10px;align-items:end}}
+#{h(modal_id)} .acl-directory-filter-field,#{h(modal_id)} .acl-directory-toolbar .cm-field{{margin:0}}
+#{h(modal_id)} .acl-directory-footer{{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}}
+#{h(modal_id)} .acl-result-dropdown{{display:grid;gap:8px;max-height:430px;overflow:auto;padding-right:3px}}
+#{h(modal_id)} .acl-result-item{{width:100%;text-align:left;border:1px solid var(--c-border,#dce3ed);border-radius:9px;padding:10px 12px;background:var(--c-surface,#fff);cursor:pointer}}
+#{h(modal_id)} .acl-result-item:hover{{border-color:var(--c-primary,#166534)}}
+#{h(modal_id)} .acl-result-item.is-admin{{box-shadow:inset 4px 0 0 #d4a017}}
+#{h(modal_id)} .acl-result-main{{display:flex;align-items:center;gap:8px;flex-wrap:wrap}}
+#{h(modal_id)} .acl-result-principal{{font-weight:800}}
+#{h(modal_id)} .acl-result-type,#{h(modal_id)} .acl-admin-badge{{font-size:.67rem;font-weight:800;border-radius:999px;padding:3px 7px;background:var(--c-surface-2,#f1f5f9)}}
+#{h(modal_id)} .acl-admin-badge{{border:1px solid #d4a017}}
+#{h(modal_id)} .acl-result-meta{{margin-top:5px;font-size:.73rem;color:var(--c-muted,#64748b)}}
+#{h(modal_id)} .acl-result-groups{{display:flex;gap:4px;flex-wrap:wrap;margin-top:6px}}
+#{h(modal_id)} .acl-result-group{{font-size:.64rem;border:1px solid var(--c-border,#dce3ed);border-radius:999px;padding:2px 6px}}
 @media(max-width:700px){{
   #{h(modal_id)} .wizard-head{{padding:18px}}
   #{h(modal_id)} .acl-modal-content{{padding:16px;gap:14px}}
-  #{h(modal_id)} .acl-modal-meta,#{h(modal_id)} .acl-selection-grid{{grid-template-columns:1fr}}
+  #{h(modal_id)} .acl-modal-meta,#{h(modal_id)} .acl-selection-grid,#{h(modal_id)} .acl-directory-toolbar{{grid-template-columns:1fr}}
   #{h(modal_id)} .acl-current-section{{overflow-x:auto}}
   #{h(modal_id)} .acl-current-table{{min-width:620px}}
   #{h(modal_id)} .acl-form-actions .cm-btn{{width:100%}}

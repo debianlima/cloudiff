@@ -4297,6 +4297,10 @@ if "Portal" in globals():
             stype = (qs.get("type", ["all"])[0] or "all").strip().lower()
             slug = (qs.get("slug", [""])[0] or "").strip()
             diag = (qs.get("diag", ["0"])[0] or "0") == "1"
+            try: page = max(int((qs.get("page", ["1"])[0] or "1")), 1)
+            except Exception: page = 1
+            try: page_size = min(max(int((qs.get("page_size", ["50"])[0] or "50")), 1), 100)
+            except Exception: page_size = 50
 
             try:
                 user = directory.user_from_headers(self.headers)
@@ -4330,10 +4334,12 @@ if "Portal" in globals():
                 }, 403)
 
             try:
-                payload = directory.search(q, stype, user=user, diagnostics=diag)
+                payload = directory.search(q, stype, user=user, diagnostics=diag, page=page, page_size=page_size)
                 payload["slug"] = slug
                 payload["user"] = user.get("username") or "unknown"
                 payload["path"] = clean_path
+                payload["can_sync"] = True
+                if "_prod_csrf_token" in globals(): payload["csrf_token"] = _prod_csrf_token(user)
                 return _cloudif_v89_send_json(self, payload, 200)
             except Exception as e:
                 return _cloudif_v89_send_json(self, {
@@ -6909,3 +6915,42 @@ if __name__ == "__main__":
     refresh_tenant_policies()
     print(f"CloudIF Portal v17 clean listening on {HOST}:{PORT}", flush=True)
     ThreadingHTTPServer((HOST, PORT), Portal).serve_forever()
+
+
+# CloudIF v108 directory-cache manual synchronization BEGIN
+import json as _directory_sync_json
+import subprocess as _directory_sync_subprocess
+import urllib.parse as _directory_sync_urlparse
+
+if "Portal" in globals() and not globals().get("_directory_sync_post_wrapped"):
+    _directory_sync_previous_post = Portal.do_POST
+    def _directory_sync_do_POST(self):
+        parsed = _directory_sync_urlparse.urlparse(self.path)
+        clean = parsed.path.rstrip("/")
+        if clean not in ("/cloudiff/portal/action/directory-cache-sync", "/cloudif/portal/action/directory-cache-sync", "/action/directory-cache-sync"):
+            return _directory_sync_previous_post(self)
+        import cloudif_ad_directory_module as directory
+        user = directory.user_from_headers(self.headers)
+        if "_cloudif_security_valid_origin" in globals() and not _cloudif_security_valid_origin(self):
+            return _cloudif_v89_send_json(self,{"ok":False,"error":"invalid_origin"},403)
+        length = int(self.headers.get("Content-Length","0") or 0)
+        if length < 1 or length > 8192:
+            return _cloudif_v89_send_json(self,{"ok":False,"error":"invalid_body"},413)
+        form = _directory_sync_urlparse.parse_qs(self.rfile.read(length).decode("utf-8","ignore"))
+        val = lambda k: (form.get(k) or [""])[0].strip()
+        slug = val("slug")
+        if not directory.can_manage_project(user, slug):
+            return _cloudif_v89_send_json(self,{"ok":False,"error":"forbidden"},403)
+        provided = val("csrf_token") or (self.headers.get("X-CSRF-Token") or "").strip()
+        if "_prod_csrf_token" not in globals() or not _prod_csrf_equal(provided,_prod_csrf_token(user)):
+            return _cloudif_v89_send_json(self,{"ok":False,"error":"invalid_csrf"},403)
+        proc = _directory_sync_subprocess.run(
+            ["systemctl","start","cloudif-directory-cache-sync.service"],
+            stdout=_directory_sync_subprocess.PIPE,stderr=_directory_sync_subprocess.PIPE,text=True,timeout=30,
+        )
+        if proc.returncode != 0:
+            return _cloudif_v89_send_json(self,{"ok":False,"error":"directory_sync_failed","detail":(proc.stderr or "")[-500:]},503)
+        return _cloudif_v89_send_json(self,{"ok":True,"cache":directory.cache_status()},200)
+    Portal.do_POST = _directory_sync_do_POST
+    _directory_sync_post_wrapped = True
+# CloudIF v108 directory-cache manual synchronization END

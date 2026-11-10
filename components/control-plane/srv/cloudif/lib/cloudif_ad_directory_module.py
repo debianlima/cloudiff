@@ -1097,3 +1097,182 @@ try:
         return _central_rbac.authorize(user, "project.manage", project=slug)
 except Exception:
     pass
+
+# CloudIF v91 — Authentik-derived directory cache + canonical AD Agent fallback BEGIN
+import json as _v91_json
+import urllib.request as _v91_urllib_request
+import urllib.parse as _v91_urllib_parse
+from pathlib import Path as _v91_Path
+
+_v91_legacy_search = search
+
+
+def _v91_cache_path():
+    return _v91_Path(os.environ.get("CLOUDIF_DIRECTORY_CACHE", "/var/lib/cloudif/portal/directory-cache.db"))
+
+
+def cache_status():
+    path = _v91_cache_path()
+    if not path.is_file():
+        return {"available": False, "synced_at": "", "users": 0, "groups": 0, "admins": 0, "professors": 0}
+    try:
+        con = sqlite3.connect(f"file:{path}?mode=ro", uri=True, timeout=2)
+        meta = dict(con.execute("SELECT key,value FROM metadata").fetchall())
+        con.close()
+        return {
+            "available": True,
+            "synced_at": meta.get("synced_at", ""),
+            "source": meta.get("source", "authentik"),
+            "users": int(meta.get("users", 0)),
+            "groups": int(meta.get("groups", 0)),
+            "admins": int(meta.get("admins", 0)),
+            "professors": int(meta.get("professors", 0)),
+        }
+    except Exception as exc:
+        return {"available": False, "synced_at": "", "users": 0, "groups": 0, "admins": 0, "professors": 0, "error": type(exc).__name__}
+
+
+def _v91_cache_results(q, stype, page=1, page_size=50):
+    path = _v91_cache_path()
+    if not path.is_file():
+        return [], 0
+    page = max(int(page or 1), 1)
+    page_size = min(max(int(page_size or 50), 1), 100)
+    where = ["active=1"]
+    params = []
+    if stype in ("user", "group"):
+        where.append("kind=?")
+        params.append(stype)
+    if q:
+        where.append("search_text LIKE ?")
+        params.append("%" + str(q).strip().lower() + "%")
+    clause = " AND ".join(where)
+    con = sqlite3.connect(f"file:{path}?mode=ro", uri=True, timeout=3)
+    con.row_factory = sqlite3.Row
+    try:
+        total = int(con.execute(f"SELECT COUNT(*) FROM identities WHERE {clause}", params).fetchone()[0])
+        rows = con.execute(
+            f"""SELECT kind,principal,display_name,email,stable_subject,groups_json,is_admin,is_professor,source
+                FROM identities WHERE {clause}
+                ORDER BY CASE kind WHEN 'user' THEN 0 ELSE 1 END,
+                         lower(display_name), lower(principal)
+                LIMIT ? OFFSET ?""",
+            [*params, page_size, (page - 1) * page_size],
+        ).fetchall()
+    finally:
+        con.close()
+    items = []
+    for row in rows:
+        try:
+            groups = _v91_json.loads(row["groups_json"] or "[]")
+        except Exception:
+            groups = []
+        items.append({
+            "type": row["kind"],
+            "principal": row["principal"],
+            "username": row["principal"] if row["kind"] == "user" else "",
+            "full_name": row["display_name"],
+            "display_name": row["display_name"],
+            "email": row["email"],
+            "stable_subject": row["stable_subject"],
+            "groups": groups,
+            "admin": bool(row["is_admin"]),
+            "professor": bool(row["is_professor"]),
+            "source": row["source"],
+        })
+    return items, total
+
+
+def _v91_ad_agent_results(q, stype, diag):
+    base = setting_value("CLOUDIF_AD_AGENT_URL", "").strip().rstrip("/")
+    if not base or len(str(q or "").strip()) < 2:
+        return []
+    url = base + "/search?" + _v91_urllib_parse.urlencode({"q": q, "type": stype})
+    try:
+        with _v91_urllib_request.urlopen(url, timeout=4) as res:
+            payload = _v91_json.load(res)
+    except Exception as exc:
+        diag["ad_agent_error"] = type(exc).__name__
+        return []
+    found = []
+    for raw in payload.get("results") or []:
+        kind = str(raw.get("type") or "user").strip().lower()
+        if kind not in ("user", "group"):
+            continue
+        principal = str(raw.get("name") or raw.get("username") or raw.get("uid") or "").strip()
+        if not principal:
+            continue
+        groups = raw.get("groups") or raw.get("memberOf") or []
+        if isinstance(groups, str):
+            groups = [x.strip() for x in re.split(r"[,;|]", groups) if x.strip()]
+        full_name = str(raw.get("displayName") or raw.get("full_name") or raw.get("cn") or principal).strip()
+        email = str(raw.get("mail") or raw.get("email") or "").strip()
+        found.append({
+            "type": kind,
+            "principal": principal,
+            "username": principal if kind == "user" else "",
+            "full_name": full_name,
+            "display_name": full_name,
+            "email": email,
+            "groups": groups,
+            "admin": "CloudIF-Tenants-Admin" in groups,
+            "professor": "CloudIF-Professor" in groups,
+            "source": "ad-agent-live",
+        })
+    if found:
+        diag["sources_used"].append("ad-agent-live")
+    return found
+
+
+def search(q, stype="all", user=None, diagnostics=False, page=1, page_size=50):
+    """Fast identity discovery.
+
+    The local cache is a derived Authentik projection.  When an identity is not
+    cached yet, query the canonical AD Agent directly.  Slow legacy LDAP/NSS
+    probing is disabled by default to keep the Portal below proxy timeouts.
+    """
+    q = str(q or "").strip()
+    stype = str(stype or "all").strip().lower()
+    if stype not in ("all", "user", "group"):
+        stype = "all"
+    page = max(int(page or 1), 1)
+    page_size = min(max(int(page_size or 50), 1), 100)
+    diag = {"sources_used": [], "cache": cache_status(), "legacy_fallback": False}
+
+    cached, total = _v91_cache_results(q, stype, page=page, page_size=page_size)
+    if cached or (diag["cache"].get("available") and not q):
+        diag["sources_used"].append("authentik-cache")
+        payload = {
+            "ok": True, "query": q, "type": stype, "count": len(cached), "total": total,
+            "page": page, "page_size": page_size, "items": cached, "cache": diag["cache"],
+        }
+        if diagnostics:
+            payload["diagnostics"] = diag
+        return payload
+
+    if len(q) >= 2:
+        live = _v91_ad_agent_results(q, stype, diag)
+        if live:
+            payload = {
+                "ok": True, "query": q, "type": stype, "count": len(live), "total": len(live),
+                "page": 1, "page_size": page_size, "items": live[:page_size], "cache": diag["cache"],
+            }
+            if diagnostics:
+                payload["diagnostics"] = diag
+            return payload
+
+    legacy = setting_value("CLOUDIF_DIRECTORY_LEGACY_FALLBACK", "false").strip().lower() in {"1", "true", "yes", "on"}
+    if legacy and len(q) >= 2:
+        diag["legacy_fallback"] = True
+        old = _v91_legacy_search(q, stype, user=user, diagnostics=diagnostics)
+        old["cache"] = diag["cache"]
+        return old
+
+    payload = {
+        "ok": True, "query": q, "type": stype, "count": 0, "total": 0, "page": page,
+        "page_size": page_size, "items": [], "cache": diag["cache"],
+    }
+    if diagnostics:
+        payload["diagnostics"] = diag
+    return payload
+# CloudIF v91 — Authentik-derived directory cache + canonical AD Agent fallback END
