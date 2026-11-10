@@ -22,7 +22,18 @@ status(){
   systemctl is-enabled cloudif-directory-cache-sync.timer 2>/dev/null || true
   systemctl is-active cloudif-directory-cache-sync.timer 2>/dev/null || true
   systemctl show cloudif-directory-cache-sync.service -p Result -p ExecMainStatus 2>/dev/null || true
-  [ -f /var/lib/cloudif/portal/directory-cache.db ] && sqlite3 /var/lib/cloudif/portal/directory-cache.db 'select key||"="||value from metadata order by key;' || true
+  if [ -f /var/lib/cloudif/portal/directory-cache.db ]; then
+    python3 - <<'PYDB' || true
+import sqlite3
+p='/var/lib/cloudif/portal/directory-cache.db'
+con=sqlite3.connect(f'file:{p}?mode=ro',uri=True,timeout=3)
+try:
+    for key,value in con.execute('select key,value from metadata order by key'):
+        print(f'{key}={value}')
+finally:
+    con.close()
+PYDB
+  fi
 }
 apply(){
   [ "$(id -u)" -eq 0 ] || { echo 'run as root on Hospedagem' >&2; exit 2; }
@@ -41,7 +52,17 @@ apply(){
   systemctl start cloudif-directory-cache-sync.service
   systemctl enable --now cloudif-directory-cache-sync.timer
   systemctl is-active --quiet cloudif-directory-cache-sync.timer
-  sqlite3 /var/lib/cloudif/portal/directory-cache.db 'pragma quick_check;' | grep -qx ok
+  python3 - <<'PYDB'
+import sqlite3
+p='/var/lib/cloudif/portal/directory-cache.db'
+con=sqlite3.connect(f'file:{p}?mode=ro',uri=True,timeout=3)
+try:
+    row=con.execute('pragma quick_check').fetchone()
+    if not row or row[0] != 'ok':
+        raise SystemExit('directory cache quick_check failed')
+finally:
+    con.close()
+PYDB
   echo DIRECTORY_CACHE_INSTALL=PASS
 }
 rollback(){
