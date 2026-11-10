@@ -110,6 +110,14 @@ class TaigaIdentityIsolationContractTests(unittest.TestCase):
         self.assertIn('announceAuthenticatedSession()',src)
         self.assertIn('/login?reason=session-replaced',src)
 
+    def test_authenticated_api_responses_are_not_shared_cached(self):
+        conf=(ROOT/'components/faro/current-apps/taiga-current/taiga.conf').read_text()
+        block=conf.split('location /api/ {',1)[1].split('}',1)[0]
+        self.assertIn('Cache-Control "private, no-store, no-cache, must-revalidate"',block)
+        self.assertIn('Pragma "no-cache"',block)
+        self.assertIn('Expires "0"',block)
+        self.assertIn('Vary "Authorization, Cookie"',block)
+
     def test_shared_workstation_bootstrap_assets_are_not_stale_cached(self):
         conf=(ROOT/'components/faro/current-apps/taiga-current/taiga.conf').read_text()
         self.assertIn('location = / {',conf)
