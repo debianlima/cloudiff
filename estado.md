@@ -398,3 +398,18 @@
 - Foi corrigido um defeito estrutural do delta remoto: o handler de sync `v108` estava depois de `if __name__ == "__main__"` e não seria registrado pelo launcher real. O handler final fica antes do loop HTTP; gate de contrato cobre essa ordem.
 - O cache continua exclusivamente derivado para descoberta; `project_acl` permanece a fonte de autorização. Cache miss consulta AD Agent curto; LDAP/wbinfo/getent ficam desabilitados por padrão e só podem ser reativados por `CLOUDIF_DIRECTORY_LEGACY_FALLBACK`.
 - Suíte ampla reconciliada: 1.307 testes executados, com 1 erro baseline em `test_taiga_gateway_php_paths`. O mesmo erro foi reproduzido no `origin/main@03dd2b1` em worktree limpa; não é causado por esta unidade e está fora da zona reservada.
+
+
+## CLOUDIFF-DIRECTORY-CACHE-IDENTITY-PICKER — live concluído (2026-11-10)
+
+- Source live reconciliado e promovido: `main@d7c6b4c3d5bf5b94e5f2a0b3b4dff6513d0642ed`; `portal-current` e `/srv/cloudif/lib/portal` apontam para `a10-ux-d7c6b4c3d5bf`; `portal-previous` preserva `a10-ux-a491520d7cea`; pre-state A10 íntegro.
+- Hashes source↔live confirmados byte a byte para `cloudif-admin-portal-base.py`, `cloudif_project_acl_module.py`, `cloudif_ad_directory_module.py`, `portal/core/auth.py` e `portal/ui/shell.py`.
+- Cache live: `/var/lib/cloudif/portal/directory-cache.db`, `quick_check=ok`, 1.272 usuários + 7 grupos. Timer `cloudif-directory-cache-sync.timer` ativo. Credential Authentik criptografada em `/etc/credstore.encrypted/cloudif-directory-cache-authentik.cred`; plaintext temporário removido.
+- Refresh manual validado ponta a ponta: POST autorizado/CSRF respondeu `202` em ~0,018 s, sync rodou em background e polling confirmou novo `synced_at`; snapshot anterior permaneceu disponível durante refresh.
+- Busca live do professor `iff1860746` no projeto `mvplanner`: primeira página lista 50 de 1.270 usuários; `Pedro Henrique Miranda` e `iff20222920038` retornam `iff20222920038` / `Pedro Henrique Miranda de Oliveira`; `iff20222920151` continua identificado como Welington Peres Léo.
+- `iff3546365` foi promovido explicitamente no Authentik para `CloudIF-Professor` e `CloudIF-Tenants-Admin`; memberships observados PASS. Após sync, cache marca `is_admin=1`, `is_professor=1` e grupos `CloudIF-Professor` + `CloudIF-Tenants-Admin`.
+- UI live em `?tab=projetos` renderiza `Selecionar usuário ou grupo`, `Atualizar lista` e o badge `Administrador CloudIFF`; somente usuários admin recebem destaque.
+- ACL `mvplanner` permaneceu inalterada durante a implementação: 1 entrada, owner `iff1860746`. `iff20222920038`, `iff20222920151` e `iff3546365` não foram adicionados automaticamente.
+- Edge público pós-release: acesso sem sessão, headers `X-authentik-*` forjados e teste com `X-Original-URI` continuam `302 -> /outpost.goauthentik.io/start` (PASS).
+- Suíte ampla reconciliada: 1.307 testes executados, com 1 erro baseline em `test_taiga_gateway_php_paths`; o mesmo erro foi reproduzido em `origin/main` limpo antes desta unidade. Gates focados de directory cache/UI: 15/15 PASS; `scripts/validate.sh` PASS.
+- Unidade compartilhada encerrada; nenhum force push, segredo em Git ou alteração automática de ACL de projeto foi realizada.
