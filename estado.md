@@ -316,3 +316,15 @@
 - Handoff da unidade de fonte: commit `e2eff5461dd984ae29db81c869777758060bb196` publicado em `origin/cloudiff-identity-session-fix`; reserva de trabalho compartilhado liberada após gates de fonte. O bloqueio restante é exclusivamente de capability de promoção no Faro, não de código/teste.
 
 - Smoke de imagem em Lima Cripto encontrou e corrigiu um gate de empacotamento: checkout com umask restritivo fazia `COPY cloudif-session-isolation.js` preservar modo `0600`, produzindo HTTP 403 pelo nginx. Dockerfiles agora normalizam explicitamente o JS e módulo OIDC para `0644`, com teste contratual correspondente.
+
+### Evidência adicional do candidato de identidade — 2026-11-10
+
+- `main` após normalização determinística de permissões: `3f17f0aa82f2522b3e369ae0341d658f115951a6`.
+- Build/smoke isolado executado na Lima Cripto com Docker, sem tocar serviços ativos. Base OIDC foi reconstruída para auditoria a partir de `taigaio/taiga-back:6.10.2`, `taigaio/taiga-front:6.10.3` e commit exato `taiga-contrib-oidc-auth@c623b753047ce9923f3e38614d86e81fc5eb2bb1`; o `oidc_auth.js` reproduzido ficou byte-idêntico ao servido em produção.
+- Backend candidato: módulo OIDC `0644`, `PermissionDenied`/binding fail-closed presente, `OIDC_AUTH_REQUEST_EXTRA_PARAMS` com `prompt=login` presente e `py_compile` PASS.
+- Frontend candidato: `cloudif-session-isolation.js` `0644`, servido por HTTP com sucesso, injetado no `index.html`, `conf.json` OIDC válido, asset de sessão idêntico à fonte canônica e asset OIDC idêntico ao runtime anterior.
+- Gateway candidato: `nginx -t` PASS; `/entrar-cloudiff` limpa geração/tokens; mídia privada declara `private, no-store, no-cache, must-revalidate` e `Vary: Authorization, Cookie`.
+- Simulação A→B em duas abas PASS: B mantém sua nova sessão; token/refresh/userInfo de A são apagados; aba A é redirecionada para `/login?reason=session-replaced`; payload de autenticação não permanece em `localStorage` compartilhado.
+- Suíte após correção de permissões: `scripts/validate.sh` PASS e `scripts/test.sh` 1281/1281 PASS.
+- Estado live permanece inalterado por ausência de authority/capability de promoção. Blockers separados: `BLOCKED_CAPABILITY_FARO_DEPLOY` (sem SSH/release binding para `maquina:faro`), `BLOCKED_CAPABILITY_AUTHENTIK_ADMIN` (API admin retorna 403 e não há secret/binding PGH para administrar providers) e `BLOCKED_CAPABILITY_MAURICIO_GLOBAL_PROXY` (publisher `10.62.91.3:18160` só gerencia publicação/tenant; não possui operação contratual para `http_top.conf`).
+- Authentik compartilhado: o gate de produção deve confirmar que o provider usa invalidação que encerra a sessão principal do Authentik, não apenas a sessão do provider; não há configuração declarativa desse estado no repositório atual.
