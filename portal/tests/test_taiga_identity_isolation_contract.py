@@ -74,7 +74,7 @@ class TaigaIdentityIsolationContractTests(unittest.TestCase):
     def test_runtime_uses_derivative_images_and_clean_entry_route(self):
         compose=(ROOT/'components/faro/current-apps/taiga-current/compose.yaml').read_text()
         conf=(ROOT/'components/faro/current-apps/taiga-current/taiga.conf').read_text()
-        self.assertIn('cloudif-local/taiga-back-oidc:6.10.2-c623b753-r6-identity',compose)
+        self.assertIn('cloudif-local/taiga-back-oidc:6.10.2-c623b753-r7-identity',compose)
         self.assertIn('cloudif-local/taiga-front-oidc:6.10.3-c623b753-r4-session',compose)
         self.assertIn('/cloudif-enter/',conf)
         self.assertIn('location ~ "^/cloudif-enter/([a-z0-9][a-z0-9-]{0,62})$" {',conf)
@@ -84,6 +84,15 @@ class TaigaIdentityIsolationContractTests(unittest.TestCase):
         self.assertIn('sessionid=; Path=/; Max-Age=0',conf)
         self.assertIn('/oidc/authenticate/?next=/project/$1',conf)
 
+
+    def test_oidc_username_shadow_collision_fails_closed(self):
+        src=OIDC.read_text(); ast.parse(src)
+        block=src.split('def filter_users_by_claims',1)[1].split('def _bind_authdata',1)[0]
+        self.assertIn('bound_user = self._authdata_user(self.AUTHDATA_KEY, username)',block)
+        self.assertIn('named_user = self.UserModel.objects.filter(username__iexact=username).first()',block)
+        self.assertIn('bound_user.pk != named_user.pk',block)
+        self.assertIn('raise PermissionDenied("OIDC username shadow collision")',block)
+        self.assertLess(block.index('bound_user.pk != named_user.pk'),block.index('if bound_user:'))
 
     def test_oidc_binding_conflicts_fail_closed(self):
         src=OIDC.read_text(); ast.parse(src)

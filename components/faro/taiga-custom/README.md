@@ -20,3 +20,5 @@ The next immutable derivative images are:
 - `cloudif-local/taiga-front-oidc:6.10.3-c623b753-r4-session`: keeps Taiga auth in `sessionStorage` and uses a non-secret browser session generation signal so a new authenticated tab invalidates older authenticated tabs on the same workstation.
 
 The gateway canonicalizes both `/entrar-cloudiff` and `/cloudif-enter/<slug>` through a local Taiga-session reset before OIDC and marks OIDC/private-media responses as non-cacheable. Production must build these tags as new images; previous immutable tags must not be overwritten.
+
+- `cloudif-local/taiga-back-oidc:6.10.2-c623b753-r7-identity`: extends r6 with fail-closed detection when a legacy `AuthData(oidc)` alias shadows a different current `User.username`.

@@ -40,14 +40,18 @@ class TaigaOIDCAuthenticationBackend(OIDCAuthenticationBackend):
 
         username = self.get_username(claims).strip()
         if username:
-            # Preserve an existing OIDC binding before considering a newly
-            # pre-provisioned Taiga username with the same institutional id.
-            user = self._authdata_user(self.AUTHDATA_KEY, username)
-            if user:
-                return [user]
-            user = self.UserModel.objects.filter(username__iexact=username).first()
-            if user:
-                return [user]
+            # A legacy AuthData alias may coexist with a newer Taiga user that
+            # now owns the same institutional username.  Never choose one side
+            # silently: that historical shadow collision caused cross-account
+            # login on shared workstations.  Fail closed until reconciled.
+            bound_user = self._authdata_user(self.AUTHDATA_KEY, username)
+            named_user = self.UserModel.objects.filter(username__iexact=username).first()
+            if bound_user and named_user and bound_user.pk != named_user.pk:
+                raise PermissionDenied("OIDC username shadow collision")
+            if bound_user:
+                return [bound_user]
+            if named_user:
+                return [named_user]
 
         # A present institutional username is authoritative. Falling back to
         # e-mail here can merge two different people when a directory exposes
