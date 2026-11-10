@@ -110,6 +110,16 @@ class TaigaIdentityIsolationContractTests(unittest.TestCase):
         self.assertIn('announceAuthenticatedSession()',src)
         self.assertIn('/login?reason=session-replaced',src)
 
+    def test_shared_workstation_bootstrap_assets_are_not_stale_cached(self):
+        conf=(ROOT/'components/faro/current-apps/taiga-current/taiga.conf').read_text()
+        self.assertIn('location = / {',conf)
+        self.assertIn('location = /index.html {',conf)
+        self.assertIn('location = /plugins/cloudif-session-isolation.js {',conf)
+        self.assertGreaterEqual(conf.count('no-store, no-cache, must-revalidate'),4)
+        self.assertIn('location / {\n    proxy_pass http://taiga-front/;',conf)
+        generic=conf.split('location / {\n    proxy_pass http://taiga-front/;',1)[1].split('}',1)[0]
+        self.assertIn('Cache-Control "no-cache, must-revalidate"',generic)
+
     def test_all_entry_routes_reset_session_and_private_media_is_no_store(self):
         conf=(ROOT/'components/faro/current-apps/taiga-current/taiga.conf').read_text()
         edge=(ROOT/'components/proxy/srv/cloudif/proxy/npm/data/nginx/custom/http_top.conf').read_text()
