@@ -314,3 +314,5 @@
 - Blocker de promoção: `BLOCKED_CAPABILITY_FARO_DEPLOY`. Próximo passo autorizado é prover/atribuir um canal SSH/release explícito para Faro, então construir as duas imagens novas, executar candidato isolado, auditar `AuthData`/memberships, promover atomicamente e provar matriz A→B em browser real com rollback preservado.
 
 - Handoff da unidade de fonte: commit `e2eff5461dd984ae29db81c869777758060bb196` publicado em `origin/cloudiff-identity-session-fix`; reserva de trabalho compartilhado liberada após gates de fonte. O bloqueio restante é exclusivamente de capability de promoção no Faro, não de código/teste.
+
+- Smoke de imagem em Lima Cripto encontrou e corrigiu um gate de empacotamento: checkout com umask restritivo fazia `COPY cloudif-session-isolation.js` preservar modo `0600`, produzindo HTTP 403 pelo nginx. Dockerfiles agora normalizam explicitamente o JS e módulo OIDC para `0644`, com teste contratual correspondente.

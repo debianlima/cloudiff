@@ -123,7 +123,9 @@ class TaigaIdentityIsolationContractTests(unittest.TestCase):
         back=BACK_DOCKER.read_text(); front=FRONT_DOCKER.read_text()
         self.assertIn('FROM cloudif-local/taiga-back-oidc:6.10.2-c623b753',back)
         self.assertIn('COPY oidc.py',back)
+        self.assertIn('chmod 0644 /opt/venv/lib/python3.11/site-packages/taiga_contrib_oidc_auth/oidc.py',back)
         self.assertIn('FROM cloudif-local/taiga-front-oidc:6.10.3-c623b753-r2',front)
         self.assertIn('/plugins/cloudif-session-isolation.js',front)
+        self.assertIn('chmod 0644 /usr/share/nginx/html/plugins/cloudif-session-isolation.js',front)
 
 if __name__=='__main__': unittest.main()
