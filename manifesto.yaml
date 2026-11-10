@@ -12207,12 +12207,16 @@ entradas:
 
 trabalho_compartilhado:
   projeto: cloudiff
-  caminho: /tmp/cloudiff-a10-priority-hidden-shell-control-plane
-  unidade: CLOUDIFF-A10-PRIORITY-CONTROL-PLANE-HIDDEN-SHELL
-  descricao: 'prioridade total: corrigir pareamento/transporte governado e execução shell em background com hint discreto ao usuário; takeover humano autorizado com estado A9 preservado'
-  agente: A10-Redes/profile-aline
-  atualizado_em: '2026-09-13T14:49:09Z'
-  previsao_termino: '2026-09-13T16:49:09Z'
+  caminho: /srv/mcp-workspace/cloudiff-identity-fix
+  unidade: CLOUDIFF-IDENTITY-SESSION-HARDENING
+  descricao: 'corrigir isolamento de sessão compartilhada, binding OIDC fail-closed, entrada segura Taiga e cache privado; preservar rollout reversível'
+  agente: Meu Terminal Oracle
+  atualizado_em: '2026-11-10T16:26:24Z'
+  previsao_termino: '2026-11-10T20:26:24Z'
   zona_exclusao:
     - manifesto.yaml
     - estado.md
+    - components/faro/taiga-custom/**
+    - components/faro/current-apps/taiga-current/**
+    - components/proxy/srv/cloudif/proxy/npm/data/nginx/custom/http_top.conf
+    - portal/tests/test_taiga_identity_isolation_contract.py

@@ -1,6 +1,7 @@
 import unicodedata
 
 from django.apps import apps
+from django.core.exceptions import PermissionDenied
 from mozilla_django_oidc.auth import OIDCAuthenticationBackend
 from taiga.auth.services import send_register_email
 from taiga.auth.signals import user_registered as user_registered_signal
@@ -60,21 +61,38 @@ class TaigaOIDCAuthenticationBackend(OIDCAuthenticationBackend):
                 return [user]
         return self.UserModel.objects.none()
 
-    def _ensure_authdata(self, user, claims, username):
+    def _bind_authdata(self, user, key, value):
+        """Bind one external identity to exactly one Taiga user.
+
+        Historical or concurrent drift must never silently reassign an OIDC
+        subject/username to another account.  A conflict is denied so an
+        administrator can reconcile it with evidence instead of merging users.
+        """
+        if not value:
+            return None
         AuthData = apps.get_model("users", "AuthData")
+        value = str(value)
+        query = AuthData.objects.filter(key=key, value=value)
+        if query.exclude(user=user).exists():
+            raise PermissionDenied("OIDC identity binding conflict")
+        existing = query.filter(user=user).first()
+        if existing:
+            return existing
+        row, _ = AuthData.objects.get_or_create(
+            key=key,
+            value=value,
+            defaults={"user": user, "extra": {}},
+        )
+        if row.user_id != user.pk:
+            raise PermissionDenied("OIDC identity binding conflict")
+        return row
+
+    def _ensure_authdata(self, user, claims, username):
         sub = str(claims.get("sub") or "").strip()
         if sub:
-            AuthData.objects.get_or_create(
-                key=self.AUTHDATA_SUB_KEY,
-                value=sub,
-                defaults={"user": user, "extra": {}},
-            )
+            self._bind_authdata(user, self.AUTHDATA_SUB_KEY, sub)
         if username:
-            AuthData.objects.get_or_create(
-                key=self.AUTHDATA_KEY,
-                value=username,
-                defaults={"user": user, "extra": {}},
-            )
+            self._bind_authdata(user, self.AUTHDATA_KEY, username)
 
     def _update_identity_fields(self, user, claims):
         changed = []

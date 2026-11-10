@@ -74,8 +74,8 @@ class TaigaIdentityIsolationContractTests(unittest.TestCase):
     def test_runtime_uses_derivative_images_and_clean_entry_route(self):
         compose=(ROOT/'components/faro/current-apps/taiga-current/compose.yaml').read_text()
         conf=(ROOT/'components/faro/current-apps/taiga-current/taiga.conf').read_text()
-        self.assertIn('cloudif-local/taiga-back-oidc:6.10.2-c623b753-r5-identity',compose)
-        self.assertIn('cloudif-local/taiga-front-oidc:6.10.3-c623b753-r3-session',compose)
+        self.assertIn('cloudif-local/taiga-back-oidc:6.10.2-c623b753-r6-identity',compose)
+        self.assertIn('cloudif-local/taiga-front-oidc:6.10.3-c623b753-r4-session',compose)
         self.assertIn('/cloudif-enter/',conf)
         self.assertIn('location ~ "^/cloudif-enter/([a-z0-9][a-z0-9-]{0,62})$" {',conf)
         self.assertNotIn('location ~ ^/cloudif-enter/([a-z0-9][a-z0-9-]{0,62})$ {',conf)
@@ -83,6 +83,34 @@ class TaigaIdentityIsolationContractTests(unittest.TestCase):
         self.assertIn('sessionStorage.removeItem("token")',conf)
         self.assertIn('sessionid=; Path=/; Max-Age=0',conf)
         self.assertIn('/oidc/authenticate/?next=/project/$1',conf)
+
+
+    def test_oidc_binding_conflicts_fail_closed(self):
+        src=OIDC.read_text(); ast.parse(src)
+        self.assertIn('from django.core.exceptions import PermissionDenied',src)
+        self.assertIn('def _bind_authdata',src)
+        self.assertIn('query.exclude(user=user).exists()',src)
+        self.assertIn('raise PermissionDenied("OIDC identity binding conflict")',src)
+        self.assertIn('row.user_id != user.pk',src)
+
+    def test_new_authenticated_tab_invalidates_previous_tab(self):
+        src=SESSION.read_text()
+        self.assertIn('cloudif-auth-generation',src)
+        self.assertIn('BroadcastChannel',src)
+        self.assertIn('window.addEventListener("storage"',src)
+        self.assertIn('announceAuthenticatedSession()',src)
+        self.assertIn('/login?reason=session-replaced',src)
+
+    def test_all_entry_routes_reset_session_and_private_media_is_no_store(self):
+        conf=(ROOT/'components/faro/current-apps/taiga-current/taiga.conf').read_text()
+        edge=(ROOT/'components/proxy/srv/cloudif/proxy/npm/data/nginx/custom/http_top.conf').read_text()
+        for text in (conf,edge):
+            self.assertIn('location = /entrar-cloudiff',text)
+            self.assertIn('sessionStorage.removeItem("cloudif-auth-generation")',text)
+            self.assertIn('/oidc/authenticate/?next=/',text)
+        self.assertIn('private, no-store, no-cache, must-revalidate',conf)
+        self.assertIn('add_header Vary "Authorization, Cookie" always',conf)
+        self.assertIn('~^/media/ "private, no-store, no-cache, must-revalidate"',edge)
 
     def test_broker_marks_placeholder_users_as_pending_identity(self):
         src=BROKER.read_text()

@@ -302,3 +302,13 @@
 - Preflight criou `/srv/cloudif/releases/a10-ux-3007073dee2c/pre-state`; `cutover-readiness.sh` retornou `CUTOVER_READINESS=PASS` para release/source/archive novos.
 - Produção permaneceu intacta: current `a10-ux-73dd432fea38`, previous `a10-ux-adabb6ee435a`, `lib/portal` coerente com current, serviço `active/running`, PID `860577`; nenhum pointer, overlay ou serviço foi alterado.
 - A autorização humana de Produção segue **explicitamente não concedida**. O candidate está preparado para o futuro gate humano, não para promoção automática.
+
+
+## CLOUDIFF-IDENTITY-SESSION-HARDENING — correção de isolamento de identidade (2026-11-10)
+
+- Incidente observado em estações compartilhadas: runtime Taiga público reutilizava sessão IdP sem `prompt=login`, o plugin `/plugins/cloudif-session-isolation.js` não estava implantado (fallback SPA) e `/entrar-cloudiff` não limpava o estado Taiga; o source canônico já continha parte do hardening, comprovando drift source→produção.
+- Patch desta unidade: binding OIDC passa a falhar fechado quando `oidc_sub`/username já pertence a outro `User`; frontend usa `sessionStorage` e geração não secreta via `BroadcastChannel`/`storage` para invalidar abas autenticadas anteriores; `/entrar-cloudiff` e `/cloudif-enter/<slug>` limpam sessão antes do OIDC; `/oidc/` e mídia privada recebem `no-store`; mídia varia por Authorization/Cookie.
+- Releases derivadas novas e imutáveis: backend `6.10.2-c623b753-r6-identity` e frontend `6.10.3-c623b753-r4-session`; tags anteriores não podem ser sobrescritas.
+- Gates de fonte: `portal.tests.test_taiga_identity_isolation_contract` PASS; suíte focal 16/16 PASS; `scripts/validate.sh` PASS; `scripts/test.sh` 1281/1281 PASS; `git diff --check` e secret scan PASS.
+- Runtime Faro continua **inalterado** nesta etapa. LabIFF e PGH Core alcançam `10.62.91.5:22`, porém nenhuma superfície disponível possui credencial SSH vinculada a `maquina:faro`; o Vault Admin possui apenas `secret://credentials/faro/taiga/reconciler`, cuja capability é o reconciler de membership e não autoriza shell/deploy. Não foi usado como shell oculto.
+- Blocker de promoção: `BLOCKED_CAPABILITY_FARO_DEPLOY`. Próximo passo autorizado é prover/atribuir um canal SSH/release explícito para Faro, então construir as duas imagens novas, executar candidato isolado, auditar `AuthData`/memberships, promover atomicamente e provar matriz A→B em browser real com rollback preservado.
