@@ -441,31 +441,23 @@ def render_acl_modal(slug, user=None):
 </section>
 
 <section class="acl-modal-section acl-add-section">
-  <div class="acl-modal-section-head acl-directory-head">
-    <div><h4>Adicionar permissão</h4><p>Selecione uma identidade do catálogo institucional sincronizado.</p></div>
-    <button type="button" class="btn light acl-sync-btn" id="acl_sync_{h(modal_id)}">Atualizar lista de usuários</button>
+  <div class="acl-modal-section-head">
+    <div><h4>Adicionar permissão</h4><p>Pesquise uma identidade real no diretório institucional.</p></div>
   </div>
 
-  <div class="acl-directory-status" id="acl_status_{h(modal_id)}">Carregando catálogo...</div>
-
-  <div class="acl-directory-filters" id="acl_filters_{h(modal_id)}" role="group" aria-label="Filtrar identidades">
-    <button type="button" class="acl-filter active" data-kind="all">Todos</button>
-    <button type="button" class="acl-filter" data-kind="user">Usuários</button>
-    <button type="button" class="acl-filter" data-kind="group">Grupos</button>
+<div class="acl-directory-launch">
+  <button id="acl_directory_open_{h(modal_id)}" class="cm-btn" type="button">Selecionar usuário ou grupo</button>
+  <span id="acl_directory_status_{h(modal_id)}" class="acl-directory-status">Catálogo institucional</span>
+</div>
+<div id="acl_directory_panel_{h(modal_id)}" class="acl-directory-panel" hidden>
+  <div class="acl-directory-toolbar">
+    <div class="cm-field acl-search-field"><label>Buscar no catálogo</label><input id="acl_search_{h(modal_id)}" placeholder="Nome, matrícula, e-mail ou grupo" autocomplete="off"></div>
+    <div class="cm-field acl-directory-filter-field"><label>Mostrar</label><select id="acl_directory_filter_{h(modal_id)}"><option value="all">Todos</option><option value="user">Usuários</option><option value="group">Grupos</option></select></div>
+    <button id="acl_directory_refresh_{h(modal_id)}" class="cm-btn light" type="button">Atualizar lista</button>
   </div>
-
-  <div class="cm-field acl-search-field">
-    <label>Buscar usuário ou grupo</label>
-    <input id="acl_search_{h(modal_id)}" placeholder="Nome, matrícula, login, e-mail ou grupo" autocomplete="off">
-    <div class="acl-search-help">A lista abaixo vem do cache local sincronizado com o Authentik. Se uma identidade recém-criada ainda não estiver no cache, a busca usa o AD Agent como fallback rápido.</div>
-  </div>
-
-  <div id="acl_results_{h(modal_id)}" class="acl-search-results" aria-live="polite"></div>
-  <div class="acl-directory-pagination">
-    <button type="button" class="btn light" id="acl_prev_{h(modal_id)}">Anterior</button>
-    <span id="acl_page_{h(modal_id)}" class="acl-page-label">Página 1</span>
-    <button type="button" class="btn light" id="acl_next_{h(modal_id)}">Próxima</button>
-  </div>
+  <div id="acl_results_{h(modal_id)}" class="acl-search-results"></div>
+  <div class="acl-directory-footer"><button id="acl_directory_more_{h(modal_id)}" class="cm-btn light" type="button" hidden>Carregar mais</button><span class="acl-search-help">O catálogo é derivado do Authentik/AD. O acesso só é concedido após confirmar “Adicionar permissão”.</span></div>
+</div>
 
 <form class="acl-add-form" method="post" action="/cloudiff/portal/action/project_acl" onsubmit="return cloudifValidateAclSelection_{h(modal_id)}()">
   <input type="hidden" name="op" value="add">
@@ -478,7 +470,7 @@ def render_acl_modal(slug, user=None):
   <div class="cm-field">
     <label>Tipo identificado</label>
     <select id="acl_principal_type_view_{h(modal_id)}" disabled>
-      <option value="">Selecione na lista</option>
+      <option value="">Selecione na busca</option>
       <option value="user">Usuário</option>
       <option value="group">Grupo</option>
     </select>
@@ -486,7 +478,7 @@ def render_acl_modal(slug, user=None):
 
   <div class="cm-field">
     <label>Usuário ou grupo selecionado</label>
-    <input id="acl_principal_{h(modal_id)}" disabled placeholder="Selecione um resultado da lista">
+    <input id="acl_principal_{h(modal_id)}" disabled placeholder="Selecione um resultado da busca">
   </div>
   </div>
 
@@ -498,180 +490,114 @@ def render_acl_modal(slug, user=None):
 
 <script>
 (function(){{
-  var search = document.getElementById("acl_search_{h(modal_id)}");
-  var principalView = document.getElementById("acl_principal_{h(modal_id)}");
-  var principalHidden = document.getElementById("acl_principal_hidden_{h(modal_id)}");
-  var typeView = document.getElementById("acl_principal_type_view_{h(modal_id)}");
-  var typeHidden = document.getElementById("acl_principal_type_hidden_{h(modal_id)}");
-  var results = document.getElementById("acl_results_{h(modal_id)}");
-  var statusBox = document.getElementById("acl_status_{h(modal_id)}");
-  var filters = document.getElementById("acl_filters_{h(modal_id)}");
-  var syncButton = document.getElementById("acl_sync_{h(modal_id)}");
-  var prevButton = document.getElementById("acl_prev_{h(modal_id)}");
-  var nextButton = document.getElementById("acl_next_{h(modal_id)}");
-  var pageLabel = document.getElementById("acl_page_{h(modal_id)}");
-  var timer = null;
-  var projectSlug = "{h(slug)}";
-  var currentPage = 1;
-  var currentPages = 1;
-  var currentType = "all";
-  var csrfToken = "";
-  var loading = false;
+  var search=document.getElementById("acl_search_{h(modal_id)}");
+  var openBtn=document.getElementById("acl_directory_open_{h(modal_id)}");
+  var panel=document.getElementById("acl_directory_panel_{h(modal_id)}");
+  var refreshBtn=document.getElementById("acl_directory_refresh_{h(modal_id)}");
+  var moreBtn=document.getElementById("acl_directory_more_{h(modal_id)}");
+  var filter=document.getElementById("acl_directory_filter_{h(modal_id)}");
+  var status=document.getElementById("acl_directory_status_{h(modal_id)}");
+  var principalView=document.getElementById("acl_principal_{h(modal_id)}");
+  var principalHidden=document.getElementById("acl_principal_hidden_{h(modal_id)}");
+  var typeView=document.getElementById("acl_principal_type_view_{h(modal_id)}");
+  var typeHidden=document.getElementById("acl_principal_type_hidden_{h(modal_id)}");
+  var results=document.getElementById("acl_results_{h(modal_id)}");
+  var timer=null,page=1,pageSize=50,total=0,csrfToken="",projectSlug="{h(slug)}";
+  if(!search||!openBtn||!panel||!refreshBtn||!moreBtn||!filter||!status||!principalView||!principalHidden||!typeView||!typeHidden||!results)return;
 
-  if(!search || !principalView || !principalHidden || !typeView || !typeHidden || !results) return;
+  function esc(v){{return String(v||'').replace(/[&<>"']/g,function(c){{return {{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}}[c];}});}}
+  function attr(v){{return esc(v).replace(/"/g,'&quot;');}}
+  function cleanPrincipal(v){{return String(v||'').trim().split(/\\s+/)[0]||'';}}
+  function renderMessage(msg){{results.innerHTML='<div class="acl-result-dropdown"><div class="acl-result-item" role="note"><div class="acl-result-meta">'+esc(msg)+'</div></div></div>';}}
+  function setCacheStatus(cache){{
+    if(!cache||!cache.available){{status.textContent='Catálogo ainda não sincronizado';return;}}
+    var when=cache.synced_at?new Date(cache.synced_at).toLocaleString():'horário indisponível';
+    status.textContent=String(cache.users||0)+' usuários · '+String(cache.groups||0)+' grupos · atualizado '+when;
+  }}
+  function selectPrincipal(txt,typ){{
+    txt=cleanPrincipal(txt);typ=String(typ||'').trim();if(!txt)return;
+    principalView.value=txt;principalHidden.value=txt;if(typ){{typeView.value=typ;typeHidden.value=typ;}}
+    search.value=txt;panel.hidden=true;status.textContent='Selecionado: '+txt;
+  }}
+  function renderItems(arr,append){{
+    if(!arr||!arr.length){{if(!append)renderMessage('Nenhum resultado encontrado. Use “Atualizar lista” ou pesquise novamente para consultar o AD ao vivo.');return;}}
+    var html=arr.map(function(x){{
+      var label=x.principal||x.username||x.uid||x.cn||x.name||x.email||x.group||x.label||'';
+      var type=x.type||'',full=x.full_name||x.displayName||x.display_name||x.cn||x.name||label,mail=x.mail||x.email||'',source=x.source||'';
+      var groups=Array.isArray(x.groups)?x.groups:[],admin=!!x.admin;
+      var adminBadge=admin?'<span class="acl-admin-badge">Administrador CloudIFF</span>':'';
+      var groupHtml=groups.length?'<div class="acl-result-groups">'+groups.slice(0,8).map(function(g){{return '<span class="acl-result-group">'+esc(g)+'</span>';}}).join('')+(groups.length>8?'<span class="acl-result-group">+'+(groups.length-8)+'</span>':'')+'</div>':'';
+      return '<button type="button" class="acl-result-item'+(admin?' is-admin':'')+'" data-principal="'+attr(label)+'" data-type="'+attr(type)+'">'+
+        '<div class="acl-result-main"><span class="acl-result-principal">'+esc(full)+'</span><span class="acl-result-type">'+esc(type||'principal')+'</span>'+adminBadge+'</div>'+
+        '<div class="acl-result-meta"><div><strong>Identificador:</strong> '+esc(label)+'</div>'+(mail?'<div><strong>E-mail:</strong> '+esc(mail)+'</div>':'')+(source?'<div><strong>Fonte:</strong> '+esc(source)+'</div>':'')+'</div>'+groupHtml+'</button>';
+    }}).join('');
+    if(append){{var box=results.querySelector('.acl-result-dropdown');if(box)box.insertAdjacentHTML('beforeend',html);else results.innerHTML='<div class="acl-result-dropdown">'+html+'</div>';}}
+    else results.innerHTML='<div class="acl-result-dropdown">'+html+'</div>';
+  }}
+  function loadDirectory(q,requestedPage,append){{
+    page=requestedPage||1;if(!append)renderMessage('Carregando catálogo...');
+    var endpoint=new URL('api/ad-search',window.location.href);
+    endpoint.searchParams.set('q',q||'');endpoint.searchParams.set('type',filter.value||'all');endpoint.searchParams.set('slug',projectSlug);endpoint.searchParams.set('page',String(page));endpoint.searchParams.set('page_size',String(pageSize));
+    return fetch(endpoint.toString(),{{headers:{{'Accept':'application/json'}},credentials:'same-origin'}})
+      .then(function(r){{var ct=r.headers.get('content-type')||'';if(ct.indexOf('application/json')<0)throw new Error('O catálogo não retornou JSON (HTTP '+r.status+').');return r.json();}})
+      .then(function(data){{if(!data||data.ok===false)throw new Error((data&&data.error)||'Catálogo indisponível.');csrfToken=data.csrf_token||csrfToken;total=Number(data.total||data.count||0);setCacheStatus(data.cache||{{}});renderItems(data.items||data.results||[],append);moreBtn.hidden=(page*pageSize>=total)||!(data.items||[]).length;return data;}})
+      .catch(function(err){{renderMessage(err&&err.message?err.message:'Catálogo indisponível.');moreBtn.hidden=true;throw err;}});
+  }}
 
-  function esc(v){{
-    return String(v || '').replace(/[&<>"']/g, function(c){{
-      return {{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}}[c];
-    }});
-  }}
-  function attr(v){{ return esc(v).replace(/"/g, '&quot;'); }}
-  function cleanPrincipal(txt){{ return (txt || "").trim().split(/\\s+/)[0] || ""; }}
-  function ageLabel(seconds){{
-    seconds = Number(seconds);
-    if(!Number.isFinite(seconds)) return "sem sincronização";
-    if(seconds < 60) return "agora";
-    if(seconds < 3600) return "há " + Math.floor(seconds/60) + " min";
-    return "há " + Math.floor(seconds/3600) + " h";
-  }}
-  function renderMessage(msg){{
-    results.innerHTML = '<div class="acl-result-dropdown"><div class="acl-result-item" role="note"><div class="acl-result-meta">' + esc(msg) + '</div></div></div>';
-  }}
-  function updateCacheStatus(cache, total){{
-    cache = cache || {{}};
-    var pieces = [];
-    if(cache.ready) pieces.push((cache.users || 0) + " usuários", (cache.groups || 0) + " grupos");
-    else pieces.push("cache ainda não sincronizado");
-    pieces.push("atualizado " + ageLabel(cache.age_seconds));
-    if(cache.stale) pieces.push("sincronização recomendada");
-    if(typeof total === "number") pieces.push(total + " resultado" + (total === 1 ? "" : "s"));
-    statusBox.textContent = pieces.join(" · ");
-    statusBox.classList.toggle("stale", !!cache.stale);
-  }}
-  function selectPrincipal(txt, typ){{
-    txt = cleanPrincipal(txt); typ = (typ || "").trim(); if(!txt) return;
-    principalView.value = txt; principalHidden.value = txt;
-    if(typ){{ typeView.value = typ; typeHidden.value = typ; }}
-    search.value = txt;
-  }}
-  function renderItems(arr){{
-    if(!arr || !arr.length){{ renderMessage("Nenhum resultado encontrado. Use “Atualizar lista de usuários” ou confirme a identidade no diretório institucional."); return; }}
-    results.innerHTML = '<div class="acl-result-dropdown">' + arr.map(function(x){{
-      var label = x.principal || x.username || x.uid || x.name || x.email || "";
-      var type = x.type || "";
-      var full = x.full_name || x.display_name || x.displayName || x.cn || x.name || label;
-      var mail = x.email || x.mail || "";
-      var source = x.source || "";
-      var admin = type === "user" && x.is_admin === true;
-      var adminBadge = admin ? '<span class="acl-admin-badge">Administrador CloudIFF</span>' : '';
-      return '<button type="button" class="acl-result-item' + (admin ? ' is-admin' : '') + '" data-principal="' + attr(label) + '" data-type="' + attr(type) + '">' +
-        '<div class="acl-result-main"><span class="acl-result-name">' + esc(full) + '</span>' + adminBadge + '<span class="acl-result-type">' + esc(type || "principal") + '</span></div>' +
-        '<div class="acl-result-meta"><strong>' + esc(label) + '</strong>' + (mail ? ' · ' + esc(mail) : '') + (source ? ' · ' + esc(source) : '') + '</div>' +
-      '</button>';
-    }}).join('') + '</div>';
-  }}
-  function loadDirectory(page){{
-    if(loading) return;
-    loading = true; currentPage = Math.max(1, Number(page || 1));
-    renderMessage("Carregando identidades...");
-    var endpoint = new URL("api/ad-search", window.location.href);
-    endpoint.searchParams.set("q", search.value.trim());
-    endpoint.searchParams.set("type", currentType);
-    endpoint.searchParams.set("slug", projectSlug);
-    endpoint.searchParams.set("page", String(currentPage));
-    endpoint.searchParams.set("page_size", "50");
-    fetch(endpoint.toString(), {{headers: {{"Accept":"application/json"}}, credentials:"same-origin"}})
-      .then(function(r){{
-        var ct = r.headers.get("content-type") || "";
-        if(ct.indexOf("application/json") < 0) throw new Error("O catálogo respondeu em formato inesperado (HTTP " + r.status + ").");
-        return r.json().then(function(data){{ if(!r.ok) throw new Error(data.error || ("HTTP " + r.status)); return data; }});
-      }})
+  results.addEventListener('click',function(ev){{var item=ev.target.closest?ev.target.closest('.acl-result-item[data-principal]'):null;if(!item)return;ev.preventDefault();ev.stopPropagation();selectPrincipal(item.getAttribute('data-principal')||'',item.getAttribute('data-type')||'');}},true);
+  window.cloudifValidateAclSelection_{h(modal_id)}=function(){{if(!principalHidden.value||!typeHidden.value){{renderMessage('Selecione um usuário ou grupo no catálogo antes de adicionar a permissão.');panel.hidden=false;return false;}}return true;}};
+  openBtn.addEventListener('click',function(){{panel.hidden=!panel.hidden;if(!panel.hidden){{search.focus();loadDirectory(search.value.trim(),1,false).catch(function(){{}});}}}});
+  search.addEventListener('input',function(){{clearTimeout(timer);principalView.value='';principalHidden.value='';typeView.value='';typeHidden.value='';timer=setTimeout(function(){{loadDirectory(search.value.trim(),1,false).catch(function(){{}});}},220);}});
+  filter.addEventListener('change',function(){{loadDirectory(search.value.trim(),1,false).catch(function(){{}});}});
+  moreBtn.addEventListener('click',function(){{loadDirectory(search.value.trim(),page+1,true).catch(function(){{}});}});
+  function pollSync(previousStamp,attempt){{
+    var endpoint=new URL('api/directory-status',window.location.href);endpoint.searchParams.set('slug',projectSlug);
+    fetch(endpoint.toString(),{{headers:{{'Accept':'application/json'}},credentials:'same-origin'}})
+      .then(function(r){{return r.json().then(function(x){{if(!r.ok||x.ok===false)throw new Error(x.error||'Falha ao consultar sincronização.');return x;}});}})
       .then(function(data){{
-        if(data.ok === false) throw new Error(data.error || "Busca não autorizada.");
-        csrfToken = data.csrf_token || csrfToken;
-        currentPage = Number(data.page || 1); currentPages = Number(data.pages || 1);
-        pageLabel.textContent = "Página " + currentPage + " de " + currentPages;
-        prevButton.disabled = currentPage <= 1; nextButton.disabled = currentPage >= currentPages;
-        updateCacheStatus(data.cache || {{}}, Number(data.total || 0));
-        renderItems(data.items || data.results || []);
+        var cache=(data&&data.cache)||{{}};csrfToken=data.csrf_token||csrfToken;setCacheStatus(cache);
+        if(cache.available&&cache.synced_at&&cache.synced_at!==previousStamp){{status.textContent='Lista atualizada.';refreshBtn.disabled=false;return loadDirectory(search.value.trim(),1,false);}}
+        if(attempt<40){{setTimeout(function(){{pollSync(previousStamp,attempt+1);}},1500);return;}}
+        refreshBtn.disabled=false;status.textContent='Sincronização continua em segundo plano; a lista atual permanece disponível.';
       }})
-      .catch(function(err){{ renderMessage(err && err.message ? err.message : "Catálogo indisponível."); }})
-      .finally(function(){{ loading = false; }});
+      .catch(function(){{
+        if(attempt<40){{setTimeout(function(){{pollSync(previousStamp,attempt+1);}},1500);return;}}
+        refreshBtn.disabled=false;renderMessage('Não foi possível confirmar o fim da sincronização. A lista anterior continua disponível.');
+      }});
   }}
 
-  results.addEventListener("click", function(ev){{
-    var item = ev.target.closest ? ev.target.closest(".acl-result-item[data-principal]") : null;
-    if(!item) return; ev.preventDefault(); ev.stopPropagation();
-    selectPrincipal(item.getAttribute("data-principal") || "", item.getAttribute("data-type") || "");
-  }}, true);
-  window.cloudifValidateAclSelection_{h(modal_id)} = function(){{
-    if(!principalHidden.value || !typeHidden.value){{ renderMessage("Selecione um usuário ou grupo na lista antes de adicionar a permissão."); return false; }}
-    return true;
-  }};
-  search.addEventListener("input", function(){{
-    clearTimeout(timer); principalView.value = ""; principalHidden.value = ""; typeView.value = ""; typeHidden.value = "";
-    timer = setTimeout(function(){{ loadDirectory(1); }}, 250);
-  }});
-  filters.addEventListener("click", function(ev){{
-    var btn = ev.target.closest ? ev.target.closest("button[data-kind]") : null; if(!btn) return;
-    currentType = btn.getAttribute("data-kind") || "all";
-    filters.querySelectorAll("button[data-kind]").forEach(function(x){{ x.classList.toggle("active", x === btn); }});
-    loadDirectory(1);
-  }});
-  prevButton.addEventListener("click", function(){{ if(currentPage > 1) loadDirectory(currentPage - 1); }});
-  nextButton.addEventListener("click", function(){{ if(currentPage < currentPages) loadDirectory(currentPage + 1); }});
-  function pollDirectorySync(previousStamp, attempt){{
-    var endpoint = new URL("api/directory-status", window.location.href);
-    endpoint.searchParams.set("slug", projectSlug);
-    fetch(endpoint.toString(), {{headers:{{"Accept":"application/json"}},credentials:"same-origin"}})
-      .then(function(r){{ return r.json().then(function(data){{ if(!r.ok) throw new Error(data.error || ("HTTP "+r.status)); return data; }}); }})
-      .then(function(data){{
-        var cache = (data && data.cache) || {{}};
-        csrfToken = data.csrf_token || csrfToken;
-        updateCacheStatus(cache, null);
-        if(cache.ready && cache.last_sync_at && cache.last_sync_at !== previousStamp){{ loadDirectory(1); return; }}
-        if(attempt < 30) setTimeout(function(){{ pollDirectorySync(previousStamp, attempt + 1); }}, 1500);
-        else renderMessage("A sincronização continua em segundo plano. A lista atual permanece disponível.");
-      }})
-      .catch(function(){{ if(attempt < 30) setTimeout(function(){{ pollDirectorySync(previousStamp, attempt + 1); }}, 1500); }});
-  }}
-
-  syncButton.addEventListener("click", function(){{
-    if(!csrfToken){{ renderMessage("Aguarde o carregamento do catálogo antes de sincronizar."); return; }}
-    syncButton.disabled = true; syncButton.textContent = "Sincronizando...";
-    var endpoint = new URL("api/directory-sync", window.location.href);
-    var body = new URLSearchParams({{slug:projectSlug, csrf_token:csrfToken}});
-    fetch(endpoint.toString(), {{method:"POST", credentials:"same-origin", headers:{{"Accept":"application/json","Content-Type":"application/x-www-form-urlencoded;charset=UTF-8","X-CSRF-Token":csrfToken}}, body:body.toString()}})
-      .then(function(r){{ return r.json().then(function(data){{ if(!r.ok && r.status !== 202) throw new Error(data.error || ("HTTP " + r.status)); return data; }}); }})
-      .then(function(data){{
-        var cache = (data && data.cache) || {{}};
-        var previousStamp = cache.last_sync_at || "";
-        updateCacheStatus(cache, null);
-        statusBox.textContent = "Sincronizando diretório em segundo plano...";
-        pollDirectorySync(previousStamp, 0);
-      }})
-      .catch(function(err){{ renderMessage("Falha ao sincronizar: " + (err.message || err)); }})
-      .finally(function(){{ syncButton.disabled = false; syncButton.textContent = "Atualizar lista de usuários"; }});
+  refreshBtn.addEventListener('click',function(){{
+    if(!csrfToken){{loadDirectory(search.value.trim(),1,false).catch(function(){{}});return;}}
+    refreshBtn.disabled=true;status.textContent='Sincronizando com Authentik em segundo plano...';
+    var endpoint=new URL('action/directory-cache-sync',window.location.href),body=new URLSearchParams();body.set('slug',projectSlug);body.set('csrf_token',csrfToken);
+    fetch(endpoint.toString(),{{method:'POST',credentials:'same-origin',headers:{{'Accept':'application/json','Content-Type':'application/x-www-form-urlencoded;charset=UTF-8','X-CSRF-Token':csrfToken}},body:body.toString()}})
+      .then(function(r){{return r.json().then(function(x){{if((!r.ok&&r.status!==202)||x.ok===false)throw new Error(x.error||'Falha ao sincronizar.');return x;}});}})
+      .then(function(data){{var cache=(data&&data.cache)||{{}};var previousStamp=cache.synced_at||'';setCacheStatus(cache);status.textContent='Sincronizando com Authentik em segundo plano...';pollSync(previousStamp,0);}})
+      .catch(function(err){{refreshBtn.disabled=false;renderMessage(err&&err.message?err.message:'Falha ao sincronizar catálogo.');}});
   }});
 
-  window.cloudifAclDirectoryLoaders = window.cloudifAclDirectoryLoaders || {{}};
-  window.cloudifAclDirectoryLoaders["{h(modal_id)}"] = function(){{ loadDirectory(1); }};
-  if(typeof window.cloudifOpenAcl !== "function"){{
-    window.cloudifOpenAcl = function(id){{
-      if(typeof cloudifShowWizard === "function") cloudifShowWizard(id);
-      var loader = window.cloudifAclDirectoryLoaders && window.cloudifAclDirectoryLoaders[id];
-      if(typeof loader === "function") loader();
-    }};
-  }}
-
+  // Autoabre este modal após redirect de ADD/REMOVE: ?acl=<slug>&msg=...
   (function(){{
     var params = new URLSearchParams(window.location.search);
-    if(params.get("acl") !== "{h(slug)}") return;
-    window.cloudifOpenAcl("{h(modal_id)}");
+    var acl = params.get("acl");
+    if(acl !== "{h(slug)}") return;
+
+    if(typeof cloudifShowWizard === "function"){{
+      cloudifShowWizard("{h(modal_id)}");
+    }}
+
     var msg = params.get("msg");
     if(msg){{
-      var box = document.getElementById("{h(modal_id)}"), notice = document.createElement("div");
-      if(box){{ notice.className="wizard-note"; notice.innerHTML="<strong>Resultado:</strong> "+esc(msg); var head=box.querySelector(".wizard-head"); if(head&&head.parentNode) head.parentNode.insertBefore(notice,head.nextSibling); }}
+      var box = document.getElementById("{h(modal_id)}");
+      if(box){{
+        var notice = document.createElement("div");
+        notice.className = "wizard-note";
+        notice.innerHTML = "<strong>Resultado:</strong> " + esc(msg);
+        var head = box.querySelector(".wizard-head");
+        if(head && head.parentNode){{
+          head.parentNode.insertBefore(notice, head.nextSibling);
+        }}
+      }}
     }}
   }})();
 }})();
@@ -698,34 +624,32 @@ def render_acl_modal(slug, user=None):
 #{h(modal_id)} .acl-current-table td,#{h(modal_id)} .acl-current-table th{{vertical-align:middle}}
 #{h(modal_id)} .acl-search-field{{position:relative;margin:0}}
 #{h(modal_id)} .acl-search-help{{margin-top:6px;font-size:.72rem;color:var(--c-muted,#64748b)}}
-#{h(modal_id)} .acl-directory-head{{align-items:center}}
-#{h(modal_id)} .acl-sync-btn{{width:auto;white-space:nowrap}}
-#{h(modal_id)} .acl-directory-status{{padding:9px 12px;border-radius:9px;background:var(--c-surface-2,#f8fafc);font-size:.74rem;color:var(--c-muted,#64748b)}}
-#{h(modal_id)} .acl-directory-status.stale{{background:#fff7ed;color:#9a3412}}
-#{h(modal_id)} .acl-directory-filters{{display:flex;gap:8px;flex-wrap:wrap}}
-#{h(modal_id)} .acl-filter{{border:1px solid var(--c-border,#dce3ed);background:var(--c-surface,#fff);border-radius:999px;padding:7px 12px;cursor:pointer;font-weight:750}}
-#{h(modal_id)} .acl-filter.active{{background:#176b35;color:#fff;border-color:#176b35}}
-#{h(modal_id)} .acl-result-dropdown{{display:grid;gap:8px;max-height:360px;overflow:auto;padding:2px}}
-#{h(modal_id)} .acl-result-item{{display:grid;gap:5px;width:100%;padding:11px 12px;text-align:left;border:1px solid var(--c-border,#dce3ed);border-radius:10px;background:var(--c-surface,#fff);cursor:pointer}}
-#{h(modal_id)} .acl-result-item:hover{{border-color:#7ab58b;background:#f4fbf6}}
-#{h(modal_id)} .acl-result-item.is-admin{{border-left:4px solid #b45309;background:#fffbeb}}
-#{h(modal_id)} .acl-result-main{{display:flex;align-items:center;gap:8px;flex-wrap:wrap}}
-#{h(modal_id)} .acl-result-name{{font-weight:850}}
-#{h(modal_id)} .acl-result-type{{margin-left:auto;font-size:.7rem;color:var(--c-muted,#64748b)}}
-#{h(modal_id)} .acl-admin-badge{{padding:3px 7px;border-radius:999px;background:#fef3c7;color:#92400e;font-size:.66rem;font-weight:900;text-transform:uppercase}}
-#{h(modal_id)} .acl-result-meta{{font-size:.73rem;color:var(--c-muted,#64748b);overflow-wrap:anywhere}}
-#{h(modal_id)} .acl-directory-pagination{{display:flex;align-items:center;justify-content:center;gap:10px}}
-#{h(modal_id)} .acl-directory-pagination .btn{{width:auto;min-width:100px}}
-#{h(modal_id)} .acl-page-label{{font-size:.75rem;color:var(--c-muted,#64748b)}}
 #{h(modal_id)} .acl-selection-grid{{display:grid;grid-template-columns:minmax(180px,.7fr) minmax(0,1.3fr);gap:12px}}
 #{h(modal_id)} .acl-add-form{{display:grid;gap:12px}}
 #{h(modal_id)} .acl-form-actions{{display:flex;justify-content:flex-end;margin:2px 0 0}}
 #{h(modal_id)} .acl-form-actions .cm-btn{{width:auto;min-width:170px}}
 #{h(modal_id)} .pill{{white-space:nowrap}}
+#{h(modal_id)} .acl-directory-launch{{display:flex;align-items:center;gap:10px;flex-wrap:wrap}}
+#{h(modal_id)} .acl-directory-status{{font-size:.72rem;color:var(--c-muted,#64748b)}}
+#{h(modal_id)} .acl-directory-panel{{display:grid;gap:12px;padding:14px;border:1px solid var(--c-border,#dce3ed);border-radius:10px;background:var(--c-surface-2,#f8fafc)}}
+#{h(modal_id)} .acl-directory-toolbar{{display:grid;grid-template-columns:minmax(0,1fr) 150px auto;gap:10px;align-items:end}}
+#{h(modal_id)} .acl-directory-filter-field,#{h(modal_id)} .acl-directory-toolbar .cm-field{{margin:0}}
+#{h(modal_id)} .acl-directory-footer{{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}}
+#{h(modal_id)} .acl-result-dropdown{{display:grid;gap:8px;max-height:430px;overflow:auto;padding-right:3px}}
+#{h(modal_id)} .acl-result-item{{width:100%;text-align:left;border:1px solid var(--c-border,#dce3ed);border-radius:9px;padding:10px 12px;background:var(--c-surface,#fff);cursor:pointer}}
+#{h(modal_id)} .acl-result-item:hover{{border-color:var(--c-primary,#166534)}}
+#{h(modal_id)} .acl-result-item.is-admin{{box-shadow:inset 4px 0 0 #d4a017}}
+#{h(modal_id)} .acl-result-main{{display:flex;align-items:center;gap:8px;flex-wrap:wrap}}
+#{h(modal_id)} .acl-result-principal{{font-weight:800}}
+#{h(modal_id)} .acl-result-type,#{h(modal_id)} .acl-admin-badge{{font-size:.67rem;font-weight:800;border-radius:999px;padding:3px 7px;background:var(--c-surface-2,#f1f5f9)}}
+#{h(modal_id)} .acl-admin-badge{{border:1px solid #d4a017}}
+#{h(modal_id)} .acl-result-meta{{margin-top:5px;font-size:.73rem;color:var(--c-muted,#64748b)}}
+#{h(modal_id)} .acl-result-groups{{display:flex;gap:4px;flex-wrap:wrap;margin-top:6px}}
+#{h(modal_id)} .acl-result-group{{font-size:.64rem;border:1px solid var(--c-border,#dce3ed);border-radius:999px;padding:2px 6px}}
 @media(max-width:700px){{
   #{h(modal_id)} .wizard-head{{padding:18px}}
   #{h(modal_id)} .acl-modal-content{{padding:16px;gap:14px}}
-  #{h(modal_id)} .acl-modal-meta,#{h(modal_id)} .acl-selection-grid{{grid-template-columns:1fr}}
+  #{h(modal_id)} .acl-modal-meta,#{h(modal_id)} .acl-selection-grid,#{h(modal_id)} .acl-directory-toolbar{{grid-template-columns:1fr}}
   #{h(modal_id)} .acl-current-section{{overflow-x:auto}}
   #{h(modal_id)} .acl-current-table{{min-width:620px}}
   #{h(modal_id)} .acl-form-actions .cm-btn{{width:100%}}

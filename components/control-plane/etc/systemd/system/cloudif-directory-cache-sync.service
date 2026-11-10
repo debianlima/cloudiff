@@ -1,0 +1,23 @@
+[Unit]
+Description=CloudIF Portal Authentik Directory Cache Sync
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+Environment=AUTHENTIK_API_URL=http://10.62.91.2:9000
+Environment=CLOUDIF_DIRECTORY_CACHE=/var/lib/cloudif/portal/directory-cache.db
+Environment=CLOUDIF_ADMIN_GROUP=CloudIF-Tenants-Admin
+Environment=CLOUDIF_PROFESSOR_GROUP=CloudIF-Professor
+LoadCredentialEncrypted=authentik_token:/etc/credstore.encrypted/cloudif-directory-cache-authentik.cred
+ExecStart=/usr/local/sbin/cloudif-directory-cache-sync.py
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectHome=yes
+ProtectSystem=strict
+ReadWritePaths=/var/lib/cloudif/portal
+
+[Install]
+WantedBy=multi-user.target

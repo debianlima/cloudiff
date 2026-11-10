@@ -3217,7 +3217,7 @@ def render_projects(user):
         <button class="btn amber" name="op" value="integrate">Integrar</button>
       </form>
       <button class="btn light" onclick="cloudifShowWizard('{edit_id}')">Editar</button>
-      <button class="btn light" onclick="cloudifOpenAcl('{acl_id}')">Permissões</button>
+      <button class="btn light" onclick="cloudifShowWizard('{acl_id}')">Permissões</button>
     </div>
   </div>
 </div>"""))
@@ -4297,9 +4297,9 @@ if "Portal" in globals():
             stype = (qs.get("type", ["all"])[0] or "all").strip().lower()
             slug = (qs.get("slug", [""])[0] or "").strip()
             diag = (qs.get("diag", ["0"])[0] or "0") == "1"
-            try: page = max(1, int((qs.get("page", ["1"])[0] or "1")))
+            try: page = max(int((qs.get("page", ["1"])[0] or "1")), 1)
             except Exception: page = 1
-            try: page_size = max(1, min(100, int((qs.get("page_size", ["50"])[0] or "50"))))
+            try: page_size = min(max(int((qs.get("page_size", ["50"])[0] or "50")), 1), 100)
             except Exception: page_size = 50
 
             try:
@@ -4338,8 +4338,8 @@ if "Portal" in globals():
                 payload["slug"] = slug
                 payload["user"] = user.get("username") or "unknown"
                 payload["path"] = clean_path
-                if "_prod_csrf_token" in globals():
-                    payload["csrf_token"] = _prod_csrf_token(user)
+                payload["can_sync"] = True
+                if "_prod_csrf_token" in globals(): payload["csrf_token"] = _prod_csrf_token(user)
                 return _cloudif_v89_send_json(self, payload, 200)
             except Exception as e:
                 return _cloudif_v89_send_json(self, {
@@ -6661,7 +6661,7 @@ def _pm197_render(user,selected=''):
 <div class="project-resource-row"><span>Repositório Forge</span><strong>{h(forge_target or 'Não vinculado')}</strong><div>{repo_action}</div></div>
 <div class="project-resource-row"><span>Terminal</span><strong>{'Stack '+h(runtime_project.get('stack_id')) if runtime_project.get('stack_id') else 'Não disponível'}</strong><div>{terminal_action}</div></div>
 </div></section>
-<section class="project-workspace-section"><div class="project-workspace-section__head"><div><span>Operações</span><h3>Próximas ações</h3></div></div><div class="project-action-stack"><a class="btn" href="/cloudiff/portal/?tab=publicacao&amp;project={urllib.parse.quote(slug,safe='')}&amp;open=release">Publicar</a><a class="btn light" href="/cloudiff/portal/?tab=git&amp;project={urllib.parse.quote(slug,safe='')}">Código</a><form method="post" action="{url('/action/project_action')}"><input type="hidden" name="csrf_token" value="{h(csrf_token)}"><input type="hidden" name="slug" value="{h(slug)}"><button class="btn gray" name="op" value="check">Checar estado</button></form>{resume_action}<button class="btn light" type="button" onclick="cloudifOpenAcl('{acl_id}')">Permissões</button>{delete_action}</div></section>
+<section class="project-workspace-section"><div class="project-workspace-section__head"><div><span>Operações</span><h3>Próximas ações</h3></div></div><div class="project-action-stack"><a class="btn" href="/cloudiff/portal/?tab=publicacao&amp;project={urllib.parse.quote(slug,safe='')}&amp;open=release">Publicar</a><a class="btn light" href="/cloudiff/portal/?tab=git&amp;project={urllib.parse.quote(slug,safe='')}">Código</a><form method="post" action="{url('/action/project_action')}"><input type="hidden" name="csrf_token" value="{h(csrf_token)}"><input type="hidden" name="slug" value="{h(slug)}"><button class="btn gray" name="op" value="check">Checar estado</button></form>{resume_action}<button class="btn light" type="button" onclick="cloudifShowWizard('{acl_id}')">Permissões</button>{delete_action}</div></section>
 </div>
 <details class="project-workspace-more"><summary>Detalhes técnicos</summary><div class="project-workspace-more__body"><section><h3>Descrição</h3><p>{h(p['description'] or 'Sem descrição.')}</p></section><section><h3>Publicação</h3><p>Preview → Homologação → Produção. A produção reutiliza o artefato homologado.</p><div class="project-final__actions"><a class="btn light" href="/cloudiff/portal/?tab=publicacao&amp;project={urllib.parse.quote(slug,safe='')}&amp;open=variables">Variáveis</a><a class="btn light" href="/cloudiff/portal/?tab=publicacao&amp;project={urllib.parse.quote(slug,safe='')}">Histórico de publicação</a></div></section><section><h3>Provisionamento</h3><p><strong>{h(provision_label)}</strong></p><p class="project-final__meta">Etapa: {h(provision_state['step'] or '—')} · Atualizado: {h(provision_state['updated_at'] or '—')}</p>{('<p class="project-final__meta">'+h(provision_state['error'])+'</p>') if provision_state['error'] else ''}{('<p class="project-final__meta"><strong>A infraestrutura está pronta.</strong> A retomada continuará da última etapa segura sem recriar projeto, repositório ou banco.</p>') if provision_state.get('recoverable') else ''}</section></div></details>
 </article>'''
@@ -6910,67 +6910,61 @@ if 'Portal' in globals() and not globals().get('_tenant_always_on_final_wrapped'
     _tenant_always_on_final_wrapped=True
 # CloudIF definitive always-on tenant policy END
 
-# CloudIF directory cache control API BEGIN
-if "Portal" in globals() and not globals().get("_cloudif_directory_cache_api_wrapped"):
-    _cloudif_directory_cache_prev_get = Portal.do_GET
-    _cloudif_directory_cache_prev_post = Portal.do_POST
+# CloudIF v108 directory-cache control API BEGIN
+import subprocess as _directory_sync_subprocess
+import urllib.parse as _directory_sync_urlparse
 
-    def _cloudif_directory_cache_json(handler, payload, status=200):
-        raw = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
-        handler.send_response(status)
-        handler.send_header("Content-Type", "application/json; charset=utf-8")
-        handler.send_header("Cache-Control", "no-store")
-        handler.send_header("X-Content-Type-Options", "nosniff")
-        handler.send_header("Content-Length", str(len(raw)))
-        handler.end_headers()
-        handler.wfile.write(raw)
+if "Portal" in globals() and not globals().get("_directory_sync_api_wrapped"):
+    _directory_sync_previous_get = Portal.do_GET
+    _directory_sync_previous_post = Portal.do_POST
 
-    def _cloudif_directory_cache_get(self):
-        parsed = urllib.parse.urlparse(self.path)
-        path = parsed.path.rstrip("/")
-        if path not in ("/cloudiff/portal/api/directory-status", "/cloudif/portal/api/directory-status", "/api/directory-status"):
-            return _cloudif_directory_cache_prev_get(self)
+    def _directory_sync_status_GET(self):
+        parsed = _directory_sync_urlparse.urlparse(self.path)
+        clean = parsed.path.rstrip("/")
+        if clean not in ("/cloudiff/portal/api/directory-status", "/cloudif/portal/api/directory-status", "/api/directory-status"):
+            return _directory_sync_previous_get(self)
         import cloudif_ad_directory_module as directory
-        query = urllib.parse.parse_qs(parsed.query)
+        query = _directory_sync_urlparse.parse_qs(parsed.query)
         slug = (query.get("slug") or [""])[0].strip()
         user = directory.user_from_headers(self.headers)
         if not directory.can_manage_project(user, slug):
-            return _cloudif_directory_cache_json(self, {"ok": False, "error": "forbidden"}, 403)
-        payload = {"ok": True, "cache": directory.directory_status()}
+            return _cloudif_v89_send_json(self,{"ok":False,"error":"forbidden"},403)
+        payload = {"ok": True, "cache": directory.cache_status()}
         if "_prod_csrf_token" in globals(): payload["csrf_token"] = _prod_csrf_token(user)
-        return _cloudif_directory_cache_json(self, payload, 200)
+        return _cloudif_v89_send_json(self,payload,200)
 
-    def _cloudif_directory_cache_post(self):
-        parsed = urllib.parse.urlparse(self.path)
-        path = parsed.path.rstrip("/")
-        if path not in ("/cloudiff/portal/api/directory-sync", "/cloudif/portal/api/directory-sync", "/api/directory-sync"):
-            return _cloudif_directory_cache_prev_post(self)
+    def _directory_sync_do_POST(self):
+        parsed = _directory_sync_urlparse.urlparse(self.path)
+        clean = parsed.path.rstrip("/")
+        if clean not in ("/cloudiff/portal/action/directory-cache-sync", "/cloudif/portal/action/directory-cache-sync", "/action/directory-cache-sync"):
+            return _directory_sync_previous_post(self)
         import cloudif_ad_directory_module as directory
-        if "_cloudif_security_valid_origin" in globals() and not _cloudif_security_valid_origin(self):
-            return _cloudif_directory_cache_json(self, {"ok": False, "error": "invalid_origin"}, 403)
-        length = int(self.headers.get("Content-Length", "0") or 0)
-        if length < 0 or length > 32768:
-            return _cloudif_directory_cache_json(self, {"ok": False, "error": "invalid_body"}, 413)
-        form = urllib.parse.parse_qs(self.rfile.read(length).decode("utf-8", "ignore"))
-        val = lambda key: (form.get(key) or [""])[0].strip()
-        slug = val("slug")
         user = directory.user_from_headers(self.headers)
+        if "_cloudif_security_valid_origin" in globals() and not _cloudif_security_valid_origin(self):
+            return _cloudif_v89_send_json(self,{"ok":False,"error":"invalid_origin"},403)
+        length = int(self.headers.get("Content-Length","0") or 0)
+        if length < 1 or length > 8192:
+            return _cloudif_v89_send_json(self,{"ok":False,"error":"invalid_body"},413)
+        form = _directory_sync_urlparse.parse_qs(self.rfile.read(length).decode("utf-8","ignore"))
+        val = lambda k: (form.get(k) or [""])[0].strip()
+        slug = val("slug")
         if not directory.can_manage_project(user, slug):
-            return _cloudif_directory_cache_json(self, {"ok": False, "error": "forbidden"}, 403)
+            return _cloudif_v89_send_json(self,{"ok":False,"error":"forbidden"},403)
         provided = val("csrf_token") or (self.headers.get("X-CSRF-Token") or "").strip()
-        if "_prod_csrf_equal" in globals() and "_prod_csrf_token" in globals():
-            if not _prod_csrf_equal(provided, _prod_csrf_token(user)):
-                return _cloudif_directory_cache_json(self, {"ok": False, "error": "invalid_csrf"}, 403)
-        try:
-            result = directory.sync_cache()
-            return _cloudif_directory_cache_json(self, result, 202 if result.get("sync_in_progress") else 200)
-        except Exception as exc:
-            return _cloudif_directory_cache_json(self, {"ok": False, "error": "directory_sync_failed", "detail": str(exc)}, 503)
+        if "_prod_csrf_token" not in globals() or not _prod_csrf_equal(provided,_prod_csrf_token(user)):
+            return _cloudif_v89_send_json(self,{"ok":False,"error":"invalid_csrf"},403)
+        proc = _directory_sync_subprocess.run(
+            ["systemctl","--no-block","start","cloudif-directory-cache-sync.service"],
+            stdout=_directory_sync_subprocess.PIPE,stderr=_directory_sync_subprocess.PIPE,text=True,timeout=5,
+        )
+        if proc.returncode != 0:
+            return _cloudif_v89_send_json(self,{"ok":False,"error":"directory_sync_failed","detail":(proc.stderr or "")[-500:]},503)
+        return _cloudif_v89_send_json(self,{"ok":True,"sync_started":True,"cache":directory.cache_status()},202)
 
-    Portal.do_GET = _cloudif_directory_cache_get
-    Portal.do_POST = _cloudif_directory_cache_post
-    _cloudif_directory_cache_api_wrapped = True
-# CloudIF directory cache control API END
+    Portal.do_GET = _directory_sync_status_GET
+    Portal.do_POST = _directory_sync_do_POST
+    _directory_sync_api_wrapped = True
+# CloudIF v108 directory-cache control API END
 
 if __name__ == "__main__":
     init_db()

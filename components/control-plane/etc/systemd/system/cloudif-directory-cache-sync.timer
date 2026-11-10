@@ -1,0 +1,12 @@
+[Unit]
+Description=Refresh CloudIF identity directory cache every 10 minutes
+
+[Timer]
+OnBootSec=45s
+OnUnitActiveSec=10min
+RandomizedDelaySec=20s
+Persistent=true
+Unit=cloudif-directory-cache-sync.service
+
+[Install]
+WantedBy=timers.target
