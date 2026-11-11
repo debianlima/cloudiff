@@ -169,8 +169,18 @@ void NpmPublisherProvider::render_locked(){
     auto tmp=options_.nginx_conf_path;tmp+=".tmp-v2-canary";
     {std::ofstream out(tmp,std::ios::trunc);if(!out)throw std::runtime_error("nginx_live_write_failed");out<<next;out.flush();if(!out)throw std::runtime_error("nginx_live_flush_failed");}
     std::filesystem::permissions(tmp,mode,std::filesystem::perm_options::replace);std::filesystem::rename(tmp,options_.nginx_conf_path);
-    try{run_command(options_.nginx_test_command,30);run_command(options_.nginx_reload_command,30);}
-    catch(...){std::filesystem::copy_file(backup,options_.nginx_conf_path,std::filesystem::copy_options::overwrite_existing);try{run_command(options_.nginx_reload_command,30);}catch(...){}throw;}
+    try{
+        run_command(options_.nginx_test_command,30);
+        run_command(options_.nginx_reload_command,30);
+        std::error_code cleanup_ec;
+        std::filesystem::remove(backup,cleanup_ec);
+    }catch(...){
+        bool rollback_reloaded=false;
+        std::filesystem::copy_file(backup,options_.nginx_conf_path,std::filesystem::copy_options::overwrite_existing);
+        try{run_command(options_.nginx_reload_command,30);rollback_reloaded=true;}catch(...){}
+        if(rollback_reloaded){std::error_code cleanup_ec;std::filesystem::remove(backup,cleanup_ec);}
+        throw;
+    }
 }
 nlohmann::json NpmPublisherProvider::state_snapshot() const{std::scoped_lock lock(mutex_);return state_;}
 PublisherResponse NpmPublisherProvider::handle(std::string_view method,std::string_view path,std::string_view presented_token,std::string_view body){

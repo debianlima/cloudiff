@@ -13,4 +13,4 @@ PrivateTmp=true
 ProtectHome=true
 ProtectSystem=strict
 ReadOnlyPaths=/etc/cloudif
-ReadWritePaths=/srv/cloudif/managed-backups/machine-admin-postgres /tmp
+ReadWritePaths=/srv/cloudif/managed-backups /tmp

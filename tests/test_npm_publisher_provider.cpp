@@ -90,15 +90,25 @@ int main(){
     cloudiff::NpmPublisherProvider live_provider(live);
     r=live_provider.handle("POST","/unpublish","unit-secret",R"({"public_number":1007})"); assert(r.status==200);
     {std::ifstream in(live_conf);std::string text((std::istreambuf_iterator<char>(in)),{});assert(text.starts_with("# OUTER PREFIX\n"));assert(text.ends_with("# OUTER SUFFIX\n"));assert(text.find("server_name 1007.cloudiff.duckdns.org;")==std::string::npos);}
-    bool found_backup=false;for(const auto& e:std::filesystem::directory_iterator(root))if(e.path().filename().string().starts_with("live-http.conf.bkp-v2-canary-"))found_backup=true;assert(found_backup);
+    bool found_backup=false;for(const auto& e:std::filesystem::directory_iterator(root))if(e.path().filename().string().starts_with("live-http.conf.bkp-v2-canary-"))found_backup=true;assert(!found_backup);
 
-    // Forced nginx -t failure must restore the exact previous config and leave state file uncommitted.
+    // Forced nginx -t failure must restore the exact previous config, remove the temporary backup after successful rollback, and leave state file uncommitted.
     {std::ofstream out(live_state,std::ios::trunc);out<<seed.dump(2)<<'\n';}{std::ofstream out(live_conf,std::ios::trunc);out<<original_conf;}
     cloudiff::PublisherOptions rollback=live; rollback.nginx_test_command={"/bin/false"}; rollback.nginx_reload_command={"/bin/true"};
     cloudiff::NpmPublisherProvider rollback_provider(rollback);
     r=rollback_provider.handle("POST","/unpublish","unit-secret",R"({"public_number":1007})"); assert(r.status==422); assert(r.body.at("error")=="RuntimeError");
     {std::ifstream in(live_conf);std::string text((std::istreambuf_iterator<char>(in)),{});assert(text==original_conf);}
     {std::ifstream in(live_state);nlohmann::json persisted;in>>persisted;assert(persisted.at("projects").contains("1007"));}
+    found_backup=false;for(const auto& e:std::filesystem::directory_iterator(root))if(e.path().filename().string().starts_with("live-http.conf.bkp-v2-canary-"))found_backup=true;assert(!found_backup);
+
+    // If rollback reload itself fails, preserve the canary backup for manual recovery.
+    {std::ofstream out(live_state,std::ios::trunc);out<<seed.dump(2)<<'\n';}{std::ofstream out(live_conf,std::ios::trunc);out<<original_conf;}
+    cloudiff::PublisherOptions hard_rollback=live; hard_rollback.nginx_test_command={"/bin/false"}; hard_rollback.nginx_reload_command={"/bin/false"};
+    cloudiff::NpmPublisherProvider hard_rollback_provider(hard_rollback);
+    r=hard_rollback_provider.handle("POST","/unpublish","unit-secret",R"({"public_number":1007})"); assert(r.status==422); assert(r.body.at("error")=="RuntimeError");
+    {std::ifstream in(live_conf);std::string text((std::istreambuf_iterator<char>(in)),{});assert(text==original_conf);}
+    found_backup=false;for(const auto& e:std::filesystem::directory_iterator(root))if(e.path().filename().string().starts_with("live-http.conf.bkp-v2-canary-"))found_backup=true;assert(found_backup);
+    for(const auto& e:std::filesystem::directory_iterator(root))if(e.path().filename().string().starts_with("live-http.conf.bkp-v2-canary-"))std::filesystem::remove(e.path());
 
     // ACME issuance is intentionally not part of v9: missing/mismatched cert must fail closed.
     const auto cert_state=root/"cert-state.json", cert_conf=root/"cert-http.conf";
