@@ -513,3 +513,18 @@
 - Cache do Portal sincronizado manualmente: `groups_json=["CloudIF-Tenants-Admin"]`, `is_admin=1`, `active=1`, source `authentik-cache`, atualizado em `2026-11-11T03:19:02+00:00`.
 - Gate de visibilidade usando os grupos do cache: 6 projetos visíveis — `mvplanner`, `cadales`, `cpuhub`, `agenda-unica`, `laboratorio-de-hardware`, `silvipro`. `VISIBILITY=PASS`.
 - `CloudIF-Professor` não foi adicionado nesta unidade; a solicitação explícita desta unidade foi somente `CloudIF-Tenants-Admin`.
+
+
+## Visão geral minimalista — três áreas (2026-11-11 UTC)
+
+- Revisão solicitada após feedback visual: reduzir o número de opções na Visão geral, mantendo lazy loading, lista vertical e detalhe único.
+- Novo primeiro nível: apenas `Projetos`, `Recursos` e `Plataforma`.
+- `Recursos` consolida sites/publicações e bancos/tenants numa única lista vertical; IDs internos usam prefixos `site:` e `db:` para evitar colisão e o detalhe continua carregado somente após clique.
+- Removidos da Visão geral como opções primárias: `Filas, histórico e atividades`, `Conectores e administração`, `Aprovações`, `Backup` e o chip técnico `Carregamento progressivo`. Esses recursos continuam nas telas próprias do Portal.
+- Master/detail e destaque do item selecionado foram preservados: `is-active`/`aria-current=true` com fundo `var(--iff)`, contraste `var(--on-iff)` e marcador lateral `var(--iff-dark)`.
+- Testes focados: `test_overview_sites` 22/22, `test_permission_table` 4/4, `test_frozen_surfaces_contract` 3/3; total 29/29 PASS. JavaScript `node --jitless --check`: PASS. `scripts/validate.sh`: PASS.
+- Source: `86e4ea05d11117095c1d2182687f14e39b2f7da9`, tree `8dab18cdf1fff2d66ac8f27e79d4128fb292846a`.
+- Release A10: `a10-ux-86e4ea05d111`, archive SHA256 `77b472968cd51f3c82527dfc74a26d27aedc29a4d198f4039b1a5eb7c178c93d`; previous `a10-ux-75c974115cac`.
+- Primeiro cutover foi abortado por um smoke incorreto que procurava o texto literal `6 visíveis`; rollback PASS. O HTML real usa `Projetos visíveis` + KPI `6`. O retry com o gate correto passou.
+- Gates live: exatamente 3 `data-overview-category`, `resources` API PASS, Authentik externo 302 sem sessão, `cloudif-admin-portal.service=active`.
+- Gate de visibilidade do usuário `iff3546365`: página real `/cloudiff/portal/pagina/projetos` com claims `CloudIF-Tenants-Admin` exibiu `Projetos visíveis` com KPI `6` e não exibiu `Nenhum projeto visível`.
