@@ -413,3 +413,12 @@
 - Edge público pós-release: acesso sem sessão, headers `X-authentik-*` forjados e teste com `X-Original-URI` continuam `302 -> /outpost.goauthentik.io/start` (PASS).
 - Suíte ampla reconciliada: 1.307 testes executados, com 1 erro baseline em `test_taiga_gateway_php_paths`; o mesmo erro foi reproduzido em `origin/main` limpo antes desta unidade. Gates focados de directory cache/UI: 15/15 PASS; `scripts/validate.sh` PASS.
 - Unidade compartilhada encerrada; nenhum force push, segredo em Git ou alteração automática de ACL de projeto foi realizada.
+
+
+## Portal identity picker — correção visual live (2026-11-10)
+
+- Feedback humano explícito: a lista do seletor ficou visualmente ruim porque `acl-result-item` usava `var(--c-surface)`, que no tema live resolvia para verde forte com texto claro.
+- Correção source `c94d9cac9a825bb9428f838fb21d417597c9d9c8`: cartões de identidade usam paleta neutra escura explícita (`#111814`), hover `#18221b`, metadados/chips neutros e foco acessível; verde permanece reservado às ações. Usuários admin mantêm somente destaque dourado discreto e badge `Administrador CloudIFF`.
+- Gate de regressão em `test_directory_cache_ui_contract.py` impede retorno de `var(--c-surface)` no cartão da lista.
+- Release live `a10-ux-c94d9cac9a82`; app/runtime eram byte-idênticos ao release anterior e somente `cloudif_project_acl_module.py` diferia no `lib-overlay`. Preflight/readiness A10 PASS; rollback preservado para `a10-ux-d7c6b4c3d5bf`.
+- Pós-cutover: `cloudif-admin-portal.service=active`, `/health=200`, HTML live contém paleta neutra nova e não contém a dependência antiga de surface green. Busca de `Pedro Henrique Miranda` continua HTTP 200 e retorna `iff20222920038` / `Pedro Henrique Miranda de Oliveira`.
