@@ -12205,4 +12205,21 @@ entradas:
     aceite: python3 -m unittest portal.tests.test_publication_permissions portal.tests.test_release_flow_wizard_ui
     status: aceito
 
-trabalho_compartilhado: null
+trabalho_compartilhado:
+  projeto: cloudiff
+  caminho: /srv/mcp-workspace/cloudiff-identity-fix
+  unidade: OVERVIEW-CATEGORIZED-LAZY-LOAD
+  descricao: 'categorizar Visão geral e carregar dados pesados somente ao abrir cada categoria'
+  agente: Meu Terminal Oracle
+  atualizado_em: '2026-11-11T02:36:26+00:00'
+  previsao_termino: '2026-11-11T04:36:26+00:00'
+  zona_exclusao:
+    - manifesto.yaml
+    - estado.md
+    - portal/modules/overview/routes.py
+    - portal/modules/overview/service.py
+    - portal/modules/overview/views.py
+    - portal/design/components.css
+    - portal/tests/test_overview_sites.py
+    - portal/tests/test_permission_table.py
+    - portal/tests/test_frozen_surfaces_contract.py
