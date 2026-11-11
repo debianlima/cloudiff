@@ -56,12 +56,9 @@ class OverviewSiteCardTest(unittest.TestCase):
         self.assertEqual(resources["other_databases"], 1)
 
     def test_other_sites_card_opens_filtered_publication_scope(self):
-        from portal.modules.overview.views import overview_body
-        data = {
-            "username": "admin", "metrics": {"nodes": [], "fmt": lambda _v: "0 B", "fmt_rate": lambda _v: "0 B/s", "online_count": 0, "node_count": 0},
-            "resources": {"sites": [], "databases": [], "can_view_others": True, "other_sites": 2, "other_databases": 1},
-        }
-        markup = overview_body(data)
+        from portal.modules.overview.views import overview_category_body
+        data = {"resources": {"sites": [], "can_view_others": True, "other_sites": 2}}
+        markup = overview_category_body("publications", data)
         self.assertIn('/cloudiff/portal/?tab=publicacao&amp;scope=others#other-user-sites', markup)
 
     def test_sites_page_uses_canonical_empty_state(self):
@@ -206,7 +203,8 @@ class OverviewSiteCardTest(unittest.TestCase):
             },
             "resources": {"sites": [], "databases": [], "can_view_others": False, "other_sites": 0, "other_databases": 0},
         }
-        markup = overview_body(data)
+        from portal.modules.overview.views import platform_body
+        markup = platform_body({"metrics": data["metrics"]})
         self.assertIn("Capacidade física por servidor", markup)
         self.assertIn("Uso de memória por servidor", markup)
         self.assertIn("Capacidade física instalada", markup)
@@ -249,6 +247,60 @@ class OverviewSiteCardTest(unittest.TestCase):
         self.assertIn("Containers:</strong> 4", markup)
         self.assertIn("cloudif-node-metrics-cpp", markup)
         self.assertNotIn('<span>Disco</span>', markup)
+
+
+    def test_overview_first_paint_is_categorized_and_does_not_embed_heavy_sections(self):
+        from portal.modules.overview.views import overview_body
+        markup=overview_body({"username":"prof","is_global":True})
+        for label in ("Projetos e acompanhamento","Publicações e sites","Bancos e tenants","Infraestrutura e saúde","Filas, histórico e atividades","Conectores e administração"):
+            self.assertIn(label,markup)
+        self.assertIn('data-overview-category="academic"',markup)
+        self.assertIn('data-overview-category="publications"',markup)
+        self.assertIn('data-overview-category="data"',markup)
+        self.assertIn('data-overview-category="platform"',markup)
+        self.assertIn("addEventListener('toggle'",markup)
+        self.assertIn('/cloudiff/portal/api/overview?category=',markup)
+        self.assertNotIn('Capacidade física por servidor',markup)
+        self.assertNotIn('Sinais dos projetos',markup)
+        self.assertNotIn('Meus sites</h2>',markup)
+        self.assertNotIn('Meus bancos</h2>',markup)
+
+    def test_overview_initial_data_does_not_call_expensive_sources(self):
+        from portal.modules.overview import service
+        from portal.core.auth import Identity
+        identity=Identity('alice','alice@example.invalid',frozenset({'CloudIF-Aluno'}))
+        with mock.patch.object(service,'server_metrics',side_effect=AssertionError('metrics loaded')), \
+             mock.patch.object(service,'academic_resources',side_effect=AssertionError('resources loaded')), \
+             mock.patch.object(service,'academic_tracking',side_effect=AssertionError('tracking loaded')):
+            data=service.overview_initial_data(identity)
+        self.assertEqual(data['username'],'alice')
+        self.assertFalse(data['is_global'])
+
+    def test_overview_category_loads_only_requested_expensive_source(self):
+        from portal.modules.overview import service
+        from portal.core.auth import Identity
+        identity=Identity('prof','prof@example.invalid',frozenset({'CloudIF-Professor'}))
+        with mock.patch.object(service,'server_metrics',return_value={'nodes':[]}) as metrics, \
+             mock.patch.object(service,'academic_resources',return_value={'sites':[],'databases':[],'can_view_others':False,'other_sites':0,'other_databases':0}) as resources, \
+             mock.patch.object(service,'academic_tracking',return_value={'enabled':True,'projects':[]}) as tracking:
+            service.overview_category_data(identity,'platform')
+            self.assertEqual(metrics.call_count,1);self.assertEqual(resources.call_count,0);self.assertEqual(tracking.call_count,0)
+            service.overview_category_data(identity,'academic')
+            self.assertEqual(metrics.call_count,1);self.assertEqual(resources.call_count,0);self.assertEqual(tracking.call_count,1)
+            service.overview_category_data(identity,'publications')
+            self.assertEqual(resources.call_count,1)
+
+    def test_overview_category_endpoint_is_registered_and_page_uses_light_model(self):
+        from portal.modules.overview import routes
+        endpoint={(e.path,e.method):e for e in routes.endpoints()}
+        self.assertIn(('/cloudiff/portal/api/overview','GET'),endpoint)
+        source=(Path(__file__).resolve().parents[1]/'modules'/'overview'/'routes.py').read_text()
+        self.assertIn('service.overview_initial_data(request.identity)',source)
+        self.assertNotIn('data = service.overview_data(request.identity)',source)
+        coexist=(Path(__file__).resolve().parents[2]/'components'/'control-plane'/'srv'/'cloudif'/'lib'/'cloudif_portal_v2_coexist.py').read_text()
+        self.assertIn('("/cloudiff/portal/api/overview", "GET")',coexist)
+        self.assertIn('"resumo", "visao-geral", "visão-geral"',coexist)
+        self.assertNotIn('getattr(owner, "render_resumo")',coexist)
 
 
 if __name__ == "__main__":

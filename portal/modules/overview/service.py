@@ -328,3 +328,42 @@ def overview_data(identity) -> dict:
         "resources": academic_resources(identity),
         "academic_tracking": academic_tracking(identity),
     }
+
+_OVERVIEW_CATEGORIES = frozenset({"academic", "publications", "data", "platform"})
+
+
+def overview_initial_data(identity) -> dict:
+    """Cheap first-paint model. It must not query project, tracking or metrics stores."""
+    return {
+        "username": identity.username,
+        "email": identity.email,
+        "role_text": _role_text(identity),
+        "is_global": is_global(identity),
+    }
+
+
+def overview_category_data(identity, category: str) -> dict:
+    """Load exactly one expensive overview category on demand."""
+    category = str(category or "").strip().lower()
+    if category not in _OVERVIEW_CATEGORIES:
+        raise ValueError("invalid_overview_category")
+    if category == "academic":
+        return {"academic_tracking": academic_tracking(identity)}
+    if category == "platform":
+        return {"metrics": server_metrics()}
+    resources = academic_resources(identity)
+    if category == "publications":
+        return {
+            "resources": {
+                "sites": resources["sites"],
+                "can_view_others": resources["can_view_others"],
+                "other_sites": resources["other_sites"],
+            }
+        }
+    return {
+        "resources": {
+            "databases": resources["databases"],
+            "can_view_others": resources["can_view_others"],
+            "other_databases": resources["other_databases"],
+        }
+    }

@@ -6,6 +6,8 @@ visibility) allow at the edge and scope inside the service, matching the v1.
 """
 from __future__ import annotations
 
+import json
+
 from portal.core.dispatch import Endpoint
 from portal.core.http import Request, Response
 from portal.core.rbac import authenticated, is_global
@@ -22,7 +24,7 @@ def _ok_json(request: Request) -> Response:
 def _page(request: Request) -> Response:
     from portal.ui import shell
     from portal.wiring import all_endpoints
-    data = service.overview_data(request.identity)
+    data = service.overview_initial_data(request.identity)
     body = views.overview_body(data)
     nav = sorted({e.module for e in all_endpoints() if e.method == "GET" and e.guard(request.identity)})
     if not is_global(request.identity):
@@ -30,10 +32,24 @@ def _page(request: Request) -> Response:
     html = shell.render(request.identity, nav, "overview", "Visão geral", body)
     return Response.html(html)
 
+
+
+def _category(request: Request) -> Response:
+    category = request.q("category").strip().lower()
+    try:
+        data = service.overview_category_data(request.identity, category)
+        markup = views.overview_category_body(category, data)
+    except ValueError:
+        return Response.json_body(b'{"ok":false,"error":"invalid_overview_category"}', 400)
+    payload = json.dumps({"ok": True, "category": category, "html": markup}, ensure_ascii=False, separators=(",", ":")).encode()
+    return Response.json_body(payload, 200)
+
 def endpoints() -> tuple[Endpoint, ...]:
     return (
         Endpoint("/cloudiff/portal", "GET", "overview.view",
                  authenticated, _page, MODULE),
         Endpoint("/cloudiff/portal/", "GET", "overview.view",
                  authenticated, _page, MODULE),
+        Endpoint("/cloudiff/portal/api/overview", "GET", "overview.view",
+                 authenticated, _category, MODULE),
     )

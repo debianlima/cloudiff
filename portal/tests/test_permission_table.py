@@ -43,6 +43,7 @@ class PermissionTableTest(unittest.TestCase):
         ("/cloudiff/portal/api/taiga", "GET"),
         ("/cloudiff/portal/action/taiga-access", "POST"),
         ("/cloudiff/portal/", "GET"),  # home com barra, equivale a /cloudiff/portal
+        ("/cloudiff/portal/api/overview", "GET"),  # dados categorizados/lazy da nova Visão geral
     }
 
     def test_every_endpoint_matches_v1(self):

@@ -151,9 +151,16 @@ def sites_body(data: dict) -> str:
         "Publique um projeto quando ele estiver pronto para ser acessado pela comunidade acadêmica.",
         "Ver meus projetos", f"{BASE}/?tab=projetos"
     )
+    others = ""
+    if resources.get("can_view_others"):
+        others = (
+            '<div class="other-resources">'
+            f'<a href="{BASE}/?tab=publicacao&amp;scope=others#other-user-sites" class="other-link"><span>Sites de outros usuários</span><b>{int(resources.get("other_sites") or 0)}</b></a>'
+            '</div>'
+        )
     return (
         '<section class="resource-section" aria-labelledby="my-sites-title"><div class="resource-section-head"><div><p class="ov-eyebrow">Publicações</p><h2 id="my-sites-title">Meus sites</h2><p>Todos os seus projetos web, publicados ou em preparação.</p></div>'
-        f'</div><div class="resource-grid sites-grid">{sites}</div></section>'
+        f'</div><div class="resource-grid sites-grid">{sites}</div>{others}</section>'
     )
 
 
@@ -224,36 +231,148 @@ def academic_tracking_body(data: dict) -> str:
     )
 
 
-def overview_body(data: dict) -> str:
-    metrics, resources = data["metrics"], data["resources"]
-    username = html.escape(data["username"] or "usuário")
-    databases = "".join(_database_card(item) for item in resources["databases"]) or _empty(
+def databases_body(data: dict) -> str:
+    resources = data.get("resources") or {}
+    databases = "".join(_database_card(item) for item in resources.get("databases", [])) or _empty(
         "Nenhum banco vinculado", "Crie ou vincule um banco de dados a um dos seus projetos.",
         "Ir para bancos", f"{BASE}/?tab=bancos"
     )
+    others = ""
+    if resources.get("can_view_others"):
+        others = (
+            '<div class="other-resources">'
+            f'<a href="{BASE}/?tab=bancos" class="other-link"><span>Bancos de outros usuários</span><b>{int(resources.get("other_databases") or 0)}</b></a>'
+            '</div>'
+        )
+    return (
+        '<section class="resource-section overview-loaded-section" aria-labelledby="my-databases-title">'
+        '<div class="resource-section-head"><div><p class="ov-eyebrow">Dados</p><h2 id="my-databases-title">Meus bancos</h2><p>Ambientes de dados que você pode usar nos seus projetos.</p></div>'
+        f'<a href="{BASE}/?tab=bancos">Gerenciar todos os bancos</a></div><div class="resource-grid">{databases}</div>{others}</section>'
+    )
+
+
+def platform_body(data: dict) -> str:
+    metrics = data.get("metrics") or {}
+    metrics.setdefault("nodes", [])
+    metrics.setdefault("online_count", 0)
+    metrics.setdefault("node_count", 0)
+    metrics.setdefault("fmt", lambda _value: "-")
+    metrics.setdefault("fmt_storage", lambda _value: "-")
+    metrics.setdefault("fmt_rate", lambda _value: "-")
     for node in metrics["nodes"]:
         node["network_rx_label"] = metrics["fmt_rate"](node.get("network_rx_bps"))
         node["network_tx_label"] = metrics["fmt_rate"](node.get("network_tx_bps"))
     servers = "".join(_server_card(node, metrics["fmt"], metrics["fmt_storage"]) for node in metrics["nodes"]) or _empty(
         "Métricas indisponíveis", "A coleta da plataforma ainda não enviou dados.", "Ver saúde", f"{BASE}/?tab=monitor-saude"
     )
-    others = ""
-    if resources["can_view_others"]:
-        others = (
-            '<div class="other-resources">'
-            f'<a href="{BASE}/?tab=publicacao&amp;scope=others#other-user-sites" class="other-link"><span>Sites de outros usuários</span><b>{resources["other_sites"]}</b></a>'
-            f'<a href="{BASE}/?tab=bancos" class="other-link"><span>Bancos de outros usuários</span><b>{resources["other_databases"]}</b></a>'
-            '</div>'
-        )
     return (
-        '<section class="welcome-panel"><div><p class="ov-eyebrow">Seu espaço acadêmico</p>'
-        f'<h2>Olá, {username}.</h2><p>Aqui você encontra o que está publicando, os bancos ligados aos seus projetos e os caminhos mais usados para continuar seu trabalho.</p></div>'
-        f'<div class="welcome-actions"><a class="btn btn-quiet" href="{BASE}/?tab=ajuda">Primeiros passos</a></div></section>'
-        + academic_tracking_body(data)
-        + sites_body(data)
-        + '<section class="resource-section" aria-labelledby="my-databases-title"><div class="resource-section-head"><div><p class="ov-eyebrow">Dados</p><h2 id="my-databases-title">Meus bancos</h2><p>Ambientes de dados que você pode usar nos seus projetos.</p></div>'
-        f'<a href="{BASE}/?tab=bancos">Gerenciar todos os bancos</a></div><div class="resource-grid">{databases}</div>{others}</section>'
-        '<section class="resource-section platform-health" aria-labelledby="platform-title"><div class="resource-section-head"><div><p class="ov-eyebrow">Plataforma</p><h2 id="platform-title">Saúde da plataforma</h2>'
-        f'<p>{metrics["online_count"]} de {metrics["node_count"]} servidores com coleta recente.</p></div><a href="{BASE}/?tab=monitor-saude">Abrir monitoramento</a></div>'
+        '<section class="resource-section platform-health overview-loaded-section" aria-labelledby="platform-title">'
+        '<div class="resource-section-head"><div><p class="ov-eyebrow">Infraestrutura</p><h2 id="platform-title">Saúde da plataforma</h2>'
+        f'<p>{int(metrics["online_count"])} de {int(metrics["node_count"])} servidores com coleta recente.</p></div><a href="{BASE}/?tab=monitor-saude">Abrir monitoramento</a></div>'
         f'{_platform_charts(metrics)}<div class="resource-grid server-grid">{servers}</div></section>'
+    )
+
+
+def overview_category_body(category: str, data: dict) -> str:
+    category = str(category or "").strip().lower()
+    if category == "academic":
+        rendered = academic_tracking_body(data)
+        if rendered:
+            return rendered
+        return (
+            '<section class="resource-section overview-loaded-section"><div class="resource-section-head"><div>'
+            '<p class="ov-eyebrow">Projetos</p><h2>Projetos e acompanhamento</h2>'
+            '<p>Abra seus projetos ou o Taiga para acompanhar tarefas, histórias e equipe.</p></div></div>'
+            f'<div class="overview-link-list"><a href="{BASE}/?tab=projetos">Projetos</a><a href="{BASE}/?tab=taiga">Taiga</a></div></section>'
+        )
+    if category == "publications":
+        return sites_body(data)
+    if category == "data":
+        return databases_body(data)
+    if category == "platform":
+        return platform_body(data)
+    raise ValueError("invalid_overview_category")
+
+
+def _category_card(key: str, eyebrow: str, title: str, description: str, links: tuple[tuple[str, str], ...], *, lazy: bool = True) -> str:
+    links_html = "".join(
+        f'<a href="{html.escape(href, quote=True)}">{html.escape(label)}</a>' for label, href in links
+    )
+    lazy_attrs = f' data-overview-category="{key}"' if lazy else ' data-overview-static="1"'
+    status = '<span class="overview-category-status">Abrir para carregar</span>' if lazy else '<span class="overview-category-status">Atalhos</span>'
+    body = (
+        '<div class="overview-category-content" data-overview-category-body>'
+        '<div class="overview-category-placeholder"><p>Os detalhes desta categoria serão carregados somente quando você abrir esta seção.</p></div></div>'
+        if lazy else f'<div class="overview-category-content"><div class="overview-link-list">{links_html}</div></div>'
+    )
+    footer_links = f'<div class="overview-category-links">{links_html}</div>' if lazy and links_html else ''
+    return (
+        f'<details class="overview-category"{lazy_attrs}><summary><div><p class="ov-eyebrow">{html.escape(eyebrow)}</p>'
+        f'<h2>{html.escape(title)}</h2><p>{html.escape(description)}</p></div>{status}</summary>{body}{footer_links}</details>'
+    )
+
+
+def overview_body(data: dict) -> str:
+    username = html.escape(data.get("username") or "usuário")
+    is_global = bool(data.get("is_global"))
+    categories = [
+        _category_card(
+            "academic", "Trabalho acadêmico", "Projetos e acompanhamento",
+            "Projetos, equipe, tarefas e sinais acadêmicos reunidos em um só lugar.",
+            (("Abrir projetos", f"{BASE}/?tab=projetos"), ("Abrir Taiga", f"{BASE}/?tab=taiga")),
+            lazy=is_global,
+        ),
+        _category_card(
+            "publications", "Entrega", "Publicações e sites",
+            "Sites publicados, endereços ativos e acesso ao fluxo de publicação.",
+            (("Publicações", f"{BASE}/?tab=publicacao"), ("Aprovações", f"{BASE}/?tab=aprovacoes")),
+        ),
+        _category_card(
+            "data", "Dados", "Bancos e tenants",
+            "Bancos vinculados aos projetos e atalhos para administração de dados.",
+            (("Bancos e tenants", f"{BASE}/?tab=bancos"), ("Backup", f"{BASE}/?tab=backup")),
+        ),
+        _category_card(
+            "platform", "Operação", "Infraestrutura e saúde",
+            "Servidores, capacidade, memória, rede e sinais de disponibilidade.",
+            (("Saúde", f"{BASE}/?tab=monitor-saude"), ("Métricas", f"{BASE}/?tab=monitor-telemetria")),
+        ),
+        _category_card(
+            "operations", "Operação", "Filas, histórico e atividades",
+            "Acompanhe execução assíncrona, promoções e atividades sem misturar com o resumo inicial.",
+            (("Atividades", f"{BASE}/?tab=monitor-transacoes"), ("Filas", f"{BASE}/?tab=monitor-filas"), ("Histórico", f"{BASE}/?tab=monitor-promocoes")),
+            lazy=False,
+        ),
+        _category_card(
+            "access", "Acesso", "Conectores e administração",
+            "Conexões de agentes, documentação e controles administrativos autorizados ao seu perfil.",
+            (("Conectores", f"{BASE}/?tab=agentes"), ("Guia", f"{BASE}/?tab=ajuda")) + ((("Administração", f"{BASE}/?tab=admin"),) if is_global else ()),
+            lazy=False,
+        ),
+    ]
+    script = r"""<script id="overview-lazy-categories">(()=>{
+ const root=document.querySelector('[data-overview-categories]');if(!root)return;
+ const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+ async function loadCategory(section,force=false){
+  const category=section.dataset.overviewCategory,body=section.querySelector('[data-overview-category-body]'),status=section.querySelector('.overview-category-status');
+  if(!category||!body||(!force&&section.dataset.loaded==='1')||section.dataset.loading==='1')return;
+  section.dataset.loading='1';if(status)status.textContent='Carregando…';body.setAttribute('aria-busy','true');body.innerHTML='<div class="overview-category-loading">Carregando somente esta categoria…</div>';
+  try{
+   const response=await fetch('/cloudiff/portal/api/overview?category='+encodeURIComponent(category),{credentials:'same-origin',cache:'no-store',headers:{Accept:'application/json'}}),data=await response.json();
+   if(!response.ok||!data.ok)throw new Error(data.error||('HTTP '+response.status));
+   body.innerHTML=String(data.html||'')+'<div class="overview-category-refresh"><button type="button" class="btn btn-quiet" data-overview-refresh>Atualizar esta categoria</button></div>';section.dataset.loaded='1';if(status)status.textContent='Carregado';
+  }catch(error){body.innerHTML='<div class="resource-empty"><h3>Não foi possível carregar esta categoria</h3><p>'+esc(error.message||error)+'</p><button type="button" class="btn" data-overview-refresh>Tentar novamente</button></div>';if(status)status.textContent='Falha';}
+  finally{section.dataset.loading='0';body.removeAttribute('aria-busy');}
+ }
+ root.querySelectorAll('[data-overview-category]').forEach(section=>section.addEventListener('toggle',()=>{if(section.open)loadCategory(section)}));
+ root.addEventListener('click',event=>{const button=event.target.closest('[data-overview-refresh]');if(!button)return;const section=button.closest('[data-overview-category]');if(section)loadCategory(section,true)});
+})();</script>"""
+    return (
+        '<section class="welcome-panel overview-welcome"><div><p class="ov-eyebrow">Visão geral</p>'
+        f'<h2>Olá, {username}.</h2><p>Escolha uma categoria. A CloudIFF carrega apenas o bloco que você abrir, evitando consultas e painéis desnecessários no primeiro acesso.</p></div>'
+        f'<div class="welcome-actions"><a class="btn btn-quiet" href="{BASE}/?tab=ajuda">Primeiros passos</a></div></section>'
+        '<section class="overview-category-shell" aria-labelledby="overview-categories-title"><div class="overview-category-shell-head">'
+        '<div><p class="ov-eyebrow">Organizado por área</p><h2 id="overview-categories-title">O que você quer consultar?</h2><p>As categorias operacionais só consultam dados quando abertas.</p></div>'
+        '<span class="chip">Carregamento progressivo</span></div>'
+        f'<div class="overview-category-grid" data-overview-categories>{"".join(categories)}</div></section>{script}'
     )
