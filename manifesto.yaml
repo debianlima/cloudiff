@@ -12218,4 +12218,8 @@ trabalho_compartilhado:
     - runtime:hospedagem:control-plane-integrity
     - runtime:hospedagem:ui-security-review
     - portal/tests/test_ui_security_gate_contract.py
+    - runtime:mauricio:npm-http2-and-canary-cleanup
+    - components/proxy/srv/cloudif/proxy/npm/data/nginx/custom/http.conf
+    - tests/test_npm_publisher_provider.cpp
+    - src/agent/npm_publisher_provider.cpp
     - components/control-plane/srv/cloudif/tests/cloudif-ui-security-tests.py
