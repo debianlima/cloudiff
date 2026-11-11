@@ -157,7 +157,7 @@ def _configuration_controls(slug,rows):
       '<article><span class="publication-stage-code">W</span><div><strong>Preview</strong><small>Workspace vivo</small></div><span class="publication-stage-state" data-release-summary-w>Consultar</span></article>'
       '<article><span class="publication-stage-code">H</span><div><strong>Homologação</strong><small>Candidato imutável</small></div><span class="publication-stage-state" data-release-summary-h>Consultar</span></article>'
       '<article><span class="publication-stage-code">P</span><div><strong>Publicação</strong><small>Produção aprovada</small></div><span class="publication-stage-state" data-release-summary-p>Consultar</span></article>'
-      '</div><div class="publication-release-flow__tools"><button class="btn" type="button" data-release-flow-open data-project-slug="'+h(slug)+'">Gerenciar publicação</button><button class="btn light" type="button" data-publication-environments data-publication-tool="overview" data-project-slug="'+h(slug)+'">Ambiente de publicação</button></div></section>'
+      '</div><div class="publication-release-flow__tools"><button class="btn" type="button" data-publication-environments data-publication-tool="overview" data-project-slug="'+h(slug)+'">Ambiente de publicação</button></div></section>'
     )
 
 def publication_panel(slug, framework_hint=''):

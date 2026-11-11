@@ -451,3 +451,14 @@
 - Gates públicos pós-reparo: LabIFF externo 3/3 HTTP 200; Mauricio/NPM 3/3 HTTP 200; todos com 7234 bytes e SHA256 `4a80098aeaaaa7d911ca4f64e3e86fcb3838151bab58dfee55289933373e4c2a`; título `silvipro · primeiros passos`. Publication-gateway e `p1/.cloudif-health` também HTTP 200.
 - O source atual não depende de variáveis Supabase em runtime; apenas README contém exemplos de `SUPABASE_URL/PUBLIC_KEY`, e `api/server.js` usa somente `PORT` com default. `runtime.env` vazio é compatível com esta revisão publicada.
 - Unidade `SILVIPRO-PUBLICATION-REPAIR` encerrada. Nenhum segredo foi persistido no Git ou exibido em evidência.
+
+
+## UI de publicação unificada + MVPlanner p1024 (2026-11-11 UTC)
+
+- A tela separada `Gerenciar publicação` foi incorporada ao `Ambiente de publicação`; o card principal agora expõe um único ponto de entrada.
+- O workspace de publicação ganhou a ferramenta `Publicar`, que reutiliza o mesmo backend/gates do antigo gerenciador, sem duplicar regra de negócio.
+- Deep-link legado `?open=release` foi preservado semanticamente e agora abre `Ambiente de publicação` na ferramenta `Publicar`; `?open=variables` continua abrindo Variáveis.
+- Preview/Homologação/Produção passam a aplicar estado visual explícito no workspace, usando tokens semânticos do design system: `--iff`, `--drift` e `--focus`.
+- Testes focados: 34/34 PASS (`test_release_flow_wizard_ui`, `test_publication_workspace_tools`, `test_project_publication_configuration_v1`).
+- Gate global `scripts/validate.sh`: PASS.
+- MVPlanner p1024: `d2` healthy homologado em `origin/main@b54974c`; publicação canônica `p1` criada a partir do mesmo image digest do `d2`. O alias textual HTTPS ainda exige fechamento no publisher/NPM sem quebrar `/cloudiff/portal/`.

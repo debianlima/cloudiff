@@ -32,7 +32,7 @@ class ReleaseFlowWizardUITests(unittest.TestCase):
 
     def test_homologation_authorization_button_opens_existing_permission_manager(self):
         release=RELEASE_JS_PATH.read_text()
-        self.assertIn('data-release-permissions>Autorizar homologação</button>',release)
+        self.assertIn('data-release-permissions>Autorizar homologação e publicação</button>',release)
         self.assertIn('Autorizar homologação e publicação',release)
         self.assertIn('Quem pode homologar e publicar',release)
         self.assertIn('data-permission-homologate',release)
@@ -63,7 +63,9 @@ class ReleaseFlowWizardUITests(unittest.TestCase):
     def test_release_manager_is_promotion_only(self):
         self.assertTrue(RELEASE_JS_PATH.is_file(), 'release manager must live in a dedicated module')
         release=RELEASE_JS_PATH.read_text()
-        self.assertIn('Gerenciar publicação',release)
+        self.assertNotIn('Gerenciar publicação',release)
+        self.assertIn('window.CloudIFReleaseFlow = { mount: mountEmbedded }',release)
+        self.assertIn('cloudif:publication-release-mount',release)
         self.assertIn('Enviar Preview para homologação',release)
         self.assertIn('Homologar',release)
         self.assertIn('Publicar em Produção',release)
@@ -102,19 +104,20 @@ class ReleaseFlowWizardUITests(unittest.TestCase):
 
     def test_primary_ui_uses_w_h_p_and_no_direct_publish_button(self):
         self.assertIn('Preview → Homologação → Publicação',UI)
-        self.assertIn('data-release-flow-open',UI)
+        self.assertNotIn('data-release-flow-open',UI)
+        self.assertIn('data-publication-tool="overview"',UI)
+        self.assertIn('Ambiente de publicação',UI)
         self.assertNotIn('>Publicar site<',UI)
         self.assertNotIn('>Publicar nova versão<',UI)
         self.assertIn('Alternar entre Publicações',UI);self.assertNotIn('Detalhes técnicos e versões legadas',UI)
 
-    def test_primary_actions_are_grouped_side_by_side(self):
+    def test_primary_ui_has_one_publication_workspace_entry_point(self):
         controls=UI[UI.index('def _configuration_controls'):UI.index('def publication_panel')]
         tools=controls[controls.index('publication-release-flow__tools'):]
-        self.assertIn('Gerenciar publicação',tools)
-        self.assertIn('Ambiente de publicação',tools)
-        self.assertLess(tools.index('Gerenciar publicação'),tools.index('Ambiente de publicação'))
-        head=controls[controls.index('publication-release-flow__head'):controls.index('publication-release-flow__stages')]
-        self.assertNotIn('Gerenciar publicação',head)
+        self.assertNotIn('Gerenciar publicação',tools)
+        self.assertEqual(tools.count('Ambiente de publicação'),1)
+        self.assertIn('data-publication-environments',tools)
+        self.assertNotIn('data-release-flow-open',tools)
 
     def test_cached_legacy_publish_is_redirected_to_homologation(self):
         self.assertIn('publications.enqueue_homologation(slug,user)',BASE)
@@ -134,19 +137,20 @@ class ReleaseFlowWizardUITests(unittest.TestCase):
         self.assertIn('>Variáveis</a>',block)
         self.assertNotIn('/publication/base/',block)
 
-    def test_publications_page_auto_opens_release_deep_link(self):
+    def test_publications_page_auto_opens_release_deep_link_in_environment_workspace(self):
+        self.assertIn("['variables','release'].includes(publicationDeepLinkOpen)",BASE)
+        self.assertIn("publicationDeepLinkOpen==='release'?'release':'variables'",BASE)
+        self.assertIn('publicationEnvironmentOpen(button,tool)',BASE)
         release=RELEASE_JS_PATH.read_text()
-        self.assertIn("const params = new URLSearchParams(location.search)",release)
-        self.assertIn("params.get('open') === 'release'",release)
-        self.assertIn("item.dataset.projectSlug === deepLinkProject",release)
-        self.assertIn("setTimeout(() => open(button), 0)",release)
+        self.assertIn('window.CloudIFReleaseFlow = { mount: mountEmbedded }',release)
+        self.assertNotIn("params.get('open') === 'release'",release)
 
     def test_publications_page_auto_opens_variables_deep_link(self):
         self.assertIn("const publicationDeepLink=new URLSearchParams(location.search)",BASE)
-        self.assertIn("publicationDeepLinkOpen==='variables'",BASE)
-        self.assertIn('[data-publication-environments][data-publication-tool="variables"]',BASE)
+        self.assertIn("['variables','release'].includes(publicationDeepLinkOpen)",BASE)
+        self.assertIn("publicationDeepLinkOpen==='release'?'release':'variables'",BASE)
         self.assertIn("x.dataset.projectSlug===publicationDeepLinkProject",BASE)
-        self.assertIn("setTimeout(()=>publicationEnvironmentOpen(button),0)",BASE)
+        self.assertIn("publicationEnvironmentOpen(button,tool)",BASE)
 
     def test_release_flow_api_is_csrf_protected(self):
         self.assertIn('/release-flow(?:/(approval/status))?',COEXIST)
@@ -176,28 +180,31 @@ class ReleaseFlowWizardUITests(unittest.TestCase):
         self.assertIn('.publication-release-flow__stages{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0;border-block:1px solid var(--rule-soft)}',PUBLICATION_CSS)
         self.assertIn('.publication-release-flow__stages article{display:flex;align-items:center;gap:10px;padding:12px 14px;border:0;border-right:1px solid var(--rule-soft);border-radius:0;background:transparent}',PUBLICATION_CSS)
         self.assertIn('.publication-release-flow__tools',PUBLICATION_CSS)
-        self.assertIn('#cloudif-release-flow .release-tabs button{min-height:44px}',PUBLICATION_CSS)
+        self.assertIn('.publication-release-embedded',PUBLICATION_CSS)
+        self.assertIn('.release-primary-action',PUBLICATION_CSS)
         self.assertIn('.nav-link{min-height:44px}',CSS)
         self.assertIn('.btn:focus-visible,.nav-link:focus-visible',CSS)
 
-    def test_release_wizard_closes_with_escape_and_restores_focus(self):
+    def test_release_controls_are_embedded_in_environment_workspace(self):
         release=RELEASE_JS_PATH.read_text()
-        self.assertIn('opener: null',release)
-        self.assertIn('model.opener = button',release)
-        self.assertIn('if (opener && document.contains(opener)) opener.focus()',release)
-        self.assertIn("event.key === 'Escape'",release)
+        self.assertIn('function mountEmbedded(detail = {})',release)
+        self.assertIn('environmentToTab',release)
+        self.assertIn('tabToEnvironment',release)
+        self.assertIn('cloudif:publication-environment-select',release)
+        self.assertNotIn("layer.id = 'cloudif-release-flow'",release)
+        self.assertNotIn('release-wizard-close',release)
 
-    def test_wizard_has_dark_theme_safe_tokens_and_mobile_layout(self):
+    def test_embedded_release_controls_keep_theme_tokens_and_mobile_layout(self):
         self.assertIn('_WHP_RELEASE_ASSETS',BASE)
         self.assertIn('cloudif-whp-release-script',BASE)
         self.assertNotIn('cloudif-whp-release-style',BASE)
         self.assertNotIn('/* CloudIFF W/H/P release wizard */',CSS)
         self.assertIn('/* CloudIFF W/H/P release wizard */',PUBLICATION_CSS)
+        self.assertIn('.publication-release-embedded',PUBLICATION_CSS)
         self.assertIn('var(--surface)',PUBLICATION_CSS)
         self.assertIn('var(--rule)',PUBLICATION_CSS)
-        self.assertIn('var(--overlay)',PUBLICATION_CSS)
         self.assertIn('@media(max-width:700px)',PUBLICATION_CSS)
         self.assertNotIn('!important',PUBLICATION_CSS)
-        self.assertIn('Promova o mesmo artefato do Preview até Produção.',RELEASE_JS_PATH.read_text())
+        self.assertNotIn('#cloudif-release-flow{',PUBLICATION_CSS)
 
 if __name__=='__main__':unittest.main()

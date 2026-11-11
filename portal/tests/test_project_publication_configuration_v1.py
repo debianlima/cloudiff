@@ -75,7 +75,7 @@ class ProjectPublicationConfigurationV1Tests(unittest.TestCase):
 
     def test_wizard_and_base_controls_are_in_project_publication_ui(self):
         portal=PORTAL.read_text();ui=PUB_UI.read_text();env=ENV_WEB.read_text()
-        self.assertNotIn('Abrir base no Komodo',ui);self.assertNotIn('/cloudiff/portal/publication/base/',ui);self.assertIn('data-release-flow-open',ui);self.assertIn('Preview → Homologação → Publicação',ui);self.assertIn('data-publication-environments',ui);self.assertNotIn('data-environments-overview',ui);self.assertNotIn('>Gerenciar variáveis</button>',ui)
+        self.assertNotIn('Abrir base no Komodo',ui);self.assertNotIn('/cloudiff/portal/publication/base/',ui);self.assertNotIn('data-release-flow-open',ui);self.assertIn('Preview → Homologação → Publicação',ui);self.assertIn('data-publication-environments',ui);self.assertIn('Ambiente de publicação',ui);self.assertNotIn('data-environments-overview',ui);self.assertNotIn('>Gerenciar variáveis</button>',ui)
         self.assertIn("envLayer.className='cloudif-wizard'",portal);self.assertIn('wizard-box env-wizard-box',portal);self.assertIn('class=\"wizard-head\"',portal);self.assertIn('class=\"pm-field\"',portal);self.assertIn('class=\"pm-new-footer\"',portal);self.assertIn("const envMount=document.querySelector('.legacy-content')||document.body;envMount.appendChild(envLayer)",portal);self.assertNotIn('document.body.appendChild(envLayer)',portal);self.assertNotIn("createElement('dialog')",portal);self.assertNotIn('env-wizard-dialog::backdrop',portal);self.assertIn('#cloudif-environment-wizard{position:fixed!important;inset:0!important;z-index:1600!important;display:none;place-items:center',portal);self.assertIn('#cloudif-environment-wizard>.env-wizard-box{width:min(900px,100%);max-height:94vh;overflow:auto',portal);self.assertIn('#cloudif-environment-wizard .env-wizard-footer{position:sticky;bottom:0',portal);self.assertIn("change/plan",portal);self.assertIn("approval/request",portal);self.assertIn("change/execute",portal)
         self.assertIn('approval/status',env);self.assertIn('valores secretos nunca são carregados',portal)
         self.assertIn('open_base_workspace',portal);self.assertIn('canWrite',PUBLICATIONS.read_text())
@@ -107,7 +107,7 @@ class ProjectPublicationConfigurationV1Tests(unittest.TestCase):
         self.assertIn("data-publication-env-tab=\"production\"",portal)
         self.assertIn("function publicationEnvironmentSelect(name)",portal)
         self.assertIn('publication-workspace-tools',portal)
-        for tool in ('overview','php','node','variables'):
+        for tool in ('overview','release','php','node','variables'):
             self.assertIn('data-publication-tool=\"'+tool+'\"',portal)
         self.assertIn("function publicationEnvironmentToolSelect(name)",portal)
         self.assertIn("/api/project-runtime-info?slug=",portal)
@@ -132,8 +132,11 @@ class ProjectPublicationConfigurationV1Tests(unittest.TestCase):
         self.assertIn('.publication-environments-launch{',design)
         self.assertIn('.legacy-content #cloudif-publication-environments{position:fixed;inset:0;z-index:1580;display:none;place-items:center',design)
         self.assertIn('.publication-environments-tabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr))',design)
-        self.assertIn('.publication-environments-tabs button.is-active{border-bottom-color:var(--iff)',design)
+        self.assertIn('.publication-environments-tabs button.is-active{border-bottom-color:var(--publication-env-accent)',design)
         self.assertIn('.publication-workspace-tools{display:flex',design)
+        self.assertIn('.is-env-preview{--publication-env-accent:var(--iff)',design)
+        self.assertIn('.is-env-homologation{--publication-env-accent:var(--drift)',design)
+        self.assertIn('.is-env-production{--publication-env-accent:var(--focus)',design)
         self.assertIn('width:min(1180px,100%);height:min(94vh,900px)',design)
         self.assertIn('.publication-runtime-preview pre{',design)
         self.assertIn('.publication-variable-row{display:grid',design)

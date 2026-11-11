@@ -27,10 +27,12 @@ class PublicationWorkspaceToolsTests(unittest.TestCase):
         self.assertIn('publication-workspace-tools',self.portal)
         for environment in ('preview','homologation','production'):
             self.assertIn(f'data-publication-env-tab="{environment}"',self.portal)
-        for tool in ('overview','php','node','variables'):
+        for tool in ('overview','release','php','node','variables'):
             self.assertIn(f'data-publication-tool="{tool}"',self.portal)
         self.assertIn("tool:'overview'",self.portal)
         self.assertIn('function publicationEnvironmentToolSelect(name)',self.portal)
+        self.assertIn('cloudif:publication-release-mount',self.portal)
+        self.assertIn('cloudif:publication-environment-select',self.portal)
 
     def test_runtime_preview_uses_authenticated_json_without_iframe(self):
         workspace=self.portal[self.portal.index("const publicationTools="):self.portal.index("const backdrop=document.createElement('div');")]
@@ -61,6 +63,9 @@ class PublicationWorkspaceToolsTests(unittest.TestCase):
         self.assertIn('.publication-workspace-tools{display:flex',self.design)
         self.assertIn('.publication-runtime-preview pre{',self.design)
         self.assertIn('.publication-variable-row{display:grid',self.design)
+        self.assertIn('.is-env-preview{--publication-env-accent:var(--iff)',self.design)
+        self.assertIn('.is-env-homologation{--publication-env-accent:var(--drift)',self.design)
+        self.assertIn('.is-env-production{--publication-env-accent:var(--focus)',self.design)
 
 
 if __name__=='__main__':

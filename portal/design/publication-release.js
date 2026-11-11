@@ -1,47 +1,20 @@
 (() => {
-  if (document.getElementById('cloudif-release-flow')) return;
+  if (window.CloudIFReleaseFlow) return;
 
   const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
   }[char]));
-  const mount = document.querySelector('.legacy-content') || document.body;
-  const layer = document.createElement('div');
-  layer.id = 'cloudif-release-flow';
-  layer.setAttribute('role', 'dialog');
-  layer.setAttribute('aria-modal', 'true');
-  layer.setAttribute('aria-labelledby', 'release-wizard-title');
-  layer.innerHTML = `
-    <section class="release-wizard">
-      <header>
-        <div>
-          <span class="release-kicker">Publicação</span>
-          <h2 id="release-wizard-title">Gerenciar publicação</h2>
-          <p data-release-project></p>
-        </div>
-        <button type="button" class="release-wizard-close" aria-label="Fechar">×</button>
-      </header>
-      <nav class="release-tabs" aria-label="Etapas da publicação">
-        <button type="button" data-release-tab="preview">Preview</button>
-        <button type="button" data-release-tab="homologation">Homologação</button>
-        <button type="button" data-release-tab="publication">Produção</button>
-      </nav>
-      <main class="release-wizard-body" data-release-body><p>Carregando fluxo…</p></main>
-      <footer class="release-wizard-footer">
-        <span>Promova o mesmo artefato do Preview até Produção.</span>
-        <div>
-          <button type="button" class="btn light" data-release-permissions>Autorizar homologação</button>
-          <button type="button" class="btn light" data-release-close>Fechar</button>
-        </div>
-      </footer>
-    </section>`;
-  mount.appendChild(layer);
-
   const model = {
     slug: '', tab: 'preview', data: null, csrf: '', approval: null,
     poll: null, busy: false, opener: null, autoPreviewAttempted: false,
     previewPreparing: false, previewError: '', permissionsOpen: false
   };
-  const body = layer.querySelector('[data-release-body]');
+  let body = null;
+  const environmentToTab = { preview: 'preview', homologation: 'homologation', production: 'publication' };
+  const tabToEnvironment = { preview: 'preview', homologation: 'homologation', publication: 'production' };
+  function syncEnvironment(tab) {
+    document.dispatchEvent(new CustomEvent('cloudif:publication-environment-select', { detail: { slug: model.slug, environment: tabToEnvironment[tab] || 'preview' } }));
+  }
 
   function apiBase() {
     return '/cloudiff/portal/api/projects/' + encodeURIComponent(model.slug) + '/release-flow';
@@ -69,22 +42,10 @@
     });
   }
 
-  function close() {
-    layer.classList.remove('is-open');
-    document.body.classList.remove('cloudif-modal-open');
-    clearTimeout(model.poll);
-    model.poll = null;
-    const opener = model.opener;
-    model.opener = null;
-    if (opener && document.contains(opener)) opener.focus();
-  }
-
-  function selectTab(name) {
+  function selectTab(name, sync = true) {
     model.permissionsOpen = false;
     model.tab = ['preview', 'homologation', 'publication'].includes(name) ? name : 'preview';
-    layer.querySelectorAll('[data-release-tab]').forEach(button => {
-      button.classList.toggle('is-active', button.dataset.releaseTab === model.tab);
-    });
+    if (sync) syncEnvironment(model.tab);
     render();
   }
 
@@ -277,6 +238,7 @@
 
 
   function render() {
+    if (!body) return;
     if (!model.data) {
       body.innerHTML = '<p>Carregando fluxo…</p>';
       return;
@@ -286,11 +248,15 @@
       bindActions();
       return;
     }
-    body.innerHTML = model.tab === 'preview'
+    const content = model.tab === 'preview'
       ? renderPreview()
       : model.tab === 'homologation'
         ? renderHomologation()
         : renderProduction();
+    const permissionAction = model.data.canManagePermissions
+      ? '<div class="release-embedded-tools"><button class="btn light" type="button" data-release-permissions>Autorizar homologação e publicação</button></div>'
+      : '';
+    body.innerHTML = content + permissionAction;
     bindActions();
   }
 
@@ -360,7 +326,7 @@
       }
       render();
       updateSummary(model.slug, data);
-      if (!(data.preview || {}).configured && !model.autoPreviewAttempted) {
+      if (model.tab === 'preview' && !(data.preview || {}).configured && !model.autoPreviewAttempted) {
         void ensurePreviewAutomatically();
       }
       if (data.job && ['queued', 'running'].includes(data.job.status)) model.poll = setTimeout(load, 2200);
@@ -375,7 +341,7 @@
     body.insertAdjacentHTML('afterbegin', `<div class="release-job"><strong>${esc(message)}</strong><progress></progress></div>`);
     try {
       await post(operation, payload);
-      if (nextTab) model.tab = nextTab;
+      if (nextTab) { model.tab = nextTab; syncEnvironment(nextTab); }
       await load();
     } catch (error) {
       await load();
@@ -391,6 +357,7 @@
     try {
       await post('production/publish', { candidateNumber: Number(candidate) });
       model.tab = 'publication';
+      syncEnvironment('publication');
       await load();
     } catch (error) {
       await load();
@@ -418,6 +385,7 @@
 
 
   function bindActions() {
+    body.querySelectorAll('[data-release-permissions]').forEach(button => button.onclick = () => { model.permissionsOpen = true; render(); });
     body.querySelectorAll('[data-release-action]').forEach(button => {
       button.onclick = async () => {
         const action = button.dataset.releaseAction;
@@ -444,40 +412,32 @@
     });
   }
 
-  function open(button) {
-    model.opener = button;
-    model.slug = button.dataset.projectSlug || '';
-    model.tab = 'preview';
-    model.data = null;
-    model.approval = null;
-    model.autoPreviewAttempted = false;
-    model.previewPreparing = false;
-    model.previewError = '';
-    layer.querySelector('[data-release-project]').textContent = model.slug;
-    layer.classList.add('is-open');
-    document.body.classList.add('cloudif-modal-open');
-    selectTab('preview');
+  function mountEmbedded(detail = {}) {
+    const host = detail.host;
+    const slug = String(detail.slug || '').trim();
+    if (!(host instanceof Element) || !slug) return;
+    const environment = ['preview', 'homologation', 'production'].includes(detail.environment) ? detail.environment : 'preview';
+    const changedProject = model.slug !== slug;
+    body = host;
+    model.slug = slug;
+    model.tab = environmentToTab[environment] || 'preview';
+    model.permissionsOpen = false;
+    if (changedProject) {
+      clearTimeout(model.poll);
+      model.poll = null;
+      model.data = null;
+      model.csrf = '';
+      model.approval = null;
+      model.autoPreviewAttempted = false;
+      model.previewPreparing = false;
+      model.previewError = '';
+    }
+    render();
     void load();
-    setTimeout(() => layer.querySelector('[data-release-tab].is-active')?.focus(), 0);
   }
 
-  layer.querySelector('.release-wizard-close').onclick = close;
-  layer.querySelector('[data-release-close]').onclick = close;
-  layer.querySelector('[data-release-permissions]').onclick = () => { model.permissionsOpen = !model.permissionsOpen; render(); };
-  layer.querySelectorAll('[data-release-tab]').forEach(button => button.onclick = () => selectTab(button.dataset.releaseTab));
-  layer.addEventListener('click', event => { if (event.target === layer) close(); });
-  document.addEventListener('keydown', event => { if (event.key === 'Escape' && layer.classList.contains('is-open')) close(); });
-  document.addEventListener('click', event => {
-    const button = event.target.closest('[data-release-flow-open]');
-    if (button) open(button);
-  });
-
-  const params = new URLSearchParams(location.search);
-  const deepLinkProject = params.get('project') || '';
-  if (params.get('tab') === 'publicacao' && deepLinkProject && params.get('open') === 'release') {
-    const button = [...document.querySelectorAll('[data-release-flow-open]')].find(item => item.dataset.projectSlug === deepLinkProject);
-    if (button) setTimeout(() => open(button), 0);
-  }
+  window.CloudIFReleaseFlow = { mount: mountEmbedded };
+  document.addEventListener('cloudif:publication-release-mount', event => mountEmbedded(event.detail || {}));
 
   const roots = [...document.querySelectorAll('[data-release-flow-summary]')];
   async function loadSummary(root) {
