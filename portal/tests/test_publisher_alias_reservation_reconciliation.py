@@ -20,6 +20,12 @@ class PublisherAliasReservationReconciliationTests(unittest.TestCase):
         ):
             self.assertIn(marker,src)
         self.assertEqual(src,MIRROR.read_text())
+        self.assertIn('def _bootstrap_alias_http(state,num,dep,alias):',src)
+        self.assertIn("if not hostcert:\n    continue",src)
+        self.assertIn('location ^~ /cloudiff/',src)
+        self.assertIn('location ^~ /cloudif/',src)
+        self.assertIn('proxy_pass http://10.62.92.7:8099;',src)
+        self.assertIn('_restore_alias_after_bootstrap(state,alias,previous)',src)
 
     def test_stage_framing_fix_is_added_without_touching_reserved_alias_behavior(self):
         src=CURRENT.read_text()

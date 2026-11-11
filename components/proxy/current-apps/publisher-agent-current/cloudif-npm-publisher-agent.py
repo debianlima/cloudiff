@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import json,os,re,subprocess,tempfile,shutil,ssl,time,threading
+import copy,json,os,re,subprocess,tempfile,shutil,ssl,time,threading
 from http.server import ThreadingHTTPServer,BaseHTTPRequestHandler
 from pathlib import Path
 ENV=Path('/etc/cloudif/npm-publisher.env')
@@ -133,18 +133,19 @@ server {{
 }}''')
  for alias,a in sorted(state.get('aliases',{}).items()):
   num=int(a['public_number']); dep=int(a.get('active_deploy') or 0)
-  stable_host=f'{alias}.cloudiff.duckdns.org'; stable_target=f'{num}.cloudiff.duckdns.org'
+  stable_host=f'{alias}.cloudiff.duckdns.org'; stable_target=f'{num}.cloudiff.duckdns.org'; hostcert=str(a.get('cert') or '')
+  # Alias HTTP always exists, even before certificate issuance. This makes the
+  # ACME webroot bootstrap deterministic instead of depending on a default host.
   if dep<1:
-   hostcert=str(a.get('cert') or '')
+   blocks.append('server {\n'
+    '    listen 80;\n'
+    '    listen [::]:80;\n'
+    f'    server_name {stable_host};\n'
+    '    location ^~ /.well-known/acme-challenge/ { root /data/letsencrypt-acme-challenge; default_type text/plain; }\n'
+    '    location / { return 301 https://$host$request_uri; }\n'
+    '}')
    if hostcert:
     blocks.append('server {\n'
-     '    listen 80;\n'
-     '    listen [::]:80;\n'
-     f'    server_name {stable_host};\n'
-     '    location ^~ /.well-known/acme-challenge/ { root /data/letsencrypt-acme-challenge; default_type text/plain; }\n'
-     '    location / { return 301 https://$host$request_uri; }\n'
-     '}\n'
-     'server {\n'
      '    listen 443 ssl;\n'
      '    listen [::]:443 ssl;\n'
      '    http2 on;\n'
@@ -159,12 +160,12 @@ server {{
      '    location / { return 503 "<!doctype html><html lang=pt-BR><head><meta charset=utf-8><meta name=viewport content=width=device-width,initial-scale=1><title>Aguardando publicação</title></head><body><main><h1>Aguardando publicação</h1><p>Este endereço está reservado e será ativado quando houver uma publicação P ativa.</p></main></body></html>"; }\n'
      '}')
    continue
-  pairs=[(stable_host,a['cert'],stable_target)]
+  pairs=[(stable_host,hostcert,stable_target)]
   versions=a.get('versions',{})
   if not versions and a.get('version_cert'):
    versions={str(dep):{'cert':a['version_cert']}}
   for dep_s,version_data in sorted(versions.items(),key=lambda item:int(item[0])):
-   version_dep=int(dep_s);pairs.append((f'{version_dep}.{alias}.cloudiff.duckdns.org',version_data['cert'],f'{num}-d{version_dep}.cloudiff.duckdns.org'))
+   version_dep=int(dep_s);pairs.append((f'{version_dep}.{alias}.cloudiff.duckdns.org',str(version_data.get('cert') or ''),f'{num}-d{version_dep}.cloudiff.duckdns.org'))
   for host,hostcert,target in pairs:
    blocks.append('server {\n'
     '    listen 80;\n'
@@ -172,8 +173,10 @@ server {{
     f'    server_name {host};\n'
     '    location ^~ /.well-known/acme-challenge/ { root /data/letsencrypt-acme-challenge; default_type text/plain; }\n'
     '    location / { return 301 https://$host$request_uri; }\n'
-    '}\n'
-    'server {\n'
+    '}')
+   if not hostcert:
+    continue
+   blocks.append('server {\n'
     '    listen 443 ssl;\n'
     '    listen [::]:443 ssl;\n'
     '    http2 on;\n'
@@ -182,6 +185,24 @@ server {{
     f'    ssl_certificate_key /etc/letsencrypt/live/{hostcert}/privkey.pem;\n'
     '    include conf.d/include/ssl-ciphers.conf;\n'
     '    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;\n'
+    '    location ^~ /cloudiff/ {\n'
+    '        proxy_http_version 1.1;\n'
+    '        proxy_set_header Host $host;\n'
+    '        proxy_set_header X-Real-IP $remote_addr;\n'
+    '        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n'
+    '        proxy_set_header X-Forwarded-Proto https;\n'
+    '        proxy_set_header X-Forwarded-Host $host;\n'
+    '        proxy_pass http://10.62.92.7:8099;\n'
+    '    }\n'
+    '    location ^~ /cloudif/ {\n'
+    '        proxy_http_version 1.1;\n'
+    '        proxy_set_header Host $host;\n'
+    '        proxy_set_header X-Real-IP $remote_addr;\n'
+    '        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n'
+    '        proxy_set_header X-Forwarded-Proto https;\n'
+    '        proxy_set_header X-Forwarded-Host $host;\n'
+    '        proxy_pass http://10.62.92.7:8099;\n'
+    '    }\n'
     '    location / {\n'
     '        proxy_http_version 1.1;\n'
     f'        proxy_set_header Host {target};\n'
@@ -204,6 +225,22 @@ server {{
   subprocess.run(['docker','exec','cloudif-nginx-proxy-manager','nginx','-s','reload'])
   raise
 
+def _bootstrap_alias_http(state,num,dep,alias):
+ aliases=state.setdefault('aliases',{})
+ previous=copy.deepcopy(aliases.get(alias))
+ item=aliases.setdefault(alias,{'public_number':int(num),'active_deploy':int(dep),'cert':'','versions':{}})
+ item['public_number']=int(num);item['active_deploy']=int(dep);item.setdefault('cert','');item.setdefault('versions',{})
+ if int(dep)>0:item['versions'].setdefault(str(int(dep)),{'cert':''})
+ render(state)
+ return previous
+
+def _restore_alias_after_bootstrap(state,alias,previous):
+ aliases=state.setdefault('aliases',{})
+ if previous is None:aliases.pop(alias,None)
+ else:aliases[alias]=previous
+ render(state)
+
+
 def reserve_alias(state,num,alias):
  num=int(num);alias=str(alias or '').strip().lower()
  if not (1<=num<=999999999):raise ValueError('invalid_number')
@@ -212,7 +249,12 @@ def reserve_alias(state,num,alias):
  if alias in state.get('tenants',{}):raise ValueError('alias_in_use')
  current=aliases.get(alias)
  if current and int(current.get('public_number') or 0)!=num:raise ValueError('alias_in_use')
- stable=f'{alias}.cloudiff.duckdns.org';cert=(current or {}).get('cert') or ensure_cert(f'cloudif-alias-{alias}',[stable])
+ stable=f'{alias}.cloudiff.duckdns.org';cert=str((current or {}).get('cert') or '')
+ if not cert:
+  previous=_bootstrap_alias_http(state,num,0,alias)
+  try:cert=ensure_cert(f'cloudif-alias-{alias}',[stable])
+  except Exception:
+   _restore_alias_after_bootstrap(state,alias,previous);raise
  item=aliases.setdefault(alias,{'public_number':num,'active_deploy':0,'cert':cert,'versions':{}})
  item['public_number']=num;item['active_deploy']=0;item['cert']=cert;item.setdefault('versions',{});item['status']='reserved';item['updated_at']=time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime())
  return {'ok':True,'alias':alias,'stable_url':'https://'+stable+'/','active':False,'reserved':True}
@@ -225,8 +267,14 @@ def ensure_alias(state,num,dep,alias):
  current=aliases.get(alias)
  if current and int(current.get('public_number'))!=int(num): raise ValueError('alias_in_use')
  stable=f'{alias}.cloudiff.duckdns.org'; version=f'{dep}.{alias}.cloudiff.duckdns.org'
- cert=ensure_cert(f'cloudif-alias-{alias}',[stable])
- version_cert=ensure_cert(f'cloudif-alias-{alias}-d{dep}',[version])
+ cert=str((current or {}).get('cert') or '');version_cert=str((((current or {}).get('versions') or {}).get(str(int(dep))) or {}).get('cert') or '')
+ if not cert or not version_cert:
+  previous=_bootstrap_alias_http(state,num,dep,alias)
+  try:
+   if not cert:cert=ensure_cert(f'cloudif-alias-{alias}',[stable])
+   if not version_cert:version_cert=ensure_cert(f'cloudif-alias-{alias}-d{dep}',[version])
+  except Exception:
+   _restore_alias_after_bootstrap(state,alias,previous);raise
  item=aliases.setdefault(alias,{'public_number':int(num),'active_deploy':int(dep),'cert':cert,'versions':{}})
  item['public_number']=int(num);item['active_deploy']=int(dep);item['cert']=cert;item.setdefault('versions',{})[str(dep)]={'cert':version_cert};item['status']='active';item['updated_at']=time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime())
  return {'ok':True,'alias':alias,'stable_url':'https://'+stable+'/','version_url':'https://'+version+'/','active':True,'reserved':False}
