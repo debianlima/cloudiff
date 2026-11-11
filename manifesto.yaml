@@ -12205,27 +12205,4 @@ entradas:
     aceite: python3 -m unittest portal.tests.test_publication_permissions portal.tests.test_release_flow_wizard_ui
     status: aceito
 
-trabalho_compartilhado:
-  projeto: cloudiff
-  caminho: /srv/mcp-workspace/cloudiff-identity-fix
-  unidade: AUDITORIA-INTERFACE-AGENTES-2026-11-11
-  descricao: 'estudo completo de interface e agentes, atualização documental e catálogos técnicos do GitHub'
-  agente: Meu Terminal Oracle
-  atualizado_em: '2026-11-11T08:15:19+00:00'
-  previsao_termino: '2026-11-11T11:15:19+00:00'
-  zona_exclusao:
-    - manifesto.yaml
-    - estado.md
-    - docs/AUDITORIA-INTERFACE-E-AGENTES-2026-11-11.md
-    - docs/PLANO-DE-APERFEICOAMENTO.md
-    - docs/CATALOGO-DE-AGENTES.md
-    - docs/CATALOGO-DE-ROTAS.md
-    - docs/CATALOGO-DE-SERVICOS.md
-    - docs/DICIONARIO-DE-DADOS-ESTATICO.md
-    - docs/ARCHITECTURE.md
-    - docs/README.md
-    - portal/tests/test_publication_site_terminal_workspace.py
-    - portal/tests/test_publication_runtime_links_and_actions.py
-    - portal/tests/test_portal_no_legacy_visual_fallback.py
-    - portal/tests/test_forja_komodo_client_unit_contract.py
-    - portal/tests/test_taiga_gateway_php_paths.py
+trabalho_compartilhado: null

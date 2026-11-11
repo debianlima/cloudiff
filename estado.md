@@ -538,3 +538,18 @@
 - Sync LDAP do Authentik foi acionado. O wrapper `ak ldap_sync` retornou `ResultMissing` ao aguardar result backend, mas a tarefa real permaneceu ativa sob o lock da fonte e concluiu normalmente; após término, Authentik reportou `GROUPS ['CloudIF-Tenants-Admin', 'CloudIF-Professor']` e `LOCK_AVAILABLE=True`.
 - Cache do Portal reconciliado: `groups_json=["CloudIF-Professor", "CloudIF-Tenants-Admin"]`, `is_admin=1`, `is_professor=1`, `active=1`, atualizado em `2026-11-11T08:06:45+00:00`.
 - Gate de visibilidade com os grupos do cache: 6 projetos visíveis — `mvplanner`, `cadales`, `cpuhub`, `agenda-unica`, `laboratorio-de-hardware`, `silvipro`. `VISIBILITY=PASS`.
+
+
+## Auditoria de interface e agentes — 2026-11-11 UTC
+
+- Solicitação humana: estudo completo da interface e dos agentes, com atualização do GitHub do projeto. Relatório canônico: `docs/AUDITORIA-INTERFACE-E-AGENTES-2026-11-11.md`; plano revisado para versão 3 em `docs/PLANO-DE-APERFEICOAMENTO.md`.
+- Source auditado em `main`; commit de documentação/testes `3aeaa6e94458fe62eacd9f56e2830673d7a7b87e`.
+- Interface: 7 módulos v2, 32 endpoints declarados, entry point do Portal reduzido a 18.455 bytes/144 linhas, design system v2 sem `!important`, 34 breakpoints em `components.css`, 228 arquivos de teste do Portal. Visão geral minimalista/lazy/master-detail classificada como evolução positiva.
+- Dívidas de interface: fallback legado ainda contém concessões por `domain admins` (P1); `mcp-gateway-current/cloudif-mcp-gateway.py` cresceu para 428.302 bytes/3.636 linhas (P1); `components.css` 101.161 bytes/926 linhas é dívida de coesão, não falha visual (P2); falta smoke visual mobile contínuo (P2).
+- Catálogos técnicos regenerados: 41 aplicações `*-current` (control-plane/runtime), 691 referências estáticas de rota, 179 unidades/timers versionados em componentes e 271 declarações estáticas de tabela.
+- Runtime observado: `cloudiff-v2-agent.service` e `cloudiff-v2-agent-updater.service` estão `failed` em Forja, Mauricio, Faro e Hospedagem. Os serviços especializados permanecem ativos, mas não substituem o heartbeat do agente-base pelo contrato vigente.
+- P0 headless: `/__cloudiff_agent_updates/`, `/cloudiff/portal/api/node-recovery-policy` e `/__cloudif_distribution/` retornam HTTP 403 no OpenResty. O access log do NPM confirma `access forbidden by rule` com `client: 172.18.0.1`: a allowlist por `remote_addr` vê a bridge Docker em vez do IP privado original. Não é seguro corrigir aceitando `172.18.0.1` genericamente.
+- P0 NATS: TCP para `10.62.92.7:14222` está acessível e certificados cliente observados são válidos até 2028, mas o agent-base não estabelece a sessão libnats. A causa de protocolo/TLS exata permaneceu indisponível nesta unidade; próxima unidade deve executar o `test_nats_mtls` real e provar reconnect/heartbeat.
+- P0 certificado NATS: certificado servidor `CN=nats.cloudiff.duckdns.org` observado com validade até `2026-11-18T13:48:27Z`; `cloudiff-v2-cert-sync.service` está failed pelo mesmo HTTP 403 headless. Correção deve preceder o vencimento.
+- Testes: primeira execução completa expôs 4 falhas + 1 erro em contratos antigos; foram reconciliados apenas testes, sem mudar runtime. Resultado final em quatro shards: 307 + 395 + 302 + 314 = 1.318/1.318 PASS. Gates de scripts de produção PASS. `scripts/validate.sh` final PASS.
+- Catálogos, relatório e plano foram enviados ao GitHub. Nenhuma mutação de produção P0 foi embutida na auditoria; os achados permanecem explícitos para unidade operacional dedicada.
