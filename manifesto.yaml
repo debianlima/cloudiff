@@ -12218,3 +12218,6 @@ trabalho_compartilhado:
     - estado.md
     - runtime:forja:p1024
     - runtime:mauricio:nginx-custom-http.conf
+    - components/control-plane/srv/cloudif/lib/cloudif_ui_publications.py
+    - components/control-plane/current-apps/portal-current/cloudif_ui_publications.py
+    - components/control-plane/current-apps/portal-current/cloudif-admin-portal-base.py
