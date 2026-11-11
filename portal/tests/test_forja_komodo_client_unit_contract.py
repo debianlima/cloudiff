@@ -1,6 +1,6 @@
 from pathlib import Path
 import importlib.util
-import time
+import threading
 import unittest
 
 
@@ -18,15 +18,15 @@ class ForjaKomodoClientUnitContractTest(unittest.TestCase):
             'forja_url':'http://forja.invalid','forja_token':'',
             'komodo_url':'http://komodo.invalid','komodo_token':'',
         }
-        calls=[]
+        calls=[];lock=threading.Lock();barrier=threading.Barrier(4,timeout=2)
         def fake_http(url,method='GET',payload=None,token='',timeout=7):
-            calls.append((url,timeout));time.sleep(.12);return {'ok':False,'status':0,'data':{}}
+            with lock:calls.append((url,timeout,threading.get_ident()))
+            barrier.wait()
+            return {'ok':False,'status':0,'data':{}}
         module.http_json=fake_http
-        started=time.perf_counter()
         snapshot=module.integration_status_snapshot()
-        elapsed=time.perf_counter()-started
-        self.assertLess(elapsed,.30)
         self.assertEqual(len(calls),4)
+        self.assertEqual(len({thread_id for _,_,thread_id in calls}),4)
         self.assertEqual(set(snapshot),{'forja_health','forja_status','komodo_health','komodo_status'})
 
 

@@ -13,7 +13,9 @@ class PortalNoLegacyVisualFallbackTests(unittest.TestCase):
         portal=PORTAL.read_text();current=PUB_CURRENT.read_text();shared=PUB_SHARED.read_text();coexist=COEXIST.read_text()
         for source in (current,shared):
             self.assertNotIn('/cloudiff/portal/publication/base/',source)
-            self.assertIn('data-release-flow-open',source)
+            self.assertNotIn('data-release-flow-open',source)
+            self.assertIn('data-publication-environments',source)
+            self.assertIn('Ambiente de publicação',source)
             self.assertNotIn('name="op" value="open_base_workspace"',source)
             self.assertNotIn('target="_blank" action="/cloudiff/portal/action/publication"',source)
         renderer=portal[portal.index('def _pm197_render'):portal.index('render_projects=_pm197_render')]

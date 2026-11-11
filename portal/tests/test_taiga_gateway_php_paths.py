@@ -10,7 +10,12 @@ class TaigaGatewayPhpPathTests(unittest.TestCase):
     def test_php_like_paths_are_rejected_before_frontend_proxy(self):
         source = CONF.read_text()
         self.assertEqual(source.count(RULE), 1)
-        self.assertLess(source.index(RULE), source.index('location / { proxy_pass http://taiga-front/;'))
+        rule_pos=source.index(RULE)
+        frontend_pos=source.index('  location / {',rule_pos)
+        api_pos=source.index('  location /api/',frontend_pos)
+        self.assertLess(rule_pos,frontend_pos)
+        self.assertLess(frontend_pos,api_pos)
+        self.assertIn('proxy_pass http://taiga-front/;',source[frontend_pos:api_pos])
 
     def test_core_taiga_routes_remain_present(self):
         source = CONF.read_text()

@@ -5,6 +5,7 @@ Documentação técnica, inventários e evidências.
 
 ## Guias operacionais
 
+- [Auditoria de interface e agentes — 2026-11-11](AUDITORIA-INTERFACE-E-AGENTES-2026-11-11.md)
 - [Fluxo W → H → P de publicação](FLUXO-WHP-PUBLICACAO.md)
 - [Acesso externo e conexões](manual-tecnico/13-ACESSO-EXTERNO.md)
 
@@ -20,6 +21,7 @@ Documentação técnica, inventários e evidências.
 | [`manual-tecnico/`](manual-tecnico/) | Diretório | Documentação técnica, inventários e evidências. |
 | [`portal-v2/`](portal-v2/) | Diretório | Documentação técnica, inventários e evidências. |
 | [`ARCHITECTURE.md`](ARCHITECTURE.md) | `.md` | Documento técnico ou operacional. |
+| [`AUDITORIA-INTERFACE-E-AGENTES-2026-11-11.md`](AUDITORIA-INTERFACE-E-AGENTES-2026-11-11.md) | `.md` | Documento técnico ou operacional. |
 | [`CATALOGO-DE-AGENTES.md`](CATALOGO-DE-AGENTES.md) | `.md` | Documento técnico ou operacional. |
 | [`CATALOGO-DE-ROTAS.md`](CATALOGO-DE-ROTAS.md) | `.md` | Documento técnico ou operacional. |
 | [`CATALOGO-DE-SERVICOS.md`](CATALOGO-DE-SERVICOS.md) | `.md` | Documento técnico ou operacional. |

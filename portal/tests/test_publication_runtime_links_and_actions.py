@@ -25,9 +25,11 @@ class PublicationRuntimeLinksAndActionsTests(unittest.TestCase):
         for marker in ('kind not in {"php","node"}','php -v','php -m','process.versions','package.json'):
             self.assertIn(marker,self.agent)
         self.assertNotIn('payload.get("command")',self.agent)
-    def test_release_wizard_replaces_direct_publish_controls(self):
+    def test_environment_workspace_replaces_direct_publish_controls(self):
         panel=self.pub[self.pub.index('def _configuration_controls'):self.pub.index('def admin_publications')]
-        self.assertIn('data-release-flow-open',panel)
+        self.assertNotIn('data-release-flow-open',panel)
+        self.assertIn('data-publication-environments',panel)
+        self.assertIn('Ambiente de publicação',panel)
         self.assertIn('Alternar entre Publicações',panel);self.assertNotIn('Detalhes técnicos e versões legadas',panel)
         self.assertNotIn('Publicar nova versão',panel)
         self.assertNotIn('publication-new-version',panel)

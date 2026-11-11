@@ -1,6 +1,38 @@
-# Plano de aperfeiçoamento — CloudIFF Portal
+# Plano de aperfeiçoamento — CloudIFF Portal e agentes
 
-Documento de trabalho · versão 2 · 01/08/2026
+Documento de trabalho · versão 3 · 11/11/2026
+
+> **Revisão 3** — confronta o plano de agosto com o source e runtime atuais. O Portal v2 já modularizou o entry point principal, o CI passou a executar testes e o design system novo não usa `!important`. As prioridades mudam para continuidade dos agentes/NATS, retirada segura de RBAC legado, modularização do MCP gateway e gates E2E de rotas máquina-a-máquina. Evidência completa: [`AUDITORIA-INTERFACE-E-AGENTES-2026-11-11.md`](AUDITORIA-INTERFACE-E-AGENTES-2026-11-11.md).
+
+## Estado atual da revisão 3
+
+| Tema do plano v2 | Estado 11/11/2026 | Evidência atual |
+|---|---|---|
+| Monólito principal do Portal | **substancialmente resolvido** | `cloudif-admin-portal.py` 18 KB/144 linhas; 7 módulos v2 |
+| Design system/cascata | **resolvido para v2; legado preservado** | `tokens.css` + `base.css` + `components.css`; zero `!important` no v2 |
+| CI só valida sintaxe | **resolvido** | workflow executa `validate.sh` + `test.sh`; 228 arquivos de teste do Portal |
+| RBAC permissivo legado | **parcial / aberto** | core v2 canônico; fallback ainda contém `domain admins` |
+| Staging/lib e coexistência | **controlado, ainda relevante** | release A10 imutável e overlays com pre-state/rollback; fallback continua existente |
+| Navegação/organização | **evoluída** | overview minimalista + lazy/master-detail; shell responsivo |
+| Monólito MCP | **piorou e virou prioridade P1** | gateway atual ~428 KB/3.636 linhas |
+| Agente-base/heartbeat | **P0 aberto** | `cloudiff-v2-agent.service` failed em Forja/Mauricio/Faro/Hospedagem |
+| Auto-update e policy | **P0 aberto** | HTTP 403 em quatro nós |
+| Distribuição cert NATS | **P0 aberto** | sync 403; certificado servidor vence 18/11/2026 |
+| Catálogos técnicos | **corrigidos nesta revisão** | regeneração atual de agentes/rotas/serviços/schema |
+
+### Sequência operacional revisada
+
+1. corrigir a fronteira headless do NPM sem confiar no IP da bridge Docker;
+2. recuperar NATS mTLS/heartbeat e provar reconnect real;
+3. renovar o certificado NATS antes de 18/11/2026;
+4. remover concessões `domain admins` dos fallbacks executáveis;
+5. modularizar `mcp-gateway` preservando rotas e approvals;
+6. adicionar gates CI de catálogos e E2E headless;
+7. dividir CSS v2 por domínio somente depois, sem alterar a interface homologada.
+
+---
+
+## Histórico — revisão 2 (01/08/2026)
 
 > **Revisão 2** — corrige três números da versão 1 (camadas de CSS, contagem de
 > `!important` e a caracterização do `staging/lib/`) e acrescenta os itens 16 a 18.

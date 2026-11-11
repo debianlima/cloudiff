@@ -22,7 +22,8 @@ class PublicationSiteTerminalWorkspaceTests(unittest.TestCase):
         self.assertIn('data-publication-tool="terminal"',BASE)
 
     def test_environment_workspace_has_site_and_terminal_tools(self):
-        self.assertIn("const publicationTools=['overview','site','php','node','terminal','variables']",BASE)
+        self.assertIn("const publicationTools=['overview','release','site','php','node','terminal','variables']",BASE)
+        self.assertIn('data-publication-tool="release"',BASE)
         self.assertIn('function publicationSiteRender()',BASE)
         self.assertIn('function publicationTerminalRender(requestId)',BASE)
         self.assertIn("/release-flow/stage/terminal",BASE)
