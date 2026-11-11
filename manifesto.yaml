@@ -12205,4 +12205,30 @@ entradas:
     aceite: python3 -m unittest portal.tests.test_publication_permissions portal.tests.test_release_flow_wizard_ui
     status: aceito
 
-trabalho_compartilhado: null
+trabalho_compartilhado:
+  projeto: cloudiff
+  caminho: /srv/mcp-workspace/cloudiff-identity-fix
+  unidade: P0-AGENTS-NATS-HEADLESS-LEGACY-CLEANUP
+  descricao: 'corrigir NATS agent-base, autenticar rotas headless por mTLS e retirar legado comprovadamente morto'
+  agente: Meu Terminal Oracle
+  atualizado_em: '2026-11-11T09:49:46+00:00'
+  previsao_termino: '2026-11-11T13:49:46+00:00'
+  zona_exclusao:
+    - manifesto.yaml
+    - estado.md
+    - deploy/install_agent_update_route.sh
+    - deploy/install_secure_distribution_route.sh
+    - deploy/agent_updater.sh
+    - deploy/sync_nats_server_cert.sh
+    - deploy/systemd/cloudiff-v2-agent-updater.service
+    - deploy/systemd/cloudiff-v2-cert-sync.service
+    - config/agent-update.json
+    - config/secure-distribution-v1.json
+    - tests/
+    - components/proxy/
+    - runtime:forja:cloudiff-v2-agent
+    - runtime:mauricio:cloudiff-v2-agent
+    - runtime:faro:cloudiff-v2-agent
+    - runtime:hospedagem:cloudiff-v2-agent
+    - runtime:mauricio:npm-headless
+    - runtime:hospedagem:nats-cert-sync
