@@ -11,9 +11,11 @@ print(v)
 PY
 }
 ROOT=$(read_cfg layout.root);RELEASES=$(read_cfg layout.releases);CURRENT=$(read_cfg layout.current);STATE=$(read_cfg layout.state);PUB=$(read_cfg layout.public_key);BASE=$(read_cfg repository.url);SERVICE=$(read_cfg activation.restart_service)
+CLIENT_CERT=$(read_cfg transport.client_cert);CLIENT_KEY=$(read_cfg transport.client_key);CA_BUNDLE=$(read_cfg transport.ca_bundle)
+[ -r "$CLIENT_CERT" ] && [ -r "$CLIENT_KEY" ] && [ -r "$CA_BUNDLE" ]
 POLICY_URL_TEMPLATE=$(read_cfg policy.url_template);NODE_ID_FILE=$(read_cfg policy.node_id_file);POLICY_CACHE=$(read_cfg policy.cache_file);POLICY_DEFAULT=$(read_cfg policy.default_reboot_enabled);REBOOT_COOLDOWN=$(read_cfg policy.reboot_cooldown_seconds)
 install -d -m 0755 "$ROOT" "$RELEASES";install -d -m 0700 "$STATE"
-fetch(){ curl -fsS --max-time 15 --connect-timeout 4 "$1" -o "$2"; }
+fetch(){ curl -fsS --max-time 15 --connect-timeout 4 --cert "$CLIENT_CERT" --key "$CLIENT_KEY" --cacert "$CA_BUNDLE" "$1" -o "$2"; }
 verify_manifest(){ openssl pkeyutl -verify -rawin -pubin -inkey "$PUB" -in "$1" -sigfile "$2" >/dev/null 2>&1; }
 current_version(){ [ -x "$CURRENT/cloudiff-agent" ] && "$CURRENT/cloudiff-agent" --version | sed -n 's/.* \([0-9][0-9.]*\)-shadow$/\1/p' || true; }
 policy_url(){ python3 - "$POLICY_URL_TEMPLATE" "$1" <<'PY'

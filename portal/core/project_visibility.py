@@ -20,7 +20,7 @@ def admin_groups() -> set[str]:
 
 def is_admin_groups(groups) -> bool:
     current = {norm(group) for group in groups}
-    return bool(admin_groups() & current) or "domain admins" in current
+    return bool(admin_groups() & current)
 
 
 def tenant_visible(con: sqlite3.Connection, tenant, username, group_set, is_admin) -> bool:

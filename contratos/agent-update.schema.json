@@ -1,11 +1,12 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "CloudIFF AgentUpdate v1",
+  "title": "CloudIFF AgentUpdate v2",
   "type": "object",
   "additionalProperties": false,
   "required": [
     "version",
     "repository",
+    "transport",
     "layout",
     "verification",
     "activation",
@@ -15,7 +16,7 @@
   ],
   "properties": {
     "version": {
-      "const": 1
+      "const": 2
     },
     "repository": {
       "type": "object",
@@ -25,7 +26,6 @@
         "bind",
         "port",
         "image",
-        "allowed_sources",
         "https_route"
       ],
       "properties": {
@@ -41,16 +41,8 @@
         "image": {
           "const": "nginx@sha256:5f979dcfed4ce6461873f087e8c980d6e29b084b9e8776d9704a7e989b5f4898"
         },
-        "allowed_sources": {
-          "const": [
-            "10.62.91.2",
-            "10.62.91.3",
-            "10.62.91.5",
-            "10.62.92.7"
-          ]
-        },
         "https_route": {
-          "const": "NPM Mauricio :443 -> 10.62.92.7:8099 router -> 127.0.0.1:18250 repository"
+          "const": "NPM :443 mTLS -> 10.62.92.7:8099 router -> 127.0.0.1:18250 repository"
         }
       }
     },
@@ -195,6 +187,30 @@
         },
         "reboot_cooldown_seconds": {
           "const": 900
+        }
+      }
+    },
+    "transport": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mode",
+        "client_cert",
+        "client_key",
+        "ca_bundle"
+      ],
+      "properties": {
+        "mode": {
+          "const": "mTLS"
+        },
+        "client_cert": {
+          "const": "/etc/cloudiff-v2/tls/client-chain.pem"
+        },
+        "client_key": {
+          "const": "/etc/cloudiff-v2/tls/client.key"
+        },
+        "ca_bundle": {
+          "const": "/etc/ssl/certs/ca-certificates.crt"
         }
       }
     }

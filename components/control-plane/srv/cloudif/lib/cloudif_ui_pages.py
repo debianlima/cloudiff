@@ -30,7 +30,7 @@ def _v95_user_groups(user=None):
 
 def _v95_is_admin(user=None):
     groups = {g.lower() for g in _v95_user_groups(user)}
-    return bool(groups & {"cloudif-tenants-admin", "cloudif-admin", "domain admins"})
+    return bool(groups & {"cloudif-tenants-admin", "cloudif-admin"})
 
 def _v95_tenant_name(t):
     if isinstance(t, dict):
@@ -1139,7 +1139,7 @@ def _v95_user_groups(user=None):
 
 def _v95_is_admin(user=None):
     groups = {g.lower() for g in _v95_user_groups(user)}
-    return bool(groups & {"cloudif-tenants-admin", "cloudif-admin", "domain admins"})
+    return bool(groups & {"cloudif-tenants-admin", "cloudif-admin"})
 
 def _v95_tenant_name(t):
     if isinstance(t, dict):

@@ -18,3 +18,7 @@ jobs:
         run: scripts/validate.sh
       - name: Run offline tests and parse existing production tests
         run: scripts/test.sh
+      - name: Verify generated technical catalogs are current
+        run: |
+          python3 scripts/generate-technical-catalogs.py
+          git diff --exit-code -- docs/CATALOGO-DE-AGENTES.md docs/CATALOGO-DE-ROTAS.md docs/CATALOGO-DE-SERVICOS.md docs/DICIONARIO-DE-DADOS-ESTATICO.md

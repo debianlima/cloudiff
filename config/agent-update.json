@@ -1,17 +1,11 @@
 {
-  "version": 1,
+  "version": 2,
   "repository": {
     "url": "https://cloudiff.duckdns.org/__cloudiff_agent_updates",
     "bind": "127.0.0.1",
     "port": 18250,
     "image": "nginx@sha256:5f979dcfed4ce6461873f087e8c980d6e29b084b9e8776d9704a7e989b5f4898",
-    "allowed_sources": [
-      "10.62.91.2",
-      "10.62.91.3",
-      "10.62.91.5",
-      "10.62.92.7"
-    ],
-    "https_route": "NPM Mauricio :443 -> 10.62.92.7:8099 router -> 127.0.0.1:18250 repository"
+    "https_route": "NPM :443 mTLS -> 10.62.92.7:8099 router -> 127.0.0.1:18250 repository"
   },
   "layout": {
     "root": "/opt/cloudiff-agent",
@@ -48,5 +42,11 @@
     "default_reboot_enabled": true,
     "failure_behavior": "keep-last-cached-policy; if no cache use default true",
     "reboot_cooldown_seconds": 900
+  },
+  "transport": {
+    "mode": "mTLS",
+    "client_cert": "/etc/cloudiff-v2/tls/client-chain.pem",
+    "client_key": "/etc/cloudiff-v2/tls/client.key",
+    "ca_bundle": "/etc/ssl/certs/ca-certificates.crt"
   }
 }

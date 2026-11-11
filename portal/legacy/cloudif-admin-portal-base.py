@@ -3663,7 +3663,7 @@ def _cloudif_v58_user_from_headers(handler):
     try:
         admin = is_admin(groups)
     except Exception:
-        admin = any(g.lower() in ["cloudif-tenants-admin", "cloudif-admin", "domain admins"] for g in groups)
+        admin = any(g.lower() in ["cloudif-tenants-admin", "cloudif-admin"] for g in groups)
 
     return {
         "username": username,
@@ -3784,7 +3784,7 @@ def _cm_user(handler):
     try:
         admin = is_admin(groups)
     except Exception:
-        admin = any(g.lower() in ["cloudif-tenants-admin", "cloudif-admin", "domain admins"] for g in groups)
+        admin = any(g.lower() in ["cloudif-tenants-admin", "cloudif-admin"] for g in groups)
     return {"username": username, "email": email, "groups": groups, "admin": admin}
 
 def _cm_send(handler, tab, body):
@@ -3938,7 +3938,7 @@ def _cloudif_ad_user_from_headers(handler):
     try:
         admin = is_admin(groups)
     except Exception:
-        admin = any(g.lower() in ["cloudif-tenants-admin", "cloudif-admin", "domain admins"] for g in groups)
+        admin = any(g.lower() in ["cloudif-tenants-admin", "cloudif-admin"] for g in groups)
 
     return {"username": username, "email": email, "groups": groups, "admin": admin}
 
@@ -4658,7 +4658,6 @@ def _cloudif_v2_profiles(user):
     if 'CloudIF-Tenants' in groups: chips.append('<span class="profile-chip student">● Aluno / tenant</span>')
     if 'CloudIF-Professor' in groups: chips.append('<span class="profile-chip teacher">● Professor</span>')
     if 'CloudIF-Tenants-Admin' in groups or user.get('admin'): chips.append('<span class="profile-chip admin">● Administrador CloudIF</span>')
-    if 'Domain Admins' in groups: chips.append('<span class="profile-chip domain">● Administrador do domínio</span>')
     return ''.join(chips) or '<span class="profile-chip student">● Usuário CloudIF</span>'
 
 def _cloudif_v2_enhance(doc,user,tab):
@@ -5075,7 +5074,7 @@ def _pb_groups(user):
     return {str(x or '').strip().lower() for x in (user.get('groups') or [])}
 
 def _pb_is_platform_admin(user):
-    return bool(_pb_groups(user).intersection({'cloudif-tenants-admin','domain admins'}))
+    return bool(_pb_groups(user).intersection({'cloudif-tenants-admin'}))
 
 def _pb_is_professor(user):
     return bool(_pb_groups(user).intersection({'cloudif-professor','cloudif-professores'}))
@@ -5261,7 +5260,7 @@ def _rd_project_access(slug):
 def _rd_actor_allowed(user, access):
     username=str(user.get('username') or '').strip().lower();groups={str(x).strip() for x in (user.get('groups') or [])}
     if user.get('admin') or username==str(access.get('owner') or '').lower(): return True
-    if groups.intersection({'CloudIF-Tenants-Admin','CloudIF-Professor','Domain Admins','domain admins'}): return True
+    if groups.intersection({'CloudIF-Tenants-Admin','CloudIF-Professor'}): return True
     for item in access.get('acl') or []:
         if item.get('type')=='user' and str(item.get('subject') or '').lower()==username:return True
         if item.get('type')=='group' and str(item.get('subject') or '') in groups:return True
@@ -6351,7 +6350,7 @@ def _pm197_render(user):
         terminal_target=url('/action/open-project-terminal')+'?slug='+urllib.parse.quote(slug,safe='') if runtime_project.get('stack_id') else ''
         studio=supabase_studio_url(p['tenant']) if p['tenant'] else ''
         acl_id='wiz_acl_'+safe
-        delete_allowed=_admin_project_delete_allowed(user,slug) if '_admin_project_delete_allowed' in globals() else bool(user.get('admin') or {str(x).strip().lower() for x in (user.get('groups') or [])}.intersection({'cloudif-tenants-admin','domain admins'}))
+        delete_allowed=_admin_project_delete_allowed(user,slug) if '_admin_project_delete_allowed' in globals() else bool(user.get('admin') or {str(x).strip().lower() for x in (user.get('groups') or [])}.intersection({'cloudif-tenants-admin'}))
         delete_action=f'<a class="btn red" href="/cloudiff/portal/?tab=admin-excluir-projeto&amp;slug={h(slug)}">Excluir projeto</a>' if delete_allowed else ''
         resume_action=(f'<form method="post" action="{url('/action/project_action')}" onsubmit="return confirm(\'Retomar somente a publicação inicial deste projeto?\')"><input type="hidden" name="csrf_token" value="{h(csrf_token)}"><input type="hidden" name="slug" value="{h(slug)}"><button class="btn blue" name="action" value="resume_initial_publication">Retomar publicação</button></form>' if provision_state.get('recoverable') else '')
         bank_action=f'<a class="btn light" href="{h(studio)}" target="_blank" rel="noopener">Abrir Studio</a>' if studio else '<span class="project-final__meta">Sem Studio vinculado</span>'

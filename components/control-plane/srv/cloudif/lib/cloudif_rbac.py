@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import Iterable
 
 DB_PATH=os.environ.get('CLOUDIF_PORTAL_DB','/var/lib/cloudif/qa/cloudif-portal.db')
-ADMIN_GROUPS={x.strip().lower() for x in os.environ.get('CLOUDIF_ADMIN_GROUPS','cloudif-tenants-admin,cloudif-admin,domain admins').replace('|',',').split(',') if x.strip()}
+ADMIN_GROUPS={x.strip().lower() for x in os.environ.get('CLOUDIF_ADMIN_GROUPS','cloudif-tenants-admin,cloudif-admin').replace('|',',').split(',') if x.strip()}
 ROLE_LEVEL={'none':0,'viewer':10,'read':10,'reader':10,'user':10,'developer':20,'editor':20,'write':20,'manager':30,'manage':30,'admin':40,'administrator':40,'owner':50,'dono':50,'proprietario':50,'proprietário':50}
 ACTION_LEVEL={'project.view':10,'project.edit':20,'project.manage':30,'project.delete':50,'tenant.view':10,'tenant.manage':30,'tenant.delete':50,'admin.global':40}
 

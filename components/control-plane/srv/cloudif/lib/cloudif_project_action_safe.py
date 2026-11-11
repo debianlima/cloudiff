@@ -582,7 +582,7 @@ def resume_initial_publication(form, user):
     from cloudif_project_provision_status import resume_material
     slug=val(form,'slug','').strip()
     groups={str(item).strip().lower() for item in (user.get('groups') or [])}
-    global_admin=bool(groups.intersection({'cloudif-tenants-admin','cloudif-professor','domain admins'}))
+    global_admin=bool(groups.intersection({'cloudif-tenants-admin','cloudif-professor'}))
     job=resume_material(slug,user,global_admin=global_admin)
     queued=queue_provision_job(job)
     return {

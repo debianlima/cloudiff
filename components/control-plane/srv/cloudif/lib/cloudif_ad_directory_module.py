@@ -12,7 +12,6 @@ DB = os.environ.get("CLOUDIF_PORTAL_DB", "/var/lib/cloudif/portal/cloudif-portal
 ADMIN_GROUPS_DEFAULT = {
     "cloudif-tenants-admin",
     "cloudif-admin",
-    "domain admins",
 }
 
 MANAGE_ROLES = {

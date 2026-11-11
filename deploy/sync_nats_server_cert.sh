@@ -9,7 +9,11 @@ DEST=${CLOUDIFF_NATS_CERT_DEST:-/var/lib/cloudiff-v2/tls/server}
 BACKUP_ROOT=${CLOUDIFF_NATS_CERT_BACKUP_ROOT:-/var/lib/cloudiff-v2/backups/nats-cert}
 EXPECTED=${CLOUDIFF_NATS_TLS_EXPECTED_HOSTNAME:-nats.cloudiff.duckdns.org}
 MIN_SECONDS=${CLOUDIFF_NATS_CERT_MIN_SECONDS:-1209600}
+CLIENT_CERT=${CLOUDIFF_DISTRIBUTION_CLIENT_CERT:-/etc/cloudiff-v2/tls/client-chain.pem}
+CLIENT_KEY=${CLOUDIFF_DISTRIBUTION_CLIENT_KEY:-/etc/cloudiff-v2/tls/client.key}
+CA_BUNDLE=${CLOUDIFF_DISTRIBUTION_CA_BUNDLE:-/etc/ssl/certs/ca-certificates.crt}
 [ -s "$TOKEN_FILE" ]
+[ -r "$CLIENT_CERT" ] && [ -r "$CLIENT_KEY" ] && [ -r "$CA_BUNDLE" ]
 case "$ORIGIN" in https://cloudiff.duckdns.org/*) ;; *) echo invalid_distribution_origin >&2; exit 2;; esac
 [[ "$CONNECT_IP" =~ ^[0-9a-fA-F:.]+$ ]] || { echo invalid_connect_ip >&2; exit 2; }
 [[ "$AUDIENCE" =~ ^[A-Za-z0-9._:-]{1,128}$ ]] || { echo invalid_audience >&2; exit 2; }
@@ -19,7 +23,7 @@ tmp=$(mktemp -d "$DEST/.https-sync.XXXXXX");trap 'rm -rf "$tmp"' EXIT
 umask 077
 { printf 'Authorization: Bearer '; tr -d '\r\n' < "$TOKEN_FILE"; printf '\nX-CloudIFF-Audience: %s\n' "$AUDIENCE"; } > "$tmp/headers"
 chmod 0600 "$tmp/headers"
-CURL=(curl --fail-with-body --silent --show-error --max-time 30 --proto '=https' --tlsv1.2 --resolve "cloudiff.duckdns.org:443:$CONNECT_IP" --header "@$tmp/headers")
+CURL=(curl --fail-with-body --silent --show-error --max-time 30 --proto '=https' --tlsv1.2 --resolve "cloudiff.duckdns.org:443:$CONNECT_IP" --cert "$CLIENT_CERT" --key "$CLIENT_KEY" --cacert "$CA_BUNDLE" --header "@$tmp/headers")
 "${CURL[@]}" "$ORIGIN/v1/collections/$COLLECTION/manifest" -o "$tmp/manifest.json"
 python3 - "$tmp/manifest.json" "$COLLECTION" "$AUDIENCE" "$tmp/meta" <<'PY'
 import json,re,sys
