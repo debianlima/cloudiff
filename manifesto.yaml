@@ -12205,4 +12205,15 @@ entradas:
     aceite: python3 -m unittest portal.tests.test_publication_permissions portal.tests.test_release_flow_wizard_ui
     status: aceito
 
-trabalho_compartilhado: null
+trabalho_compartilhado:
+  projeto: cloudiff
+  caminho: /srv/mcp-workspace/cloudiff-identity-fix
+  unidade: SILVIPRO-PUBLICATION-REPAIR
+  descricao: 'reparar publicação p1002, migrar runtime legado d1 ausente para release novo e validar domínio silvipro'
+  agente: Meu Terminal Oracle
+  atualizado_em: '2026-11-11T00:47:20+00:00'
+  previsao_termino: '2026-11-11T02:47:20+00:00'
+  zona_exclusao:
+    - manifesto.yaml
+    - estado.md
+    - runtime:forja:p1002
