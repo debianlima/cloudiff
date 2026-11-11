@@ -12205,4 +12205,17 @@ entradas:
     aceite: python3 -m unittest portal.tests.test_publication_permissions portal.tests.test_release_flow_wizard_ui
     status: aceito
 
-trabalho_compartilhado: null
+trabalho_compartilhado:
+  projeto: cloudiff
+  caminho: /srv/mcp-workspace/cloudiff-identity-fix
+  unidade: OVERVIEW-MINIMAL-THREE-CATEGORIES
+  descricao: 'reduzir Visão geral para Projetos, Recursos e Plataforma preservando lazy/master-detail'
+  agente: Meu Terminal Oracle
+  atualizado_em: '2026-11-11T03:21:53+00:00'
+  previsao_termino: '2026-11-11T05:21:53+00:00'
+  zona_exclusao:
+    - manifesto.yaml
+    - estado.md
+    - portal/modules/overview/service.py
+    - portal/modules/overview/views.py
+    - portal/tests/test_overview_sites.py
