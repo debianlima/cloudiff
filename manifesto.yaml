@@ -12221,3 +12221,9 @@ trabalho_compartilhado:
     - components/control-plane/srv/cloudif/lib/cloudif_ui_publications.py
     - components/control-plane/current-apps/portal-current/cloudif_ui_publications.py
     - components/control-plane/current-apps/portal-current/cloudif-admin-portal-base.py
+    - portal/tests/test_publication_workspace_tools.py
+    - portal/tests/test_project_publication_configuration_v1.py
+    - portal/tests/test_release_flow_wizard_ui.py
+    - portal/design/components.css
+    - portal/design/publications.css
+    - portal/design/publication-release.js
