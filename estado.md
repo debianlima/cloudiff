@@ -502,3 +502,14 @@
 - Release A10: `a10-ux-75c974115cac`, archive SHA256 `70b5ee51df2aac23547ea116b792ff39fd111a6ed6dff7b8f54126a2472ec895`; previous `a10-ux-0a15e8d16ef5`. Manifest 136/136, preflight/readiness PASS, smoke das quatro listas PASS, detalhe unitário PASS, CSS ativo PASS, Authentik externo continua 302 sem sessão. Rollback e pre-state PASS.
 - Medição live pós-cutover: listas `publications 0.003319 s`, `data 0.002999 s`, `platform 0.002456 s`, `academic 0.002263 s`. Primeiro item acadêmico observado `mvplanner`; detalhe isolado `academic&item=mvplanner` HTTP 200 em `3.067947 s`. Assim, o custo de tracking deixou de bloquear todo o submenu e passou a existir somente no item explicitamente selecionado.
 - Serviço final: `cloudif-admin-portal.service=active`; `portal-current=/srv/cloudif/app-releases/portal/a10-ux-75c974115cac`; `portal-previous=/srv/cloudif/app-releases/portal/a10-ux-0a15e8d16ef5`.
+
+
+## iff3546365 em CloudIF-Tenants-Admin (2026-11-11 UTC)
+
+- Diagnóstico inicial: Authentik/cache mostravam `iff3546365` ativo, porém `groups_json=[]`, `is_admin=0`, `is_professor=0`; a simulação de visibilidade com apenas `CloudIF-Professor` retornava 0 projetos, enquanto `CloudIF-Tenants-Admin` retornava os 6 projetos atuais.
+- Fonte canônica identificada: usuário e grupo possuem `distinguishedName`/`ldap_uniq` e são derivados da fonte LDAP `samba4-pelogo`; portanto a associação foi feita no AD, não diretamente no cache.
+- AD: DN do usuário foi adicionado ao atributo `member` de `CN=CloudIF-Tenants-Admin,...` via conexão LDAP já configurada no Authentik; `MODIFY_ADD` retornou sucesso e o grupo passou de 4 para 5 membros. Pre-state root-only preservado em `/srv/cloudif/backups/authentik-membership/iff3546365-cloudif-tenants-admin-ad-prestate.json`.
+- A API de grupos do Authentik com o token de cache retornou 403 para `add_user`; esse token foi mantido com privilégio mínimo. O sync LDAP nativo foi acionado; após conclusão, o Authentik passou a reportar `GROUPS ['CloudIF-Tenants-Admin']` para `iff3546365` e o lock da fonte foi liberado.
+- Cache do Portal sincronizado manualmente: `groups_json=["CloudIF-Tenants-Admin"]`, `is_admin=1`, `active=1`, source `authentik-cache`, atualizado em `2026-11-11T03:19:02+00:00`.
+- Gate de visibilidade usando os grupos do cache: 6 projetos visíveis — `mvplanner`, `cadales`, `cpuhub`, `agenda-unica`, `laboratorio-de-hardware`, `silvipro`. `VISIBILITY=PASS`.
+- `CloudIF-Professor` não foi adicionado nesta unidade; a solicitação explícita desta unidade foi somente `CloudIF-Tenants-Admin`.

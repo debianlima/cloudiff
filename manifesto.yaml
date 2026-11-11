@@ -12205,16 +12205,4 @@ entradas:
     aceite: python3 -m unittest portal.tests.test_publication_permissions portal.tests.test_release_flow_wizard_ui
     status: aceito
 
-trabalho_compartilhado:
-  projeto: cloudiff
-  caminho: /srv/mcp-workspace/cloudiff-identity-fix
-  unidade: AUTHENTIK-ADD-IFF3546365-TENANTS-ADMIN
-  descricao: 'adicionar iff3546365 ao grupo CloudIF-Tenants-Admin no Authentik e reconciliar cache/visibilidade'
-  agente: Meu Terminal Oracle
-  atualizado_em: '2026-11-11T03:03:47+00:00'
-  previsao_termino: '2026-11-11T04:03:47+00:00'
-  zona_exclusao:
-    - manifesto.yaml
-    - estado.md
-    - authentik:group:CloudIF-Tenants-Admin
-    - runtime:hospedagem:directory-cache
+trabalho_compartilhado: null
