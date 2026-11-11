@@ -12219,6 +12219,8 @@ trabalho_compartilhado:
     - runtime:forja:p1024
     - runtime:mauricio:nginx-custom-http.conf
     - portal/tests/test_publisher_alias_reservation_reconciliation.py
+    - tests/test_npm_publisher_provider.cpp
+    - src/agent/npm_publisher_provider.cpp
     - components/proxy/usr/local/sbin/cloudif-npm-publisher-agent.py
     - components/proxy/current-apps/publisher-agent-current/cloudif-npm-publisher-agent.py
     - components/control-plane/srv/cloudif/lib/cloudif_ui_publications.py
