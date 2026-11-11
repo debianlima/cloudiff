@@ -12205,4 +12205,16 @@ entradas:
     aceite: python3 -m unittest portal.tests.test_publication_permissions portal.tests.test_release_flow_wizard_ui
     status: aceito
 
-trabalho_compartilhado: null
+trabalho_compartilhado:
+  projeto: cloudiff
+  caminho: /srv/mcp-workspace/cloudiff-identity-fix
+  unidade: CLOUDIFF-ACL-PICKER-DARK-CONTRAST
+  descricao: 'corrigir cascade visual da lista de identidades para verde-preto de alto contraste'
+  agente: Meu Terminal Oracle
+  atualizado_em: '2026-11-11T00:13:49+00:00'
+  previsao_termino: '2026-11-11T01:13:49+00:00'
+  zona_exclusao:
+    - manifesto.yaml
+    - estado.md
+    - components/control-plane/srv/cloudif/lib/cloudif_project_acl_module.py
+    - portal/tests/test_directory_cache_ui_contract.py

@@ -648,6 +648,46 @@ def render_acl_modal(slug, user=None):
 #{h(modal_id)} .acl-result-meta strong{{color:#c8d3cb;font-weight:750}}
 #{h(modal_id)} .acl-result-groups{{display:flex;gap:4px;flex-wrap:wrap;margin-top:7px}}
 #{h(modal_id)} .acl-result-group{{font-size:.64rem;color:#b8c6bc;background:#18211b;border:1px solid #334238;border-radius:999px;padding:2px 6px}}
+/* CloudIF ACL identity picker: final cascade guard for dark theme.
+   Keep identity cards green-black even when generic button/theme rules load later. */
+#{h(modal_id)} .acl-directory-panel .acl-result-dropdown > .acl-result-item{{
+  background:#0d1711 !important;
+  background-color:#0d1711 !important;
+  color:#edf6ef !important;
+  border:1px solid #2f5740 !important;
+  box-shadow:none !important;
+}}
+#{h(modal_id)} .acl-directory-panel .acl-result-dropdown > .acl-result-item:hover{{
+  background:#173322 !important;
+  background-color:#173322 !important;
+  border-color:#4f8b64 !important;
+  color:#f4faf5 !important;
+}}
+#{h(modal_id)} .acl-directory-panel .acl-result-dropdown > .acl-result-item.is-admin{{
+  background:#101a13 !important;
+  background-color:#101a13 !important;
+  border-color:#806a2c !important;
+  box-shadow:inset 3px 0 0 #d6a928 !important;
+}}
+#{h(modal_id)} .acl-directory-panel .acl-result-item .acl-result-principal{{color:#f3faf5 !important}}
+#{h(modal_id)} .acl-directory-panel .acl-result-item .acl-result-meta,
+#{h(modal_id)} .acl-directory-panel .acl-result-item .acl-result-meta strong{{color:#b8c9bd !important}}
+#{h(modal_id)} .acl-directory-panel .acl-result-item .acl-result-type{{
+  background:#0a120d !important;
+  color:#d8e8dc !important;
+  border-color:#355a43 !important;
+}}
+#{h(modal_id)} .acl-directory-panel .acl-result-item .acl-result-group{{
+  background:#111d16 !important;
+  color:#c7d8cc !important;
+  border-color:#355a43 !important;
+}}
+#{h(modal_id)} .acl-directory-panel .acl-result-item .acl-admin-badge{{
+  background:#2b2412 !important;
+  color:#f2cd61 !important;
+  border-color:#8c6e22 !important;
+}}
+
 @media(max-width:700px){{
   #{h(modal_id)} .wizard-head{{padding:18px}}
   #{h(modal_id)} .acl-modal-content{{padding:16px;gap:14px}}

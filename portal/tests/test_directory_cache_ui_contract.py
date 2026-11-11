@@ -25,6 +25,15 @@ class DirectoryCacheUiContractTests(unittest.TestCase):
         item_css=ACL.split('.acl-result-item{{',1)[1].split('}}',1)[0]
         self.assertNotIn('var(--c-surface',item_css)
 
+    def test_identity_card_final_cascade_guard_forces_green_black_contrast(self):
+        self.assertIn('.acl-directory-panel .acl-result-dropdown > .acl-result-item{{',ACL)
+        self.assertIn('background:#0d1711 !important',ACL)
+        self.assertIn('background-color:#0d1711 !important',ACL)
+        self.assertIn('color:#edf6ef !important',ACL)
+        self.assertIn('background:#173322 !important',ACL)
+        self.assertIn('.acl-result-item .acl-admin-badge{{',ACL)
+        self.assertIn('color:#f2cd61 !important',ACL)
+
     def test_only_cloudiff_admin_users_receive_visual_badge(self):
         self.assertIn('admin=!!x.admin',ACL)
         self.assertIn('Administrador CloudIFF',ACL)
