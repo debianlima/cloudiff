@@ -260,17 +260,82 @@ Também passaram a compilação do teste de segurança da UI e `bash -n` dos doi
 
 Uma thread assíncrona de teste de build ainda emite traceback de conexão/TLS em stderr em um cenário simulado, embora o teste correspondente termine `OK`. Isso é ruído de harness e deve ser eliminado em unidade futura para que stderr volte a ser um sinal confiável.
 
+## 5.2 Correções executadas após a auditoria — 2026-11-11
+
+Os P0 e o risco RBAC identificados acima foram corrigidos na unidade operacional seguinte. O texto das seções 4.3–4.6 permanece como evidência do estado encontrado antes da correção.
+
+### NATS/heartbeat — resolvido
+
+A causa do agent-base foi um drift de configuração: o source canônico já gerava `nats://10.62.92.7:14222`, com TLS habilitado separadamente por `CLOUDIFF_NATS_TLS_ENABLED=1`, enquanto os ambientes live usavam `tls://...`. A troca foi aplicada com backup por nó e canary no Faro.
+
+Estado final observado:
+
+- Forja, Mauricio e Faro: `CLOUDIFF_NATS_URL=nats://10.62.92.7:14222`;
+- Hospedagem: `CLOUDIFF_NATS_URL=nats://127.0.0.1:14222`;
+- os quatro `cloudiff-v2-agent.service` estão `active`;
+- os heartbeats dos quatro nós continuam avançando;
+- durante a rotação do certificado NATS, os quatro agentes preservaram o mesmo PID, provando reconnect sem restart do processo.
+
+### Rotas headless — resolvido por mTLS
+
+A allowlist por `remote_addr` foi removida das rotas de AgentUpdate/recovery/SecureDistribution. O controle de origem agora usa a PKI de agentes CloudIFF já existente. O NPM usa `ssl_verify_client optional` no host e cada rota headless exige `$ssl_client_verify = SUCCESS`; capability/bearer continua independente no SecureDistribution.
+
+Gates live:
+
+- sem certificado cliente: update/policy retornam HTTP 403;
+- com certificado cliente CloudIFF: update/policy retornam HTTP 200 nos quatro nós;
+- SecureDistribution foi comprovado pela sincronização real do certificado;
+- Portal/browser sem certificado continua HTTP 302 para Authentik.
+
+O source foi consolidado em `deploy/install_headless_routes.sh`; os antigos `install_agent_update_route.sh` e `install_secure_distribution_route.sh` foram retirados.
+
+### Updater e certificado NATS — resolvidos
+
+O updater passou a apresentar o certificado cliente já instalado em `/etc/cloudiff-v2/tls/`. Nos quatro nós, `cloudiff-v2-agent-updater.service` terminou `Result=success`, `ExecMainStatus=0`, com `AGENT_UPDATE=NOOP`, e os timers estão ativos.
+
+A Hospedagem foi promovida para o consumer imutável `20261111-v23-secure-distribution-consumer-mtls`, preservando o v22 como `previous`. O sync substituiu o certificado que venceria em 18/11/2026 pelo certificado observado no provedor, válido até **17/01/2027 00:13:50 UTC**. `cloudiff-v2-cert-sync.service` terminou `success/0` e seu timer está ativo.
+
+### RBAC legado — resolvido
+
+`Domain Admins` foi removido de todos os caminhos executáveis de autorização CloudIFF auditados. O JSON histórico de permissões observadas foi mantido como evidência, não como regra de execução.
+
+Release Portal: `a10-ux-207e60ecb1ef`; previous `a10-ux-86e4ea05d111`. Smoke live:
+
+- identidade apenas `Domain Admins`: 0 projetos visíveis;
+- `CloudIF-Tenants-Admin`: 6 projetos visíveis;
+- `iff3546365` com Admin+Professor: 6 projetos visíveis;
+- edge público sem sessão: 302 para Authentik.
+
+A primeira tentativa de cutover foi revertida automaticamente porque o smoke esperava uma frase de vazio que a página não renderiza; o KPI real já era 0. O retry usou o critério correto e passou.
+
+### Limpeza de legado — concluída com arquivo de recuperação
+
+No Mauricio, 2.163 objetos `*.bkp*` antigos foram removidos da árvore ativa do NPM após prova de que nenhum rollback vigente os referenciava. Antes da remoção foram compactados e checksummed em `/srv/cloudif/backups/legacy-cleanup-20261111T100410Z/`. Os instaladores/state dirs headless v35 também foram arquivados antes da retirada.
+
+Na Hospedagem, o state legado `agent-update-route-v35` foi arquivado em `/srv/cloudif/backups/legacy-cleanup-20261111T100416Z/` e removido do caminho ativo. Releases `current/previous` continuam preservados.
+
+### Gates finais
+
+- `scripts/validate.sh`: PASS;
+- contratos headless/updater: PASS;
+- testes focados de RBAC/Portal: PASS;
+- suíte Portal em quatro shards: **1.318/1.318 PASS**;
+- NPM `nginx -t`: PASS;
+- CI agora falha quando os catálogos técnicos gerados deixam diff.
+
+Source técnico: `207e60ecb1efc1f47954a5e68fa837fb515320b9`.
+
 ## 6. Priorização recomendada
 
 | Prioridade | Unidade | Critério de aceite |
 |---|---|---|
-| P0 | Corrigir ingress headless NPM | policy/update/distribution retornam sucesso de origens autorizadas e 403 de origem não autorizada; sem confiar cegamente em `172.18.0.1` |
-| P0 | Recuperar NATS agent-base | quatro nós `active`; heartbeat retomado sem restart após interrupção controlada; `test_nats_mtls` positivo/negativo PASS |
-| P0 | Renovar/sincronizar cert NATS | cert novo com lifetime suficiente instalado via SecureDistribution; timer PASS; NATS recarregado/reiniciado por contrato |
-| P1 | Remover admin por `domain admins` do fallback executável | tabela RBAC v2/legacy equivalente; somente grupos CloudIFF canônicos concedem global admin |
+| **RESOLVIDO** | Corrigir ingress headless NPM | policy/update/distribution retornam sucesso de origens autorizadas e 403 de origem não autorizada; sem confiar cegamente em `172.18.0.1` |
+| **RESOLVIDO** | Recuperar NATS agent-base | quatro nós `active`; heartbeat retomado sem restart após interrupção controlada; `test_nats_mtls` positivo/negativo PASS |
+| **RESOLVIDO** | Renovar/sincronizar cert NATS | cert novo com lifetime suficiente instalado via SecureDistribution; timer PASS; NATS recarregado/reiniciado por contrato |
+| **RESOLVIDO** | Remover admin por `domain admins` do fallback executável | tabela RBAC v2/legacy equivalente; somente grupos CloudIFF canônicos concedem global admin |
 | P1 | Modularizar MCP gateway | módulos coesos, entry point fino, contratos/rotas invariantes |
-| P1 | Gate CI de catálogos | geradores não deixam diff em checkout limpo |
-| P1 | Gate E2E headless | teste real pós-router/NPM detecta 403 indevido |
+| **RESOLVIDO** | Gate CI de catálogos | geradores não deixam diff em checkout limpo |
+| **PARCIAL** | Gate E2E headless | teste real pós-router/NPM detecta 403 indevido |
 | P2 | Dividir CSS v2 por domínio | nenhuma mudança visual; zero `!important`; tokens preservados |
 | P2 | Smoke visual mobile | snapshots/DOM para 360–430 px em Projetos, Visão geral e Publicações |
 

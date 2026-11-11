@@ -553,3 +553,21 @@
 - P0 certificado NATS: certificado servidor `CN=nats.cloudiff.duckdns.org` observado com validade até `2026-11-18T13:48:27Z`; `cloudiff-v2-cert-sync.service` está failed pelo mesmo HTTP 403 headless. Correção deve preceder o vencimento.
 - Testes: primeira execução completa expôs 4 falhas + 1 erro em contratos antigos; foram reconciliados apenas testes, sem mudar runtime. Resultado final em quatro shards: 307 + 395 + 302 + 314 = 1.318/1.318 PASS. Gates de scripts de produção PASS. `scripts/validate.sh` final PASS.
 - Catálogos, relatório e plano foram enviados ao GitHub. Nenhuma mutação de produção P0 foi embutida na auditoria; os achados permanecem explícitos para unidade operacional dedicada.
+
+
+## Correção P0 de agentes, headless mTLS, RBAC e limpeza legado — 2026-11-11 UTC
+
+- Autorização humana: corrigir os achados da auditoria e retirar legado/poluição, preservando rollback.
+- NATS agent-base: causa confirmada como drift live `tls://` vs source canônico `nats://` com TLS habilitado separadamente. Faro usado como canary; depois Forja, Mauricio e Hospedagem reconciliados. Backups por nó em `/var/lib/cloudiff-v2/backups/nats-url-fix-20261111/`.
+- Estado final dos agentes: Forja PID 2449930, Mauricio PID 1349646, Faro PID 840227, Hospedagem PID 1831106; todos `active`. Heartbeats finais observados aproximadamente `2026-11-11 10:19:52–10:19:58 UTC`.
+- Reconnect provado: após rotação/reload do certificado NATS, os quatro agentes preservaram os mesmos PIDs e os heartbeats continuaram avançando.
+- Headless: allowlist por `remote_addr` foi substituída por mTLS da Agent PKI; sem cert update/policy retornam 403, com cert válido retornam 200. SecureDistribution mantém bearer/audience além do mTLS. NPM `nginx -t` PASS; Portal público sem sessão continua 302 para Authentik.
+- Source unificado: `deploy/install_headless_routes.sh`; instaladores antigos `install_agent_update_route.sh` e `install_secure_distribution_route.sh` removidos. Contratos AgentUpdate/ SecureDistribution atualizados para mTLS.
+- Updater: quatro nós `Result=success`, `ExecMainStatus=0`, timers ativos e `AGENT_UPDATE=NOOP`.
+- Certificado NATS: consumer promovido para `/opt/cloudiff-v2/releases/20261111-v23-secure-distribution-consumer-mtls`, previous preservado em `20260820-v22-secure-distribution-consumer`. Destino sincronizado para serial `061DB1745099ED07666DD21167976DC2C31D`, validade até `2027-01-17T00:13:50Z`; cert-sync `success/0`, timer ativo.
+- Limpeza Mauricio: 2.163 objetos `*.bkp*` removidos da árvore ativa do NPM após arquivo root-only e SHA em `/srv/cloudif/backups/legacy-cleanup-20261111T100410Z/`; remaining bkp=0. Instaladores/state dirs v35 antigos arquivados e removidos.
+- Limpeza Hospedagem: `/var/lib/cloudiff-v2/agent-update-route-v35` arquivado em `/srv/cloudif/backups/legacy-cleanup-20261111T100416Z/` e removido; releases current/previous preservados.
+- RBAC: `Domain Admins` removido dos caminhos executáveis de autorização CloudIFF. Release Portal `a10-ux-207e60ecb1ef`, previous `a10-ux-86e4ea05d111`. Primeiro cutover abortou por smoke textual incorreto e executou `ROLLBACK=PASS`; retry PASS. Live: Domain Admins=0 projetos, CloudIF-Tenants-Admin=6, `iff3546365` Admin+Professor=6.
+- CI: adicionada verificação de catálogos técnicos determinísticos com `generate-technical-catalogs.py` + `git diff --exit-code`.
+- Gates: `scripts/validate.sh` PASS; headless/updater PASS; RBAC/Portal focados PASS; suíte Portal em shards 307+395+302+314 = 1.318/1.318 PASS. O traceback assíncrono conhecido de build permanece como ruído de harness, sem falha de teste.
+- Source técnico: `207e60ecb1efc1f47954a5e68fa837fb515320b9`.

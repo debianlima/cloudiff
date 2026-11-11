@@ -11,24 +11,24 @@ Documento de trabalho · versão 3 · 11/11/2026
 | Monólito principal do Portal | **substancialmente resolvido** | `cloudif-admin-portal.py` 18 KB/144 linhas; 7 módulos v2 |
 | Design system/cascata | **resolvido para v2; legado preservado** | `tokens.css` + `base.css` + `components.css`; zero `!important` no v2 |
 | CI só valida sintaxe | **resolvido** | workflow executa `validate.sh` + `test.sh`; 228 arquivos de teste do Portal |
-| RBAC permissivo legado | **parcial / aberto** | core v2 canônico; fallback ainda contém `domain admins` |
+| RBAC permissivo legado | **resolvido em 11/11/2026** | `Domain Admins` removido dos caminhos executáveis; smoke live 0/6/6 |
 | Staging/lib e coexistência | **controlado, ainda relevante** | release A10 imutável e overlays com pre-state/rollback; fallback continua existente |
 | Navegação/organização | **evoluída** | overview minimalista + lazy/master-detail; shell responsivo |
 | Monólito MCP | **piorou e virou prioridade P1** | gateway atual ~428 KB/3.636 linhas |
-| Agente-base/heartbeat | **P0 aberto** | `cloudiff-v2-agent.service` failed em Forja/Mauricio/Faro/Hospedagem |
-| Auto-update e policy | **P0 aberto** | HTTP 403 em quatro nós |
-| Distribuição cert NATS | **P0 aberto** | sync 403; certificado servidor vence 18/11/2026 |
-| Catálogos técnicos | **corrigidos nesta revisão** | regeneração atual de agentes/rotas/serviços/schema |
+| Agente-base/heartbeat | **resolvido em 11/11/2026** | quatro agentes ativos; heartbeat e reconnect sem restart provados |
+| Auto-update e policy | **resolvido em 11/11/2026** | mTLS headless; quatro updaters success/NOOP; timers ativos |
+| Distribuição cert NATS | **resolvido em 11/11/2026** | sync mTLS success; certificado válido até 17/01/2027 |
+| Catálogos técnicos | **corrigidos + gate CI** | regeneração determinística e `git diff --exit-code` no workflow |
 
 ### Sequência operacional revisada
 
-1. corrigir a fronteira headless do NPM sem confiar no IP da bridge Docker;
-2. recuperar NATS mTLS/heartbeat e provar reconnect real;
-3. renovar o certificado NATS antes de 18/11/2026;
-4. remover concessões `domain admins` dos fallbacks executáveis;
-5. modularizar `mcp-gateway` preservando rotas e approvals;
-6. adicionar gates CI de catálogos e E2E headless;
-7. dividir CSS v2 por domínio somente depois, sem alterar a interface homologada.
+Os itens 1–4 da sequência anterior foram fechados em 11/11/2026. Próximas unidades, sem blocker operacional:
+
+1. modularizar `mcp-gateway` preservando rotas, approvals e contratos;
+2. transformar o smoke mTLS headless live em gate E2E automatizado de release;
+3. dividir CSS v2 por domínio sem alterar a interface homologada;
+4. adicionar smoke visual mobile contínuo para Projetos, Visão geral e Publicações;
+5. eliminar o traceback assíncrono conhecido do harness de build para devolver significado forte ao stderr dos testes.
 
 ---
 
