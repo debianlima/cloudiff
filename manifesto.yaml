@@ -12217,3 +12217,5 @@ trabalho_compartilhado:
     - runtime:hospedagem:machine-admin-backups
     - runtime:hospedagem:control-plane-integrity
     - runtime:hospedagem:ui-security-review
+    - portal/tests/test_ui_security_gate_contract.py
+    - components/control-plane/srv/cloudif/tests/cloudif-ui-security-tests.py
