@@ -60,6 +60,16 @@ int main(){
     const auto stable_block=rendered.substr(stable_pos,version_pos-stable_pos);
     assert(stable_block.find("proxy_hide_header X-Frame-Options;")==std::string::npos);
     assert(rendered.find("server_name labhard.cloudiff.duckdns.org;")!=std::string::npos);
+    const auto alias_pos=rendered.find("server_name labhard.cloudiff.duckdns.org;");
+    const auto alias_version_pos=rendered.find("server_name 3.labhard.cloudiff.duckdns.org;",alias_pos);
+    const auto alias_block=rendered.substr(alias_pos,alias_version_pos-alias_pos);
+    assert(alias_block.find("location ^~ /cloudiff/ {")!=std::string::npos);
+    assert(alias_block.find("location ^~ /cloudif/ {")!=std::string::npos);
+    assert(alias_block.find("proxy_pass http://10.62.92.7:8099;")!=std::string::npos);
+    assert(alias_block.find("proxy_set_header Host 1007.cloudiff.duckdns.org;")!=std::string::npos);
+    assert(alias_block.find("proxy_pass http://10.62.91.2:18150;")!=std::string::npos);
+    const auto alias_version_block=rendered.substr(alias_version_pos);
+    assert(alias_version_block.find("location ^~ /cloudiff/ {")==std::string::npos);
     assert(rendered.find("proxy_pass http://10.62.91.2:18150;")!=std::string::npos);
     assert(rendered.find("# CloudIF managed publications BEGIN")!=std::string::npos);
     assert(rendered.find("# CloudIF managed publications END")!=std::string::npos);
