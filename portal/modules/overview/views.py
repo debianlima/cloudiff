@@ -286,7 +286,14 @@ def _master_detail(category: str, data: dict, title: str, description: str, empt
         )
     listing = "".join(rows) or f'<div class="overview-master-empty"><b>{html.escape(empty_title)}</b><p>{html.escape(empty_text)}</p></div>'
     extra = ""
-    if category == "publications" and data.get("can_view_others"):
+    if category == "resources" and data.get("can_view_others"):
+        parts=[]
+        if int(data.get("other_sites") or 0):
+            parts.append(f'<a class="overview-master-secondary" href="{BASE}/?tab=publicacao&amp;scope=others#other-user-sites">Outros sites <b>{int(data.get("other_sites") or 0)}</b></a>')
+        if int(data.get("other_databases") or 0):
+            parts.append(f'<a class="overview-master-secondary" href="{BASE}/?tab=bancos">Outros bancos <b>{int(data.get("other_databases") or 0)}</b></a>')
+        extra="".join(parts)
+    elif category == "publications" and data.get("can_view_others"):
         extra = f'<a class="overview-master-secondary" href="{BASE}/?tab=publicacao&amp;scope=others#other-user-sites">Sites de outros usuários <b>{int(data.get("other_sites") or 0)}</b></a>'
     elif category == "data" and data.get("can_view_others"):
         extra = f'<a class="overview-master-secondary" href="{BASE}/?tab=bancos">Bancos de outros usuários <b>{int(data.get("other_databases") or 0)}</b></a>'
@@ -305,6 +312,8 @@ def overview_category_body(category: str, data: dict) -> str:
     category = str(category or "").strip().lower()
     if category == "academic":
         return _master_detail(category, data, "Projetos", "Selecione um projeto para consultar o acompanhamento sem carregar todos de uma vez.", "Nenhum projeto", "Não há projetos visíveis para esta sessão.")
+    if category == "resources":
+        return _master_detail(category, data, "Recursos", "Sites publicados e bancos vinculados aos seus projetos.", "Nenhum recurso", "Sites e bancos vinculados aparecerão aqui.")
     if category == "publications":
         return _master_detail(category, data, "Sites", "Selecione um site para ver endereço, estado e ações de publicação.", "Nenhum site", "Seus projetos publicados ou em preparação aparecerão aqui.")
     if category == "data":
@@ -330,6 +339,16 @@ def overview_item_body(category: str, data: dict) -> str:
             '<p class="resource-note">Abra o projeto ou o Taiga para consultar tarefas e equipe.</p>'
             f'<div class="resource-actions"><a class="btn" href="{BASE}/?tab=projetos&amp;project={quote(slug,safe="")}">Abrir projeto</a><a class="btn btn-quiet" href="{BASE}/?tab=taiga&amp;project={quote(slug,safe="")}">Abrir no Taiga</a></div></article>'
         )
+    if category == "resources":
+        if data.get("resource_kind")=="site":
+            site=data.get("site")
+            if not site: raise ValueError("invalid_overview_item")
+            return _site_card(site)
+        if data.get("resource_kind")=="database":
+            database=data.get("database")
+            if not database: raise ValueError("invalid_overview_item")
+            return _database_card(database)
+        raise ValueError("invalid_overview_item")
     if category == "publications":
         site = data.get("site")
         if not site: raise ValueError("invalid_overview_item")
@@ -374,36 +393,19 @@ def overview_body(data: dict) -> str:
     is_global = bool(data.get("is_global"))
     categories = [
         _category_card(
-            "academic", "Trabalho acadêmico", "Projetos e acompanhamento",
-            "Projetos, equipe, tarefas e sinais acadêmicos reunidos em um só lugar.",
-            (("Abrir projetos", f"{BASE}/?tab=projetos"), ("Abrir Taiga", f"{BASE}/?tab=taiga")),
+            "academic", "Projetos", "Projetos",
+            "Projetos e acompanhamento.",
+            (),
         ),
         _category_card(
-            "publications", "Entrega", "Publicações e sites",
-            "Sites publicados, endereços ativos e acesso ao fluxo de publicação.",
-            (("Publicações", f"{BASE}/?tab=publicacao"), ("Aprovações", f"{BASE}/?tab=aprovacoes")),
+            "resources", "Recursos", "Recursos",
+            "Sites e bancos vinculados aos projetos.",
+            (),
         ),
         _category_card(
-            "data", "Dados", "Bancos e tenants",
-            "Bancos vinculados aos projetos e atalhos para administração de dados.",
-            (("Bancos e tenants", f"{BASE}/?tab=bancos"), ("Backup", f"{BASE}/?tab=backup")),
-        ),
-        _category_card(
-            "platform", "Operação", "Infraestrutura e saúde",
-            "Servidores, capacidade, memória, rede e sinais de disponibilidade.",
-            (("Saúde", f"{BASE}/?tab=monitor-saude"), ("Métricas", f"{BASE}/?tab=monitor-telemetria")),
-        ),
-        _category_card(
-            "operations", "Operação", "Filas, histórico e atividades",
-            "Acompanhe execução assíncrona, promoções e atividades sem misturar com o resumo inicial.",
-            (("Atividades", f"{BASE}/?tab=monitor-transacoes"), ("Filas", f"{BASE}/?tab=monitor-filas"), ("Histórico", f"{BASE}/?tab=monitor-promocoes")),
-            lazy=False,
-        ),
-        _category_card(
-            "access", "Acesso", "Conectores e administração",
-            "Conexões de agentes, documentação e controles administrativos autorizados ao seu perfil.",
-            (("Conectores", f"{BASE}/?tab=agentes"), ("Guia", f"{BASE}/?tab=ajuda")) + ((("Administração", f"{BASE}/?tab=admin"),) if is_global else ()),
-            lazy=False,
+            "platform", "Plataforma", "Plataforma",
+            "Servidores e saúde da CloudIFF.",
+            (),
         ),
     ]
     script = r"""<script id="overview-lazy-categories">(()=>{
@@ -431,10 +433,8 @@ def overview_body(data: dict) -> str:
 })();</script>"""
     return (
         '<section class="welcome-panel overview-welcome"><div><p class="ov-eyebrow">Visão geral</p>'
-        f'<h2>Olá, {username}.</h2><p>Escolha uma categoria. A CloudIFF carrega apenas o bloco que você abrir, evitando consultas e painéis desnecessários no primeiro acesso.</p></div>'
-        f'<div class="welcome-actions"><a class="btn btn-quiet" href="{BASE}/?tab=ajuda">Primeiros passos</a></div></section>'
+        f'<h2>Olá, {username}.</h2><p>Escolha uma área para começar.</p></div></section>'
         '<section class="overview-category-shell" aria-labelledby="overview-categories-title"><div class="overview-category-shell-head">'
-        '<div><p class="ov-eyebrow">Organizado por área</p><h2 id="overview-categories-title">O que você quer consultar?</h2><p>As categorias operacionais só consultam dados quando abertas.</p></div>'
-        '<span class="chip">Carregamento progressivo</span></div>'
+        '<div><h2 id="overview-categories-title">Áreas</h2><p>Abra somente o que precisa.</p></div></div>'
         f'<div class="overview-category-grid" data-overview-categories>{"".join(categories)}</div></section>{script}'
     )

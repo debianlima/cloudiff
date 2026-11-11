@@ -252,12 +252,16 @@ class OverviewSiteCardTest(unittest.TestCase):
     def test_overview_first_paint_is_categorized_and_does_not_embed_heavy_sections(self):
         from portal.modules.overview.views import overview_body
         markup=overview_body({"username":"prof","is_global":True})
-        for label in ("Projetos e acompanhamento","Publicações e sites","Bancos e tenants","Infraestrutura e saúde","Filas, histórico e atividades","Conectores e administração"):
+        for label in (">Projetos</h2>",">Recursos</h2>",">Plataforma</h2>"):
             self.assertIn(label,markup)
+        self.assertEqual(markup.count('data-overview-category='),3)
         self.assertIn('data-overview-category="academic"',markup)
-        self.assertIn('data-overview-category="publications"',markup)
-        self.assertIn('data-overview-category="data"',markup)
+        self.assertIn('data-overview-category="resources"',markup)
         self.assertIn('data-overview-category="platform"',markup)
+        self.assertNotIn('Filas, histórico e atividades',markup)
+        self.assertNotIn('Conectores e administração',markup)
+        self.assertNotIn('Carregamento progressivo',markup)
+        self.assertNotIn('Primeiros passos',markup)
         self.assertIn("addEventListener('toggle'",markup)
         self.assertIn('/cloudiff/portal/api/overview?category=',markup)
         self.assertNotIn('Capacidade física por servidor',markup)
@@ -288,7 +292,7 @@ class OverviewSiteCardTest(unittest.TestCase):
             self.assertEqual(metrics.call_count,1);self.assertEqual(resources.call_count,0);self.assertEqual(projects.call_count,0);self.assertEqual(tracking.call_count,0)
             service.overview_category_list_data(identity,'academic')
             self.assertEqual(projects.call_count,1);self.assertEqual(tracking.call_count,0)
-            service.overview_category_list_data(identity,'publications')
+            service.overview_category_list_data(identity,'resources')
             self.assertEqual(resources.call_count,1)
 
     def test_overview_category_endpoint_is_registered_and_page_uses_light_model(self):
@@ -306,12 +310,25 @@ class OverviewSiteCardTest(unittest.TestCase):
 
     def test_overview_category_uses_vertical_master_detail_and_no_detail_is_open_by_default(self):
         from portal.modules.overview.views import overview_category_body
-        markup=overview_category_body('publications',{'items':[{'id':'alpha','title':'Alpha','meta':'Publicado'},{'id':'beta','title':'Beta','meta':'Ainda não publicado'}]})
+        markup=overview_category_body('resources',{'items':[{'id':'site:alpha','title':'Site · Alpha','meta':'Publicado'},{'id':'db:tenant-a','title':'Banco · tenant-a','meta':'Disponível'}]})
         self.assertIn('class="overview-master-list"',markup)
-        self.assertIn('data-overview-item="alpha"',markup)
-        self.assertIn('data-overview-item="beta"',markup)
+        self.assertIn('data-overview-item="site:alpha"',markup)
+        self.assertIn('data-overview-item="db:tenant-a"',markup)
         self.assertIn('Selecione um item',markup)
         self.assertNotIn('Abrir site',markup)
+
+    def test_resources_merge_sites_and_databases_into_one_minimal_category(self):
+        from portal.modules.overview import service
+        from portal.core.auth import Identity
+        identity=Identity('alice','alice@example.invalid',frozenset({'CloudIF-Aluno'}))
+        payload={'sites':[{'project_slug':'site-a','name':'Site A','published':True}], 'databases':[{'tenant':'tenant-a','projects':['site-a']}], 'can_view_others':False, 'other_sites':0, 'other_databases':0}
+        with mock.patch.object(service,'academic_resources',return_value=payload):
+            data=service.overview_category_list_data(identity,'resources')
+            self.assertEqual([x['id'] for x in data['items']],['site:site-a','db:tenant-a'])
+            site=service.overview_item_data(identity,'resources','site:site-a')
+            db=service.overview_item_data(identity,'resources','db:tenant-a')
+        self.assertEqual(site['resource_kind'],'site')
+        self.assertEqual(db['resource_kind'],'database')
 
     def test_selected_master_item_has_explicit_active_color_contract(self):
         css=(Path(__file__).resolve().parents[1]/'design'/'components.css').read_text()

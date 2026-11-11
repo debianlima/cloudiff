@@ -329,7 +329,7 @@ def overview_data(identity) -> dict:
         "academic_tracking": academic_tracking(identity),
     }
 
-_OVERVIEW_CATEGORIES = frozenset({"academic", "publications", "data", "platform"})
+_OVERVIEW_CATEGORIES = frozenset({"academic", "resources", "publications", "data", "platform"})
 
 
 def overview_initial_data(identity) -> dict:
@@ -352,6 +352,8 @@ def overview_category_data(identity, category: str) -> dict:
     if category == "platform":
         return {"metrics": server_metrics()}
     resources = academic_resources(identity)
+    if category == "resources":
+        return {"resources": resources}
     if category == "publications":
         return {
             "resources": {
@@ -412,6 +414,23 @@ def overview_category_list_data(identity, category: str) -> dict:
         } for node in metrics.get("nodes", []) if node.get("node"))
         return {"items": items}
     resources = academic_resources(identity)
+    if category == "resources":
+        items = [{
+            "id": f'site:{site.get("project_slug")}',
+            "title": f'Site · {site.get("name") or site.get("project_slug") or "Site"}',
+            "meta": "Publicado" if site.get("published") else "Ainda não publicado",
+        } for site in resources.get("sites", []) if site.get("project_slug")]
+        items.extend({
+            "id": f'db:{database.get("tenant")}',
+            "title": f'Banco · {database.get("tenant") or "Tenant"}',
+            "meta": (f'{len(database.get("projects") or [])} projeto(s) vinculado(s)' if database.get("projects") else "Disponível para seus projetos"),
+        } for database in resources.get("databases", []) if database.get("tenant"))
+        return {
+            "items": items,
+            "can_view_others": resources.get("can_view_others", False),
+            "other_sites": int(resources.get("other_sites") or 0),
+            "other_databases": int(resources.get("other_databases") or 0),
+        }
     if category == "publications":
         return {
             "items": [{
@@ -465,6 +484,18 @@ def overview_item_data(identity, category: str, item_id: str) -> dict:
         node["network_tx_label"] = metrics["fmt_rate"](node.get("network_tx_bps"))
         return {"node": node, "fmt": metrics["fmt"], "fmt_storage": metrics["fmt_storage"]}
     resources = academic_resources(identity)
+    if category == "resources":
+        if item_id.startswith("site:"):
+            key=item_id.split(":",1)[1]
+            site=next((site for site in resources.get("sites", []) if str(site.get("project_slug") or "") == key), None)
+            if not site: raise LookupError("overview_item_not_found")
+            return {"resource_kind":"site","site":site}
+        if item_id.startswith("db:"):
+            key=item_id.split(":",1)[1]
+            database=next((database for database in resources.get("databases", []) if str(database.get("tenant") or "") == key), None)
+            if not database: raise LookupError("overview_item_not_found")
+            return {"resource_kind":"database","database":database}
+        raise LookupError("overview_item_not_found")
     if category == "publications":
         site = next((site for site in resources.get("sites", []) if str(site.get("project_slug") or "") == item_id), None)
         if not site:
