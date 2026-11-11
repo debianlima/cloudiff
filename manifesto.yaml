@@ -12224,3 +12224,8 @@ trabalho_compartilhado:
     - docs/DICIONARIO-DE-DADOS-ESTATICO.md
     - docs/ARCHITECTURE.md
     - docs/README.md
+    - portal/tests/test_publication_site_terminal_workspace.py
+    - portal/tests/test_publication_runtime_links_and_actions.py
+    - portal/tests/test_portal_no_legacy_visual_fallback.py
+    - portal/tests/test_forja_komodo_client_unit_contract.py
+    - portal/tests/test_taiga_gateway_php_paths.py
