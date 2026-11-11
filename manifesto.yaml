@@ -12218,6 +12218,9 @@ trabalho_compartilhado:
     - estado.md
     - runtime:forja:p1024
     - runtime:mauricio:nginx-custom-http.conf
+    - portal/tests/test_publisher_alias_reservation_reconciliation.py
+    - components/proxy/usr/local/sbin/cloudif-npm-publisher-agent.py
+    - components/proxy/current-apps/publisher-agent-current/cloudif-npm-publisher-agent.py
     - components/control-plane/srv/cloudif/lib/cloudif_ui_publications.py
     - components/control-plane/current-apps/portal-current/cloudif_ui_publications.py
     - components/control-plane/current-apps/portal-current/cloudif-admin-portal-base.py
