@@ -12224,6 +12224,12 @@ trabalho_compartilhado:
     - deploy/systemd/cloudiff-v2-cert-sync.service
     - config/agent-update.json
     - config/secure-distribution-v1.json
+    - docs/PLANO-DE-APERFEICOAMENTO.md
+    - docs/AUDITORIA-INTERFACE-E-AGENTES-2026-11-11.md
+    - tests/test_headless_routes.py
+    - deploy/install_headless_routes.sh
+    - contratos/secure-distribution.schema.json
+    - contratos/agent-update.schema.json
     - tests/
     - components/proxy/
     - runtime:forja:cloudiff-v2-agent
