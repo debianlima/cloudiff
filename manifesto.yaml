@@ -12205,19 +12205,4 @@ entradas:
     aceite: python3 -m unittest portal.tests.test_publication_permissions portal.tests.test_release_flow_wizard_ui
     status: aceito
 
-trabalho_compartilhado:
-  projeto: cloudiff
-  caminho: /srv/mcp-workspace/cloudiff-identity-fix
-  unidade: OVERVIEW-MASTER-DETAIL
-  descricao: 'converter conteúdo das categorias da Visão geral para lista vertical e detalhe sob demanda'
-  agente: Meu Terminal Oracle
-  atualizado_em: '2026-11-11T02:52:12+00:00'
-  previsao_termino: '2026-11-11T04:52:12+00:00'
-  zona_exclusao:
-    - manifesto.yaml
-    - estado.md
-    - portal/modules/overview/routes.py
-    - portal/modules/overview/service.py
-    - portal/modules/overview/views.py
-    - portal/design/components.css
-    - portal/tests/test_overview_sites.py
+trabalho_compartilhado: null

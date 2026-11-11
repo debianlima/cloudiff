@@ -485,3 +485,20 @@
 - Gate de rollout: preflight PASS, readiness PASS, manifest 136/136 hashes, smoke raiz PASS, `?tab=resumo` PASS, API `platform` PASS, categoria inválida 400 PASS, CSS live PASS, Authentik externo continua 302 sem sessão. Rollback A10 sintaticamente válido e pre-state SHA PASS.
 - Medição observada no backend live após cutover (mesma sessão/admin): primeiro paint HTTP 200 em `0.002138 s`, 11.289 bytes e sem conteúdo pesado embutido. APIs sob demanda: `publications 0.003410 s`, `data 0.003674 s`, `platform 0.004670 s`, `academic 9.428524 s`. O custo acadêmico mais alto deixou de bloquear a página inteira e só ocorre quando a categoria é aberta.
 - Serviço final: `cloudif-admin-portal.service=active`; `portal-current=/srv/cloudif/app-releases/portal/a10-ux-0a15e8d16ef5`; `portal-previous=/srv/cloudif/app-releases/portal/a10-ux-5042da9a3790`.
+
+
+## Visão geral — master/detail vertical por categoria (2026-11-11 UTC)
+
+- Autorização humana: reduzir o tumulto dentro dos submenus da Visão geral, usando lista vertical e detalhe único; o item selecionado deve mudar de cor para indicar claramente o estado ativo.
+- Padrão adotado: master/detail com progressive disclosure. Cada categoria dinâmica abre uma lista vertical compacta; nenhum detalhe é pré-renderizado. O painel direito inicia com `Selecione um item` e somente o item clicado é consultado/renderizado.
+- Comportamento global: somente um `details.overview-category` pode permanecer aberto por vez. Dentro dele, somente um item recebe `is-active`/`aria-current=true` e somente um painel de detalhe é exibido.
+- Estado visual selecionado: item ativo usa `background: var(--iff)`, `border-color: var(--iff-dark)`, `color: var(--on-iff)` e marcador interno `4px` em `var(--iff-dark)`, com contraste diferente do hover/foco.
+- API read-only preservada em `GET /cloudiff/portal/api/overview`; sem `item` retorna apenas a lista da categoria; com `item=<id>` retorna somente o detalhe daquele item. Item inexistente retorna 404 `overview_item_not_found`; categoria inválida continua 400.
+- Segurança/escopo: IDs de detalhe são resolvidos novamente contra os recursos visíveis à identidade atual. Projetos acadêmicos usam `canonical_visible_projects`; sites/bancos usam `academic_resources`; servidores usam apenas cache de métricas.
+- Otimização acadêmica: abrir `academic` não chama mais `project_tracking_summary` para todos os projetos. A lista usa apenas visibilidade canônica; `project_tracking_summary` é executado somente para o projeto selecionado. Para perfis não globais, o detalhe acadêmico mostra ações do projeto/Taiga sem tracking administrativo.
+- Categorias dinâmicas convertidas: Projetos, Sites, Bancos/tenants e Infraestrutura. Infraestrutura oferece `Resumo da plataforma` e servidores como itens; sites/bancos mantêm links para recursos de outros usuários quando autorizados.
+- Testes focados: `test_overview_sites` 21/21, `test_permission_table` 4/4, `test_frozen_surfaces_contract` 3/3; total 28/28 PASS. JavaScript gerado `node --jitless --check`: PASS. `scripts/validate.sh`: PASS.
+- Source homologado: `75c974115cac2312bb17d79cb094b98edb82e08b`, tree `00c0932ff25901e78300db651be0614807b46108`.
+- Release A10: `a10-ux-75c974115cac`, archive SHA256 `70b5ee51df2aac23547ea116b792ff39fd111a6ed6dff7b8f54126a2472ec895`; previous `a10-ux-0a15e8d16ef5`. Manifest 136/136, preflight/readiness PASS, smoke das quatro listas PASS, detalhe unitário PASS, CSS ativo PASS, Authentik externo continua 302 sem sessão. Rollback e pre-state PASS.
+- Medição live pós-cutover: listas `publications 0.003319 s`, `data 0.002999 s`, `platform 0.002456 s`, `academic 0.002263 s`. Primeiro item acadêmico observado `mvplanner`; detalhe isolado `academic&item=mvplanner` HTTP 200 em `3.067947 s`. Assim, o custo de tracking deixou de bloquear todo o submenu e passou a existir somente no item explicitamente selecionado.
+- Serviço final: `cloudif-admin-portal.service=active`; `portal-current=/srv/cloudif/app-releases/portal/a10-ux-75c974115cac`; `portal-previous=/srv/cloudif/app-releases/portal/a10-ux-0a15e8d16ef5`.
