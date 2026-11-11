@@ -12197,4 +12197,23 @@ entradas:
     aceite: python3 -m unittest portal.tests.test_publication_permissions portal.tests.test_release_flow_wizard_ui
     status: aceito
 
-trabalho_compartilhado: null
+trabalho_compartilhado:
+  projeto: cloudiff
+  caminho: /srv/mcp-workspace/cloudiff-identity-fix
+  unidade: MANUTENCAO-CORRETIVA-2026-11-11-B
+  descricao: 'corrigir failed units restantes, retirar relays/reconcilers órfãos e normalizar integrity/backups/UI review'
+  agente: Meu Terminal Oracle
+  atualizado_em: '2026-11-11T16:44:40+00:00'
+  previsao_termino: '2026-11-11T19:44:40+00:00'
+  zona_exclusao:
+    - manifesto.yaml
+    - estado.md
+    - docs/AUDITORIA-INTERFACE-E-AGENTES-2026-11-11.md
+    - components/control-plane/etc/systemd/system/cloudif-machine-admin-db-backup.service
+    - components/control-plane/etc/systemd/system/cloudif-machine-admin-dr-backup.service
+    - components/control-plane/usr/local/sbin/cloudif-control-plane-integrity.py
+    - runtime:forja:cloudif-tuleap-ptbr-reconciler
+    - runtime:hospedagem:cloudif-taiga-db-fallback-relay
+    - runtime:hospedagem:machine-admin-backups
+    - runtime:hospedagem:control-plane-integrity
+    - runtime:hospedagem:ui-security-review
