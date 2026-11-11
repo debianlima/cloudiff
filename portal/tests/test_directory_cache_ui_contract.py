@@ -18,6 +18,13 @@ class DirectoryCacheUiContractTests(unittest.TestCase):
             self.assertIn(marker,ACL)
         self.assertIn("loadDirectory(search.value.trim(),1,false)",ACL)
 
+    def test_identity_cards_use_neutral_dark_palette_not_theme_surface_green(self):
+        self.assertIn('background:#111814;color:#e3ebe5',ACL)
+        self.assertIn('.acl-result-item:hover{{background:#18221b',ACL)
+        self.assertIn('color:#f2cd61',ACL)
+        item_css=ACL.split('.acl-result-item{{',1)[1].split('}}',1)[0]
+        self.assertNotIn('var(--c-surface',item_css)
+
     def test_only_cloudiff_admin_users_receive_visual_badge(self):
         self.assertIn('admin=!!x.admin',ACL)
         self.assertIn('Administrador CloudIFF',ACL)

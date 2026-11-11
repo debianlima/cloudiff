@@ -636,16 +636,18 @@ def render_acl_modal(slug, user=None):
 #{h(modal_id)} .acl-directory-filter-field,#{h(modal_id)} .acl-directory-toolbar .cm-field{{margin:0}}
 #{h(modal_id)} .acl-directory-footer{{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}}
 #{h(modal_id)} .acl-result-dropdown{{display:grid;gap:8px;max-height:430px;overflow:auto;padding-right:3px}}
-#{h(modal_id)} .acl-result-item{{width:100%;text-align:left;border:1px solid var(--c-border,#dce3ed);border-radius:9px;padding:10px 12px;background:var(--c-surface,#fff);cursor:pointer}}
-#{h(modal_id)} .acl-result-item:hover{{border-color:var(--c-primary,#166534)}}
-#{h(modal_id)} .acl-result-item.is-admin{{box-shadow:inset 4px 0 0 #d4a017}}
+#{h(modal_id)} .acl-result-item{{width:100%;text-align:left;border:1px solid #2b3930;border-radius:10px;padding:11px 12px;background:#111814;color:#e3ebe5;cursor:pointer;box-shadow:none;transition:background .14s ease,border-color .14s ease,transform .14s ease}}
+#{h(modal_id)} .acl-result-item:hover{{background:#18221b;border-color:#4d6757;transform:translateY(-1px)}}
+#{h(modal_id)} .acl-result-item:focus-visible{{outline:2px solid #65d47f;outline-offset:2px}}
+#{h(modal_id)} .acl-result-item.is-admin{{border-color:#6b5723;box-shadow:inset 3px 0 0 #d6a928}}
 #{h(modal_id)} .acl-result-main{{display:flex;align-items:center;gap:8px;flex-wrap:wrap}}
-#{h(modal_id)} .acl-result-principal{{font-weight:800}}
-#{h(modal_id)} .acl-result-type,#{h(modal_id)} .acl-admin-badge{{font-size:.67rem;font-weight:800;border-radius:999px;padding:3px 7px;background:var(--c-surface-2,#f1f5f9)}}
-#{h(modal_id)} .acl-admin-badge{{border:1px solid #d4a017}}
-#{h(modal_id)} .acl-result-meta{{margin-top:5px;font-size:.73rem;color:var(--c-muted,#64748b)}}
-#{h(modal_id)} .acl-result-groups{{display:flex;gap:4px;flex-wrap:wrap;margin-top:6px}}
-#{h(modal_id)} .acl-result-group{{font-size:.64rem;border:1px solid var(--c-border,#dce3ed);border-radius:999px;padding:2px 6px}}
+#{h(modal_id)} .acl-result-principal{{font-weight:800;color:#f0f5f1}}
+#{h(modal_id)} .acl-result-type{{font-size:.67rem;font-weight:800;border-radius:999px;padding:3px 7px;background:#202b24;color:#cdd8d0;border:1px solid #34453a}}
+#{h(modal_id)} .acl-admin-badge{{font-size:.67rem;font-weight:850;border-radius:999px;padding:3px 7px;background:#2b2412;color:#f2cd61;border:1px solid #8c6e22}}
+#{h(modal_id)} .acl-result-meta{{margin-top:6px;font-size:.73rem;color:#aab8ae;line-height:1.45}}
+#{h(modal_id)} .acl-result-meta strong{{color:#c8d3cb;font-weight:750}}
+#{h(modal_id)} .acl-result-groups{{display:flex;gap:4px;flex-wrap:wrap;margin-top:7px}}
+#{h(modal_id)} .acl-result-group{{font-size:.64rem;color:#b8c6bc;background:#18211b;border:1px solid #334238;border-radius:999px;padding:2px 6px}}
 @media(max-width:700px){{
   #{h(modal_id)} .wizard-head{{padding:18px}}
   #{h(modal_id)} .acl-modal-content{{padding:16px;gap:14px}}
