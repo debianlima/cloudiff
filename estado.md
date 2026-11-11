@@ -528,3 +528,13 @@
 - Primeiro cutover foi abortado por um smoke incorreto que procurava o texto literal `6 visíveis`; rollback PASS. O HTML real usa `Projetos visíveis` + KPI `6`. O retry com o gate correto passou.
 - Gates live: exatamente 3 `data-overview-category`, `resources` API PASS, Authentik externo 302 sem sessão, `cloudif-admin-portal.service=active`.
 - Gate de visibilidade do usuário `iff3546365`: página real `/cloudiff/portal/pagina/projetos` com claims `CloudIF-Tenants-Admin` exibiu `Projetos visíveis` com KPI `6` e não exibiu `Nenhum projeto visível`.
+
+
+## iff3546365 em CloudIF-Professor (2026-11-11 UTC)
+
+- Solicitação humana: adicionar `iff3546365` ao grupo `CloudIF-Professor`, preservando o acesso administrativo já existente.
+- Estado inicial no Authentik: `GROUPS ['CloudIF-Tenants-Admin']`; `CloudIF-Professor` ainda não continha o usuário. Usuário e grupo possuem `distinguishedName`/`ldap_uniq`, portanto a fonte canônica é o AD/LDAP `samba4-pelogo`.
+- AD: DN do usuário foi adicionado ao atributo `member` de `CN=CloudIF-Professor,...` via conexão LDAP configurada no Authentik. `MODIFY_ADD` retornou `success`; o grupo passou de 4 para 5 membros. Pre-state root-only: `/srv/cloudif/backups/authentik-membership/iff3546365-cloudif-professor-ad-prestate.json`.
+- Sync LDAP do Authentik foi acionado. O wrapper `ak ldap_sync` retornou `ResultMissing` ao aguardar result backend, mas a tarefa real permaneceu ativa sob o lock da fonte e concluiu normalmente; após término, Authentik reportou `GROUPS ['CloudIF-Tenants-Admin', 'CloudIF-Professor']` e `LOCK_AVAILABLE=True`.
+- Cache do Portal reconciliado: `groups_json=["CloudIF-Professor", "CloudIF-Tenants-Admin"]`, `is_admin=1`, `is_professor=1`, `active=1`, atualizado em `2026-11-11T08:06:45+00:00`.
+- Gate de visibilidade com os grupos do cache: 6 projetos visíveis — `mvplanner`, `cadales`, `cpuhub`, `agenda-unica`, `laboratorio-de-hardware`, `silvipro`. `VISIBILITY=PASS`.
