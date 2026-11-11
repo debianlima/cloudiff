@@ -422,3 +422,14 @@
 - Gate de regressão em `test_directory_cache_ui_contract.py` impede retorno de `var(--c-surface)` no cartão da lista.
 - Release live `a10-ux-c94d9cac9a82`; app/runtime eram byte-idênticos ao release anterior e somente `cloudif_project_acl_module.py` diferia no `lib-overlay`. Preflight/readiness A10 PASS; rollback preservado para `a10-ux-d7c6b4c3d5bf`.
 - Pós-cutover: `cloudif-admin-portal.service=active`, `/health=200`, HTML live contém paleta neutra nova e não contém a dependência antiga de surface green. Busca de `Pedro Henrique Miranda` continua HTTP 200 e retorna `iff20222920038` / `Pedro Henrique Miranda de Oliveira`.
+
+
+## Portal identity picker — cascade dark contrast live (2026-11-11)
+
+- Causa confirmada: `cloudif_ui_components.py` define `.acl-result-item` globalmente em duas gerações (v87/v88), e o tema de botões continuava vencendo visualmente no runtime, mantendo cartões verde-claro apesar da paleta local anterior.
+- Correção source `fe95aa26018cc3a3207eef2e74c26a271615b2f0`: regra final escopada em `#modal .acl-directory-panel .acl-result-dropdown > .acl-result-item`, com `background/background-color/color/border` em `!important` somente para os cartões de identidade. Paleta live: normal `#0d1711`, hover `#173322`, texto `#edf6ef`; admin mantém badge dourado `#f2cd61`.
+- Gate de regressão cobre seletor específico e `!important`, evitando retorno do fundo verde-claro por cascade global.
+- Release live `a10-ux-fe95aa26018c`; preflight/readiness A10 PASS; app e runtime Portal eram byte-idênticos ao release anterior, com único delta em `cloudif_project_acl_module.py`. Rollback preservado em `a10-ux-c94d9cac9a82`.
+- Pós-cutover: `cloudif-admin-portal.service=active`, `/health=200`; HTML renderizado contém seletor específico, dark background, dark hover, texto de alto contraste e badge dourado. Busca de Pedro segue HTTP 200 e retorna `iff20222920038`.
+- SHA256 source/live de `cloudif_project_acl_module.py`: `9cf1dbe8059aa8e3de51e18769048f1b1e82c91bdc14fc83d573b496f9d99200`; pre-state íntegro. Gates públicos sem autenticação, headers `X-authentik-*` forjados e `X-Original-URI` continuam 302 para Authentik.
+- Unidade compartilhada `CLOUDIFF-ACL-PICKER-DARK-CONTRAST` encerrada.
