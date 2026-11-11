@@ -433,3 +433,21 @@
 - Pós-cutover: `cloudif-admin-portal.service=active`, `/health=200`; HTML renderizado contém seletor específico, dark background, dark hover, texto de alto contraste e badge dourado. Busca de Pedro segue HTTP 200 e retorna `iff20222920038`.
 - SHA256 source/live de `cloudif_project_acl_module.py`: `9cf1dbe8059aa8e3de51e18769048f1b1e82c91bdc14fc83d573b496f9d99200`; pre-state íntegro. Gates públicos sem autenticação, headers `X-authentik-*` forjados e `X-Original-URI` continuam 302 para Authentik.
 - Unidade compartilhada `CLOUDIFF-ACL-PICKER-DARK-CONTRAST` encerrada.
+
+
+## SilviPro — reparo de publicação p1002 (2026-11-11 UTC)
+
+- Sintoma observado: `https://silvipro.cloudiff.duckdns.org/` retornava `502 Bad Gateway`. O proxy Mauricio reescreve o host curto para `1002.cloudiff.duckdns.org` e encaminha para o publication-gateway da Forja (`10.62.91.2:18150`), cujo backend esperado é o alias Docker `cloudif-p1002-active-web`.
+- Supabase/tenant `iff1860746-silvipro` na Hospedagem não era a causa: 11/11 serviços estavam `running` (serviços com healthcheck reportaram healthy); Kong respondeu 401 sem credencial, comportamento esperado para requisição anônima na raiz.
+- Estado legado encontrado no Komodo Agent: `publication_runtimes` registrava `d1` (`cloudif-p1002-d1-web`, commit `4d05bb20...`) como `ready/is_active=1`, mas o container já não existia. O único container p1002 materializado era `cloudif-p1002-base-editor`.
+- `cloudif-p1002-base-editor` foi preservado deliberadamente: o contrato `_cloudif_project_base_ensure/_snapshot` o usa como workspace canônico para gerar revisões de base. Removê-lo faria o próximo ensure recriar uma base genérica e poderia perder customizações do workspace. Não é o runtime público ativo.
+- Pre-state root-only: `/srv/cloudif/releases/silvipro-publication-repair-20261111T004805Z/pre-state`; checksum regenerado excluindo o próprio manifesto e PASS para `containers.json`, `gateway-http.txt`, `komodo-state.json` e `origin-main.txt`; `PRESTATE_COMPLETE=PASS`.
+- Source canônico reconciliado: `origin/main=ad2273de08fac6189d19b2f8009b56157b0be594` (`d1` é ancestral). O checkout `/etc/komodo/stacks/cloudif-silvipro` estava divergente; HEAD anterior `f3d01a3...` foi preservado na branch local `cloudif-pre-reconcile-20261111T005423Z`, e `main` foi alinhado a `origin/main` sem perda.
+- Candidato `d2` criado pela API canônica do Komodo Agent (`/komodo/publication/deploy`), commit `ad2273d`, baseRevision 2, image `cloudif/publication-p1002-d2:php8.3-node22`, image id `sha256:da3372e820885380bed026b1325358ba365d1b0f413bc16ecbcc74c4958ce405`; container `cloudif-p1002-d2-web` healthy e terminal disponível.
+- `d2` foi promovido primeiro: `integrations.active_deploy=2`, `d1.is_active=0`, alias `cloudif-p1002-active-web` aplicado a `d2`. Isso eliminou o 502 antes da migração final.
+- Publicação atual criada pela rota canônica `/komodo/publication/release`: `p1`, candidate 1, deploy 2, container `cloudif-p1002-p1-publication-web`, usando exatamente o mesmo image digest homologado do `d2`; `stage_production_releases.status=ready/is_active=1`. O alias estável `cloudif-p1002-active-web` pertence somente a `p1`; `d2` permanece healthy sem alias como rollback imediato.
+- Container legado `cloudif-p1002-d1-web`: ABSENT no Docker. Não havia container a remover; o estado legado foi retirado da posição ativa (`is_active=0`). O histórico `d1` foi preservado como evidência, sem tráfego.
+- Rollback operacional preservado em `/srv/cloudif/releases/silvipro-publication-repair-20261111T004805Z/rollback-to-d2.sh`, SHA256 `3c5eced5f433543c954ac9417cf18a590c67b583c1be0a85af9542b63810bee8`; alvo `d2` healthy.
+- Gates públicos pós-reparo: LabIFF externo 3/3 HTTP 200; Mauricio/NPM 3/3 HTTP 200; todos com 7234 bytes e SHA256 `4a80098aeaaaa7d911ca4f64e3e86fcb3838151bab58dfee55289933373e4c2a`; título `silvipro · primeiros passos`. Publication-gateway e `p1/.cloudif-health` também HTTP 200.
+- O source atual não depende de variáveis Supabase em runtime; apenas README contém exemplos de `SUPABASE_URL/PUBLIC_KEY`, e `api/server.js` usa somente `PORT` com default. `runtime.env` vazio é compatível com esta revisão publicada.
+- Unidade `SILVIPRO-PUBLICATION-REPAIR` encerrada. Nenhum segredo foi persistido no Git ou exibido em evidência.
