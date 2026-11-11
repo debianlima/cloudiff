@@ -755,11 +755,11 @@ entradas:
     aceite: portao-mecanico/infraestrutura
     status: aceito
   - id: 95
-    caminho: deploy/install_secure_distribution_route.sh
-    proposito: instala/valida/rollback da rota HTTPS /__cloudif_distribution/ no include server_proxy do NPM
+    caminho: deploy/install_headless_routes.sh
+    proposito: instala, valida e reverte as rotas headless mTLS de AgentUpdate, recovery policy e SecureDistribution
     tipo: infraestrutura
-    consome: [runtime/secure-distribution-provider, contratos/secure-distribution.schema]
-    produz: runtime/secure-distribution-https-route
+    consome: [runtime/secure-distribution-provider, contratos/secure-distribution.schema, config/agent-update]
+    produz: runtime/headless-mtls-routes
     aceite: portao-mecanico/infraestrutura
     status: aceito
   - id: 96
@@ -1322,22 +1322,14 @@ entradas:
     produz: teste/faro-profile
     aceite: portao-mecanico/infraestrutura
     status: aceito
-  - id: 169
-    caminho: deploy/install_agent_update_route.sh
-    proposito: 'instala rota HTTPS AgentUpdate: NPM Maurício -> router Hospedagem -> repository loopback, com rollback'
-    tipo: deploy
-    consome: [config/agent-update, runtime/agent-update-repository]
-    produz: runtime/agent-update-https-route
-    aceite: portao-mecanico/deploy
-    status: pendente
   - id: 170
-    caminho: tests/test_agent_update_route.py
-    proposito: testa isolamento da rota AgentUpdate, allowlist, método, strip de prefixo e backends exatos
+    caminho: tests/test_headless_routes.py
+    proposito: testa mTLS das rotas headless, ausência de allowlist por IP e backends exatos
     tipo: backend-integracao
-    consome: [runtime/agent-update-https-route]
-    produz: teste/agent-update-route
+    consome: [runtime/headless-mtls-routes]
+    produz: teste/headless-mtls-routes
     aceite: portao-mecanico/backend-integracao
-    status: pendente
+    status: aceito
   - id: 171
     caminho: contratos/webdev-workspace.schema.json
     proposito: contrato do WebDevWorkspace isolado em Forja para automação Selenium/noVNC e simulações contra infraestrutura física
@@ -12216,8 +12208,6 @@ trabalho_compartilhado:
   zona_exclusao:
     - manifesto.yaml
     - estado.md
-    - deploy/install_agent_update_route.sh
-    - deploy/install_secure_distribution_route.sh
     - deploy/agent_updater.sh
     - deploy/sync_nats_server_cert.sh
     - deploy/systemd/cloudiff-v2-agent-updater.service
@@ -12225,6 +12215,17 @@ trabalho_compartilhado:
     - config/agent-update.json
     - config/secure-distribution-v1.json
     - docs/PLANO-DE-APERFEICOAMENTO.md
+    - .github/workflows/validate.yml
+    - portal/legacy/cloudif-admin-portal.py
+    - portal/legacy/cloudif-admin-portal-base.py
+    - components/control-plane/current-apps/portal-current/cloudif-admin-portal.py
+    - components/control-plane/current-apps/portal-current/cloudif-admin-portal-base.py
+    - components/control-plane/srv/cloudif/lib/cloudif_ui_pages.py
+    - components/control-plane/srv/cloudif/lib/cloudif_project_action_safe.py
+    - components/control-plane/srv/cloudif/lib/cloudif_ad_search_module.py
+    - components/control-plane/srv/cloudif/lib/cloudif_ad_directory_module.py
+    - components/control-plane/srv/cloudif/lib/cloudif_rbac.py
+    - portal/core/project_visibility.py
     - docs/AUDITORIA-INTERFACE-E-AGENTES-2026-11-11.md
     - tests/test_headless_routes.py
     - deploy/install_headless_routes.sh
