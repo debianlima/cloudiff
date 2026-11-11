@@ -12205,4 +12205,16 @@ entradas:
     aceite: python3 -m unittest portal.tests.test_publication_permissions portal.tests.test_release_flow_wizard_ui
     status: aceito
 
-trabalho_compartilhado: null
+trabalho_compartilhado:
+  projeto: cloudiff
+  caminho: /srv/mcp-workspace/cloudiff-identity-fix
+  unidade: MVPLANNER-PUBLICATION-READY
+  descricao: 'promover p1024 ao modelo publication release e criar alias HTTPS mvplanner preservando portal/tenant'
+  agente: Meu Terminal Oracle
+  atualizado_em: '2026-11-11T01:43:03+00:00'
+  previsao_termino: '2026-11-11T03:43:03+00:00'
+  zona_exclusao:
+    - manifesto.yaml
+    - estado.md
+    - runtime:forja:p1024
+    - runtime:mauricio:nginx-custom-http.conf
