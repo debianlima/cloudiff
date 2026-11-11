@@ -273,24 +273,81 @@ def platform_body(data: dict) -> str:
     )
 
 
+def _master_detail(category: str, data: dict, title: str, description: str, empty_title: str, empty_text: str) -> str:
+    items = data.get("items") or []
+    rows = []
+    for item in items:
+        item_id = html.escape(str(item.get("id") or ""), quote=True)
+        item_title = html.escape(str(item.get("title") or item_id))
+        item_meta = html.escape(str(item.get("meta") or ""))
+        rows.append(
+            f'<button type="button" class="overview-master-item" data-overview-item="{item_id}" aria-current="false">'
+            f'<span class="overview-master-item-title">{item_title}</span><small>{item_meta}</small><span class="overview-master-item-arrow" aria-hidden="true">›</span></button>'
+        )
+    listing = "".join(rows) or f'<div class="overview-master-empty"><b>{html.escape(empty_title)}</b><p>{html.escape(empty_text)}</p></div>'
+    extra = ""
+    if category == "publications" and data.get("can_view_others"):
+        extra = f'<a class="overview-master-secondary" href="{BASE}/?tab=publicacao&amp;scope=others#other-user-sites">Sites de outros usuários <b>{int(data.get("other_sites") or 0)}</b></a>'
+    elif category == "data" and data.get("can_view_others"):
+        extra = f'<a class="overview-master-secondary" href="{BASE}/?tab=bancos">Bancos de outros usuários <b>{int(data.get("other_databases") or 0)}</b></a>'
+    return (
+        '<section class="overview-master" data-overview-master-detail>'
+        f'<div class="overview-master-head"><div><p class="ov-eyebrow">Detalhes sob demanda</p><h3>{html.escape(title)}</h3><p>{html.escape(description)}</p></div></div>'
+        '<div class="overview-master-layout">'
+        f'<nav class="overview-master-list" aria-label="{html.escape(title, quote=True)}">{listing}{extra}</nav>'
+        '<div class="overview-master-panel" data-overview-detail aria-live="polite">'
+        '<div class="overview-master-placeholder"><p class="ov-eyebrow">Detalhe</p><h3>Selecione um item</h3><p>Somente o item escolhido será carregado e mostrado aqui.</p></div>'
+        '</div></div></section>'
+    )
+
+
 def overview_category_body(category: str, data: dict) -> str:
     category = str(category or "").strip().lower()
     if category == "academic":
-        rendered = academic_tracking_body(data)
-        if rendered:
-            return rendered
+        return _master_detail(category, data, "Projetos", "Selecione um projeto para consultar o acompanhamento sem carregar todos de uma vez.", "Nenhum projeto", "Não há projetos visíveis para esta sessão.")
+    if category == "publications":
+        return _master_detail(category, data, "Sites", "Selecione um site para ver endereço, estado e ações de publicação.", "Nenhum site", "Seus projetos publicados ou em preparação aparecerão aqui.")
+    if category == "data":
+        return _master_detail(category, data, "Bancos e tenants", "Selecione um banco para ver seus vínculos e ações.", "Nenhum banco", "Nenhum tenant de dados está vinculado à sua sessão.")
+    if category == "platform":
+        return _master_detail(category, data, "Infraestrutura", "Selecione o resumo ou um servidor para consultar apenas aquele detalhe.", "Sem métricas", "Nenhum servidor possui métrica disponível agora.")
+    raise ValueError("invalid_overview_category")
+
+
+def overview_item_body(category: str, data: dict) -> str:
+    category = str(category or "").strip().lower()
+    if category == "academic":
+        project = data.get("project") or {}
+        tracking = data.get("tracking")
+        if tracking is not None:
+            return _academic_tracking_card(tracking)
+        slug = str(project.get("slug") or "")
+        name = html.escape(str(project.get("name") or slug or "Projeto"))
+        status = html.escape(str(project.get("status") or "ativo"))
         return (
-            '<section class="resource-section overview-loaded-section"><div class="resource-section-head"><div>'
-            '<p class="ov-eyebrow">Projetos</p><h2>Projetos e acompanhamento</h2>'
-            '<p>Abra seus projetos ou o Taiga para acompanhar tarefas, histórias e equipe.</p></div></div>'
-            f'<div class="overview-link-list"><a href="{BASE}/?tab=projetos">Projetos</a><a href="{BASE}/?tab=taiga">Taiga</a></div></section>'
+            '<article class="resource-card overview-master-detail-card"><div class="resource-card-head"><div>'
+            f'<p class="resource-kicker">Projeto</p><h3>{name}</h3><small>{html.escape(slug)}</small></div><span class="chip">{status}</span></div>'
+            '<p class="resource-note">Abra o projeto ou o Taiga para consultar tarefas e equipe.</p>'
+            f'<div class="resource-actions"><a class="btn" href="{BASE}/?tab=projetos&amp;project={quote(slug,safe="")}">Abrir projeto</a><a class="btn btn-quiet" href="{BASE}/?tab=taiga&amp;project={quote(slug,safe="")}">Abrir no Taiga</a></div></article>'
         )
     if category == "publications":
-        return sites_body(data)
+        site = data.get("site")
+        if not site: raise ValueError("invalid_overview_item")
+        return _site_card(site)
     if category == "data":
-        return databases_body(data)
+        database = data.get("database")
+        if not database: raise ValueError("invalid_overview_item")
+        return _database_card(database)
     if category == "platform":
-        return platform_body(data)
+        if data.get("summary") is not None:
+            metrics = data["summary"]
+            return (
+                '<section class="overview-master-summary"><div class="resource-section-head"><div><p class="ov-eyebrow">Infraestrutura</p><h3>Resumo da plataforma</h3>'
+                f'<p>{int(metrics.get("online_count") or 0)} de {int(metrics.get("node_count") or 0)} servidores com coleta recente.</p></div></div>{_platform_charts(metrics)}</section>'
+            )
+        node = data.get("node")
+        if not node: raise ValueError("invalid_overview_item")
+        return _server_card(node, data["fmt"], data["fmt_storage"])
     raise ValueError("invalid_overview_category")
 
 
@@ -320,7 +377,6 @@ def overview_body(data: dict) -> str:
             "academic", "Trabalho acadêmico", "Projetos e acompanhamento",
             "Projetos, equipe, tarefas e sinais acadêmicos reunidos em um só lugar.",
             (("Abrir projetos", f"{BASE}/?tab=projetos"), ("Abrir Taiga", f"{BASE}/?tab=taiga")),
-            lazy=is_global,
         ),
         _category_card(
             "publications", "Entrega", "Publicações e sites",
@@ -353,19 +409,25 @@ def overview_body(data: dict) -> str:
     script = r"""<script id="overview-lazy-categories">(()=>{
  const root=document.querySelector('[data-overview-categories]');if(!root)return;
  const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+ async function request(url){const response=await fetch(url,{credentials:'same-origin',cache:'no-store',headers:{Accept:'application/json'}}),data=await response.json();if(!response.ok||!data.ok)throw new Error(data.error||('HTTP '+response.status));return data;}
  async function loadCategory(section,force=false){
   const category=section.dataset.overviewCategory,body=section.querySelector('[data-overview-category-body]'),status=section.querySelector('.overview-category-status');
   if(!category||!body||(!force&&section.dataset.loaded==='1')||section.dataset.loading==='1')return;
-  section.dataset.loading='1';if(status)status.textContent='Carregando…';body.setAttribute('aria-busy','true');body.innerHTML='<div class="overview-category-loading">Carregando somente esta categoria…</div>';
-  try{
-   const response=await fetch('/cloudiff/portal/api/overview?category='+encodeURIComponent(category),{credentials:'same-origin',cache:'no-store',headers:{Accept:'application/json'}}),data=await response.json();
-   if(!response.ok||!data.ok)throw new Error(data.error||('HTTP '+response.status));
-   body.innerHTML=String(data.html||'')+'<div class="overview-category-refresh"><button type="button" class="btn btn-quiet" data-overview-refresh>Atualizar esta categoria</button></div>';section.dataset.loaded='1';if(status)status.textContent='Carregado';
-  }catch(error){body.innerHTML='<div class="resource-empty"><h3>Não foi possível carregar esta categoria</h3><p>'+esc(error.message||error)+'</p><button type="button" class="btn" data-overview-refresh>Tentar novamente</button></div>';if(status)status.textContent='Falha';}
+  section.dataset.loading='1';if(status)status.textContent='Carregando…';body.setAttribute('aria-busy','true');body.innerHTML='<div class="overview-category-loading">Carregando a lista desta categoria…</div>';
+  try{const data=await request('/cloudiff/portal/api/overview?category='+encodeURIComponent(category));body.innerHTML=String(data.html||'')+'<div class="overview-category-refresh"><button type="button" class="btn btn-quiet" data-overview-refresh>Atualizar lista</button></div>';section.dataset.loaded='1';if(status)status.textContent='Lista carregada';}
+  catch(error){body.innerHTML='<div class="resource-empty"><h3>Não foi possível carregar esta categoria</h3><p>'+esc(error.message||error)+'</p><button type="button" class="btn" data-overview-refresh>Tentar novamente</button></div>';if(status)status.textContent='Falha';}
   finally{section.dataset.loading='0';body.removeAttribute('aria-busy');}
  }
- root.querySelectorAll('[data-overview-category]').forEach(section=>section.addEventListener('toggle',()=>{if(section.open)loadCategory(section)}));
- root.addEventListener('click',event=>{const button=event.target.closest('[data-overview-refresh]');if(!button)return;const section=button.closest('[data-overview-category]');if(section)loadCategory(section,true)});
+ async function loadItem(button){
+  const section=button.closest('[data-overview-category]'),category=section?.dataset.overviewCategory,item=button.dataset.overviewItem,panel=section?.querySelector('[data-overview-detail]');if(!section||!category||!item||!panel)return;
+  section.querySelectorAll('[data-overview-item]').forEach(row=>{const active=row===button;row.classList.toggle('is-active',active);row.setAttribute('aria-current',active?'true':'false')});
+  panel.setAttribute('aria-busy','true');panel.innerHTML='<div class="overview-master-placeholder"><p class="ov-eyebrow">Detalhe</p><h3>Carregando…</h3><p>Consultando somente o item selecionado.</p></div>';
+  try{const data=await request('/cloudiff/portal/api/overview?category='+encodeURIComponent(category)+'&item='+encodeURIComponent(item));panel.innerHTML=String(data.html||'');}
+  catch(error){panel.innerHTML='<div class="resource-empty"><h3>Não foi possível carregar o detalhe</h3><p>'+esc(error.message||error)+'</p></div>';}
+  finally{panel.removeAttribute('aria-busy');}
+ }
+ root.querySelectorAll('details.overview-category').forEach(section=>section.addEventListener('toggle',()=>{if(!section.open)return;root.querySelectorAll('details.overview-category').forEach(other=>{if(other!==section)other.open=false});loadCategory(section)}));
+ root.addEventListener('click',event=>{const item=event.target.closest('[data-overview-item]');if(item){loadItem(item);return}const button=event.target.closest('[data-overview-refresh]');if(!button)return;const section=button.closest('[data-overview-category]');if(section)loadCategory(section,true)});
 })();</script>"""
     return (
         '<section class="welcome-panel overview-welcome"><div><p class="ov-eyebrow">Visão geral</p>'

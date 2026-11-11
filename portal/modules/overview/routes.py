@@ -36,12 +36,19 @@ def _page(request: Request) -> Response:
 
 def _category(request: Request) -> Response:
     category = request.q("category").strip().lower()
+    item_id = request.q("item").strip()
     try:
-        data = service.overview_category_data(request.identity, category)
-        markup = views.overview_category_body(category, data)
+        if item_id:
+            data = service.overview_item_data(request.identity, category, item_id)
+            markup = views.overview_item_body(category, data)
+        else:
+            data = service.overview_category_list_data(request.identity, category)
+            markup = views.overview_category_body(category, data)
     except ValueError:
         return Response.json_body(b'{"ok":false,"error":"invalid_overview_category"}', 400)
-    payload = json.dumps({"ok": True, "category": category, "html": markup}, ensure_ascii=False, separators=(",", ":")).encode()
+    except LookupError:
+        return Response.json_body(b'{"ok":false,"error":"overview_item_not_found"}', 404)
+    payload = json.dumps({"ok": True, "category": category, "item": item_id or None, "html": markup}, ensure_ascii=False, separators=(",", ":")).encode()
     return Response.json_body(payload, 200)
 
 def endpoints() -> tuple[Endpoint, ...]:

@@ -57,7 +57,7 @@ class OverviewSiteCardTest(unittest.TestCase):
 
     def test_other_sites_card_opens_filtered_publication_scope(self):
         from portal.modules.overview.views import overview_category_body
-        data = {"resources": {"sites": [], "can_view_others": True, "other_sites": 2}}
+        data = {"items": [], "can_view_others": True, "other_sites": 2}
         markup = overview_category_body("publications", data)
         self.assertIn('/cloudiff/portal/?tab=publicacao&amp;scope=others#other-user-sites', markup)
 
@@ -276,18 +276,19 @@ class OverviewSiteCardTest(unittest.TestCase):
         self.assertEqual(data['username'],'alice')
         self.assertFalse(data['is_global'])
 
-    def test_overview_category_loads_only_requested_expensive_source(self):
+    def test_overview_category_list_loads_only_the_selected_category_source(self):
         from portal.modules.overview import service
         from portal.core.auth import Identity
         identity=Identity('prof','prof@example.invalid',frozenset({'CloudIF-Professor'}))
-        with mock.patch.object(service,'server_metrics',return_value={'nodes':[]}) as metrics, \
+        with mock.patch.object(service,'server_metrics',return_value={'nodes':[],'online_count':0,'node_count':0}) as metrics, \
              mock.patch.object(service,'academic_resources',return_value={'sites':[],'databases':[],'can_view_others':False,'other_sites':0,'other_databases':0}) as resources, \
-             mock.patch.object(service,'academic_tracking',return_value={'enabled':True,'projects':[]}) as tracking:
-            service.overview_category_data(identity,'platform')
-            self.assertEqual(metrics.call_count,1);self.assertEqual(resources.call_count,0);self.assertEqual(tracking.call_count,0)
-            service.overview_category_data(identity,'academic')
-            self.assertEqual(metrics.call_count,1);self.assertEqual(resources.call_count,0);self.assertEqual(tracking.call_count,1)
-            service.overview_category_data(identity,'publications')
+             mock.patch.object(service,'canonical_visible_projects',return_value=[]) as projects, \
+             mock.patch.object(service,'project_tracking_summary',side_effect=AssertionError('detail must not load')) as tracking:
+            service.overview_category_list_data(identity,'platform')
+            self.assertEqual(metrics.call_count,1);self.assertEqual(resources.call_count,0);self.assertEqual(projects.call_count,0);self.assertEqual(tracking.call_count,0)
+            service.overview_category_list_data(identity,'academic')
+            self.assertEqual(projects.call_count,1);self.assertEqual(tracking.call_count,0)
+            service.overview_category_list_data(identity,'publications')
             self.assertEqual(resources.call_count,1)
 
     def test_overview_category_endpoint_is_registered_and_page_uses_light_model(self):
@@ -301,6 +302,44 @@ class OverviewSiteCardTest(unittest.TestCase):
         self.assertIn('("/cloudiff/portal/api/overview", "GET")',coexist)
         self.assertIn('"resumo", "visao-geral", "visão-geral"',coexist)
         self.assertNotIn('getattr(owner, "render_resumo")',coexist)
+
+
+    def test_overview_category_uses_vertical_master_detail_and_no_detail_is_open_by_default(self):
+        from portal.modules.overview.views import overview_category_body
+        markup=overview_category_body('publications',{'items':[{'id':'alpha','title':'Alpha','meta':'Publicado'},{'id':'beta','title':'Beta','meta':'Ainda não publicado'}]})
+        self.assertIn('class="overview-master-list"',markup)
+        self.assertIn('data-overview-item="alpha"',markup)
+        self.assertIn('data-overview-item="beta"',markup)
+        self.assertIn('Selecione um item',markup)
+        self.assertNotIn('Abrir site',markup)
+
+    def test_selected_master_item_has_explicit_active_color_contract(self):
+        css=(Path(__file__).resolve().parents[1]/'design'/'components.css').read_text()
+        self.assertIn('.overview-master-item.is-active,.overview-master-item[aria-current="true"]{background:var(--iff)',css)
+        self.assertIn('color:var(--on-iff)',css)
+        self.assertIn('box-shadow:inset 4px 0 0 var(--iff-dark)',css)
+
+    def test_academic_list_does_not_call_project_tracking_until_item_selected(self):
+        from portal.modules.overview import service
+        from portal.core.auth import Identity
+        professor=Identity('prof','prof@example.invalid',frozenset({'CloudIF-Professor'}))
+        projects=[{'slug':'alpha','name':'Alpha','status':'active'}]
+        with mock.patch.object(service,'canonical_visible_projects',return_value=projects), mock.patch.object(service,'project_tracking_summary',side_effect=AssertionError('detail loaded early')) as tracking:
+            data=service.overview_category_list_data(professor,'academic')
+            self.assertEqual(data['items'][0]['id'],'alpha')
+            self.assertEqual(tracking.call_count,0)
+        with mock.patch.object(service,'canonical_visible_projects',return_value=projects), mock.patch.object(service,'project_tracking_summary',return_value={'ok':True,'slug':'alpha','name':'Alpha'}) as tracking:
+            detail=service.overview_item_data(professor,'academic','alpha')
+            self.assertEqual(detail['tracking']['slug'],'alpha')
+            self.assertEqual(tracking.call_count,1)
+
+    def test_master_detail_js_marks_selected_row_and_loads_only_clicked_item(self):
+        from portal.modules.overview.views import overview_body
+        markup=overview_body({'username':'prof','is_global':True})
+        self.assertIn("row.classList.toggle('is-active',active)",markup)
+        self.assertIn("row.setAttribute('aria-current',active?'true':'false')",markup)
+        self.assertIn("'&item='+encodeURIComponent(item)",markup)
+        self.assertIn("if(other!==section)other.open=false",markup)
 
 
 if __name__ == "__main__":

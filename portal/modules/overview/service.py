@@ -367,3 +367,110 @@ def overview_category_data(identity, category: str) -> dict:
             "other_databases": resources["other_databases"],
         }
     }
+
+
+def _overview_visible_projects(identity) -> list[dict]:
+    try:
+        projects = canonical_visible_projects(identity, _DB)
+    except Exception:
+        projects = []
+    return [
+        dict(project) for project in projects
+        if str(project.get("status") or "").strip().lower() not in {"archived", "deleted", "disabled"}
+    ]
+
+
+def overview_category_list_data(identity, category: str) -> dict:
+    """Return only lightweight rows for the selected overview category."""
+    category = str(category or "").strip().lower()
+    if category not in _OVERVIEW_CATEGORIES:
+        raise ValueError("invalid_overview_category")
+    if category == "academic":
+        projects = _overview_visible_projects(identity)
+        return {
+            "items": [
+                {
+                    "id": str(project.get("slug") or ""),
+                    "title": str(project.get("name") or project.get("slug") or "Projeto"),
+                    "meta": str(project.get("status") or "ativo"),
+                }
+                for project in projects if project.get("slug")
+            ],
+            "can_track": is_global(identity),
+        }
+    if category == "platform":
+        metrics = server_metrics()
+        items = [{
+            "id": "summary",
+            "title": "Resumo da plataforma",
+            "meta": f'{int(metrics.get("online_count") or 0)} de {int(metrics.get("node_count") or 0)} servidores disponíveis',
+        }]
+        items.extend({
+            "id": str(node.get("node") or ""),
+            "title": str(node.get("node") or "Servidor"),
+            "meta": "Disponível" if node.get("online") else ("Dados atrasados" if node.get("stale") else "Indisponível"),
+        } for node in metrics.get("nodes", []) if node.get("node"))
+        return {"items": items}
+    resources = academic_resources(identity)
+    if category == "publications":
+        return {
+            "items": [{
+                "id": str(site.get("project_slug") or ""),
+                "title": str(site.get("name") or site.get("project_slug") or "Site"),
+                "meta": "Publicado" if site.get("published") else "Ainda não publicado",
+            } for site in resources.get("sites", []) if site.get("project_slug")],
+            "can_view_others": resources.get("can_view_others", False),
+            "other_sites": int(resources.get("other_sites") or 0),
+        }
+    return {
+        "items": [{
+            "id": str(database.get("tenant") or ""),
+            "title": str(database.get("tenant") or "Banco"),
+            "meta": (f'{len(database.get("projects") or [])} projeto(s) vinculado(s)' if database.get("projects") else "Disponível para seus projetos"),
+        } for database in resources.get("databases", []) if database.get("tenant")],
+        "can_view_others": resources.get("can_view_others", False),
+        "other_databases": int(resources.get("other_databases") or 0),
+    }
+
+
+def overview_item_data(identity, category: str, item_id: str) -> dict:
+    """Load one detail only after the user selects a row in the master list."""
+    category = str(category or "").strip().lower()
+    item_id = str(item_id or "").strip()
+    if category not in _OVERVIEW_CATEGORIES:
+        raise ValueError("invalid_overview_category")
+    if not item_id:
+        raise LookupError("overview_item_not_found")
+    if category == "academic":
+        project = next((p for p in _overview_visible_projects(identity) if str(p.get("slug") or "") == item_id), None)
+        if not project:
+            raise LookupError("overview_item_not_found")
+        if is_global(identity):
+            try:
+                tracking = project_tracking_summary(identity, project)
+            except Exception:
+                tracking = {"ok": False, "slug": item_id, "name": project.get("name") or item_id, "error": "tracking_unavailable"}
+        else:
+            tracking = None
+        return {"project": project, "tracking": tracking}
+    if category == "platform":
+        metrics = server_metrics()
+        if item_id == "summary":
+            return {"summary": metrics}
+        node = next((node for node in metrics.get("nodes", []) if str(node.get("node") or "") == item_id), None)
+        if not node:
+            raise LookupError("overview_item_not_found")
+        node = dict(node)
+        node["network_rx_label"] = metrics["fmt_rate"](node.get("network_rx_bps"))
+        node["network_tx_label"] = metrics["fmt_rate"](node.get("network_tx_bps"))
+        return {"node": node, "fmt": metrics["fmt"], "fmt_storage": metrics["fmt_storage"]}
+    resources = academic_resources(identity)
+    if category == "publications":
+        site = next((site for site in resources.get("sites", []) if str(site.get("project_slug") or "") == item_id), None)
+        if not site:
+            raise LookupError("overview_item_not_found")
+        return {"site": site}
+    database = next((database for database in resources.get("databases", []) if str(database.get("tenant") or "") == item_id), None)
+    if not database:
+        raise LookupError("overview_item_not_found")
+    return {"database": database}
