@@ -12,6 +12,9 @@ EnvironmentFile=/etc/cloudif/project-config-controller.env
 EnvironmentFile=/etc/cloudif/multiservice-preview.env
 EnvironmentFile=-/etc/cloudif/runtime-reconciler.env
 EnvironmentFile=-/etc/cloudif/project-observability.env
+Environment=CLOUDIF_MCP_OAUTH_STATE_DIR=/var/lib/cloudif/mcp-gateway
+StateDirectory=cloudif/mcp-gateway
+StateDirectoryMode=0700
 ExecStart=/usr/bin/python3 /srv/cloudif/app-pointers/mcp-gateway-current/cloudif-mcp-gateway.py
 Restart=on-failure
 RestartSec=3
@@ -20,6 +23,7 @@ PrivateTmp=true
 ProtectHome=true
 ProtectSystem=strict
 ReadOnlyPaths=/srv/cloudif/app-releases/mcp-gateway /srv/cloudif/app-pointers
+ReadWritePaths=/var/lib/cloudif/mcp-gateway
 
 PrivateDevices=true
 ProtectClock=true

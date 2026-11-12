@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import os,json,hmac,urllib.request,urllib.error,threading,time,uuid,hashlib,secrets,base64,re,socket,ipaddress,http.client
+import os,json,hmac,urllib.request,urllib.error,threading,time,uuid,hashlib,secrets,base64,re,socket,ipaddress,http.client,sqlite3
 import jsonschema
 from http.server import BaseHTTPRequestHandler,ThreadingHTTPServer
 from urllib.parse import urlparse,parse_qs,urlencode,urljoin
@@ -49,6 +49,66 @@ ARTIFACT_UPLOAD_WIDGET_HTML=r'''<!doctype html><html lang="pt-BR"><head><meta ch
 OAUTH_ISSUER=PUBLIC_ORIGIN
 OAUTH_LOGIN_REQUESTS={};OAUTH_CODES={};OAUTH_ACCESS={};OAUTH_REFRESH={};OAUTH_LOCK=threading.Lock()
 OAUTH_LOGIN_TTL=300;OAUTH_ACCESS_TTL=3600;OAUTH_REFRESH_TTL=2592000
+OAUTH_STATE_DIR=os.environ.get('CLOUDIF_MCP_OAUTH_STATE_DIR','').strip()
+OAUTH_DB_PATH=os.path.join(OAUTH_STATE_DIR,'oauth-tokens.sqlite3') if OAUTH_STATE_DIR else ''
+
+def _oauth_token_hash(token):
+    return hashlib.sha256(str(token or '').encode()).hexdigest()
+
+def _oauth_state_db():
+    if not OAUTH_DB_PATH:return None
+    os.makedirs(OAUTH_STATE_DIR,mode=0o700,exist_ok=True)
+    try:os.chmod(OAUTH_STATE_DIR,0o700)
+    except OSError:pass
+    conn=sqlite3.connect(OAUTH_DB_PATH,timeout=5)
+    conn.execute('pragma journal_mode=WAL')
+    conn.execute('pragma synchronous=FULL')
+    conn.execute('create table if not exists oauth_tokens(kind text not null,token_hash text not null,payload_json text not null,expires_at integer not null,created_at integer not null,primary key(kind,token_hash))')
+    conn.execute('create index if not exists oauth_tokens_expires_idx on oauth_tokens(expires_at)')
+    return conn
+
+def _oauth_persist(kind,token,payload):
+    if not OAUTH_DB_PATH or not payload.get('public_client'):return
+    safe={k:v for k,v in dict(payload).items() if k!='secret'}
+    conn=_oauth_state_db()
+    if conn is None:return
+    try:
+        now=int(time.time())
+        conn.execute('insert or replace into oauth_tokens(kind,token_hash,payload_json,expires_at,created_at) values(?,?,?,?,?)',(kind,_oauth_token_hash(token),json.dumps(safe,separators=(',',':'),sort_keys=True),int(safe.get('expires_at') or 0),now))
+        conn.commit()
+    finally:conn.close()
+
+def _oauth_persistent_get(kind,token,consume=False):
+    if not OAUTH_DB_PATH or not token:return None
+    conn=_oauth_state_db()
+    if conn is None:return None
+    try:
+        th=_oauth_token_hash(token)
+        row=conn.execute('select payload_json,expires_at from oauth_tokens where kind=? and token_hash=?',(kind,th)).fetchone()
+        if not row:return None
+        if int(row[1] or 0)<=int(time.time()):
+            conn.execute('delete from oauth_tokens where kind=? and token_hash=?',(kind,th));conn.commit();return None
+        if consume:
+            conn.execute('delete from oauth_tokens where kind=? and token_hash=?',(kind,th));conn.commit()
+        try:return json.loads(row[0])
+        except Exception:return None
+    finally:conn.close()
+
+def _oauth_persistent_delete(kind,token):
+    if not OAUTH_DB_PATH or not token:return
+    conn=_oauth_state_db()
+    if conn is None:return
+    try:
+        conn.execute('delete from oauth_tokens where kind=? and token_hash=?',(kind,_oauth_token_hash(token)));conn.commit()
+    finally:conn.close()
+
+def _oauth_persistent_cleanup(now=None):
+    if not OAUTH_DB_PATH:return
+    conn=_oauth_state_db()
+    if conn is None:return
+    try:
+        conn.execute('delete from oauth_tokens where expires_at<=?',(int(now or time.time()),));conn.commit()
+    finally:conn.close()
 
 def _agent_clients():
     req=urllib.request.Request(AGENT_URL+'/v1/clients',headers={'Authorization':'Bearer '+AGENT_ADMIN_TOKEN,'Accept':'application/json'})
@@ -112,15 +172,19 @@ def _oauth_authorize_preflight(query):
     return {'client_id':client_id,'project_slug':projects[0],'redirect_uri':redirect_uri,'state':state,'code_challenge':challenge,'oauth_flow':flow,'resource':resource}
 def _oauth_token(client):
     now=int(time.time());access=secrets.token_urlsafe(36);refresh=secrets.token_urlsafe(36);client={**client,'resource':str(client.get('resource') or MCP_RESOURCE)}
+    access_payload={**client,'expires_at':now+OAUTH_ACCESS_TTL};refresh_payload={**client,'expires_at':now+OAUTH_REFRESH_TTL}
     with OAUTH_LOCK:
-        OAUTH_ACCESS[access]={**client,'expires_at':now+OAUTH_ACCESS_TTL}
-        OAUTH_REFRESH[refresh]={**client,'expires_at':now+OAUTH_REFRESH_TTL}
+        OAUTH_ACCESS[access]=access_payload
+        OAUTH_REFRESH[refresh]=refresh_payload
+        _oauth_persist('access',access,access_payload)
+        _oauth_persist('refresh',refresh,refresh_payload)
     return {'access_token':access,'token_type':'Bearer','expires_in':OAUTH_ACCESS_TTL,'refresh_token':refresh,'scope':'mcp offline_access'}
 def _oauth_cleanup():
     now=time.time()
     with OAUTH_LOCK:
         for store in (OAUTH_LOGIN_REQUESTS,OAUTH_CODES,OAUTH_ACCESS,OAUTH_REFRESH):
             for key in [k for k,v in store.items() if float(v.get('expires_at') or 0)<=now]:store.pop(key,None)
+        _oauth_persistent_cleanup(now)
 
 def _oauth_metadata(resource=False):
     if resource:return {'resource':MCP_RESOURCE,'authorization_servers':[OAUTH_ISSUER],'bearer_methods_supported':['header'],'scopes_supported':['mcp','offline_access'],'resource_documentation':PUBLIC_ORIGIN+'/cloudiff/mcp/privacy'}
@@ -2017,6 +2081,10 @@ class H(BaseHTTPRequestHandler):
     def auth(self):
         got=self.headers.get('Authorization','');raw=got[7:] if got.startswith('Bearer ') else ''
         _oauth_cleanup();oauth=OAUTH_ACCESS.get(raw)
+        if not oauth and raw:
+            with OAUTH_LOCK:
+                oauth=_oauth_persistent_get('access',raw)
+                if oauth:OAUTH_ACCESS[raw]=oauth
         if oauth:
             if str(oauth.get('resource') or MCP_RESOURCE)!=MCP_RESOURCE:return False
             self._oauth=oauth
@@ -2146,13 +2214,20 @@ class H(BaseHTTPRequestHandler):
                 else:
                     client=_validate_client_secret(client_id,secret) if secret else (row if row.get('public_client') else None)
             elif grant=='refresh_token':
-                ref=(form.get('refresh_token') or [''])[0];saved=OAUTH_REFRESH.pop(ref,None)
+                ref=(form.get('refresh_token') or [''])[0]
+                with OAUTH_LOCK:
+                    saved=OAUTH_REFRESH.pop(ref,None)
+                    if saved:_oauth_persistent_delete('refresh',ref)
+                    else:saved=_oauth_persistent_get('refresh',ref,consume=True)
                 client=(_validate_client_secret(client_id,secret) if secret else saved) if saved and saved.get('client_id')==client_id and (not resource or resource==saved.get('resource')) else None
             else:return self.sendj(400,{'error':'unsupported_grant_type'})
             return self.sendj(200,_oauth_token(client)) if client else self.sendj(401,{'error':'invalid_client'})
         if path in {'/revoke','/oauth/revoke','/cloudiff/mcp/oauth/revoke'}:
             n=int(self.headers.get('Content-Length','0'));form=parse_qs(self.rfile.read(min(n,65536)).decode());token=(form.get('token') or [''])[0]
-            OAUTH_ACCESS.pop(token,None);OAUTH_REFRESH.pop(token,None);return self.sendj(200,{'ok':True})
+            with OAUTH_LOCK:
+                OAUTH_ACCESS.pop(token,None);OAUTH_REFRESH.pop(token,None)
+                _oauth_persistent_delete('access',token);_oauth_persistent_delete('refresh',token)
+            return self.sendj(200,{'ok':True})
         if path!='/mcp':self.sendj(404,{'ok':False,'error':'not_found'});return
         try:
             n=int(self.headers.get('Content-Length','0'));raw=self.rfile.read(min(n,1048576));req=json.loads(raw or b'{}')

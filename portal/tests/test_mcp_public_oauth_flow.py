@@ -13,6 +13,7 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlencode, urlparse
 import unittest
+import tempfile
 
 ROOT = Path(__file__).resolve().parents[2]
 GATEWAY = ROOT / 'components/control-plane/current-apps/mcp-gateway-current/cloudif-mcp-gateway.py'
@@ -101,6 +102,7 @@ class MCPPublicOAuthFlowTest(unittest.TestCase):
         cls.control_port = free_port()
         cls.agent_port = free_port()
         cls.gateway_port = free_port()
+        cls.oauth_state = tempfile.TemporaryDirectory()
         cls.control = ThreadingHTTPServer(('127.0.0.1', cls.control_port), FakeControl)
         cls.agent = ThreadingHTTPServer(('127.0.0.1', cls.agent_port), FakeAgent)
         cls.control_thread = threading.Thread(target=cls.control.serve_forever, daemon=True)
@@ -112,7 +114,9 @@ class MCPPublicOAuthFlowTest(unittest.TestCase):
             'CLOUDIF_MCP_PUBLIC_ORIGIN': 'https://cloudiff.duckdns.org',
             'CLOUDIF_CONTROL_URL': f'http://127.0.0.1:{cls.control_port}', 'CLOUDIF_CONTROL_TOKEN': 'test',
             'CLOUDIF_AGENT_URL': f'http://127.0.0.1:{cls.agent_port}', 'CLOUDIF_AGENT_ADMIN_TOKEN': 'test',
+            'CLOUDIF_MCP_OAUTH_STATE_DIR': cls.oauth_state.name,
         })
+        cls.gateway_env = env
         cls.proc = subprocess.Popen(['python3', str(GATEWAY)], env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         deadline = time.time() + 10
         while time.time() < deadline:
@@ -132,7 +136,29 @@ class MCPPublicOAuthFlowTest(unittest.TestCase):
         cls.proc.terminate()
         try: cls.proc.wait(timeout=3)
         except subprocess.TimeoutExpired: cls.proc.kill()
-        cls.control.shutdown(); cls.agent.shutdown()
+        for stream in (cls.proc.stdout,cls.proc.stderr):
+            if stream:stream.close()
+        cls.control.shutdown();cls.control.server_close()
+        cls.agent.shutdown();cls.agent.server_close()
+        cls.oauth_state.cleanup()
+
+    @classmethod
+    def restart_gateway(cls):
+        old_proc=cls.proc
+        old_proc.terminate()
+        try: old_proc.wait(timeout=3)
+        except subprocess.TimeoutExpired: old_proc.kill()
+        for stream in (old_proc.stdout,old_proc.stderr):
+            if stream:stream.close()
+        cls.proc = subprocess.Popen(['python3', str(GATEWAY)], env=cls.gateway_env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        deadline=time.time()+10
+        while time.time()<deadline:
+            try:
+                c=http.client.HTTPConnection('127.0.0.1',cls.gateway_port,timeout=1);c.request('GET','/health');r=c.getresponse();r.read();c.close()
+                if r.status in (200,503):return
+            except OSError:time.sleep(.1)
+        out,err=cls.proc.communicate(timeout=2)
+        raise RuntimeError(f'gateway did not restart: {out!r} {err!r}')
 
     def request(self, method, path, body=None, headers=None):
         conn = http.client.HTTPConnection('127.0.0.1', self.gateway_port, timeout=5)
@@ -141,7 +167,7 @@ class MCPPublicOAuthFlowTest(unittest.TestCase):
         response = conn.getresponse(); raw = response.read(); returned_headers = dict(response.getheaders()); conn.close()
         return response.status, returned_headers, raw
 
-    def oauth_token(self):
+    def oauth_credentials(self):
         verifier = 'a' * 64
         challenge = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).rstrip(b'=').decode()
         callback = 'http://127.0.0.1:53682/callback'
@@ -171,7 +197,10 @@ class MCPPublicOAuthFlowTest(unittest.TestCase):
         self.assertEqual(status, 200, raw)
         data = json.loads(raw)
         self.assertNotIn('client_secret', data)
-        return data['access_token']
+        return data
+
+    def oauth_token(self):
+        return self.oauth_credentials()['access_token']
 
     def rpc(self, token, method, params=None, request_id=1, expected_status=200):
         raw = json.dumps({'jsonrpc': '2.0', 'id': request_id, 'method': method, 'params': params or {}})
@@ -200,6 +229,23 @@ class MCPPublicOAuthFlowTest(unittest.TestCase):
         self.assertEqual(metadata['resource_documentation'],'https://cloudiff.duckdns.org/cloudiff/mcp/privacy')
         status,headers,raw=self.request('GET','/cloudiff/mcp/actions/v1/project');self.assertEqual(status,401,raw)
         self.assertIn('resource_metadata="https://cloudiff.duckdns.org/.well-known/oauth-protected-resource"',headers.get('WWW-Authenticate',''))
+
+    def test_public_oauth_survives_gateway_restart_and_refresh_rotates(self):
+        creds=self.oauth_credentials()
+        access=creds['access_token'];refresh=creds['refresh_token']
+        state_bytes=(Path(self.oauth_state.name)/'oauth-tokens.sqlite3').read_bytes()
+        self.assertNotIn(access.encode(),state_bytes)
+        self.assertNotIn(refresh.encode(),state_bytes)
+        self.restart_gateway()
+        listed=self.rpc(access,'tools/call',{'name':'project.list','arguments':{}},70)
+        content=json.loads(listed['result']['content'][0]['text'])
+        self.assertEqual([row['slug'] for row in content],[SLUG])
+        form=urlencode({'grant_type':'refresh_token','client_id':CLIENT_ID,'refresh_token':refresh,'resource':'https://cloudiff.duckdns.org/cloudiff/mcp'})
+        status,_,raw=self.request('POST','/cloudiff/mcp/oauth/token',form,{'Content-Type':'application/x-www-form-urlencoded','Content-Length':str(len(form))})
+        self.assertEqual(status,200,raw)
+        rotated=json.loads(raw);self.assertTrue(rotated.get('access_token'));self.assertTrue(rotated.get('refresh_token'))
+        status,_,raw=self.request('POST','/cloudiff/mcp/oauth/token',form,{'Content-Type':'application/x-www-form-urlencoded','Content-Length':str(len(form))})
+        self.assertEqual(status,401,raw)
 
     def test_public_oauth_pkce_tools_and_project_isolation(self):
         token = self.oauth_token()
