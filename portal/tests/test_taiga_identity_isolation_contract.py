@@ -118,14 +118,24 @@ class TaigaIdentityIsolationContractTests(unittest.TestCase):
         self.assertIn('Expires "0"',block)
         self.assertIn('Vary "Authorization, Cookie"',block)
 
+    def test_gateway_re_resolves_docker_backends(self):
+        conf=(ROOT/'components/faro/current-apps/taiga-current/taiga.conf').read_text()
+        self.assertIn("resolver 127.0.0.11 valid=10s ipv6=off;", conf)
+        self.assertIn("set $taiga_front taiga-front:80;", conf)
+        self.assertIn("set $taiga_back taiga-back:8000;", conf)
+        self.assertIn("set $taiga_events taiga-events:8888;", conf)
+        self.assertIn("set $taiga_protected taiga-protected:8003;", conf)
+        self.assertIn("proxy_pass http://$taiga_back/api/;", conf)
+        self.assertNotIn("proxy_pass http://taiga-back:8000/api/;", conf)
+
     def test_shared_workstation_bootstrap_assets_are_not_stale_cached(self):
         conf=(ROOT/'components/faro/current-apps/taiga-current/taiga.conf').read_text()
         self.assertIn('location = / {',conf)
         self.assertIn('location = /index.html {',conf)
         self.assertIn('location = /plugins/cloudif-session-isolation.js {',conf)
         self.assertGreaterEqual(conf.count('no-store, no-cache, must-revalidate'),4)
-        self.assertIn('location / {\n    proxy_pass http://taiga-front/;',conf)
-        generic=conf.split('location / {\n    proxy_pass http://taiga-front/;',1)[1].split('}',1)[0]
+        self.assertIn('location / {\n    proxy_pass http://$taiga_front/;',conf)
+        generic=conf.split('location / {\n    proxy_pass http://$taiga_front/;',1)[1].split('}',1)[0]
         self.assertIn('Cache-Control "no-cache, must-revalidate"',generic)
 
     def test_all_entry_routes_reset_session_and_private_media_is_no_store(self):
