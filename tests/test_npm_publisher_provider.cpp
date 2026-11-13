@@ -27,6 +27,8 @@ int main(){
 
     r=provider.handle("POST","/version","unit-secret",R"({"public_number":1010,"deploy_number":2})"); assert(r.status==200); assert(r.body.at("version_url")=="https://1010-d2.cloudiff.duckdns.org/");
     r=provider.handle("POST","/stage","unit-secret",R"({"public_number":1010,"stage":"homologation","number":2})"); assert(r.status==200); assert(r.body.at("stage_code")=="H2");
+    r=provider.handle("POST","/stage/delete","unit-secret",R"({"public_number":1010,"stage":"homologation","number":2})"); assert(r.status==200); assert(r.body.at("removed")==true); assert(!provider.state_snapshot().at("stages").contains("1010-h2-homologation"));
+    r=provider.handle("POST","/stage/delete","unit-secret",R"({"public_number":1010,"stage":"homologation","number":2})"); assert(r.status==200); assert(r.body.at("removed")==false);
     r=provider.handle("POST","/alias","unit-secret",R"({"public_number":1010,"deploy_number":2,"alias":"demoalias"})"); assert(r.status==200); assert(r.body.at("stable_url")=="https://demoalias.cloudiff.duckdns.org/");
     r=provider.handle("POST","/publish","unit-secret",R"({"public_number":1010,"deploy_number":2,"alias":"demoalias"})"); assert(r.status==200); assert(r.body.at("stable_url")=="https://1010.cloudiff.duckdns.org/");
     const auto state_after_publish=provider.state_snapshot();

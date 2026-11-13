@@ -197,6 +197,17 @@ PublisherResponse NpmPublisherProvider::handle(std::string_view method,std::stri
             const auto num=as_int(payload.at("public_number"),"number"),dep=as_int(payload.at("deploy_number"),"number");version(num,dep);result={{"ok",true},{"public_number",num},{"deploy_number",dep},{"version_url","https://"+std::to_string(num)+"-d"+std::to_string(dep)+".cloudiff.duckdns.org/"}};
         }else if(path=="/stage"){
             const auto num=as_int(payload.at("public_number"),"number"),number=as_int(payload.at("number"),"number");validate_num(num,999999999,"stage");validate_num(number,999999,"stage");const std::string stage=payload.value("stage","");char letter=0;if(stage=="preview")letter='w';else if(stage=="homologation")letter='h';else if(stage=="publication")letter='p';else throw ValidationError("invalid_stage");const std::string name=std::to_string(num)+"-"+letter+std::to_string(number)+"-"+stage;auto& item=state_["stages"][name];std::string cert=item.is_object()?item.value("cert",""):"";if(cert.empty())cert=ensure_certificate("cloudif-stage-"+name,{name+".cloudiff.duckdns.org"});item={{"public_number",num},{"stage",stage},{"number",number},{"cert",cert},{"updated_at",now_utc()}};std::string code(1,static_cast<char>(std::toupper(letter)));code+=std::to_string(number);result={{"ok",true},{"public_number",num},{"stage",stage},{"number",number},{"stage_code",code},{"hostname",name+".cloudiff.duckdns.org"},{"url","https://"+name+".cloudiff.duckdns.org/"}};
+        }else if(path=="/stage/delete"){
+            const auto num=as_int(payload.at("public_number"),"number"),number=as_int(payload.at("number"),"number");
+            validate_num(num,999999999,"stage");validate_num(number,999999,"stage");
+            const std::string stage=payload.value("stage","");
+            char letter=0;
+            if(stage=="preview")letter='w';else if(stage=="homologation")letter='h';else if(stage=="publication")letter='p';else throw ValidationError("invalid_stage");
+            const std::string name=std::to_string(num)+"-"+letter+std::to_string(number)+"-"+stage;
+            std::string cert;
+            if(state_["stages"].contains(name)&&state_["stages"][name].is_object())cert=state_["stages"][name].value("cert","");
+            const bool removed=state_["stages"].erase(name)>0;
+            result={{"ok",true},{"public_number",num},{"stage",stage},{"number",number},{"removed",removed},{"certificate_preserved",cert}};
         }else if(path=="/alias"){
             const auto num=as_int(payload.at("public_number"),"number"),dep=as_int(payload.at("deploy_number"),"number");validate_num(num,999999999,"number");validate_num(dep,999999,"number");result=alias(num,dep,payload.value("alias",""));
         }else if(path=="/publish"){
