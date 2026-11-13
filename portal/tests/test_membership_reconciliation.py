@@ -34,6 +34,14 @@ class MembershipReconciliationTests(unittest.TestCase):
         self.assertIn("if(!keep)d.Permission.deleteOne", self.authz)
         self.assertNotIn("deleteMany({})", self.authz)
 
+    def test_legacy_komodo_ensure_preserves_known_membership(self):
+        self.assertIn('def _cloudif_project_access_payload',self.komodo)
+        self.assertIn('legacy_users=payload.get("allow_users")',self.komodo)
+        self.assertIn('legacy_groups=payload.get("allow_groups")',self.komodo)
+        self.assertIn('"/var/lib/cloudif/komodo-project-authz"',self.komodo)
+        self.assertIn('"preserved-state"',self.komodo)
+        self.assertIn('access_owner,access_acl,access_source=_cloudif_project_access_payload(payload,project)',self.komodo)
+
     def test_worker_distinguishes_forgejo_and_komodo_waiting_messages(self):
         self.assertIn('aguardando identidade válida no Forgejo',self.worker)
         self.assertIn('aguardando primeiro login do usuário no Komodo',self.worker)

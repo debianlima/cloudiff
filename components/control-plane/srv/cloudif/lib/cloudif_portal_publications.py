@@ -1364,3 +1364,111 @@ def activate(slug,deploy_number,user):
     membership=_reconcile_publication_members(ku,kt,slug,access)
     queued=_enqueue_membership_reconcile(slug,user.get('username') or 'portal',tenant)
     return {'ok':True,'slug':slug,'public_number':num,'deploy_number':dep,'stable_url':f'https://{num}.cloudiff.duckdns.org/','rebuilt':rebuilt is not None,'runtime':rebuilt,'membership':membership,'reconcile':queued}
+
+
+# CloudIFF v144 BEGIN - terminal Stack contract and temporary homologation cleanup
+_v143_preview_terminal_portal=preview_terminal
+def preview_terminal(slug,user):
+    con=sqlite3.connect(DB);con.row_factory=sqlite3.Row;_ensure_schema(con);project=_project_allowed(con,slug,user)
+    if not project:con.close();raise PermissionError('Projeto não encontrado ou sem permissão.')
+    from cloudif_project_environment_web import authorization
+    auth=authorization(slug,user.get('username') or '',user.get('groups') or [])
+    if not auth.get('canWrite'):con.close();raise PermissionError('O terminal do Preview exige permissão de escrita no projeto.')
+    num=_number(con,slug);con.close();ku,kt,_=_clients()
+    status,data=_post(ku+'/komodo/project/preview/terminal',{'project':slug,'public_number':num,'actor':user.get('username') or 'portal'},kt,timeout=60)
+    if status//100!=2 or data.get('ok') is not True:raise RuntimeError(str(data.get('message') or 'O terminal do Preview está temporariamente indisponível.'))
+    container=str(data.get('container') or '');stack_id=str(data.get('stack_id') or '');terminal=str(data.get('terminal') or '');generation=int(data.get('generation') or 1)
+    expected=f'cloudif-p{num}-preview-web'
+    if generation!=1 or container!=expected or not stack_id or not terminal or data.get('target_mode')!='stack':raise RuntimeError('preview_terminal_contract_invalid')
+    target='https://komodoiff.duckdns.org/stacks/'+urllib.parse.quote(stack_id,safe='')+'/service/web/terminal/'+urllib.parse.quote(terminal,safe='')
+    return {'ok':True,'project':slug,'public_number':num,'generation':1,'stageCode':'W1','container':container,'stackId':stack_id,'terminalUrl':target,'terminalReady':True,'terminalSource':'preview_stack','continuous':True,'secretValuesIncluded':False,'secretReferencesIncluded':False}
+
+_v143_stage_terminal_portal=stage_terminal
+def stage_terminal(slug,user,environment='preview'):
+    environment=str(environment or '').strip().lower()
+    if environment not in {'preview','homologation','production'}:raise ValueError('Ambiente de terminal inválido.')
+    if environment=='preview':return preview_terminal(slug,user)
+    con=sqlite3.connect(DB);con.row_factory=sqlite3.Row;_ensure_schema(con);project=_project_allowed(con,slug,user)
+    if not project:con.close();raise PermissionError('Projeto não encontrado ou sem permissão.')
+    from cloudif_project_environment_web import authorization
+    auth=authorization(slug,user.get('username') or '',user.get('groups') or [])
+    if not auth.get('canWrite'):con.close();raise PermissionError('O terminal exige permissão de escrita no projeto.')
+    if environment=='production' and not _owner_or_admin(con,slug,user):con.close();raise PermissionError('O terminal de Produção exige o responsável pelo projeto ou administrador.')
+    num=_number(con,slug);payload={'project':slug,'public_number':num,'environment':environment,'actor':user.get('username') or 'portal'};stage_code=''
+    if environment=='homologation':
+        row=con.execute("select candidate_number,deploy_number,stage_code,status from publication_candidates where project_slug=? and status in ('awaiting_homologation','homologated') order by candidate_number desc limit 1",(slug,)).fetchone()
+        if not row:con.close();raise RuntimeError('Nenhum candidato temporário de Homologação está disponível.')
+        dep=int(row['deploy_number'] or 0);candidate=int(row['candidate_number'] or 0)
+        if dep<1 or candidate<1:con.close();raise RuntimeError('O candidato de Homologação não possui runtime válido.')
+        payload.update({'deploy_number':dep,'candidate_number':candidate});stage_code=str(row['stage_code'] or ('H'+str(candidate)))
+    else:
+        release=con.execute("select publication_number,candidate_number,deploy_number,stage_code,status from production_releases where project_slug=? and is_active=1 and status='published' order by publication_number desc limit 1",(slug,)).fetchone()
+        if not release:con.close();return _v143_stage_terminal_portal(slug,user,environment)
+        publication=int(release['publication_number'] or 0);dep=int(release['deploy_number'] or 0);candidate=int(release['candidate_number'] or 0)
+        if publication<1 or dep<1:con.close();raise RuntimeError('A Produção ativa não possui runtime válido.')
+        payload.update({'publication_number':publication,'deploy_number':dep,'candidate_number':candidate,'legacy':False});stage_code=str(release['stage_code'] or ('P'+str(publication)))
+    con.close();ku,kt,_=_clients();status,data=_post(ku+'/komodo/project/stage/terminal',payload,kt,timeout=60)
+    if status//100!=2 or data.get('ok') is not True:raise RuntimeError(str(data.get('message') or 'O terminal deste ambiente está temporariamente indisponível.'))
+    container=str(data.get('container') or '');stack_id=str(data.get('stack_id') or '');terminal=str(data.get('terminal') or '')
+    expected=f'cloudif-p{num}-d{dep}-web'
+    if container!=expected or not stack_id or not terminal or data.get('target_mode')!='stack':raise RuntimeError('stage_terminal_contract_invalid')
+    target='https://komodoiff.duckdns.org/stacks/'+urllib.parse.quote(stack_id,safe='')+'/service/web/terminal/'+urllib.parse.quote(terminal,safe='')
+    return {'ok':True,'project':slug,'public_number':num,'environment':environment,'stageCode':stage_code,'container':container,'stackId':stack_id,'terminalUrl':target,'terminalReady':True,'terminalSource':'publication_stack','sameRuntimeAcrossPromotion':environment=='production','secretValuesIncluded':False,'secretReferencesIncluded':False}
+
+_v143_homologate_candidate=homologate_candidate
+def homologate_candidate(slug,candidate_number,user,decision='approved',note=''):
+    decision=str(decision or '').strip().lower()
+    if decision!='rejected':return _v143_homologate_candidate(slug,candidate_number,user,decision,note)
+    con=sqlite3.connect(DB);con.row_factory=sqlite3.Row;_ensure_schema(con)
+    row=con.execute('select * from publication_candidates where project_slug=? and candidate_number=?',(slug,int(candidate_number))).fetchone()
+    if not row:con.close();raise ValueError('Candidato não encontrado.')
+    runtime_meta=_candidate_runtime_metadata(row);num=int(row['public_number']);dep=int(row['deploy_number']);con.close()
+    result=_v143_homologate_candidate(slug,candidate_number,user,decision,note)
+    cleanup={'ok':True,'skipped':False}
+    kind=str(runtime_meta.get('runtimeKind') or '')
+    if kind not in {'multiservice','compose-snapshot'}:
+        ku,kt,_=_clients();status,data=_post(ku+'/komodo/publication/reject',{'project':slug,'public_number':num,'deploy_number':dep,'candidate_number':int(candidate_number)},kt,timeout=240)
+        cleanup={'ok':status//100==2 and data.get('ok') is not False,'status':status,'result':data}
+    else:
+        cleanup={'ok':True,'skipped':True,'reason':'broker_managed_runtime'}
+    try:
+        _,_,nt=_clients()
+        pstatus,pdata=_post('http://10.62.91.3/stage/delete',{'public_number':num,'stage':'homologation','number':int(candidate_number)},nt,host='cloudif-publisher.internal',timeout=120)
+        cleanup['publisher']={'ok':pstatus//100==2 and pdata.get('ok') is not False,'status':pstatus}
+    except Exception as exc:
+        cleanup['publisher']={'ok':False,'error':type(exc).__name__}
+    result['runtimeCleanup']=cleanup
+    return result
+
+# CloudIFF v144 END
+
+_v144_publish_homologated_candidate_base=publish_homologated_candidate
+def publish_homologated_candidate(slug,candidate_number,user,progress=None,publication_number=None,authorization_checked=False):
+    result=_v144_publish_homologated_candidate_base(slug,candidate_number,user,progress,publication_number,authorization_checked)
+    try:
+        con=sqlite3.connect(DB);con.row_factory=sqlite3.Row;_ensure_schema(con)
+        row=con.execute('select public_number from publication_candidates where project_slug=? and candidate_number=?',(slug,int(candidate_number))).fetchone();con.close()
+        if row:
+            _,_,nt=_clients();status,data=_post('http://10.62.91.3/stage/delete',{'public_number':int(row['public_number']),'stage':'homologation','number':int(candidate_number)},nt,host='cloudif-publisher.internal',timeout=120)
+            result['homologationStageRemoved']=bool(status//100==2 and data.get('ok') is not False)
+    except Exception as exc:
+        result['homologationStageRemoved']=False;result['homologationStageCleanupError']=type(exc).__name__
+    return result
+
+_v144_ensure_preview_base=ensure_preview
+def ensure_preview(slug,user):
+    result=_v144_ensure_preview_base(slug,user)
+    try:
+        con=sqlite3.connect(DB);con.row_factory=sqlite3.Row;_ensure_schema(con);project=con.execute('select * from projects where slug=?',(slug,)).fetchone();tenant=str(project['tenant'] if project and 'tenant' in project.keys() else '');con.close()
+        result['reconcile']=_enqueue_membership_reconcile(slug,user.get('username') or 'portal',tenant)
+    except Exception as exc:result['reconcile']={'ok':False,'error':type(exc).__name__}
+    return result
+
+_v144_create_homologation_candidate_base=create_homologation_candidate
+def create_homologation_candidate(slug,user,progress=None,candidate_number=None,authorization_checked=False):
+    result=_v144_create_homologation_candidate_base(slug,user,progress,candidate_number,authorization_checked)
+    try:
+        con=sqlite3.connect(DB);con.row_factory=sqlite3.Row;_ensure_schema(con);project=con.execute('select * from projects where slug=?',(slug,)).fetchone();tenant=str(project['tenant'] if project and 'tenant' in project.keys() else '');con.close()
+        result['reconcile']=_enqueue_membership_reconcile(slug,user.get('username') or 'portal',tenant)
+    except Exception as exc:result['reconcile']={'ok':False,'error':type(exc).__name__}
+    return result

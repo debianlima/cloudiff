@@ -300,6 +300,14 @@ def ensure_stage(state,num,stage,number):
 def stage_publish(payload):
  state=load_state();result=ensure_stage(state,int(payload.get('public_number')),payload.get('stage'),int(payload.get('number')));render(state);save_state(state);return result
 
+
+
+def stage_delete(payload):
+ num=int(payload.get('public_number'));number=int(payload.get('number'));stage=str(payload.get('stage') or '').strip().lower();labels={'preview':('w','preview'),'homologation':('h','homologation'),'publication':('p','publication')}
+ if stage not in labels or not (1 <= num <= 999999999 and 1 <= number <= 999999):raise ValueError('invalid_stage')
+ letter,label=labels[stage];name=f'{num}-{letter}{number}-{label}';state=load_state();removed=state.setdefault('stages',{}).pop(name,None);render(state);save_state(state)
+ return {'ok':True,'public_number':num,'stage':stage,'number':number,'removed':bool(removed),'certificate_preserved':str((removed or {}).get('cert') or '')}
+
 def alias_publish(payload):
  num=int(payload.get('public_number')); dep=int(payload.get('deploy_number') or 0); alias=str(payload.get('alias') or '').strip().lower()
  state=load_state(); result=(ensure_alias(state,num,dep,alias) if dep>0 else reserve_alias(state,num,alias)); render(state); save_state(state); return result
@@ -370,6 +378,7 @@ class H(BaseHTTPRequestHandler):
    if self.path=='/publish': return self._json(200,publish(payload))
    if self.path=='/version': return self._json(200,version_publish(payload))
    if self.path=='/stage': return self._json(200,stage_publish(payload))
+   if self.path=='/stage/delete': return self._json(200,stage_delete(payload))
    if self.path=='/alias': return self._json(200,alias_publish(payload))
    if self.path=='/unpublish': return self._json(200,unpublish(payload))
    if self.path=='/tenant': return self._json(200,ensure_tenant(payload))
