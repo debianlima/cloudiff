@@ -214,3 +214,30 @@ Markdown, da hierarquia e dos vínculos explícitos PGH. O teste de
 Playwright sintético do dev-02 não substitui a validação com autenticação
 e leitor de tela por surface-01. A integração à main e a automação
 periódica dos snapshots ainda dependem de revisão e gates próprios.
+
+## Evidência cruzada do manifesto PGH e Atlas
+
+Em 14/11/2026, o doc-01 comparou separadamente a origem LabIFF com o
+snapshot que o Atlas efetivamente utiliza, sem acessar credenciais ou
+alterar os registros. A origem canônica do mapeamento no LabIFF é
+project-followup/atlas-project-bindings.json, esquema
+atlas-pgh-project-bindings/1, com dois vínculos verificados e explícitos:
+
+- cloudiff: cloudiff.project.platform;
+- dotfiles: protocol:dotfiles.
+
+O SHA-256 dos bytes do manifesto no LabIFF foi
+0de67ceeb1552540365a6e085273c36481d40bd4820d6fa94d54998acb749bfa.
+O campo atlas_binding_manifest_sha256 do snapshot instalado em
+/var/lib/mapa-projetos/project-monitor/snapshot.json retornou
+**exatamente o mesmo digest**. O snapshot reportou seis journals íntegros.
+A API publicou 24 projetos, dois feeds reais, 22 sem feed e zero conflitos
+de vínculo, sem propagar tarefas CloudIFF para subprojetos sem journal.
+
+Esse confronto prova que os hashes observados coincidiram no momento da
+auditoria. Ele **não equivale a assinatura digital ou autenticação
+criptográfica ponta a ponta**: o importador valida a sintaxe e unicidade
+dos vínculos, mas não dispõe da cópia confiável do manifesto LabIFF para
+conferir independentemente seu hash. Dev-02 e aud-01 devem aprovar a
+cadeia de confiança para eventual sincronização automática; não derivar
+acesso a dados privados desse campo.
