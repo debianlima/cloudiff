@@ -9,6 +9,7 @@ Documentação técnica, inventários e evidências.
 - [Fluxo W → H → P de publicação](FLUXO-WHP-PUBLICACAO.md)
 - [Operação Atlas, CloudIFF e PGH](ATLAS-CLOUDIFF-PGH-OPERACAO.md)
 - [Conciliação Atlas, GitHub, CloudIFF e PGH](ATLAS-CLOUDIFF-CONCILIACAO.md)
+- [Agentes PGH: catálogo, competências e despacho](PGH-AGENTES-CLOUDIFF.md)
 - [Acesso externo e conexões](manual-tecnico/13-ACESSO-EXTERNO.md)
 
 <!-- CLOUDIFF-AUTO-DOC:BEGIN -->

@@ -94,3 +94,7 @@ mudanças de documentação rastreadas por SHA/PR; revisões de aud-01 nas incon
 
 ## Atualização de inventário — 14/11/2026T13:56Z
 Consulta read-only à API local Atlas na VPS IPsec retornou 213 itens; além das oito fichas cloudiff.project.*, existem oito fichas cloudiff.repo.* (CloudIFF / Forgejo) referenciando os tenants. As 205 fichas anteriores são baseline histórico, não o total atual. Ver [procedimento de conciliação](ATLAS-CLOUDIFF-CONCILIACAO.md) para verificações e gatilhos.
+
+## Equipe PGH de seis agentes
+
+A equipe operacional do projeto CloudIFF possui aud-01, dev-01, dev-02, doc-01, infra-01 e surface-01. Infra-01 cuida de segurança/infraestrutura; surface-01 testa interfaces como usuário autorizado. Ambos usam finding-dispatch para distribuir achados; aud-01 utiliza audit-dispatch. As duas novas identidades estão registradas no Atlas. Veja [catálogo de agentes e roteamento](PGH-AGENTES-CLOUDIFF.md). Sempre consultar o catálogo online do LabIFF em vez de fixar a lista no plugin.
