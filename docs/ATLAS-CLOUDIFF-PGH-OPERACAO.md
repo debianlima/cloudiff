@@ -297,3 +297,35 @@ coordenar com os proprietários o tratamento P0. OpenBao segue em
 homologação, sem autorização produtiva comprovada. Não publicar
 tokens, links autenticados ou arquivos privados nos documentos HTML,
 issues, commits ou relatórios.
+
+## Indicador humano de tarefas P0 e bloqueios de publicação
+
+**Candidato para revisão, não implantado:** a branch interna Atlas
+feature/doc01-security-gates-human-20261114, commit 8620e59, propõe
+um painel simples na Visão geral do CloudIFF chamado
+**Segurança e gates de publicação**. Esse painel calcula somente com
+metadados de pgh.cloudiff.tasks o número de tarefas P0 abertas, seus
+subtotais bloqueados/em andamento e apresenta a data do snapshot,
+sem copiar títulos e valores sensíveis. Também faz link direto à aba
+Tarefas, sem criar feeds individuais fictícios nos oito tenants.
+
+A amostra do snapshot de 14/11/2026 às 22h38 UTC registrava 12
+tarefas P0, sendo oito não concluídas (duas bloqueadas, seis em
+andamento). São contagens de tarefas de várias áreas, não oito
+incidentes distintos. Se a fonte estiver ausente, antiga ou sem
+integridade verificada, o painel deve exibir aviso de incerteza,
+nunca um indicador de segurança aprovado.
+
+O incidente P0 de credenciais embutidas em remotes Git CloudIFF,
+reportado por aud-01 e infra-01, atingiu 22 arquivos de checkout
+até a última conferência. A contenção, migração para autenticação de
+privilégio mínimo e rotação/revogação continuam sem evidência de
+conclusão. Não revelar conteúdo de remotes nem valores de tokens em
+HTML, logs, GitHub ou documentação.
+
+O componente passou em testes sintéticos Node de contagem,
+isolamento por projeto, link de navegação e ausência de títulos
+sensíveis, além dos testes de controle Markdown, hierarquia e
+vínculo PGH. Deve ser revisado por dev-02, aud-01 e infra-01;
+surface-01 precisa testar acessibilidade e interface autenticada.
+**Nenhum deploy foi realizado por doc-01** nesta entrega.
