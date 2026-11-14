@@ -176,3 +176,41 @@ SHA-256 3332e5814f058f9209da81c0c6080a24041011e1c9d0ac5d830bffafa0cd375f.
 A integração da branch e o aceite autenticado de surface-01 continuam
 pendentes. A existência do verificador não conclui T-009, T-010 ou T-011
 nem autoriza automatização de sincronização entre servidores.
+
+## Auditoria da publicação acessível e vínculos PGH explícitos
+
+Em 14/11/2026, o dev-02 implantou a correção de acessibilidade da interface
+de acompanhamento a partir da branch
+fix/dev02-atlas-tabs-accessibility-20261114 (commit d2ac4fd). O HTML agora
+declara a região tablist/tabpanel; os nove botões são tabs com seleção
+semântica, suporte a setas, Home/End e foco preservado. A publicação foi
+confirmada pela comparação dos hashes do HTML e do JavaScript servidos
+por HTTP com os arquivos Git do commit.
+
+O dev-02 também preparou vínculos explícitos entre journals PGH e projetos
+Atlas, sem inferir titularidade por nome ou vínculo pai/filho. A API
+de acompanhamento apresentou 24 projetos e dois feeds PGH legítimos:
+CloudIFF e Dotfiles. Os oito subprojetos CloudIFF continuam com fichas
+de catálogo e não recebem memórias próprias fictícias.
+
+A revisão independente doc-01 adicionou o HTML ao verificador somente
+leitura da publicação e tornou a seleção da referência Git obrigatória.
+Código e regressões na branch review/doc01-atlas-a11y-20261114,
+commit c204435c3bb1d382acaf3b51b3aed53cf0345e02. Exemplo no IPsec:
+
+    python3 scripts/audit_atlas_publication.py --ref fix/dev02-atlas-tabs-accessibility-20261114 --check-backend --external-url 'https://atlas.limaeducation.duckdns.org/acompanhamento?project=cloudiff.project.platform&tab=visao'
+
+A nova auditoria confirmou quatro recursos HTTP e três fontes backend
+coincidentes com a versão Git, os oito relacionamentos CloudIFF,
+integridade de seis journals e acesso anônimo negado com HTTP 401.
+A execução concluiu com WARN apenas MAIN_BEHIND_RELEASE; a main permanece
+em 724d24b7 e a versão publicada tem origem no commit d2ac4fd.
+Evidência IPsec:
+atlas-project-followup-staging/atlas-doc01-a11y-expanded-audit-20261114.json,
+SHA-256 4170a086a6bbae53cf75eec781c58e8bb2c263040f0f2735534a7669cd111e07.
+
+Foram aprovados onze testes do verificador, os testes do visualizador
+Markdown, da hierarquia e dos vínculos explícitos PGH. O teste de
+Playwright sintético do dev-02 não substitui a validação com autenticação
+e leitor de tela por surface-01. A integração à main e a automação
+periódica dos snapshots ainda dependem de revisão e gates próprios.
