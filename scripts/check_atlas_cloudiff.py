@@ -35,6 +35,9 @@ def reconcile(portal, atlas):
 
     slugs = []
     issues = []
+    if not projects:
+        # Empty exports cannot establish integrity for a managed tenant catalogue.
+        issues.append({"type": "empty_source_projects"})
     atlas_index = defaultdict(list)
     for item in records:
         atlas_index[str(item.get("id", ""))].append(item)
@@ -44,6 +47,11 @@ def reconcile(portal, atlas):
             issues.append({"type": "invalid_source_slug"})
             continue
         slugs.append(slug)
+        source_url = project.get("repo_url")
+        if not isinstance(source_url, str) or not source_url.strip():
+            issues.append({"type": "missing_source_repo_url", "slug": slug})
+        if project.get("status") not in EXPECTED_STATUSES:
+            issues.append({"type": "unrecognized_source_status", "slug": slug})
         suffix = slug.replace("-", "_")
         for prefix, kind in (("cloudiff.project.", "project"), ("cloudiff.repo.", "repo")):
             identifier = prefix + suffix

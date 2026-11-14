@@ -38,6 +38,27 @@ class CloudIFFAtlasReconciliationTests(unittest.TestCase):
         self.assertEqual(result["issues"], [])
         self.assertTrue(result["readonly"])
 
+    def test_empty_source_and_atlas_never_report_match(self):
+        result = MOD.reconcile({"tables": {"projects": []}}, {"items": []})
+        self.assertEqual(result["status"], "review_required")
+        self.assertIn("empty_source_projects", {i["type"] for i in result["issues"]})
+
+    def test_missing_repo_url_never_report_match(self):
+        portal, atlas = fixtures()
+        portal["tables"]["projects"][0]["repo_url"] = ""
+        for item in atlas["items"]:
+            item.pop("repo_url", None)
+        result = MOD.reconcile(portal, atlas)
+        self.assertEqual(result["status"], "review_required")
+        self.assertIn("missing_source_repo_url", {i["type"] for i in result["issues"]})
+
+    def test_unknown_source_status_never_report_match(self):
+        portal, atlas = fixtures()
+        portal["tables"]["projects"][0]["status"] = "unrecognized-future-status"
+        result = MOD.reconcile(portal, atlas)
+        self.assertEqual(result["status"], "review_required")
+        self.assertIn("unrecognized_source_status", {i["type"] for i in result["issues"]})
+
     def test_missing_atlas_repo(self):
         portal, atlas = fixtures()
         atlas["items"].pop()
