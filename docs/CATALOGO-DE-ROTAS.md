@@ -1,6 +1,6 @@
 # Catálogo de rotas e endpoints
 
-Catálogo estático de **691 referências de rota** encontradas nos serviços e módulos. Uma rota pode aparecer em mais de um adaptador por compatibilidade.
+Catálogo estático de **693 referências de rota** encontradas nos serviços e módulos. Uma rota pode aparecer em mais de um adaptador por compatibilidade.
 
 | Componente | Método observado | Rota |
 |---|---|---|
@@ -414,6 +414,7 @@ Catálogo estático de **691 referências de rota** encontradas nos serviços e 
 | [`components/control-plane/current-apps/portal-current/cloudif_portal_publications.py`](../components/control-plane/current-apps/portal-current/cloudif_portal_publications.py) | GET/POST | `/komodo/project/stage/terminal` |
 | [`components/control-plane/current-apps/portal-current/cloudif_portal_publications.py`](../components/control-plane/current-apps/portal-current/cloudif_portal_publications.py) | GET/POST | `/komodo/publication/deploy` |
 | [`components/control-plane/current-apps/portal-current/cloudif_portal_publications.py`](../components/control-plane/current-apps/portal-current/cloudif_portal_publications.py) | GET/POST | `/komodo/publication/promote` |
+| [`components/control-plane/current-apps/portal-current/cloudif_portal_publications.py`](../components/control-plane/current-apps/portal-current/cloudif_portal_publications.py) | GET/POST | `/komodo/publication/reject` |
 | [`components/control-plane/current-apps/portal-current/cloudif_portal_publications.py`](../components/control-plane/current-apps/portal-current/cloudif_portal_publications.py) | GET/POST | `/komodo/publication/release` |
 | [`components/control-plane/current-apps/portal-current/cloudif_portal_publications.py`](../components/control-plane/current-apps/portal-current/cloudif_portal_publications.py) | GET/POST | `/komodo/publication/release/activate` |
 | [`components/control-plane/current-apps/portal-current/cloudif_portal_publications.py`](../components/control-plane/current-apps/portal-current/cloudif_portal_publications.py) | POST | `/v1/approvals` |
@@ -610,6 +611,7 @@ Catálogo estático de **691 referências de rota** encontradas nos serviços e 
 | [`components/runtime/current-apps/komodo-agent-current/cloudif-komodo-agent.py`](../components/runtime/current-apps/komodo-agent-current/cloudif-komodo-agent.py) | GET/POST | `/komodo/project/terminal/ensure` |
 | [`components/runtime/current-apps/komodo-agent-current/cloudif-komodo-agent.py`](../components/runtime/current-apps/komodo-agent-current/cloudif-komodo-agent.py) | GET/POST | `/komodo/publication/deploy` |
 | [`components/runtime/current-apps/komodo-agent-current/cloudif-komodo-agent.py`](../components/runtime/current-apps/komodo-agent-current/cloudif-komodo-agent.py) | GET/POST | `/komodo/publication/promote` |
+| [`components/runtime/current-apps/komodo-agent-current/cloudif-komodo-agent.py`](../components/runtime/current-apps/komodo-agent-current/cloudif-komodo-agent.py) | GET/POST | `/komodo/publication/reject` |
 | [`components/runtime/current-apps/komodo-agent-current/cloudif-komodo-agent.py`](../components/runtime/current-apps/komodo-agent-current/cloudif-komodo-agent.py) | GET/POST | `/komodo/publication/release` |
 | [`components/runtime/current-apps/komodo-agent-current/cloudif-komodo-agent.py`](../components/runtime/current-apps/komodo-agent-current/cloudif-komodo-agent.py) | GET/POST | `/komodo/publication/release/activate` |
 | [`components/runtime/current-apps/komodo-agent-current/cloudif-komodo-agent.py`](../components/runtime/current-apps/komodo-agent-current/cloudif-komodo-agent.py) | GET/POST | `/komodo/rollback` |
