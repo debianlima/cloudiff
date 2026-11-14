@@ -16,8 +16,18 @@ def load_json(path):
 
 
 def reconcile(portal, atlas):
-    projects = portal.get("tables", {}).get("projects", [])
-    records = atlas if isinstance(atlas, list) else atlas.get("items", [])
+    # Fail closed: an incomplete export must never be reported as a match.
+    if not isinstance(portal, dict) or not isinstance(portal.get("tables"), dict):
+        raise ValueError("Snapshot Portal sem tabelas")
+    if "projects" not in portal["tables"]:
+        raise ValueError("Snapshot Portal sem tabela projects")
+    projects = portal["tables"]["projects"]
+    if isinstance(atlas, list):
+        records = atlas
+    elif isinstance(atlas, dict) and "items" in atlas:
+        records = atlas["items"]
+    else:
+        raise ValueError("Exportação Atlas sem items")
     if not isinstance(projects, list) or not isinstance(records, list):
         raise ValueError("Estrutura JSON inesperada: tables.projects e items devem ser listas")
     if not all(isinstance(x, dict) for x in projects + records):
