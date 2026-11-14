@@ -91,3 +91,6 @@ mudanças de documentação rastreadas por SHA/PR; revisões de aud-01 nas incon
 - LabIFF cloudiff-admin/PLANO-ATLAS-GITHUB-CLOUDIFF-PGH-2026-11-14.md
 - LabIFF cloudiff-admin/evidencias/AUDITORIA-GERAL-CLOUDIFF-2026-11-13.md
 - Memória PGH documentacao/cloudiff/doc-01, tarefas T-004 a T-011
+
+## Atualização de inventário — 14/11/2026T13:56Z
+Consulta read-only à API local Atlas na VPS IPsec retornou 213 itens; além das oito fichas cloudiff.project.*, existem oito fichas cloudiff.repo.* (CloudIFF / Forgejo) referenciando os tenants. As 205 fichas anteriores são baseline histórico, não o total atual. Ver [procedimento de conciliação](ATLAS-CLOUDIFF-CONCILIACAO.md) para verificações e gatilhos.
