@@ -6029,11 +6029,20 @@ def cloudif_publication_release(handler):
     restart=subprocess.run(['docker','restart',source],text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=90)
     if restart.returncode!=0:return send(handler,422,{'ok':False,'error':'production_restart_failed','detail':(restart.stderr or restart.stdout)[-500:]})
     if not _cloudif_wait_health(source,90).get('ok'):return send(handler,422,{'ok':False,'error':'production_container_not_healthy'})
-    try:previous=_cloudif_v144_reconnect_active(num,source)
-    except Exception as exc:return send(handler,422,{'ok':False,'error':'production_activation_failed','detail':str(exc)[:300]})
-    if previous and previous!=source:subprocess.run(['docker','stop','--time','20',previous],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=45)
     after=subprocess.run(['docker','inspect',source,'--format','{{.Id}}|{{.Image}}'],text=True,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL).stdout.strip().split('|',1)
     if len(after)!=2 or after[0]!=container_id or after[1]!=image_id:return send(handler,409,{'ok':False,'error':'promotion_changed_container_identity'})
+    try:previous=_cloudif_v144_reconnect_active(num,source)
+    except Exception as exc:return send(handler,422,{'ok':False,'error':'production_activation_failed','detail':str(exc)[:300]})
+    if previous and previous!=source:
+        try:
+            stopped=subprocess.run(['docker','stop','--time','20',previous],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=45)
+            if stopped.returncode!=0:raise RuntimeError('previous_stop_failed')
+        except Exception:
+            # Restore the old active alias if previous production cannot be stopped;
+            # never persist the candidate as an accepted production release.
+            try:_cloudif_v144_reconnect_active(num,previous)
+            except Exception:return send(handler,503,{'ok':False,'error':'production_activation_rollback_failed'})
+            return send(handler,422,{'ok':False,'error':'previous_production_stop_failed'})
     db_exec('update stage_production_releases set is_active=0,updated_at=? where project=?',(now(),project))
     db_exec('''insert into stage_production_releases(project,public_number,publication_number,candidate_number,deploy_number,image,image_id,container,status,is_active,environment_revision,environment_digest,created_at,created_by,updated_at)
       values(?,?,?,?,?,?,?,?,?,1,?,?,?,?,?) on conflict(project,publication_number) do update set candidate_number=excluded.candidate_number,deploy_number=excluded.deploy_number,image=excluded.image,image_id=excluded.image_id,container=excluded.container,status=excluded.status,is_active=1,environment_revision=excluded.environment_revision,environment_digest=excluded.environment_digest,updated_at=excluded.updated_at''',(project,num,publication,candidate,dep,image,image_id,source,'ready',env_rev,str(payload.get('environment_digest') or ''),now(),str(payload.get('actor') or 'portal')[:128],now()))
@@ -6056,7 +6065,14 @@ def cloudif_publication_release_activate(handler):
     if not _cloudif_wait_health(target,90).get('ok'):return send(handler,422,{'ok':False,'error':'production_release_not_healthy'})
     try:previous=_cloudif_v144_reconnect_active(num,target)
     except Exception as exc:return send(handler,422,{'ok':False,'error':'production_activation_failed','detail':str(exc)[:300]})
-    if previous and previous!=target:subprocess.run(['docker','stop','--time','20',previous],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=45)
+    if previous and previous!=target:
+        try:
+            stopped=subprocess.run(['docker','stop','--time','20',previous],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=45)
+            if stopped.returncode!=0:raise RuntimeError('previous_stop_failed')
+        except Exception:
+            try:_cloudif_v144_reconnect_active(num,previous)
+            except Exception:return send(handler,503,{'ok':False,'error':'production_activation_rollback_failed'})
+            return send(handler,422,{'ok':False,'error':'previous_production_stop_failed'})
     db_exec('update stage_production_releases set is_active=case when publication_number=? then 1 else 0 end,updated_at=? where project=?',(publication,now(),project))
     dep=int(rows[0].get('deploy_number') or 0)
     if dep:db_exec('update publication_runtimes set is_active=case when deploy_number=? then 1 else 0 end,updated_at=? where project=?',(dep,now(),project))
