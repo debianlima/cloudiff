@@ -97,4 +97,4 @@ Consulta read-only à API local Atlas na VPS IPsec retornou 213 itens; além das
 
 ## Equipe PGH de seis agentes
 
-A equipe operacional do projeto CloudIFF possui aud-01, dev-01, dev-02, doc-01, infra-01 e surface-01. Infra-01 cuida de segurança/infraestrutura; surface-01 testa interfaces como usuário autorizado. Ambos usam finding-dispatch para distribuir achados; aud-01 utiliza audit-dispatch. As duas novas identidades estão registradas no Atlas. Veja [catálogo de agentes e roteamento](PGH-AGENTES-CLOUDIFF.md). Sempre consultar o catálogo online do LabIFF em vez de fixar a lista no plugin.
+A equipe operacional do projeto CloudIFF possui aud-01, dev-01, dev-02, doc-01, infra-01 e surface-01. Infra-01 cuida de segurança/infraestrutura; surface-01 testa interfaces como usuário autorizado. Ambos usam finding-dispatch para distribuir achados; aud-01 utiliza audit-dispatch. As seis identidades operacionais CloudIFF e a identidade Dotfiles estão registradas no Atlas. Veja [catálogo de agentes e roteamento](PGH-AGENTES-CLOUDIFF.md). Sempre consultar o catálogo online do LabIFF em vez de fixar a lista no plugin.

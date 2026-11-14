@@ -58,12 +58,21 @@ Cada agente é uma ficha de ferramenta com identidade estável, área,
 missão, vínculo com CloudIFF e referência ao roteiro PGH no LabIFF.
 O PGH permanece a fonte de verdade para tarefas e handoffs; Atlas é índice.
 
-Cadastros adicionados na API do Atlas em 14/11/2026:
+Cadastros verificados na API do Atlas em 14/11/2026:
+- pgh.agent.auditoria.cloudiff.aud_01
+- pgh.agent.desenvolvimento.cloudiff.dev_01
+- pgh.agent.desenvolvimento.cloudiff.dev_02
+- pgh.agent.documentacao.cloudiff.doc_01
 - pgh.agent.infraestrutura.cloudiff.infra_01
 - pgh.agent.testes.cloudiff.surface_01
+- pgh.agent.documentacao.dotfiles.doc_01 (identidade adicional Dotfiles)
 
-API Atlas observada: 213 registros antes, 215 depois, sem alteração dos
-anteriores. Backup prévio da exportação e do grafo salvo no host IPsec.
+Na primeira operação, a API passou de 213 a 215 itens com infra-01 e surface-01.
+Na segunda, 223 itens foram preservados e cinco fichas foram acrescentadas,
+resultando em 228 no instante da verificação; as demais alterações entre as
+coletas pertencem a outros processos. Ambas as operações têm exportação API,
+backup do grafo e auditoria de resultado no servidor IPsec. O valor total não
+é fixo e precisa ser consultado novamente para auditorias posteriores.
 
 ## Publicação e aceite
 
