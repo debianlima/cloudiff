@@ -98,3 +98,28 @@ Consulta read-only à API local Atlas na VPS IPsec retornou 213 itens; além das
 ## Equipe PGH de seis agentes
 
 A equipe operacional do projeto CloudIFF possui aud-01, dev-01, dev-02, doc-01, infra-01 e surface-01. Infra-01 cuida de segurança/infraestrutura; surface-01 testa interfaces como usuário autorizado. Ambos usam finding-dispatch para distribuir achados; aud-01 utiliza audit-dispatch. As seis identidades operacionais CloudIFF e a identidade Dotfiles estão registradas no Atlas. Veja [catálogo de agentes e roteamento](PGH-AGENTES-CLOUDIFF.md). Sempre consultar o catálogo online do LabIFF em vez de fixar a lista no plugin.
+
+## Como localizar a plataforma CloudIFF e seus projetos no Atlas
+
+Observação da publicação: 14/11/2026, aproximadamente 19:22 UTC.
+- Acesse o Atlas autenticado em https://atlas.limaeducation.duckdns.org/#projetos-repositorios
+- No menu Projetos & Repositórios, a seção **CloudIFF — Projetos** aparece
+  antes da lista geral de repositórios. Ela mostra a ficha da plataforma e
+  os oito projetos registrados no Portal: Agenda Única, Cadales, CPUHub,
+  Laboratório de Hardware, MSHA, MVPlanner, Paperclip e SilviPro.
+- A seção é formada a partir dos vínculos explícitos da ontologia Atlas,
+  onde cada ficha cloudiff.project.<slug> possui relação partOf com
+  cloudiff.project.platform. Outros tipos de item não entram na grade.
+- Os projetos podem ser acessados pelo cartão e a plataforma pelo botão
+  Abrir ficha CloudIFF. A visualização semântica também mostra esses vínculos.
+- O estado published/draft representa apenas o cadastro no Portal, e
+  não a disponibilidade operacional dos containers.
+
+Correção técnica registrada no Git local do Atlas: branch
+fix/doc01-cloudiff-platform-projects-20261114, commit
+9faf001077e833bcb48e0631a117ed074c565f68.
+A versão foi ativada no caminho real /opt/mapa-projetos/ui.js, sem reiniciar
+o serviço; arquivo servido e oito vínculos foram validados por HTTP/API.
+Backup operacional root e registro de auditoria foram mantidos no IPsec.
+Teste visual com navegador autenticado permanece sob responsabilidade de
+surface-01 e não deve ser declarado concluído sem evidência.
