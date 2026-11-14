@@ -268,3 +268,32 @@ em docs/ATLAS-ORIGEM-GITHUB-E-GATE-DE-SEGREDOS-2026-11-14.md.
 Qualquer integração e publicação exigem gates de segurança, CI, backup
 restituível e rollback. Não divulgar valores de credenciais ou remotes
 autenticados em documentação, tickets ou painéis.
+
+## Aviso P0 na ficha humana CloudIFF e endurecimento do importador
+
+Atualização de 14/11/2026, 22h51 UTC. A ficha principal
+cloudiff.project.platform recebeu um aviso administrativo sanitizado
+sobre o bloqueio P0 de credenciais em configurações Git de checkouts
+CloudIFF, sem publicar dados confidenciais. O aviso descreve a falta de
+prova de contenção/rotação, os papéis dos agentes e os gates de
+backup, autenticação com privilégio mínimo, ensaio isolado, rotação
+coordenada e reauditoria. O catálogo preservou 228 itens; há backup
+da ficha anterior no IPsec:
+atlas-project-followup-staging/cloudiff-catalog-before-p0-20261114T225129Z.json.
+A ficha HTML de acompanhamento tem links para auditorias PGH, mas o
+snapshot é sanitizado e datado, não transmissão em tempo real.
+
+O candidato de segurança do importador de snapshots foi melhorado
+na branch Git interna review/doc01-atlas-a11y-20261114, commit
+0f761e0aa2362bc4ce4bc9e1737386edf0201aa1. Além de rejeitar URLs
+com credenciais, valores Bearer e atribuições de senha/token em texto
+livre, verifica os valores após decodificação JSON, incluindo campos
+aninhados. Onze testes sintéticos do importador passaram e o snapshot
+real foi aceito em teste somente leitura com seis journals e dois
+vínculos legítimos. **Nenhuma correção do importador foi implantada.**
+
+Os agentes infra-01, aud-01 e dev-02 devem revisar o candidato e
+coordenar com os proprietários o tratamento P0. OpenBao segue em
+homologação, sem autorização produtiva comprovada. Não publicar
+tokens, links autenticados ou arquivos privados nos documentos HTML,
+issues, commits ou relatórios.
