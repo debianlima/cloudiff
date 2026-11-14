@@ -147,3 +147,32 @@ Cada ficha esclarece se existe feed PGH individual e qual é o estado administra
 **Evidências de implantação:** API confirmou 24 projetos, oito filhos CloudIFF e somente dois feeds PGH (CloudIFF e Dotfiles); Node aprovou os testes de Markdown e da hierarquia; a checagem SQLite retornou ok; o Nginx externo respondeu HTTP 401 sem login. Backups root dos arquivos anteriores estão em /var/backups/mapa-projetos/, identificados como acompanhamento.js-before-cloudiff-project-cards-20261114T214631Z e acompanhamento.css-before-cloudiff-project-cards-20261114T214631Z.
 
 **Pendências de aceite:** Chrome headless e Playwright não completaram teste de cliques/download/mobile nesta VPS; surface-01 deve executar e registrar o E2E em navegador autenticado. O pipeline de release precisa promover esse ramo ao fluxo canônico para impedir regressões em redeploy. Atualização contínua dos snapshots PGH depende de canal de serviço seguro e autorizado, ainda não concluído.
+
+## Validador de integridade de publicações Atlas
+
+**Entrega de 14/11/2026:** o Git bare interno do Atlas possui o verificador
+somente leitura scripts/audit_atlas_publication.py, commit ef3eeb6, na branch
+feature/doc01-cloudiff-followup-hierarchy-20261114. O procedimento e
+os testes sintéticos são documentados em
+docs/ATLAS-AUDITORIA-PUBLICACAO-PGH-2026-11-14.md nesse repositório.
+
+No controlador IPsec autorizado, executar:
+
+    PYTHONDONTWRITEBYTECODE=1 python3 scripts/audit_atlas_publication.py       --check-backend       --external-url 'https://atlas.limaeducation.duckdns.org/acompanhamento?project=cloudiff.project.platform&tab=visao'
+
+Essa auditoria compara hashes de três arquivos HTTP e três arquivos
+backend protegidos com o Git; confere a ontologia dos oito projetos,
+duplicatas, correspondência de feeds PGH, integridade e frescor do snapshot
+e bloqueio do GET anônimo (HTTP 401/403). Não altera dados ou serviços.
+
+Resultado observado: **WARN — MAIN_BEHIND_RELEASE** (nenhum desvio nos
+seis arquivos comparados; oito projetos e seis journals íntegros). A main
+do Atlas está em 724d24b7, anterior ao código publicado f51a874d.
+Esse alerta é um bloqueio de continuidade para um próximo redeploy a partir
+de main sem integração e revisão. O relatório JSON de evidência está no
+IPsec sob atlas-project-followup-staging/atlas-doc01-publication-report-20261114.json,
+SHA-256 3332e5814f058f9209da81c0c6080a24041011e1c9d0ac5d830bffafa0cd375f.
+
+A integração da branch e o aceite autenticado de surface-01 continuam
+pendentes. A existência do verificador não conclui T-009, T-010 ou T-011
+nem autoriza automatização de sincronização entre servidores.
