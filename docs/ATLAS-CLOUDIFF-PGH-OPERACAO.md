@@ -123,3 +123,15 @@ o serviço; arquivo servido e oito vínculos foram validados por HTTP/API.
 Backup operacional root e registro de auditoria foram mantidos no IPsec.
 Teste visual com navegador autenticado permanece sob responsabilidade de
 surface-01 e não deve ser declarado concluído sem evidência.
+
+## Visualização dos arquivos Markdown de controle no Atlas
+
+**Atualização de 14/11/2026:** acesse o [painel de documentos CloudIFF](https://atlas.limaeducation.duckdns.org/acompanhamento?project=cloudiff.project.platform&tab=arquivos). Na guia **Arquivos .md**, escolha um documento na lista vertical; o conteúdo é mostrado em texto e pode ser baixado em .md para consulta humana.
+
+O portal gera **projeções sanitizadas**, não o conteúdo original completo do PGH. Para CloudIFF com feed associado, as fichas incluem PROJECT.md, SOURCES.md, TASKS.md, HISTORY.md, MEMORY.md, INSTRUCTIONS.md, AUDITS.md e BACKUPS.md. Referências históricas REVISIONS.md são oferecidas quando houver fonte documentada. Os arquivos originais ACCESS.md, evidências sensíveis, backups binários, segredos e logs privados **não são disponibilizados**.
+
+Para cada um dos oito tenants, a ficha própria mostra projeto e fonte (PROJECT.md, SOURCES.md), com acesso ao controle transversal CloudIFF. Não são inventadas tarefas, eventos ou memórias particulares de tenants sem journal vinculado. O catálogo Atlas apresenta 24 projetos, mas apenas CloudIFF e Dotfiles têm feed PGH vinculado no snapshot atual.
+
+O snapshot PGH foi atualizado manualmente às **21h19 UTC de 14/11/2026**, incluindo 242 eventos CloudIFF e 12 de Dotfiles. Não há sincronização automática aprovada: conferir sempre o horário da coleta antes de usar o documento como evidência de estado. A página é protegida por autenticação Nginx (HTTP 401 sem credenciais).
+
+A primeira entrega da aba é o commit Atlas ddd305670f30a49c15282d49c9abdcbdba139271 na branch feature/doc01-control-md-human-viewer-20261114. Foi publicada também uma revisão de segurança (352c4dcb4cc5742ec979447903ce789698dc35c8, branch fix/doc01-control-md-download-safety-20261114) que neutraliza HTML e padrões de credenciais em Markdown exportado, com testes automatizados aprovados. A entrega permaneceu no Git bare interno do Atlas; promover para o ramo principal só após reconciliação e gates. O teste headless confirmou a renderização da aba, mas a automação interativa de cliques/download ainda não foi concluída. Surface-01 deve executar o aceite autenticado no navegador.
