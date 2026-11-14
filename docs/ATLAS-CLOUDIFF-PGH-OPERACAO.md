@@ -241,3 +241,30 @@ dos vínculos, mas não dispõe da cópia confiável do manifesto LabIFF para
 conferir independentemente seu hash. Dev-02 e aud-01 devem aprovar a
 cadeia de confiança para eventual sincronização automática; não derivar
 acesso a dados privados desse campo.
+
+## Origem canônica do Atlas e revisão de segurança dos snapshots
+
+**Auditoria documental de 14/11/2026:** o Git usado pela implantação Atlas
+é local na VPS, sob /srv/git/atlas-mapa-projetos.git. Os remotes examinados
+não apontam para um GitHub confirmado; uma busca entre os 65 repositórios
+acessíveis do proprietário debianlima não identificou claramente a origem
+GitHub canônica dessa instalação. Não espelhar a árvore nem selecionar
+outro repositório por semelhança sem definição do mantenedor, revisão,
+política de privacidade e verificação adicional do histórico.
+
+Na branch interna review/doc01-atlas-a11y-20261114, commit c13dfa1,
+foi preparada uma proteção adicional para o importador de snapshots PGH,
+exigindo rejeição de URLs com credenciais, valores Bearer e atribuições
+diretas de senhas/tokens inseridos em campos de texto livre. O importador
+já dispunha de outros controles de esquema, prazo, journal e nomes de
+campos sensíveis. Os oito testes sintéticos de segurança passaram, assim
+como a validação de uma cópia do snapshot atual usando o importador
+modificado, com seis journals e dois vínculos legítimos.
+
+**Estado:** patch submetido para revisão, não implantado. As expressões
+são heurísticas e não substituem gestão de segredos, testes adversariais
+ou revisão humana. A documentação detalhada está no Git interno Atlas
+em docs/ATLAS-ORIGEM-GITHUB-E-GATE-DE-SEGREDOS-2026-11-14.md.
+Qualquer integração e publicação exigem gates de segurança, CI, backup
+restituível e rollback. Não divulgar valores de credenciais ou remotes
+autenticados em documentação, tickets ou painéis.
