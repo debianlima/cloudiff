@@ -454,3 +454,43 @@ sem alterar a situação dos gates de release CloudIFF.
   expostas, cofre OpenBao produtivo, prova de backup
   restaurável e rotação/revogação/re-auditoria
   ainda impedem a liberação CloudIFF v145.1.
+## Revisão PR40 — proteção dos arquivos SQLite
+
+Atualização de 15/11/2026, aproximadamente 19h UTC.
+
+O PR #40 avançou para revisão 05d3978, com CI
+aprovado e testes de verificador externo fora do
+write lock SQLite. O journal permanece **isolado
+e não integrado ao worker de produção**.
+
+Doc-01 reproduziu em ambiente descartável que
+o banco SQLite e seu arquivo WAL podem nascer
+com modo **0644** quando o processo usa umask 022;
+com umask 077, os arquivos ficam em modo 0600.
+O resultado é dependente das permissões do
+diretório de dados; **não existe evidência de
+exposição produtiva** por esse achado.
+
+Foi publicada uma proposta de correção na branch:
+
+- https://github.com/debianlima/cloudiff/tree/review/doc01-pr40-private-sqlite-20261115
+- Commit efbb1b0, baseado no PR #40, sem alterar
+  a branch do responsável.
+- Abrir/criar o banco com modo 0600, reforçar
+  modo 0600 de arquivos antigos DB/WAL/SHM,
+  rejeitar symlinks no componente final e
+  arquivos não regulares.
+- Testes de permissões **5/5 PASS**, testes
+  próprios do PR40 **22/22 PASS** e suíte
+  completa CloudIFF **1391/1391 PASS**.
+  Validação estática de fonte: OK.
+- Exigir revisão de dev-01, infra-01 e
+  aud-01 antes de integrar ou publicar:
+  proprietário, diretório ancestral confiável,
+  ACL e concorrência multiworker.
+
+**A proposta não substitui G0–G5:** o principal
+P0 continua sendo a presença de credenciais em
+22 configurações de origem Git. Sem restauração
+produtiva comprovada, cofre OpenBao e Docker E2E
+da promoção Hn→Pn, a v145.1 continua bloqueada.
