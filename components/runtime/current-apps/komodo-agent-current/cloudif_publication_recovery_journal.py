@@ -46,7 +46,13 @@ class PublicationRecoveryJournal:
     SQLite WAL + FULL applies only to this connection. All mutations use BEGIN
     IMMEDIATE and commit before the caller starts the next external phase.
     """
-    def __init__(self, db_path):
+    def __init__(self, db_path, *, evidence_verifier=None):
+        # Only the trusted hosting controller may inject an independently
+        # authenticated local verifier. Without it, terminal successes are
+        # forbidden regardless of SHA-256 formatting.
+        if evidence_verifier is not None and not callable(evidence_verifier):
+            raise TypeError('invalid_evidence_verifier')
+        self._evidence_verifier = evidence_verifier
         self.con = sqlite3.connect(str(db_path), timeout=30)
         self.con.row_factory = sqlite3.Row
         self.con.execute('PRAGMA busy_timeout=30000')
@@ -69,6 +75,12 @@ class PublicationRecoveryJournal:
         self.con.execute('''CREATE UNIQUE INDEX IF NOT EXISTS
             idx_pubjournal_one_open_per_project
             ON stage_publication_operation_journal(project)
+            WHERE phase IN ('prepared','mutating','needs_reconciliation')''')
+        # The public number identifies the network alias globally. Another
+        # project must not change it while an operation is unresolved.
+        self.con.execute('''CREATE UNIQUE INDEX IF NOT EXISTS
+            idx_pubjournal_one_open_per_public_number
+            ON stage_publication_operation_journal(public_number)
             WHERE phase IN ('prepared','mutating','needs_reconciliation')''')
         self.con.commit()
 
@@ -100,11 +112,13 @@ class PublicationRecoveryJournal:
                     self.con.commit()
                     return operation_id  # Safe idempotent retry before external effects.
                 raise PublicationJournalConflict('operation_id_already_advanced_or_reused')
-            busy=self.con.execute('''SELECT operation_id FROM stage_publication_operation_journal
-                                     WHERE project=? AND phase IN ('prepared','mutating','needs_reconciliation')''',
-                                  (project,)).fetchone()
+            busy=self.con.execute('''SELECT project,public_number FROM stage_publication_operation_journal
+                                     WHERE (project=? OR public_number=?)
+                                       AND phase IN ('prepared','mutating','needs_reconciliation')''',
+                                  (project,public_number)).fetchone()
             if busy is not None:
-                raise PublicationJournalConflict('unresolved_project_operation')
+                raise PublicationJournalConflict('unresolved_project_operation' if busy['project']==project
+                                                 else 'unresolved_public_alias')
             stamp=_now()
             self.con.execute('''INSERT INTO stage_publication_operation_journal(
                 operation_id,project,kind,public_number,publication_number,target_container,
@@ -132,6 +146,23 @@ class PublicationRecoveryJournal:
             raise ValueError('verification_digest_for_nonterminal_phase')
         try:
             self._begin()
+            current=self.con.execute('''SELECT operation_id,project,kind,public_number,publication_number,
+                   target_container,phase FROM stage_publication_operation_journal
+                   WHERE operation_id=? AND phase=?''',
+                   (operation_id,expected_phase)).fetchone()
+            if current is None:
+                raise PublicationJournalConflict('journal_phase_changed_or_missing')
+            if next_phase in ('committed','reconciled'):
+                if self._evidence_verifier is None:
+                    raise PublicationJournalConflict('evidence_verifier_unavailable')
+                # The digest alone is NOT evidence: the trusted local verifier
+                # must bind it to this exact operation and intended next phase.
+                try:
+                    accepted=self._evidence_verifier(dict(current),next_phase,verification_sha256)
+                except Exception:
+                    raise PublicationJournalConflict('evidence_verification_failed') from None
+                if accepted is not True:
+                    raise PublicationJournalConflict('evidence_verification_failed')
             result=self.con.execute('''UPDATE stage_publication_operation_journal
                 SET phase=?,reason_code=?,verification_sha256=?,updated_at=?
                 WHERE operation_id=? AND phase=?''',

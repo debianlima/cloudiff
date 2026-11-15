@@ -3,6 +3,8 @@
 Proves a persistent *fence*, not automatic real-Docker crash recovery.
 """
 import importlib.util
+import hashlib
+import json
 import sqlite3
 import tempfile
 import unittest
@@ -24,9 +26,31 @@ class JournalContract(unittest.TestCase):
         self.tmp=tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         self.db=Path(self.tmp.name)/'ephemeral-state.sqlite'
+        self.proof_store={}
 
-    def journal(self):
-        return mod.PublicationRecoveryJournal(self.db)
+    def _verifier(self,row,phase,digest):
+        """Fixture-only trusted evidence store; not a production attestation service."""
+        payload=self.proof_store.get(digest)
+        if not isinstance(payload,bytes):return False
+        if hashlib.sha256(payload).hexdigest()!=digest:return False
+        proof=json.loads(payload)
+        expected={key:row[key] for key in
+                  ('operation_id','project','kind','public_number','publication_number','target_container')}
+        expected['decision']=phase
+        return proof==expected
+
+    def _attest(self,j,operation_id,phase):
+        row=j.con.execute('''SELECT operation_id,project,kind,public_number,publication_number,target_container
+                             FROM stage_publication_operation_journal WHERE operation_id=?''',(operation_id,)).fetchone()
+        proof={key:row[key] for key in row.keys()}
+        proof['decision']=phase
+        blob=json.dumps(proof,sort_keys=True).encode()
+        digest=hashlib.sha256(blob).hexdigest()
+        self.proof_store[digest]=blob
+        return digest
+
+    def journal(self,verified=False):
+        return mod.PublicationRecoveryJournal(self.db,evidence_verifier=self._verifier if verified else None)
 
     def test_prepare_is_durable_after_connection_restart(self):
         with self.journal() as first:
@@ -76,10 +100,10 @@ class JournalContract(unittest.TestCase):
             self.assertEqual(len(j.unresolved()),2)
 
     def test_clean_terminal_commit_allows_next_operation(self):
-        with self.journal() as j:
+        with self.journal(verified=True) as j:
             one=j.prepare(**payload())
             j.transition(one,expected_phase='prepared',next_phase='mutating')
-            j.transition(one,expected_phase='mutating',next_phase='committed',verification_sha256='a'*64)
+            j.transition(one,expected_phase='mutating',next_phase='committed',verification_sha256=self._attest(j,one,'committed'))
             self.assertEqual(j.unresolved('example'),[])
             two=j.prepare(**payload(publication_number=2))
             self.assertNotEqual(one,two)
@@ -92,7 +116,7 @@ class JournalContract(unittest.TestCase):
             j.prepare(**payload(publication_number=2))
 
     def test_reconciliation_is_explicit_not_automatic(self):
-        with self.journal() as j:
+        with self.journal(verified=True) as j:
             key=j.prepare(**payload())
             j.transition(key,expected_phase='prepared',next_phase='mutating')
             j.transition(key,expected_phase='mutating',next_phase='needs_reconciliation',
@@ -101,11 +125,11 @@ class JournalContract(unittest.TestCase):
                 j.prepare(**payload(publication_number=2))
             # This library does not inspect Docker. `reconciled` is allowed only
             # after a trusted separate verifier supplies that conclusion.
-            j.transition(key,expected_phase='needs_reconciliation',next_phase='reconciled',verification_sha256='b'*64)
+            j.transition(key,expected_phase='needs_reconciliation',next_phase='reconciled',verification_sha256=self._attest(j,key,'reconciled'))
             j.prepare(**payload(publication_number=2))
 
     def test_ambiguous_operation_cannot_be_closed_without_evidence_reference(self):
-        with self.journal() as j:
+        with self.journal(verified=True) as j:
             key=j.prepare(**payload())
             j.transition(key,expected_phase='prepared',next_phase='mutating')
             with self.assertRaisesRegex(ValueError,'finalization_requires_verification_digest'):
@@ -115,11 +139,69 @@ class JournalContract(unittest.TestCase):
             with self.assertRaisesRegex(ValueError,'finalization_requires_verification_digest'):
                 j.transition(key,expected_phase='needs_reconciliation',next_phase='reconciled')
             self.assertEqual(j.unresolved()[0]['phase'],'needs_reconciliation')
+            with self.assertRaisesRegex(mod.PublicationJournalConflict,'evidence_verification_failed'):
+                j.transition(key,expected_phase='needs_reconciliation',next_phase='reconciled',
+                             verification_sha256='c'*64)
+            valid=self._attest(j,key,'reconciled')
             j.transition(key,expected_phase='needs_reconciliation',next_phase='reconciled',
-                         verification_sha256='c'*64)
+                         verification_sha256=valid)
             row=j.con.execute('SELECT verification_sha256 FROM stage_publication_operation_journal WHERE operation_id=?',
                               (key,)).fetchone()
-            self.assertEqual(row[0],'c'*64)
+            self.assertEqual(row[0],valid)
+
+    def test_public_number_is_globally_fenced_across_projects(self):
+        with self.journal() as j:
+            first=j.prepare(**payload('alpha',10))
+            with self.assertRaisesRegex(mod.PublicationJournalConflict,'unresolved_public_alias'):
+                j.prepare(**payload('beta',10))
+            self.assertEqual(j.unresolved()[0]['operation_id'],first)
+            j.transition(first,expected_phase='prepared',next_phase='aborted')
+            self.assertEqual(j.prepare(**payload('beta',10)),j.unresolved()[0]['operation_id'])
+
+    def test_two_connections_cannot_reserve_same_public_alias(self):
+        with self.journal() as first,self.journal() as second:
+            first.prepare(**payload('alpha',10))
+            with self.assertRaisesRegex(mod.PublicationJournalConflict,'unresolved_public_alias'):
+                second.prepare(**payload('beta',10))
+            self.assertEqual(len(first.unresolved()),1)
+
+    def test_unverified_hash_cannot_finalize_without_provider(self):
+        with self.journal() as j:
+            key=j.prepare(**payload())
+            j.transition(key,expected_phase='prepared',next_phase='mutating')
+            with self.assertRaisesRegex(mod.PublicationJournalConflict,'evidence_verifier_unavailable'):
+                j.transition(key,expected_phase='mutating',next_phase='committed',
+                             verification_sha256='0'*64)
+            self.assertEqual(j.unresolved()[0]['phase'],'mutating')
+
+    def test_wrong_attestation_operation_or_decision_is_rejected(self):
+        with self.journal(verified=True) as j:
+            first=j.prepare(**payload('alpha',10))
+            j.transition(first,expected_phase='prepared',next_phase='mutating')
+            good=self._attest(j,first,'reconciled')
+            with self.assertRaisesRegex(mod.PublicationJournalConflict,'evidence_verification_failed'):
+                j.transition(first,expected_phase='mutating',next_phase='committed',verification_sha256=good)
+            self.assertEqual(j.unresolved('alpha')[0]['phase'],'mutating')
+            success=self._attest(j,first,'committed')
+            j.transition(first,expected_phase='mutating',next_phase='committed',verification_sha256=success)
+            second=j.prepare(**payload('beta',10))
+            j.transition(second,expected_phase='prepared',next_phase='mutating')
+            with self.assertRaisesRegex(mod.PublicationJournalConflict,'evidence_verification_failed'):
+                j.transition(second,expected_phase='mutating',next_phase='committed',verification_sha256=success)
+            self.assertEqual(j.unresolved('beta')[0]['phase'],'mutating')
+
+    def test_verifier_exceptions_and_truthy_nonboolean_are_not_accepted(self):
+        for verifier in (lambda *args:'yes',lambda *args:1,
+                         lambda *args:(_ for _ in ()).throw(RuntimeError('offline-check-failed'))):
+            with self.subTest(verifier=repr(verifier)):
+                with tempfile.TemporaryDirectory() as root:
+                    with mod.PublicationRecoveryJournal(Path(root)/'fixture.db',evidence_verifier=verifier) as j:
+                        key=j.prepare(**payload())
+                        j.transition(key,expected_phase='prepared',next_phase='mutating')
+                        with self.assertRaisesRegex(mod.PublicationJournalConflict,'evidence_verification_failed'):
+                            j.transition(key,expected_phase='mutating',next_phase='committed',
+                                         verification_sha256='a'*64)
+                        self.assertEqual(j.unresolved()[0]['phase'],'mutating')
 
     def test_stale_expected_transition_cannot_change_record(self):
         with self.journal() as j:
