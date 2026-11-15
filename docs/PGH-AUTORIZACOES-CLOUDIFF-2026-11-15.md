@@ -100,3 +100,55 @@ produtivo não é permitido declarar o incidente resolvido.
   handoffs na memória canônica antes de declarar qualquer gate feito.
 
 **Autorização condicionada não é certificado de conclusão.**
+
+## Atualização operacional — 15/11/2026, 16h UTC
+
+Os estados a seguir substituem apenas os valores temporais acima,
+não alteram o caráter **condicionado** das autorizações.
+
+| Fonte | Código revisado | CI | Publicação |
+| --- | --- | --- | --- |
+| CloudIFF PR #35 (documentação) | 7957edb | sucesso | draft, sem merge |
+| CloudIFF PR #37 (catálogos/CI) | b0264a1 | sucesso | draft, sem merge |
+| CloudIFF PR #38 (Hn/Pn) | 361d94d | sucesso | draft, sem deploy |
+| CloudIFF PR #39 (ACL de jobs) | 75a6b4a | sucesso | draft, sem deploy |
+
+- **F2:** o PR #38 corrigiu falhas sintéticas de transação
+  SQLite e recuperação de alias/container após parada; o CI
+  validou o código, mas ainda faltam Docker real descartável,
+  tratamento de crash/journal e demonstração efetiva do mesmo
+  container Hn/Pn com variáveis Pn. Não marcar F2 como aprovado.
+- **F3:** o PR #39 contém revalidação de ACL antes da operação
+  enfileirada; ainda dependem de revisão os papéis privilegiados
+  e a janela de corrida entre verificação e aplicação.
+- **F4/F1:** a última auditoria registrou quatro previews W1
+  respondendo 502, Paperclip com 403 ainda não classificado como
+  falha sem autenticação e SilviPro com incompatibilidade de
+  hostname TLS/SNI. A correção de certificado depende do
+  responsável, evidência e rollback; não contornar TLS.
+- **G1:** a infraestrutura testou a integridade e restauração
+  em tmp de um backup **do próprio PGH**, mas isso não substitui
+  teste de restauração de backups produtivos do CloudIFF/Samba.
+- **G4:** o incidente P0 de 22 configurações Git com
+  credenciais expostas ainda exige contenção, substituição,
+  revogação e reauditoria sob autorização efetiva.
+- **R1:** o Atlas possui candidato de integração interno
+  3938944 na branch de review de dev-02, partindo do commit
+  de assets publicados 357f762. Uma revisão independente
+  de doc-01 comprovou paridade dos arquivos, testes offline
+  de inventário/segurança e teste de acessibilidade das
+  nove abas em 1365/390/320 px. O teste adicional de busca
+  de eventos terminou inconclusivo por timeout do Chromium.
+  Sem aceite de Surface em navegador autenticado, sem
+  aprovação da infraestrutura e da auditoria, **não**
+  executar merge de main nem novo deploy.
+- **Atlas PGH:** snapshots são importados manualmente com
+  integridade, backup e autenticação; o painel pode se tornar
+  defasado. Não interpretar o número de eventos como
+  relatório em tempo real e não atribuir journals da
+  plataforma aos tenants sem vínculo explícito.
+
+A memória PGH e os registros restritos permanecem a fonte
+canônica de estado de tarefas e de incidentes. Antes de
+qualquer decisão operacional, o agente deve reler os gates
+G0–G5 na memória e obter aprovação concreta do titular.
