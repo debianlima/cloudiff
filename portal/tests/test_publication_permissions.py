@@ -317,6 +317,57 @@ class PublicationPermissionsTests(unittest.TestCase):
             module._validate_project_permission_job(job['project_slug'],job['candidate_number'],job['publication_number'],
                                                     job['activation_digest'],job['actor'],job['authorization_role'],job['id'])
 
+    def test_revocation_during_environment_snapshot_is_rejected(self):
+        module,job=self._staged_authorized_job()
+        original=module._publication_config
+        def revoke_on_snapshot():
+            config=original()
+            class RevokingConfig:
+                @staticmethod
+                def environment_summary(slug,environment='production'):
+                    self.con.execute("update project_publication_permissions set can_publish=0 where project_slug='demo' and username='bob'")
+                    self.con.commit()
+                    return config.environment_summary(slug,environment)
+            return RevokingConfig
+        module._publication_config=revoke_on_snapshot
+        with self.assertRaisesRegex(PermissionError,'publication_permission_revoked'):
+            module._validate_project_permission_job('demo',job['candidate_number'],job['publication_number'],
+                job['activation_digest'],job['actor'],job['authorization_role'],job['id'])
+
+    def test_job_cancelled_during_environment_snapshot_is_rejected(self):
+        module,job=self._staged_authorized_job()
+        original=module._publication_config
+        def cancel_on_snapshot():
+            config=original()
+            class CancellingConfig:
+                @staticmethod
+                def environment_summary(slug,environment='production'):
+                    self.con.execute("update publication_jobs set status='cancelled' where id=?",(job['id'],))
+                    self.con.commit()
+                    return config.environment_summary(slug,environment)
+            return CancellingConfig
+        module._publication_config=cancel_on_snapshot
+        with self.assertRaisesRegex(PermissionError,'publication_job_binding_mismatch'):
+            module._validate_project_permission_job('demo',job['candidate_number'],job['publication_number'],
+                job['activation_digest'],job['actor'],job['authorization_role'],job['id'])
+
+    def test_candidate_changed_during_environment_snapshot_is_rejected(self):
+        module,job=self._staged_authorized_job()
+        original=module._publication_config
+        def change_on_snapshot():
+            config=original()
+            class ChangingConfig:
+                @staticmethod
+                def environment_summary(slug,environment='production'):
+                    self.con.execute("update publication_candidates set artifact_image_id=? where project_slug='demo' and candidate_number=3",('sha256:'+'d'*64,))
+                    self.con.commit()
+                    return config.environment_summary(slug,environment)
+            return ChangingConfig
+        module._publication_config=change_on_snapshot
+        with self.assertRaisesRegex(PermissionError,'publication_binding_mismatch'):
+            module._validate_project_permission_job('demo',job['candidate_number'],job['publication_number'],
+                job['activation_digest'],job['actor'],job['authorization_role'],job['id'])
+
     def test_second_claim_cannot_claim_running_job(self):
         module,job=self._staged_authorized_job()
         self.assertIsNone(module.claim_next_job())
