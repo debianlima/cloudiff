@@ -610,3 +610,51 @@ OpenBao produtivo e Docker E2E Hn→Pn.
 Os problemas do Agenda API, Pooler, cinco W1 502
 e TLS SilviPro continuam sob diagnóstico
 e owner autorizados.
+
+## Atlas T023 publicado — auditoria e ajuste de fuso
+
+Atualização 15/11/2026, aproximadamente 19h45 UTC.
+Esta seção substitui a informação anterior de que
+todo o T023 estava apenas em revisão.
+
+- **T023 já foi publicado pelo dev-02**, commit
+  Git interno **46ce086**, branch
+  fix/dev02-atlas-t023-invalid-freshness-failclosed-20261115,
+  com backup prévio da interface.
+- JavaScript HTTP, arquivo instalado e Git coincidem
+  por SHA256. Auditoria independente doc-01 confirmou
+  **3/3 frontend e 3/3 backend iguais à fonte**;
+  API healthy, HTTP 401 anônimo. Único alerta:
+  MAIN_BEHIND_RELEASE, main Atlas ainda antiga.
+- A implementação publicada recusa metadados de
+  idade e limite inválidos e mensagens de
+  snapshot_error, sem esconder tarefas P0.
+
+### Caso residual em timestamp sem fuso
+
+- A versão publicada utiliza Date.parse(timestamp)
+  para validar snapshot_at. Em teste sintético
+  reproduzido diretamente no código publicado,
+  timestamp sem Z ou offset — por exemplo
+  2026-11-15T18:00:00 — ainda retorna recent.
+- A API real não foi observada emitindo esse formato
+  inválido; trata-se de robustez fail-closed,
+  não de incidente produtivo comprovado.
+- Doc-01 criou proposta mínima sobre o commit
+  publicado, branch interna
+  review/doc01-atlas-t023-timezone-required-20261115,
+  **commit ec3774b**, mantendo tratamento de
+  snapshot_error e exigindo ISO8601 com fuso explícito.
+- Testes com a proposta: **42/42** variantes
+  Chromium em 1365/390/320 px, T022 3/3,
+  T021 3/3 e T019 9/9 PASS, zero erros JS.
+- **A correção de fuso ainda não foi implantada**.
+  Dev-02 deve revisar e publicar com rollback;
+  Surface retestar o hash servido após publicação;
+  aud-01 conferir aviso P0 e fail-closed.
+
+A instalação do T023 não comprova acesso autenticado
+para T005, feeds individuais para os 22 projetos
+restantes, backup restaurável do CloudIFF, OpenBao
+produtivo ou conclusão de G0–G5. O gate de release
+CloudIFF v145.1 permanece bloqueado.
