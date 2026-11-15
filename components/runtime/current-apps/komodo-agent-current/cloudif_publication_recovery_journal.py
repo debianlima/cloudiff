@@ -4,7 +4,9 @@ This module is not integrated into a live publication path. It records *only*
 non-secret operation metadata and rejects concurrent/ambiguous retries.
 No Docker, network, credential or service actions occur here.
 """
+import os
 import re
+import stat
 import sqlite3
 import uuid
 from datetime import datetime, timezone
@@ -53,7 +55,28 @@ class PublicationRecoveryJournal:
         if evidence_verifier is not None and not callable(evidence_verifier):
             raise TypeError('invalid_evidence_verifier')
         self._evidence_verifier = evidence_verifier
-        self.con = sqlite3.connect(str(db_path), timeout=30)
+        # Open the DB privately before SQLite, independent of process umask.
+        # Existing WAL/SHM files may predate this code: tighten them too.
+        # Parent directory must be controller-owned, not untrusted-writable;
+        # no in-process umask changes (unsafe for multithreaded workers).
+        path = os.fspath(db_path)
+        nofollow = getattr(os, 'O_NOFOLLOW', 0)
+        for suffix in ('', '-wal', '-shm'):
+            flags = (os.O_RDWR | os.O_CREAT if not suffix
+                     else os.O_RDONLY | getattr(os, 'O_NONBLOCK', 0))
+            try:
+                fd = os.open(path + suffix, flags | nofollow, 0o600)
+            except FileNotFoundError:
+                if suffix:
+                    continue
+                raise
+            try:
+                if not stat.S_ISREG(os.fstat(fd).st_mode):
+                    raise ValueError('journal_not_regular_file')
+                os.fchmod(fd, 0o600)
+            finally:
+                os.close(fd)
+        self.con = sqlite3.connect(path, timeout=30)
         self.con.row_factory = sqlite3.Row
         self.con.execute('PRAGMA busy_timeout=30000')
         self.con.execute('PRAGMA journal_mode=WAL')
