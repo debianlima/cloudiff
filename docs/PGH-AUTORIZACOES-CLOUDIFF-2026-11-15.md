@@ -152,3 +152,70 @@ A memória PGH e os registros restritos permanecem a fonte
 canônica de estado de tarefas e de incidentes. Antes de
 qualquer decisão operacional, o agente deve reler os gates
 G0–G5 na memória e obter aprovação concreta do titular.
+## Reauditoria — 15/11/2026, 17h30 UTC
+
+Esta atualização indica o estado **observado**, não libera
+automaticamente nenhuma das 13 autorizações condicionadas.
+
+### F2 — Código PR #38 versus produção
+
+- HEAD revisto: [PR #38](https://github.com/debianlima/cloudiff/pull/38)
+  revisão 42774c3 (draft, não mesclado), CI concluído com sucesso.
+- Aud-01 validou 19/19 testes do contrato sintético e
+  10/10 testes próprios da compensação de alias da primeira Pn.
+  O candidato retira a associação pública do container candidato
+  quando a primeira promoção falha após operação de banco.
+- **Não há prova de conclusão Hn→Pn:** execução real com Docker
+  descartável autorizado, preservação de rede/IP/aliases,
+  variáveis efetivas de Pn, recuperação após crash e journal
+  transacional continuam pendentes. A Forja ainda opera código
+  anterior ao PR #38.
+- PR #39 permanece draft sem deploy. ACL de jobs ainda exige
+  verificar papéis privilegiados, revogação e janela TOCTOU.
+
+### F1/F4/T1 — Disponibilidade e navegação
+
+- Nova ocorrência T020 / MVPlanner: Preview W1 anteriormente
+  HTTP 200 com tela de primeiros passos passou a responder
+  **HTTP 502** em testes do Surface via browser e duas redes.
+  O 200 anterior não era aceite da aplicação funcional.
+- Surface observou **5 de 7 URLs W1 públicas com HTTP 502**
+  (Agenda Única, Cadales, CPUHub, Laboratório de Hardware,
+  MVPlanner). Paperclip retornou HTTP 403 anônimo; verificar
+  autenticação/ACL antes de concluir falha funcional.
+  SilviPro apresentou incompatibilidade TLS/SNI de hostname;
+  não contornar verificação de certificado.
+- Diagnóstico depende de owner, proxy/Komodo sanitizados,
+  processo/upstream e análise de alterações recentes;
+  nenhuma autorização de restart automático.
+
+### R1 — Acessibilidade e candidata Atlas
+
+- Surface reproduziu **9/9** perdas de foco ao navegar por
+  cartões de subprojetos no Atlas em 1365, 390 e 320 px.
+  O candidato isolado T019 transfere o foco ao H1 de destino
+  após renderização; testes sintéticos 9/9 e regressão
+  passaram, mas a correção **não está publicada**.
+- Separadamente, doc-01 corrigiu o seletor de teste de
+  Markdown desatualizado (role button → role tab), commit
+  de revisão no Git interno Atlas eb6fdcc, validado em
+  1365 e 390 px sem alterar runtime/main.
+- Candidata Atlas 3938944 permanece sob revisão e main
+  histórica é ancestral da versão implantada. Dev-02 deve
+  revisar ambas correções e solicitar aceite autorizado.
+- Só dois projetos têm feed PGH explícito (CloudIFF e
+  Dotfiles); os outros 22 não recebem memória inventada.
+  Snapshot ainda é manual e sujeito a atraso.
+
+### G0–G5 — Segurança e recuperação
+
+- Auditoria independente confirmou persistência de **22
+  origens Git com credenciais expostas**. G4 depende de
+  contenção/rotação autorizadas; G5 exige reauditoria.
+- G1 segue pendente: restauração de backup da memória PGH
+  em temporário não comprova restauração produtiva do CloudIFF.
+- OpenBao produtivo, identidades e ACL/TTL auditáveis e
+  conta de teste via secret_ref continuam pendentes.
+- Agenda Única API e Supabase Pooler de produção seguem
+  em ciclo de reinícios, exigindo diagnóstico e rollback.
+- Release CloudIFF v145.1 continua bloqueada mesmo com CI verde.
