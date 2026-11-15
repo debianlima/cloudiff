@@ -4,6 +4,8 @@ Executes only the final (runtime-effective) function definition from AST.
 No shell, network, credentials, containers, production DB or live access.
 """
 import ast
+import sqlite3
+import tempfile
 import hmac
 from pathlib import Path
 import types
@@ -17,6 +19,9 @@ CODE = compile(ast.Module(body=[FUNCTION], type_ignores=[]), str(SOURCE), 'exec'
 ACTIVATION_FUNCTION = [node for node in TREE.body if isinstance(node, ast.FunctionDef)
                        and node.name == 'cloudif_publication_release_activate'][-1]
 ACTIVATION_CODE = compile(ast.Module(body=[ACTIVATION_FUNCTION], type_ignores=[]), str(SOURCE), 'exec')
+HELPER_NAMES=('_cloudif_v144_atomic_updates','_cloudif_v144_recover_previous')
+HELPER_NODES=[next(n for n in TREE.body if isinstance(n,ast.FunctionDef) and n.name==name) for name in HELPER_NAMES]
+HELPER_CODE=compile(ast.Module(body=HELPER_NODES,type_ignores=[]),str(SOURCE),'exec')
 
 class FakeProcess:
     def __init__(self, stdout='', stderr='', returncode=0):
@@ -24,14 +29,45 @@ class FakeProcess:
         self.stderr = stderr
         self.returncode = returncode
 
+class FakeTransactionalDb:
+    """Simulates SQLite begin/commit/rollback, never opens a real database."""
+    def __init__(self,fixture):
+        self.fixture=fixture
+        self.pending=[]
+
+    def execute(self,sql,params=()):
+        if sql=='BEGIN IMMEDIATE':
+            self.pending=[]
+            return self
+        self.fixture.db_step+=1
+        if self.fixture.fail_at_db_step==self.fixture.db_step:
+            raise RuntimeError('synthetic_db_write_failed')
+        self.pending.append((sql,params))
+        return self
+
+    def commit(self):
+        self.fixture.db_calls.extend(self.pending)
+        self.pending=[]
+
+    def rollback(self):
+        self.fixture.db_rollback_count+=1
+        self.pending=[]
+
+    def close(self):
+        pass
+
 class PromotionFixture:
-    def __init__(self, previous_stop_status=0, restore_fails=False, changed_id=False):
+    def __init__(self, previous_stop_status=0, restore_fails=False, changed_id=False, fail_at_db_step=0, previous_start_status=0):
         self.calls=[]
         self.db_calls=[]
         self.reconnections=[]
         self.previous_stop_status=previous_stop_status
         self.restore_fails=restore_fails
         self.changed_id=changed_id
+        self.fail_at_db_step=fail_at_db_step
+        self.previous_start_status=previous_start_status
+        self.db_step=0
+        self.db_rollback_count=0
         self.expected_previous='prior-container'
         self.source='cloudif-p1999-d3-web'
         self.payload={
@@ -54,10 +90,12 @@ class PromotionFixture:
             '_cloudif_v144_runtime_env_replace':lambda *args:None,
             '_cloudif_wait_health':lambda *args:{'ok':True},
             '_cloudif_v144_reconnect_active':self.reconnect,
-            'db_exec':lambda *args:self.db_calls.append(args),
+            'init_db':lambda:None,
+            '_db_connect':lambda:FakeTransactionalDb(self),
             'now':lambda:'2026-11-14T00:00:00Z',
             'normalize_resource_id':lambda value:value,
         }
+        exec(HELPER_CODE,ns)
         exec(CODE,ns)
         self.release=ns['cloudif_publication_release']
         exec(ACTIVATION_CODE,ns)
@@ -81,6 +119,8 @@ class PromotionFixture:
             return FakeProcess(stdout=self.source)
         if args[:2]==['docker','stop']:
             return FakeProcess(returncode=self.previous_stop_status)
+        if args[:2]==['docker','start']:
+            return FakeProcess(stdout=args[-1],returncode=self.previous_start_status)
         raise AssertionError('unexpected Docker operation: '+repr(args))
 
     def reconnect(self, public_number, target):
@@ -139,6 +179,45 @@ class PromotionContractTests(unittest.TestCase):
         self.assertEqual(result['error'],'production_activation_rollback_failed')
         self.assertFalse(fake.db_calls)
 
+    def test_release_db_write_failure_restores_prior_runtime_for_each_step(self):
+        for fail_step in (1,2,3,4):
+            with self.subTest(write=fail_step):
+                fake=PromotionFixture(fail_at_db_step=fail_step)
+                result=fake.release(object())
+                self.assertEqual(result['http_status'],503)
+                self.assertEqual(result['error'],'production_db_commit_failed_rolled_back')
+                self.assertEqual(fake.db_calls,[])
+                self.assertEqual(fake.db_rollback_count,1)
+                self.assertIn(('docker','start','prior-container'),fake.calls)
+                self.assertIn('prior-container',fake.reconnections)
+
+    def test_manual_reactivation_db_write_failure_restores_prior_runtime(self):
+        for fail_step in (1,2):
+            with self.subTest(write=fail_step):
+                fake=PromotionFixture(fail_at_db_step=fail_step)
+                result=fake.activate(object())
+                self.assertEqual(result['http_status'],503)
+                self.assertEqual(result['error'],'production_db_commit_failed_rolled_back')
+                self.assertEqual(fake.db_calls,[])
+                self.assertEqual(fake.db_rollback_count,1)
+                self.assertIn(('docker','start','prior-container'),fake.calls)
+                self.assertIn('prior-container',fake.reconnections)
+
+    def test_prior_runtime_restart_failure_does_not_claim_recovery(self):
+        fake=PromotionFixture(fail_at_db_step=1,previous_start_status=1)
+        result=fake.release(object())
+        self.assertEqual(result['http_status'],503)
+        self.assertEqual(result['error'],'production_db_recovery_failed')
+        self.assertEqual(fake.db_calls,[])
+        self.assertNotIn('prior-container',fake.reconnections)
+
+    def test_failed_previous_alias_restore_does_not_claim_recovery(self):
+        fake=PromotionFixture(fail_at_db_step=1,restore_fails=True)
+        result=fake.release(object())
+        self.assertEqual(result['http_status'],503)
+        self.assertEqual(result['error'],'production_db_recovery_failed')
+        self.assertEqual(fake.db_calls,[])
+
     def test_changed_container_id_is_rejected(self):
         fake=PromotionFixture(changed_id=True)
         result=fake.release(object())
@@ -147,5 +226,45 @@ class PromotionContractTests(unittest.TestCase):
         self.assertFalse(fake.db_calls)
         self.assertFalse(fake.reconnections, 'identity check must precede alias switch')
         self.assertFalse(any(call[:2]==('docker','stop') for call in fake.calls))
+
+
+class SqliteAtomicityTests(unittest.TestCase):
+    """Real SQLite rollback, in a disposable temporary database."""
+    def run_atomic(self,db,statements):
+        scope={'init_db':lambda:None,'_db_connect':lambda:sqlite3.connect(db)}
+        exec(compile(ast.Module(body=[HELPER_NODES[0]],type_ignores=[]),str(SOURCE),'exec'),scope)
+        return scope['_cloudif_v144_atomic_updates'](statements)
+
+    def test_partial_sql_errors_roll_back_all_prior_updates(self):
+        for fail_at in (0,1,2,3):
+            with self.subTest(fail_at=fail_at),tempfile.TemporaryDirectory() as root:
+                db=Path(root)/'state.db'
+                with sqlite3.connect(db) as con:
+                    con.execute('create table test_atomic_probe_rows (id integer primary key, v text)')
+                    con.executemany('insert into test_atomic_probe_rows values (?,?)',[(i,'old') for i in range(1,5)])
+                statements=[('update test_atomic_probe_rows set v=? where id=?',('new',i)) for i in range(1,5)]
+                statements[fail_at]=('update missing_table set v=? where id=?',('new',fail_at+1))
+                with self.assertRaises(sqlite3.OperationalError):
+                    self.run_atomic(db,statements)
+                with sqlite3.connect(db) as con:
+                    self.assertEqual([x[0] for x in con.execute('select v from test_atomic_probe_rows order by id')],['old']*4)
+
+    def test_all_updates_commit_together_if_successful(self):
+        with tempfile.TemporaryDirectory() as root:
+            db=Path(root)/'state.db'
+            with sqlite3.connect(db) as con:
+                con.execute('create table test_atomic_probe_rows (id integer primary key, v text)')
+                con.executemany('insert into test_atomic_probe_rows values (?,?)',[(i,'old') for i in range(1,5)])
+            self.run_atomic(db,[('update test_atomic_probe_rows set v=? where id=?',('new',i)) for i in range(1,5)])
+            with sqlite3.connect(db) as con:
+                self.assertEqual([x[0] for x in con.execute('select v from test_atomic_probe_rows order by id')],['new']*4)
+
+    def test_no_previous_container_never_claims_recovery(self):
+        fake=PromotionFixture(fail_at_db_step=1)
+        fake.expected_previous=''
+        result=fake.release(object())
+        self.assertEqual(result['http_status'],503)
+        self.assertEqual(result['error'],'production_db_recovery_failed')
+        self.assertFalse(fake.db_calls)
 
 if __name__=='__main__':unittest.main()

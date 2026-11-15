@@ -6009,6 +6009,38 @@ def _cloudif_v144_reconnect_active(num,target):
     if active not in aliases(target):raise RuntimeError('active_alias_not_applied')
     return previous
 
+def _cloudif_v144_atomic_updates(statements):
+    """Persist all publication state changes as one SQLite unit (no partial commits)."""
+    init_db()
+    con=_db_connect()
+    try:
+        con.execute('BEGIN IMMEDIATE')
+        for sql,params in statements:
+            con.execute(sql,params)
+        con.commit()
+    except Exception:
+        con.rollback()
+        raise
+    finally:
+        con.close()
+
+
+def _cloudif_v144_recover_previous(num,previous,target):
+    """Compensate runtime state, never claim recovery without health and alias proof."""
+    if not previous or previous==target:
+        return False
+    try:
+        started=subprocess.run(['docker','start',previous],text=True,stdout=subprocess.PIPE,
+                               stderr=subprocess.DEVNULL,timeout=90)
+        if started.returncode!=0:return False
+        if not _cloudif_wait_health(previous,90).get('ok'):return False
+        replaced=_cloudif_v144_reconnect_active(num,previous)
+        # The expected replacement is the new target, unless another actor raced.
+        return replaced==target
+    except Exception:
+        return False
+
+
 _v143_publication_release=cloudif_publication_release
 def cloudif_publication_release(handler):
     if not _cloudif_pub_auth(handler):return send(handler,403,{'ok':False,'error':'forbidden'})
@@ -6044,11 +6076,19 @@ def cloudif_publication_release(handler):
             try:_cloudif_v144_reconnect_active(num,previous)
             except Exception:return send(handler,503,{'ok':False,'error':'production_activation_rollback_failed'})
             return send(handler,422,{'ok':False,'error':'previous_production_stop_failed'})
-    db_exec('update stage_production_releases set is_active=0,updated_at=? where project=?',(now(),project))
-    db_exec('''insert into stage_production_releases(project,public_number,publication_number,candidate_number,deploy_number,image,image_id,container,status,is_active,environment_revision,environment_digest,created_at,created_by,updated_at)
-      values(?,?,?,?,?,?,?,?,?,1,?,?,?,?,?) on conflict(project,publication_number) do update set candidate_number=excluded.candidate_number,deploy_number=excluded.deploy_number,image=excluded.image,image_id=excluded.image_id,container=excluded.container,status=excluded.status,is_active=1,environment_revision=excluded.environment_revision,environment_digest=excluded.environment_digest,updated_at=excluded.updated_at''',(project,num,publication,candidate,dep,image,image_id,source,'ready',env_rev,str(payload.get('environment_digest') or ''),now(),str(payload.get('actor') or 'portal')[:128],now()))
-    db_exec('update publication_runtimes set is_active=case when deploy_number=? then 1 else 0 end,updated_at=? where project=?',(dep,now(),project))
-    db_exec('update integrations set public_number=?,active_deploy=?,updated_at=? where project=?',(num,dep,now(),project))
+    try:
+        _cloudif_v144_atomic_updates([
+            ('update stage_production_releases set is_active=0,updated_at=? where project=?',(now(),project)),
+            ('''insert into stage_production_releases(project,public_number,publication_number,candidate_number,deploy_number,image,image_id,container,status,is_active,environment_revision,environment_digest,created_at,created_by,updated_at)
+              values(?,?,?,?,?,?,?,?,?,1,?,?,?,?,?) on conflict(project,publication_number) do update set candidate_number=excluded.candidate_number,deploy_number=excluded.deploy_number,image=excluded.image,image_id=excluded.image_id,container=excluded.container,status=excluded.status,is_active=1,environment_revision=excluded.environment_revision,environment_digest=excluded.environment_digest,updated_at=excluded.updated_at''',
+              (project,num,publication,candidate,dep,image,image_id,source,'ready',env_rev,str(payload.get('environment_digest') or ''),now(),str(payload.get('actor') or 'portal')[:128],now())),
+            ('update publication_runtimes set is_active=case when deploy_number=? then 1 else 0 end,updated_at=? where project=?',(dep,now(),project)),
+            ('update integrations set public_number=?,active_deploy=?,updated_at=? where project=?',(num,dep,now(),project)),
+        ])
+    except Exception:
+        if _cloudif_v144_recover_previous(num,previous,source):
+            return send(handler,503,{'ok':False,'error':'production_db_commit_failed_rolled_back'})
+        return send(handler,503,{'ok':False,'error':'production_db_recovery_failed'})
     return send(handler,200,{'ok':True,'project':project,'public_number':num,'candidate_number':candidate,'publication_number':publication,'stageCode':'P'+str(publication),'deploy_number':dep,'container':source,'stack_id':normalize_resource_id(runtime.get('stack_id')),'stack_name':stack_name,'image':image,'artifactImageId':image_id,'containerId':container_id,'healthy':True,'previous':previous,'activeAlias':f'cloudif-p{num}-active-web','environmentRevision':env_rev,'environmentDigest':str(payload.get('environment_digest') or ''),'promotedInPlace':True,'sameContainerAsHomologation':True,'secretValuesIncluded':False})
 
 _v143_publication_release_activate=cloudif_publication_release_activate
@@ -6074,9 +6114,14 @@ def cloudif_publication_release_activate(handler):
             try:_cloudif_v144_reconnect_active(num,previous)
             except Exception:return send(handler,503,{'ok':False,'error':'production_activation_rollback_failed'})
             return send(handler,422,{'ok':False,'error':'previous_production_stop_failed'})
-    db_exec('update stage_production_releases set is_active=case when publication_number=? then 1 else 0 end,updated_at=? where project=?',(publication,now(),project))
     dep=int(rows[0].get('deploy_number') or 0)
-    if dep:db_exec('update publication_runtimes set is_active=case when deploy_number=? then 1 else 0 end,updated_at=? where project=?',(dep,now(),project))
+    updates=[('update stage_production_releases set is_active=case when publication_number=? then 1 else 0 end,updated_at=? where project=?',(publication,now(),project))]
+    if dep:updates.append(('update publication_runtimes set is_active=case when deploy_number=? then 1 else 0 end,updated_at=? where project=?',(dep,now(),project)))
+    try:_cloudif_v144_atomic_updates(updates)
+    except Exception:
+        if _cloudif_v144_recover_previous(num,previous,target):
+            return send(handler,503,{'ok':False,'error':'production_db_commit_failed_rolled_back'})
+        return send(handler,503,{'ok':False,'error':'production_db_recovery_failed'})
     return send(handler,200,{'ok':True,'project':project,'publication_number':publication,'stageCode':'P'+str(publication),'container':target,'previous':previous,'activeAlias':f'cloudif-p{num}-active-web','reactivatedInPlace':True,'secretValuesIncluded':False})
 
 def cloudif_homologation_reject(handler):
