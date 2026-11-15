@@ -641,5 +641,117 @@ class PublicationPermissionsTests(unittest.TestCase):
         self.assertIsNone(module.run_job(job));self.assertFalse(effects)
 
 
+    def _legacy_publish_fixture(self,username='alice',grant=False):
+        module,actor=self._homologation_fixture(username=username,grant=False)
+        if grant:
+            self.module().set_permissions(self.con,'demo',self.user('teacher',['CloudIF-Professor']),
+                [{'username':'bob','homologate':False,'publish':True}])
+            self.con.commit()
+        class Config:
+            @staticmethod
+            def capture_snapshot(slug,num,actor):
+                return {'baseRevision':4,'baseImage':'base','baseImageId':'sha256:'+'b'*64,
+                        'environmentRevision':8,'environmentDigest':'c'*64}
+        module._publication_config=lambda:Config
+        return module,actor
+
+    def test_legacy_publish_queue_refuses_member_without_release_grant(self):
+        module,user=self._legacy_publish_fixture(username='bob',grant=False)
+        called=[]
+        module._publication_config=lambda:(called.append('snapshot') or object())
+        with self.assertRaisesRegex(PermissionError,'legacy_publish_permission_denied'):
+            module.enqueue_publish('demo',user)
+        self.assertEqual(called,[])
+        self.assertEqual(self.con.execute('select count(*) from publication_jobs').fetchone()[0],0)
+
+    def test_legacy_publish_queue_records_owner_permission_binding(self):
+        module,user=self._legacy_publish_fixture()
+        queued=module.enqueue_publish('demo',user)
+        self.assertTrue(queued['queued'])
+        row=self.con.execute('select actor,operation,authorization_mode,authorization_role,environment from publication_jobs where id=?',
+                             (queued['job_id'],)).fetchone()
+        self.assertEqual(tuple(row),('alice','legacy_publish','project_permission','owner','production'))
+
+    def test_legacy_publish_queue_records_current_delegated_grant(self):
+        module,user=self._legacy_publish_fixture('bob',grant=True)
+        row_id=module.enqueue_publish('demo',user)['job_id']
+        row=self.con.execute('select authorization_role from publication_jobs where id=?',(row_id,)).fetchone()
+        self.assertEqual(row[0],'delegated')
+
+    def test_legacy_publish_group_role_requires_fresh_directory_identity(self):
+        module,user=self._legacy_publish_fixture('teacher')
+        with self.assertRaisesRegex(PermissionError,'legacy_publish_role_revalidation_unavailable'):
+            module.enqueue_publish('demo',user)
+
+    def test_legacy_publish_direct_call_refuses_member_before_external_side_effect(self):
+        module,user=self._legacy_publish_fixture('bob')
+        called=[]
+        module._clients=lambda:(called.append('clients') or ('','',''))
+        with self.assertRaisesRegex(PermissionError,'legacy_publish_permission_denied'):
+            module.publish_now('demo',user)
+        self.assertEqual(called,[])
+
+    def test_legacy_publish_worker_checks_binding_and_succeeds_for_owner(self):
+        module,user=self._legacy_publish_fixture()
+        queued=module.enqueue_publish('demo',user)
+        job=module.claim_next_job()
+        calls=[]
+        def fake_publish(slug,user,progress=None,publication_snapshot=None):
+            progress('deploying','synthetic no network')
+            calls.append((slug,user['username']))
+            return {'ok':True,'stageCode':'P1'}
+        module.publish_now=fake_publish
+        result=module.run_job(job)
+        self.assertEqual(result['stageCode'],'P1')
+        self.assertEqual(calls,[('demo','alice')])
+        self.assertEqual(self.con.execute('select status from publication_jobs where id=?',(queued['job_id'],)).fetchone()[0],
+                         'succeeded')
+
+    def test_legacy_publish_worker_rejects_member_after_grant_revoked(self):
+        module,user=self._legacy_publish_fixture('bob',grant=True)
+        module.enqueue_publish('demo',user)
+        job=module.claim_next_job()
+        self.con.execute("update project_publication_permissions set can_publish=0 where project_slug='demo' and username='bob'")
+        self.con.commit()
+        calls=[];module.publish_now=lambda *args,**kwargs:calls.append('external')
+        self.assertIsNone(module.run_job(job))
+        self.assertFalse(calls)
+
+    def test_legacy_publish_worker_rejects_tampered_snapshot(self):
+        module,user=self._legacy_publish_fixture()
+        module.enqueue_publish('demo',user)
+        job=module.claim_next_job()
+        job['environment_digest']='untrusted-digest'
+        calls=[];module.publish_now=lambda *args,**kwargs:calls.append('external')
+        self.assertIsNone(module.run_job(job))
+        self.assertFalse(calls)
+
+    def test_legacy_publish_worker_rejects_unrecognized_operation(self):
+        module,user=self._legacy_publish_fixture()
+        module.enqueue_publish('demo',user)
+        job=module.claim_next_job()
+        job['operation']='unrecognized_operation'
+        called=[];module.publish_now=lambda *args,**kwargs:called.append('publish')
+        self.assertIsNone(module.run_job(job))
+        self.assertEqual(called,[])
+
+    def test_legacy_publish_cancelled_during_progress_cannot_complete(self):
+        module,user=self._legacy_publish_fixture()
+        queued=module.enqueue_publish('demo',user)
+        job=module.claim_next_job()
+        effects=[]
+        def fake_publish(slug,user,progress=None,publication_snapshot=None):
+            self.con.execute("update publication_jobs set status='cancelled' where id=?",(queued['job_id'],))
+            self.con.commit()
+            progress('deploying','should reject')
+            effects.append('deployed')
+            return {'ok':True}
+        module.publish_now=fake_publish
+        self.assertIsNone(module.run_job(job))
+        self.assertEqual(effects,[])
+        self.assertEqual(self.con.execute('select status from publication_jobs where id=?',(queued['job_id'],)).fetchone()[0],
+                         'cancelled')
+
+
 
 if __name__=='__main__': unittest.main()

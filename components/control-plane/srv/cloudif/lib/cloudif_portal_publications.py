@@ -988,11 +988,15 @@ def publish_now(slug,user,progress=None,publication_snapshot=None):
     def notify(step,message):
         if progress:
             progress(step,message)
-    notify('preparing','Validando projeto e preparando a publicação.')
-    if slug==TARGET_SLUG:return _publish_production(slug,user)
     con=sqlite3.connect(DB); con.row_factory=sqlite3.Row; _ensure_schema(con)
     project=_project_allowed(con,slug,user)
-    if not project: con.close(); raise PermissionError('Projeto não encontrado ou sem permissão.')
+    if not project or not _can_publish(con,slug,user):
+        con.close();raise PermissionError('legacy_publish_permission_denied')
+    if slug==TARGET_SLUG:
+        con.close()
+        notify('preparing','Validando projeto e preparando a publicação.')
+        return _publish_production(slug,user)
+    notify('preparing','Validando projeto e preparando a publicação.')
     num=_number(con,slug)
     dep=int(con.execute('select coalesce(max(deploy_number),0)+1 from project_publications where project_slug=?',(slug,)).fetchone()[0])
     actor=user.get('username') or 'portal'; ku,kt,nt=_clients();pc=_publication_config()
@@ -1257,14 +1261,18 @@ def homologate_and_enqueue(slug,candidate_number,user,note=''):
 def enqueue_publish(slug,user):
     con=sqlite3.connect(DB);con.row_factory=sqlite3.Row;_ensure_schema(con)
     project=_project_allowed(con,slug,user)
-    if not project:con.close();raise PermissionError('Projeto não encontrado ou sem permissão.')
+    if not project or not _can_publish(con,slug,user):
+        con.close();raise PermissionError('legacy_publish_permission_denied')
+    role=_release_permission_role(con,slug,user)
+    if role not in ('owner','delegated'):
+        con.close();raise PermissionError('legacy_publish_role_revalidation_unavailable')
     active=con.execute("select id from publication_jobs where project_slug=? and status in ('queued','running') order by id desc limit 1",(slug,)).fetchone()
     if active:
         job_id=int(active[0]);con.close();return {'ok':True,'queued':True,'job_id':job_id,'existing':True}
     actor=user.get('username') or 'portal';now=_now();num=_number(con,slug)
     snapshot=_publication_config().capture_snapshot(slug,num,actor)
-    cur=con.execute("""insert into publication_jobs(project_slug,actor,status,step,message,created_at,base_revision,base_image,base_image_id,environment,environment_revision,environment_digest)
-      values(?,?,?,?,?,?,?,?,?,?,?,?)""",(slug,actor,'queued','queued','Solicitação recebida com base e ambiente congelados.',now,int(snapshot['baseRevision']),str(snapshot.get('baseImage') or ''),str(snapshot['baseImageId']),'production',int(snapshot['environmentRevision']),str(snapshot.get('environmentDigest') or '')))
+    cur=con.execute("""insert into publication_jobs(project_slug,actor,status,step,message,created_at,base_revision,base_image,base_image_id,environment,environment_revision,environment_digest,operation,authorization_mode,authorization_role)
+      values(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",(slug,actor,'queued','queued','Solicitação recebida com base e ambiente congelados.',now,int(snapshot['baseRevision']),str(snapshot.get('baseImage') or ''),str(snapshot['baseImageId']),'production',int(snapshot['environmentRevision']),str(snapshot.get('environmentDigest') or ''),'legacy_publish','project_permission',role))
     con.commit();job_id=int(cur.lastrowid);con.close()
     return {'ok':True,'queued':True,'job_id':job_id,'existing':False,'baseRevision':int(snapshot['baseRevision']),'baseImageId':str(snapshot['baseImageId']),'environmentRevision':int(snapshot['environmentRevision']),'environmentDigest':str(snapshot.get('environmentDigest') or ''),'secretValuesIncluded':False}
 
@@ -1358,6 +1366,38 @@ def _homologation_job_update_if_running(job_id,step,message,status=None,detail=N
     if rc!=1:raise PermissionError('homologation_job_no_longer_running')
 
 
+def _validate_legacy_publish_job(slug,actor,role,job_id,expected_snapshot):
+    """Fail closed on legacy publication queue jobs without current publish grant.
+
+    A queue-time Admin/Professor role is not proof of current group membership.
+    Every caller must also fence the external publisher before runtime effects.
+    """
+    actor=str(actor or '').strip().lower();role=str(role or '').strip().lower()
+    if not actor or role not in ('owner','delegated'):
+        raise PermissionError('legacy_publish_role_revalidation_unavailable')
+    con=sqlite3.connect(DB);con.row_factory=sqlite3.Row
+    try:
+        _ensure_schema(con)
+        row=con.execute('''select * from publication_jobs where id=? and project_slug=?''',(int(job_id),slug)).fetchone()
+        if (not row or str(row['status'])!='running'
+                or str(row['operation'])!='legacy_publish'
+                or str(row['environment'])!='production'
+                or str(row['authorization_mode'])!='project_permission'
+                or str(row['authorization_role'] or '').strip().lower()!=role
+                or str(row['actor'] or '').strip().lower()!=actor):
+            raise PermissionError('legacy_publish_job_binding_mismatch')
+        if any(str(row[key])!=str(expected_snapshot.get(key)) for key in
+               ('base_revision','base_image','base_image_id','environment_revision','environment_digest')):
+            raise PermissionError('legacy_publish_snapshot_mismatch')
+        user={'username':actor,'groups':[],'admin':False}
+        if (not _project_allowed(con,slug,user) or not _can_publish(con,slug,user)
+                or _release_permission_role(con,slug,user)!=role):
+            raise PermissionError('legacy_publish_permission_revoked')
+    finally:
+        con.close()
+    return True
+
+
 def run_job(job):
     job_id=int(job['id']);slug=job['project_slug'];actor=job['actor']
     user={'username':actor,'groups':[],'admin':False}
@@ -1396,16 +1436,29 @@ def run_job(job):
                 except Exception:
                     if reservation:_finalize_production_approval(approval_id,reservation,False)
                     raise
+        elif operation=='legacy_publish':
+            queued_role=str(job.get('authorization_role') or '')
+            _validate_legacy_publish_job(slug,actor,queued_role,job_id,job)
+            def guarded_legacy_progress(step,message):
+                _validate_legacy_publish_job(slug,actor,queued_role,job_id,job)
+                _homologation_job_update_if_running(job_id,step,message)
+                _validate_legacy_publish_job(slug,actor,queued_role,job_id,job)
+            result=publish_now(slug,user,progress=guarded_legacy_progress,publication_snapshot=job)
+            _validate_legacy_publish_job(slug,actor,queued_role,job_id,job)
+            message='Site publicado e ativado.'
         else:
-            result=publish_now(slug,user,progress=progress,publication_snapshot=job);message='Site publicado e ativado.'
+            raise PermissionError('unsupported_publication_operation')
         if operation=='homologation_candidate':
             _validate_homologation_job(slug,int(job.get('candidate_number') or 0),actor,job.get('authorization_role'),job_id)
+            _homologation_job_update_if_running(job_id,'completed',message,status='succeeded',detail=result,finished=True)
+        elif operation=='legacy_publish':
+            _validate_legacy_publish_job(slug,actor,job.get('authorization_role'),job_id,job)
             _homologation_job_update_if_running(job_id,'completed',message,status='succeeded',detail=result,finished=True)
         else:
             _job_update(job_id,status='succeeded',step='completed',message=message,detail=result,finished=True)
         return result
     except Exception as exc:
-        if str(job.get('operation') or '')=='homologation_candidate':
+        if str(job.get('operation') or '') in ('homologation_candidate','legacy_publish'):
             # Preserve external cancellation; it must never be overwritten by
             # the worker's generic failed/succeeded update.
             try:
