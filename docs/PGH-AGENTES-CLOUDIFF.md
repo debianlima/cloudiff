@@ -88,3 +88,7 @@ Fontes internas LabIFF:
 - agent-memory/v2/areas/auditoria/projects/cloudiff/agents/aud-01/ROTEIRO-OPERACIONAL.md
 
 Ver também ATLAS-CLOUDIFF-PGH-OPERACAO.md e ATLAS-CLOUDIFF-CONCILIACAO.md.
+
+## Autorizações condicionadas de 15/11/2026
+
+O protocolo PGH-AUT-20261115-001 distribuiu 13 pedidos a infra-01, dev-01, dev-02, aud-01 e surface-01, sem duplicar tarefas. Autorizar condicionalmente não comprova um gate nem concede privilégios irrestritos. Ver [matriz de responsáveis e condições](PGH-AUTORIZACOES-CLOUDIFF-2026-11-15.md). A memória PGH no LabIFF permanece canônica.
