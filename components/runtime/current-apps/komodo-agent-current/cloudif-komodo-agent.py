@@ -5570,8 +5570,8 @@ CMD {startup_json}
     restart: unless-stopped
     volumes:
       - type: bind
-        source: ./runtime.env
-        target: /run/cloudif/runtime.env
+        source: ./runtime-config
+        target: /run/cloudif
         read_only: true
         bind:
           create_host_path: false
@@ -5614,7 +5614,8 @@ networks:
         shutil.copytree(source,staged)
         shutil.copy2(snap/'Dockerfile.runtime',stack_dir/'Dockerfile.runtime')
         runtime_source=_cloudif_publication_environment_path(public_number,deploy_number)
-        runtime_tmp=stack_dir/'.runtime.env.tmp';runtime_path=stack_dir/'runtime.env'
+        runtime_dir=stack_dir/'runtime-config';runtime_dir.mkdir(mode=0o700,exist_ok=True);runtime_dir.chmod(0o700)
+        runtime_tmp=runtime_dir/'.runtime.env.tmp';runtime_path=runtime_dir/'runtime.env'
         shutil.copyfile(runtime_source,runtime_tmp);runtime_tmp.chmod(0o600);os.replace(runtime_tmp,runtime_path);runtime_path.chmod(0o600)
         compose_tmp=stack_dir/'.docker-compose.yml.tmp';compose_path=stack_dir/'docker-compose.yml'
         compose_tmp.write_text(compose,encoding='utf-8');compose_tmp.chmod(0o600);os.replace(compose_tmp,compose_path);compose_path.chmod(0o600);stack_dir.chmod(0o700)
@@ -5984,9 +5985,9 @@ def cloudif_preview_terminal(handler):
 def _cloudif_v144_runtime_env_replace(stack_name,source_path):
     stack_name=str(stack_name or '')
     if not re.fullmatch(r'cloudif-p\d+-d\d+',stack_name):raise RuntimeError('invalid_homologation_stack_name')
-    stack_dir=Path('/etc/komodo/stacks')/stack_name;target=stack_dir/'runtime.env'
-    if not stack_dir.is_dir() or not Path(source_path).is_file():raise RuntimeError('runtime_environment_path_missing')
-    tmp=stack_dir/'.runtime.env.promote.tmp';shutil.copyfile(source_path,tmp);tmp.chmod(0o600);os.replace(tmp,target);target.chmod(0o600)
+    stack_dir=Path('/etc/komodo/stacks')/stack_name;runtime_dir=stack_dir/'runtime-config';target=runtime_dir/'runtime.env'
+    if not runtime_dir.is_dir() or not Path(source_path).is_file():raise RuntimeError('runtime_environment_path_missing')
+    tmp=runtime_dir/'.runtime.env.promote.tmp';shutil.copyfile(source_path,tmp);tmp.chmod(0o600);os.replace(tmp,target);target.chmod(0o600)
     return str(target)
 
 def _cloudif_v144_reconnect_active(num,target):
