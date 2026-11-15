@@ -418,6 +418,39 @@ class PublicationPermissionsTests(unittest.TestCase):
             module.enqueue_homologation('demo',actor)
         self.assertEqual(self.con.execute('select count(*) from publication_jobs').fetchone()[0],0)
 
+    def test_hn_direct_candidate_creation_rejects_member_without_hn_grant(self):
+        module,actor=self._homologation_fixture(grant=False)
+        external_calls=[]
+        module._is_linked_compose_project=lambda *_:(external_calls.append('detect_linked') or True)
+        module._is_multiservice_project=lambda *_:(external_calls.append('detect_multi') or True)
+        module._create_linked_compose_homologation_candidate=lambda *args,**kwargs:external_calls.append('deploy_linked')
+        module._create_multiservice_homologation_candidate=lambda *args,**kwargs:external_calls.append('deploy_multi')
+        module._clients=lambda *args,**kwargs:external_calls.append('clients')
+        with self.assertRaisesRegex(PermissionError,'homologation_permission_denied'):
+            module.create_homologation_candidate('demo',actor,authorization_checked=False)
+        self.assertEqual(external_calls,[])
+        self.assertEqual(self.con.execute('select count(*) from publication_candidates').fetchone()[0],0)
+
+    def test_hn_direct_candidate_creation_rejects_revoked_legacy_grant(self):
+        module,actor=self._homologation_fixture(grant=True)
+        self.con.execute("delete from project_acl where slug='demo' and lower(subject)='bob'")
+        self.con.commit()
+        external=[];module._is_linked_compose_project=lambda *_:(external.append('detect') or True)
+        with self.assertRaises(PermissionError):
+            module.create_homologation_candidate('demo',actor,authorization_checked=False)
+        self.assertFalse(external)
+
+    def test_hn_direct_candidate_creation_allows_qualified_owner(self):
+        module,owner=self._homologation_fixture(username='alice')
+        external=[]
+        module._is_linked_compose_project=lambda *_:True
+        module._create_linked_compose_homologation_candidate=lambda slug,num,candidate,actor,progress:(external.append((slug,num,candidate,actor)) or {'ok':True,'stageCode':'H1'})
+        result=module.create_homologation_candidate('demo',owner,authorization_checked=False)
+        self.assertEqual(result['stageCode'],'H1')
+        self.assertEqual(len(external),1)
+        self.assertEqual(external[0][0],'demo')
+        self.assertEqual(external[0][3],'alice')
+
     def test_hn_worker_authorized_delegated_job_executes(self):
         module,job=self._running_hn_job()
         calls=[]

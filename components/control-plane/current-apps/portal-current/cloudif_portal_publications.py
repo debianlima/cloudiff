@@ -793,9 +793,22 @@ def _create_multiservice_homologation_candidate(slug,num,candidate,actor,progres
 
 def create_homologation_candidate(slug,user,progress=None,candidate_number=None,authorization_checked=False):
     notify=lambda step,msg: progress(step,msg) if progress else None
-    con=sqlite3.connect(DB);con.row_factory=sqlite3.Row;_ensure_schema(con);project=_project_allowed(con,slug,user) if not authorization_checked else con.execute('select * from projects where slug=?',(slug,)).fetchone()
-    if not project:con.close();raise PermissionError('Projeto não encontrado ou sem permissão.')
-    num=_number(con,slug);candidate=int(candidate_number or _next_candidate(con,slug));actor=(user.get('username') or 'portal').strip().lower();con.close()
+    con=sqlite3.connect(DB);con.row_factory=sqlite3.Row;_ensure_schema(con)
+    try:
+        if authorization_checked:
+            # The queued Hn worker revalidates authorization and job identity
+            # separately. This flag is for that internal guarded call only.
+            project=con.execute('select * from projects where slug=?',(slug,)).fetchone()
+        else:
+            project=_project_allowed(con,slug,user)
+            if project and not _can_homologate(con,slug,user):
+                raise PermissionError('homologation_permission_denied')
+        if not project:raise PermissionError('Projeto não encontrado ou sem permissão.')
+        num=_number(con,slug)
+        candidate=int(candidate_number or _next_candidate(con,slug))
+        actor=(user.get('username') or 'portal').strip().lower()
+    finally:
+        con.close()
     if _is_linked_compose_project(slug):return _create_linked_compose_homologation_candidate(slug,num,candidate,actor,progress)
     if _is_multiservice_project(slug):return _create_multiservice_homologation_candidate(slug,num,candidate,actor,progress)
     notify('snapshot','Congelando código e runtime do Preview.')
