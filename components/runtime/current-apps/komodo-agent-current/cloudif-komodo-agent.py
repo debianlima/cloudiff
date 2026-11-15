@@ -6025,10 +6025,50 @@ def _cloudif_v144_atomic_updates(statements):
         con.close()
 
 
+def _cloudif_v144_retract_initial_alias(num,target):
+    """Retract only the first failed release's public alias, preserving other aliases.
+
+    Docker cannot remove one network alias in place. Reattach only the validated
+    candidate to the publication network and verify all original other aliases.
+    No production container or unrelated Docker network may be stopped/removed.
+    """
+    try:
+        num=int(num);target=str(target or '')
+        if num<1 or not re.fullmatch(rf'cloudif-p{num}-d\d+-web',target):return False
+        network='cloudif-publications';active=f'cloudif-p{num}-active-web'
+        def current_aliases():
+            inspected=subprocess.run(
+                ['docker','inspect',target,'--format',
+                 '{{json (index .NetworkSettings.Networks "cloudif-publications").Aliases}}'],
+                text=True,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,timeout=20)
+            if inspected.returncode!=0:return None
+            raw=inspected.stdout.strip()
+            values=json.loads(raw) if raw and raw!='null' else None
+            if not isinstance(values,list) or any(not isinstance(v,str) for v in values):return None
+            return values
+        old=current_aliases()
+        if old is None:return False
+        if active not in old:return True  # Proved no public alias to retract.
+        keep=list(dict.fromkeys(alias for alias in old if alias!=active))
+        if target not in keep:keep.insert(0,target)
+        disconnected=subprocess.run(['docker','network','disconnect',network,target],
+                                    stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=30)
+        if disconnected.returncode!=0:return False
+        command=['docker','network','connect']
+        for alias in keep:command.extend(['--alias',alias])
+        command.extend([network,target])
+        attached=subprocess.run(command,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=30)
+        if attached.returncode!=0:return False
+        after=current_aliases()
+        return after is not None and active not in after and all(alias in after for alias in keep)
+    except Exception:
+        return False
+
+
 def _cloudif_v144_recover_previous(num,previous,target):
     """Compensate runtime state, never claim recovery without health and alias proof."""
-    if not previous or previous==target:
-        return False
+    if not previous:return _cloudif_v144_retract_initial_alias(num,target)
+    if previous==target:return False
     try:
         started=subprocess.run(['docker','start',previous],text=True,stdout=subprocess.PIPE,
                                stderr=subprocess.DEVNULL,timeout=90)

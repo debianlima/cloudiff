@@ -4,6 +4,8 @@ Executes only the final (runtime-effective) function definition from AST.
 No shell, network, credentials, containers, production DB or live access.
 """
 import ast
+import json
+import re
 import sqlite3
 import tempfile
 import hmac
@@ -19,7 +21,7 @@ CODE = compile(ast.Module(body=[FUNCTION], type_ignores=[]), str(SOURCE), 'exec'
 ACTIVATION_FUNCTION = [node for node in TREE.body if isinstance(node, ast.FunctionDef)
                        and node.name == 'cloudif_publication_release_activate'][-1]
 ACTIVATION_CODE = compile(ast.Module(body=[ACTIVATION_FUNCTION], type_ignores=[]), str(SOURCE), 'exec')
-HELPER_NAMES=('_cloudif_v144_atomic_updates','_cloudif_v144_recover_previous')
+HELPER_NAMES=('_cloudif_v144_atomic_updates','_cloudif_v144_retract_initial_alias','_cloudif_v144_recover_previous')
 HELPER_NODES=[next(n for n in TREE.body if isinstance(n,ast.FunctionDef) and n.name==name) for name in HELPER_NAMES]
 HELPER_CODE=compile(ast.Module(body=HELPER_NODES,type_ignores=[]),str(SOURCE),'exec')
 
@@ -57,7 +59,9 @@ class FakeTransactionalDb:
         pass
 
 class PromotionFixture:
-    def __init__(self, previous_stop_status=0, restore_fails=False, changed_id=False, fail_at_db_step=0, previous_start_status=0):
+    def __init__(self, previous_stop_status=0, restore_fails=False, changed_id=False,
+                 fail_at_db_step=0, previous_start_status=0, alias_disconnect_fails=False,
+                 alias_connect_fails=False):
         self.calls=[]
         self.db_calls=[]
         self.reconnections=[]
@@ -68,6 +72,9 @@ class PromotionFixture:
         self.previous_start_status=previous_start_status
         self.db_step=0
         self.db_rollback_count=0
+        self.alias_disconnect_fails=alias_disconnect_fails
+        self.alias_connect_fails=alias_connect_fails
+        self.network_aliases=['cloudif-p1999-d3-web','cloudif-p1999-active-web','other-safe-alias']
         self.expected_previous='prior-container'
         self.source='cloudif-p1999-d3-web'
         self.payload={
@@ -86,6 +93,8 @@ class PromotionFixture:
             'db_query':self.db_query,
             'subprocess':self.subprocess,
             'hmac':hmac,
+            'json':json,
+            're':re,
             '_cloudif_stage_write_environment':lambda *args:'/tmp/fake-env-not-created',
             '_cloudif_v144_runtime_env_replace':lambda *args:None,
             '_cloudif_wait_health':lambda *args:{'ok':True},
@@ -110,6 +119,8 @@ class PromotionFixture:
     def docker_run(self, args, **kwargs):
         self.calls.append(tuple(args))
         if args[:3]==['docker','inspect',self.source]:
+            if 'Aliases' in args[-1]:
+                return FakeProcess(stdout=json.dumps(self.network_aliases))
             if '{{.State.Running}}' in args[-1]:
                 return FakeProcess(stdout='true')
             if '{{.State.Status}}' in args[-1]:
@@ -121,6 +132,14 @@ class PromotionFixture:
             return FakeProcess(returncode=self.previous_stop_status)
         if args[:2]==['docker','start']:
             return FakeProcess(stdout=args[-1],returncode=self.previous_start_status)
+        if args[:3]==['docker','network','disconnect']:
+            if self.alias_disconnect_fails:return FakeProcess(returncode=1)
+            self.network_aliases=None
+            return FakeProcess()
+        if args[:3]==['docker','network','connect']:
+            if self.alias_connect_fails:return FakeProcess(returncode=1)
+            self.network_aliases=[args[i+1] for i,x in enumerate(args) if x=='--alias']
+            return FakeProcess()
         raise AssertionError('unexpected Docker operation: '+repr(args))
 
     def reconnect(self, public_number, target):
@@ -259,12 +278,49 @@ class SqliteAtomicityTests(unittest.TestCase):
             with sqlite3.connect(db) as con:
                 self.assertEqual([x[0] for x in con.execute('select v from test_atomic_probe_rows order by id')],['new']*4)
 
-    def test_no_previous_container_never_claims_recovery(self):
+    def test_initial_release_db_failure_retracts_only_public_alias(self):
         fake=PromotionFixture(fail_at_db_step=1)
         fake.expected_previous=''
         result=fake.release(object())
         self.assertEqual(result['http_status'],503)
-        self.assertEqual(result['error'],'production_db_recovery_failed')
+        self.assertEqual(result['error'],'production_db_commit_failed_rolled_back')
         self.assertFalse(fake.db_calls)
+        self.assertEqual(fake.db_rollback_count,1)
+        self.assertNotIn('cloudif-p1999-active-web',fake.network_aliases)
+        self.assertIn('other-safe-alias',fake.network_aliases)
+        self.assertIn(fake.source,fake.network_aliases)
+        self.assertTrue(any(c[:3]==('docker','network','disconnect') and c[-1]==fake.source for c in fake.calls))
+        self.assertFalse(any(c[:2]==('docker','stop') and c[-1]==fake.source for c in fake.calls))
+        self.assertFalse(any(c[:3]==('docker','network','disconnect') and c[-1]!=fake.source for c in fake.calls))
+
+    def test_initial_release_cleanup_errors_never_claim_success(self):
+        for phase in ('disconnect','connect'):
+            with self.subTest(phase=phase):
+                fake=PromotionFixture(fail_at_db_step=1,
+                    alias_disconnect_fails=phase=='disconnect',alias_connect_fails=phase=='connect')
+                fake.expected_previous=''
+                result=fake.release(object())
+                self.assertEqual(result['http_status'],503)
+                self.assertEqual(result['error'],'production_db_recovery_failed')
+                self.assertFalse(fake.db_calls)
+
+    def test_initial_release_already_unpublished_requires_no_network_change(self):
+        fake=PromotionFixture(fail_at_db_step=1)
+        fake.expected_previous=''
+        fake.network_aliases=['cloudif-p1999-d3-web','other-safe-alias']
+        result=fake.release(object())
+        self.assertEqual(result['http_status'],503)
+        self.assertEqual(result['error'],'production_db_commit_failed_rolled_back')
+        self.assertFalse(any(c[:3]==('docker','network','disconnect') for c in fake.calls))
+
+    def test_initial_alias_cleanup_rejects_invalid_target(self):
+        fake=PromotionFixture(fail_at_db_step=1)
+        fake.expected_previous=''
+        fake.source='untrusted-container-name'
+        result=fake.release(object())
+        # Invalid name never triggers network reconfiguration.
+        self.assertEqual(result['http_status'],503)
+        self.assertEqual(result['error'],'production_db_recovery_failed')
+        self.assertFalse(any(c[:3]==('docker','network','disconnect') for c in fake.calls))
 
 if __name__=='__main__':unittest.main()
