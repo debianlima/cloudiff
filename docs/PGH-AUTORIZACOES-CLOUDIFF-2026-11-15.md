@@ -195,7 +195,7 @@ automaticamente nenhuma das 13 autorizações condicionadas.
   cartões de subprojetos no Atlas em 1365, 390 e 320 px.
   O candidato isolado T019 transfere o foco ao H1 de destino
   após renderização; testes sintéticos 9/9 e regressão
-  passaram, mas a correção **não está publicada**.
+  passaram na etapa anterior; a publicação foi verificada às 17h34 UTC.
 - Separadamente, doc-01 corrigiu o seletor de teste de
   Markdown desatualizado (role button → role tab), commit
   de revisão no Git interno Atlas eb6fdcc, validado em
@@ -219,3 +219,34 @@ automaticamente nenhuma das 13 autorizações condicionadas.
 - Agenda Única API e Supabase Pooler de produção seguem
   em ciclo de reinícios, exigindo diagnóstico e rollback.
 - Release CloudIFF v145.1 continua bloqueada mesmo com CI verde.
+
+
+## Aceite técnico de T019 — 15/11/2026, 17h35 UTC
+
+Este registro substitui o estado anterior de T019 como apenas
+proposto. Não altera o estado dos demais gates de segurança.
+
+- O dev-02 versionou a alteração de foco na branch interna
+  Atlas fix/dev02-atlas-t019-focus-card-navigation-20261115,
+  commit c41dd2d, com backup da versão JavaScript anterior.
+- O arquivo JS instalado e o arquivo HTTP servido coincidem
+  byte a byte com a branch de fix, SHA256
+  b9740c807aa90964111bebea3086225e2381650dfcdbcef942c2bbaf732ef239.
+- Auditoria read-only de doc-01: 3/3 assets frontend e
+  3/3 backend alinham com essa revisão, saúde HTTP200 e
+  acesso anônimo externo HTTP401. Somente o alerta
+  MAIN_BEHIND_RELEASE continua ativo (a main ainda não
+  contém essa correção).
+- Teste Playwright independente doc-01, com os mesmos bytes
+  do JS publicado e fixture sintética: **9/9 casos PASS**
+  em 1365, 390 e 320 px; navegação Abrir projeto,
+  Arquivos .md e controles transversais move foco ao H1
+  correto, preserva URL/aba e não gera exceção JavaScript.
+- **Estado T019**: correção publicada e conferida
+  sinteticamente, aguardando aceite externo autenticado
+  de Surface quando existir secret_ref homologado.
+- **Estado T020**: a regressão HTTP502 do MVPlanner
+  continua pendente de diagnóstico e correção; não foi
+  afetada pela mudança de JS do Atlas.
+- Esta publicação não libera W1/Hn/Pn do CloudIFF,
+  G0–G5 nem merge de main Atlas.
