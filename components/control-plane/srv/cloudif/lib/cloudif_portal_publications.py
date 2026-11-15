@@ -1131,11 +1131,17 @@ def _active_stage_job(con,slug):
 
 def enqueue_homologation(slug,user):
     con=sqlite3.connect(DB);con.row_factory=sqlite3.Row;_ensure_schema(con);project=_project_allowed(con,slug,user)
-    if not project:con.close();raise PermissionError('Projeto não encontrado ou sem permissão.')
+    if not project or not _can_homologate(con,slug,user):
+        con.close();raise PermissionError('homologation_permission_denied')
+    role=_release_permission_role(con,slug,user)
+    # Group-derived Admin/Professor privileges cannot be reconstructed from a
+    # queued user name. Require trusted directory refresh before supporting them.
+    if role not in ('owner','delegated'):
+        con.close();raise PermissionError('homologation_role_revalidation_unavailable')
     active=_active_stage_job(con,slug)
     if active:
         out={'ok':True,'queued':True,'job_id':int(active['id']),'existing':True,'operation':str(active['operation'] or '')};con.close();return out
-    candidate=_next_candidate(con,slug);actor=(user.get('username') or 'portal').strip().lower();cur=con.execute("insert into publication_jobs(project_slug,actor,status,step,message,created_at,operation,candidate_number,environment) values(?,?,?,?,?,?,?,?,?)",(slug,actor,'queued','queued','Envio para homologação recebido.',_now(),'homologation_candidate',candidate,'homologation'));con.commit();jid=int(cur.lastrowid);con.close();return {'ok':True,'queued':True,'job_id':jid,'candidateNumber':candidate,'stageCode':'H'+str(candidate),'existing':False}
+    candidate=_next_candidate(con,slug);actor=(user.get('username') or 'portal').strip().lower();cur=con.execute("insert into publication_jobs(project_slug,actor,status,step,message,created_at,operation,candidate_number,environment,authorization_mode,authorization_role) values(?,?,?,?,?,?,?,?,?,?,?)",(slug,actor,'queued','queued','Envio para homologação recebido.',_now(),'homologation_candidate',candidate,'homologation','project_permission',role));con.commit();jid=int(cur.lastrowid);con.close();return {'ok':True,'queued':True,'job_id':jid,'candidateNumber':candidate,'stageCode':'H'+str(candidate),'existing':False}
 
 def enqueue_candidate_publication(slug,candidate_number,user,approval_id='',activation_digest=''):
     con=sqlite3.connect(DB);con.row_factory=sqlite3.Row;_ensure_schema(con);project=_project_allowed(con,slug,user)
@@ -1287,6 +1293,58 @@ def _job_update(job_id,status=None,step=None,message=None,detail=None,finished=F
     if finished:sets.append('finished_at=?');vals.append(_now())
     vals.append(job_id);con.execute('update publication_jobs set '+','.join(sets)+' where id=?',vals);con.commit();con.close()
 
+def _validate_homologation_job(slug,candidate_number,actor,authorization_role,job_id):
+    """Require live project ACL and exact queued job identity before Hn effects.
+
+    Never recover implicit Admin/Professor groups from a queue-time role string.
+    The worker only has the actor name, not a fresh trusted directory identity.
+    """
+    actor=str(actor or '').strip().lower()
+    role=str(authorization_role or '').strip().lower()
+    if not actor or actor=='portal' or role not in ('owner','delegated'):
+        raise PermissionError('homologation_role_revalidation_unavailable')
+    con=sqlite3.connect(DB);con.row_factory=sqlite3.Row
+    try:
+        _ensure_schema(con)
+        row=con.execute('''select id,project_slug,actor,status,operation,candidate_number,
+            environment,authorization_mode,authorization_role
+            from publication_jobs where id=? and project_slug=?''',(int(job_id),slug)).fetchone()
+        if (not row or str(row['status'])!='running'
+                or str(row['operation'])!='homologation_candidate'
+                or str(row['environment'])!='homologation'
+                or str(row['authorization_mode'])!='project_permission'
+                or str(row['actor'] or '').strip().lower()!=actor
+                or str(row['authorization_role'] or '').strip().lower()!=role
+                or int(row['candidate_number'] or 0)!=int(candidate_number)
+                or int(candidate_number)<=0):
+            raise PermissionError('homologation_job_binding_mismatch')
+        user={'username':actor,'groups':[],'admin':False}
+        if (not _project_allowed(con,slug,user)
+                or not _can_homologate(con,slug,user)
+                or _release_permission_role(con,slug,user)!=role):
+            raise PermissionError('homologation_permission_revoked')
+    finally:
+        con.close()
+    return True
+
+
+def _homologation_job_update_if_running(job_id,step,message,status=None,detail=None,finished=False):
+    """Do not resurrect cancelled Hn jobs through status/progress writes."""
+    con=sqlite3.connect(DB);con.row_factory=sqlite3.Row
+    try:
+        _ensure_schema(con)
+        sets=['step=?','message=?'];params=[step,message]
+        if status is not None:sets.append('status=?');params.append(status)
+        if detail is not None:sets.append('detail_json=?');params.append(json.dumps(detail,ensure_ascii=False))
+        if finished:sets.append('finished_at=?');params.append(_now())
+        params.append(int(job_id))
+        rc=con.execute('update publication_jobs set '+','.join(sets)+" where id=? and status='running'",params).rowcount
+        con.commit()
+    finally:
+        con.close()
+    if rc!=1:raise PermissionError('homologation_job_no_longer_running')
+
+
 def run_job(job):
     job_id=int(job['id']);slug=job['project_slug'];actor=job['actor']
     user={'username':actor,'groups':[],'admin':False}
@@ -1295,7 +1353,19 @@ def run_job(job):
             _job_update(job_id,status='running',step=step,message=message)
         operation=str(job.get('operation') or 'legacy_publish')
         if operation=='homologation_candidate':
-            result=create_homologation_candidate(slug,user,progress=progress,candidate_number=int(job.get('candidate_number') or 0),authorization_checked=True);message='Candidato '+str(result.get('stageCode') or '')+' pronto para homologação.'
+            candidate_number=int(job.get('candidate_number') or 0)
+            queued_role=str(job.get('authorization_role') or '')
+            _validate_homologation_job(slug,candidate_number,actor,queued_role,job_id)
+            def guarded_progress(step,message):
+                # Recheck status/membership before every controlled stage.
+                # A cross-service lock is still required to close TOCTOU after
+                # the last check; do not claim runtime authorization from this.
+                _validate_homologation_job(slug,candidate_number,actor,queued_role,job_id)
+                _homologation_job_update_if_running(job_id,step,message)
+                _validate_homologation_job(slug,candidate_number,actor,queued_role,job_id)
+            result=create_homologation_candidate(slug,user,progress=guarded_progress,candidate_number=candidate_number,authorization_checked=True)
+            _validate_homologation_job(slug,candidate_number,actor,queued_role,job_id)
+            message='Candidato '+str(result.get('stageCode') or '')+' pronto para homologação.'
         elif operation=='production_release':
             authorization_mode=str(job.get('authorization_mode') or 'critical_approval')
             activation_digest=str(job.get('activation_digest') or '')
@@ -1315,10 +1385,22 @@ def run_job(job):
                     raise
         else:
             result=publish_now(slug,user,progress=progress,publication_snapshot=job);message='Site publicado e ativado.'
-        _job_update(job_id,status='succeeded',step='completed',message=message,detail=result,finished=True)
+        if operation=='homologation_candidate':
+            _validate_homologation_job(slug,int(job.get('candidate_number') or 0),actor,job.get('authorization_role'),job_id)
+            _homologation_job_update_if_running(job_id,'completed',message,status='succeeded',detail=result,finished=True)
+        else:
+            _job_update(job_id,status='succeeded',step='completed',message=message,detail=result,finished=True)
         return result
     except Exception as exc:
-        _job_update(job_id,status='failed',step='failed',message=str(exc),detail={'error':type(exc).__name__,'message':str(exc)[:800]},finished=True)
+        if str(job.get('operation') or '')=='homologation_candidate':
+            # Preserve external cancellation; it must never be overwritten by
+            # the worker's generic failed/succeeded update.
+            try:
+                _homologation_job_update_if_running(job_id,'failed',str(exc),status='failed',
+                    detail={'error':type(exc).__name__,'message':str(exc)[:800]},finished=True)
+            except PermissionError:pass
+        else:
+            _job_update(job_id,status='failed',step='failed',message=str(exc),detail={'error':type(exc).__name__,'message':str(exc)[:800]},finished=True)
         return None
 
 

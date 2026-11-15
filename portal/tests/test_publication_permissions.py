@@ -373,4 +373,198 @@ class PublicationPermissionsTests(unittest.TestCase):
         self.assertIsNone(module.claim_next_job())
 
 
+    def _homologation_fixture(self,username='bob',grant=True):
+        import importlib.util
+        spec=importlib.util.spec_from_file_location('isolated_hn_acl_module_'+username,
+            ROOT/'components/control-plane/current-apps/portal-current/cloudif_portal_publications.py')
+        module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+        module.DB=self.db;module._ensure_schema(self.con);self.con.commit()
+        permissions=self.module()
+        if grant:
+            permissions.set_permissions(self.con,'demo',self.user('teacher',['CloudIF-Professor']),
+                [{'username':'bob','homologate':True,'publish':False}])
+            self.con.commit()
+        actor=self.user(username,['CloudIF-Professor'] if username=='teacher' else [])
+        return module,actor
+
+    def _running_hn_job(self,username='bob',grant=True):
+        module,actor=self._homologation_fixture(username,grant)
+        queued=module.enqueue_homologation('demo',actor)
+        self.assertTrue(queued['queued'])
+        claimed=module.claim_next_job()
+        self.assertEqual(claimed['id'],queued['job_id'])
+        self.assertEqual(claimed['status'],'running')
+        return module,claimed
+
+    def test_hn_enqueue_requires_explicit_homologation_permission(self):
+        module,actor=self._homologation_fixture(grant=False)
+        with self.assertRaisesRegex(PermissionError,'homologation_permission_denied'):
+            module.enqueue_homologation('demo',actor)
+        self.assertEqual(self.con.execute('select count(*) from publication_jobs').fetchone()[0],0)
+
+    def test_hn_enqueue_stores_role_binding_and_owner(self):
+        for username,expected in (('bob','delegated'),('alice','owner')):
+            with self.subTest(username=username):
+                module,actor=self._homologation_fixture(username)
+                self.con.execute('delete from publication_jobs');self.con.commit()
+                row=module.enqueue_homologation('demo',actor)
+                state=self.con.execute('select actor,operation,authorization_mode,authorization_role from publication_jobs where id=?',
+                                       (row['job_id'],)).fetchone()
+                self.assertEqual(tuple(state),(username,'homologation_candidate','project_permission',expected))
+
+    def test_hn_rejects_group_derived_privilege_without_live_directory(self):
+        module,actor=self._homologation_fixture('teacher')
+        with self.assertRaisesRegex(PermissionError,'homologation_role_revalidation_unavailable'):
+            module.enqueue_homologation('demo',actor)
+        self.assertEqual(self.con.execute('select count(*) from publication_jobs').fetchone()[0],0)
+
+    def test_hn_worker_authorized_delegated_job_executes(self):
+        module,job=self._running_hn_job()
+        calls=[]
+        def synthetic_hn(slug,user,progress=None,candidate_number=None,authorization_checked=False):
+            progress('snapshot','Synthetic planning')
+            progress('deploying','Synthetic deployment')
+            calls.append((slug,candidate_number,authorization_checked))
+            return {'ok':True,'stageCode':'H1'}
+        module.create_homologation_candidate=synthetic_hn
+        outcome=module.run_job(job)
+        self.assertEqual(outcome['stageCode'],'H1')
+        self.assertEqual(calls,[('demo',1,True)])
+        self.assertEqual(self.con.execute('select status from publication_jobs where id=?',(job['id'],)).fetchone()[0],'succeeded')
+
+    def test_hn_worker_revoked_grant_does_not_create_stage(self):
+        module,job=self._running_hn_job()
+        self.con.execute("update project_publication_permissions set can_homologate=0 where project_slug='demo' and username='bob'");self.con.commit()
+        calls=[];module.create_homologation_candidate=lambda *args,**kwargs:calls.append(True)
+        self.assertIsNone(module.run_job(job));self.assertEqual(calls,[])
+        self.assertEqual(self.con.execute('select status from publication_jobs where id=?',(job['id'],)).fetchone()[0],'failed')
+
+    def test_hn_worker_removed_membership_does_not_create_stage(self):
+        module,job=self._running_hn_job()
+        self.con.execute("delete from project_acl where slug='demo' and subject='bob'");self.con.commit()
+        calls=[];module.create_homologation_candidate=lambda *args,**kwargs:calls.append(True)
+        self.assertIsNone(module.run_job(job));self.assertFalse(calls)
+
+    def test_hn_worker_owner_changed_does_not_create_stage(self):
+        module,job=self._running_hn_job('alice')
+        self.con.execute("update projects set owner='carol',created_by='carol' where slug='demo'");self.con.commit()
+        calls=[];module.create_homologation_candidate=lambda *args,**kwargs:calls.append(True)
+        self.assertIsNone(module.run_job(job));self.assertFalse(calls)
+
+    def test_hn_worker_rejects_modified_actor_candidate_and_role(self):
+        module,job=self._running_hn_job()
+        for change in ({'actor':'alice'},{'project_slug':'other'},{'candidate_number':2},
+                       {'authorization_role':'owner'},{'id':999}):
+            with self.subTest(change=change):
+                changed=dict(job);changed.update(change)
+                with self.assertRaises(PermissionError):
+                    module._validate_homologation_job(changed['project_slug'],changed['candidate_number'],
+                        changed['actor'],changed.get('authorization_role'),changed['id'])
+        self.assertTrue(module._validate_homologation_job('demo',job['candidate_number'],job['actor'],
+                         job['authorization_role'],job['id']))
+        # The validator reloads authoritative mode from SQLite rather than trusting
+        # an input dict. Tamper the persisted record, then verify fail-closed.
+        self.con.execute("update publication_jobs set authorization_mode='critical_approval' where id=?",(job['id'],))
+        self.con.commit()
+        with self.assertRaisesRegex(PermissionError,'homologation_job_binding_mismatch'):
+            module._validate_homologation_job('demo',job['candidate_number'],job['actor'],
+                                             job['authorization_role'],job['id'])
+
+    def test_hn_worker_rejects_cancelled_or_replayed_job(self):
+        module,job=self._running_hn_job()
+        self.con.execute("update publication_jobs set status='cancelled' where id=?",(job['id'],));self.con.commit()
+        with self.assertRaisesRegex(PermissionError,'homologation_job_binding_mismatch'):
+            module._validate_homologation_job('demo',job['candidate_number'],job['actor'],job['authorization_role'],job['id'])
+        self.con.execute("update publication_jobs set status='succeeded' where id=?",(job['id'],));self.con.commit()
+        with self.assertRaisesRegex(PermissionError,'homologation_job_binding_mismatch'):
+            module._validate_homologation_job('demo',job['candidate_number'],job['actor'],job['authorization_role'],job['id'])
+
+    def test_hn_worker_rechecks_revocation_between_prepare_and_stage(self):
+        module,job=self._running_hn_job()
+        calls=[]
+        def synthetic_hn(slug,user,progress=None,candidate_number=None,authorization_checked=False):
+            progress('snapshot','Synthetic preflight')
+            self.con.execute("update project_publication_permissions set can_homologate=0 where project_slug='demo' and username='bob'")
+            self.con.commit()
+            progress('deploying','Should be rejected before remote mutation')
+            calls.append(True)
+            return {'stageCode':'H1'}
+        module.create_homologation_candidate=synthetic_hn
+        self.assertIsNone(module.run_job(job));self.assertFalse(calls)
+
+    def test_hn_worker_rechecks_cancel_during_preparation(self):
+        module,job=self._running_hn_job()
+        calls=[]
+        def synthetic_hn(slug,user,progress=None,candidate_number=None,authorization_checked=False):
+            progress('snapshot','Synthetic preflight')
+            self.con.execute("update publication_jobs set status='cancelled' where id=?",(job['id'],))
+            self.con.commit()
+            progress('deploying','Should be rejected before remote mutation')
+            calls.append(True)
+            return {'stageCode':'H1'}
+        module.create_homologation_candidate=synthetic_hn
+        self.assertIsNone(module.run_job(job));self.assertFalse(calls)
+
+
+    def test_hn_cancelled_during_preparation_remains_cancelled(self):
+        module,job=self._running_hn_job()
+        stage=[]
+        def synthetic_hn(slug,user,progress=None,candidate_number=None,authorization_checked=False):
+            progress('snapshot','Synthetic preflight')
+            self.con.execute("update publication_jobs set status='cancelled' where id=?",(job['id'],))
+            self.con.commit()
+            progress('deploying','Rejected')
+            stage.append('stage_started')
+            return {'stageCode':'H1'}
+        module.create_homologation_candidate=synthetic_hn
+        self.assertIsNone(module.run_job(job))
+        self.assertEqual(stage,[])
+        self.assertEqual(self.con.execute('select status from publication_jobs where id=?',(job['id'],)).fetchone()[0],
+                         'cancelled')
+
+    def test_hn_cancel_between_validation_and_progress_write_stays_cancelled(self):
+        module,job=self._running_hn_job()
+        stage=[]
+        original=module._homologation_job_update_if_running
+        def race_cancel(job_id,step,message,*args,**kw):
+            if step=='snapshot':
+                self.con.execute("update publication_jobs set status='cancelled' where id=?",(job_id,))
+                self.con.commit()
+            return original(job_id,step,message,*args,**kw)
+        module._homologation_job_update_if_running=race_cancel
+        def synthetic_hn(slug,user,progress=None,candidate_number=None,authorization_checked=False):
+            progress('snapshot','Before remote mutation')
+            stage.append('stage_started')
+            return {'stageCode':'H1'}
+        module.create_homologation_candidate=synthetic_hn
+        self.assertIsNone(module.run_job(job))
+        self.assertFalse(stage)
+        self.assertEqual(self.con.execute('select status from publication_jobs where id=?',(job['id'],)).fetchone()[0],
+                         'cancelled')
+
+    def test_hn_legacy_queue_without_role_fails_closed(self):
+        module,job=self._running_hn_job()
+        self.con.execute("update publication_jobs set authorization_role='' where id=?",(job['id'],))
+        self.con.commit()
+        effects=[];module.create_homologation_candidate=lambda *args,**kw:effects.append('stage_started')
+        self.assertIsNone(module.run_job(job))
+        self.assertEqual(effects,[])
+        self.assertEqual(self.con.execute('select status from publication_jobs where id=?',(job['id'],)).fetchone()[0],
+                         'failed')
+
+    def test_hn_owner_changed_during_preparation_fails_before_deploy(self):
+        module,job=self._running_hn_job('alice')
+        effects=[]
+        def synthetic_hn(slug,user,progress=None,candidate_number=None,authorization_checked=False):
+            progress('snapshot','preflight')
+            self.con.execute("update projects set owner='carol',created_by='carol' where slug='demo'")
+            self.con.commit()
+            progress('deploying','should fail')
+            effects.append('deployed')
+            return {'stageCode':'H1'}
+        module.create_homologation_candidate=synthetic_hn
+        self.assertIsNone(module.run_job(job));self.assertFalse(effects)
+
+
+
 if __name__=='__main__': unittest.main()
