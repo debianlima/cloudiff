@@ -494,3 +494,41 @@ P0 continua sendo a presença de credenciais em
 22 configurações de origem Git. Sem restauração
 produtiva comprovada, cofre OpenBao e Docker E2E
 da promoção Hn→Pn, a v145.1 continua bloqueada.
+
+## P1 em PR39 — permissão de homologação na fila
+
+Auditoria independente de 15/11/2026, ~19h UTC.
+
+O PR #39 (head 75a6b4a, draft/unmerged, CI verde)
+contém revalidação de ACL para promover candidatos
+à Produção. Porém o aud-01 encontrou outro caminho,
+**específico da Homologação**, que ainda requer correção:
+
+- A criação de job de homologação confere acesso
+  genérico ao projeto, sem exigir a concessão
+  específica de homologar.
+- O worker recebe um job de homologação com
+  autorização previamente presumida e não prova,
+  novamente, o vínculo/role do ator na execução.
+- A auditoria reproduziu a falta de guarda com
+  **1/1 cenário negativo de enfileiramento** e
+  **2/2 cenários negativos de revogação na fila**,
+  em funções reais executadas com banco e Komodo
+  inteiramente simulados. Não houve Hn real criada.
+- O Portal ativo contém o mesmo padrão de chamadas
+  segundo inspeção estática read-only; isso não
+  equivale a confirmar abuso em produção.
+
+**Critério de aceite F3/T010:** verificar concessão
+de homologação no enfileiramento e novamente no
+worker, com vínculo de ator/projeto/job/estado,
+participação, role atual, candidate e tratamento
+fail-closed de cancelamento ou revogação. Acrescentar
+testes negativos e reauditoria independente antes
+de merge/deploy. Não usar um sucesso de CI de
+Produção como prova de segurança do fluxo Hn.
+
+O responsável é dev-01 com colaboração de dev-02
+e revisão aud-01/infra-01. A autorização do usuário
+permite trabalhar na correção, mas não substitui
+G0/G1, restore e o teste E2E em ambiente descartável.
