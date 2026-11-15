@@ -390,3 +390,67 @@ aprovação geral dos pedidos.
 Os demais gates G0–G5 e a contenção/rotação das 22
 origens Git com credenciais permanecem abertos; também
 não há comprovação do E2E Docker para a promoção Hn→Pn.
+
+## T022 publicado — auditoria de 18h40 UTC
+
+Esta seção atualiza o estado do Atlas após a revisão
+isolada do doc-01: **T022 está publicado pelo dev-02**,
+sem alterar a situação dos gates de release CloudIFF.
+
+- Branch Git interna Atlas:
+  fix/dev02-atlas-t022-snapshot-open-tab-stale-20261115,
+  commit **53021dd**. Backup do JS anterior foi preservado.
+- SHA256 do JS efetivamente instalado e servido:
+  33615c85793ca85dc120391ee57612499c59a4dfec2d08e4be047d74c27be60d,
+  igual à fonte Git da branch de correção.
+- Doc-01 revisou a proposta paralela em branch isolada
+  review/doc01-atlas-t022-live-freshness-20261115,
+  commit **67377d1**, que não foi implantada. A única
+  diferença de JavaScript entre as duas versões é um
+  comentário de esclarecimento.
+- Playwright sobre os **bytes realmente servidos**,
+  usando somente API sintética e relógio virtual:
+  **3/3** resoluções 1365/390/320 exibiram estado
+  old após 16 minutos e aviso de que o painel P0 não
+  pode atestar segurança com dados antigos. O campo de
+  busca manteve o foco/texto, sem exceções JS.
+- Regressões com o mesmo JS de produção: T021 passou
+  **3/3** Back/Forward de projetos, guias e Markdown;
+  T019 passou **9/9** casos de foco H1.
+- Auditoria read-only contra o commit correto: **3/3**
+  arquivos frontend e **3/3** fontes backend idênticos
+  ao Git. API saúde OK, acesso externo não autenticado
+  HTTP401. Único aviso MAIN_BEHIND_RELEASE, porque
+  a main Atlas não contém todos os fixes publicados.
+- **Estado T022:** versão publicada e validada com
+  testes sintéticos; aceite autenticado formal ainda
+  depende de identidade de teste/secret_ref e Surface.
+- A idade do snapshot agora é refletida corretamente
+  numa aba já aberta, mas a alimentação PGH segue
+  manual. Não equiparar correção de aviso de frescor
+  a telemetria viva ou sincronização contínua.
+
+### Outros gates operacionais atualizados
+
+- **PR #40:** head 8365058, CI verde e 19 testes
+  de journal durável PASS, incluindo fence global de
+  número público e verificador externo de evidência.
+  O componente continua standalone, não integrado
+  ao worker ou à promoção real Hn/Pn. A auditoria
+  identificou contenção potencial de transação SQLite
+  quando o callback verificador é lento. Revisão de
+  concorrência, trust boundary, crash e Docker E2E
+  exigidos antes de qualquer implantação.
+- **Agenda Única:** infraestrutura e desenvolvimento
+  confirmaram divergência de porta do banco na API
+  produtiva contra a homologação/serviço DB. O serviço
+  segue reiniciando; corrigir somente com owner,
+  backup restaurável, rollout canário e rollback.
+- **Supabase Pooler:** configuração de porta do banco
+  confere com a fonte DB, mas a causa de falha DNS/rede
+  permanece sob investigação. Não alterar a porta
+  indiscriminadamente.
+- **P0/G0–G5:** as 22 origens Git com credenciais
+  expostas, cofre OpenBao produtivo, prova de backup
+  restaurável e rotação/revogação/re-auditoria
+  ainda impedem a liberação CloudIFF v145.1.
