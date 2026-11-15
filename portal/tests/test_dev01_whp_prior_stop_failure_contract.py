@@ -293,6 +293,32 @@ class SqliteAtomicityTests(unittest.TestCase):
         self.assertFalse(any(c[:2]==('docker','stop') and c[-1]==fake.source for c in fake.calls))
         self.assertFalse(any(c[:3]==('docker','network','disconnect') and c[-1]!=fake.source for c in fake.calls))
 
+    def test_initial_manual_activation_db_failure_retracts_public_alias(self):
+        for fail_step in (1,2):
+            with self.subTest(write=fail_step):
+                fake=PromotionFixture(fail_at_db_step=fail_step)
+                fake.expected_previous=''
+                result=fake.activate(object())
+                self.assertEqual(result['http_status'],503)
+                self.assertEqual(result['error'],'production_db_commit_failed_rolled_back')
+                self.assertEqual(fake.db_rollback_count,1)
+                self.assertEqual(fake.db_calls,[])
+                self.assertNotIn('cloudif-p1999-active-web',fake.network_aliases)
+                self.assertIn('other-safe-alias',fake.network_aliases)
+                self.assertIn(fake.source,fake.network_aliases)
+                self.assertFalse(any(cmd[:2]==('docker','stop') and cmd[-1]==fake.source for cmd in fake.calls))
+                self.assertFalse(any(cmd[:3]==('docker','network','disconnect')
+                                     and cmd[-1]!=fake.source for cmd in fake.calls))
+
+    def test_initial_manual_activation_cleanup_error_never_claims_recovery(self):
+        fake=PromotionFixture(fail_at_db_step=2,alias_connect_fails=True)
+        fake.expected_previous=''
+        result=fake.activate(object())
+        self.assertEqual(result['http_status'],503)
+        self.assertEqual(result['error'],'production_db_recovery_failed')
+        self.assertFalse(fake.db_calls)
+        self.assertEqual(fake.db_rollback_count,1)
+
     def test_initial_release_cleanup_errors_never_claim_success(self):
         for phase in ('disconnect','connect'):
             with self.subTest(phase=phase):
