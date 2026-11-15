@@ -341,3 +341,52 @@ A proposta está em branch de revisão no Git Atlas interno:
 
 A versão Atlas main continua defasada e os bloqueios
 CloudIFF de G0–G5, W1 e Docker Hn/Pn permanecem ativos.
+
+## Revisão final — T021 publicado e importador estrito
+
+Atualização de 15/11/2026, aproximadamente 18h05 UTC.
+
+**T021 Atlas passou de revisão para publicado.**
+O dev-02 publicou no Git interno Atlas a correção
+fix/dev02-atlas-t021-browser-history-20261115,
+commit 5b3c908. O arquivo JavaScript HTTP servido tem SHA256
+eaf89f9b1a6e47b6a1b3923aae274dd5d1466274bfe642ad775c885c7bf4f20c,
+idêntico ao Git da branch. Um backup da versão anterior
+foi preservado antes da substituição.
+
+- A auditoria doc-01 com a branch exata publicada confirmou
+  3/3 assets de interface e 3/3 fontes backend coincidentes.
+  O único alerta de governança é MAIN_BEHIND_RELEASE:
+  publicar main antiga causaria regressão.
+- O navegador Playwright com os mesmos bytes servidos,
+  API fictícia e sem credenciais, passou em 1365, 390 e
+  320 px com Voltar/Avançar de projetos, abas, arquivos
+  Markdown e foco acessível, zero exceções JS.
+- A revisão de doc-01 a9ff48e foi preservada isoladamente
+  como evidência, sem merge nem implantação paralela.
+  Dev-02 manteve o próprio commit 5b3c908.
+- A versão publicada continua sujeita ao aceite autenticado
+  de Surface e à integração governada na main, que permanece
+  defasada. T019 e T021 não liberam o release CloudIFF.
+
+**Segurança do importador PGH:** o dev-02 também publicou
+o importador que rejeita chaves JSON duplicadas, commit
+interno 9474b93. A fonte Git corresponde ao arquivo
+administrativo instalado, SHA256
+d3e2190b7f74626d7344698a3b877e08419ec8fa9744d344bfde720a2aeb27f4.
+A revisão independente doc-01 executou 9/9 testes de
+JSON estrito, 11/11 de sanitização de textos sensíveis e
+verificou os vínculos explícitos dos projetos, todos PASS.
+Isso não implica sincronização em tempo real: a exportação
+PGH/Atlas continua manual e precisa verificar frescor.
+
+**G1:** o servidor Samba de backup ainda requer acesso
+autenticado por identidade confiável e confirmação da
+host key SSH por canal legítimo. Sem inventário de
+compartilhamentos e teste real de restauração dos
+serviços CloudIFF, G1 continua pendente mesmo após a
+aprovação geral dos pedidos.
+
+Os demais gates G0–G5 e a contenção/rotação das 22
+origens Git com credenciais permanecem abertos; também
+não há comprovação do E2E Docker para a promoção Hn→Pn.
