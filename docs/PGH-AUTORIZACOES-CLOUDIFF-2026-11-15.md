@@ -250,3 +250,33 @@ proposto. Não altera o estado dos demais gates de segurança.
   afetada pela mudança de JS do Atlas.
 - Esta publicação não libera W1/Hn/Pn do CloudIFF,
   G0–G5 nem merge de main Atlas.
+
+## PR #40 — journal durável ainda não integrado
+
+Atualização documental de 15/11/2026, aproximadamente 17h40 UTC.
+
+- Dev-01 abriu [PR #40](https://github.com/debianlima/cloudiff/pull/40)
+  head d6b82b1, base PR #38, draft/unmerged e CI remoto
+  concluído com sucesso. A suíte completa local do módulo
+  e repositório registrou 1378/1378 testes, incluindo
+  14 testes do journal SQLite.
+- O código adiciona protótipo independente de journal
+  persistente para a publicação, mas **ainda não é usado
+  pelos handlers de execução**. Sua presença não implementa
+  recuperação automática após crash, isolamento real entre
+  controladores nem autorização para promoção Docker.
+- Aud-01 reproduziu uma questão de unicidade entre projetos
+  com número público de publicação compartilhado e observou
+  que uma referência SHA256 de evidência pode ser aceita
+  sem prova autenticada no estado terminal. O integrador
+  deverá vincular public_number às restrições reais do
+  Portal, exigir identidade, fonte e verificador de
+  evidência confiáveis e impedir reconciliação arbitrária.
+- Antes de integrar PR #40: revisão independente de aud-01
+  e infra-01, integração do journal no fluxo PR #38,
+  lease e fencing de todos os controladores, teste
+  descartável com falhas/crash, prova de recuperação
+  do estado Docker/SQLite e cobertura dos gates G0–G5.
+- Não converter CI verde, testes sintéticos ou permissão
+  condicionada em autorização de deploy. A versão v145.1
+  permanece bloqueada.
