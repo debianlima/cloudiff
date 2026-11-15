@@ -1152,12 +1152,43 @@ def enqueue_candidate_publication(slug,candidate_number,user,approval_id='',acti
     actor=(user.get('username') or 'portal').strip().lower();con=sqlite3.connect(DB);_ensure_schema(con);cur=con.execute("insert into publication_jobs(project_slug,actor,status,step,message,created_at,operation,candidate_number,publication_number,environment,approval_id,activation_digest,authorization_mode,authorization_role) values(?,?,?,?,?,?,?,?,?,?,?,?,?,?)",(slug,actor,'queued','queued','Publicação do candidato homologado e aprovado recebida.',_now(),'production_release',int(candidate_number),publication,'production',str(approval_id),str(activation_digest),'critical_approval',_release_permission_role(con,slug,user)));con.execute("update production_activation_requests set status='queued',updated_at=? where project_slug=? and candidate_number=? and publication_number=?",(_now(),slug,int(candidate_number),publication));con.commit();jid=int(cur.lastrowid);con.close();return {'ok':True,'queued':True,'job_id':jid,'candidateNumber':int(candidate_number),'publicationNumber':publication,'stageCode':'P'+str(publication),'approvalId':str(approval_id),'existing':False}
 
 
-def _validate_project_permission_job(slug,candidate_number,publication_number,activation_digest):
-    con=sqlite3.connect(DB);con.row_factory=sqlite3.Row;_ensure_schema(con)
-    candidate=con.execute("select * from publication_candidates where project_slug=? and candidate_number=? and status='homologated'",(slug,int(candidate_number))).fetchone();con.close()
-    if not candidate:raise PermissionError('publication_binding_mismatch')
+def _validate_project_permission_job(slug,candidate_number,publication_number,activation_digest,actor,authorization_role,job_id):
+    """Revalidate current project ACL and queued identity before publish mutation.
+
+    Global Admin/Professor roles cannot be recovered from queued group snapshots.
+    Until a trusted current identity provider exists, deny those queued jobs.
+    """
+    actor=str(actor or '').strip().lower();role=str(authorization_role or '').strip().lower()
+    if not actor or actor=='portal' or role not in ('owner','delegated'):
+        raise PermissionError('publication_role_revalidation_unavailable')
+    con=sqlite3.connect(DB);con.row_factory=sqlite3.Row
+    try:
+        _ensure_schema(con)
+        queued=con.execute(
+            'select id,project_slug,actor,status,operation,authorization_mode,authorization_role, '
+            'candidate_number,publication_number,activation_digest '
+            'from publication_jobs where id=? and project_slug=?',
+            (int(job_id),slug)).fetchone()
+        if (not queued or str(queued['status'])!='running'
+                or str(queued['operation'])!='production_release'
+                or str(queued['authorization_mode'])!='project_permission'
+                or str(queued['actor'] or '').strip().lower()!=actor
+                or str(queued['authorization_role'] or '').strip().lower()!=role
+                or int(queued['candidate_number'] or 0)!=int(candidate_number)
+                or int(queued['publication_number'] or 0)!=int(publication_number)
+                or not hmac.compare_digest(str(queued['activation_digest'] or ''),str(activation_digest or ''))):
+            raise PermissionError('publication_job_binding_mismatch')
+        user={'username':actor,'groups':[],'admin':False}
+        if (not _project_allowed(con,slug,user)
+                or not _can_publish(con,slug,user)
+                or _release_permission_role(con,slug,user)!=role):
+            raise PermissionError('publication_permission_revoked')
+        candidate=con.execute("select * from publication_candidates where project_slug=? and candidate_number=? and status='homologated'",(slug,int(candidate_number))).fetchone()
+        if not candidate:raise PermissionError('publication_binding_mismatch')
+    finally:
+        con.close()
     summary=_publication_config().environment_summary(slug,'production')
-    material,digest=_production_activation_material(slug,candidate,int(publication_number),summary)
+    _material,digest=_production_activation_material(slug,candidate,int(publication_number),summary)
     if not hmac.compare_digest(str(digest),str(activation_digest or '')):raise PermissionError('publication_binding_mismatch')
     return candidate,digest
 
@@ -1260,7 +1291,7 @@ def run_job(job):
             authorization_mode=str(job.get('authorization_mode') or 'critical_approval')
             activation_digest=str(job.get('activation_digest') or '')
             if authorization_mode=='project_permission':
-                _validate_project_permission_job(slug,int(job.get('candidate_number') or 0),int(job.get('publication_number') or 0),activation_digest)
+                _validate_project_permission_job(slug,int(job.get('candidate_number') or 0),int(job.get('publication_number') or 0),activation_digest,actor,job.get('authorization_role'),job_id)
                 result=publish_homologated_candidate(slug,int(job.get('candidate_number') or 0),user,progress=progress,publication_number=int(job.get('publication_number') or 0),authorization_checked=True);message='Publicação '+str(result.get('stageCode') or '')+' ativada em Produção.'
             else:
                 approval_id=str(job.get('approval_id') or '');reservation=''
