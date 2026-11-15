@@ -418,6 +418,48 @@ class PublicationPermissionsTests(unittest.TestCase):
             module.enqueue_homologation('demo',actor)
         self.assertEqual(self.con.execute('select count(*) from publication_jobs').fetchone()[0],0)
 
+    def test_public_alias_rejects_project_member_without_publish_grant(self):
+        module,user=self._homologation_fixture(grant=False)
+        self.assertIsNotNone(module._project_allowed(self.con,'demo',user))
+        called=[]
+        module._clients=lambda *args,**kwargs:(called.append('clients') or ('','',''))
+        module._post=lambda *args,**kwargs:(called.append('publisher') or (200,{'ok':True}))
+        with self.assertRaisesRegex(PermissionError,'publication_alias_permission_denied'):
+            module.set_alias('demo','newalias',user)
+        self.assertFalse(called)
+        self.assertEqual(self.con.execute('select count(*) from project_publication_aliases').fetchone()[0],0)
+
+    def test_public_alias_respects_grant_revocation(self):
+        module,user=self._homologation_fixture(grant=True)
+        self.con.execute("update project_publication_permissions set can_publish=0 where project_slug='demo' and username='bob'")
+        self.con.commit()
+        called=[]
+        module._clients=lambda *args,**kwargs:(called.append('clients') or ('','',''))
+        with self.assertRaisesRegex(PermissionError,'publication_alias_permission_denied'):
+            module.set_alias('demo','newalias',user)
+        self.assertFalse(called)
+
+    def test_public_alias_allows_current_publish_delegate(self):
+        module,user=self._homologation_fixture(grant=True)
+        self.module().set_permissions(self.con,'demo',self.user('teacher',['CloudIF-Professor']),
+            [{'username':'bob','homologate':True,'publish':True}])
+        self.con.commit()
+        requests=[]
+        module._clients=lambda :('https://runtime.invalid','fake-komodo','fake-publisher')
+        module._post=lambda *args,**kwargs:(requests.append((args[0],args[1])) or (200,{'ok':True}))
+        result=module.set_alias('demo','newalias',user)
+        self.assertTrue(result['ok'])
+        self.assertEqual(result['hostname'],'newalias.cloudiff.duckdns.org')
+        self.assertEqual(len(requests),1)
+        row=self.con.execute('select alias from project_publication_aliases where project_slug=?',('demo',)).fetchone()
+        self.assertEqual(row[0],'newalias')
+
+    def test_public_alias_allows_owner_without_explicit_grant(self):
+        module,user=self._homologation_fixture(username='alice',grant=False)
+        module._clients=lambda :('https://runtime.invalid','fake-komodo','fake-publisher')
+        module._post=lambda *args,**kwargs:(200,{'ok':True})
+        self.assertEqual(module.set_alias('demo','owneralias',user)['alias'],'owneralias')
+
     def test_hn_direct_candidate_creation_rejects_member_without_hn_grant(self):
         module,actor=self._homologation_fixture(grant=False)
         external_calls=[]

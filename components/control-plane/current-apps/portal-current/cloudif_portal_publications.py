@@ -1423,7 +1423,11 @@ def set_alias(slug,alias,user):
     if alias in {'www','api','admin','cloudiff','auth','login','status','mail'}:raise ValueError('Alias reservado.')
     con=sqlite3.connect(DB);con.row_factory=sqlite3.Row;_ensure_schema(con)
     project=_project_allowed(con,slug,user)
-    if not project:con.close();raise PermissionError('Projeto não encontrado ou sem permissão.')
+    # Changing a public DNS alias is a production-facing mutation, not merely
+    # viewing a shared project. Require the current publish grant before any
+    # publisher call or reservation write.
+    if not project or not _can_publish(con,slug,user):
+        con.close();raise PermissionError('publication_alias_permission_denied')
     other=con.execute('select project_slug from project_publication_aliases where alias=? and project_slug<>?',(alias,slug)).fetchone()
     if other:con.close();raise ValueError('Este alias já está em uso.')
     now=_now();actor=user.get('username') or 'portal'
