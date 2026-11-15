@@ -59,7 +59,18 @@ class PublicationRecoveryJournal:
         # Existing WAL/SHM files may predate this code: tighten them too.
         # Parent directory must be controller-owned, not untrusted-writable;
         # no in-process umask changes (unsafe for multithreaded workers).
-        path = os.fspath(db_path)
+        path = os.path.abspath(os.fspath(db_path))
+        parent = os.path.dirname(path)
+        # Fail closed when the immediate state directory is replaceable by
+        # unrelated local users or resolves through a symlink. Ancestor/path
+        # trust still requires an owner-approved deployment location.
+        parent_stat = os.lstat(parent)
+        if not stat.S_ISDIR(parent_stat.st_mode) or stat.S_ISLNK(parent_stat.st_mode):
+            raise ValueError('journal_parent_not_directory')
+        if parent_stat.st_mode & 0o022:
+            raise PermissionError('journal_parent_writable_by_others')
+        if parent_stat.st_uid not in (os.geteuid(), 0):
+            raise PermissionError('journal_parent_untrusted_owner')
         nofollow = getattr(os, 'O_NOFOLLOW', 0)
         for suffix in ('', '-wal', '-shm'):
             flags = (os.O_RDWR | os.O_CREAT if not suffix

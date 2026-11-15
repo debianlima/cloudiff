@@ -78,6 +78,24 @@ with j.PublicationRecoveryJournal(path) as x:
         self.assertEqual(target.read_text(),'untouched')
         self.assertEqual(stat.S_IMODE(target.stat().st_mode),original_mode)
 
+    def test_rejects_group_or_world_writable_state_directory(self):
+        for mode in (0o775,0o777):
+            with self.subTest(mode=oct(mode)):
+                self.root.chmod(mode)
+                try:
+                    with self.assertRaisesRegex(PermissionError,'journal_parent_writable_by_others'):
+                        journal.PublicationRecoveryJournal(self.root/'insecure.sqlite')
+                    self.assertFalse((self.root/'insecure.sqlite').exists())
+                finally:
+                    self.root.chmod(0o755)
+
+    def test_rejects_symlinked_immediate_state_directory(self):
+        trusted=self.root/'trusted';trusted.mkdir(mode=0o700)
+        alias=self.root/'alias';alias.symlink_to(trusted,target_is_directory=True)
+        with self.assertRaisesRegex(ValueError,'journal_parent_not_directory'):
+            journal.PublicationRecoveryJournal(alias/'journal.sqlite')
+        self.assertFalse((trusted/'journal.sqlite').exists())
+
     def test_nonregular_path_is_not_accepted(self):
         folder=self.root/'journal.sqlite'
         folder.mkdir()

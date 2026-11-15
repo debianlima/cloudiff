@@ -65,3 +65,7 @@ publicação Hn -> Pn.
 
 O P0 original de 22 configurações Git com credenciais
 continua não resolvido por este patch.
+
+## Dev-01 review integration: state-directory gate
+
+Dev-01 integrated the doc-01 file-mode patch preserving original commit authorship, then added a fail-closed **immediate parent** directory check. The parent must exist, not be a symlink, be owned by the service's effective UID or root, and must not be group/other writable. Tests reject mode 0775/0777 and symlinked direct parent without creating the database. This does **not** prove all ancestors are trusted, protect an attacker who controls a higher-level mount or replace the need for an owner-approved service directory with fixed ownership/ACL. No production instance uses this journal yet.
