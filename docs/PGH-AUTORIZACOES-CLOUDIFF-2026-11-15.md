@@ -280,3 +280,64 @@ Atualização documental de 15/11/2026, aproximadamente 17h40 UTC.
 - Não converter CI verde, testes sintéticos ou permissão
   condicionada em autorização de deploy. A versão v145.1
   permanece bloqueada.
+
+## Confirmação das 13 aprovações e revisão T021
+
+Atualização de 15/11/2026, aproximadamente 18h UTC.
+
+O solicitante confirmou expressamente: **todos os 13 pedidos estão
+aprovados para prosseguimento dentro de seu escopo**. A confirmação
+foi registrada como adendo restrito no PGH e despachada novamente a
+infra-01 (G0/G1/G2/G4/M1), dev-02 (G3/F1/F4/R1),
+dev-01 (F2/F3), aud-01 (G5) e surface-01 (T1).
+
+O escopo permitido é verificar, preparar e executar ações
+somente após os gates operacionais pertinentes. O aceite
+administrativo **não certifica** privilégio de sistema,
+titularidade de credencial de terceiro, backup restaurável,
+cofre, teste de rollback ou resolução do incidente P0.
+Nenhum pedido foi marcado concluído pela confirmação.
+
+### G1 — Acesso seguro ao backup
+
+Conectividade TCP ao servidor Samba de backup indicado
+foi confirmada para SSH/SMB. A identidade atualmente
+disponível no LabIFF não possui chave SSH do host
+registrada e confiável; cliente SMB também não está
+disponível nesta sessão. Acesso autenticado, integridade
+dos arquivos e restauração isolada não foram validados.
+Não foi desabilitada verificação SSH nem colocada
+senha do solicitante em comandos, logs ou Git. A ação
+depende de identidade e host key verificados pelo
+responsável e secret_ref governado.
+
+### R1 — T021: Voltar/Avançar no acompanhamento Atlas
+
+Surface-01 identificou que navegar em cartões, abas
+e arquivos Markdown com history.replaceState não
+preservava o histórico do navegador. Doc-01 adaptou
+a proposta do Surface sobre a correção T019 já
+publicada, sem alteração do serviço ativo.
+
+A proposta está em branch de revisão no Git Atlas interno:
+
+- Branch review/doc01-atlas-t021-history-20261115,
+  commit a9ff48e, baseado em c41dd2d (T019).
+- Acrescenta tratamento popstate, pushState para
+  alteração real de projeto/aba/documento, e mantém
+  foco no H1 de contexto do projeto.
+- Testes Playwright sintéticos: 2/2 projetos em
+  desktop/mobile, 3/3 abas/documentos em diferentes
+  resoluções, 9/9 casos de foco H1 preservado.
+- Teste versionado de histórico cobriu 1365/390;
+  320 px passou em execução isolada do mesmo código.
+  Testes de hierarquia, documentos Markdown e
+  importador sem segredos passaram.
+- **T021 é candidato para revisão**, não está
+  implantado. Dev-02 deve revisar e integrar em
+  branch própria sob controle de concorrência;
+  Surface deve validar a versão realmente servida
+  antes de declarar o problema corrigido.
+
+A versão Atlas main continua defasada e os bloqueios
+CloudIFF de G0–G5, W1 e Docker Hn/Pn permanecem ativos.
