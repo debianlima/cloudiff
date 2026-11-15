@@ -144,25 +144,36 @@ class PublicationRecoveryJournal:
                 raise ValueError('finalization_requires_verification_digest')
         elif verification_sha256:
             raise ValueError('verification_digest_for_nonterminal_phase')
+        # Never run an external or potentially slow evidence verifier under a
+        # SQLite write lock: it blocks unrelated projects and can deadlock on
+        # a re-entrant verifier. Read a stable journal snapshot in autocommit,
+        # verify that snapshot, and then compare it again under BEGIN IMMEDIATE.
+        # The controller must ALSO own a cross-service alias/operation lease
+        # while observing Docker/runtime; SQLite alone cannot fence Docker.
+        select_sql=('SELECT operation_id,project,kind,public_number,publication_number, '
+                    'target_container,phase,reason_code,verification_sha256,updated_at '
+                    'FROM stage_publication_operation_journal '
+                    'WHERE operation_id=? AND phase=?')
+        prior=None
+        if next_phase in ('committed','reconciled'):
+            if self._evidence_verifier is None:
+                raise PublicationJournalConflict('evidence_verifier_unavailable')
+            prior=self.con.execute(select_sql,(operation_id,expected_phase)).fetchone()
+            if prior is None:
+                raise PublicationJournalConflict('journal_phase_changed_or_missing')
+            try:
+                verified=self._evidence_verifier(dict(prior),next_phase,verification_sha256)
+            except Exception:
+                raise PublicationJournalConflict('evidence_verification_failed') from None
+            if verified is not True:
+                raise PublicationJournalConflict('evidence_verification_failed')
         try:
             self._begin()
-            current=self.con.execute('''SELECT operation_id,project,kind,public_number,publication_number,
-                   target_container,phase FROM stage_publication_operation_journal
-                   WHERE operation_id=? AND phase=?''',
-                   (operation_id,expected_phase)).fetchone()
+            current=self.con.execute(select_sql,(operation_id,expected_phase)).fetchone()
             if current is None:
                 raise PublicationJournalConflict('journal_phase_changed_or_missing')
-            if next_phase in ('committed','reconciled'):
-                if self._evidence_verifier is None:
-                    raise PublicationJournalConflict('evidence_verifier_unavailable')
-                # The digest alone is NOT evidence: the trusted local verifier
-                # must bind it to this exact operation and intended next phase.
-                try:
-                    accepted=self._evidence_verifier(dict(current),next_phase,verification_sha256)
-                except Exception:
-                    raise PublicationJournalConflict('evidence_verification_failed') from None
-                if accepted is not True:
-                    raise PublicationJournalConflict('evidence_verification_failed')
+            if prior is not None and dict(current)!=dict(prior):
+                raise PublicationJournalConflict('journal_changed_during_verification')
             result=self.con.execute('''UPDATE stage_publication_operation_journal
                 SET phase=?,reason_code=?,verification_sha256=?,updated_at=?
                 WHERE operation_id=? AND phase=?''',

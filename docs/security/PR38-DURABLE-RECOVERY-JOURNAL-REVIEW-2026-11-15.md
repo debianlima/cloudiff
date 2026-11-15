@@ -42,3 +42,9 @@ A future trusted read-only inspector should obtain: target and previous containe
 ## Prototype evidence
 
 The 13 deterministic offline tests use temporary SQLite databases: persistence across connection restart, replay/idempotency, competing connection fence, crash phase retention, separate projects, accepted and forbidden transitions, metadata validation, and no secret-bearing columns. They are not a Docker E2E or an implementation of automatic crash recovery.
+
+## Audit follow-up — verifier outside SQLite write lock
+
+Independent aud-01 review confirmed a 400 ms evidence callback blocked unrelated journal writers for approximately 434 ms under `BEGIN IMMEDIATE`. The standalone prototype now loads a journal snapshot in autocommit mode, runs the injected trusted verifier **without holding a SQLite write transaction**, and then enters `BEGIN IMMEDIATE` to re-read and compare exact operation metadata, phase, reason, digest and update timestamp before atomically setting the terminal phase. A phase or metadata change in that window rejects terminal success.
+
+This avoids holding an SQLite write lock during network or other slow proof I/O. It **does not guarantee** that the observed Docker/alias state stays fixed between verification and SQLite commit: the hosting controller must own an external resource fence/lease across Docker actions and verification, and must enforce verifier timeouts and trusted evidence identity. No production worker uses this standalone library yet.

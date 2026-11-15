@@ -5,6 +5,8 @@ Proves a persistent *fence*, not automatic real-Docker crash recovery.
 import importlib.util
 import hashlib
 import json
+import threading
+import time
 import sqlite3
 import tempfile
 import unittest
@@ -241,6 +243,76 @@ class JournalContract(unittest.TestCase):
             j.prepare(**payload())
             self.assertNotIn('example.invalid',str(j.unresolved()))
             self.assertEqual(j.con.execute('PRAGMA synchronous').fetchone()[0],2) # FULL
+
+    def test_unrelated_project_does_not_wait_for_slow_verifier_write_lock(self):
+        entered=threading.Event()
+        leave=threading.Event()
+        failures=[]
+        with self.journal() as j:
+            op=j.prepare(**payload('alpha',10))
+            j.transition(op,expected_phase='prepared',next_phase='mutating')
+            j.transition(op,expected_phase='mutating',next_phase='needs_reconciliation',
+                         reason_code='worker_crash')
+        def verifier(row,phase,digest):
+            entered.set()
+            if not leave.wait(2):return False
+            return True
+        def finish():
+            try:
+                with mod.PublicationRecoveryJournal(self.db,evidence_verifier=verifier) as j:
+                    j.transition(op,expected_phase='needs_reconciliation',next_phase='reconciled',
+                                 verification_sha256='a'*64)
+            except Exception as e:
+                failures.append(type(e).__name__)
+        worker=threading.Thread(target=finish,daemon=True)
+        worker.start()
+        try:
+            self.assertTrue(entered.wait(2))
+            start=time.monotonic()
+            with self.journal() as unrelated:
+                beta=unrelated.prepare(**payload('beta',11))
+            latency=time.monotonic()-start
+            self.assertTrue(beta)
+            # A delayed evidence verifier must not retain a global SQLite
+            # writer lock. Leave generous CI tolerance for process scheduling.
+            self.assertLess(latency,0.8)
+        finally:
+            leave.set()
+            worker.join(timeout=3)
+        self.assertFalse(worker.is_alive())
+        self.assertFalse(failures)
+
+    def test_state_change_during_verification_rejects_stale_finalization(self):
+        with self.journal() as j:
+            op=j.prepare(**payload('alpha',10))
+            j.transition(op,expected_phase='prepared',next_phase='mutating')
+        def race_verifier(row,phase,digest):
+            with self.journal() as writer:
+                writer.transition(op,expected_phase='mutating',next_phase='needs_reconciliation',
+                                  reason_code='worker_crash')
+            return True
+        with mod.PublicationRecoveryJournal(self.db,evidence_verifier=race_verifier) as j:
+            with self.assertRaisesRegex(mod.PublicationJournalConflict,'journal_phase_changed_or_missing'):
+                j.transition(op,expected_phase='mutating',next_phase='committed',
+                             verification_sha256='c'*64)
+            self.assertEqual(j.unresolved('alpha')[0]['phase'],'needs_reconciliation')
+
+    def test_same_phase_metadata_change_during_verification_is_rejected(self):
+        with self.journal() as j:
+            op=j.prepare(**payload('alpha',10))
+            j.transition(op,expected_phase='prepared',next_phase='mutating')
+        def race_verifier(row,phase,digest):
+            with self.journal() as writer:
+                writer.con.execute('BEGIN IMMEDIATE')
+                writer.con.execute('UPDATE stage_publication_operation_journal SET reason_code=? WHERE operation_id=?',
+                                   ('updated_by_test',op))
+                writer.con.commit()
+            return True
+        with mod.PublicationRecoveryJournal(self.db,evidence_verifier=race_verifier) as j:
+            with self.assertRaisesRegex(mod.PublicationJournalConflict,'journal_changed_during_verification'):
+                j.transition(op,expected_phase='mutating',next_phase='committed',
+                             verification_sha256='c'*64)
+            self.assertEqual(j.unresolved('alpha')[0]['phase'],'mutating')
 
     def test_no_partial_row_after_insert_conflict(self):
         with self.journal() as j:
