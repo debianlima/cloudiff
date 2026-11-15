@@ -532,3 +532,81 @@ O responsável é dev-01 com colaboração de dev-02
 e revisão aud-01/infra-01. A autorização do usuário
 permite trabalhar na correção, mas não substitui
 G0/G1, restore e o teste E2E em ambiente descartável.
+## Revalidação independente — PR39/40 e Atlas T023
+
+Atualização 15/11/2026, aproximadamente 19h40 UTC.
+Aprovações continuam condicionadas às evidências dos gates.
+
+### PR #39 — autorização de homologação corrigida no código
+
+O dev-01 publicou novo HEAD **4eee31f**, CI
+GitHub Actions success, PR draft/unmerged. O
+doc-01 conferiu em worktree independente:
+
+- Os dois arquivos espelhados do Portal são
+  idênticos byte a byte.
+- **39/39 testes de autorização PASS** no
+  commit exato (incluindo fluxo de homologação).
+- Enqueue Hn exige concessão de homologação;
+  worker revalida ator, job, role e vínculo
+  antes/durante etapas, protegendo cancelamentos.
+- Ainda faltam prova de identidade atual para
+  privilégios de Admin/Professor, lease interserviços
+  e testes E2E de revogação durante efeitos Docker.
+  **Não há autorização de merge/deploy.**
+
+### PR #40 — arquivos privados do journal
+
+O dev-01 publicou HEAD **28fa84f**, CI
+GitHub Actions success, PR draft/unmerged,
+incorporando a revisão doc-01 efbb1b0 com
+preservação de autoria e validação adicional
+do diretório pai. Na revisão independente:
+
+- **22/22 testes originais do journal PASS**.
+- **7/7 testes de permissões/ACL PASS**.
+- Banco, WAL e SHM passam a ser controlados
+  com modo 0600, mais verificação do diretório
+  imediato antes da criação.
+- O módulo permanece standalone; verificação
+  de ancestrais, ACL efetiva, lease Docker e
+  integração ao worker ainda exigem aprovação
+  de infraestrutura/auditoria e teste isolado.
+
+### Atlas T023 — metadados inválidos de frescor
+
+O surface-01 identificou que dados sintéticos
+recent/verified com idade ou limite inválidos
+podiam ser apresentados sem aviso. O doc-01
+preparou no Git Atlas interno a branch
+review/doc01-atlas-t023-strict-metadata-20261115,
+commit **f67bc65**, baseada no T022 publicado.
+
+- Exige idade e limite numéricos finitos válidos
+  e timestamp ISO8601 com fuso de horário.
+- Caso inválido: estado old e aviso de que
+  segurança não pode ser atestada, sem esconder
+  tarefas P0.
+- **42/42 testes Chromium sintéticos PASS**
+  em 1365/390/320 px. Regressões T022 3/3,
+  T021 3/3 e T019 9/9 também PASS.
+- **T023 ainda não foi implantado**: revisar
+  com dev-02, aud-01 e Surface, publicar somente
+  com backup, paridade Git/runtime e rollback.
+
+### G1 / operações pendentes
+
+A infraestrutura comprovou que o agendamento do
+backup PostgreSQL dos tenants terminou com
+resultado success e sem falhas reportadas.
+Entretanto, o armazenamento é root-only,
+os artefatos atuais ainda não foram inventariados
+pelo responsável nem restaurados isoladamente.
+Portanto **G1 não está concluído**.
+
+O CloudIFF v145.1 permanece bloqueado por G0–G5,
+P0 de 22 origens Git com credenciais, falta de
+OpenBao produtivo e Docker E2E Hn→Pn.
+Os problemas do Agenda API, Pooler, cinco W1 502
+e TLS SilviPro continuam sob diagnóstico
+e owner autorizados.
