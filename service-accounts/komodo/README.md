@@ -11,6 +11,23 @@
 - **Autenticação:** uma chave de API **distinta por agente**, com expiração em até 24h; valores devem entrar **diretamente no gerenciador institucional de segredos**. Nunca registrar valores de chaves/senhas em arquivos de memória, documentação, logs, GitHub ou no chat. O cadastro contém apenas um padrão de `secret_ref` e não representa segredo ativo.
 - **Atenção:** todas as chaves da mesma Service User herdam as permissões da conta. Portanto, **não elevar esta conta compartilhada a `Write`**. Mudanças da API Agenda exigem uma identidade de manutenção **separada**, Stack-specific, temporária, criada pelo administrador após verificação de G0/G1 e rollback. `Write` é capaz de excluir o recurso.
 
+## Payload nativo de provisionamento (sem credenciais)
+
+O contrato público Komodo `v2.3.x` confirma `POST /write/CreateServiceUser`, exclusivo de administrador, com **somente** `username` e `description`. O script `scripts/prepare-komodo-service-user-request.py` gera esse payload a partir da política local **PENDING**, sem efetuar chamada HTTP, autenticar, emitir chave ou declarar sucesso:
+
+```json
+{
+  "username": "svc-pgh-cloudiff",
+  "description": "PGH CloudIFF — leitura auditada da stack Agenda; sem operacao de producao"
+}
+```
+
+O administrador deve primeiro verificar se essa identidade já existe no Komodo Core, para evitar uma criação duplicada. Depois da criação, a concessão de permissão por recurso é feita **separadamente**, pelo mecanismo oficial `UpdatePermissionOnTarget` ou pela interface do Komodo; nunca presumir que a chamada de criação concedeu automaticamente `Read`. O contrato documentado dessa operação aceita `user_target`, `resource_target` e `permission`, e os IDs devem vir de consultas autenticadas no Komodo real (nunca inventados no script). A emissão de credenciais por `CreateApiKeyForServiceUser` usa `user_id`, `name` e `expires` como timestamp Unix em **milissegundos**. **Não usar `expires=0`**: significa ausência de expiração. O administrador cria apenas depois de confirmar ACL, TTLS e broker. Nunca imprimir a resposta que contém chave/segredo num console gravado ou arquivo PGH.
+
+A permissão `Read` permite consultar a configuração da stack; por isso, antes de emitir qualquer chave de leitura, a equipe de TI e `aud-01` devem comprovar que os campos sensíveis não ficam acessíveis em `Read`, ou limitar mais o acesso. O manifesto mantém `read_config_secret_sanitization_confirmed=false` enquanto não houver evidência real.
+
+Referências oficiais de API: https://docs.rs/komodo_client/latest/komodo_client/api/write/struct.CreateServiceUser.html , https://docs.rs/komodo_client/latest/komodo_client/api/write/struct.UpdatePermissionOnTarget.html e https://docs.rs/komodo_client/latest/komodo_client/api/write/struct.CreateApiKeyForServiceUser.html .
+
 ## Fluxo do administrador Komodo
 
 1. Confirmar a identidade do administrador e o domínio oficial do **Komodo Core**. Não usar SSH/Docker/Mongo para contornar a autenticação normal de usuário.
