@@ -6168,7 +6168,7 @@ def cloudif_publication_release_activate(handler):
     payload=_cloudif_pub_json(handler);project=safe_slug(payload.get('project') or '')
     try:num=int(payload.get('public_number'));publication=int(payload.get('publication_number'))
     except Exception:return send(handler,400,{'ok':False,'error':'invalid_release_request'})
-    rows=db_query("select * from stage_production_releases where project=? and publication_number=? and status='ready'",(project,publication))
+    rows=db_query("select * from stage_production_releases where project=? and publication_number=? and public_number=? and status='ready'",(project,publication,num))
     if not rows:return send(handler,404,{'ok':False,'error':'production_release_not_found'})
     target=str(rows[0].get('container') or '')
     try:
