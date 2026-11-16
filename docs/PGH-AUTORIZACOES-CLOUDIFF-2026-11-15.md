@@ -885,3 +885,88 @@ nao substituem owner/locks, secret_ref ou testes reais.
   W1 502 e SilviPro TLS permanecem em diagnostico.
 
 **CloudIFF v145.1 nao esta liberado.**
+
+## 16/11 — Atlas PGH automático e atualizações PR41/45/46
+
+Revisão 16/11/2026 aproximadamente 21h06 UTC,
+documentacao/cloudiff/doc-01.
+
+### T007 — sincronização Atlas PGH realmente implantada
+
+- O IPsec passou a sincronizar snapshots PGH automaticamente
+  a cada dez minutos por atlas-pgh-sync.timer (enabled/active).
+- A conexão via VPN 10.20.0.3 → 10.20.0.5 é feita com
+  chave SSH dedicada, host key verificada e comando
+  forçado de exportação, sem shell arbitrário.
+- No LabIFF, o exportador executa efetivamente como
+  mcp-shell sem privilégios root. No IPsec, a chave
+  privada está em diretório protegido root-only.
+- O cliente valida JSON estrito, integridade, origem
+  e fuso da data, conteúdo sanitizado e vínculos
+  de projeto; o importador Atlas oficial faz dry-run,
+  backup e troca atômica sob lock.
+- Bloqueio conservador para menos de 2 GiB livres
+  no volume de backups; nunca apaga backups antigos
+  automaticamente. É necessária política de retenção.
+- Código, unidades systemd, documentação de rollback
+  e 14 testes versionados no Git interno Atlas,
+  branch review/doc01-atlas-pgh-autosync-20261116,
+  commit **251140d**. Main não foi alterada pela
+  revisão; o serviço existente e a versão Git
+  têm hash idêntico.
+- Execuções periódicas confirmadas durante o dia.
+  Snapshot 2026-11-16T20:59:27Z com **1167 eventos**,
+  seis journals íntegros e catálogo de 24 projetos;
+  API saudável e acesso anônimo externo HTTP401.
+- Testes novos 14/14 PASS; regressões P0/controle
+  Markdown/hierarquia, audit10/10, JSON9/9 e
+  filtro texto sensível11/11 PASS.
+- Apenas **dois** projetos possuem feeds PGH
+  próprios explícitos. Não atribuir os eventos
+  transversais aos demais 22 projetos.
+
+### PR41 — validação de alias no worker
+
+- GitHub PR41 atual HEAD **35cb187**, CI Actions
+  43954728713 SUCCESS, permanece draft/unmerged.
+- Em análise independente doc-01 o handler real
+  de ativação manual contém condição SQL por
+  project, publication_number, public_number e
+  status ready ANTES dos efeitos externos.
+- Testes de binding de alias **2/2** e do gate
+  **20/20** PASS no commit exato; validador de
+  fonte PASS. A vulnerabilidade de public_number
+  identificada pelo aud-01 não se reproduz nesse
+  HEAD de código.
+- PR46 contém revisão isolada do mesmo defeito;
+  comparar antes de reaplicar para não duplicar
+  mudanças. PR41/46 continuam não implantados.
+- O worker ainda precisa lease distribuído,
+  identidade real e verificador independente
+  Docker/banco/alias, crash recovery e G0–G5.
+  Uma aprovação de CI não autoriza release.
+
+### PR45 — identidade Komodo planejada, não criada
+
+- Infra-01 publicou PR45 draft, CI success,
+  com instruções e gerador de payload não secreto
+  para criação de svc-pgh-cloudiff por administrador.
+- O catálogo Atlas registra estado
+  PENDING_ADMIN_CREATION; **não há conta, API key
+  nem secret_ref produtivo comprovados**.
+- O owner Komodo com admin autenticado deve
+  criar a conta e atribuir apenas Read ao alvo
+  estritamente necessário. Somente depois,
+  broker/OpenBao produtivo poderá fornecer
+  chaves de curta duração com escopo mínimo,
+  e aud-01/surface-01 executar testes de negação.
+- Não reutilizar usuário de sessão, criar chave
+  sem validade ou assumir direitos a partir
+  de manifesto pendente.
+
+Os bloqueios G0 (delegação efetiva/lock), G1
+(restore institucional Postgres, roles e volumes),
+G2 (OpenBao produtivo), G3 (Docker Hn→Pn E2E
+e lease), G4 (remover e revogar credenciais
+expostas em 22 configs Git) e G5 (reauditoria)
+continuam impedindo CloudIFF v145.1.
