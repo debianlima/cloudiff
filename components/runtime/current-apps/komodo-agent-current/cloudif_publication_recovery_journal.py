@@ -82,8 +82,16 @@ class PublicationRecoveryJournal:
                     continue
                 raise
             try:
-                if not stat.S_ISREG(os.fstat(fd).st_mode):
+                metadata=os.fstat(fd)
+                if not stat.S_ISREG(metadata.st_mode):
                     raise ValueError('journal_not_regular_file')
+                # Reject an existing hard link before chmod or SQLite writes:
+                # it could be another file sharing the same inode. Require an
+                # owned, singly-linked inode for DB, WAL and SHM alike.
+                if metadata.st_nlink != 1:
+                    raise PermissionError('journal_hardlinked_file_forbidden')
+                if metadata.st_uid != os.geteuid():
+                    raise PermissionError('journal_file_untrusted_owner')
                 os.fchmod(fd, 0o600)
             finally:
                 os.close(fd)
