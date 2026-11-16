@@ -57,7 +57,9 @@ class ProjectPublicationConfigurationV1Tests(unittest.TestCase):
         self.assertIn("'variableValuesReturned':False",source);self.assertIn("'secretValuesIncluded':False",source)
         latest=source[source.rfind('def cloudif_publication_deploy(handler):'):]
         self.assertIn("runtime_source=_cloudif_publication_environment_path(public_number,deploy_number)",latest)
-        self.assertIn("source: ./runtime.env",latest);self.assertIn("target: /run/cloudif/runtime.env",latest)
+        self.assertIn("source: ./runtime-config",latest);self.assertIn("target: /run/cloudif",latest)
+        self.assertNotIn("source: ./runtime.env",latest)
+        self.assertIn("runtime_dir.chmod(0o700)",latest)
         self.assertIn("runtime_path.chmod(0o600)",latest);self.assertNotIn('    env_file:',latest)
         self.assertNotIn("'environment_variables':environment_values",source)
 
