@@ -735,3 +735,79 @@ do mesmo Hn container promovido Pn persistem.
 Atlas main segue defasada, PGH ainda depende
 de importação manual e há apenas dois feeds
 por projeto no catálogo de 24.
+
+## Atualizacao 16/11 — Atlas reconciliado e fence multi-servico
+
+Revisao por documentacao/cloudiff/doc-01,
+2026-11-16, aproximadamente 07h30 UTC.
+Estado comprobado por LabIFF, IPsec, testes
+e hash de fontes, sem alteracao produtiva CloudIFF.
+
+### Atlas
+
+- A branch main Atlas interna ja foi avancada por outro
+  agente para 0ec46a8; nao existe divergencia contra
+  o commit T023 publicado.
+- JavaScript, CSS e HTML servidos correspondem ao
+  mesmo commit Git. Testes Node de hierarquia, P0,
+  MD e Python de auditoria/importacao/vinculos passam.
+- Snapshot PGH atualizado com exportador sanitizado:
+  2026-11-16T07:15:07Z, **1046 eventos**, **6 journals**,
+  **24 projetos**. Importador strict JSON efetuou dry-run,
+  backup atomico e readback da API; HTTP401 anon externo.
+- Os vinculos PGH sao explicitos para 2 projetos; nao
+  inventar feeds de atividades para os outros 22.
+- A main reconciliada elimina o risco anterior de
+  republicar uma branch antiga. Nao significa que
+  todas as tarefas CloudIFF estao concluidas.
+
+### CloudIFF: adaptador do journal e autoridade real
+
+- Dev-01 trabalha em branch local com lease exclusivo,
+  integrando o journal PR40 ao worker Komodo. Aud-01
+  desenvolveu revisao isolada para comparar o fluxo.
+- Doc-01 criou uma terceira proposta independente,
+  **somente revisao**, a partir do merge local dos
+  PR35/38/39/40 (HEAD 7bd3468). Commit GitHub
+  **8f5ec20**, em
+  https://github.com/debianlima/cloudiff/tree/review/doc01-crosspr-release-guard-20261116
+- Contrato do adaptador: identidade atual, lease
+  cross-service, journal duravel com mutating antes
+  de qualquer efeito Docker/rede, callback recebe
+  operation_id e contexto do lease, prova externa
+  autenticada para committed. Falha incerta exige
+  needs_reconciliation, nunca retry cego.
+- Testes **11/11** novos, journal **22/22**,
+  permissao SQLite **7/7**, rollback **19/19**,
+  source validator OK. Nenhum Docker real.
+- **Nao esta ligado ao worker produtivo**; o lease
+  entre hosts e a autoridade de evidencias ainda
+  precisam existir. A publicacao no GitHub nao
+  realiza merge dos PRs nem release.
+- O modulo alternativo do dev-01 com flock
+  local nao e, por si, um lease entre servicos.
+  Compatibilidade com modo disabled nao deve
+  ser tratada como durabilidade efetiva. Owner,
+  infra e auditores precisam comparar os codigos.
+
+### Infraestrutura e gates
+
+- O arquivo local .git-credentials no LabIFF tem
+  modo 0600 sob pasta 0700; seu conteudo nao
+  foi lido ou alterado por esta revisao.
+- Os **22** arquivos .git/config remotos com
+  credenciais em URL (Forja21, Hospedagem1)
+  ainda necessitam contencao/rotacao e G5.
+  Nao significam 22 tokens unicos.
+- SSH BatchMode do LabIFF para Hospedagem com
+  a identidade disponivel retornou Permission
+  denied. Nao foi usada senha do chat,
+  nem houve bypass SSH ou acesso root remoto.
+- G1 nao comprova restauraçao real de PostgreSQL
+  e volumes; G0 ownership, G2 OpenBao produtivo,
+  G3 Docker Hn→Pn, G4 rotacao e G5 reauditoria
+  permanecem sem aceite.
+- Agenda API DSN 5432 versus banco 54402,
+  Pooler DNS, W1 cinco 502 e TLS SilviPro
+  continuam pendencias de servico.
+- **CloudIFF v145.1 continua bloqueado.**
