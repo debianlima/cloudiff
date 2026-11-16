@@ -147,6 +147,45 @@ class PublicationGateTests(unittest.TestCase):
         with self.assertRaises(PublicationJournalConflict):
             with self.make():pass
 
+    def test_durable_mutating_precedes_environment_file_replacement(self):
+        fixture=PromotionFixture()
+        observations=[]
+        def gated(project,kind,num,publication,target):
+            return self.make(project=project,kind=kind,num=num,publication=publication,target=target)
+        def observed_write(*args):
+            with PublicationRecoveryJournal(self.root/'journal.sqlite') as readback:
+                phases=[row['phase'] for row in readback.unresolved()]
+            observations.append(phases)
+            self.assertEqual(phases,['mutating'])
+            return '/tmp/synthetic-env-file-not-written'
+        fixture.release.__globals__['_cloudif_v145_operation_gate']=gated
+        fixture.release.__globals__['_cloudif_stage_write_environment']=observed_write
+        result=fixture.release(object())
+        self.assertEqual(result['http_status'],200)
+        self.assertEqual(observations,[['mutating']])
+
+    def test_durable_mutating_precedes_manual_docker_start(self):
+        from portal.tests.test_dev01_whp_prior_stop_failure_contract import FakeProcess
+        fixture=PromotionFixture()
+        events=[]
+        def gated(project,kind,num,publication,target):
+            return self.make(project=project,kind=kind,num=num,publication=publication,target=target)
+        original_docker=fixture.subprocess.run
+        def observed_docker(args,**kwargs):
+            if args[:3]==['docker','inspect',fixture.source] and '{{.State.Running}}' in args[-1]:
+                return FakeProcess(stdout='false')
+            if args[:2]==['docker','start']:
+                with PublicationRecoveryJournal(self.root/'journal.sqlite') as readback:
+                    phases=[row['phase'] for row in readback.unresolved()]
+                events.append(phases)
+                self.assertEqual(phases,['mutating'])
+            return original_docker(args,**kwargs)
+        fixture.activate.__globals__['_cloudif_v145_operation_gate']=gated
+        fixture.subprocess.run=observed_docker
+        result=fixture.activate(object())
+        self.assertEqual(result['http_status'],200)
+        self.assertEqual(events,[['mutating']])
+
     def test_fake_release_success_journal_committed_without_real_docker(self):
         fixture=PromotionFixture()
         def gated(project,kind,num,publication,target):

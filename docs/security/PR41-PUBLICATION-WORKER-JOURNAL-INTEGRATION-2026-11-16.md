@@ -32,3 +32,7 @@
 ### Residual concerns for aud-01 / infra-01 / dev-02
 
 The helper is only enabled via a process-level flag. Unless all aliases are mutated by cooperating workers, a host-local lock and a SQLite unique index do not prevent an out-of-band Docker CLI/Komodo write. The gate conservatively retains pending records even for early failures before Docker effects, requiring manual reconciliation. Deployment packaging must load the bridge module safely, use a private state directory, and provide a trusted verification identity. PR38's alias/network recovery still needs independent Docker proof for static IP, unrelated aliases and crash ambiguity. PR39's Portal ACL/worker authorization remains an independent gate.
+
+## Follow-up independent audit tests (16 November 2026)
+
+The parallel aud-01 sandbox implementation identified the importance of proving the precise ordering of the mutation boundary. Dev-01 added two standalone test cases to PR41: a fake production release asserts that the journal is already `mutating` when the runtime environment file would first be written, and a fake manual reactivation asserts the same before its first `docker start`. These tests never execute Docker. The source-level release gate still requires trusted callbacks and real Docker E2E before activation.
