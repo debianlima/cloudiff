@@ -811,3 +811,77 @@ e hash de fontes, sem alteracao produtiva CloudIFF.
   Pooler DNS, W1 cinco 502 e TLS SilviPro
   continuam pendencias de servico.
 - **CloudIFF v145.1 continua bloqueado.**
+
+## 16/11 — candidato G4 e adaptador de journal auditados
+
+Atualizacao 16/11/2026, aproximadamente 07h40 UTC.
+Todas as implementacoes abaixo sao REVISAO DE CODIGO;
+nao substituem owner/locks, secret_ref ou testes reais.
+
+### G4 — contencao de permissoes Git
+
+- Branch de revisao GitHub
+  https://github.com/debianlima/cloudiff/tree/review/doc01-g4-owner-git-config-mode-20261116
+  commit **3266a2e**.
+- Ferramenta owner_git_config_containment.py executa
+  plan sem revelar paths ou URLs; apply apenas com
+  root, service user proprietario, contagem exata,
+  manifesto root-private e verificacao de integridade;
+  chmod dos configs sensiveis a 0600, sem mudar URL.
+- Rollback exige manifesto original root-only e
+  confirmacao expressa por poder restaurar modo
+  world-readable. Rejeita symlink, hardlink, file
+  replacement e owner/diretorios inseguros.
+- **12/12 testes sintéticos PASS** e um teste
+  CLI completo sobre repo descartavel no LabIFF:
+  plan, apply 0644->0600, manifesto root0600,
+  rollback sem confirmacao negado e restauracao
+  controlada PASS. Validator de fonte PASS.
+- **Nao aplicado aos 22 arquivos reais** (Forja21,
+  Hospedagem1) por falta de acesso autenticado/owner
+  aos hosts. Mesmo aplicado, G4 exigiria rota de
+  credenciais por secret_ref, revogacao e rotacao,
+  mais reauditoria G5. Contencao nao e rotacao.
+
+### T003/T006 — fencing duravel revisado
+
+- Branch de revisao GitHub
+  https://github.com/debianlima/cloudiff/tree/review/doc01-crosspr-release-guard-20261116
+  commit **8f5ec20**, baseada no merge local
+  7bd3468 dos PR35/38/39/40 do dev-01.
+- Adaptador independente obriga identidade atual,
+  lease entre servicos, prepared/mutating antes de
+  efeitos externos e prova independente para commit.
+  Falha ambigua permanece needs_reconciliation.
+- **59 testes direcionados PASS**: 11 do adaptador,
+  22 journal, 7 ACL DB/WAL/SHM e 19 rollback.
+  Validator de fonte PASS.
+- Dev-01 e aud-01 ja possuem wrappers em worktrees
+  com lease proprio; essas abordagens devem ser
+  conciliadas, nao sobrepostas automaticamente.
+- O novo adaptador NAO foi integrado a handlers
+  produtivos. Flock local nao e lease distribuido,
+  e provider ficticio nos testes nao comprova Docker.
+  Sem atestado real e identidade/TTL de servico,
+  nao habilitar enforcement nem afirmar durabilidade.
+
+### Estado de infraestrutura neste ponto
+
+- .git-credentials LOCAL LabIFF ja tinha 0600 e
+  diretorio 0700; nenhum ajuste necessario.
+- SSH nao interativo para Hospedagem recusou
+  autenticação com identidade disponivel.
+- Atlas PGH exportado sanitizado em 07:15:07Z:
+  1046 eventos / 6 journals / 24 projetos,
+  importador strict com backup/readback OK.
+- Atlas main ja havia sido reconciliada para
+  0ec46a8 por outro agente, sem acao concorrente;
+  a versao servida passou nos testes de paridade.
+- Permanecem nao comprovados G0 owner/locks,
+  G1 backup PostgreSQL/volumes restauravel,
+  G2 OpenBao prod, G3 Docker Hn->Pn, G4 token
+  revocation/rotation e G5 verificacao final.
+- Agenda API DB port mismatch, Pooler DNS, cinco
+  W1 502 e SilviPro TLS permanecem em diagnostico.
+
+**CloudIFF v145.1 nao esta liberado.**
