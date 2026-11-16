@@ -72,6 +72,7 @@ class PublicationRecoveryJournal:
         if parent_stat.st_uid not in (os.geteuid(), 0):
             raise PermissionError('journal_parent_untrusted_owner')
         nofollow = getattr(os, 'O_NOFOLLOW', 0)
+        validated_db_identity = None
         for suffix in ('', '-wal', '-shm'):
             flags = (os.O_RDWR | os.O_CREAT if not suffix
                      else os.O_RDONLY | getattr(os, 'O_NONBLOCK', 0))
@@ -92,10 +93,26 @@ class PublicationRecoveryJournal:
                     raise PermissionError('journal_hardlinked_file_forbidden')
                 if metadata.st_uid != os.geteuid():
                     raise PermissionError('journal_file_untrusted_owner')
+                if not suffix:
+                    validated_db_identity = (metadata.st_dev, metadata.st_ino)
                 os.fchmod(fd, 0o600)
             finally:
                 os.close(fd)
+        # Catch replacement of the validated pathname at the SQLite-open
+        # boundary before any SQL writes. This is defense in depth only:
+        # it is not an fd-bound SQLite connection and cannot replace a
+        # trusted, non-replaceable parent/ancestor directory and owner lock.
         self.con = sqlite3.connect(path, timeout=30)
+        try:
+            opened_stat = os.lstat(path)
+            if (not stat.S_ISREG(opened_stat.st_mode) or
+                    (opened_stat.st_dev, opened_stat.st_ino) != validated_db_identity or
+                    opened_stat.st_uid != os.geteuid() or
+                    opened_stat.st_nlink != 1):
+                raise PermissionError('journal_db_changed_after_validation')
+        except BaseException:
+            self.con.close()
+            raise
         self.con.row_factory = sqlite3.Row
         self.con.execute('PRAGMA busy_timeout=30000')
         self.con.execute('PRAGMA journal_mode=WAL')
