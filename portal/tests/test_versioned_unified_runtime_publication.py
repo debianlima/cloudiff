@@ -1,3 +1,4 @@
+import ast
 from pathlib import Path
 import unittest
 
@@ -7,6 +8,18 @@ class VersionedUnifiedRuntimePublicationTests(unittest.TestCase):
         cls.agent=Path('components/runtime/current-apps/komodo-agent-current/cloudif-komodo-agent.py').read_text()
         cls.portal=Path('components/control-plane/srv/cloudif/lib/cloudif_portal_publications.py').read_text()
         cls.initial=Path('components/control-plane/usr/local/sbin/cloudif-project-initial-publish.py').read_text()
+        cls.active_deploy_source=cls._effective_deploy_source(cls.agent)
+
+    @staticmethod
+    def _effective_deploy_source(source):
+        # Two historical definitions share the same name. Inspect only the
+        # last, runtime-effective function, NEVER its trailing sibling methods.
+        tree=ast.parse(source)
+        functions=[node for node in tree.body if isinstance(node,ast.FunctionDef)
+                   and node.name=='cloudif_publication_deploy']
+        if not functions:raise AssertionError('missing_publication_deploy_handler')
+        final=functions[-1]
+        return '\n'.join(source.splitlines()[final.lineno-1:final.end_lineno])
     def test_each_deploy_has_unique_runtime_resources(self):
         for marker in (
             "name=f'cloudif-p{public_number}-d{deploy_number}'",
@@ -41,13 +54,13 @@ class VersionedUnifiedRuntimePublicationTests(unittest.TestCase):
         self.assertIn("'docker','build','--pull=false','--tag',image",self.agent)
         self.assertIn("'run_build':False",self.agent)
         self.assertNotIn("'run_build':True,'auto_pull':False,'file_contents':compose",self.agent)
-        latest=self.agent[self.agent.rfind('def cloudif_publication_deploy(handler):'):]
+        latest=self.active_deploy_source
         self.assertNotIn('build:\n      context: .\n      dockerfile: Dockerfile.runtime',latest)
         self.assertIn("'materialization':'local_base_derived'",latest)
         self.assertIn("payload.get('build_timeout') or payload.get('timeout') or 300",latest)
 
     def test_failed_version_can_refresh_frozen_base_but_ready_version_is_immutable(self):
-        latest=self.agent[self.agent.rfind('def cloudif_publication_deploy(handler):'):]
+        latest=self.active_deploy_source
         self.assertIn("runtime_rows=db_query('select status,is_active from publication_runtimes",latest)
         self.assertIn("runtime_immutable=str(runtime_row.get('status') or '')=='ready'",latest)
         self.assertIn('identity_mismatch=(',latest)
@@ -57,7 +70,7 @@ class VersionedUnifiedRuntimePublicationTests(unittest.TestCase):
         self.assertIn("requested_environment_digest=str(payload.get('environment_digest')",latest)
 
     def test_committed_base_runtime_state_is_sanitized_before_publication(self):
-        latest=self.agent[self.agent.rfind('def cloudif_publication_deploy(handler):'):]
+        latest=self.active_deploy_source
         self.assertIn('/run/apache2/apache2.pid',latest)
         self.assertIn('/run/supervisord.pid',latest)
         self.assertIn("compose_tmp=stack_dir/'.docker-compose.yml.tmp'",latest)
@@ -69,14 +82,26 @@ class VersionedUnifiedRuntimePublicationTests(unittest.TestCase):
         self.assertNotIn("'files_on_host':False,'run_build':False,'auto_pull':False,'file_contents':compose",latest)
 
     def test_deploy_health_is_polled_without_serial_operation_wait(self):
-        latest=self.agent[self.agent.rfind('def cloudif_publication_deploy(handler):'):]
+        latest=self.active_deploy_source
         self.assertNotIn('_cloudif_pub_wait_operation(opid',latest)
         self.assertIn("updates=komodo_query_updates([opid])",latest)
         self.assertIn("if healthy:break",latest)
         self.assertIn("time.sleep(2)",latest)
 
+    def test_deploy_scope_excludes_unrelated_operation_waits_after_function(self):
+        self.assertIn('_cloudif_pub_wait_operation(opid', self.agent)
+        self.assertNotIn('_cloudif_pub_wait_operation(opid', self.active_deploy_source)
+        self.assertLess(len(self.active_deploy_source),len(self.agent))
+
+    def test_deploy_scope_still_detects_introduced_blocking_wait(self):
+        marker='updates=komodo_query_updates([opid]);final='
+        self.assertIn(marker,self.active_deploy_source)
+        mutant=self.agent.replace(marker,
+                                  '_cloudif_pub_wait_operation(opid,timeout=180);'+marker,1)
+        self.assertIn('_cloudif_pub_wait_operation(opid', self._effective_deploy_source(mutant))
+
     def test_runtime_values_are_loaded_without_compose_log_exposure(self):
-        latest=self.agent[self.agent.rfind('def cloudif_publication_deploy(handler):'):]
+        latest=self.active_deploy_source
         self.assertIn("source: ./runtime.env",latest)
         self.assertIn("target: /run/cloudif/runtime.env",latest)
         self.assertIn("read_only: true",latest)
