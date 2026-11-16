@@ -67,6 +67,39 @@ class AkadminSupavisorStartup(unittest.TestCase):
         self.assertEqual(x.stdout,'')
         self.assertIn('bounded retry',x.stderr)
 
+    def test_preflight_recovers_from_transient_dns_failure(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)
+            # Succeeds only on the third attempt; no sleeps or real network.
+            (root/'getent').write_text('#!/bin/sh\nf="'+str(root/'counter')+'"\nn=$(cat "$f" 2>/dev/null || echo 0)\nn=$((n+1))\necho "$n" > "$f"\n[ "$n" -ge 3 ]\n')
+            (root/'pg_isready').write_text('#!/bin/sh\nexit 0\n')
+            (root/'sleep').write_text('#!/bin/sh\nexit 0\n')
+            for item in ('getent','pg_isready','sleep'):
+                (root/item).chmod(0o755)
+            env={**os.environ,'PATH':tmp+os.pathsep+os.environ.get('PATH',''),
+                 'POSTGRES_HOST':'db','POSTGRES_PORT':'54330'}
+            r=subprocess.run(['/bin/sh','-c',self.prefix+'printf PREFLIGHT_PASS'],
+                             env=env,capture_output=True,text=True,timeout=6)
+            self.assertEqual(r.returncode,0,r.stderr[:150])
+            self.assertEqual(r.stdout,'PREFLIGHT_PASS')
+            self.assertEqual((root/'counter').read_text().strip(),'3')
+
+    def test_preflight_recovers_from_transient_tcp_failure(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)
+            (root/'getent').write_text('#!/bin/sh\nexit 0\n')
+            (root/'pg_isready').write_text('#!/bin/sh\nf="'+str(root/'counter')+'"\nn=$(cat "$f" 2>/dev/null || echo 0)\nn=$((n+1))\necho "$n" > "$f"\n[ "$n" -ge 2 ]\n')
+            (root/'sleep').write_text('#!/bin/sh\nexit 0\n')
+            for item in ('getent','pg_isready','sleep'):
+                (root/item).chmod(0o755)
+            env={**os.environ,'PATH':tmp+os.pathsep+os.environ.get('PATH',''),
+                 'POSTGRES_HOST':'db','POSTGRES_PORT':'54330'}
+            r=subprocess.run(['/bin/sh','-c',self.prefix+'printf PREFLIGHT_PASS'],
+                             env=env,capture_output=True,text=True,timeout=6)
+            self.assertEqual(r.returncode,0,r.stderr[:150])
+            self.assertEqual(r.stdout,'PREFLIGHT_PASS')
+            self.assertEqual((root/'counter').read_text().strip(),'2')
+
     def test_preflight_fails_closed_without_db_tcp(self):
         x=self._simulate(True,False)
         self.assertNotEqual(x.returncode,0)
