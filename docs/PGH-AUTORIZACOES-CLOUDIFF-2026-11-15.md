@@ -658,3 +658,80 @@ para T005, feeds individuais para os 22 projetos
 restantes, backup restaurável do CloudIFF, OpenBao
 produtivo ou conclusão de G0–G5. O gate de release
 CloudIFF v145.1 permanece bloqueado.
+
+## Acompanhamento 16/11 — PR39 final de permissões e G1
+
+Verificação em 16/11/2026, aproximadamente 00h35 UTC.
+Registro PGH por documentacao/cloudiff/doc-01, sem
+alteração do Portal, Komodo, Docker, banco, secrets ou
+serviços de produção.
+
+### PR #39 — commit 6bdc5ca
+
+A branch do dev-01 passou de 4eee31f para
+**6bdc5ca**, CI remoto GitHub Actions
+43754314973 **completed/success**. O PR permanece
+**draft/open/unmerged**, e o Portal ativo em
+Hospedagem ainda possui o código anterior ao fix.
+
+Revisão independente doc-01 sobre cópia Git limpa
+do commit exato:
+
+- **56/56 testes direcionados de autorização PASS**,
+  sem utilizar Portal, Komodo ou Docker reais.
+- Os dois mirrors de cloudif_portal_publications.py
+  têm conteúdo idêntico, SHA256
+  fa85b68054693915c1653b6b3078c30ffdb207da1cebc4e88cf71556383cfe40.
+- Testes adicionais: test_publication_jobs.py
+  **4/4 PASS**, race/deploy **2/2 PASS**.
+- Source validator scripts/validate.sh: OK,
+  errors=[], sem alterações de código geradas.
+- O teste completo scripts/test.sh independente
+  atingiu timeout sob carga concorrente de agentes
+  antes de emitir resumo final. **Não considerar
+  full-suite independente aprovado**; o dev-01
+  registrou sua própria execução completa
+  1385/1385 PASS. O CI remoto deste HEAD está verde.
+- A criação direta de Hn exige concessão de
+  homologação atual; enfileiramento/execução de
+  publicação legada exigem concessão de publicar,
+  papel e vínculo atual com o job/snapshot.
+- Alteração de alias público exige concessão de
+  publicação. Operações desconhecidas no worker
+  deixam de entrar no caminho legado implicitamente.
+- O worker não pode assumir papéis Admin/Professor
+  apenas a partir de uma string antiga na fila.
+  A migração/inventário de jobs antigos deve
+  ocorrer sob o owner, sem reproduzir jobs
+  históricos automaticamente.
+
+**Risco residual:** mudanças em Docker, rede ou
+alias continuam vulneráveis à janela TOCTOU
+após revalidação local sem lease/fencing entre
+serviços; falta teste E2E com autenticação/ACL
+atuais e efeitos externos, crash e rollback.
+Não liberar PR39 para deploy somente pelo CI.
+
+### PR #40 e backup G1
+
+O PR40 head **28fa84f** continua draft e
+não integrado aos handlers. SQLite DB/WAL/SHM
+e diretório pai passam pelos testes de privacidade
+do protótipo, mas faltam lease do worker,
+verificador de evidência confiável, recuperação
+real pós-crash e validação do diretório efetivo.
+
+Infra-01 atestou que a rotina systemd de backup
+PostgreSQL diário dos tenants terminou sem
+falhas reportadas. O armazenamento root-only
+não pode ser inspecionado por cti, e os artefatos
+atuais **não foram restaurados isoladamente**.
+Um sucesso de timer não conclui G1.
+Não rebaixar ACL para coletar prova.
+
+Os bloqueios P0 de 22 configurações Git com
+credenciais embutidas, G0–G5 e o teste Docker
+do mesmo Hn container promovido Pn persistem.
+Atlas main segue defasada, PGH ainda depende
+de importação manual e há apenas dois feeds
+por projeto no catálogo de 24.
