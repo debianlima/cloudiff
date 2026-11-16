@@ -1,0 +1,50 @@
+{
+  "schema": "pgh/cloudiff/komodo-service-identity-plan/v1",
+  "identity": "svc-pgh-cloudiff",
+  "provider": "Komodo Core",
+  "kind": "service_user",
+  "state": "PENDING_ADMIN_CREATION",
+  "verified_in_komodo": false,
+  "verified_credential_injection": false,
+  "requested_by": "infraestrutura/cloudiff/infra-01",
+  "target_scope": {
+    "type": "Stack",
+    "name": "cloudif-agenda-unica",
+    "base_level": "Read",
+    "specific_permissions": [],
+    "denied_global_privileges": [
+      "admin", "super_admin", "create_server_permissions", "create_build_permissions",
+      "Terminal", "Inspect", "Processes", "Server", "Repo", "Build", "GlobalWrite"
+    ],
+    "other_resources_default": "None",
+    "transparent_mode_must_be_false": true
+  },
+  "agent_credential_model": {
+    "sharing_one_api_secret_between_agents": false,
+    "one_key_per_agent": true,
+    "agents": ["infra-01", "dev-01", "dev-02", "aud-01", "doc-01", "surface-01"],
+    "secret_broker": "OpenBao-or-institutional-secret-manager",
+    "secret_ref_pattern": "komodo/cloudiff/svc-pgh-cloudiff/<agent-code>",
+    "plain_secret_in_pgh": false,
+    "plain_secret_in_git": false,
+    "key_ttl_hours_max": 24,
+    "rotation": "on_owner_revocation_or_expiry",
+    "all_agent_keys_inherit_identical_user_permissions": true
+  },
+  "elevated_operations": {
+    "status": "NOT_AUTHORIZED_BY_THIS_READ_IDENTITY",
+    "principle": "Dedicated separately approved maintenance identity for temporary Stack Write; never expand shared read-only service user",
+    "stack": "cloudif-agenda-unica",
+    "requires": ["G0_owner_and_change_lock", "G1_verified_restore", "Komodo_admin_approval", "Rollback_plan", "Independent_audit"],
+    "no_automatic_role_escalation": true
+  },
+  "activation_checks": {
+    "service_user_exists_in_komodo": false,
+    "user_is_enabled_and_non_admin": false,
+    "read_only_stack_scope_confirmed": false,
+    "negative_other_stack_access_confirmed": false,
+    "api_key_created_by_authorized_admin_and_brokered": false,
+    "audit_provenance_confirmed": false
+  },
+  "release_authorized": false
+}
