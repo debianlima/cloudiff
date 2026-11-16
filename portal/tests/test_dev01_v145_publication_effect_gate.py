@@ -59,6 +59,29 @@ def crash_after_mutating(directory):
     os._exit(13)
 
 
+def crash_after_external_effect(directory):
+    """Crash after a committed journal and durable simulated alias mutation.
+
+    No Docker/network operation is performed: a local JSON file emulates the
+    external system having switched the alias before the process was killed.
+    """
+    base=Path(directory)
+    gate=strict_fixtures(base)()
+    gate.__enter__()  # prepared -> mutating and fsynced SQLite WAL (FULL)
+    state=base/'external-alias-fixture.json'
+    with state.open('w',encoding='utf8') as handle:
+        json.dump({'alias_number':1200,'target':'cloudif-p1200-d3-web',
+                   'effect':'alias_switched'},handle,sort_keys=True)
+        handle.flush()
+        os.fsync(handle.fileno())
+    # Persist the directory entry too: emulate an independently durable
+    # Docker/network effect, not merely a buffered file write.
+    directory_fd=os.open(base,os.O_RDONLY | getattr(os,'O_DIRECTORY',0))
+    try:os.fsync(directory_fd)
+    finally:os.close(directory_fd)
+    os._exit(27)  # bypass both gate.__exit__ and its cleanup handlers
+
+
 class PublicationGateTests(unittest.TestCase):
     def setUp(self):
         self.tmp=tempfile.TemporaryDirectory()
@@ -146,6 +169,78 @@ class PublicationGateTests(unittest.TestCase):
             self.assertEqual(readback.unresolved()[0]['phase'],'mutating')
         with self.assertRaises(PublicationJournalConflict):
             with self.make():pass
+
+    def test_crash_after_durable_external_effect_blocks_replay_across_projects(self):
+        """Crash between Docker-like alias mutation and DB ack must fail closed."""
+        ctx=multiprocessing.get_context('fork')
+        worker=ctx.Process(target=crash_after_external_effect,args=(str(self.root),))
+        worker.start();worker.join(timeout=6)
+        if worker.is_alive():worker.terminate();worker.join(timeout=3)
+        self.assertEqual(worker.exitcode,27)
+        external=json.loads((self.root/'external-alias-fixture.json').read_text())
+        self.assertEqual(external['effect'],'alias_switched')
+        self.assertEqual(external['target'],'cloudif-p1200-d3-web')
+        with PublicationRecoveryJournal(self.root/'journal.sqlite') as journal:
+            pending=journal.unresolved()
+            self.assertEqual(len(pending),1)
+            self.assertEqual(pending[0]['phase'],'mutating')
+            self.assertEqual(pending[0]['target_container'],external['target'])
+        # Child's fcntl lock has been released. The persistent SQLite unique
+        # fences must still reject both this project and another project that
+        # would seize the SAME global public alias number.
+        with self.assertRaisesRegex(PublicationJournalConflict,'unresolved_project_operation'):
+            with self.make():pass
+        with self.assertRaisesRegex(PublicationJournalConflict,'unresolved_public_alias'):
+            with self.make(project='different-project',num=1200):pass
+        self.assertEqual(json.loads((self.root/'external-alias-fixture.json').read_text()),external)
+
+    def test_interrupted_effect_requires_evidence_for_explicit_reconciliation(self):
+        """Only the isolated fixture verifier can unlock an interrupted alias."""
+        ctx=multiprocessing.get_context('fork')
+        worker=ctx.Process(target=crash_after_external_effect,args=(str(self.root),))
+        worker.start();worker.join(timeout=6)
+        if worker.is_alive():worker.terminate();worker.join(timeout=3)
+        self.assertEqual(worker.exitcode,27)
+        state_file=self.root/'external-alias-fixture.json'
+        with PublicationRecoveryJournal(self.root/'journal.sqlite') as journal:
+            pending=journal.unresolved()[0]
+            operation_id=pending['operation_id']
+            journal.transition(operation_id,expected_phase='mutating',
+                               next_phase='needs_reconciliation',reason_code='crash_after_effect')
+            self.assertEqual(journal.unresolved()[0]['phase'],'needs_reconciliation')
+        payload=json.dumps({'project':'demo','public_number':1200,
+                            'target_container':'cloudif-p1200-d3-web',
+                            'observed_effect':'alias_switched'},sort_keys=True,
+                           separators=(',',':')).encode('utf8')
+        digest=hashlib.sha256(payload).hexdigest()
+        with PublicationRecoveryJournal(self.root/'journal.sqlite',
+                evidence_verifier=lambda *_:False) as journal:
+            with self.assertRaisesRegex(PublicationJournalConflict,'evidence_verification_failed'):
+                journal.transition(operation_id,expected_phase='needs_reconciliation',
+                                   next_phase='reconciled',verification_sha256=digest)
+            self.assertEqual(journal.unresolved()[0]['phase'],'needs_reconciliation')
+        def fixture_verifier(row,phase,claimed_digest):
+            external=json.loads(state_file.read_text(encoding='utf8'))
+            return (phase=='reconciled' and row['operation_id']==operation_id
+                    and row['project']=='demo' and row['public_number']==1200
+                    and row['target_container']==external['target']
+                    and external['alias_number']==1200
+                    and external['effect']=='alias_switched'
+                    and claimed_digest==digest)
+        with PublicationRecoveryJournal(self.root/'journal.sqlite',
+                                        evidence_verifier=fixture_verifier) as journal:
+            journal.transition(operation_id,expected_phase='needs_reconciliation',
+                               next_phase='reconciled',verification_sha256=digest)
+            self.assertEqual(journal.unresolved(),[])
+            completed=journal.con.execute(
+                'select phase,verification_sha256 from stage_publication_operation_journal '
+                'where operation_id=?',(operation_id,)).fetchone()
+            self.assertEqual((completed['phase'],completed['verification_sha256']),
+                             ('reconciled',digest))
+        # Only after a terminal verified transition may the same project/alias
+        # start a different synthetic operation.
+        with self.make() as gate:
+            gate.finish()
 
     def test_durable_mutating_precedes_environment_file_replacement(self):
         fixture=PromotionFixture()
