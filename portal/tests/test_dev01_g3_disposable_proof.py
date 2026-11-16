@@ -5,6 +5,7 @@ import subprocess
 import sys
 import unittest
 from unittest import mock
+from types import SimpleNamespace
 
 SCRIPT=Path(__file__).resolve().parents[2]/'scripts/dev01-g3-disposable-docker-proof.py'
 
@@ -27,6 +28,23 @@ class DisposableG3ProofContractTests(unittest.TestCase):
         result=subprocess.run([sys.executable,str(SCRIPT),'--help'],capture_output=True,text=True,timeout=6)
         self.assertEqual(result.returncode,0)
         self.assertIn('--execute',result.stdout)
+
+    def test_journal_flag_without_execute_is_still_read_only(self):
+        result=subprocess.run([sys.executable,str(SCRIPT),'--journal-smoke'],
+                              capture_output=True,text=True,timeout=6)
+        self.assertEqual(result.returncode,0)
+        self.assertIn('"READ_ONLY"',result.stdout)
+        self.assertNotIn('"FAIL"',result.stdout)
+
+    def test_missing_journal_modules_refuse_before_docker_io(self):
+        module=load_module()
+        with mock.patch.object(module.socket,'gethostname',return_value='hospedagem'),\
+             mock.patch.object(module.os,'geteuid',return_value=1000),\
+             mock.patch.object(module,'__file__','/tmp/empty-pgh-sandbox/scripts/proof.py'),\
+             mock.patch.object(module,'run',return_value=SimpleNamespace(stdout='cti\n',returncode=0)) as execute:
+            with self.assertRaisesRegex(RuntimeError,'journal_source_modules_not_staged'):
+                module.main(journal_smoke=True)
+        execute.assert_called_once_with('id','-un')
 
     def test_cpu_pressure_denies_before_entering_main(self):
         m=load_module()

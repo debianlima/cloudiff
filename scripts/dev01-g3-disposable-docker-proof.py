@@ -5,6 +5,8 @@ No production mounts, Docker credentials, public ports, build, pull or secrets.
 Only disposable prefixed resources. 0.2 CPU/64 MiB per test container.
 """
 import argparse
+import hashlib
+from contextlib import nullcontext
 import json
 import os
 import pathlib
@@ -36,12 +38,21 @@ def network_info(name, network):
     return inspect(name)['NetworkSettings']['Networks'].get(network)
 
 
-def main():
+def main(journal_smoke=False):
     if socket.gethostname() != 'hospedagem' or os.geteuid() == 0:
         raise RuntimeError('refusing_wrong_host_or_root_identity')
     ident = run('id','-un').stdout.strip()
     if ident != 'cti':
         raise RuntimeError('refusing_unexpected_user')
+    # Verify all inputs and local source availability before any Docker effect.
+    if journal_smoke:
+        modules=pathlib.Path(__file__).resolve().parents[1]/'components/runtime/current-apps/komodo-agent-current'
+        if not all((modules / name).is_file() for name in
+                   ('cloudif_publication_effect_gate.py','cloudif_publication_recovery_journal.py')):
+            raise RuntimeError('journal_source_modules_not_staged')
+        sys.path.insert(0,str(modules))
+        from cloudif_publication_effect_gate import make_publication_gate
+        from cloudif_publication_recovery_journal import PublicationRecoveryJournal
     if run('docker','image','inspect','postgres:15-bookworm',check=False).returncode:
         raise RuntimeError('cached_image_not_present_do_not_pull')
     tag = uuid.uuid4().hex[:12]
@@ -83,34 +94,88 @@ def main():
         record('isolated_stages','PASS','two_nonprivileged_64m_0.2cpu_containers_running')
         if run('docker','exec',hn,'cat','/run/cloudif/runtime.env',timeout=8).stdout != 'STAGE=hn\n':
             raise RuntimeError('private_bind_initial_read_failed')
-        temp_marker=pathlib.Path(tempfile_dir)/'runtime.env.next'
-        temp_marker.write_text('STAGE=pn\n')
-        os.chmod(temp_marker,0o600)
-        os.replace(temp_marker,marker)
-        if run('docker','exec',hn,'cat','/run/cloudif/runtime.env',timeout=8).stdout != 'STAGE=pn\n':
-            raise RuntimeError('directory_bind_atomic_replace_not_observed')
-        run('docker','restart','--time','2',hn,timeout=25)
-        if inspect(hn)['Id'] != hn_id:
-            raise RuntimeError('candidate_identity_changed_on_restart')
-        if run('docker','exec',hn,'cat','/run/cloudif/runtime.env',timeout=8).stdout != 'STAGE=pn\n':
-            raise RuntimeError('runtime_env_not_effective_after_restart')
-        record('runtime_environment','PASS','directory_bind_atomic_replace_and_restart_same_container_id')
-        run('docker','network','disconnect',net,old,timeout=12)
-        run('docker','network','disconnect',net,hn,timeout=12)
-        run('docker','network','connect','--alias',hn,'--alias',alias,net,hn,timeout=12)
-        before_stop=network_info(hn,net)
-        if inspect(hn)['Id'] != hn_id or not before_stop or alias not in before_stop['Aliases']:
-            raise RuntimeError('alias_switch_or_identity_invariant_failed')
-        if network_info(old,net) is not None:
-            raise RuntimeError('old_production_still_has_active_network_alias')
-        run('docker','stop','--time','2',old,timeout=18)
-        if inspect(old)['State']['Running']:
-            raise RuntimeError('old_production_not_stopped')
-        if run('docker','exec',hn,'getent','hosts',alias,timeout=9).returncode:
-            raise RuntimeError('private_network_alias_resolution_failed')
-        if inspect(hn)['Id'] != hn_id:
-            raise RuntimeError('promotion_changed_candidate_identity')
-        record('alias_promotion','PASS','active_alias_switched_old_stopped_same_hn_id')
+        gate=nullcontext(None)
+        if journal_smoke:
+            # Exact PR41 modules were preflighted and imported before any
+            # test container or network was created; no installed worker used.
+            journal_dir=pathlib.Path(tempfile_dir)/'journal-private'
+            journal_dir.mkdir(mode=0o700)
+            number=800000000+(int(tag[:8],16)%90000000)
+            project='pgh-g3-'+tag
+            canonical_target=f'cloudif-p{number}-d3-web'
+            def observe_effect(row):
+                # Synthetic journal identity is mapped solely to test-labeled
+                # Docker containers, NEVER an active CloudIFF production name.
+                if (row['project']!=project or row['kind']!='production_release'
+                        or row['public_number']!=number
+                        or row['target_container']!=canonical_target):
+                    raise RuntimeError('journal_fixture_identity_mismatch')
+                target_state=inspect(hn)
+                previous_state=inspect(old)
+                attached=network_info(hn,net)
+                current=run('docker','exec',hn,'cat','/run/cloudif/runtime.env',timeout=8).stdout
+                if (target_state['Id']!=hn_id or not target_state['State']['Running']
+                        or previous_state['State']['Running']
+                        or not attached or alias not in attached['Aliases']
+                        or network_info(old,net) is not None
+                        or current!='STAGE=pn\n'):
+                    raise RuntimeError('docker_fixture_evidence_inconsistent')
+                proof={key:row[key] for key in
+                       ('operation_id','project','kind','public_number','publication_number','target_container')}
+                proof.update({'docker_hn_id':hn_id,'docker_previous_id':old_id,
+                              'active_alias_on_hn':True,'prior_stopped':True,
+                              'effective_environment':'STAGE=pn'})
+                return hashlib.sha256(json.dumps(proof,sort_keys=True,
+                    separators=(',',':')).encode()).hexdigest()
+            def fixture_verifier(row,phase,digest):
+                # This is a test-only local Docker observer, NOT authenticated
+                # production evidence or a cross-host distributed lease.
+                return phase=='committed' and digest==observe_effect(row)
+            gate=make_publication_gate(
+                mode='strict',db_path=str(journal_dir/'journal.sqlite'),
+                lock_dir=str(journal_dir),project=project,kind='production_release',
+                public_number=number,publication_number=1,target=canonical_target,
+                evidence_provider=observe_effect,evidence_verifier=fixture_verifier)
+        with gate as active_gate:
+            temp_marker=pathlib.Path(tempfile_dir)/'runtime.env.next'
+            temp_marker.write_text('STAGE=pn\n')
+            os.chmod(temp_marker,0o600)
+            os.replace(temp_marker,marker)
+            if run('docker','exec',hn,'cat','/run/cloudif/runtime.env',timeout=8).stdout != 'STAGE=pn\n':
+                raise RuntimeError('directory_bind_atomic_replace_not_observed')
+            run('docker','restart','--time','2',hn,timeout=25)
+            if inspect(hn)['Id'] != hn_id:
+                raise RuntimeError('candidate_identity_changed_on_restart')
+            if run('docker','exec',hn,'cat','/run/cloudif/runtime.env',timeout=8).stdout != 'STAGE=pn\n':
+                raise RuntimeError('runtime_env_not_effective_after_restart')
+            record('runtime_environment','PASS','directory_bind_atomic_replace_and_restart_same_container_id')
+            run('docker','network','disconnect',net,old,timeout=12)
+            run('docker','network','disconnect',net,hn,timeout=12)
+            run('docker','network','connect','--alias',hn,'--alias',alias,net,hn,timeout=12)
+            before_stop=network_info(hn,net)
+            if inspect(hn)['Id'] != hn_id or not before_stop or alias not in before_stop['Aliases']:
+                raise RuntimeError('alias_switch_or_identity_invariant_failed')
+            if network_info(old,net) is not None:
+                raise RuntimeError('old_production_still_has_active_network_alias')
+            run('docker','stop','--time','2',old,timeout=18)
+            if inspect(old)['State']['Running']:
+                raise RuntimeError('old_production_not_stopped')
+            if run('docker','exec',hn,'getent','hosts',alias,timeout=9).returncode:
+                raise RuntimeError('private_network_alias_resolution_failed')
+            if inspect(hn)['Id'] != hn_id:
+                raise RuntimeError('promotion_changed_candidate_identity')
+            record('alias_promotion','PASS','active_alias_switched_old_stopped_same_hn_id')
+            if journal_smoke:
+                active_gate.finish()
+        if journal_smoke:
+            with PublicationRecoveryJournal(journal_dir/'journal.sqlite') as check:
+                if check.unresolved():
+                    raise RuntimeError('unexpected_pending_journal_after_real_docker_proof')
+                row=check.con.execute('select phase,verification_sha256 from stage_publication_operation_journal').fetchone()
+                if not row or row['phase']!='committed' or len(row['verification_sha256'])!=64:
+                    raise RuntimeError('journal_success_not_verified')
+            record('real_docker_with_journal','PASS',
+                   'strict_test_only_evidence_verified_and_committed_same_hn_id')
     finally:
         for n in reversed(owned):
             run('docker','rm','-f',n,timeout=20,check=False)
@@ -132,6 +197,7 @@ def main():
 def entrypoint():
     parser=argparse.ArgumentParser(description='Disposal-only Docker Hn->Pn alias and env smoke test; read-only plan by default.')
     parser.add_argument('--execute',action='store_true',help='Use only after owner/lock approval on Hospedagem.')
+    parser.add_argument('--journal-smoke',action='store_true',help='On --execute only, use a disposable SQLite journal with test-only Docker proof.')
     args=parser.parse_args()
     if not args.execute:
         record('plan','READ_ONLY','requires --execute, approved G0 lock, cached image; creates two 64MiB/0.2CPU disposable containers and one internal network, then cleans up')
@@ -149,7 +215,7 @@ def entrypoint():
         raise RuntimeError('host_memory_below_disposable_budget')
     if shutil.disk_usage('/tmp').free < 1*1024**3:
         raise RuntimeError('host_disk_below_disposable_budget')
-    main()
+    main(journal_smoke=args.journal_smoke)
 
 
 if __name__=='__main__':
