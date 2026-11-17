@@ -1652,7 +1652,27 @@ def _v119_forgejo_repo_git_url(owner, repo):
 
     return f"{base}/{owner}/{repo}.git"
 
-def _v119_run(cmd, cwd=None, timeout=90):
+def _v119_git_ephemeral_auth(owner, repo):
+    """Provide clean remote URL and process-scoped auth, never Git origin userinfo."""
+    base = _v118_cfg("FORGEJO_URL", "https://cloudiff.duckdns.org/git").rstrip("/")
+    token = _v118_cfg("FORGEJO_TOKEN", "")
+    user = _v118_cfg("FORGEJO_SERVICE_USER", "cloudif-bot") or "cloudif-bot"
+    parsed = urllib.parse.urlsplit(base)
+    if parsed.scheme not in ("https", "http") or not parsed.hostname or parsed.username or parsed.password:
+        raise RuntimeError("FORGEJO_URL inválida para git clone")
+    if not token:
+        raise RuntimeError("FORGEJO_TOKEN ausente")
+    clean = urllib.parse.urlunsplit((parsed.scheme, parsed.netloc, parsed.path, "", ""))
+    url = f"{clean}/{urllib.parse.quote(owner, safe='')}/{urllib.parse.quote(repo, safe='')}.git"
+    basic = base64.b64encode(f"{user}:{token}".encode()).decode("ascii")
+    # Git environment config is subprocess-only; it never enters .git/config
+    # or the command argument vector. Restrict same-UID process inspection.
+    env = {"GIT_CONFIG_COUNT": "1", "GIT_CONFIG_KEY_0": "http.extraHeader",
+           "GIT_CONFIG_VALUE_0": "Authorization: Basic " + basic,
+           "GIT_TERMINAL_PROMPT": "0"}
+    return url, env
+
+def _v119_run(cmd, cwd=None, timeout=90, git_auth_env=None):
     try:
         r = subprocess.run(
             cmd,
@@ -1661,6 +1681,7 @@ def _v119_run(cmd, cwd=None, timeout=90):
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             timeout=timeout,
+            env=({**os.environ, **git_auth_env} if git_auth_env else None),
         )
         return {
             "returncode": r.returncode,
@@ -1683,12 +1704,12 @@ def _v119_git_commit_file(owner, repo, path, branch, content, message, delete=Fa
     tmp = tempfile.mkdtemp(prefix="cloudif-fileops-")
 
     try:
-        url = _v119_forgejo_repo_git_url(owner, repo)
+        url, git_auth_env = _v119_git_ephemeral_auth(owner, repo)
 
-        clone = _v119_run(["git", "clone", "--depth", "1", "--branch", branch, url, tmp], timeout=120)
+        clone = _v119_run(["git", "clone", "--depth", "1", "--branch", branch, url, tmp], timeout=120, git_auth_env=git_auth_env)
 
         if clone["returncode"] != 0:
-            clone = _v119_run(["git", "clone", url, tmp], timeout=120)
+            clone = _v119_run(["git", "clone", url, tmp], timeout=120, git_auth_env=git_auth_env)
 
         if clone["returncode"] != 0:
             return 0, {"error": "git clone falhou", "detail": clone}
@@ -1735,7 +1756,7 @@ def _v119_git_commit_file(owner, repo, path, branch, content, message, delete=Fa
         if commit["returncode"] != 0:
             return 0, {"error": "git commit falhou", "detail": commit}
 
-        push = _v119_run(["git", "push", "origin", f"HEAD:{branch}"], cwd=tmp, timeout=120)
+        push = _v119_run(["git", "push", "origin", f"HEAD:{branch}"], cwd=tmp, timeout=120, git_auth_env=git_auth_env)
         if push["returncode"] != 0:
             return 0, {"error": "git push falhou", "detail": push}
 
@@ -2812,8 +2833,8 @@ def _change_set_git_commit_bytes(owner,repo,path,branch,raw,message):
     if not token:return 0,{'error':'forgejo_token_missing'}
     tmp=tempfile.mkdtemp(prefix='cloudif-artifact-commit-')
     try:
-        url=_v119_forgejo_repo_git_url(owner,repo);clone=_v119_run(['git','clone','--depth','1','--branch',branch,url,tmp],timeout=120)
-        if clone['returncode']!=0:clone=_v119_run(['git','clone',url,tmp],timeout=120)
+        url,git_auth_env=_v119_git_ephemeral_auth(owner,repo);clone=_v119_run(['git','clone','--depth','1','--branch',branch,url,tmp],timeout=120,git_auth_env=git_auth_env)
+        if clone['returncode']!=0:clone=_v119_run(['git','clone',url,tmp],timeout=120,git_auth_env=git_auth_env)
         if clone['returncode']!=0:return 0,{'error':'git_clone_failed','detail':clone}
         _v119_run(['git','config','user.name','CloudIF Bot'],cwd=tmp);_v119_run(['git','config','user.email','cloudif-bot@cloudiff.local'],cwd=tmp)
         checkout=_v119_run(['git','checkout','-B',branch],cwd=tmp)
@@ -2823,7 +2844,7 @@ def _change_set_git_commit_bytes(owner,repo,path,branch,raw,message):
         if add['returncode']!=0:return 0,{'error':'git_add_failed','detail':add}
         commit=_v119_run(['git','commit','-m',message],cwd=tmp,timeout=120)
         if commit['returncode']!=0:return 0,{'error':'git_commit_failed','detail':commit}
-        push=_v119_run(['git','push','origin',f'HEAD:{branch}'],cwd=tmp,timeout=180)
+        push=_v119_run(['git','push','origin',f'HEAD:{branch}'],cwd=tmp,timeout=180,git_auth_env=git_auth_env)
         if push['returncode']!=0:return 0,{'error':'git_push_failed','detail':push}
         head=_v119_run(['git','rev-parse','HEAD'],cwd=tmp);return 201,{'ok':True,'git_binary':True,'commit':{'sha':(head.get('stdout') or '').strip()}}
     finally:shutil.rmtree(tmp,ignore_errors=True)
