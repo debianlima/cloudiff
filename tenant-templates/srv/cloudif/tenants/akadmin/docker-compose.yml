@@ -564,7 +564,7 @@ services:
       [
         "/bin/sh",
         "-c",
-        "/app/bin/migrate && /app/bin/supavisor eval \"$$(cat /etc/pooler/pooler.exs)\" && /app/bin/server"
+        "attempt=0; until getent hosts \"$$POSTGRES_HOST\" >/dev/null 2>&1 && pg_isready -h \"$$POSTGRES_HOST\" -p \"$$POSTGRES_PORT\" -t 2 >/dev/null 2>&1; do attempt=$$((attempt+1)); if [ \"$$attempt\" -ge 12 ]; then echo \"supavisor db readiness unavailable after bounded retry\" >&2; exit 1; fi; sleep 2; done; /app/bin/migrate && /app/bin/supavisor eval \"$$(cat /etc/pooler/pooler.exs)\" && exec /app/bin/server"
       ]
 
 volumes:
