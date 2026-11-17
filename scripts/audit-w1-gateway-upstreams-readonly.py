@@ -25,9 +25,12 @@ def validate_gateway_ip(value: str) -> str:
         address = ipaddress.IPv4Address(value)
     except ipaddress.AddressValueError as exc:
         raise ValueError("gateway must be a literal IPv4 address") from exc
-    if not (address.is_private or address.is_loopback) or (address.is_link_local or
-            address.is_multicast or address.is_unspecified):
-        raise ValueError("gateway must be a private non-link-local IPv4 address")
+    # IPv4Address.is_private also includes some reserved ranges. Restrict
+    # contact to explicit RFC1918/loopback blocks rather than reserved networks.
+    allowed = tuple(ipaddress.IPv4Network(network) for network in
+                    ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "127.0.0.0/8"))
+    if not any(address in network for network in allowed):
+        raise ValueError("gateway must be RFC1918 or loopback IPv4")
     return str(address)
 
 
