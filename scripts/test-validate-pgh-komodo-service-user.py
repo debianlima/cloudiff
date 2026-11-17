@@ -35,4 +35,18 @@ class PolicyTests(unittest.TestCase):
   a=copy.deepcopy(BASE);a['activation_checks']['read_config_secret_sanitization_confirmed']=True;self.assertIn('false_activation_claim',m.validate(a))
  def test_rejects_missing_agent(self):
   a=copy.deepcopy(BASE);a['agent_credential_model']['agents'].remove('aud-01');self.assertIn('agent_scope',m.validate(a))
+ def test_rejects_unexpected_top_level_api_key(self):
+  a=copy.deepcopy(BASE);a['api_key']='SYNTHETIC_NOT_REAL'
+  self.assertIn('unexpected_manifest_field',m.validate(a))
+ def test_rejects_nested_token_payload(self):
+  a=copy.deepcopy(BASE);a['agent_credential_model']['api_token']='SYNTHETIC_NOT_REAL'
+  self.assertIn('unexpected_manifest_field',m.validate(a))
+ def test_rejects_unapproved_activation_proof_field(self):
+  a=copy.deepcopy(BASE);a['activation_checks']['admin_override']=False
+  self.assertIn('unexpected_manifest_field',m.validate(a))
+ def test_rejects_extra_stack_grant_field(self):
+  a=copy.deepcopy(BASE);a['target_scope']['force_global_write']=False
+  self.assertIn('unexpected_manifest_field',m.validate(a))
+ def test_rejects_non_object_manifest(self):
+  self.assertIn('invalid_manifest_type',m.validate([]))
 if __name__=='__main__':unittest.main(verbosity=1)
