@@ -1629,6 +1629,11 @@ def _v119_mask(value):
     # configured Forgejo token; redact it independently of URL handling.
     s = re.sub(r'(?i)(\bAuthorization\s*:\s*(?:Basic|Bearer)\s+)[^\s\"\']+',
                r'\1[auth-redacted]', s)
+    # SCP-like Git remote strings do not contain a URL scheme. A malformed
+    # credential-bearing remote can still be echoed by Git on failure.
+    # Limit the pattern to host:path syntax so ordinary user@host remains.
+    s = re.sub(r'(?<![\w/])[^\s:@/]+:[^\s@/]+@([\w.-]+:[^\s\"\']+)',
+               r'[auth-redacted]@\1', s)
     return s
 
 def _v119_forgejo_repo_git_url(owner, repo):
