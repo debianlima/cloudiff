@@ -1647,6 +1647,14 @@ def _v119_git_ephemeral_auth(owner, repo):
     if not token:
         raise RuntimeError("FORGEJO_TOKEN ausente")
     clean = urllib.parse.urlunsplit((parsed.scheme, parsed.netloc, parsed.path, "", ""))
+    # Reject path segments that HTTP clients or proxies may normalize before
+    # Git's repository-scoped Authorization matching. Percent-encoding a slash
+    # is not sufficient: upstream proxies may decode it differently.
+    for segment in (owner, repo):
+        if (not isinstance(segment, str) or not segment or segment in (".", "..")
+                or "/" in segment or "\\" in segment
+                or any(ord(c) < 32 or ord(c) == 127 for c in segment)):
+            raise RuntimeError("Caminho de repositório Forgejo inválido")
     url = f"{clean}/{urllib.parse.quote(owner, safe='')}/{urllib.parse.quote(repo, safe='')}.git"
     basic = base64.b64encode(f"{user}:{token}".encode()).decode("ascii")
     # Git environment config is subprocess-only; it never enters .git/config
