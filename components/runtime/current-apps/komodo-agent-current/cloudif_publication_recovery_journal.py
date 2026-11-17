@@ -61,6 +61,16 @@ class PublicationRecoveryJournal:
         # no in-process umask changes (unsafe for multithreaded workers).
         path = os.path.abspath(os.fspath(db_path))
         parent = os.path.dirname(path)
+        # Reject symlinks in *all* ancestor components, not only the immediate
+        # parent: an earlier component can otherwise redirect the state tree.
+        # An owner-approved deployment must use a canonical physical path.
+        component = os.path.sep
+        for segment in parent.split(os.path.sep)[1:]:
+            if not segment:
+                continue
+            component = os.path.join(component, segment)
+            if stat.S_ISLNK(os.lstat(component).st_mode):
+                raise PermissionError('journal_ancestor_symlink_forbidden')
         # Fail closed when the immediate state directory is replaceable by
         # unrelated local users or resolves through a symlink. Ancestor/path
         # trust still requires an owner-approved deployment location.

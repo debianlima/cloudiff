@@ -34,6 +34,17 @@ class JournalRecheckTests(unittest.TestCase):
                 row=c.execute("select name from sqlite_master where name='stage_publication_operation_journal'").fetchone()
             self.assertIsNone(row,'no journal schema may be written into substituted inode')
 
+    def test_ancestor_symlink_rejected_before_sqlite_open(self):
+        with tempfile.TemporaryDirectory() as d:
+            base=pathlib.Path(d)
+            real=base/'real';real.mkdir(mode=0o700)
+            state=real/'state';state.mkdir(mode=0o700)
+            alias=base/'alias';alias.symlink_to(real,target_is_directory=True)
+            with mock.patch.object(mod.sqlite3,'connect',side_effect=AssertionError('must_not_open')):
+                with self.assertRaisesRegex(PermissionError,'journal_ancestor_symlink_forbidden'):
+                    mod.PublicationRecoveryJournal(alias/'state'/'journal.db')
+            self.assertFalse((state/'journal.db').exists())
+
     def test_symlink_path_rejected(self):
         with tempfile.TemporaryDirectory() as d:
             target=pathlib.Path(d)/'target.db';target.touch(mode=0o600)
