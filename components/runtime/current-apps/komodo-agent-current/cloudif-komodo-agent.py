@@ -6081,6 +6081,32 @@ def _cloudif_v144_recover_previous(num,previous,target):
         return False
 
 
+
+class _CloudifV145DisabledJournal:
+    """Compatibility only; this is NOT evidence of a durable release gate."""
+    def __enter__(self):return self
+    def __exit__(self,*_):return False
+    def finish(self):return None
+
+
+def _cloudif_v145_operation_gate(project,kind,public_number,publication_number,target):
+    mode=os.environ.get('CLOUDIF_PUBLICATION_JOURNAL_MODE','disabled')
+    if mode=='disabled':return _CloudifV145DisabledJournal()
+    # Strict integration must be enabled only by an authorized owner after
+    # provisioning a private state directory and audited Docker identity.
+    from cloudif_publication_effect_gate import make_publication_gate
+    return make_publication_gate(
+        mode=mode,
+        db_path=os.environ.get('CLOUDIF_PUBLICATION_JOURNAL_DB',''),
+        lock_dir=os.environ.get('CLOUDIF_PUBLICATION_JOURNAL_LOCK_DIR',''),
+        project=project,kind=kind,public_number=public_number,
+        publication_number=publication_number,target=target,
+        # These callbacks are injected by a trusted hosting component, NEVER
+        # accepted from an incoming request. Not implemented/attached in prod.
+        evidence_provider=globals().get('_CLOUDIF_V145_EVIDENCE_PROVIDER'),
+        evidence_verifier=globals().get('_CLOUDIF_V145_EVIDENCE_VERIFIER'),
+    )
+
 _v143_publication_release=cloudif_publication_release
 def cloudif_publication_release(handler):
     if not _cloudif_pub_auth(handler):return send(handler,403,{'ok':False,'error':'forbidden'})
@@ -6096,40 +6122,45 @@ def cloudif_publication_release(handler):
     if len(parts)!=5 or parts[0]!='running' or parts[1]!='healthy':return send(handler,422,{'ok':False,'error':'homologation_candidate_not_healthy'})
     image,image_id,container_id=parts[2],parts[3],parts[4];expected=str(payload.get('artifact_image_id') or '')
     if expected and not hmac.compare_digest(expected,image_id):return send(handler,409,{'ok':False,'error':'homologated_artifact_changed'})
-    env_path=_cloudif_stage_write_environment(num,'p',publication,payload.get('environment_variables') if isinstance(payload.get('environment_variables'),dict) else {})
-    try:_cloudif_v144_runtime_env_replace(stack_name,env_path)
-    except Exception as exc:return send(handler,422,{'ok':False,'error':'production_environment_apply_failed','detail':str(exc)[:300]})
-    restart=subprocess.run(['docker','restart',source],text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=90)
-    if restart.returncode!=0:return send(handler,422,{'ok':False,'error':'production_restart_failed','detail':(restart.stderr or restart.stdout)[-500:]})
-    if not _cloudif_wait_health(source,90).get('ok'):return send(handler,422,{'ok':False,'error':'production_container_not_healthy'})
-    after=subprocess.run(['docker','inspect',source,'--format','{{.Id}}|{{.Image}}'],text=True,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL).stdout.strip().split('|',1)
-    if len(after)!=2 or after[0]!=container_id or after[1]!=image_id:return send(handler,409,{'ok':False,'error':'promotion_changed_container_identity'})
-    try:previous=_cloudif_v144_reconnect_active(num,source)
-    except Exception as exc:return send(handler,422,{'ok':False,'error':'production_activation_failed','detail':str(exc)[:300]})
-    if previous and previous!=source:
-        try:
-            stopped=subprocess.run(['docker','stop','--time','20',previous],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=45)
-            if stopped.returncode!=0:raise RuntimeError('previous_stop_failed')
-        except Exception:
-            # Restore the old active alias if previous production cannot be stopped;
-            # never persist the candidate as an accepted production release.
-            try:_cloudif_v144_reconnect_active(num,previous)
-            except Exception:return send(handler,503,{'ok':False,'error':'production_activation_rollback_failed'})
-            return send(handler,422,{'ok':False,'error':'previous_production_stop_failed'})
     try:
-        _cloudif_v144_atomic_updates([
-            ('update stage_production_releases set is_active=0,updated_at=? where project=?',(now(),project)),
-            ('''insert into stage_production_releases(project,public_number,publication_number,candidate_number,deploy_number,image,image_id,container,status,is_active,environment_revision,environment_digest,created_at,created_by,updated_at)
-              values(?,?,?,?,?,?,?,?,?,1,?,?,?,?,?) on conflict(project,publication_number) do update set candidate_number=excluded.candidate_number,deploy_number=excluded.deploy_number,image=excluded.image,image_id=excluded.image_id,container=excluded.container,status=excluded.status,is_active=1,environment_revision=excluded.environment_revision,environment_digest=excluded.environment_digest,updated_at=excluded.updated_at''',
-              (project,num,publication,candidate,dep,image,image_id,source,'ready',env_rev,str(payload.get('environment_digest') or ''),now(),str(payload.get('actor') or 'portal')[:128],now())),
-            ('update publication_runtimes set is_active=case when deploy_number=? then 1 else 0 end,updated_at=? where project=?',(dep,now(),project)),
-            ('update integrations set public_number=?,active_deploy=?,updated_at=? where project=?',(num,dep,now(),project)),
-        ])
-    except Exception:
-        if _cloudif_v144_recover_previous(num,previous,source):
-            return send(handler,503,{'ok':False,'error':'production_db_commit_failed_rolled_back'})
-        return send(handler,503,{'ok':False,'error':'production_db_recovery_failed'})
-    return send(handler,200,{'ok':True,'project':project,'public_number':num,'candidate_number':candidate,'publication_number':publication,'stageCode':'P'+str(publication),'deploy_number':dep,'container':source,'stack_id':normalize_resource_id(runtime.get('stack_id')),'stack_name':stack_name,'image':image,'artifactImageId':image_id,'containerId':container_id,'healthy':True,'previous':previous,'activeAlias':f'cloudif-p{num}-active-web','environmentRevision':env_rev,'environmentDigest':str(payload.get('environment_digest') or ''),'promotedInPlace':True,'sameContainerAsHomologation':True,'secretValuesIncluded':False})
+        with _cloudif_v145_operation_gate(project,'production_release',num,publication,source) as _pub_gate:
+            env_path=_cloudif_stage_write_environment(num,'p',publication,payload.get('environment_variables') if isinstance(payload.get('environment_variables'),dict) else {})
+            try:_cloudif_v144_runtime_env_replace(stack_name,env_path)
+            except Exception as exc:return send(handler,422,{'ok':False,'error':'production_environment_apply_failed','detail':str(exc)[:300]})
+            restart=subprocess.run(['docker','restart',source],text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=90)
+            if restart.returncode!=0:return send(handler,422,{'ok':False,'error':'production_restart_failed','detail':(restart.stderr or restart.stdout)[-500:]})
+            if not _cloudif_wait_health(source,90).get('ok'):return send(handler,422,{'ok':False,'error':'production_container_not_healthy'})
+            after=subprocess.run(['docker','inspect',source,'--format','{{.Id}}|{{.Image}}'],text=True,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL).stdout.strip().split('|',1)
+            if len(after)!=2 or after[0]!=container_id or after[1]!=image_id:return send(handler,409,{'ok':False,'error':'promotion_changed_container_identity'})
+            try:previous=_cloudif_v144_reconnect_active(num,source)
+            except Exception as exc:return send(handler,422,{'ok':False,'error':'production_activation_failed','detail':str(exc)[:300]})
+            if previous and previous!=source:
+                try:
+                    stopped=subprocess.run(['docker','stop','--time','20',previous],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=45)
+                    if stopped.returncode!=0:raise RuntimeError('previous_stop_failed')
+                except Exception:
+                    # Restore the old active alias if previous production cannot be stopped;
+                    # never persist the candidate as an accepted production release.
+                    try:_cloudif_v144_reconnect_active(num,previous)
+                    except Exception:return send(handler,503,{'ok':False,'error':'production_activation_rollback_failed'})
+                    return send(handler,422,{'ok':False,'error':'previous_production_stop_failed'})
+            try:
+                _cloudif_v144_atomic_updates([
+                    ('update stage_production_releases set is_active=0,updated_at=? where project=?',(now(),project)),
+                    ('''insert into stage_production_releases(project,public_number,publication_number,candidate_number,deploy_number,image,image_id,container,status,is_active,environment_revision,environment_digest,created_at,created_by,updated_at)
+                      values(?,?,?,?,?,?,?,?,?,1,?,?,?,?,?) on conflict(project,publication_number) do update set candidate_number=excluded.candidate_number,deploy_number=excluded.deploy_number,image=excluded.image,image_id=excluded.image_id,container=excluded.container,status=excluded.status,is_active=1,environment_revision=excluded.environment_revision,environment_digest=excluded.environment_digest,updated_at=excluded.updated_at''',
+                      (project,num,publication,candidate,dep,image,image_id,source,'ready',env_rev,str(payload.get('environment_digest') or ''),now(),str(payload.get('actor') or 'portal')[:128],now())),
+                    ('update publication_runtimes set is_active=case when deploy_number=? then 1 else 0 end,updated_at=? where project=?',(dep,now(),project)),
+                    ('update integrations set public_number=?,active_deploy=?,updated_at=? where project=?',(num,dep,now(),project)),
+                ])
+            except Exception:
+                if _cloudif_v144_recover_previous(num,previous,source):
+                    return send(handler,503,{'ok':False,'error':'production_db_commit_failed_rolled_back'})
+                return send(handler,503,{'ok':False,'error':'production_db_recovery_failed'})
+            _pub_gate.finish()
+            return send(handler,200,{'ok':True,'project':project,'public_number':num,'candidate_number':candidate,'publication_number':publication,'stageCode':'P'+str(publication),'deploy_number':dep,'container':source,'stack_id':normalize_resource_id(runtime.get('stack_id')),'stack_name':stack_name,'image':image,'artifactImageId':image_id,'containerId':container_id,'healthy':True,'previous':previous,'activeAlias':f'cloudif-p{num}-active-web','environmentRevision':env_rev,'environmentDigest':str(payload.get('environment_digest') or ''),'promotedInPlace':True,'sameContainerAsHomologation':True,'secretValuesIncluded':False})
+    except (PermissionError, ValueError, RuntimeError, OSError, ImportError, sqlite3.Error):
+        return send(handler,503,{'ok':False,'error':'publication_journal_or_runtime_blocked','secretValuesIncluded':False})
 
 _v143_publication_release_activate=cloudif_publication_release_activate
 def cloudif_publication_release_activate(handler):
@@ -6137,32 +6168,37 @@ def cloudif_publication_release_activate(handler):
     payload=_cloudif_pub_json(handler);project=safe_slug(payload.get('project') or '')
     try:num=int(payload.get('public_number'));publication=int(payload.get('publication_number'))
     except Exception:return send(handler,400,{'ok':False,'error':'invalid_release_request'})
-    rows=db_query("select * from stage_production_releases where project=? and publication_number=? and status='ready'",(project,publication))
+    rows=db_query("select * from stage_production_releases where project=? and publication_number=? and public_number=? and status='ready'",(project,publication,num))
     if not rows:return send(handler,404,{'ok':False,'error':'production_release_not_found'})
     target=str(rows[0].get('container') or '')
-    if subprocess.run(['docker','inspect',target,'--format','{{.State.Running}}'],text=True,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL).stdout.strip()!='true':
-        start=subprocess.run(['docker','start',target],text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=90)
-        if start.returncode!=0:return send(handler,422,{'ok':False,'error':'production_release_start_failed'})
-    if not _cloudif_wait_health(target,90).get('ok'):return send(handler,422,{'ok':False,'error':'production_release_not_healthy'})
-    try:previous=_cloudif_v144_reconnect_active(num,target)
-    except Exception as exc:return send(handler,422,{'ok':False,'error':'production_activation_failed','detail':str(exc)[:300]})
-    if previous and previous!=target:
-        try:
-            stopped=subprocess.run(['docker','stop','--time','20',previous],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=45)
-            if stopped.returncode!=0:raise RuntimeError('previous_stop_failed')
-        except Exception:
-            try:_cloudif_v144_reconnect_active(num,previous)
-            except Exception:return send(handler,503,{'ok':False,'error':'production_activation_rollback_failed'})
-            return send(handler,422,{'ok':False,'error':'previous_production_stop_failed'})
-    dep=int(rows[0].get('deploy_number') or 0)
-    updates=[('update stage_production_releases set is_active=case when publication_number=? then 1 else 0 end,updated_at=? where project=?',(publication,now(),project))]
-    if dep:updates.append(('update publication_runtimes set is_active=case when deploy_number=? then 1 else 0 end,updated_at=? where project=?',(dep,now(),project)))
-    try:_cloudif_v144_atomic_updates(updates)
-    except Exception:
-        if _cloudif_v144_recover_previous(num,previous,target):
-            return send(handler,503,{'ok':False,'error':'production_db_commit_failed_rolled_back'})
-        return send(handler,503,{'ok':False,'error':'production_db_recovery_failed'})
-    return send(handler,200,{'ok':True,'project':project,'publication_number':publication,'stageCode':'P'+str(publication),'container':target,'previous':previous,'activeAlias':f'cloudif-p{num}-active-web','reactivatedInPlace':True,'secretValuesIncluded':False})
+    try:
+        with _cloudif_v145_operation_gate(project,'manual_activation',num,publication,target) as _pub_gate:
+            if subprocess.run(['docker','inspect',target,'--format','{{.State.Running}}'],text=True,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL).stdout.strip()!='true':
+                start=subprocess.run(['docker','start',target],text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=90)
+                if start.returncode!=0:return send(handler,422,{'ok':False,'error':'production_release_start_failed'})
+            if not _cloudif_wait_health(target,90).get('ok'):return send(handler,422,{'ok':False,'error':'production_release_not_healthy'})
+            try:previous=_cloudif_v144_reconnect_active(num,target)
+            except Exception as exc:return send(handler,422,{'ok':False,'error':'production_activation_failed','detail':str(exc)[:300]})
+            if previous and previous!=target:
+                try:
+                    stopped=subprocess.run(['docker','stop','--time','20',previous],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=45)
+                    if stopped.returncode!=0:raise RuntimeError('previous_stop_failed')
+                except Exception:
+                    try:_cloudif_v144_reconnect_active(num,previous)
+                    except Exception:return send(handler,503,{'ok':False,'error':'production_activation_rollback_failed'})
+                    return send(handler,422,{'ok':False,'error':'previous_production_stop_failed'})
+            dep=int(rows[0].get('deploy_number') or 0)
+            updates=[('update stage_production_releases set is_active=case when publication_number=? then 1 else 0 end,updated_at=? where project=?',(publication,now(),project))]
+            if dep:updates.append(('update publication_runtimes set is_active=case when deploy_number=? then 1 else 0 end,updated_at=? where project=?',(dep,now(),project)))
+            try:_cloudif_v144_atomic_updates(updates)
+            except Exception:
+                if _cloudif_v144_recover_previous(num,previous,target):
+                    return send(handler,503,{'ok':False,'error':'production_db_commit_failed_rolled_back'})
+                return send(handler,503,{'ok':False,'error':'production_db_recovery_failed'})
+            _pub_gate.finish()
+            return send(handler,200,{'ok':True,'project':project,'publication_number':publication,'stageCode':'P'+str(publication),'container':target,'previous':previous,'activeAlias':f'cloudif-p{num}-active-web','reactivatedInPlace':True,'secretValuesIncluded':False})
+    except (PermissionError, ValueError, RuntimeError, OSError, ImportError, sqlite3.Error):
+        return send(handler,503,{'ok':False,'error':'publication_journal_or_runtime_blocked','secretValuesIncluded':False})
 
 def cloudif_homologation_reject(handler):
     if not _cloudif_pub_auth(handler):return send(handler,403,{'ok':False,'error':'forbidden'})
