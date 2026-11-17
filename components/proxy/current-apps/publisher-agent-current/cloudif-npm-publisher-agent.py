@@ -30,7 +30,17 @@ def run(cmd,timeout=180):
  return p.stdout
 
 def cert_exists(name):
- return subprocess.run(['docker','exec','cloudif-nginx-proxy-manager','test','-f',f'/etc/letsencrypt/live/{name}/fullchain.pem']).returncode==0
+ # The name may originate from persisted publisher state. Never pass a
+ # path-like label to the Docker/Certbot boundary or wait indefinitely for it.
+ if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.-]{0,127}',str(name)):
+  return False
+ try:
+  p=subprocess.run(['docker','exec','cloudif-nginx-proxy-manager','test','-f',
+   f'/etc/letsencrypt/live/{name}/fullchain.pem'],
+   stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=15)
+  return p.returncode==0
+ except (OSError,subprocess.TimeoutExpired):
+  return False
 
 def cert_covers(name, domains):
  # Never interpolate a persisted certificate label into a filesystem path.
