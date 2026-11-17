@@ -9,6 +9,8 @@ Paperclip application. Full E2E and backup/rollback gates are still required.
 from __future__ import annotations
 import argparse
 import json
+import os
+import pathlib
 import re
 
 COMMIT_RE = re.compile(r"[0-9a-f]{40}\Z")
@@ -40,25 +42,34 @@ def validate_nginx_image(value: str) -> str:
 
 
 def nginx_proxy_config() -> str:
-    """Route only the isolated preview service, never the private host:3100."""
-    return f"""server {{
+    """Route only the isolated Preview; reject unexpected host headers.
+
+    This file is loaded by nginx from conf.d within its http context, so a
+    map may precede the server block. Never rely on untrusted forwarded-proto
+    supplied by the client to decide authentication or cookie security.
+    """
+    return f"""map $http_upgrade $cloudiff_w1_connection {{
+  default upgrade;
+  '' close;
+}}
+server {{
   listen 80;
   server_name {HOST};
   server_tokens off;
+  if ($host != {HOST}) {{ return 421; }}
   client_max_body_size 8m;
   location / {{
     proxy_pass http://app:3100;
     proxy_http_version 1.1;
-    proxy_set_header Host $host;
+    proxy_set_header Host {HOST};
     proxy_set_header X-Real-IP $remote_addr;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto $http_x_forwarded_proto;
+    proxy_set_header X-Forwarded-Proto https;
     proxy_set_header Upgrade $http_upgrade;
-    proxy_set_header Connection $connection_upgrade;
+    proxy_set_header Connection $cloudiff_w1_connection;
     proxy_read_timeout 120s;
   }}
 }}
-""".replace("$connection_upgrade", '"upgrade"')
+"""
 
 
 def compose_plan(*, source_commit: str, native_image_id: str, nginx_image: str) -> dict:
@@ -86,6 +97,7 @@ def compose_plan(*, source_commit: str, native_image_id: str, nginx_image: str) 
                     "PAPERCLIP_DEPLOYMENT_EXPOSURE": "private",
                     "PAPERCLIP_HOME": "/paperclip",
                     "PAPERCLIP_INSTANCE_ID": "preview-w1-1025",
+                    "PAPERCLIP_CONFIG": "/paperclip/instances/preview-w1-1025/config.json",
                     "HOST": "0.0.0.0",
                     "PORT": "3100",
                 },
@@ -110,7 +122,7 @@ def compose_plan(*, source_commit: str, native_image_id: str, nginx_image: str) 
                 "security_opt": ["no-new-privileges:true"],
                 "networks": ["preview-private", "cloudif-publications"],
                 "labels": labels,
-                "healthcheck": {"test": ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/api/health"],
+                "healthcheck": {"test": ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/ && wget -q -O /dev/null http://127.0.0.1/api/health"],
                                 "interval": "10s", "timeout": "5s", "retries": 12, "start_period": "20s"},
             },
         },
@@ -122,18 +134,62 @@ def compose_plan(*, source_commit: str, native_image_id: str, nginx_image: str) 
     }
 
 
+def write_candidate(output_dir: str, plan: dict, proxy_config: str) -> tuple[str, str]:
+    """Materialize files only inside current working tree, refusing overwrite.
+
+    This deliberately does not touch /etc/komodo, /srv/cloudif or Docker.
+    Runtime deployment always requires separately approved G0-G5 gates.
+    """
+    root = pathlib.Path.cwd().resolve(strict=True)
+    path = pathlib.Path(output_dir)
+    if path.is_absolute() or not path.parts or ".." in path.parts or path.parts[0] == ".":
+        raise ValueError("candidate_output_must_be_relative_subdirectory")
+    output = root / path
+    for parent in (root, *(root.joinpath(*path.parts[:i]) for i in range(1, len(path.parts)))):
+        if parent.is_symlink() or not parent.is_dir():
+            raise ValueError("candidate_output_parent_must_exist_and_not_be_symlink")
+    if output.is_symlink():
+        raise ValueError("candidate_output_parent_must_exist_and_not_be_symlink")
+    if output.exists():
+        raise ValueError("candidate_output_already_exists")
+    try:
+        output.mkdir(mode=0o700)
+        for name, content in (
+            ("compose.json", json.dumps(plan, sort_keys=True, indent=2) + "\n"),
+            ("proxy.conf", proxy_config),
+        ):
+            file = output / name
+            with file.open("x", encoding="utf-8") as stream:
+                stream.write(content)
+            file.chmod(0o600)
+    except BaseException:
+        for name in ("compose.json", "proxy.conf"):
+            (output / name).unlink(missing_ok=True)
+        output.rmdir()
+        raise
+    return str(output / "compose.json"), str(output / "proxy.conf")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--source-commit", required=True)
     parser.add_argument("--native-image-id", required=True)
     parser.add_argument("--nginx-image", required=True)
+    parser.add_argument("--output-dir", help="Create a new local directory with compose.json and proxy.conf")
     args = parser.parse_args()
     try:
         plan = compose_plan(source_commit=args.source_commit, native_image_id=args.native_image_id,
                             nginx_image=args.nginx_image)
     except ValueError as exc:
         parser.error(str(exc))
-    print(json.dumps(plan, indent=2, sort_keys=True))
+    if args.output_dir:
+        try:
+            output_files = write_candidate(args.output_dir, plan, nginx_proxy_config())
+        except (OSError, ValueError) as exc:
+            parser.error(str(exc))
+        print(json.dumps({"offline_candidate_files": output_files, "deployed": False}))
+    else:
+        print(json.dumps(plan, indent=2, sort_keys=True))
     return 0
 
 if __name__ == "__main__":
