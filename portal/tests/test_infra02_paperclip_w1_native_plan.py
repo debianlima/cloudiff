@@ -16,8 +16,9 @@ APP='sha256:'+'a'*64
 NGINX='nginx:1.27.5-alpine@sha256:'+'b'*64
 
 class PlanTests(unittest.TestCase):
-    def get(self):
-        return plan.compose_plan(source_commit=COMMIT, native_image_id=APP, nginx_image=NGINX)
+    def get(self, mode="cutover"):
+        return plan.compose_plan(source_commit=COMMIT, native_image_id=APP, nginx_image=NGINX,
+                                 mode=mode)
 
     def test_exact_paperclip_project_identity(self):
         d=self.get(); self.assertEqual(d['services']['app']['labels']['org.cloudiff.project'], 'paperclip')
@@ -63,10 +64,43 @@ class PlanTests(unittest.TestCase):
                 plan.compose_plan(source_commit=sha,native_image_id=APP,nginx_image=NGINX)
 
     def test_gateway_alias_and_port(self):
-        d=self.get(); self.assertEqual(d['services']['web']['container_name'], 'cloudif-p1025-preview-web')
-        self.assertEqual(d['services']['app']['container_name'], 'cloudif-p1025-preview-app')
+        d=self.get(); self.assertEqual(d['services']['web']['container_name'], 'cloudif-p1025-w1-preview-web')
+        self.assertEqual(d['services']['app']['container_name'], 'cloudif-p1025-w1-preview-app')
         self.assertEqual(d['services']['app']['environment']['PORT'], '3100')
         self.assertNotIn('3100:',str(d))
+
+    def test_default_plan_canary_is_not_public(self):
+        d=plan.compose_plan(source_commit=COMMIT,native_image_id=APP,nginx_image=NGINX)
+        self.assertEqual(d["name"],"cloudif-p1025-w1-canary")
+        self.assertEqual(d["services"]["web"]["container_name"],plan.CANARY_WEB_NAME)
+        self.assertEqual(d["services"]["app"]["container_name"],plan.CANARY_APP_NAME)
+        self.assertEqual(d["services"]["web"]["networks"],["preview-private"])
+        self.assertEqual(d["services"]["app"]["networks"],["preview-private"])
+        self.assertNotIn("cloudif-publications",d["networks"])
+        self.assertTrue(d["networks"]["preview-private"]["internal"])
+        self.assertEqual(d["services"]["web"]["labels"]["org.cloudiff.source-preview-bridge"],"false")
+        self.assertEqual(d["services"]["web"]["labels"]["org.cloudiff.stage"],"canary")
+        self.assertEqual(d["services"]["app"]["volumes"][0]["source"],plan.CANARY_DATA_VOLUME)
+        self.assertNotIn(plan.DATA_VOLUME,d["volumes"])
+        self.assertEqual(d["services"]["app"]["environment"]["PAPERCLIP_INSTANCE_ID"],
+                         "preview-w1-1025-canary")
+        self.assertNotIn(plan.WEB_NAME,str(d))
+        self.assertNotIn(plan.APP_NAME,str(d))
+
+    def test_cutover_matches_forja_generic_nginx_gateway_name(self):
+        d=self.get(mode="cutover")
+        self.assertEqual(d["services"]["web"]["container_name"],
+                         "cloudif-p1025-w1-preview-web")
+        self.assertEqual(d["services"]["web"]["networks"],
+                         ["preview-private","cloudif-publications"])
+        self.assertEqual(d["services"]["web"]["labels"]["org.cloudiff.source-preview-bridge"],"true")
+        self.assertEqual(d["volumes"][plan.DATA_VOLUME]["name"],plan.DATA_VOLUME)
+        self.assertNotEqual(plan.CANARY_DATA_VOLUME,plan.DATA_VOLUME)
+
+    def test_invalid_mode_rejected_before_any_manifest_is_written(self):
+        for invalid in ("production","preview","",None):
+            with self.subTest(mode=invalid),self.assertRaises(ValueError):
+                self.get(mode=invalid)
 
     def test_nginx_routes_to_internal_app_only(self):
         content=plan.nginx_proxy_config()
@@ -126,7 +160,7 @@ class PlanTests(unittest.TestCase):
                 root=pathlib.Path(temp)/'candidate'
                 self.assertEqual(root.stat().st_mode & 0o777,0o700)
                 self.assertEqual((root/'proxy.conf').stat().st_mode & 0o777,0o600)
-                self.assertIn('"cloudif-p1025-preview-app"', (root/'compose.json').read_text())
+                self.assertIn('"cloudif-p1025-w1-preview-app"', (root/'compose.json').read_text())
                 with self.assertRaisesRegex(ValueError,'already_exists'):
                     plan.write_candidate('candidate',config,plan.nginx_proxy_config())
             finally:
