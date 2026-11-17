@@ -11,7 +11,7 @@ import re
 import socket
 import subprocess
 
-TARGET = "cloudif-p1025-preview-web"
+TARGET = "cloudif-p1025-w1-preview-web"
 FILES = {
     "root_index_html": "/var/www/html/index.html",
     "root_index_php": "/var/www/html/index.php",

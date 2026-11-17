@@ -15,6 +15,10 @@ class Tests(TestCase):
     def test_unprivileged_block(self):
         with patch.object(m.socket,"gethostname",return_value="forja"),patch.object(m.os,"geteuid",return_value=1000):
             self.assertEqual(m.report()["status"],"BLOCKED_REQUIRES_AUTHORIZED_ROOT")
+    def test_exact_observed_legacy_w1_container_name(self):
+        self.assertEqual(m.TARGET,"cloudif-p1025-w1-preview-web")
+        self.assertNotEqual(m.TARGET,"cloudif-p1025-preview-web")
+
     def test_wrong_host_block(self):
         with patch.object(m.socket,"gethostname",return_value="pghd-server"),patch.object(m.os,"geteuid",return_value=0):
             self.assertEqual(m.report()["status"],"BLOCKED_WRONG_HOST")

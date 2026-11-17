@@ -7,7 +7,7 @@ não altera Docker/Komodo, não importa senhas, não faz deploy e não lê
 variáveis ou arquivos de segredo.
 
 O executável exige EUID 0 no host correto e valida exclusivamente o
-container cloudif-p1025-preview-web. Ele consulta apenas nome da
+container cloudif-p1025-w1-preview-web. Ele consulta apenas nome da
 imagem, estado do container, mount de /var/www/html e metadados de
 identidade das labels org.cloudiff.*, incluindo project=paperclip,
 public-number=1025, stage=preview, stage-number=1, marcador Preview
@@ -37,3 +37,5 @@ amplas na conta cti nem contornar o sudo restrito existente.
 Teste offline:
 
     python3 -m unittest discover -s portal/tests -p test_owner_paperclip_w1_runtime_readonly.py -v
+
+O ambiente legado W1 1025 observado em 17/11/2026 possuía imagem Apache e mount do checkout, porém sem as labels esperadas. Neste caso o preflight sinaliza BLOCKED_TARGET_IDENTITY, que indica lacuna de proveniência e NÃO autorização para cutover. O nome real do container é cloudif-p1025-w1-preview-web.
