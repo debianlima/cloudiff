@@ -27,7 +27,7 @@ class GitEphemeralAuthTests(unittest.TestCase):
         self.assertNotIn(FAKE_TOKEN,url)
         self.assertNotIn('@',url)
         self.assertEqual(env['GIT_CONFIG_COUNT'],'1')
-        self.assertEqual(env['GIT_CONFIG_KEY_0'],'http.extraHeader')
+        self.assertEqual(env['GIT_CONFIG_KEY_0'],f'http.{url}.extraHeader')
         self.assertEqual(env['GIT_CONFIG_VALUE_0'],'Authorization: Basic '+base64.b64encode(('testsvc:'+FAKE_TOKEN).encode()).decode())
 
     def test_missing_token_rejected(self):
