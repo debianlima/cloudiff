@@ -2,7 +2,7 @@
 import ast
 from pathlib import Path
 import unittest
-SOURCE=Path(__file__).resolve().parents[1]/'components/runtime/current-apps/forja-agent-current/cloudif-forja-agent.py'
+SOURCE=Path(__file__).resolve().parents[2]/'components/runtime/current-apps/forja-agent-current/cloudif-forja-agent.py'
 class BundleImportAuthTests(unittest.TestCase):
     def test_all_network_git_calls_receive_ephemeral_auth(self):
         tree=ast.parse(SOURCE.read_text())

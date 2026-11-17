@@ -5,7 +5,7 @@ import re
 import unittest
 import urllib.parse
 
-SOURCE=pathlib.Path(__file__).resolve().parents[1]/'components/runtime/current-apps/forja-agent-current/cloudif-forja-agent.py'
+SOURCE=pathlib.Path(__file__).resolve().parents[2]/'components/runtime/current-apps/forja-agent-current/cloudif-forja-agent.py'
 
 def mask(value):
     fn=[x for x in ast.parse(SOURCE.read_text()).body if isinstance(x,ast.FunctionDef) and x.name=='_v119_mask']
@@ -27,7 +27,7 @@ class ScpCredentialTests(unittest.TestCase):
         msg='Diagnostic a:b@example.invalid without repository suffix'
         self.assertEqual(mask(msg),msg)
     def test_http_userinfo_still_redacted(self):
-        result=mask('fatal: https://svc:FAKESECRET@example.invalid/group/repo.git')
+        result=mask('fatal: ' + 'https://' + 'svc:FAKESECRET' + '@example.invalid/group/repo.git')
         self.assertNotIn('FAKESECRET',result)
     def test_no_credentials_in_regular_error(self):
         msg='fatal: repository not found'

@@ -10,7 +10,7 @@ import threading
 import unittest
 import urllib
 
-SOURCE=(Path(__file__).resolve().parents[1]/'components/runtime/current-apps/forja-agent-current/cloudif-forja-agent.py')
+SOURCE=(Path(__file__).resolve().parents[2]/'components/runtime/current-apps/forja-agent-current/cloudif-forja-agent.py')
 TOKEN='FAKE_GIT_TOKEN_FOR_LOOPBACK_TEST_ONLY'
 
 def auth(port):

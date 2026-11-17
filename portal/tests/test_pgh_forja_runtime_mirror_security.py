@@ -2,7 +2,7 @@
 import ast
 import pathlib
 import unittest
-ROOT=pathlib.Path(__file__).resolve().parents[1]
+ROOT=pathlib.Path(__file__).resolve().parents[2]
 CANON=ROOT/'components/runtime/current-apps/forja-agent-current/cloudif-forja-agent.py'
 MIRROR=ROOT/'components/runtime/usr/local/sbin/cloudif-forja-agent.py'
 

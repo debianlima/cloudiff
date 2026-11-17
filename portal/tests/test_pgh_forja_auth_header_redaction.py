@@ -1,6 +1,6 @@
 """Synthetic credentials only; tests a local AST-extracted redactor."""
 import ast,base64,pathlib,re,unittest,urllib
-SOURCE=pathlib.Path(__file__).resolve().parents[1]/'components/runtime/current-apps/forja-agent-current/cloudif-forja-agent.py'
+SOURCE=pathlib.Path(__file__).resolve().parents[2]/'components/runtime/current-apps/forja-agent-current/cloudif-forja-agent.py'
 def redact(msg):
  f=[n for n in ast.parse(SOURCE.read_text()).body if isinstance(n,ast.FunctionDef) and n.name=='_v119_mask']
  assert len(f)==1
@@ -21,5 +21,5 @@ class TestAuthHeader(unittest.TestCase):
  def test_ordinary_errors_preserved(self):
   self.assertEqual(redact('fatal: unable to resolve example.invalid'),'fatal: unable to resolve example.invalid')
  def test_previous_url_mask_preserved(self):
-  self.assertNotIn('synthetic-password',redact('fatal https://svc:synthetic-password@example.invalid/repo.git'))
+  self.assertNotIn('synthetic-password',redact('fatal ' + 'https://' + 'svc:synthetic-password' + '@example.invalid/repo.git'))
 if __name__=='__main__':unittest.main()

@@ -2,7 +2,7 @@
 import ast
 from pathlib import Path
 import unittest
-ROOT=Path(__file__).resolve().parents[1]
+ROOT=Path(__file__).resolve().parents[2]
 PATHS=[ROOT/'components/runtime/current-apps/forja-agent-current/cloudif-forja-agent.py',ROOT/'components/runtime/usr/local/sbin/cloudif-forja-agent.py']
 class NoLegacyAuthUrl(unittest.TestCase):
     def test_no_legacy_credential_url_builder(self):

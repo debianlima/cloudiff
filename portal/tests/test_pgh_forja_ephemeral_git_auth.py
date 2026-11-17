@@ -8,7 +8,7 @@ import tempfile
 import unittest
 import urllib.parse
 
-SOURCE=(Path(__file__).resolve().parents[1]/'components/runtime/current-apps/forja-agent-current/cloudif-forja-agent.py')
+SOURCE=(Path(__file__).resolve().parents[2]/'components/runtime/current-apps/forja-agent-current/cloudif-forja-agent.py')
 FAKE_TOKEN='TEST+/CREDENTIAL:ONLY'
 
 def helpers():

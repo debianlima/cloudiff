@@ -8,7 +8,7 @@ import unittest
 import urllib.parse
 import base64
 
-SOURCE=Path(__file__).resolve().parents[1]/'components/runtime/current-apps/forja-agent-current/cloudif-forja-agent.py'
+SOURCE=Path(__file__).resolve().parents[2]/'components/runtime/current-apps/forja-agent-current/cloudif-forja-agent.py'
 
 def auth():
     tree=ast.parse(SOURCE.read_text())
