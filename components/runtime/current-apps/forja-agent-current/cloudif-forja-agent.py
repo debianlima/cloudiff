@@ -1642,7 +1642,16 @@ def _v119_git_ephemeral_auth(owner, repo):
     token = _v118_cfg("FORGEJO_TOKEN", "")
     user = _v118_cfg("FORGEJO_SERVICE_USER", "cloudif-bot") or "cloudif-bot"
     parsed = urllib.parse.urlsplit(base)
-    if parsed.scheme not in ("https", "http") or not parsed.hostname or parsed.username or parsed.password:
+    # Reject URL decorations and path traversal *before* constructing the
+    # repository-scoped Git auth header. Different HTTP clients/proxies may
+    # normalize dot segments or percent-encoded separators differently.
+    path_segments = parsed.path.split("/")
+    if (parsed.scheme not in ("https", "http") or not parsed.hostname
+            or parsed.username is not None or parsed.password is not None
+            or parsed.query or parsed.fragment
+            or any(ord(c) < 32 or ord(c) == 127 for c in base)
+            or any(seg in (".", "..") for seg in path_segments)
+            or "%" in parsed.path or "\\" in parsed.path):
         raise RuntimeError("FORGEJO_URL inválida para git clone")
     if not token:
         raise RuntimeError("FORGEJO_TOKEN ausente")
