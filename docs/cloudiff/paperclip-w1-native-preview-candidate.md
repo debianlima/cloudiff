@@ -16,7 +16,7 @@ O script `portal/tools/cloudif_paperclip_w1_plan.py` gera somente JSON Compose e
 - Modo autenticado e exposição privada. Variáveis ou segredos reais devem ser obtidos via OpenBao `secret_ref`, com ACL e TTL; não estão no gerador.
 - Imagens devem vir de compilação revisada e pinagem imutável; o gerador valida sintaxe, **não prova** proveniência do build, proprietário do digest, scanner de vulnerabilidades ou que uma imagem já esteja disponível localmente.
 - Preview requer fluxo de atualização seguro Forgejo commit novo → build independente → testes → troca atômica reversível do container W1. O gerador **ainda não implementa** esse fluxo, lock, backup, Hn/Pn, nem automação de credenciais.
-- O health do nginx exige sucesso HTTP tanto na raiz quanto em /api/health. Isso nao substitui teste funcional de JavaScript, login, tela e banco. O nginx usa o serviço `app` no namespace privado. É proibido apontar o proxy para a porta privada `10.62.91.2:3100` ou usar o mesmo banco/volume da produção.
+- O health do nginx exige sucesso HTTP tanto na raiz quanto em /api/health. Isso nao substitui teste funcional de JavaScript, login, tela e banco. O nginx usa resolução DNS interna Docker 127.0.0.11 ao iniciar e reiniciar o app no namespace privado. O nginx usa o serviço `app` no namespace privado. É proibido apontar o proxy para a porta privada `10.62.91.2:3100` ou usar o mesmo banco/volume da produção.
 
 ## Passos obrigatórios antes de usar
 
