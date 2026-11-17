@@ -3149,7 +3149,7 @@ def _cloudif_v122_import_bundle(handler):
     if st!=200:
         return json_response(handler,409,{'ok':False,'error':'target_repository_not_ready','status':st})
 
-    target_url=_v119_forgejo_repo_git_url(owner,repo)
+    target_url,git_auth_env=_v119_git_ephemeral_auth(owner,repo)
     root=tempfile.mkdtemp(prefix='cloudif-import-bundle-')
     bundle=os.path.join(root,'source.bundle')
     src=os.path.join(root,'source')
@@ -3173,7 +3173,7 @@ def _cloudif_v122_import_bundle(handler):
             return json_response(handler,422,{**result,'error':'source_commit_mismatch','bundle_head':imported_head})
 
         _v119_run(['git','remote','add','cloudiff-target',target_url],cwd=src)
-        current=_v119_run(['git','ls-remote','cloudiff-target',f'refs/heads/{branch}'],cwd=src,timeout=120)
+        current=_v119_run(['git','ls-remote','cloudiff-target',f'refs/heads/{branch}'],cwd=src,timeout=120,git_auth_env=git_auth_env)
         if current.get('returncode')!=0:
             return json_response(handler,502,{**result,'error':'target_head_lookup_failed','detail':current})
         fields=(current.get('stdout') or '').strip().split()
@@ -3185,27 +3185,27 @@ def _cloudif_v122_import_bundle(handler):
             return json_response(handler,200,result)
 
         if before:
-            fetch=_v119_run(['git','fetch','cloudiff-target',f'{branch}:refs/remotes/cloudiff-target/{branch}'],cwd=src,timeout=180)
+            fetch=_v119_run(['git','fetch','cloudiff-target',f'{branch}:refs/remotes/cloudiff-target/{branch}'],cwd=src,timeout=180,git_auth_env=git_auth_env)
             if fetch.get('returncode')!=0:
                 return json_response(handler,502,{**result,'error':'target_backup_fetch_failed','detail':fetch})
             mkref=_v119_run(['git','branch','-f',backup_branch,f'refs/remotes/cloudiff-target/{branch}'],cwd=src)
             if mkref.get('returncode')!=0:
                 return json_response(handler,502,{**result,'error':'target_backup_ref_failed','detail':mkref})
-            push_backup=_v119_run(['git','push','cloudiff-target',f'{backup_branch}:{backup_branch}'],cwd=src,timeout=180)
+            push_backup=_v119_run(['git','push','cloudiff-target',f'{backup_branch}:{backup_branch}'],cwd=src,timeout=180,git_auth_env=git_auth_env)
             if push_backup.get('returncode')!=0:
                 return json_response(handler,502,{**result,'error':'target_backup_push_failed','detail':push_backup})
             pst,pdata=_cloudif_v122_patch_repo(owner,repo,{'default_branch':backup_branch})
             if pst not in (200,201):
                 return json_response(handler,502,{**result,'error':'target_default_branch_switch_failed','status':pst,'detail':pdata})
-            delete_main=_v119_run(['git','push','cloudiff-target',f':{branch}'],cwd=src,timeout=180)
+            delete_main=_v119_run(['git','push','cloudiff-target',f':{branch}'],cwd=src,timeout=180,git_auth_env=git_auth_env)
             if delete_main.get('returncode')!=0:
                 _cloudif_v122_patch_repo(owner,repo,{'default_branch':branch})
                 return json_response(handler,502,{**result,'error':'target_branch_delete_failed','detail':delete_main})
 
-        push=_v119_run(['git','push','cloudiff-target',f'HEAD:{branch}'],cwd=src,timeout=300)
+        push=_v119_run(['git','push','cloudiff-target',f'HEAD:{branch}'],cwd=src,timeout=300,git_auth_env=git_auth_env)
         if push.get('returncode')!=0:
             if before:
-                _v119_run(['git','push','cloudiff-target',f'{backup_branch}:{branch}'],cwd=src,timeout=180)
+                _v119_run(['git','push','cloudiff-target',f'{backup_branch}:{branch}'],cwd=src,timeout=180,git_auth_env=git_auth_env)
                 _cloudif_v122_patch_repo(owner,repo,{'default_branch':branch})
             return json_response(handler,502,{**result,'error':'target_import_push_failed','detail':push})
 
@@ -3213,9 +3213,9 @@ def _cloudif_v122_import_bundle(handler):
         if pst not in (200,201):
             return json_response(handler,502,{**result,'error':'target_default_branch_restore_failed','status':pst,'detail':pdata})
         if before:
-            _v119_run(['git','push','cloudiff-target',f':{backup_branch}'],cwd=src,timeout=180)
+            _v119_run(['git','push','cloudiff-target',f':{backup_branch}'],cwd=src,timeout=180,git_auth_env=git_auth_env)
 
-        final=_v119_run(['git','ls-remote','cloudiff-target',f'refs/heads/{branch}'],cwd=src,timeout=120)
+        final=_v119_run(['git','ls-remote','cloudiff-target',f'refs/heads/{branch}'],cwd=src,timeout=120,git_auth_env=git_auth_env)
         fields=(final.get('stdout') or '').strip().split();target_commit=fields[0].lower() if fields else ''
         if target_commit!=source_commit:
             return json_response(handler,502,{**result,'error':'target_commit_verification_failed','target_commit':target_commit})
