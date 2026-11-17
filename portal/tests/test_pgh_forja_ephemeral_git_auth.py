@@ -36,6 +36,26 @@ class GitEphemeralAuthTests(unittest.TestCase):
         ns=helpers();ns['_v118_cfg']=lambda k,d='': '' if k=='FORGEJO_TOKEN' else ('https://forge.example.invalid' if k=='FORGEJO_URL' else d)
         with self.assertRaises(RuntimeError):ns['_v119_git_ephemeral_auth']('owner','repo')
 
+    def test_plain_http_endpoint_is_refused_before_auth_header_generation(self):
+        ns=helpers()
+        ns['_v118_cfg']=lambda key,default='': {
+            'FORGEJO_URL':'http://forge.example.invalid/git',
+            'FORGEJO_TOKEN':FAKE_TOKEN,'FORGEJO_SERVICE_USER':'testsvc',
+        }.get(key,default)
+        with self.assertRaisesRegex(RuntimeError,'HTTPS'):
+            ns['_v119_git_ephemeral_auth']('owner','repo')
+
+    def test_url_query_and_fragment_cannot_change_canonical_authority(self):
+        for suffix in ('?path=invalid','#fragment'):
+            with self.subTest(suffix=suffix):
+                ns=helpers()
+                ns['_v118_cfg']=lambda key,default='', suffix=suffix: {
+                    'FORGEJO_URL':'https://forge.example.invalid/git'+suffix,
+                    'FORGEJO_TOKEN':FAKE_TOKEN,'FORGEJO_SERVICE_USER':'testsvc',
+                }.get(key,default)
+                with self.assertRaisesRegex(RuntimeError,'HTTPS'):
+                    ns['_v119_git_ephemeral_auth']('owner','repo')
+
     def test_git_subprocess_receives_env_without_argv_secret(self):
         ns=helpers();url,env=ns['_v119_git_ephemeral_auth']('owner','repo')
         class FakeResult: returncode=0;stdout='ok';stderr=''

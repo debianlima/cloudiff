@@ -26,3 +26,7 @@ This PR is **preventive source hardening**. The existing **22 Git origin configu
 ## PR sequencing and catalog parity
 
 The standalone security change contains two mirrored Forja runtime files, nine test modules, and this documentation. It was stacked on PR #43 rather than duplicating the baseline async publication test fix and its generated catalogs. After PR #43 merges, rebase/retarget this PR and revalidate regenerated catalogs on the exact resulting main HEAD; no authorization to merge either draft is implied.
+
+### TLS-only credential delivery
+
+The ephemeral Basic authorization helper now **rejects HTTP**, userinfo, query and fragment in the configured `FORGEJO_URL`. Only an HTTPS canonical URL may carry the process-scoped Git Basic header. This deliberately fails closed for internal plaintext HTTP endpoints; an authorized owner must supply a valid HTTPS Forgejo ingress with matching certificate and no redirects before rollout. The direct loopback Git HTTP redirect fixture remains synthetic and never uses production credentials.

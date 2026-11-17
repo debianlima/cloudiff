@@ -1,5 +1,4 @@
 """Git HTTP integration: synthetic credentials and a loopback redirect only."""
-import ast
 import base64
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import os
@@ -8,21 +7,26 @@ import subprocess
 import tempfile
 import threading
 import unittest
-import urllib
 
 SOURCE=(Path(__file__).resolve().parents[2]/'components/runtime/current-apps/forja-agent-current/cloudif-forja-agent.py')
 TOKEN='FAKE_GIT_TOKEN_FOR_LOOPBACK_TEST_ONLY'
 
 def auth(port):
-    functions=[n for n in ast.parse(SOURCE.read_text()).body if
-               isinstance(n,ast.FunctionDef) and n.name=='_v119_git_ephemeral_auth']
-    assert len(functions)==1
-    def config(name,default=''):
-        return ({'FORGEJO_URL':f'http://127.0.0.1:{port}',
-                 'FORGEJO_TOKEN':TOKEN,'FORGEJO_SERVICE_USER':'fake-user'}).get(name,default)
-    ns={'_v118_cfg':config,'urllib':urllib,'base64':base64}
-    exec(compile(ast.Module(body=functions,type_ignores=[]),str(SOURCE),'exec'),ns,ns)
-    return ns['_v119_git_ephemeral_auth']('team','repo')
+    """Create a loopback-only *synthetic* Git configuration for probing Git.
+
+    Production `_v119_git_ephemeral_auth` now correctly rejects HTTP. This
+    isolated test is specifically about the Git binary's redirect behavior,
+    not an invocation of the credential-bearing CloudIFF helper.
+    """
+    url=f'http://127.0.0.1:{port}/team/repo.git'
+    encoded=base64.b64encode(('fake-user:'+TOKEN).encode()).decode()
+    env={'GIT_CONFIG_COUNT':'2',
+         'GIT_CONFIG_KEY_0':f'http.{url}.extraHeader',
+         'GIT_CONFIG_VALUE_0':'Authorization: Basic '+encoded,
+         'GIT_CONFIG_KEY_1':'http.followRedirects',
+         'GIT_CONFIG_VALUE_1':'false',
+         'GIT_TERMINAL_PROMPT':'0'}
+    return url,env
 
 def redirect_probe(follow):
     seen={'initial':[],'redirected':[]}

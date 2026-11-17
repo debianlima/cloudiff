@@ -1642,8 +1642,12 @@ def _v119_git_ephemeral_auth(owner, repo):
     token = _v118_cfg("FORGEJO_TOKEN", "")
     user = _v118_cfg("FORGEJO_SERVICE_USER", "cloudif-bot") or "cloudif-bot"
     parsed = urllib.parse.urlsplit(base)
-    if parsed.scheme not in ("https", "http") or not parsed.hostname or parsed.username or parsed.password:
-        raise RuntimeError("FORGEJO_URL inválida para git clone")
+    # This helper attaches Basic credentials to Git's HTTP transport. Sending
+    # even a short-lived token over plaintext HTTP is not acceptable; fail
+    # closed instead of silently downgrading TLS or following a redirect.
+    if (parsed.scheme != "https" or not parsed.hostname or parsed.username or
+            parsed.password or parsed.query or parsed.fragment):
+        raise RuntimeError("FORGEJO_URL exige URL HTTPS canônica sem credenciais ou parâmetros")
     if not token:
         raise RuntimeError("FORGEJO_TOKEN ausente")
     clean = urllib.parse.urlunsplit((parsed.scheme, parsed.netloc, parsed.path, "", ""))
