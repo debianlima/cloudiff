@@ -61,6 +61,28 @@ class PublicationRecoveryJournal:
         # no in-process umask changes (unsafe for multithreaded workers).
         path = os.path.abspath(os.fspath(db_path))
         parent = os.path.dirname(path)
+        # Every ancestor must be owned by the controller or root, and must
+        # not be replaceable by unrelated local users. A root-owned sticky
+        # directory such as /tmp is an exception: sticky semantics prevent
+        # unrelated users from unlinking or renaming the controller's child.
+        # The immediate parent is checked separately and must be private.
+        component = os.path.sep
+        for segment in parent.split(os.path.sep)[1:-1]:
+            if not segment:
+                continue
+            component = os.path.join(component, segment)
+            component_stat = os.lstat(component)
+            if stat.S_ISLNK(component_stat.st_mode):
+                raise PermissionError('journal_ancestor_symlink_forbidden')
+            if not stat.S_ISDIR(component_stat.st_mode):
+                raise ValueError('journal_ancestor_not_directory')
+            if component_stat.st_uid not in (os.geteuid(), 0):
+                raise PermissionError('journal_ancestor_untrusted_owner')
+            if component_stat.st_mode & 0o022:
+                trusted_sticky = (component_stat.st_uid == 0 and
+                                  bool(component_stat.st_mode & stat.S_ISVTX))
+                if not trusted_sticky:
+                    raise PermissionError('journal_ancestor_writable_by_others')
         # Fail closed when the immediate state directory is replaceable by
         # unrelated local users or resolves through a symlink. Ancestor/path
         # trust still requires an owner-approved deployment location.
@@ -72,6 +94,7 @@ class PublicationRecoveryJournal:
         if parent_stat.st_uid not in (os.geteuid(), 0):
             raise PermissionError('journal_parent_untrusted_owner')
         nofollow = getattr(os, 'O_NOFOLLOW', 0)
+        validated_db_identity = None
         for suffix in ('', '-wal', '-shm'):
             flags = (os.O_RDWR | os.O_CREAT if not suffix
                      else os.O_RDONLY | getattr(os, 'O_NONBLOCK', 0))
@@ -92,10 +115,26 @@ class PublicationRecoveryJournal:
                     raise PermissionError('journal_hardlinked_file_forbidden')
                 if metadata.st_uid != os.geteuid():
                     raise PermissionError('journal_file_untrusted_owner')
+                if not suffix:
+                    validated_db_identity = (metadata.st_dev, metadata.st_ino)
                 os.fchmod(fd, 0o600)
             finally:
                 os.close(fd)
+        # Catch replacement of the validated pathname at the SQLite-open
+        # boundary before any SQL writes. This is defense in depth only:
+        # it is not an fd-bound SQLite connection and cannot replace a
+        # trusted, non-replaceable parent/ancestor directory and owner lock.
         self.con = sqlite3.connect(path, timeout=30)
+        try:
+            opened_stat = os.lstat(path)
+            if (not stat.S_ISREG(opened_stat.st_mode) or
+                    (opened_stat.st_dev, opened_stat.st_ino) != validated_db_identity or
+                    opened_stat.st_uid != os.geteuid() or
+                    opened_stat.st_nlink != 1):
+                raise PermissionError('journal_db_changed_after_validation')
+        except BaseException:
+            self.con.close()
+            raise
         self.con.row_factory = sqlite3.Row
         self.con.execute('PRAGMA busy_timeout=30000')
         self.con.execute('PRAGMA journal_mode=WAL')
