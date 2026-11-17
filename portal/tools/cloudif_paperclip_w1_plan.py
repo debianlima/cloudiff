@@ -58,8 +58,12 @@ server {{
   server_tokens off;
   if ($host != {HOST}) {{ return 421; }}
   client_max_body_size 8m;
+  # Docker embedded DNS: app is a service on preview-private, not the host.
+  # Variable-based proxy_pass resolves when the app container starts/restarts.
+  resolver 127.0.0.11 valid=10s ipv6=off;
+  set $cloudiff_preview_upstream app;
   location / {{
-    proxy_pass http://app:3100;
+    proxy_pass http://$cloudiff_preview_upstream:3100;
     proxy_http_version 1.1;
     proxy_set_header Host {HOST};
     proxy_set_header X-Real-IP $remote_addr;
