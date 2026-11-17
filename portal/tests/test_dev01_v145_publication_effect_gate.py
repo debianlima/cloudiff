@@ -150,6 +150,39 @@ class PublicationGateTests(unittest.TestCase):
         with PublicationRecoveryJournal(self.root/'journal.sqlite') as readback:
             self.assertEqual(len(readback.unresolved()),1)
 
+    def test_untrusted_writable_lock_ancestor_is_rejected_before_journal(self):
+        outer=self.root/'writable-ancestor'
+        outer.mkdir(mode=0o700)
+        nested=outer/'private'
+        nested.mkdir(mode=0o700)
+        outer.chmod(0o777)
+        try:
+            gate=make_publication_gate(mode='strict',
+                db_path=self.root/'journal.sqlite',lock_dir=nested,
+                project='demo',kind='production_release',public_number=1200,
+                publication_number=1,target='cloudif-p1200-d3-web',
+                evidence_provider=lambda _:'0'*64,evidence_verifier=lambda *_:False)
+            with self.assertRaisesRegex(PublicationEffectGateUnavailable,'untrusted_lock_directory'):
+                with gate:pass
+            self.assertFalse((self.root/'journal.sqlite').exists())
+            self.assertEqual(list(nested.iterdir()),[])
+        finally:
+            outer.chmod(0o700)
+
+    def test_symlinked_lock_ancestor_is_rejected_before_file_creation(self):
+        target=self.root/'real';target.mkdir(mode=0o700)
+        private=target/'private';private.mkdir(mode=0o700)
+        shortcut=self.root/'alias';shortcut.symlink_to(target,target_is_directory=True)
+        gate=make_publication_gate(mode='strict',
+            db_path=self.root/'journal.sqlite',lock_dir=shortcut/'private',
+            project='demo',kind='production_release',public_number=1200,
+            publication_number=1,target='cloudif-p1200-d3-web',
+            evidence_provider=lambda _:'0'*64,evidence_verifier=lambda *_:False)
+        with self.assertRaisesRegex(PublicationEffectGateUnavailable,'untrusted_lock_directory'):
+            with gate:pass
+        self.assertEqual(list(private.iterdir()),[])
+        self.assertFalse((self.root/'journal.sqlite').exists())
+
     def test_untrusted_state_directory_is_rejected(self):
         self.root.chmod(0o777)
         try:

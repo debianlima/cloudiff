@@ -7,7 +7,7 @@ import tempfile
 import unittest
 from unittest import mock
 
-SOURCE = (pathlib.Path(__file__).resolve().parents[1] /
+SOURCE = (pathlib.Path(__file__).resolve().parents[2] /
     'components/runtime/current-apps/komodo-agent-current/cloudif_publication_recovery_journal.py')
 spec = importlib.util.spec_from_file_location('journal_ancestor_permissions', SOURCE)
 mod = importlib.util.module_from_spec(spec)

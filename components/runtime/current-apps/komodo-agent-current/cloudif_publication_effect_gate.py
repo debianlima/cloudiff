@@ -30,12 +30,33 @@ class DisabledPublicationGate:
 
 
 def _trusted_directory(path):
+    """Reject replaceable lock directories, not only the immediate parent.
+
+    Each component must be a non-symlink directory owned by service UID or
+    root. Root-owned sticky /tmp-style ancestors are allowed only for ancestors,
+    never for the final private lock directory. This does not replace a lock
+    coordinator spanning all Docker hosts or protect against same-UID actors.
+    """
     parent = Path(path)
-    st = os.lstat(parent)
-    if not stat.S_ISDIR(st.st_mode) or stat.S_ISLNK(st.st_mode):
+    if not parent.is_absolute():
         raise PublicationEffectGateUnavailable('untrusted_lock_directory')
-    if st.st_uid not in (os.geteuid(), 0) or st.st_mode & 0o022:
-        raise PublicationEffectGateUnavailable('untrusted_lock_directory')
+    current = Path(os.path.sep)
+    components = parent.parts[1:]
+    for index, part in enumerate(components):
+        current = current / part
+        try:
+            st = os.lstat(current)
+        except OSError:
+            raise PublicationEffectGateUnavailable('untrusted_lock_directory') from None
+        if not stat.S_ISDIR(st.st_mode) or stat.S_ISLNK(st.st_mode):
+            raise PublicationEffectGateUnavailable('untrusted_lock_directory')
+        if st.st_uid not in (os.geteuid(), 0):
+            raise PublicationEffectGateUnavailable('untrusted_lock_directory')
+        if st.st_mode & 0o022:
+            allowed_sticky_ancestor = (index < len(components) - 1 and
+                st.st_uid == 0 and bool(st.st_mode & stat.S_ISVTX))
+            if not allowed_sticky_ancestor:
+                raise PublicationEffectGateUnavailable('untrusted_lock_directory')
     return parent
 
 
