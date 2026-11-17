@@ -1,6 +1,6 @@
 # Forja Git transport — preventive credential safety patch
 
-**Status:** source-only review, not deployed; GitHub `main` is the base. No production credentials or Git `.git/config` files were accessed, changed or copied during development. This change does **not** contain or revoke historical exposed credentials.
+**Status:** source-only review, not deployed; **The review branch is stacked on draft PR #43**, whose source-test scope fix and regenerated technical catalogs are independently CI-green. Main is the eventual target only after PR #43 is reviewed/merged. No production credentials or Git `.git/config` files were accessed, changed or copied during development. This change does **not** contain or revoke historical exposed credentials.
 
 ## Code and threat model
 
@@ -22,3 +22,7 @@ Residual threats requiring independent review include: same-UID environment insp
 ## Release gates and incident containment
 
 This PR is **preventive source hardening**. The existing **22 Git origin configurations with embedded credentials (21 Forja, 1 Hospedagem)** are an active P0 and require **owner-controlled containment, real credential rotation/revocation, and independent zero-exposure audit**; no code-level test can replace that. G0 authenticated owner and change lock, G1 verified institutional backups/volume restore, G2 productive OpenBao secret broker/ACL/TTL, G3 isolated source+Docker end-to-end, G4 credential rotation and G5 independent audit all remain mandatory for production rollout. Do not merge/deploy automatically or change Git remotes from an unprivileged session.
+
+## PR sequencing and catalog parity
+
+The standalone security change contains two mirrored Forja runtime files, nine test modules, and this documentation. It was stacked on PR #43 rather than duplicating the baseline async publication test fix and its generated catalogs. After PR #43 merges, rebase/retarget this PR and revalidate regenerated catalogs on the exact resulting main HEAD; no authorization to merge either draft is implied.
