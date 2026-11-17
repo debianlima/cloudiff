@@ -32,6 +32,25 @@ class ScopedGitAuth(unittest.TestCase):
             self.assertEqual(get('http://forgejo.example.invalid/git/team/project.git')[0],1)
             self.assertEqual(get('https://forgejo.example.invalid/git/team/project.git-evil')[0],1)
 
+    def test_repository_url_auth_scope_is_prefix_not_exact_match(self):
+        # Git URL-matching covers canonical descendant paths such as info/refs;
+        # never represent scoped extraHeader as strict URL-string equality.
+        url, env = auth()
+        with tempfile.TemporaryDirectory() as directory:
+            runtime = {**os.environ, **env, 'HOME': directory, 'GIT_CONFIG_NOSYSTEM': '1'}
+            def matches(candidate):
+                result = subprocess.run(
+                    ['git', 'config', '--get-urlmatch', 'http.extraHeader', candidate],
+                    env=runtime, capture_output=True, text=True, timeout=8,
+                )
+                return result.returncode == 0
+            self.assertTrue(matches(url))
+            self.assertTrue(matches(url + '/info/refs'))
+            self.assertTrue(matches(url + '/unexpected-descendant'))
+            self.assertFalse(matches(url + '-different'))
+            self.assertFalse(matches('https://forgejo.example.invalid/git/other/repo.git'))
+            self.assertEqual(env['GIT_CONFIG_VALUE_1'], 'false')
+
     def test_git_config_is_ephemeral(self):
         url,env=auth()
         self.assertEqual(env['GIT_CONFIG_COUNT'],'2')
@@ -42,3 +61,4 @@ class ScopedGitAuth(unittest.TestCase):
         self.assertNotIn('FAKE_TOKEN_TEST',env['GIT_CONFIG_KEY_0'])
 
 if __name__=='__main__':unittest.main()
+
