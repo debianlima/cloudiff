@@ -38,6 +38,9 @@ def validate(d):
    continue
   if set(obj)-allowed:
    errors.append('unexpected_manifest_field')
+ # Reject malformed nested objects before dereferencing them.
+ if 'invalid_manifest_structure' in errors:
+  return sorted(set(errors))
  def required(test,code):
   if not test:errors.append(code)
  required(d.get('identity')=='svc-pgh-cloudiff','identity')
@@ -52,16 +55,18 @@ def validate(d):
  required(scope.get('other_resources_default')=='None','default_allow')
  required(scope.get('specific_permissions')==[],'dangerous_specific_permission')
  required(scope.get('transparent_mode_must_be_false') is True,'transparent_mode_assumption')
- required(DENY.issubset(set(scope.get('denied_global_privileges') or [])),'denylist')
+ denied=scope.get('denied_global_privileges')
+ required(type(denied) is list and all(type(v) is str for v in denied) and DENY.issubset(denied),'denylist')
  auth=d.get('agent_credential_model') or {}
- required(set(auth.get('agents') or [])==EXPECTED_AGENTS,'agent_scope')
+ agents=auth.get('agents')
+ required(type(agents) is list and all(type(v) is str for v in agents) and len(agents)==len(EXPECTED_AGENTS) and set(agents)==EXPECTED_AGENTS,'agent_scope')
  required(auth.get('sharing_one_api_secret_between_agents') is False,'shared_secret')
  required(auth.get('one_key_per_agent') is True,'per_agent_keys')
  required(auth.get('plain_secret_in_pgh') is False and auth.get('plain_secret_in_git') is False,'plaintext_secret')
  required(auth.get('secret_ref_pattern')=='komodo/cloudiff/svc-pgh-cloudiff/<agent-code>','secret_ref_pattern_drift')
  required(auth.get('secret_broker')=='OpenBao-or-institutional-secret-manager','secret_broker_drift')
  required(auth.get('all_agent_keys_inherit_identical_user_permissions') is True,'per_key_acl_false_assumption')
- required(isinstance(auth.get('key_ttl_hours_max'),int) and 0<auth['key_ttl_hours_max']<=24,'expiry')
+ required(type(auth.get('key_ttl_hours_max')) is int and 0<auth['key_ttl_hours_max']<=24,'expiry')
  elevated=d.get('elevated_operations') or {}
  required(elevated.get('status')=='NOT_AUTHORIZED_BY_THIS_READ_IDENTITY','elevated_change_enabled')
  required(elevated.get('no_automatic_role_escalation') is True,'automatic_escalation')
