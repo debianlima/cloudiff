@@ -1,5 +1,7 @@
 import importlib.util
 import pathlib
+import tempfile
+import os
 import unittest
 
 P = pathlib.Path(__file__).parents[1] / 'tools' / 'cloudif_paperclip_w1_plan.py'
@@ -82,6 +84,58 @@ class PlanTests(unittest.TestCase):
         out=str(d).lower()
         for secret in ('password','token','api_key','authorization','cloudif-paperclip/private','paperclip-private'):
             self.assertNotIn(secret,out)
+
+    def test_nginx_websocket_upgrade_and_trusted_scheme(self):
+        config=plan.nginx_proxy_config()
+        self.assertIn('map $http_upgrade $cloudiff_w1_connection', config)
+        self.assertIn('proxy_set_header Connection $cloudiff_w1_connection;', config)
+        self.assertIn('proxy_set_header X-Forwarded-Proto https;', config)
+        self.assertIn('return 421;', config)
+        self.assertNotIn('$http_x_forwarded_proto', config)
+
+    def test_proxy_health_requires_root_and_api(self):
+        d=self.get()
+        health=d['services']['web']['healthcheck']['test'][-1]
+        self.assertIn('127.0.0.1/ &&', health)
+        self.assertIn('127.0.0.1/api/health', health)
+
+    def test_explicit_isolated_paperclip_config(self):
+        app=self.get()['services']['app']
+        self.assertEqual(
+            app['environment']['PAPERCLIP_CONFIG'],
+            '/paperclip/instances/preview-w1-1025/config.json'
+        )
+
+    def test_local_candidate_files_no_overwrite(self):
+        with tempfile.TemporaryDirectory() as temp:
+            previous=os.getcwd()
+            try:
+                os.chdir(temp)
+                config=self.get()
+                target=plan.write_candidate('candidate',config,plan.nginx_proxy_config())
+                self.assertEqual(len(target),2)
+                root=pathlib.Path(temp)/'candidate'
+                self.assertEqual(root.stat().st_mode & 0o777,0o700)
+                self.assertEqual((root/'proxy.conf').stat().st_mode & 0o777,0o600)
+                self.assertIn('"cloudif-p1025-preview-app"', (root/'compose.json').read_text())
+                with self.assertRaisesRegex(ValueError,'already_exists'):
+                    plan.write_candidate('candidate',config,plan.nginx_proxy_config())
+            finally:
+                os.chdir(previous)
+
+    def test_local_candidate_rejects_absolute_path_traversal_and_symlink(self):
+        with tempfile.TemporaryDirectory() as temp:
+            previous=os.getcwd()
+            try:
+                os.chdir(temp)
+                pathlib.Path('link').symlink_to(temp, target_is_directory=True)
+                pathlib.Path('deeper').mkdir()
+                pathlib.Path('deeper/link').symlink_to(temp, target_is_directory=True)
+                for bad in ('/etc/komodo/stacks/evil', '../outside','link/candidate','deeper/link/candidate'):
+                    with self.subTest(bad=bad),self.assertRaises(ValueError):
+                        plan.write_candidate(bad,self.get(),plan.nginx_proxy_config())
+            finally:
+                os.chdir(previous)
 
     def test_no_deploy_actions(self):
         content=P.read_text()
