@@ -1642,12 +1642,25 @@ def _v119_git_ephemeral_auth(owner, repo):
     token = _v118_cfg("FORGEJO_TOKEN", "")
     user = _v118_cfg("FORGEJO_SERVICE_USER", "cloudif-bot") or "cloudif-bot"
     parsed = urllib.parse.urlsplit(base)
-    # This helper attaches Basic credentials to Git's HTTP transport. Sending
-    # even a short-lived token over plaintext HTTP is not acceptable; fail
-    # closed instead of silently downgrading TLS or following a redirect.
-    if (parsed.scheme != "https" or not parsed.hostname or parsed.username or
-            parsed.password or parsed.query or parsed.fragment):
-        raise RuntimeError("FORGEJO_URL exige URL HTTPS canônica sem credenciais ou parâmetros")
+    # Git and intermediate HTTP components can normalize dot segments,
+    # encoded separators and backslashes differently. Those variations must
+    # never influence which repository receives the scoped Basic header.
+    base_segments = parsed.path.split("/")
+    if (parsed.scheme != "https" or not parsed.hostname
+            or parsed.username is not None or parsed.password is not None
+            or parsed.query or parsed.fragment
+            or any(ord(char) < 32 or ord(char) == 127 for char in base)
+            or "%" in parsed.path or "\\" in parsed.path
+            or any(segment in (".", "..") for segment in base_segments)
+            or any(segment == "" for segment in base_segments[1:])):
+        raise RuntimeError("FORGEJO_URL exige HTTPS canônica sem caminhos ambíguos")
+    # Owner/repo are *path components*, not arbitrary URL fragments. Reject
+    # separators, dot navigation and encoded-control ambiguities before
+    # constructing Git's URL-matched (prefix-based) Authorization setting.
+    for segment in (owner, repo):
+        if (not isinstance(segment, str) or not segment or segment in (".", "..")
+                or not all(c.isascii() and (c.isalnum() or c in "_.-") for c in segment)):
+            raise RuntimeError("Caminho de repositório Forgejo inválido")
     if not token:
         raise RuntimeError("FORGEJO_TOKEN ausente")
     clean = urllib.parse.urlunsplit((parsed.scheme, parsed.netloc, parsed.path, "", ""))
