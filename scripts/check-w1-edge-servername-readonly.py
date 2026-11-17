@@ -27,7 +27,7 @@ def summarize(content):
     matches={name:{'exact_server_name_entries':names.count(host),
                    'textual_config_present':host in names} for name,host in HOSTS.items()}
     return {'schema':'w1-public-npm-servernames/1',
-            'no_mutation':True,'secrets_read':False,
+            'no_mutation':True,'secrets_printed':False,
             'effective_config_proven':False,'tls_verified':False,
             'application_health_verified':False,
             'all_known_w1_server_names_present':all(x['textual_config_present'] for x in matches.values()),
@@ -35,13 +35,13 @@ def summarize(content):
 
 def run():
     if socket.gethostname().split('.')[0].lower()!='mauricio':
-        return {'status':'BLOCKED_WRONG_HOST','no_mutation':True,'secrets_read':False}
+        return {'status':'BLOCKED_WRONG_HOST','no_mutation':True,'secrets_printed':False}
     try:
         if CONF.stat().st_size>4*1024*1024 or not os.access(CONF,os.R_OK):
-            return {'status':'BLOCKED_CONFIG_UNREADABLE_OR_TOO_LARGE','no_mutation':True,'secrets_read':False}
+            return {'status':'BLOCKED_CONFIG_UNREADABLE_OR_TOO_LARGE','no_mutation':True,'secrets_printed':False}
         body=CONF.read_text(errors='replace')
     except OSError:
-        return {'status':'BLOCKED_CONFIG_UNREADABLE_OR_TOO_LARGE','no_mutation':True,'secrets_read':False}
+        return {'status':'BLOCKED_CONFIG_UNREADABLE_OR_TOO_LARGE','no_mutation':True,'secrets_printed':False}
     out=summarize(body);out['status']='METADATA_ONLY';return out
 if __name__=='__main__':
     value=run();print(json.dumps(value,sort_keys=True,ensure_ascii=False))
