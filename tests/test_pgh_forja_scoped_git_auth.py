@@ -34,7 +34,9 @@ class ScopedGitAuth(unittest.TestCase):
 
     def test_git_config_is_ephemeral(self):
         url,env=auth()
-        self.assertEqual(env['GIT_CONFIG_COUNT'],'1')
+        self.assertEqual(env['GIT_CONFIG_COUNT'],'2')
+        self.assertEqual(env['GIT_CONFIG_KEY_1'],'http.followRedirects')
+        self.assertEqual(env['GIT_CONFIG_VALUE_1'],'false')
         self.assertTrue(env['GIT_CONFIG_KEY_0'].startswith('http.https://'))
         self.assertNotIn('FAKE_TOKEN_TEST',url)
         self.assertNotIn('FAKE_TOKEN_TEST',env['GIT_CONFIG_KEY_0'])

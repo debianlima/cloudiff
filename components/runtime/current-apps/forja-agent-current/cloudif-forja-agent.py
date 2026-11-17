@@ -1651,8 +1651,13 @@ def _v119_git_ephemeral_auth(owner, repo):
     basic = base64.b64encode(f"{user}:{token}".encode()).decode("ascii")
     # Git environment config is subprocess-only; it never enters .git/config
     # or the command argument vector. Restrict same-UID process inspection.
-    env = {"GIT_CONFIG_COUNT": "1", "GIT_CONFIG_KEY_0": f"http.{url}.extraHeader",
+    # Git/curl can carry a scoped Authorization header on HTTP redirects to
+    # another repository on the SAME origin. Fail closed on redirects rather
+    # than forwarding credentials beyond the intended repository pathname.
+    # A Forgejo operator must configure a final canonical URL, not a redirect.
+    env = {"GIT_CONFIG_COUNT": "2", "GIT_CONFIG_KEY_0": f"http.{url}.extraHeader",
            "GIT_CONFIG_VALUE_0": "Authorization: Basic " + basic,
+           "GIT_CONFIG_KEY_1": "http.followRedirects", "GIT_CONFIG_VALUE_1": "false",
            "GIT_TERMINAL_PROMPT": "0"}
     return url, env
 
