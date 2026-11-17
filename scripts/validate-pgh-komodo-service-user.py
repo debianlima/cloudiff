@@ -6,9 +6,41 @@ POLICY=Path(__file__).resolve().parent.parent/'service-accounts/komodo/svc-pgh-c
 EXPECTED_AGENTS={'infra-01','dev-01','dev-02','aud-01','doc-01','surface-01'}
 DENY={'admin','super_admin','create_server_permissions','create_build_permissions','Terminal','Inspect','Server','GlobalWrite'}
 REQUIRED_PROOFS={'service_user_exists_in_komodo','user_is_enabled_and_non_admin','read_only_stack_scope_confirmed','negative_other_stack_access_confirmed','api_key_created_by_authorized_admin_and_brokered','audit_provenance_confirmed','read_config_secret_sanitization_confirmed'}
+# Fail closed on unexpected fields: the manifest is documentation, not a vault.
+# This guards against accidental persistence of secret payloads or new grants.
+ALLOWED_FIELDS = {
+    'root': {'schema','identity','provider','kind','state','verified_in_komodo',
+             'verified_credential_injection','requested_by','target_scope',
+             'agent_credential_model','elevated_operations','activation_checks',
+             'release_authorized'},
+    'target_scope': {'type','name','base_level','specific_permissions',
+                     'denied_global_privileges','other_resources_default',
+                     'transparent_mode_must_be_false'},
+    'agent_credential_model': {'sharing_one_api_secret_between_agents',
+                               'one_key_per_agent','agents','secret_broker',
+                               'secret_ref_pattern','plain_secret_in_pgh',
+                               'plain_secret_in_git','key_ttl_hours_max',
+                               'rotation','all_agent_keys_inherit_identical_user_permissions'},
+    'elevated_operations': {'status','principle','stack','requires',
+                            'no_automatic_role_escalation'},
+    'activation_checks': REQUIRED_PROOFS,
+}
+
 
 def validate(d):
  errors=[]
+ if not isinstance(d,dict):
+  return ['invalid_manifest_type']
+ for name,allowed in ALLOWED_FIELDS.items():
+  obj=d if name=='root' else d.get(name)
+  if not isinstance(obj,dict):
+   errors.append('invalid_manifest_structure')
+   continue
+  if set(obj)-allowed:
+   errors.append('unexpected_manifest_field')
+ # Do not dereference malformed nested objects: fail closed with an error code.
+ if 'invalid_manifest_structure' in errors:
+  return sorted(set(errors))
  def required(test,code):
   if not test:errors.append(code)
  required(d.get('identity')=='svc-pgh-cloudiff','identity')
@@ -23,16 +55,18 @@ def validate(d):
  required(scope.get('other_resources_default')=='None','default_allow')
  required(scope.get('specific_permissions')==[],'dangerous_specific_permission')
  required(scope.get('transparent_mode_must_be_false') is True,'transparent_mode_assumption')
- required(DENY.issubset(set(scope.get('denied_global_privileges') or [])),'denylist')
+ denied=scope.get('denied_global_privileges')
+ required(type(denied) is list and all(type(v) is str for v in denied) and DENY.issubset(denied),'denylist')
  auth=d.get('agent_credential_model') or {}
- required(set(auth.get('agents') or [])==EXPECTED_AGENTS,'agent_scope')
+ agents=auth.get('agents')
+ required(type(agents) is list and all(type(v) is str for v in agents) and len(agents)==len(EXPECTED_AGENTS) and set(agents)==EXPECTED_AGENTS,'agent_scope')
  required(auth.get('sharing_one_api_secret_between_agents') is False,'shared_secret')
  required(auth.get('one_key_per_agent') is True,'per_agent_keys')
  required(auth.get('plain_secret_in_pgh') is False and auth.get('plain_secret_in_git') is False,'plaintext_secret')
  required(auth.get('secret_ref_pattern')=='komodo/cloudiff/svc-pgh-cloudiff/<agent-code>','secret_ref_pattern_drift')
  required(auth.get('secret_broker')=='OpenBao-or-institutional-secret-manager','secret_broker_drift')
  required(auth.get('all_agent_keys_inherit_identical_user_permissions') is True,'per_key_acl_false_assumption')
- required(isinstance(auth.get('key_ttl_hours_max'),int) and 0<auth['key_ttl_hours_max']<=24,'expiry')
+ required(type(auth.get('key_ttl_hours_max')) is int and 0<auth['key_ttl_hours_max']<=24,'expiry')
  elevated=d.get('elevated_operations') or {}
  required(elevated.get('status')=='NOT_AUTHORIZED_BY_THIS_READ_IDENTITY','elevated_change_enabled')
  required(elevated.get('no_automatic_role_escalation') is True,'automatic_escalation')
