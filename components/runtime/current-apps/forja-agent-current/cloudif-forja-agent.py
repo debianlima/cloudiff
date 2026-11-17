@@ -1618,7 +1618,12 @@ def _v119_mask(value):
                         urllib.parse.quote_plus(token)):
             if encoded:
                 s = s.replace(encoded, '***')
-    s = re.sub(r'(?i)\b(https?://)[^\s/?#]+@', r'\1[auth-redacted]@', s)
+    # Generic Git failures may echo URL userinfo and query/fragment secrets
+    # that do not match the configured Forgejo token. Redact those components
+    # before returning stderr/stdout or exception details to callers.
+    s = re.sub(r'(?i)\b((?:https?|ssh)://)[^\s/?#\"\']+@', r'\1[auth-redacted]@', s)
+    s = re.sub(r'(?i)\b((?:https?|ssh)://[^\s\"\'?#]+)[?#][^\s\"\']+',
+               r'\1[query-redacted]', s)
     return s
 
 def _v119_forgejo_repo_git_url(owner, repo):

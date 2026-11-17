@@ -48,6 +48,20 @@ class RedactionTests(unittest.TestCase):
         self.assertNotIn('credential',result)
         self.assertNotIn('user@tenant',result)
 
+    def test_unknown_query_token_not_echoed(self):
+        result=mask('fatal https://example.invalid/repo.git?access_token=SYNTHETIC-QUERY-SECRET',token='')
+        self.assertNotIn('SYNTHETIC-QUERY-SECRET',result)
+        self.assertIn('https://example.invalid/repo.git[query-redacted]',result)
+
+    def test_fragment_not_echoed(self):
+        result=mask('fatal https://example.invalid/repo.git#SYNTHETIC-FRAGMENT-SECRET',token='')
+        self.assertNotIn('SYNTHETIC-FRAGMENT-SECRET',result)
+
+    def test_ssh_scheme_userinfo_not_echoed(self):
+        result=mask('fatal ssh://svc:SYNTHETIC-SSH-SECRET@example.invalid/repo.git',token='')
+        self.assertNotIn('SYNTHETIC-SSH-SECRET',result)
+        self.assertIn('ssh://[auth-redacted]@example.invalid/repo.git',result)
+
     def test_exception_with_quoted_token_percent_encoded(self):
         encoded=urllib.parse.quote_plus(FAKE_TOKEN)
         self.assertNotIn(encoded,mask("TimeoutExpired cmd=['git', 'clone', 'https://"+FAKE_USER+':'+encoded+"@example.invalid/repo.git']"))
