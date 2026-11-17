@@ -80,6 +80,20 @@ class VersionedUnifiedRuntimePublicationTests(unittest.TestCase):
         self.assertIn("if healthy:break",latest)
         self.assertIn("time.sleep(2)",latest)
 
+    def test_homologation_rejection_waits_for_destroy_operation(self):
+        # A deploy-health poll must not wait on unrelated operations, but
+        # rejecting homologation must still wait for the destructive cleanup.
+        # AST bounds the assertion to one function even as source grows.
+        import ast
+        tree=ast.parse(self.agent)
+        definitions=[node for node in tree.body
+                     if isinstance(node,ast.FunctionDef)
+                     and node.name=='cloudif_homologation_reject']
+        self.assertTrue(definitions)
+        fn=definitions[-1]
+        reject='\n'.join(self.agent.splitlines()[fn.lineno-1:fn.end_lineno])
+        self.assertIn('_cloudif_pub_wait_operation(opid,timeout=180)',reject)
+
     def test_runtime_values_are_loaded_without_compose_log_exposure(self):
         latest=self.agent[self.agent.rfind('def cloudif_publication_deploy(handler):'):]
         self.assertIn("source: ./runtime.env",latest)
