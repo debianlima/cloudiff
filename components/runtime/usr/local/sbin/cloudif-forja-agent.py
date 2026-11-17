@@ -1636,22 +1636,6 @@ def _v119_mask(value):
                r'[auth-redacted]@\1', s)
     return s
 
-def _v119_forgejo_repo_git_url(owner, repo):
-    forgejo_url = _v118_cfg("FORGEJO_URL", "https://cloudiff.duckdns.org/git").rstrip("/")
-    token = _v118_cfg("FORGEJO_TOKEN", "")
-    user = _v118_cfg("FORGEJO_SERVICE_USER", "cloudif-bot") or "cloudif-bot"
-
-    parsed = urllib.parse.urlparse(forgejo_url)
-    if parsed.scheme not in ["http", "https"]:
-        raise RuntimeError("FORGEJO_URL inválida para git clone")
-
-    user_q = urllib.parse.quote(user, safe="")
-    token_q = urllib.parse.quote(token, safe="")
-    netloc = f"{user_q}:{token_q}@{parsed.netloc}"
-    base = urllib.parse.urlunparse((parsed.scheme, netloc, parsed.path.rstrip("/"), "", "", ""))
-
-    return f"{base}/{owner}/{repo}.git"
-
 def _v119_git_ephemeral_auth(owner, repo):
     """Provide clean remote URL and process-scoped auth, never Git origin userinfo."""
     base = _v118_cfg("FORGEJO_URL", "https://cloudiff.duckdns.org/git").rstrip("/")
