@@ -17,6 +17,27 @@ class CertTests(unittest.TestCase):
    if '-checkend' in argv:return subprocess.CompletedProcess(argv,expiry_exit,'','')
    raise AssertionError('unexpected subprocess')
   return patch.object(mod.subprocess,'run',side_effect=side_effect)
+ def test_cert_exists_rejects_untrusted_path_before_docker(self):
+  for label in ('../outside','/tmp/cert','', 'name\nnext','name:other'):
+   with self.subTest(label=repr(label)),patch.object(mod.subprocess,'run') as call:
+    self.assertFalse(mod.cert_exists(label))
+    call.assert_not_called()
+ def test_cert_exists_checks_safe_label_and_stays_silent(self):
+  done=subprocess.CompletedProcess([],0,'','')
+  with patch.object(mod.subprocess,'run',return_value=done) as call:
+   self.assertTrue(mod.cert_exists('cloudif-stage-1002-w1-preview'))
+  args,kwargs=call.call_args
+  self.assertEqual(args[0][:3],['docker','exec','cloudif-nginx-proxy-manager'])
+  self.assertEqual(args[0][-1],'/etc/letsencrypt/live/cloudif-stage-1002-w1-preview/fullchain.pem')
+  self.assertEqual(kwargs['timeout'],15)
+  self.assertEqual(kwargs['stdout'],subprocess.PIPE)
+  self.assertEqual(kwargs['stderr'],subprocess.PIPE)
+ def test_cert_exists_docker_timeout_fails_closed(self):
+  with patch.object(mod.subprocess,'run',side_effect=subprocess.TimeoutExpired('docker',15)):
+   self.assertFalse(mod.cert_exists('cloudif-stage-1002-w1-preview'))
+ def test_cert_exists_docker_error_fails_closed(self):
+  with patch.object(mod.subprocess,'run',side_effect=OSError('Docker unavailable')):
+   self.assertFalse(mod.cert_exists('cloudif-stage-1002-w1-preview'))
  def test_exact_san_positive(self):
   with patch.object(mod.Path,'is_file',return_value=True),self._openssl('X509v3 Subject Alternative Name:\n DNS:1002-w1-preview.cloudiff.duckdns.org, DNS:other.org'):
    self.assertTrue(mod.cert_covers('cloudif-stage-1002-w1-preview',['1002-w1-preview.cloudiff.duckdns.org']))
