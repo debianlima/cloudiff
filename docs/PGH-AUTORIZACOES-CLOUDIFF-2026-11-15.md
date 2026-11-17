@@ -970,3 +970,35 @@ G2 (OpenBao produtivo), G3 (Docker Hn→Pn E2E
 e lease), G4 (remover e revogar credenciais
 expostas em 22 configs Git) e G5 (reauditoria)
 continuam impedindo CloudIFF v145.1.
+
+## 17/11 — contas de integração preexistentes
+
+Atualização doc-01 a pedido do responsável CloudIFF.
+
+- Contas históricas distintas: cloudif-bot é Git Provider do
+  Forgejo usado pelo Komodo; cloudif-agent era usuário técnico
+  do Komodo com privilégios delegados; cloudif-integrator pertencia
+  à integração Tuleap. Nenhuma delas foi autenticada via
+  Komodo Core nesta auditoria. Histórico não prova grant atual.
+- A nova svc-pgh-cloudiff permanece em PR45 como
+  PENDING_ADMIN_CREATION. Não criar duplicata até reconciliar
+  identidade existente, escopo, revogação e owner por API autenticada.
+- Guia permanente para agentes:
+  docs/PGH-COFRE-OPENBAO-IDENTIDADES-E-PERMISSOES-2026-11-17.md,
+  replicado no LabIFF como
+  GUIA-COFRE-OPENBAO-IDENTIDADES-E-PERMISSOES-CLOUDIFF-2026-11-17.md.
+- O guia ensina a solicitar secret_ref por PGH Credential Broker,
+  exigindo identidade autenticada, machine_ref, service_ref,
+  capability, projeto e TTL; testes allowed/denied, revogação,
+  owner, change-ID e bloqueios quando autenticação não existe.
+- AGENTS.md compartilhado e roteiros operacionais de infra-01,
+  aud-01 e surface-01 apontam para o guia. As seis identidades
+  infra-01, aud-01, dev-01, dev-02, surface-01 e doc-01 receberam
+  referência COF-OpenBao-Runbook-20261117 e nota PGH.
+  DOCTOR_OK validou as cinco áreas.
+- OpenBao IFF2 homologação v2.6.2 saudável e broker SSH
+  preexistente autenticado somente no transporte não
+  comprovam OpenBao produtivo nem escrita KV. Komodo Core
+  responde HTTP200, sem sessão admin comprovada.
+- G0–G5, migração/rotação Git P0 e testes produtivos permanecem
+  obrigatórios. Este runbook não concede acesso por si só.
