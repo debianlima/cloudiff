@@ -7,6 +7,10 @@ Documentação técnica, inventários e evidências.
 
 - [Auditoria de interface e agentes — 2026-11-11](AUDITORIA-INTERFACE-E-AGENTES-2026-11-11.md)
 - [Fluxo W → H → P de publicação](FLUXO-WHP-PUBLICACAO.md)
+- [Operação Atlas, CloudIFF e PGH](ATLAS-CLOUDIFF-PGH-OPERACAO.md)
+- [Conciliação Atlas, GitHub, CloudIFF e PGH](ATLAS-CLOUDIFF-CONCILIACAO.md)
+- [Agentes PGH: catálogo, competências e despacho](PGH-AGENTES-CLOUDIFF.md)
+- [Autorizações PGH/CloudIFF — protocolo 2026-11-15](PGH-AUTORIZACOES-CLOUDIFF-2026-11-15.md)
 - [Acesso externo e conexões](manual-tecnico/13-ACESSO-EXTERNO.md)
 
 <!-- CLOUDIFF-AUTO-DOC:BEGIN -->

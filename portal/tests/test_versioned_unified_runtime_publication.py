@@ -69,7 +69,12 @@ class VersionedUnifiedRuntimePublicationTests(unittest.TestCase):
         self.assertNotIn("'files_on_host':False,'run_build':False,'auto_pull':False,'file_contents':compose",latest)
 
     def test_deploy_health_is_polled_without_serial_operation_wait(self):
-        latest=self.agent[self.agent.rfind('def cloudif_publication_deploy(handler):'):]
+        import ast
+        tree=ast.parse(self.agent)
+        definitions=[n for n in tree.body if isinstance(n,ast.FunctionDef) and n.name=='cloudif_publication_deploy']
+        self.assertTrue(definitions)
+        fn=definitions[-1]
+        latest='\n'.join(self.agent.splitlines()[fn.lineno-1:fn.end_lineno])
         self.assertNotIn('_cloudif_pub_wait_operation(opid',latest)
         self.assertIn("updates=komodo_query_updates([opid])",latest)
         self.assertIn("if healthy:break",latest)
