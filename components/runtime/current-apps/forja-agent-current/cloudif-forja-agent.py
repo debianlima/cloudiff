@@ -1624,6 +1624,11 @@ def _v119_mask(value):
     s = re.sub(r'(?i)\b((?:https?|ssh)://)[^\s/?#\"\']+@', r'\1[auth-redacted]@', s)
     s = re.sub(r'(?i)\b((?:https?|ssh)://[^\s\"\'?#]+)[?#][^\s\"\']+',
                r'\1[query-redacted]', s)
+    # Git's http.extraheader may be echoed in subprocess failures. The
+    # credential can be Basic(base64) or a Bearer value unrelated to the
+    # configured Forgejo token; redact it independently of URL handling.
+    s = re.sub(r'(?i)(\bAuthorization\s*:\s*(?:Basic|Bearer)\s+)[^\s\"\']+',
+               r'\1[auth-redacted]', s)
     return s
 
 def _v119_forgejo_repo_git_url(owner, repo):
