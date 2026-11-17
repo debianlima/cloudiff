@@ -69,11 +69,25 @@ class VersionedUnifiedRuntimePublicationTests(unittest.TestCase):
         self.assertNotIn("'files_on_host':False,'run_build':False,'auto_pull':False,'file_contents':compose",latest)
 
     def test_deploy_health_is_polled_without_serial_operation_wait(self):
-        latest=self.agent[self.agent.rfind('def cloudif_publication_deploy(handler):'):]
+        # Inspect exactly the deploy function, not every unrelated function
+        # defined later in the module (e.g. homologation rejection/cleanup).
+        start=self.agent.rfind('def cloudif_publication_deploy(handler):')
+        self.assertGreaterEqual(start,0)
+        next_function=self.agent.find('\ndef ',start+1)
+        latest=self.agent[start:next_function if next_function>=0 else None]
         self.assertNotIn('_cloudif_pub_wait_operation(opid',latest)
         self.assertIn("updates=komodo_query_updates([opid])",latest)
         self.assertIn("if healthy:break",latest)
         self.assertIn("time.sleep(2)",latest)
+
+    def test_homologation_rejection_still_waits_for_destroy_operation(self):
+        # The destructive cleanup has a separate, legitimate completion wait;
+        # the deploy polling assertion must not scan this different function.
+        start=self.agent.rfind('def cloudif_homologation_reject(handler):')
+        self.assertGreaterEqual(start,0)
+        next_function=self.agent.find('\ndef ',start+1)
+        reject=self.agent[start:next_function if next_function>=0 else None]
+        self.assertIn('_cloudif_pub_wait_operation(opid,timeout=180)',reject)
 
     def test_runtime_values_are_loaded_without_compose_log_exposure(self):
         latest=self.agent[self.agent.rfind('def cloudif_publication_deploy(handler):'):]
