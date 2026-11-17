@@ -103,6 +103,20 @@ class PlanTests(unittest.TestCase):
         self.assertIn('127.0.0.1/ &&', health)
         self.assertIn('127.0.0.1/api/health', health)
 
+    def test_nginx_healthcheck_sets_expected_hostname_on_both_paths(self):
+        # / health without Host: is always rejected 421 by the vhost.
+        d=self.get()
+        health=d['services']['web']['healthcheck']['test'][-1]
+        self.assertEqual(health.count("--header='Host: " + plan.HOST + "'"), 2)
+        self.assertIn('http://127.0.0.1/ &&', health)
+        self.assertIn('http://127.0.0.1/api/health', health)
+
+    def test_nginx_host_guard_remains_restrictive(self):
+        # Do not relax the Host check to make the health probe pass.
+        config=plan.nginx_proxy_config()
+        self.assertIn('if ($host != ' + plan.HOST + ') { return 421; }', config)
+        self.assertNotIn('server_name _;', config)
+
     def test_explicit_isolated_paperclip_config(self):
         app=self.get()['services']['app']
         self.assertEqual(
