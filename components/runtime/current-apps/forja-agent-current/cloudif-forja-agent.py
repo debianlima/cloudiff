@@ -1646,6 +1646,10 @@ def _v119_git_ephemeral_auth(owner, repo):
     # repository-scoped Git auth header. Different HTTP clients/proxies may
     # normalize dot segments or percent-encoded separators differently.
     path_segments = parsed.path.split("/")
+    # Never transmit Git Basic auth over plaintext networks. Allow HTTP only
+    # for local disposable fixtures bound to the loopback interface.
+    if (parsed.scheme == "http" and parsed.hostname not in ("127.0.0.1", "::1", "localhost")):
+        raise RuntimeError("FORGEJO_URL exige HTTPS fora do loopback")
     if (parsed.scheme not in ("https", "http") or not parsed.hostname
             or parsed.username is not None or parsed.password is not None
             or parsed.query or parsed.fragment
