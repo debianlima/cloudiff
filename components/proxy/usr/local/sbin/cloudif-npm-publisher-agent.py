@@ -33,12 +33,25 @@ def cert_exists(name):
  return subprocess.run(['docker','exec','cloudif-nginx-proxy-manager','test','-f',f'/etc/letsencrypt/live/{name}/fullchain.pem']).returncode==0
 
 def cert_covers(name, domains):
+ # Never interpolate a persisted certificate label into a filesystem path.
+ # Match *complete* DNS SAN entries and exclude certificates past their end.
+ if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.-]{0,127}',str(name)):
+  return False
  path=f'/srv/cloudif/proxy/npm/letsencrypt/live/{name}/fullchain.pem'
- if not Path(path).exists(): return False
- p=subprocess.run(['openssl','x509','-in',path,'-noout','-ext','subjectAltName'],text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
- if p.returncode: return False
- out=p.stdout.lower()
- return all(('dns:'+d.lower()) in out for d in domains)
+ if not Path(path).is_file(): return False
+ try:
+  p=subprocess.run(['openssl','x509','-in',path,'-noout','-ext','subjectAltName'],
+   text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=15)
+  if p.returncode: return False
+  actual={match.lower().rstrip('.') for match in
+    re.findall(r'\bDNS:([^,\s]+)',p.stdout,flags=re.I)}
+  wanted={str(domain).strip().lower().rstrip('.') for domain in domains}
+  if not wanted or not wanted.issubset(actual): return False
+  valid=subprocess.run(['openssl','x509','-in',path,'-noout','-checkend','0'],
+   text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=15)
+  return valid.returncode==0
+ except (OSError,subprocess.TimeoutExpired):
+  return False
 
 def ensure_cert(name,domains):
  domains=sorted(set(str(d).strip().lower() for d in domains if d))
@@ -293,7 +306,15 @@ def version_publish(payload):
 def ensure_stage(state,num,stage,number):
  num=int(num);number=int(number);stage=str(stage or '').strip().lower();labels={'preview':('w','preview'),'homologation':('h','homologation'),'publication':('p','publication')}
  if stage not in labels or not (1 <= num <= 999999999 and 1 <= number <= 999999):raise ValueError('invalid_stage')
- letter,label=labels[stage];name=f'{num}-{letter}{number}-{label}';host=name+'.cloudiff.duckdns.org';cert=state.setdefault('stages',{}).get(name,{}).get('cert') or ensure_cert(f'cloudif-stage-{name}',[host])
+ letter,label=labels[stage];name=f'{num}-{letter}{number}-{label}';host=name+'.cloudiff.duckdns.org'
+ old_cert=str((state.get('stages',{}).get(name) or {}).get('cert') or '')
+ # An old persisted cert reference is not proof that a current SAN covers
+ # this stage host. On a mismatch use a dedicated stage certificate instead
+ # of force-renewing a shared certificate for only one of its consumers.
+ if old_cert and cert_exists(old_cert) and cert_covers(old_cert,[host]):
+  cert=old_cert
+ else:
+  cert=ensure_cert(f'cloudif-stage-{name}',[host])
  state.setdefault('stages',{})[name]={'public_number':num,'stage':stage,'number':number,'cert':cert,'updated_at':time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime())}
  return {'ok':True,'public_number':num,'stage':stage,'number':number,'stage_code':letter.upper()+str(number),'hostname':host,'url':'https://'+host+'/'}
 
