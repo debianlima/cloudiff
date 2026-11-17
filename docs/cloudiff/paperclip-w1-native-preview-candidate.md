@@ -35,3 +35,37 @@ O script `portal/tools/cloudif_paperclip_w1_plan.py` gera somente JSON Compose e
 O gerador exige argumentos `--source-commit` (40 hex), `--native-image-id` (ID `sha256` verificável) e `--nginx-image` (imagem nginx com digest). Não use valores sintéticos para deploy.
 
 **PGH:** `infraestrutura/cloudiff/infra-02 T-011` é subtarefa de `desenvolvimento/cloudiff/dev-02 T-013`; diagnóstico registrado no LabIFF em `evidencias/INFRA02-T011-PAPERCLIP-W1-RUNTIME-CORRECAO-20261117.md`.
+
+## Separação explícita de canary e cutover — 17/11/2026
+
+O gateway Nginx em Forja usa o mapa dinâmico:
+hostname 1025-w1-preview.cloudiff.duckdns.org -> container
+cloudif-p1025-w1-preview-web (porta 80 na rede cloudif-publications).
+O runtime legado já ocupa esse nome. O plano anterior propunha um nome
+diferente, cloudif-p1025-preview-web, que não receberia o tráfego real
+do endereço público e poderia gerar um falso sucesso.
+
+A ferramenta agora separa **dois modos**:
+
+- --mode canary (padrão): containers cloudif-p1025-w1-canary-app/web,
+  Compose e volume de dados exclusivos e apenas rede privada internal.
+  NÃO entra em cloudif-publications, NÃO recebe tráfego público, NÃO
+  substitui o legado e tem marcador source-preview-bridge=false.
+  A verificação HTTP do canary deve ocorrer por execução de teste local
+  legitimamente autorizada dentro da rede isolada, após build de imagem
+  real, segredos escopados e gates de laboratório.
+- --mode cutover: descreve o nome FINAL exato exigido pelo gateway
+  cloudif-p1025-w1-preview-web e liga somente seu proxy à rede externa
+  cloudif-publications, com app/dados W1 separados do servidor privado.
+  NÃO aplique esta composição sobre o legado enquanto ele estiver ativo:
+  o container_name já existe e não há troca automática/rollback no gerador.
+
+Gerar a configuração com --mode cutover NÃO executa a troca e NÃO autoriza
+produção. O executor de lançamento deve usar reserva do projeto e controle
+de concorrência, backup restaurável e ensaiado, identidade Komodo/OpenBao,
+verificação do build e do commit Forgejo, canary E2E, troca atômica de nome
+ou alias e rollback com testes de TLS/JS/API e acesso negado. Os testes
+de Nginx devem continuar usando o header Host correto mesmo no canary.
+
+Nenhum dado da instalação privada da porta 3100 ou de Hn/Pn pode ser
+montado em qualquer modo. O canary NÃO reutiliza o volume W1 definitivo.
