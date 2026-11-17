@@ -1611,6 +1611,14 @@ def _v119_mask(value):
         s = s.replace(token, "***TOKEN_OCULTO***")
     if service_user:
         s = s.replace(service_user + ":", service_user + ":***")
+    # Command failures may include URL-encoded userinfo even when the raw
+    # token is masked. Never return Git remote credentials in error payloads.
+    if token:
+        for encoded in (urllib.parse.quote(token, safe=''),
+                        urllib.parse.quote_plus(token)):
+            if encoded:
+                s = s.replace(encoded, '***')
+    s = re.sub(r'(?i)\b(https?://)[^\s/?#]+@', r'\1[auth-redacted]@', s)
     return s
 
 def _v119_forgejo_repo_git_url(owner, repo):
