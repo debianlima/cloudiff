@@ -103,6 +103,11 @@ class PlanTests(unittest.TestCase):
         self.assertIn('127.0.0.1/ &&', health)
         self.assertIn('127.0.0.1/api/health', health)
 
+    def test_proxy_health_sends_configured_host_header(self):
+        # Without the Host header nginx rejects its own loopback checks (HTTP 421).
+        health = self.get()['services']['web']['healthcheck']['test'][-1]
+        self.assertEqual(health.count(f"--header='Host: {plan.HOST}'"), 2)
+
     def test_explicit_isolated_paperclip_config(self):
         app=self.get()['services']['app']
         self.assertEqual(

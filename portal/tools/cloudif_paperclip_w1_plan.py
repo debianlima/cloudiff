@@ -126,7 +126,7 @@ def compose_plan(*, source_commit: str, native_image_id: str, nginx_image: str) 
                 "security_opt": ["no-new-privileges:true"],
                 "networks": ["preview-private", "cloudif-publications"],
                 "labels": labels,
-                "healthcheck": {"test": ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/ && wget -q -O /dev/null http://127.0.0.1/api/health"],
+                "healthcheck": {"test": ["CMD-SHELL", f"wget -q --header='Host: {HOST}' -O /dev/null http://127.0.0.1/ && wget -q --header='Host: {HOST}' -O /dev/null http://127.0.0.1/api/health"],
                                 "interval": "10s", "timeout": "5s", "retries": 12, "start_period": "20s"},
             },
         },
