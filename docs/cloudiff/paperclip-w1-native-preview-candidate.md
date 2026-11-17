@@ -8,7 +8,7 @@ O Preview W1 1025 publica checkout de um monorepositório `pnpm` como raiz de um
 
 ## Contrato do candidato
 
-O script `portal/tools/cloudif_paperclip_w1_plan.py` gera somente JSON Compose e configuração de proxy, sem deploy ou leitura de credenciais. É uma peça de projeto para revisão/inclusão posterior no executor de publicação W1; **não substitui automaticamente** o runtime atual.
+O script `portal/tools/cloudif_paperclip_w1_plan.py` gera somente JSON Compose e configuração de proxy, sem deploy ou leitura de credenciais. O argumento opcional --output-dir candidato-w1 cria dois arquivos locais sem sobrescrever conteudo existente: compose.json e proxy.conf. É uma peça de projeto para revisão/inclusão posterior no executor de publicação W1; **não substitui automaticamente** o runtime atual.
 
 - App `cloudif-p1025-preview-app`: imagem nativa do Dockerfile Paperclip construída pelo executor autorizado de um commit Forgejo completo e autenticado, com ID imutável verificado; não usa o container Paperclip privado. A porta 3100 fica somente na rede interna sem mapeamentos `ports`.
 - Web `cloudif-p1025-preview-web`: proxy nginx exclusivo para o app W1 isolado, porta 80 interna na rede já utilizada pelo gateway, sem porta no host.
@@ -16,7 +16,7 @@ O script `portal/tools/cloudif_paperclip_w1_plan.py` gera somente JSON Compose e
 - Modo autenticado e exposição privada. Variáveis ou segredos reais devem ser obtidos via OpenBao `secret_ref`, com ACL e TTL; não estão no gerador.
 - Imagens devem vir de compilação revisada e pinagem imutável; o gerador valida sintaxe, **não prova** proveniência do build, proprietário do digest, scanner de vulnerabilidades ou que uma imagem já esteja disponível localmente.
 - Preview requer fluxo de atualização seguro Forgejo commit novo → build independente → testes → troca atômica reversível do container W1. O gerador **ainda não implementa** esse fluxo, lock, backup, Hn/Pn, nem automação de credenciais.
-- O nginx usa o serviço `app` no namespace privado. É proibido apontar o proxy para a porta privada `10.62.91.2:3100` ou usar o mesmo banco/volume da produção.
+- O health do nginx exige sucesso HTTP tanto na raiz quanto em /api/health. Isso nao substitui teste funcional de JavaScript, login, tela e banco. O nginx usa o serviço `app` no namespace privado. É proibido apontar o proxy para a porta privada `10.62.91.2:3100` ou usar o mesmo banco/volume da produção.
 
 ## Passos obrigatórios antes de usar
 
