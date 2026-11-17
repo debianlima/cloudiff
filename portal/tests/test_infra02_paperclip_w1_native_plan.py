@@ -2,6 +2,8 @@ import importlib.util
 import pathlib
 import tempfile
 import os
+import shutil
+import subprocess
 import unittest
 
 P = pathlib.Path(__file__).parents[1] / 'tools' / 'cloudif_paperclip_w1_plan.py'
@@ -68,7 +70,8 @@ class PlanTests(unittest.TestCase):
 
     def test_nginx_routes_to_internal_app_only(self):
         content=plan.nginx_proxy_config()
-        self.assertIn('proxy_pass http://app:3100;',content)
+        self.assertIn('resolver 127.0.0.11 valid=10s ipv6=off;',content)
+        self.assertIn('proxy_pass http://$cloudiff_preview_upstream:3100;',content)
         self.assertNotIn('10.62.91.2',content)
         self.assertNotIn('127.0.0.1:3100',content)
         self.assertIn('server_name 1025-w1-preview.cloudiff.duckdns.org;',content)
@@ -91,6 +94,7 @@ class PlanTests(unittest.TestCase):
         self.assertIn('proxy_set_header Connection $cloudiff_w1_connection;', config)
         self.assertIn('proxy_set_header X-Forwarded-Proto https;', config)
         self.assertIn('return 421;', config)
+        self.assertIn('set $cloudiff_preview_upstream app;', config)
         self.assertNotIn('$http_x_forwarded_proto', config)
 
     def test_proxy_health_requires_root_and_api(self):
@@ -136,6 +140,30 @@ class PlanTests(unittest.TestCase):
                         plan.write_candidate(bad,self.get(),plan.nginx_proxy_config())
             finally:
                 os.chdir(previous)
+
+    def test_nginx_configuration_with_installed_binary(self):
+        if not shutil.which("nginx"):
+            self.skipTest("nginx not installed; unit tests still assert proxy contract")
+        with tempfile.TemporaryDirectory() as prefix:
+            base=pathlib.Path(prefix)
+            dirs=['client_body','proxy','fastcgi','uwsgi','scgi']
+            http="\n".join(
+                ["access_log off;"]
+                + [f"{part}_temp_path {base / part};" for part in dirs]
+            )
+            nginx=plan.nginx_proxy_config().replace("listen 80;", "listen 18080;")
+            conf=base/"nginx.conf"
+            conf.write_text(
+                f"error_log stderr notice;\npid {base / 'nginx.pid'};\n"
+                "events { worker_connections 64; }\n"
+                f"http {{\n{http}\n{nginx}\n}}\n",
+                encoding="utf-8",
+            )
+            p=subprocess.run(
+                ["nginx","-t","-e","stderr","-p",prefix+"/","-c",str(conf)],
+                capture_output=True,text=True,check=False,timeout=10,
+            )
+            self.assertEqual(p.returncode,0,p.stderr[-500:])
 
     def test_no_deploy_actions(self):
         content=P.read_text()
