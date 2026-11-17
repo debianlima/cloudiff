@@ -17,9 +17,12 @@ COMMIT_RE = re.compile(r"[0-9a-f]{40}\Z")
 IMAGE_ID_RE = re.compile(r"sha256:[0-9a-f]{64}\Z")
 NGINX_IMAGE_RE = re.compile(r"nginx:1\.27\.5-alpine@sha256:[0-9a-f]{64}\Z")
 PROXY_CONFIG_PATH = "/srv/cloudif/paperclip-w1-1025/proxy.conf"
-WEB_NAME = "cloudif-p1025-preview-web"
-APP_NAME = "cloudif-p1025-preview-app"
+WEB_NAME = "cloudif-p1025-w1-preview-web"  # actual Nginx gateway name, cannot collide pre-cutover
+APP_NAME = "cloudif-p1025-w1-preview-app"
 DATA_VOLUME = "cloudif-p1025-w1-paperclip-data"
+CANARY_WEB_NAME = "cloudif-p1025-w1-canary-web"
+CANARY_APP_NAME = "cloudif-p1025-w1-canary-app"
+CANARY_DATA_VOLUME = "cloudif-p1025-w1-canary-paperclip-data"
 HOST = "1025-w1-preview.cloudiff.duckdns.org"
 
 
@@ -76,36 +79,54 @@ server {{
 """
 
 
-def compose_plan(*, source_commit: str, native_image_id: str, nginx_image: str) -> dict:
+def compose_plan(*, source_commit: str, native_image_id: str,
+                 nginx_image: str, mode: str = "canary") -> dict:
+    # Fail closed. Canary never joins the public gateway or shares W1 volumes.
+    if mode not in ("canary", "cutover"):
+        raise ValueError("paperclip_preview_mode_invalid")
     commit = validate_commit(source_commit)
     image = validate_image_id(native_image_id)
     proxy = validate_nginx_image(nginx_image)
+    cutover = mode == "cutover"
+    app_name = APP_NAME if cutover else CANARY_APP_NAME
+    web_name = WEB_NAME if cutover else CANARY_WEB_NAME
+    data_volume = DATA_VOLUME if cutover else CANARY_DATA_VOLUME
+    instance_id = "preview-w1-1025" if cutover else "preview-w1-1025-canary"
     labels = {
         "org.cloudiff.project": "paperclip",
         "org.cloudiff.public-number": "1025",
-        "org.cloudiff.stage": "preview",
+        "org.cloudiff.stage": "preview" if cutover else "canary",
         "org.cloudiff.stage-number": "1",
-        "org.cloudiff.source-preview-bridge": "true",
+        "org.cloudiff.source-preview-bridge": "true" if cutover else "false",
         "org.cloudiff.source-commit": commit,
     }
+    networks = {"preview-private": {
+        "name": ("cloudif-p1025-w1-internal" if cutover
+                 else "cloudif-p1025-w1-canary-internal"),
+        "internal": True,
+    }}
+    web_networks = ["preview-private"]
+    if cutover:
+        networks["cloudif-publications"] = {"external": True}
+        web_networks.append("cloudif-publications")
     return {
-        "name": "cloudif-p1025-preview",
+        "name": "cloudif-p1025-w1-preview" if cutover else "cloudif-p1025-w1-canary",
         "services": {
             "app": {
                 "image": image,  # local immutable image ID built from exact reviewed commit
                 "pull_policy": "never",
-                "container_name": APP_NAME,
+                "container_name": app_name,
                 "restart": "unless-stopped",
                 "environment": {
                     "PAPERCLIP_DEPLOYMENT_MODE": "authenticated",
                     "PAPERCLIP_DEPLOYMENT_EXPOSURE": "private",
                     "PAPERCLIP_HOME": "/paperclip",
-                    "PAPERCLIP_INSTANCE_ID": "preview-w1-1025",
-                    "PAPERCLIP_CONFIG": "/paperclip/instances/preview-w1-1025/config.json",
+                    "PAPERCLIP_INSTANCE_ID": instance_id,
+                    "PAPERCLIP_CONFIG": "/paperclip/instances/" + instance_id + "/config.json",
                     "HOST": "0.0.0.0",
                     "PORT": "3100",
                 },
-                "volumes": [{"type": "volume", "source": DATA_VOLUME, "target": "/paperclip"}],
+                "volumes": [{"type": "volume", "source": data_volume, "target": "/paperclip"}],
                 "networks": ["preview-private"],
                 "security_opt": ["no-new-privileges:true"],
                 "labels": labels,
@@ -115,7 +136,7 @@ def compose_plan(*, source_commit: str, native_image_id: str, nginx_image: str) 
             "web": {
                 "image": proxy,
                 "pull_policy": "never",
-                "container_name": WEB_NAME,
+                "container_name": web_name,
                 "restart": "unless-stopped",
                 "depends_on": {"app": {"condition": "service_healthy"}},
                 "volumes": [{"type": "bind", "source": PROXY_CONFIG_PATH,
@@ -124,17 +145,14 @@ def compose_plan(*, source_commit: str, native_image_id: str, nginx_image: str) 
                 "read_only": True,
                 "tmpfs": ["/tmp", "/var/cache/nginx", "/var/run"],
                 "security_opt": ["no-new-privileges:true"],
-                "networks": ["preview-private", "cloudif-publications"],
+                "networks": web_networks,
                 "labels": labels,
                 "healthcheck": {"test": ["CMD-SHELL", f"wget -q --header='Host: {HOST}' -O /dev/null http://127.0.0.1/ && wget -q --header='Host: {HOST}' -O /dev/null http://127.0.0.1/api/health"],
                                 "interval": "10s", "timeout": "5s", "retries": 12, "start_period": "20s"},
             },
         },
-        "volumes": {DATA_VOLUME: {"name": DATA_VOLUME}},
-        "networks": {
-            "preview-private": {"name": "cloudif-p1025-w1-internal", "internal": True},
-            "cloudif-publications": {"external": True},
-        },
+        "volumes": {data_volume: {"name": data_volume}},
+        "networks": networks,
     }
 
 
@@ -179,11 +197,13 @@ def main() -> int:
     parser.add_argument("--source-commit", required=True)
     parser.add_argument("--native-image-id", required=True)
     parser.add_argument("--nginx-image", required=True)
+    parser.add_argument("--mode", choices=("canary", "cutover"), default="canary",
+                        help="canary (default) is offline/private; cutover requires separate G0-G5 approval")
     parser.add_argument("--output-dir", help="Create a new local directory with compose.json and proxy.conf")
     args = parser.parse_args()
     try:
         plan = compose_plan(source_commit=args.source_commit, native_image_id=args.native_image_id,
-                            nginx_image=args.nginx_image)
+                            nginx_image=args.nginx_image, mode=args.mode)
     except ValueError as exc:
         parser.error(str(exc))
     if args.output_dir:
