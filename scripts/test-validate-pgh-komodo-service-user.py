@@ -49,4 +49,26 @@ class PolicyTests(unittest.TestCase):
   self.assertIn('unexpected_manifest_field',m.validate(a))
  def test_rejects_non_object_manifest(self):
   self.assertIn('invalid_manifest_type',m.validate([]))
+
+ def test_rejects_nested_scope_wrong_type_without_exception(self):
+  a=copy.deepcopy(BASE);a['target_scope']=['Stack']
+  self.assertIn('invalid_manifest_structure',m.validate(a))
+ def test_rejects_nested_agent_credentials_wrong_type_without_exception(self):
+  a=copy.deepcopy(BASE);a['agent_credential_model']='agent'
+  self.assertIn('invalid_manifest_structure',m.validate(a))
+ def test_rejects_nested_activation_wrong_type_without_exception(self):
+  a=copy.deepcopy(BASE);a['activation_checks']=1
+  self.assertIn('invalid_manifest_structure',m.validate(a))
+ def test_rejects_nonstring_denylist_without_exception(self):
+  a=copy.deepcopy(BASE);a['target_scope']['denied_global_privileges']=[{'admin':True}]
+  self.assertIn('denylist',m.validate(a))
+ def test_rejects_nonstring_agent_without_exception(self):
+  a=copy.deepcopy(BASE);a['agent_credential_model']['agents']=[{'code':'infra-01'}]
+  self.assertIn('agent_scope',m.validate(a))
+ def test_rejects_bool_ttl(self):
+  a=copy.deepcopy(BASE);a['agent_credential_model']['key_ttl_hours_max']=True
+  self.assertIn('expiry',m.validate(a))
+ def test_rejects_duplicate_agents(self):
+  a=copy.deepcopy(BASE);a['agent_credential_model']['agents'].append('infra-01')
+  self.assertIn('agent_scope',m.validate(a))
 if __name__=='__main__':unittest.main(verbosity=1)
