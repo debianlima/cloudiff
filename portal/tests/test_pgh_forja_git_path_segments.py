@@ -5,7 +5,7 @@ from pathlib import Path
 import unittest
 import urllib
 
-SOURCE=Path(__file__).resolve().parents[1]/'components/runtime/current-apps/forja-agent-current/cloudif-forja-agent.py'
+SOURCE=Path(__file__).resolve().parents[2]/'components/runtime/current-apps/forja-agent-current/cloudif-forja-agent.py'
 
 def candidate():
     fn=[n for n in ast.parse(SOURCE.read_text()).body if isinstance(n,ast.FunctionDef) and n.name=='_v119_git_ephemeral_auth']

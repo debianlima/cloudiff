@@ -4,11 +4,11 @@
 
 ## Code and threat model
 
-CloudIFF Forja has CLI fallbacks for Git-based file commits and repository bundle import. Previously, selected fallbacks constructed URLs containing `username:token@host` and could leave credential-bearing remotes inside cloned `.git/config`; Git errors could also expose URL userinfo, query secrets, SCP-like userinfo, or HTTP Authorization values. A scoped HTTP header alone is insufficient: Git/curl may follow an HTTP 302 to a *different repository on the same origin* and send the scoped header there.
+CloudIFF Forja has CLI fallbacks for Git-based file commits and repository bundle import. Previously, selected fallbacks constructed URLs containing `username:token@host` and could leave credential-bearing remotes inside cloned `.git/config`; Git errors could also expose URL userinfo, query secrets, SCP-like userinfo, or HTTP Authorization values. Git URL-match includes descendants beneath the configured repository path; a scoped HTTP header alone is insufficient: Git/curl may follow an HTTP 302 to a *different repository on the same origin* and send the scoped header there.
 
 In both mirrored runtime sources (`components/runtime/current-apps/forja-agent-current/cloudif-forja-agent.py` and `components/runtime/usr/local/sbin/cloudif-forja-agent.py`), the Git network operations now use:
 
-- A clean remote URL with **no embedded userinfo**, plus process-only environment `GIT_CONFIG_COUNT`/`GIT_CONFIG_KEY_0`/`GIT_CONFIG_VALUE_0` scoping `http.<exact repo URL>.extraHeader` to the intended Forgejo repository, and `GIT_TERMINAL_PROMPT=0`.
+- A clean remote URL with **no embedded userinfo**, plus process-only environment `GIT_CONFIG_COUNT`/`GIT_CONFIG_KEY_0`/`GIT_CONFIG_VALUE_0` scoping `http.<canonical repo URL>.extraHeader` to the intended Forgejo repository **path prefix**, not strict URL equality, and `GIT_TERMINAL_PROMPT=0`.
 - Process-only `http.followRedirects=false` to **reject even same-origin redirects** where Git/curl would otherwise forward a Basic authorization header to another repository. This requires the owner to configure a *final, canonical Forgejo URL*; changing a Git URL in an uncontrolled way or bypassing TLS is not an acceptable workaround.
 - All intended Git clone/fetch/ls-remote/push operations in the bundle-import fallback pass the ephemeral auth environment. The obsolete credential-bearing URL constructor is removed from both runtime mirrors.
 - Returned subprocess errors are sanitized to mask configured token values and encoded variants, HTTP URL authority/query/fragment credentials, Authorization Basic/Bearer values, and credential-like malformed SCP remotes. No raw secrets should be written to PGH notes, logs or error payloads.
@@ -26,3 +26,9 @@ This PR is **preventive source hardening**. The existing **22 Git origin configu
 ## PR sequencing and catalog parity
 
 The standalone security change contains two mirrored Forja runtime files, nine test modules, and this documentation. It was stacked on PR #43 rather than duplicating the baseline async publication test fix and its generated catalogs. After PR #43 merges, rebase/retarget this PR and revalidate regenerated catalogs on the exact resulting main HEAD; no authorization to merge either draft is implied.
+
+## URL normalization, TLS and Git prefix matching (17 Nov 2026)
+
+Independent aud-01 review confirmed that Git `http.<url>.extraHeader` uses **path-prefix semantics**: paths beneath `repo.git/` match the repository scope. This must never be described as exact-path-equality authorization. The code now rejects ambiguous `owner` and `repo` components (empty, `.`, `..`, slash, backslash, controls and non-string inputs) and rejects ambiguous Forgejo base URLs (query, fragment, dot segments, percent-encoded path segments, backslash and controls) before constructing a credential-bearing ephemeral header. It also refuses **plaintext HTTP except loopback test fixtures**; normal Forgejo remotes must be HTTPS with validated TLS. The already configured `http.followRedirects=false` prevents automatic authorization forwarding via redirects, including same-origin redirects.
+
+These defenses do **not** grant server-side repo-level authorization or prove every URL under a repository prefix maps to the same repository on the actual proxy. Owner-controlled Forgejo URL routing and a canary using the true canonical HTTPS endpoint remain release gates; the service identity must have strictly scoped server-side ACLs. The regression suite explicitly demonstrates Git prefix matching to a descendant so that documentation and future changes cannot assume literal equality. No live Forgejo credential or production deployment is used.

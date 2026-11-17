@@ -5,7 +5,7 @@ from pathlib import Path
 import unittest
 import urllib
 
-P=Path(__file__).resolve().parents[1]/'components/runtime/current-apps/forja-agent-current/cloudif-forja-agent.py'
+P=Path(__file__).resolve().parents[2]/'components/runtime/current-apps/forja-agent-current/cloudif-forja-agent.py'
 
 class TransportTLS(unittest.TestCase):
     def helper(self,base):
