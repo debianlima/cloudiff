@@ -17,7 +17,7 @@ class GatewayReadOnlyAudit(unittest.TestCase):
         for bad in ('', '1001,1001', 'abc', '1001,anything'):
             with self.subTest(bad=bad), self.assertRaises(ValueError):
                 mod.validate_numbers(bad)
-        for bad in ('example.org', '8.8.8.8', '0.0.0.0', '169.254.1.3'):
+        for bad in ('example.org', '8.8.8.8', '0.0.0.0', '169.254.1.3', '240.0.0.1', '255.255.255.255', '100.64.0.1'):
             with self.subTest(bad=bad), self.assertRaises(ValueError):
                 mod.validate_gateway_ip(bad)
 
