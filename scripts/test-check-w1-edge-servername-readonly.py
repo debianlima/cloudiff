@@ -31,5 +31,5 @@ class ProbeTests(unittest.TestCase):
  def test_never_claims_tls_success(self):
   self.assertFalse(m.summarize('')['tls_verified'])
  def test_no_secrets_in_output(self):
-  self.assertNotIn('a_password',json.dumps(m.summarize('proxy_pass http://user:a_password@host;')))
+  self.assertNotIn('SYNTHETIC_VALUE_MARKER',json.dumps(m.summarize('set $internal_marker SYNTHETIC_VALUE_MARKER;')))
 if __name__=='__main__':unittest.main()
