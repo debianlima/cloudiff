@@ -5931,9 +5931,20 @@ def cloudif_preview_request(handler,operation):
                                  'stageCode':'W1','secretValuesIncluded':False})
     _cloudif_v144_ensure_schema();row=_cloudif_preview_row(project)
     if operation=='status':
-        if not row:return send(handler,200,{'ok':True,'project':project,'configured':False,'secretValuesIncluded':False})
+        if not row:
+            result={'ok':True,'project':project,'configured':False,'secretValuesIncluded':False}
+            if project=='paperclip':
+                result.update({'nativeRuntimeRequired':True,'applicationE2EVerified':False,
+                               'healthy':False,'continuous':False})
+            return send(handler,200,result)
         health=_cloudif_wait_health(str(row.get('container') or ''),1);git_status=str(row.get('git_sync_status') or 'unknown')
-        return send(handler,200,{'ok':True,'project':project,'configured':True,'public_number':int(row.get('public_number') or num),'generation':1,'stageCode':'W1','container':str(row.get('container') or ''),'stack_id':str(row.get('stack_id') or ''),'stack_name':str(row.get('stack_name') or ''),'healthy':bool(health.get('ok')),'continuous':True,'git':{'ok':git_status!='missing','remoteAvailable':git_status not in {'degraded','missing'},'status':git_status,'message':str(row.get('git_sync_message') or ''),'head':str(row.get('git_head') or '')},'environmentRevision':int(row.get('environment_revision') or 0),'environmentDigest':str(row.get('environment_digest') or ''),'secretValuesIncluded':False})
+        result={'ok':True,'project':project,'configured':True,'public_number':int(row.get('public_number') or num),'generation':1,'stageCode':'W1','container':str(row.get('container') or ''),'stack_id':str(row.get('stack_id') or ''),'stack_name':str(row.get('stack_name') or ''),'healthy':bool(health.get('ok')),'continuous':True,'git':{'ok':git_status!='missing','remoteAvailable':git_status not in {'degraded','missing'},'status':git_status,'message':str(row.get('git_sync_message') or ''),'head':str(row.get('git_head') or '')},'environmentRevision':int(row.get('environment_revision') or 0),'environmentDigest':str(row.get('environment_digest') or ''),'secretValuesIncluded':False}
+        if project=='paperclip':
+            # Generic Apache health must not be reported as application health.
+            result.update({'legacyContainerHealthy':bool(health.get('ok')),'healthy':False,
+                           'continuous':False,'nativeRuntimeRequired':True,
+                           'applicationE2EVerified':False})
+        return send(handler,200,result)
     if operation=='ensure':
         expected=f'cloudif-p{num}-preview-web';migrated=not row or str(row.get('container') or '')!=expected or not normalize_resource_id((row or {}).get('stack_id'))
         if migrated:
