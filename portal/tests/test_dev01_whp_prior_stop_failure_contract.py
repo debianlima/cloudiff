@@ -25,6 +25,13 @@ HELPER_NAMES=('_cloudif_v144_atomic_updates','_cloudif_v144_retract_initial_alia
 HELPER_NODES=[next(n for n in TREE.body if isinstance(n,ast.FunctionDef) and n.name==name) for name in HELPER_NAMES]
 HELPER_CODE=compile(ast.Module(body=HELPER_NODES,type_ignores=[]),str(SOURCE),'exec')
 
+class _NoopJournalForLegacyTests:
+    """Existing Hn/Pn tests cover the default-disabled compatibility mode."""
+    def __enter__(self):return self
+    def __exit__(self,*_):return False
+    def finish(self):return None
+
+
 class FakeProcess:
     def __init__(self, stdout='', stderr='', returncode=0):
         self.stdout = stdout
@@ -94,11 +101,13 @@ class PromotionFixture:
             'subprocess':self.subprocess,
             'hmac':hmac,
             'json':json,
+            'sqlite3':sqlite3,
             're':re,
             '_cloudif_stage_write_environment':lambda *args:'/tmp/fake-env-not-created',
             '_cloudif_v144_runtime_env_replace':lambda *args:None,
             '_cloudif_wait_health':lambda *args:{'ok':True},
             '_cloudif_v144_reconnect_active':self.reconnect,
+            '_cloudif_v145_operation_gate':lambda *args:_NoopJournalForLegacyTests(),
             'init_db':lambda:None,
             '_db_connect':lambda:FakeTransactionalDb(self),
             'now':lambda:'2026-11-14T00:00:00Z',
