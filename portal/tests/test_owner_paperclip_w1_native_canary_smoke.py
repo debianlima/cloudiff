@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import importlib.util
+import json
 from pathlib import Path
 from unittest import TestCase,main
 from unittest.mock import patch,Mock
@@ -37,13 +38,42 @@ class CanaryTests(TestCase):
     def test_resource_collision_blocks_before_volume_create(self):
         with patch.object(m,"check_host"):
             with patch.object(m,"inspect_image",return_value="sha256:"+"a"*64):
-                with patch.object(m,"already_exists",return_value=True):
-                    with patch.object(m,"run",side_effect=AssertionError("no docker mut")):
-                        with self.assertRaisesRegex(ValueError,"RESOURCE_COLLISION"):
-                            m.smoke()
+                with patch.object(m,"inspect_image_commit",return_value=m.COMMIT):
+                    with patch.object(m,"already_exists",return_value=True):
+                        with patch.object(m,"run",side_effect=AssertionError("no docker mut")):
+                            with self.assertRaisesRegex(ValueError,"RESOURCE_COLLISION"):
+                                m.smoke()
     def test_inspect_image_is_metadata_only(self):
         with patch.object(m,"run",return_value=Mock(returncode=0,stdout="sha256:"+"a"*64)):
             self.assertEqual(m.inspect_image(),"sha256:"+"a"*64)
+    def test_image_build_commit_matches_exact_source(self):
+        with patch.object(m,"run",return_value=Mock(returncode=0,
+                     stdout=json.dumps(["PATH=/usr/local/bin","PAPERCLIP_BUILD_COMMIT="+m.COMMIT]))):
+            self.assertEqual(m.inspect_image_commit(),m.COMMIT)
+
+    def test_unstamped_or_mismatched_image_fails_closed(self):
+        for env in ([],["PAPERCLIP_BUILD_COMMIT=main"],
+                    ["PAPERCLIP_BUILD_COMMIT="+"a"*40],
+                    ["PAPERCLIP_BUILD_COMMIT="+m.COMMIT]*2):
+            with self.subTest(env=env), patch.object(
+                m,"run",return_value=Mock(returncode=0,stdout=json.dumps(env))
+            ):
+                self.assertEqual(m.inspect_image_commit(),"")
+
+    def test_wrong_image_commit_blocks_before_mutations(self):
+        with patch.object(m,"check_host"),patch.object(
+            m,"inspect_image",return_value="sha256:"+"a"*64
+        ),patch.object(m,"inspect_image_commit",return_value=""):
+            with patch.object(m,"already_exists",side_effect=AssertionError("unexpected")):
+                with self.assertRaisesRegex(ValueError,"COMMIT_UNVERIFIED"):
+                    m.smoke()
+
+    def test_runtime_stamp_reads_only_the_build_commit(self):
+        with patch.object(m,"run",return_value=Mock(returncode=0,stdout=m.COMMIT)):
+            self.assertEqual(m.inspect_runtime_build_stamp(),m.COMMIT)
+        with patch.object(m,"run",return_value=Mock(returncode=1,stdout="")):
+            self.assertEqual(m.inspect_runtime_build_stamp(),"")
+
     def test_script_has_no_public_or_private_mounts(self):
         s=P.read_text()
         for bad in ("--publish","--privileged","--network=host",
