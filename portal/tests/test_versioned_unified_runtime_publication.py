@@ -96,8 +96,10 @@ class VersionedUnifiedRuntimePublicationTests(unittest.TestCase):
 
     def test_runtime_values_are_loaded_without_compose_log_exposure(self):
         latest=self.agent[self.agent.rfind('def cloudif_publication_deploy(handler):'):]
-        self.assertIn("source: ./runtime.env",latest)
-        self.assertIn("target: /run/cloudif/runtime.env",latest)
+        self.assertIn("source: ./runtime-config",latest)
+        self.assertIn("target: /run/cloudif",latest)
+        self.assertNotIn("source: ./runtime.env",latest)
+        self.assertIn("runtime_dir.chmod(0o700)",latest)
         self.assertIn("read_only: true",latest)
         self.assertNotIn("    env_file:",latest)
         self.assertIn("runtime_path.chmod(0o600)",latest)
