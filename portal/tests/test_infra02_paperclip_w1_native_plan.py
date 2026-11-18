@@ -82,6 +82,11 @@ class PlanTests(unittest.TestCase):
         self.assertEqual(d["services"]["web"]["labels"]["org.cloudiff.stage"],"canary")
         self.assertEqual(d["services"]["app"]["volumes"][0]["source"],plan.CANARY_DATA_VOLUME)
         self.assertNotIn(plan.DATA_VOLUME,d["volumes"])
+        proxy_mount = d["services"]["web"]["volumes"][0]
+        self.assertEqual(proxy_mount["source"], plan.CANARY_PROXY_CONFIG_PATH)
+        self.assertNotEqual(proxy_mount["source"], plan.PROXY_CONFIG_PATH)
+        self.assertFalse(proxy_mount["bind"]["create_host_path"])
+        self.assertTrue(proxy_mount["read_only"])
         self.assertEqual(d["services"]["app"]["environment"]["PAPERCLIP_INSTANCE_ID"],
                          "preview-w1-1025-canary")
         self.assertNotIn(plan.WEB_NAME,str(d))
@@ -96,6 +101,8 @@ class PlanTests(unittest.TestCase):
         self.assertEqual(d["services"]["web"]["labels"]["org.cloudiff.source-preview-bridge"],"true")
         self.assertEqual(d["volumes"][plan.DATA_VOLUME]["name"],plan.DATA_VOLUME)
         self.assertNotEqual(plan.CANARY_DATA_VOLUME,plan.DATA_VOLUME)
+        self.assertEqual(d["services"]["web"]["volumes"][0]["source"],
+                         plan.PROXY_CONFIG_PATH)
 
     def test_invalid_mode_rejected_before_any_manifest_is_written(self):
         for invalid in ("production","preview","",None):

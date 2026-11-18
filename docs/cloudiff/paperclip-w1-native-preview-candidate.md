@@ -69,3 +69,15 @@ de Nginx devem continuar usando o header Host correto mesmo no canary.
 
 Nenhum dado da instalação privada da porta 3100 ou de Hn/Pn pode ser
 montado em qualquer modo. O canary NÃO reutiliza o volume W1 definitivo.
+
+
+## Canary: configuração do proxy também isolada
+
+O canary usa somente /srv/cloudif/paperclip-w1-1025-canary/proxy.conf;
+ele não monta /srv/cloudif/paperclip-w1-1025/proxy.conf destinado ao
+W1 definitivo. O bind.create_host_path=false impede criar pastas
+por engano. A identidade administrativa autorizada deve preparar o
+arquivo de configuração do canary num diretório privado antes de
+executar o Compose, e testar nginx -t com o mesmo arquivo, sem
+reaproveitar configuração, volume, banco, rede pública ou container
+da publicação existente. O CLI é apenas um gerador offline.
