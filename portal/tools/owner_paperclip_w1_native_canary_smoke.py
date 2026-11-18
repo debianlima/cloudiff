@@ -32,6 +32,33 @@ def inspect_image()->str:
     p=run(["docker","image","inspect",IMAGE,"--format","{{.Id}}"],15)
     return p.stdout.strip() if p.returncode==0 else ""
 
+def inspect_image_commit()->str:
+    """Read only the Paperclip source-commit ENV from image metadata.
+
+    Never print image ENV, even on error. A tag or image ID is not enough
+    to attest the repository revision used for this isolated build.
+    """
+    p=run(["docker","image","inspect",IMAGE,"--format","{{json .Config.Env}}"],15)
+    if p.returncode:
+        return ""
+    try:
+        values=json.loads(p.stdout)
+        if not isinstance(values,list):
+            return ""
+        matches=[x.split("=",1)[1] for x in values
+                 if isinstance(x,str) and x.startswith("PAPERCLIP_BUILD_COMMIT=")]
+        return matches[0] if len(matches)==1 and matches[0]==COMMIT else ""
+    except (ValueError,TypeError):
+        return ""
+
+def inspect_runtime_build_stamp()->str:
+    """Read only the exact stamped commit from the isolated container."""
+    code=("const fs=require('node:fs');"
+          "const j=JSON.parse(fs.readFileSync('/app/server/dist/build-info.json','utf8'));"
+          "process.stdout.write(String(j.commit||''));")
+    p=run(["docker","exec",CONTAINER,"node","-e",code],15)
+    return p.stdout.strip() if p.returncode==0 else ""
+
 def already_exists(kind:str,name:str)->bool:
     args=(["docker","inspect",name] if kind=="container"
           else ["docker","volume","inspect",name])
@@ -74,6 +101,8 @@ def smoke()->dict:
     image_id=inspect_image()
     if not re.fullmatch(r"sha256:[0-9a-f]{64}",image_id):
         raise ValueError("BLOCKED_VERIFIED_NATIVE_IMAGE_NOT_AVAILABLE")
+    if inspect_image_commit()!=COMMIT:
+        raise ValueError("BLOCKED_NATIVE_IMAGE_COMMIT_UNVERIFIED")
     if already_exists("container",CONTAINER) or already_exists("volume",VOLUME):
         raise ValueError("BLOCKED_TEST_RESOURCE_COLLISION")
     created_volume=False
@@ -82,7 +111,9 @@ def smoke()->dict:
            "image_id":image_id,"host":"mauricio","container":CONTAINER,"network":"none",
            "no_ports":True,"temporary_volume":VOLUME,"http":{},"assets":[],
            "auth_login_tested":False,"browser_e2e":False,
-           "production_mutated":False,"cleaned_up":False,"status":"NOT_READY"}
+           "production_mutated":False,"cleaned_up":False,
+           "image_commit_verified":True,"runtime_build_stamp_verified":False,
+           "status":"NOT_READY"}
     try:
         v=run(["docker","volume","create",
                "--label","org.cloudiff.pgh-test="+MARKER,VOLUME],20)
@@ -105,6 +136,9 @@ def smoke()->dict:
         if p.returncode or not re.fullmatch(r"[0-9a-f]{64}",p.stdout.strip()):
             raise ValueError("CANARY_CONTAINER_START_FAILED")
         created_container=True
+        proof["runtime_build_stamp_verified"] = inspect_runtime_build_stamp()==COMMIT
+        if not proof["runtime_build_stamp_verified"]:
+            raise ValueError("CANARY_RUNTIME_BUILD_STAMP_MISMATCH")
         end=time.monotonic()+145
         while time.monotonic()<end:
             a,_=get_http("/api/health")
@@ -151,10 +185,13 @@ def main()->int:
     try:
         check_host()
         image_id=inspect_image()
+        image_commit_ok=inspect_image_commit()==COMMIT if image_id else False
         if not args.execute:
-            print(json.dumps({"ready":bool(image_id),"execute_requested":False,
+            print(json.dumps({"ready":bool(image_id and image_commit_ok),
+                              "image_commit_verified":image_commit_ok,
+                              "execute_requested":False,
                               "host":"mauricio","nonproduction_only":True}))
-            return 0 if image_id else 2
+            return 0 if image_id and image_commit_ok else 2
         with (BASE/"native-canary-smoke.lock").open("a+") as lk:
             fcntl.flock(lk,fcntl.LOCK_EX|fcntl.LOCK_NB)
             if PROOF.exists():raise ValueError("BLOCKED_PROOF_EXISTS")
