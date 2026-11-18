@@ -17,6 +17,7 @@ COMMIT_RE = re.compile(r"[0-9a-f]{40}\Z")
 IMAGE_ID_RE = re.compile(r"sha256:[0-9a-f]{64}\Z")
 NGINX_IMAGE_RE = re.compile(r"nginx:1\.27\.5-alpine@sha256:[0-9a-f]{64}\Z")
 PROXY_CONFIG_PATH = "/srv/cloudif/paperclip-w1-1025/proxy.conf"
+CANARY_PROXY_CONFIG_PATH = "/srv/cloudif/paperclip-w1-1025-canary/proxy.conf"
 WEB_NAME = "cloudif-p1025-w1-preview-web"  # actual Nginx gateway name, cannot collide pre-cutover
 APP_NAME = "cloudif-p1025-w1-preview-app"
 DATA_VOLUME = "cloudif-p1025-w1-paperclip-data"
@@ -91,6 +92,7 @@ def compose_plan(*, source_commit: str, native_image_id: str,
     app_name = APP_NAME if cutover else CANARY_APP_NAME
     web_name = WEB_NAME if cutover else CANARY_WEB_NAME
     data_volume = DATA_VOLUME if cutover else CANARY_DATA_VOLUME
+    proxy_config_path = PROXY_CONFIG_PATH if cutover else CANARY_PROXY_CONFIG_PATH
     instance_id = "preview-w1-1025" if cutover else "preview-w1-1025-canary"
     labels = {
         "org.cloudiff.project": "paperclip",
@@ -139,7 +141,7 @@ def compose_plan(*, source_commit: str, native_image_id: str,
                 "container_name": web_name,
                 "restart": "unless-stopped",
                 "depends_on": {"app": {"condition": "service_healthy"}},
-                "volumes": [{"type": "bind", "source": PROXY_CONFIG_PATH,
+                "volumes": [{"type": "bind", "source": proxy_config_path,
                              "target": "/etc/nginx/conf.d/default.conf", "read_only": True,
                              "bind": {"create_host_path": False}}],
                 "read_only": True,
