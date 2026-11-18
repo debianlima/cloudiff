@@ -35,3 +35,7 @@ owner do stack/lock, backup/restauração de DB/roles/volumes, OpenBao
 secret_ref e ACL/TTL, integração contínua ao Forgejo, canary com
 credenciais de teste próprias, TLS, UI/JS/API e autenticação positiva
 e negativa com auditoria independente.
+
+## Proveniência da imagem e stamp nativo
+
+O smoke agora exige duas provas da revisão exata antes de aceitar a aplicação: (1) variável PAPERCLIP_BUILD_COMMIT no metadata da imagem apontando para SHA completo do checkout e (2) arquivo interno /app/server/dist/build-info.json com commit idêntico, lido por execução de Node no container efêmero. A ferramenta não apresenta outras variáveis da imagem ou o conteúdo de configurações. Uma tag Docker correta sem stamp não habilita o smoke. Essas verificações não substituem SBOM, pinagem de dependências/transitivas nem autenticação E2E.
