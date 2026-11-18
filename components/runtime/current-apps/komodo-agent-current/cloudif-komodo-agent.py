@@ -5882,7 +5882,15 @@ def _cloudif_v144_preview_stack(project,public_number,source_image,cfg,base_dir,
 
 _v143_preview_create=_cloudif_preview_create
 def _cloudif_preview_create(project,public_number,actor,environment_values,environment_revision,environment_digest,source='current'):
-    _cloudif_v144_ensure_schema();project=safe_slug(project);public_number=int(public_number)
+    project=safe_slug(project);public_number=int(public_number)
+    # W1 Paperclip is a Node24/pnpm monorepo. The generic Apache/PHP
+    # launcher produces 403 / and raw Vite TypeScript: never deploy it
+    # or overwrite the legacy name/stack as a pretend repair.
+    if project=='paperclip':
+        return {'ok':False,'error':'paperclip_native_runtime_required',
+                'project':project,'public_number':public_number,
+                'stageCode':'W1','secretValuesIncluded':False}
+    _cloudif_v144_ensure_schema()
     base_dir=Path('/etc/komodo/stacks')/('cloudif-'+project);checkout=_cloudif_v143_ensure_checkout(project,base_dir)
     if not checkout.get('ok'):return {'ok':False,'error':'preview_workspace_unavailable','message':'Não foi possível montar o repositório local do projeto.'}
     old=_cloudif_preview_row(project) or {};source_image=''
@@ -5915,6 +5923,12 @@ def cloudif_preview_request(handler,operation):
     except Exception:return send(handler,400,{'ok':False,'error':'invalid_preview_request'})
     values=payload.get('environment_variables') if isinstance(payload.get('environment_variables'),dict) else {};digest=str(payload.get('environment_digest') or '')
     if not project or num<1:return send(handler,400,{'ok':False,'error':'invalid_preview_request'})
+    # A healthy generic Apache container is not a Paperclip application.
+    # Block both create paths before schema/env, Docker, Git or Komodo writes.
+    if project=='paperclip' and operation in ('ensure','recreate'):
+        return send(handler,409,{'ok':False,'error':'paperclip_native_runtime_required',
+                                 'project':project,'public_number':num,
+                                 'stageCode':'W1','secretValuesIncluded':False})
     _cloudif_v144_ensure_schema();row=_cloudif_preview_row(project)
     if operation=='status':
         if not row:return send(handler,200,{'ok':True,'project':project,'configured':False,'secretValuesIncluded':False})
@@ -5940,6 +5954,10 @@ def _cloudif_v144_preview_sync_once():
     _cloudif_v144_ensure_schema()
     for row in db_query("select * from project_preview_state where status in ('online','unhealthy')"):
         project=safe_slug(row.get('project') or '');container=str(row.get('container') or '');workspace=str(row.get('workspace_path') or '')
+        # A Git checkout refresh does not compile Paperclip. Restarting the
+        # Apache legacy W1 on every commit cannot repair its missing assets.
+        # The native build-and-rollout controller must own this reconciliation.
+        if project=='paperclip':continue
         if not project or not container or not normalize_resource_id(row.get('stack_id')):continue
         try:
             old=str(row.get('git_head') or '');git=_cloudif_preview_git_sync(workspace,True,12);new=str(git.get('head') or '');restarted=False
