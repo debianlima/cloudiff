@@ -5570,8 +5570,8 @@ CMD {startup_json}
     restart: unless-stopped
     volumes:
       - type: bind
-        source: ./runtime.env
-        target: /run/cloudif/runtime.env
+        source: ./runtime-config
+        target: /run/cloudif
         read_only: true
         bind:
           create_host_path: false
@@ -5614,7 +5614,8 @@ networks:
         shutil.copytree(source,staged)
         shutil.copy2(snap/'Dockerfile.runtime',stack_dir/'Dockerfile.runtime')
         runtime_source=_cloudif_publication_environment_path(public_number,deploy_number)
-        runtime_tmp=stack_dir/'.runtime.env.tmp';runtime_path=stack_dir/'runtime.env'
+        runtime_dir=stack_dir/'runtime-config';runtime_dir.mkdir(mode=0o700,exist_ok=True);runtime_dir.chmod(0o700)
+        runtime_tmp=runtime_dir/'.runtime.env.tmp';runtime_path=runtime_dir/'runtime.env'
         shutil.copyfile(runtime_source,runtime_tmp);runtime_tmp.chmod(0o600);os.replace(runtime_tmp,runtime_path);runtime_path.chmod(0o600)
         compose_tmp=stack_dir/'.docker-compose.yml.tmp';compose_path=stack_dir/'docker-compose.yml'
         compose_tmp.write_text(compose,encoding='utf-8');compose_tmp.chmod(0o600);os.replace(compose_tmp,compose_path);compose_path.chmod(0o600);stack_dir.chmod(0o700)
@@ -5984,9 +5985,9 @@ def cloudif_preview_terminal(handler):
 def _cloudif_v144_runtime_env_replace(stack_name,source_path):
     stack_name=str(stack_name or '')
     if not re.fullmatch(r'cloudif-p\d+-d\d+',stack_name):raise RuntimeError('invalid_homologation_stack_name')
-    stack_dir=Path('/etc/komodo/stacks')/stack_name;target=stack_dir/'runtime.env'
-    if not stack_dir.is_dir() or not Path(source_path).is_file():raise RuntimeError('runtime_environment_path_missing')
-    tmp=stack_dir/'.runtime.env.promote.tmp';shutil.copyfile(source_path,tmp);tmp.chmod(0o600);os.replace(tmp,target);target.chmod(0o600)
+    stack_dir=Path('/etc/komodo/stacks')/stack_name;runtime_dir=stack_dir/'runtime-config';target=runtime_dir/'runtime.env'
+    if not runtime_dir.is_dir() or not Path(source_path).is_file():raise RuntimeError('runtime_environment_path_missing')
+    tmp=runtime_dir/'.runtime.env.promote.tmp';shutil.copyfile(source_path,tmp);tmp.chmod(0o600);os.replace(tmp,target);target.chmod(0o600)
     return str(target)
 
 def _cloudif_v144_reconnect_active(num,target):
@@ -6007,6 +6008,78 @@ def _cloudif_v144_reconnect_active(num,target):
         subprocess.run(cmd,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,check=True)
     if active not in aliases(target):raise RuntimeError('active_alias_not_applied')
     return previous
+
+def _cloudif_v144_atomic_updates(statements):
+    """Persist all publication state changes as one SQLite unit (no partial commits)."""
+    init_db()
+    con=_db_connect()
+    try:
+        con.execute('BEGIN IMMEDIATE')
+        for sql,params in statements:
+            con.execute(sql,params)
+        con.commit()
+    except Exception:
+        con.rollback()
+        raise
+    finally:
+        con.close()
+
+
+def _cloudif_v144_retract_initial_alias(num,target):
+    """Retract only the first failed release's public alias, preserving other aliases.
+
+    Docker cannot remove one network alias in place. Reattach only the validated
+    candidate to the publication network and verify all original other aliases.
+    No production container or unrelated Docker network may be stopped/removed.
+    """
+    try:
+        num=int(num);target=str(target or '')
+        if num<1 or not re.fullmatch(rf'cloudif-p{num}-d\d+-web',target):return False
+        network='cloudif-publications';active=f'cloudif-p{num}-active-web'
+        def current_aliases():
+            inspected=subprocess.run(
+                ['docker','inspect',target,'--format',
+                 '{{json (index .NetworkSettings.Networks "cloudif-publications").Aliases}}'],
+                text=True,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,timeout=20)
+            if inspected.returncode!=0:return None
+            raw=inspected.stdout.strip()
+            values=json.loads(raw) if raw and raw!='null' else None
+            if not isinstance(values,list) or any(not isinstance(v,str) for v in values):return None
+            return values
+        old=current_aliases()
+        if old is None:return False
+        if active not in old:return True  # Proved no public alias to retract.
+        keep=list(dict.fromkeys(alias for alias in old if alias!=active))
+        if target not in keep:keep.insert(0,target)
+        disconnected=subprocess.run(['docker','network','disconnect',network,target],
+                                    stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=30)
+        if disconnected.returncode!=0:return False
+        command=['docker','network','connect']
+        for alias in keep:command.extend(['--alias',alias])
+        command.extend([network,target])
+        attached=subprocess.run(command,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=30)
+        if attached.returncode!=0:return False
+        after=current_aliases()
+        return after is not None and active not in after and all(alias in after for alias in keep)
+    except Exception:
+        return False
+
+
+def _cloudif_v144_recover_previous(num,previous,target):
+    """Compensate runtime state, never claim recovery without health and alias proof."""
+    if not previous:return _cloudif_v144_retract_initial_alias(num,target)
+    if previous==target:return False
+    try:
+        started=subprocess.run(['docker','start',previous],text=True,stdout=subprocess.PIPE,
+                               stderr=subprocess.DEVNULL,timeout=90)
+        if started.returncode!=0:return False
+        if not _cloudif_wait_health(previous,90).get('ok'):return False
+        replaced=_cloudif_v144_reconnect_active(num,previous)
+        # The expected replacement is the new target, unless another actor raced.
+        return replaced==target
+    except Exception:
+        return False
+
 
 _v143_publication_release=cloudif_publication_release
 def cloudif_publication_release(handler):
@@ -6029,16 +6102,33 @@ def cloudif_publication_release(handler):
     restart=subprocess.run(['docker','restart',source],text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=90)
     if restart.returncode!=0:return send(handler,422,{'ok':False,'error':'production_restart_failed','detail':(restart.stderr or restart.stdout)[-500:]})
     if not _cloudif_wait_health(source,90).get('ok'):return send(handler,422,{'ok':False,'error':'production_container_not_healthy'})
-    try:previous=_cloudif_v144_reconnect_active(num,source)
-    except Exception as exc:return send(handler,422,{'ok':False,'error':'production_activation_failed','detail':str(exc)[:300]})
-    if previous and previous!=source:subprocess.run(['docker','stop','--time','20',previous],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=45)
     after=subprocess.run(['docker','inspect',source,'--format','{{.Id}}|{{.Image}}'],text=True,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL).stdout.strip().split('|',1)
     if len(after)!=2 or after[0]!=container_id or after[1]!=image_id:return send(handler,409,{'ok':False,'error':'promotion_changed_container_identity'})
-    db_exec('update stage_production_releases set is_active=0,updated_at=? where project=?',(now(),project))
-    db_exec('''insert into stage_production_releases(project,public_number,publication_number,candidate_number,deploy_number,image,image_id,container,status,is_active,environment_revision,environment_digest,created_at,created_by,updated_at)
-      values(?,?,?,?,?,?,?,?,?,1,?,?,?,?,?) on conflict(project,publication_number) do update set candidate_number=excluded.candidate_number,deploy_number=excluded.deploy_number,image=excluded.image,image_id=excluded.image_id,container=excluded.container,status=excluded.status,is_active=1,environment_revision=excluded.environment_revision,environment_digest=excluded.environment_digest,updated_at=excluded.updated_at''',(project,num,publication,candidate,dep,image,image_id,source,'ready',env_rev,str(payload.get('environment_digest') or ''),now(),str(payload.get('actor') or 'portal')[:128],now()))
-    db_exec('update publication_runtimes set is_active=case when deploy_number=? then 1 else 0 end,updated_at=? where project=?',(dep,now(),project))
-    db_exec('update integrations set public_number=?,active_deploy=?,updated_at=? where project=?',(num,dep,now(),project))
+    try:previous=_cloudif_v144_reconnect_active(num,source)
+    except Exception as exc:return send(handler,422,{'ok':False,'error':'production_activation_failed','detail':str(exc)[:300]})
+    if previous and previous!=source:
+        try:
+            stopped=subprocess.run(['docker','stop','--time','20',previous],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=45)
+            if stopped.returncode!=0:raise RuntimeError('previous_stop_failed')
+        except Exception:
+            # Restore the old active alias if previous production cannot be stopped;
+            # never persist the candidate as an accepted production release.
+            try:_cloudif_v144_reconnect_active(num,previous)
+            except Exception:return send(handler,503,{'ok':False,'error':'production_activation_rollback_failed'})
+            return send(handler,422,{'ok':False,'error':'previous_production_stop_failed'})
+    try:
+        _cloudif_v144_atomic_updates([
+            ('update stage_production_releases set is_active=0,updated_at=? where project=?',(now(),project)),
+            ('''insert into stage_production_releases(project,public_number,publication_number,candidate_number,deploy_number,image,image_id,container,status,is_active,environment_revision,environment_digest,created_at,created_by,updated_at)
+              values(?,?,?,?,?,?,?,?,?,1,?,?,?,?,?) on conflict(project,publication_number) do update set candidate_number=excluded.candidate_number,deploy_number=excluded.deploy_number,image=excluded.image,image_id=excluded.image_id,container=excluded.container,status=excluded.status,is_active=1,environment_revision=excluded.environment_revision,environment_digest=excluded.environment_digest,updated_at=excluded.updated_at''',
+              (project,num,publication,candidate,dep,image,image_id,source,'ready',env_rev,str(payload.get('environment_digest') or ''),now(),str(payload.get('actor') or 'portal')[:128],now())),
+            ('update publication_runtimes set is_active=case when deploy_number=? then 1 else 0 end,updated_at=? where project=?',(dep,now(),project)),
+            ('update integrations set public_number=?,active_deploy=?,updated_at=? where project=?',(num,dep,now(),project)),
+        ])
+    except Exception:
+        if _cloudif_v144_recover_previous(num,previous,source):
+            return send(handler,503,{'ok':False,'error':'production_db_commit_failed_rolled_back'})
+        return send(handler,503,{'ok':False,'error':'production_db_recovery_failed'})
     return send(handler,200,{'ok':True,'project':project,'public_number':num,'candidate_number':candidate,'publication_number':publication,'stageCode':'P'+str(publication),'deploy_number':dep,'container':source,'stack_id':normalize_resource_id(runtime.get('stack_id')),'stack_name':stack_name,'image':image,'artifactImageId':image_id,'containerId':container_id,'healthy':True,'previous':previous,'activeAlias':f'cloudif-p{num}-active-web','environmentRevision':env_rev,'environmentDigest':str(payload.get('environment_digest') or ''),'promotedInPlace':True,'sameContainerAsHomologation':True,'secretValuesIncluded':False})
 
 _v143_publication_release_activate=cloudif_publication_release_activate
@@ -6056,10 +6146,22 @@ def cloudif_publication_release_activate(handler):
     if not _cloudif_wait_health(target,90).get('ok'):return send(handler,422,{'ok':False,'error':'production_release_not_healthy'})
     try:previous=_cloudif_v144_reconnect_active(num,target)
     except Exception as exc:return send(handler,422,{'ok':False,'error':'production_activation_failed','detail':str(exc)[:300]})
-    if previous and previous!=target:subprocess.run(['docker','stop','--time','20',previous],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=45)
-    db_exec('update stage_production_releases set is_active=case when publication_number=? then 1 else 0 end,updated_at=? where project=?',(publication,now(),project))
+    if previous and previous!=target:
+        try:
+            stopped=subprocess.run(['docker','stop','--time','20',previous],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=45)
+            if stopped.returncode!=0:raise RuntimeError('previous_stop_failed')
+        except Exception:
+            try:_cloudif_v144_reconnect_active(num,previous)
+            except Exception:return send(handler,503,{'ok':False,'error':'production_activation_rollback_failed'})
+            return send(handler,422,{'ok':False,'error':'previous_production_stop_failed'})
     dep=int(rows[0].get('deploy_number') or 0)
-    if dep:db_exec('update publication_runtimes set is_active=case when deploy_number=? then 1 else 0 end,updated_at=? where project=?',(dep,now(),project))
+    updates=[('update stage_production_releases set is_active=case when publication_number=? then 1 else 0 end,updated_at=? where project=?',(publication,now(),project))]
+    if dep:updates.append(('update publication_runtimes set is_active=case when deploy_number=? then 1 else 0 end,updated_at=? where project=?',(dep,now(),project)))
+    try:_cloudif_v144_atomic_updates(updates)
+    except Exception:
+        if _cloudif_v144_recover_previous(num,previous,target):
+            return send(handler,503,{'ok':False,'error':'production_db_commit_failed_rolled_back'})
+        return send(handler,503,{'ok':False,'error':'production_db_recovery_failed'})
     return send(handler,200,{'ok':True,'project':project,'publication_number':publication,'stageCode':'P'+str(publication),'container':target,'previous':previous,'activeAlias':f'cloudif-p{num}-active-web','reactivatedInPlace':True,'secretValuesIncluded':False})
 
 def cloudif_homologation_reject(handler):
