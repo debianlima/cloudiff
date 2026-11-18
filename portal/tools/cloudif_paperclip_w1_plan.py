@@ -122,6 +122,14 @@ def compose_plan(*, source_commit: str, native_image_id: str,
                 "environment": {
                     "PAPERCLIP_DEPLOYMENT_MODE": "authenticated",
                     "PAPERCLIP_DEPLOYMENT_EXPOSURE": "private",
+                    # Public sign-up is opt-in only after an approved identity
+                    # broker and a separate authorization test are in place.
+                    "PAPERCLIP_AUTH_DISABLE_SIGN_UP": "true",
+                    # Auth callback/cookie origin must be explicit at cutover;
+                    # an isolated canary has no public URL or gateway route.
+                    **({"PAPERCLIP_PUBLIC_URL": "https://" + HOST,
+                        "PAPERCLIP_ALLOWED_HOSTNAMES": HOST}
+                       if cutover else {}),
                     "PAPERCLIP_HOME": "/paperclip",
                     "PAPERCLIP_INSTANCE_ID": instance_id,
                     "PAPERCLIP_CONFIG": "/paperclip/instances/" + instance_id + "/config.json",
