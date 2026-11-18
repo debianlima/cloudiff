@@ -70,6 +70,63 @@ class PaperclipNativeRequiredTests(TestCase):
         self.assertEqual(status, 403)
         self.assertEqual(body["error"], "forbidden")
 
+    def test_legacy_apache_health_does_not_certify_paperclip(self):
+        row={"public_number":1025,"container":"cloudif-p1025-w1-preview-web",
+             "stack_id":"legacy-stack","stack_name":"generic-apache",
+             "git_sync_status":"synced","environment_revision":3}
+        op=load_latest("cloudif_preview_request", {
+            "_cloudif_pub_auth":lambda _:True,
+            "_cloudif_pub_json":lambda _:{"project":"paperclip","public_number":1025},
+            "safe_slug":str,"send":lambda _h,code,body:(code,body),
+            "_cloudif_v144_ensure_schema":lambda:None,
+            "_cloudif_preview_row":lambda _:row,
+            "_cloudif_wait_health":lambda *args:{"ok":True},
+            "db_exec":do_not_mutate,"_cloudif_stage_write_environment":do_not_mutate})
+        code,body=op(None,"status")
+        self.assertEqual(code,200)
+        self.assertTrue(body["configured"])
+        self.assertFalse(body["healthy"])
+        self.assertFalse(body["continuous"])
+        self.assertTrue(body["legacyContainerHealthy"])
+        self.assertTrue(body["nativeRuntimeRequired"])
+        self.assertFalse(body["applicationE2EVerified"])
+        self.assertFalse(body["secretValuesIncluded"])
+
+    def test_unconfigured_paperclip_requires_native_runtime(self):
+        op=load_latest("cloudif_preview_request", {
+            "_cloudif_pub_auth":lambda _:True,
+            "_cloudif_pub_json":lambda _:{"project":"paperclip","public_number":1025},
+            "safe_slug":str,"send":lambda _h,code,body:(code,body),
+            "_cloudif_v144_ensure_schema":lambda:None,
+            "_cloudif_preview_row":lambda _:None,
+            "_cloudif_wait_health":do_not_mutate,"db_exec":do_not_mutate})
+        code,body=op(None,"status")
+        self.assertEqual(code,200)
+        self.assertFalse(body["configured"])
+        self.assertFalse(body["healthy"])
+        self.assertFalse(body["continuous"])
+        self.assertTrue(body["nativeRuntimeRequired"])
+        self.assertFalse(body["applicationE2EVerified"])
+
+    def test_other_project_status_remains_compatible(self):
+        row={"public_number":1002,"container":"cloudif-p1002-w1-preview-web",
+             "stack_id":"valid-stack","stack_name":"generic-stage",
+             "git_sync_status":"synced","environment_revision":2}
+        op=load_latest("cloudif_preview_request", {
+            "_cloudif_pub_auth":lambda _:True,
+            "_cloudif_pub_json":lambda _:{"project":"silvipro","public_number":1002},
+            "safe_slug":str,"send":lambda _h,code,body:(code,body),
+            "_cloudif_v144_ensure_schema":lambda:None,
+            "_cloudif_preview_row":lambda _:row,
+            "_cloudif_wait_health":lambda *args:{"ok":True},
+            "db_exec":do_not_mutate})
+        code,body=op(None,"status")
+        self.assertEqual(code,200)
+        self.assertTrue(body["healthy"])
+        self.assertTrue(body["continuous"])
+        self.assertNotIn("nativeRuntimeRequired",body)
+        self.assertNotIn("legacyContainerHealthy",body)
+
     def test_sync_does_not_restart_paperclip_on_checkout_change(self):
         op = load_latest("_cloudif_v144_preview_sync_once", {
             "_cloudif_v144_ensure_schema": lambda: None,
