@@ -69,6 +69,25 @@ class PlanTests(unittest.TestCase):
         self.assertEqual(d['services']['app']['environment']['PORT'], '3100')
         self.assertNotIn('3100:',str(d))
 
+    def test_authenticated_mode_disables_unapproved_public_signup(self):
+        for mode in ("canary", "cutover"):
+            with self.subTest(mode=mode):
+                env=self.get(mode)["services"]["app"]["environment"]
+                self.assertEqual(env["PAPERCLIP_DEPLOYMENT_MODE"], "authenticated")
+                self.assertEqual(env["PAPERCLIP_DEPLOYMENT_EXPOSURE"], "private")
+                self.assertEqual(env["PAPERCLIP_AUTH_DISABLE_SIGN_UP"], "true")
+                self.assertNotIn("PAPERCLIP_AUTH_SECRET", env)
+
+    def test_cutover_has_stable_https_auth_origin(self):
+        env=self.get("cutover")["services"]["app"]["environment"]
+        self.assertEqual(env["PAPERCLIP_PUBLIC_URL"],"https://"+plan.HOST)
+        self.assertEqual(env["PAPERCLIP_ALLOWED_HOSTNAMES"],plan.HOST)
+
+    def test_canary_cannot_inherit_public_auth_host(self):
+        env=self.get("canary")["services"]["app"]["environment"]
+        self.assertNotIn("PAPERCLIP_PUBLIC_URL",env)
+        self.assertNotIn("PAPERCLIP_ALLOWED_HOSTNAMES",env)
+
     def test_default_plan_canary_is_not_public(self):
         d=plan.compose_plan(source_commit=COMMIT,native_image_id=APP,nginx_image=NGINX)
         self.assertEqual(d["name"],"cloudif-p1025-w1-canary")
