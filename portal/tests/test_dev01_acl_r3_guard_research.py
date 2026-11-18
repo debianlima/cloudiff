@@ -78,6 +78,8 @@ class RevisionGuardTests(unittest.TestCase):
     def test_legacy_requires_migration(self):
         self.root.mkdir(mode=0o700)
         (self.root/'demo.json').write_text(json.dumps({'project':'demo','request':sample(7),'targets':['old']}))
+        # This test targets the *legacy schema*, not permissive file mode.
+        (self.root/'demo.json').chmod(0o600)
         self.reject('legacy_migration_required',sample(8))
         self.assertEqual(json.loads((self.root/'demo.json').read_text())['targets'],['old'])
 
@@ -103,6 +105,14 @@ class RevisionGuardTests(unittest.TestCase):
         req['authorization']='bearer fictional-secret-marker'
         self.reject('unexpected_fields',req)
         self.assertFalse((self.root/'demo.json').exists())
+
+    def test_world_readable_state_fails_closed(self):
+        self.root.mkdir(mode=0o700)
+        p=self.root/'demo.json'
+        p.write_text(json.dumps({'schema':2,'status':'ready','revision':1,'digest':'synthetic'}))
+        p.chmod(0o644)
+        self.reject('unsafe_state_file',sample(2))
+        self.assertEqual(p.stat().st_mode & 0o777,0o644)
 
     def test_hardlinked_state_fail_closed(self):
         self.root.mkdir(mode=0o700)
