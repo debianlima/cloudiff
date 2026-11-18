@@ -793,9 +793,22 @@ def _create_multiservice_homologation_candidate(slug,num,candidate,actor,progres
 
 def create_homologation_candidate(slug,user,progress=None,candidate_number=None,authorization_checked=False):
     notify=lambda step,msg: progress(step,msg) if progress else None
-    con=sqlite3.connect(DB);con.row_factory=sqlite3.Row;_ensure_schema(con);project=_project_allowed(con,slug,user) if not authorization_checked else con.execute('select * from projects where slug=?',(slug,)).fetchone()
-    if not project:con.close();raise PermissionError('Projeto não encontrado ou sem permissão.')
-    num=_number(con,slug);candidate=int(candidate_number or _next_candidate(con,slug));actor=(user.get('username') or 'portal').strip().lower();con.close()
+    con=sqlite3.connect(DB);con.row_factory=sqlite3.Row;_ensure_schema(con)
+    try:
+        if authorization_checked:
+            # The queued Hn worker revalidates authorization and job identity
+            # separately. This flag is for that internal guarded call only.
+            project=con.execute('select * from projects where slug=?',(slug,)).fetchone()
+        else:
+            project=_project_allowed(con,slug,user)
+            if project and not _can_homologate(con,slug,user):
+                raise PermissionError('homologation_permission_denied')
+        if not project:raise PermissionError('Projeto não encontrado ou sem permissão.')
+        num=_number(con,slug)
+        candidate=int(candidate_number or _next_candidate(con,slug))
+        actor=(user.get('username') or 'portal').strip().lower()
+    finally:
+        con.close()
     if _is_linked_compose_project(slug):return _create_linked_compose_homologation_candidate(slug,num,candidate,actor,progress)
     if _is_multiservice_project(slug):return _create_multiservice_homologation_candidate(slug,num,candidate,actor,progress)
     notify('snapshot','Congelando código e runtime do Preview.')
@@ -975,11 +988,15 @@ def publish_now(slug,user,progress=None,publication_snapshot=None):
     def notify(step,message):
         if progress:
             progress(step,message)
-    notify('preparing','Validando projeto e preparando a publicação.')
-    if slug==TARGET_SLUG:return _publish_production(slug,user)
     con=sqlite3.connect(DB); con.row_factory=sqlite3.Row; _ensure_schema(con)
     project=_project_allowed(con,slug,user)
-    if not project: con.close(); raise PermissionError('Projeto não encontrado ou sem permissão.')
+    if not project or not _can_publish(con,slug,user):
+        con.close();raise PermissionError('legacy_publish_permission_denied')
+    if slug==TARGET_SLUG:
+        con.close()
+        notify('preparing','Validando projeto e preparando a publicação.')
+        return _publish_production(slug,user)
+    notify('preparing','Validando projeto e preparando a publicação.')
     num=_number(con,slug)
     dep=int(con.execute('select coalesce(max(deploy_number),0)+1 from project_publications where project_slug=?',(slug,)).fetchone()[0])
     actor=user.get('username') or 'portal'; ku,kt,nt=_clients();pc=_publication_config()
@@ -1131,11 +1148,17 @@ def _active_stage_job(con,slug):
 
 def enqueue_homologation(slug,user):
     con=sqlite3.connect(DB);con.row_factory=sqlite3.Row;_ensure_schema(con);project=_project_allowed(con,slug,user)
-    if not project:con.close();raise PermissionError('Projeto não encontrado ou sem permissão.')
+    if not project or not _can_homologate(con,slug,user):
+        con.close();raise PermissionError('homologation_permission_denied')
+    role=_release_permission_role(con,slug,user)
+    # Group-derived Admin/Professor privileges cannot be reconstructed from a
+    # queued user name. Require trusted directory refresh before supporting them.
+    if role not in ('owner','delegated'):
+        con.close();raise PermissionError('homologation_role_revalidation_unavailable')
     active=_active_stage_job(con,slug)
     if active:
         out={'ok':True,'queued':True,'job_id':int(active['id']),'existing':True,'operation':str(active['operation'] or '')};con.close();return out
-    candidate=_next_candidate(con,slug);actor=(user.get('username') or 'portal').strip().lower();cur=con.execute("insert into publication_jobs(project_slug,actor,status,step,message,created_at,operation,candidate_number,environment) values(?,?,?,?,?,?,?,?,?)",(slug,actor,'queued','queued','Envio para homologação recebido.',_now(),'homologation_candidate',candidate,'homologation'));con.commit();jid=int(cur.lastrowid);con.close();return {'ok':True,'queued':True,'job_id':jid,'candidateNumber':candidate,'stageCode':'H'+str(candidate),'existing':False}
+    candidate=_next_candidate(con,slug);actor=(user.get('username') or 'portal').strip().lower();cur=con.execute("insert into publication_jobs(project_slug,actor,status,step,message,created_at,operation,candidate_number,environment,authorization_mode,authorization_role) values(?,?,?,?,?,?,?,?,?,?,?)",(slug,actor,'queued','queued','Envio para homologação recebido.',_now(),'homologation_candidate',candidate,'homologation','project_permission',role));con.commit();jid=int(cur.lastrowid);con.close();return {'ok':True,'queued':True,'job_id':jid,'candidateNumber':candidate,'stageCode':'H'+str(candidate),'existing':False}
 
 def enqueue_candidate_publication(slug,candidate_number,user,approval_id='',activation_digest=''):
     con=sqlite3.connect(DB);con.row_factory=sqlite3.Row;_ensure_schema(con);project=_project_allowed(con,slug,user)
@@ -1152,15 +1175,55 @@ def enqueue_candidate_publication(slug,candidate_number,user,approval_id='',acti
     actor=(user.get('username') or 'portal').strip().lower();con=sqlite3.connect(DB);_ensure_schema(con);cur=con.execute("insert into publication_jobs(project_slug,actor,status,step,message,created_at,operation,candidate_number,publication_number,environment,approval_id,activation_digest,authorization_mode,authorization_role) values(?,?,?,?,?,?,?,?,?,?,?,?,?,?)",(slug,actor,'queued','queued','Publicação do candidato homologado e aprovado recebida.',_now(),'production_release',int(candidate_number),publication,'production',str(approval_id),str(activation_digest),'critical_approval',_release_permission_role(con,slug,user)));con.execute("update production_activation_requests set status='queued',updated_at=? where project_slug=? and candidate_number=? and publication_number=?",(_now(),slug,int(candidate_number),publication));con.commit();jid=int(cur.lastrowid);con.close();return {'ok':True,'queued':True,'job_id':jid,'candidateNumber':int(candidate_number),'publicationNumber':publication,'stageCode':'P'+str(publication),'approvalId':str(approval_id),'existing':False}
 
 
-def _validate_project_permission_job(slug,candidate_number,publication_number,activation_digest):
-    con=sqlite3.connect(DB);con.row_factory=sqlite3.Row;_ensure_schema(con)
-    candidate=con.execute("select * from publication_candidates where project_slug=? and candidate_number=? and status='homologated'",(slug,int(candidate_number))).fetchone();con.close()
-    if not candidate:raise PermissionError('publication_binding_mismatch')
-    summary=_publication_config().environment_summary(slug,'production')
-    material,digest=_production_activation_material(slug,candidate,int(publication_number),summary)
-    if not hmac.compare_digest(str(digest),str(activation_digest or '')):raise PermissionError('publication_binding_mismatch')
-    return candidate,digest
+def _validate_project_permission_job(slug,candidate_number,publication_number,activation_digest,actor,authorization_role,job_id):
+    """Revalidate current role, membership, and queued job before publish mutation.
 
+    An authenticated current group lookup is required for Admin/Professor jobs;
+    historical queue-time group claims cannot authorize production promotion.
+    """
+    actor=str(actor or '').strip().lower();role=str(authorization_role or '').strip().lower()
+    if not actor or actor=='portal' or role not in ('owner','delegated'):
+        raise PermissionError('publication_role_revalidation_unavailable')
+
+    def current_binding():
+        con=sqlite3.connect(DB);con.row_factory=sqlite3.Row
+        try:
+            _ensure_schema(con)
+            queued=con.execute(
+                'select id,project_slug,actor,status,operation,authorization_mode,authorization_role, '
+                'candidate_number,publication_number,activation_digest '
+                'from publication_jobs where id=? and project_slug=?',
+                (int(job_id),slug)).fetchone()
+            if (not queued or str(queued['status'])!='running'
+                    or str(queued['operation'])!='production_release'
+                    or str(queued['authorization_mode'])!='project_permission'
+                    or str(queued['actor'] or '').strip().lower()!=actor
+                    or str(queued['authorization_role'] or '').strip().lower()!=role
+                    or int(queued['candidate_number'] or 0)!=int(candidate_number)
+                    or int(queued['publication_number'] or 0)!=int(publication_number)
+                    or not hmac.compare_digest(str(queued['activation_digest'] or ''),str(activation_digest or ''))):
+                raise PermissionError('publication_job_binding_mismatch')
+            user={'username':actor,'groups':[],'admin':False}
+            if (not _project_allowed(con,slug,user)
+                    or not _can_publish(con,slug,user)
+                    or _release_permission_role(con,slug,user)!=role):
+                raise PermissionError('publication_permission_revoked')
+            candidate=con.execute("select * from publication_candidates where project_slug=? and candidate_number=? and status='homologated'",(slug,int(candidate_number))).fetchone()
+            if not candidate:raise PermissionError('publication_binding_mismatch')
+            return candidate
+        finally:
+            con.close()
+
+    candidate=current_binding()
+    summary=_publication_config().environment_summary(slug,'production')
+    _material,digest=_production_activation_material(slug,candidate,int(publication_number),summary)
+    if not hmac.compare_digest(str(digest),str(activation_digest or '')):raise PermissionError('publication_binding_mismatch')
+    # Environment materialization may be slow or call external services; revoke
+    # or cancel during that window must not leave a stale successful preflight.
+    refreshed_candidate=current_binding()
+    if dict(refreshed_candidate)!=dict(candidate):
+        raise PermissionError('publication_binding_mismatch')
+    return candidate,digest
 
 def enqueue_authorized_publication(slug,candidate_number,user):
     con=sqlite3.connect(DB);con.row_factory=sqlite3.Row;_ensure_schema(con);project=_project_allowed(con,slug,user)
@@ -1198,14 +1261,18 @@ def homologate_and_enqueue(slug,candidate_number,user,note=''):
 def enqueue_publish(slug,user):
     con=sqlite3.connect(DB);con.row_factory=sqlite3.Row;_ensure_schema(con)
     project=_project_allowed(con,slug,user)
-    if not project:con.close();raise PermissionError('Projeto não encontrado ou sem permissão.')
+    if not project or not _can_publish(con,slug,user):
+        con.close();raise PermissionError('legacy_publish_permission_denied')
+    role=_release_permission_role(con,slug,user)
+    if role not in ('owner','delegated'):
+        con.close();raise PermissionError('legacy_publish_role_revalidation_unavailable')
     active=con.execute("select id from publication_jobs where project_slug=? and status in ('queued','running') order by id desc limit 1",(slug,)).fetchone()
     if active:
         job_id=int(active[0]);con.close();return {'ok':True,'queued':True,'job_id':job_id,'existing':True}
     actor=user.get('username') or 'portal';now=_now();num=_number(con,slug)
     snapshot=_publication_config().capture_snapshot(slug,num,actor)
-    cur=con.execute("""insert into publication_jobs(project_slug,actor,status,step,message,created_at,base_revision,base_image,base_image_id,environment,environment_revision,environment_digest)
-      values(?,?,?,?,?,?,?,?,?,?,?,?)""",(slug,actor,'queued','queued','Solicitação recebida com base e ambiente congelados.',now,int(snapshot['baseRevision']),str(snapshot.get('baseImage') or ''),str(snapshot['baseImageId']),'production',int(snapshot['environmentRevision']),str(snapshot.get('environmentDigest') or '')))
+    cur=con.execute("""insert into publication_jobs(project_slug,actor,status,step,message,created_at,base_revision,base_image,base_image_id,environment,environment_revision,environment_digest,operation,authorization_mode,authorization_role)
+      values(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",(slug,actor,'queued','queued','Solicitação recebida com base e ambiente congelados.',now,int(snapshot['baseRevision']),str(snapshot.get('baseImage') or ''),str(snapshot['baseImageId']),'production',int(snapshot['environmentRevision']),str(snapshot.get('environmentDigest') or ''),'legacy_publish','project_permission',role))
     con.commit();job_id=int(cur.lastrowid);con.close()
     return {'ok':True,'queued':True,'job_id':job_id,'existing':False,'baseRevision':int(snapshot['baseRevision']),'baseImageId':str(snapshot['baseImageId']),'environmentRevision':int(snapshot['environmentRevision']),'environmentDigest':str(snapshot.get('environmentDigest') or ''),'secretValuesIncluded':False}
 
@@ -1247,6 +1314,90 @@ def _job_update(job_id,status=None,step=None,message=None,detail=None,finished=F
     if finished:sets.append('finished_at=?');vals.append(_now())
     vals.append(job_id);con.execute('update publication_jobs set '+','.join(sets)+' where id=?',vals);con.commit();con.close()
 
+def _validate_homologation_job(slug,candidate_number,actor,authorization_role,job_id):
+    """Require live project ACL and exact queued job identity before Hn effects.
+
+    Never recover implicit Admin/Professor groups from a queue-time role string.
+    The worker only has the actor name, not a fresh trusted directory identity.
+    """
+    actor=str(actor or '').strip().lower()
+    role=str(authorization_role or '').strip().lower()
+    if not actor or actor=='portal' or role not in ('owner','delegated'):
+        raise PermissionError('homologation_role_revalidation_unavailable')
+    con=sqlite3.connect(DB);con.row_factory=sqlite3.Row
+    try:
+        _ensure_schema(con)
+        row=con.execute('''select id,project_slug,actor,status,operation,candidate_number,
+            environment,authorization_mode,authorization_role
+            from publication_jobs where id=? and project_slug=?''',(int(job_id),slug)).fetchone()
+        if (not row or str(row['status'])!='running'
+                or str(row['operation'])!='homologation_candidate'
+                or str(row['environment'])!='homologation'
+                or str(row['authorization_mode'])!='project_permission'
+                or str(row['actor'] or '').strip().lower()!=actor
+                or str(row['authorization_role'] or '').strip().lower()!=role
+                or int(row['candidate_number'] or 0)!=int(candidate_number)
+                or int(candidate_number)<=0):
+            raise PermissionError('homologation_job_binding_mismatch')
+        user={'username':actor,'groups':[],'admin':False}
+        if (not _project_allowed(con,slug,user)
+                or not _can_homologate(con,slug,user)
+                or _release_permission_role(con,slug,user)!=role):
+            raise PermissionError('homologation_permission_revoked')
+    finally:
+        con.close()
+    return True
+
+
+def _homologation_job_update_if_running(job_id,step,message,status=None,detail=None,finished=False):
+    """Do not resurrect cancelled Hn jobs through status/progress writes."""
+    con=sqlite3.connect(DB);con.row_factory=sqlite3.Row
+    try:
+        _ensure_schema(con)
+        sets=['step=?','message=?'];params=[step,message]
+        if status is not None:sets.append('status=?');params.append(status)
+        if detail is not None:sets.append('detail_json=?');params.append(json.dumps(detail,ensure_ascii=False))
+        if finished:sets.append('finished_at=?');params.append(_now())
+        params.append(int(job_id))
+        rc=con.execute('update publication_jobs set '+','.join(sets)+" where id=? and status='running'",params).rowcount
+        con.commit()
+    finally:
+        con.close()
+    if rc!=1:raise PermissionError('homologation_job_no_longer_running')
+
+
+def _validate_legacy_publish_job(slug,actor,role,job_id,expected_snapshot):
+    """Fail closed on legacy publication queue jobs without current publish grant.
+
+    A queue-time Admin/Professor role is not proof of current group membership.
+    Every caller must also fence the external publisher before runtime effects.
+    """
+    actor=str(actor or '').strip().lower();role=str(role or '').strip().lower()
+    if not actor or role not in ('owner','delegated'):
+        raise PermissionError('legacy_publish_role_revalidation_unavailable')
+    con=sqlite3.connect(DB);con.row_factory=sqlite3.Row
+    try:
+        _ensure_schema(con)
+        row=con.execute('''select * from publication_jobs where id=? and project_slug=?''',(int(job_id),slug)).fetchone()
+        if (not row or str(row['status'])!='running'
+                or str(row['operation'])!='legacy_publish'
+                or str(row['environment'])!='production'
+                or str(row['authorization_mode'])!='project_permission'
+                or str(row['authorization_role'] or '').strip().lower()!=role
+                or str(row['actor'] or '').strip().lower()!=actor):
+            raise PermissionError('legacy_publish_job_binding_mismatch')
+        if any(str(row[key])!=str(expected_snapshot.get(key)) for key in
+               ('base_revision','base_image','base_image_id','environment_revision','environment_digest')):
+            raise PermissionError('legacy_publish_snapshot_mismatch')
+        user={'username':actor,'groups':[],'admin':False}
+        if (not _project_allowed(con,slug,user) or not _can_publish(con,slug,user)
+                or _release_permission_role(con,slug,user)!=role):
+            raise PermissionError('legacy_publish_permission_revoked')
+    finally:
+        con.close()
+    return True
+
+
 def run_job(job):
     job_id=int(job['id']);slug=job['project_slug'];actor=job['actor']
     user={'username':actor,'groups':[],'admin':False}
@@ -1255,12 +1406,24 @@ def run_job(job):
             _job_update(job_id,status='running',step=step,message=message)
         operation=str(job.get('operation') or 'legacy_publish')
         if operation=='homologation_candidate':
-            result=create_homologation_candidate(slug,user,progress=progress,candidate_number=int(job.get('candidate_number') or 0),authorization_checked=True);message='Candidato '+str(result.get('stageCode') or '')+' pronto para homologação.'
+            candidate_number=int(job.get('candidate_number') or 0)
+            queued_role=str(job.get('authorization_role') or '')
+            _validate_homologation_job(slug,candidate_number,actor,queued_role,job_id)
+            def guarded_progress(step,message):
+                # Recheck status/membership before every controlled stage.
+                # A cross-service lock is still required to close TOCTOU after
+                # the last check; do not claim runtime authorization from this.
+                _validate_homologation_job(slug,candidate_number,actor,queued_role,job_id)
+                _homologation_job_update_if_running(job_id,step,message)
+                _validate_homologation_job(slug,candidate_number,actor,queued_role,job_id)
+            result=create_homologation_candidate(slug,user,progress=guarded_progress,candidate_number=candidate_number,authorization_checked=True)
+            _validate_homologation_job(slug,candidate_number,actor,queued_role,job_id)
+            message='Candidato '+str(result.get('stageCode') or '')+' pronto para homologação.'
         elif operation=='production_release':
             authorization_mode=str(job.get('authorization_mode') or 'critical_approval')
             activation_digest=str(job.get('activation_digest') or '')
             if authorization_mode=='project_permission':
-                _validate_project_permission_job(slug,int(job.get('candidate_number') or 0),int(job.get('publication_number') or 0),activation_digest)
+                _validate_project_permission_job(slug,int(job.get('candidate_number') or 0),int(job.get('publication_number') or 0),activation_digest,actor,job.get('authorization_role'),job_id)
                 result=publish_homologated_candidate(slug,int(job.get('candidate_number') or 0),user,progress=progress,publication_number=int(job.get('publication_number') or 0),authorization_checked=True);message='Publicação '+str(result.get('stageCode') or '')+' ativada em Produção.'
             else:
                 approval_id=str(job.get('approval_id') or '');reservation=''
@@ -1273,12 +1436,37 @@ def run_job(job):
                 except Exception:
                     if reservation:_finalize_production_approval(approval_id,reservation,False)
                     raise
+        elif operation=='legacy_publish':
+            queued_role=str(job.get('authorization_role') or '')
+            _validate_legacy_publish_job(slug,actor,queued_role,job_id,job)
+            def guarded_legacy_progress(step,message):
+                _validate_legacy_publish_job(slug,actor,queued_role,job_id,job)
+                _homologation_job_update_if_running(job_id,step,message)
+                _validate_legacy_publish_job(slug,actor,queued_role,job_id,job)
+            result=publish_now(slug,user,progress=guarded_legacy_progress,publication_snapshot=job)
+            _validate_legacy_publish_job(slug,actor,queued_role,job_id,job)
+            message='Site publicado e ativado.'
         else:
-            result=publish_now(slug,user,progress=progress,publication_snapshot=job);message='Site publicado e ativado.'
-        _job_update(job_id,status='succeeded',step='completed',message=message,detail=result,finished=True)
+            raise PermissionError('unsupported_publication_operation')
+        if operation=='homologation_candidate':
+            _validate_homologation_job(slug,int(job.get('candidate_number') or 0),actor,job.get('authorization_role'),job_id)
+            _homologation_job_update_if_running(job_id,'completed',message,status='succeeded',detail=result,finished=True)
+        elif operation=='legacy_publish':
+            _validate_legacy_publish_job(slug,actor,job.get('authorization_role'),job_id,job)
+            _homologation_job_update_if_running(job_id,'completed',message,status='succeeded',detail=result,finished=True)
+        else:
+            _job_update(job_id,status='succeeded',step='completed',message=message,detail=result,finished=True)
         return result
     except Exception as exc:
-        _job_update(job_id,status='failed',step='failed',message=str(exc),detail={'error':type(exc).__name__,'message':str(exc)[:800]},finished=True)
+        if str(job.get('operation') or '') in ('homologation_candidate','legacy_publish'):
+            # Preserve external cancellation; it must never be overwritten by
+            # the worker's generic failed/succeeded update.
+            try:
+                _homologation_job_update_if_running(job_id,'failed',str(exc),status='failed',
+                    detail={'error':type(exc).__name__,'message':str(exc)[:800]},finished=True)
+            except PermissionError:pass
+        else:
+            _job_update(job_id,status='failed',step='failed',message=str(exc),detail={'error':type(exc).__name__,'message':str(exc)[:800]},finished=True)
         return None
 
 
@@ -1288,7 +1476,11 @@ def set_alias(slug,alias,user):
     if alias in {'www','api','admin','cloudiff','auth','login','status','mail'}:raise ValueError('Alias reservado.')
     con=sqlite3.connect(DB);con.row_factory=sqlite3.Row;_ensure_schema(con)
     project=_project_allowed(con,slug,user)
-    if not project:con.close();raise PermissionError('Projeto não encontrado ou sem permissão.')
+    # Changing a public DNS alias is a production-facing mutation, not merely
+    # viewing a shared project. Require the current publish grant before any
+    # publisher call or reservation write.
+    if not project or not _can_publish(con,slug,user):
+        con.close();raise PermissionError('publication_alias_permission_denied')
     other=con.execute('select project_slug from project_publication_aliases where alias=? and project_slug<>?',(alias,slug)).fetchone()
     if other:con.close();raise ValueError('Este alias já está em uso.')
     now=_now();actor=user.get('username') or 'portal'
