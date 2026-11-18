@@ -70,7 +70,7 @@ CloudIFF source. Reintroduce this coverage only once the real authenticated
 endpoint/service principal is source-versioned and reviewed. Do **not** paste
 mock bearer tokens into a live worker or claim these tests cover authentication.
 
-Additional fail-closed research guards: unknown request keys are rejected
+Additional fail-closed research guards (including world-readable files): unknown request keys are rejected
 (before persisting arbitrary credentials in request snapshots), and private
 state/lock files reject hardlinks, unsafe mode and foreign UID. These protections
 are **not** a substitute for secure `openat`/dirfd traversal, inode recheck and
