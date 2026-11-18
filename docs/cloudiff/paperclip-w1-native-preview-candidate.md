@@ -81,3 +81,8 @@ arquivo de configuração do canary num diretório privado antes de
 executar o Compose, e testar nginx -t com o mesmo arquivo, sem
 reaproveitar configuração, volume, banco, rede pública ou container
 da publicação existente. O CLI é apenas um gerador offline.
+
+## Autenticação do Preview e origem confiável
+
+O modo autenticado exige um serviço de identidade provisionado e contas/ACL válidas.
+A composição candidata define PAPERCLIP_AUTH_DISABLE_SIGN_UP=true nos dois modos, evitando que cadastro público seja habilitado por padrão. O canary não recebe PAPERCLIP_PUBLIC_URL e não pode ser exposto à rede pública. O cutover fixa PAPERCLIP_PUBLIC_URL no HTTPS de W1 e PAPERCLIP_ALLOWED_HOSTNAMES no hostname exato, mas **ainda precisa de OpenBao secret_ref, autenticação real e teste de negação de acesso** antes do deploy. Não armazenar senhas, keys ou tokens no Compose.
