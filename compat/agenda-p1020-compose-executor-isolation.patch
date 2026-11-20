@@ -1,0 +1,186 @@
+--- a/cloudif-multiservice-deployment-executor.py
++++ b/cloudif-multiservice-deployment-executor.py
+@@ -44,6 +44,7 @@
+ PUBLICATION_BRIDGE_ROOT=Path(os.environ.get('CLOUDIF_MULTISERVICE_DEPLOYMENT_BRIDGE_DIR','/var/lib/cloudif/multiservice-deployment-executor/bridges'))
+ COMPOSE_SNAPSHOT_ROOT=Path(os.environ.get('CLOUDIF_COMPOSE_SNAPSHOT_ROOT',str(DB_PATH.parent/'compose-snapshots')))
+ COMPOSE_RUNTIME_ROOT=Path(os.environ.get('CLOUDIF_COMPOSE_RUNTIME_ROOT',str(DB_PATH.parent/'compose-runtime')))
++COMPOSE_PRODUCTION_BACKUP_ROOT=Path(os.environ.get('CLOUDIF_COMPOSE_PRODUCTION_BACKUP_ROOT','/srv/cloudif/backups/compose-production'))
+ COMPOSE_SNAPSHOT_RE=re.compile(r'^snap_[a-f0-9]{24}$')
+ COMPOSE_SNAPSHOT_MAX_BYTES=int(os.environ.get('CLOUDIF_COMPOSE_SNAPSHOT_MAX_BYTES',str(16*1024*1024*1024)))
+ COMPOSE_EPHEMERAL_PREFIXES=('/run','/tmp','/var/run','/var/cache','/var/log')
+@@ -707,13 +708,19 @@
+         if item.get('service')==edge_service:item['port']=edge_port
+     safe=sorted(safe,key=lambda item:item['service'])
+     digest=hashlib.sha256(canonical({'project':project,'source_commit':commit,'edge_service':edge_service,'edge_port':edge_port,'services':safe})).hexdigest()
+-    return {'ok':True,'source_kind':'linked-compose','project_slug':slug,'compose_project':project,'source_digest':digest,'source_commit':commit,'edge_service':edge_service,'edge_port':edge_port,'services':safe,'service_count':len(safe),'secretValuesIncluded':False,'effectsExecuted':False}
++    result={'ok':True,'source_kind':'linked-compose','project_slug':slug,'compose_project':project,'source_digest':digest,'source_commit':commit,'edge_service':edge_service,'edge_port':edge_port,'services':safe,'service_count':len(safe),'secretValuesIncluded':False,'effectsExecuted':False}
++    if slug=='agenda-unica':
++        result.update({'targetIsolationPolicy':'agenda-v1','persistentDataPolicy':{'homologation':'fresh-empty','production':'stable-project-volume'},'sourceEnvironmentStripped':True,'productionRollbackPolicy':'pre-release-volume-backup-auto-restore-v1','snapshotSourceEnvironmentValuesIncluded':False,'snapshotSourceWritableVolumeDataIncluded':False})
++    return result
+ 
+ 
+ 
+ def _snapshot_safe_status(row:sqlite3.Row)->dict:
+     manifest=json.loads(row['manifest_json'] or '{}')
+-    return {'ok':True,'source_kind':'linked-compose','snapshot_id':row['snapshot_id'],'project_slug':row['project_slug'],'source_digest':row['source_digest'],'snapshot_digest':row['snapshot_digest'],'source_commit':row['source_commit'],'edge_service':row['edge_service'],'edge_port':int(row['edge_port']),'services':manifest.get('services') or [],'status':row['status'],'created_at':int(row['created_at']),'secretValuesIncluded':False,'secretValuesPersistedRootOnly':True,'effectsExecuted':False}
++    result={'ok':True,'source_kind':'linked-compose','snapshot_id':row['snapshot_id'],'project_slug':row['project_slug'],'source_digest':row['source_digest'],'snapshot_digest':row['snapshot_digest'],'source_commit':row['source_commit'],'edge_service':row['edge_service'],'edge_port':int(row['edge_port']),'services':manifest.get('services') or [],'status':row['status'],'created_at':int(row['created_at']),'secretValuesIncluded':False,'secretValuesPersistedRootOnly':True,'effectsExecuted':False}
++    if str(row['project_slug'])=='agenda-unica':
++        result.update({'targetIsolationPolicy':'agenda-v1','persistentDataPolicy':{'homologation':'fresh-empty','production':'stable-project-volume'},'sourceEnvironmentStripped':True,'productionRollbackPolicy':'pre-release-volume-backup-auto-restore-v1','snapshotSourceEnvironmentValuesIncluded':manifest.get('sourceEnvironmentValuesIncluded'),'snapshotSourceWritableVolumeDataIncluded':manifest.get('sourceWritableVolumeDataIncluded')})
++    return result
+ 
+ 
+ def compose_snapshot_status(snapshot_id:str)->dict:
+@@ -745,21 +752,35 @@
+         subprocess.run(['sync'],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=60)
+         for row in sorted(rows,key=lambda r:str(((r.get('Config') or {}).get('Labels') or {}).get('com.docker.compose.service') or '')):
+             config=row.get('Config') or {};host=row.get('HostConfig') or {};labels=config.get('Labels') or {};service=str(labels.get('com.docker.compose.service') or '');name=str(row.get('Name') or '').lstrip('/')
+-            env=[str(x) for x in (config.get('Env') or [])];mount_records=[];safe_mounts=[];destinations=[]
++            env=[str(x) for x in (config.get('Env') or [])]
++            if slug=='agenda-unica':
++                managed={'DATABASE_URL','JWT_SECRET','BOOTSTRAP_ADMIN_PASSWORD','APP_ENV','APP_REVISION','COOKIE_SECURE','ALLOWED_ORIGINS','APP_BASE_URL','REQUIRE_ADMIN_TOTP','TOTP_ENCRYPTION_KEY','POSTGRES_USER','POSTGRES_PASSWORD','POSTGRES_DB'}
++                env=[item for item in env if '=' not in item or item.split('=',1)[0] not in managed]
++            mount_records=[];safe_mounts=[];destinations=[]
+             for index,item in enumerate(row.get('Mounts') or []):
+                 kind=str(item.get('Type') or '');dest=str(item.get('Destination') or '');rw=bool(item.get('RW'));source=Path(str(item.get('Source') or '')).resolve();archive=tmp/'artifacts'/service/f'mount-{index}.tar'
++                source_data_included=True
+                 if kind=='volume':
+                     source_ref=str(item.get('Name') or '')
+-                    _tar_container_path(name,dest,archive)
++                    if slug=='agenda-unica' and rw:
++                        source_data_included=False
++                    else:
++                        _tar_container_path(name,dest,archive)
+                 elif kind=='bind':
+                     try:source_ref=str(source.relative_to(working_dir))
+                     except ValueError:raise DeploymentError('compose_bind_outside_checkout','Bind Compose precisa estar dentro do checkout Forgejo.',409,{'service':service,'destination':dest})
+-                    _path_size(source)
+-                    _tar_path(source,archive)
++                    if slug=='agenda-unica' and rw:
++                        raise DeploymentError('compose_target_bind_policy_required','Bind gravável da Agenda não pode entrar no snapshot publicável.',409,{'service':service,'destination':dest})
++                    _path_size(source);_tar_path(source,archive)
+                 else:raise DeploymentError('compose_mount_unsupported','Mount Compose não publicável.',409,{'service':service,'type':kind})
+-                total+=archive.stat().st_size
+-                if total>COMPOSE_SNAPSHOT_MAX_BYTES:raise DeploymentError('compose_snapshot_too_large','Snapshot Compose excede o limite configurado.',409,{'bytes':total,'limit':COMPOSE_SNAPSHOT_MAX_BYTES})
+-                rec={'type':kind,'source_ref':source_ref,'destination':dest,'rw':rw,'archive':str(archive.relative_to(tmp)),'source_name':source.name};mount_records.append(rec);safe_mounts.append({'type':kind,'sourceRef':source_ref,'destination':dest,'rw':rw,**_snapshot_archive_record(archive)});destinations.append(dest)
++                rec={'type':kind,'source_ref':source_ref,'destination':dest,'rw':rw,'archive':str(archive.relative_to(tmp)) if source_data_included else '','source_name':source.name,'source_data_included':source_data_included};mount_records.append(rec)
++                if source_data_included:
++                    total+=archive.stat().st_size
++                    if total>COMPOSE_SNAPSHOT_MAX_BYTES:raise DeploymentError('compose_snapshot_too_large','Snapshot Compose excede o limite configurado.',409,{'bytes':total,'limit':COMPOSE_SNAPSHOT_MAX_BYTES})
++                    safe_mounts.append({'type':kind,'sourceRef':source_ref,'destination':dest,'rw':rw,'sourceDataIncluded':True,**_snapshot_archive_record(archive)})
++                else:
++                    safe_mounts.append({'type':kind,'sourceRef':source_ref,'destination':dest,'rw':rw,'sourceDataIncluded':False,'bytes':0})
++                destinations.append(dest)
+             rootfs_archive=tmp/'artifacts'/service/'rootfs.tar';_export_rootfs(name,rootfs_archive);total+=rootfs_archive.stat().st_size
+             if total>COMPOSE_SNAPSHOT_MAX_BYTES:raise DeploymentError('compose_snapshot_too_large','Snapshot Compose excede o limite configurado.',409,{'bytes':total,'limit':COMPOSE_SNAPSHOT_MAX_BYTES})
+             rootfs_record={'archive':str(rootfs_archive.relative_to(tmp)),'sha256':_sha_file(rootfs_archive),'bytes':rootfs_archive.stat().st_size}
+@@ -779,7 +800,7 @@
+         compressed=_compress_rootfs(raw);record={'archive':str(compressed.relative_to(tmp)),'sha256':_sha_file(compressed),'bytes':compressed.stat().st_size}
+         spec['rootfs']=record;safe_by_service[service]['rootfs']={'sha256':record['sha256'],'bytes':record['bytes']}
+     private_path=tmp/'private-spec.json';private_path.write_text(json.dumps(private,ensure_ascii=False,separators=(',',':')));os.chmod(private_path,0o600)
+-    manifest={'project_slug':slug,'source_kind':'linked-compose','source_digest':current['source_digest'],'source_commit':commit,'edge_service':current['edge_service'],'edge_port':int(current['edge_port']),'services':sorted(safe_services,key=lambda x:x['service']),'private_spec_sha256':_sha_file(private_path),'artifact_bytes':sum(item.get('bytes',0) for svc in safe_services for item in (svc.get('mounts') or [])+(svc.get('rootfs_overlays') or []))+sum(int((svc.get('rootfs') or {}).get('bytes') or 0) for svc in safe_services)}
++    manifest={'project_slug':slug,'source_kind':'linked-compose','source_digest':current['source_digest'],'source_commit':commit,'edge_service':current['edge_service'],'edge_port':int(current['edge_port']),'services':sorted(safe_services,key=lambda x:x['service']),'private_spec_sha256':_sha_file(private_path),'artifact_bytes':sum(item.get('bytes',0) for svc in safe_services for item in (svc.get('mounts') or [])+(svc.get('rootfs_overlays') or []))+sum(int((svc.get('rootfs') or {}).get('bytes') or 0) for svc in safe_services),'sourceEnvironmentValuesIncluded':False if slug=='agenda-unica' else True,'sourceWritableVolumeDataIncluded':False if slug=='agenda-unica' else True}
+     snapshot_digest=hashlib.sha256(canonical(manifest)).hexdigest();(tmp/'manifest.json').write_text(json.dumps(manifest,ensure_ascii=False,sort_keys=True,indent=2)+'\n');os.chmod(tmp/'manifest.json',0o600)
+     if root.exists():shutil.rmtree(tmp,ignore_errors=True)
+     else:os.replace(tmp,root);os.chmod(root,0o700)
+@@ -793,6 +814,23 @@
+     docker(*command,timeout=900)
+ 
+ 
++def _backup_volume_archive(volume:str,target:Path)->None:
++    image=inspect_image(PUBLICATION_BRIDGE_IMAGE_REF)
++    if str(image.get('Id') or '')!=PUBLICATION_BRIDGE_IMAGE_ID:raise DeploymentError('snapshot_helper_image_mismatch','Imagem auxiliar de backup diverge do digest homologado.',409)
++    target.parent.mkdir(parents=True,exist_ok=True);os.chmod(target.parent,0o700)
++    command=['run','--rm','--network','none','--user','0:0','--read-only','--cap-drop','ALL','--cap-add','DAC_READ_SEARCH','--security-opt','no-new-privileges','--mount',f'type=volume,src={volume},dst=/source,readonly','--mount',f'type=bind,src={target.parent.resolve()},dst=/backup','--entrypoint','/bin/sh',PUBLICATION_BRIDGE_IMAGE_REF,'-c',f'cd /source && tar --numeric-owner -cpf /backup/{target.name} .']
++    docker(*command,timeout=900)
++    if not target.is_file() or target.stat().st_size<=0:raise DeploymentError('production_volume_backup_failed','Backup do volume de Produção não foi criado.',502,{'volume':volume})
++    os.chmod(target,0o600)
++
++
++def _replace_volume_archive(archive:Path,volume:str)->None:
++    image=inspect_image(PUBLICATION_BRIDGE_IMAGE_REF)
++    if str(image.get('Id') or '')!=PUBLICATION_BRIDGE_IMAGE_ID:raise DeploymentError('snapshot_helper_image_mismatch','Imagem auxiliar de restauração diverge do digest homologado.',409)
++    command=['run','--rm','--network','none','--user','0:0','--mount',f'type=volume,src={volume},dst=/restore','--mount',f'type=bind,src={archive.resolve()},dst=/snapshot.tar,readonly','--entrypoint','/bin/sh',PUBLICATION_BRIDGE_IMAGE_REF,'-c','find /restore -mindepth 1 -maxdepth 1 -exec rm -rf -- {} + && cd /restore && tar --numeric-owner -xpf /snapshot.tar']
++    docker(*command,timeout=900)
++
++
+ def _health_options(health:dict)->list[str]:
+     test=health.get('Test') or []
+     if not test:return []
+@@ -848,15 +886,32 @@
+     docker('network','create','--internal','--label',f'org.cloudiff.deployment={deployment_id}','--label',f'org.cloudiff.environment={environment}','--label',f'org.cloudiff.project={slug}',network,timeout=30)
+     needs_egress=any(bool(item.get('requires_egress')) for item in (private.get('services') or []));egress=egress_network_name(deployment_id)
+     if needs_egress:docker('network','create','--label',f'org.cloudiff.deployment={deployment_id}','--label',f'org.cloudiff.environment={environment}','--label',f'org.cloudiff.project={slug}',egress,timeout=30)
+-    services=[];created=[]
++    services=[];created=[];production_backups=[];production_new_volumes=[]
+     try:
+         for spec in private.get('services') or []:
+             service=str(spec.get('service') or '');name=container_name(deployment_id,service);mount_args=[];runtime_service=runtime_root/service;runtime_service.mkdir(parents=True,exist_ok=True)
+             for index,mount in enumerate(spec.get('mounts') or []):
+                 archive=root/str(mount['archive']);dest=str(mount['destination']);rw=bool(mount.get('rw'));kind=str(mount['type'])
+                 if kind=='volume':
+-                    volume=f'cloudif-vol-{deployment_id[4:]}-{service}-{index}';args=['volume','create','--label',f'org.cloudiff.deployment={deployment_id}','--label',f'org.cloudiff.project={slug}','--label',f'org.cloudiff.snapshot={snapshot_id}',volume];docker(*args,timeout=30);_restore_volume_archive(archive,volume);mount_args.extend(['--mount',f'type=volume,src={volume},dst={dest}'+('' if rw else ',readonly')])
++                    agenda_isolated=(slug=='agenda-unica' and environment in {'homologation','production'} and rw)
++                    if agenda_isolated and environment=='production':
++                        volume=f'cloudif-data-{slug}-production-{service}-{index}'
++                        exists=docker('volume','inspect',volume,timeout=30,check=False).returncode==0
++                        if exists:
++                            backup=COMPOSE_PRODUCTION_BACKUP_ROOT/slug/deployment_id/f'{service}-{index}.tar'
++                            _backup_volume_archive(volume,backup);production_backups.append((volume,backup))
++                        else:
++                            docker('volume','create','--label',f'org.cloudiff.project={slug}','--label','org.cloudiff.environment=production','--label','org.cloudiff.persistence=release',volume,timeout=30);production_new_volumes.append(volume)
++                    elif agenda_isolated:
++                        volume=f'cloudif-vol-{deployment_id[4:]}-{service}-{index}'
++                        docker('volume','create','--label',f'org.cloudiff.deployment={deployment_id}','--label',f'org.cloudiff.project={slug}','--label',f'org.cloudiff.environment={environment}','--label','org.cloudiff.persistence=fresh',volume,timeout=30)
++                    else:
++                        volume=f'cloudif-vol-{deployment_id[4:]}-{service}-{index}'
++                        args=['volume','create','--label',f'org.cloudiff.deployment={deployment_id}','--label',f'org.cloudiff.project={slug}','--label',f'org.cloudiff.snapshot={snapshot_id}',volume];docker(*args,timeout=30);_restore_volume_archive(archive,volume)
++                    mount_args.extend(['--mount',f'type=volume,src={volume},dst={dest}'+('' if rw else ',readonly')])
+                 elif kind=='bind':
++                    if slug=='agenda-unica' and environment in {'homologation','production'} and rw:
++                        raise DeploymentError('compose_target_bind_policy_required','Bind gravável da origem não pode ser restaurado em H/P da Agenda.',409,{'service':service,'destination':dest})
+                     target=runtime_service/f'bind-{index}';_extract_tar(archive,target);source=target/str(mount.get('source_name') or '')
+                     if not source.exists():raise DeploymentError('compose_snapshot_restore_failed','Bind restaurado não existe.',502,{'service':service,'destination':dest})
+                     mount_args.extend(['--mount',f'type=bind,src={source},dst={dest}'+('' if rw else ',readonly')])
+@@ -866,7 +921,16 @@
+                 if '=' in str(item):key,value=str(item).split('=',1);env[key]=value
+             approved=variables.get(service) or {}
+             if not isinstance(approved,dict):raise DeploymentError('invalid_variables','Variáveis por serviço inválidas.',400,{'service':service})
+-            env.update({str(k):str(v) for k,v in approved.items()});env.update({'CLOUDIF_PROJECT_SLUG':slug,'CLOUDIF_ENVIRONMENT':environment,'CLOUDIF_DEPLOYMENT_ID':deployment_id,'CLOUDIF_SERVICE':service,'CLOUDIF_COMPOSE_SNAPSHOT_ID':snapshot_id})
++            if slug=='agenda-unica' and environment in {'homologation','production'}:
++                managed={'DATABASE_URL','JWT_SECRET','BOOTSTRAP_ADMIN_PASSWORD','APP_ENV','APP_REVISION','COOKIE_SECURE','ALLOWED_ORIGINS','APP_BASE_URL','REQUIRE_ADMIN_TOTP','TOTP_ENCRYPTION_KEY','POSTGRES_USER','POSTGRES_PASSWORD','POSTGRES_DB'}
++                for key in managed:env.pop(key,None)
++                required={'api':{'DATABASE_URL','JWT_SECRET','BOOTSTRAP_ADMIN_PASSWORD','APP_ENV','COOKIE_SECURE','ALLOWED_ORIGINS','APP_BASE_URL'},'db':{'POSTGRES_USER','POSTGRES_PASSWORD','POSTGRES_DB'}}.get(service,set())
++                missing=sorted(required-set(str(k) for k in approved))
++                if missing:raise DeploymentError('compose_target_environment_incomplete','Ambiente de destino da Agenda está incompleto.',409,{'service':service,'missing':missing})
++            env.update({str(k):str(v) for k,v in approved.items()})
++            if slug=='agenda-unica' and environment in {'homologation','production'} and service=='api' and re.fullmatch(r'[a-f0-9]{40,64}',str(snapshot.get('source_commit') or '')):
++                env['APP_REVISION']=str(snapshot['source_commit'])[:12]
++            env.update({'CLOUDIF_PROJECT_SLUG':slug,'CLOUDIF_ENVIRONMENT':environment,'CLOUDIF_DEPLOYMENT_ID':deployment_id,'CLOUDIF_SERVICE':service,'CLOUDIF_COMPOSE_SNAPSHOT_ID':snapshot_id})
+             path=env_file(deployment_id,service,env)
+             command=['create','--name',name,'--network',network,'--network-alias',service,'--restart','unless-stopped','--env-file',str(path),'--label',f'org.cloudiff.deployment={deployment_id}','--label',f'org.cloudiff.environment={environment}','--label',f'org.cloudiff.project={slug}','--label',f'org.cloudiff.service={service}','--label',f'org.cloudiff.snapshot={snapshot_id}']
+             if spec.get('read_only'):command.append('--read-only')
+@@ -910,9 +974,22 @@
+         connection=db();connection.execute('insert into deployments(deployment_id,project_slug,environment,build_job_id,plan_digest,build_plan_digest,config_revision,config_digest,toolchain_digest,archive_sha256,variables_digest,status,services_json,routes_json,error_json,created_at,updated_at,snapshot_id) values(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,',?)',(deployment_id,slug,environment,snapshot_id,plan,snapshot['snapshot_digest'],config_revision,config_digest,toolchain_digest,snapshot['snapshot_digest'],variables_digest,'running',json.dumps(services,separators=(',',':')),json.dumps(routes,separators=(',',':')),'{}',now,now,snapshot_id));connection.commit();connection.close()
+         runtime_configuration={'buildEnvironmentDigest':'','runtimeEnvironmentDigest':str(payload.get('runtime_environment_digest') or variables_digest),'environmentDigest':str(payload.get('environment_digest') or variables_digest),'buildJobId':snapshot_id}
+         _runtime_state_record({'project_slug':slug,'environment':environment,'deployment_id':deployment_id,'config_revision':config_revision,'config_digest':config_digest,'toolchain_digest':toolchain_digest,'build_job_id':snapshot_id,'variables':variables},runtime_configuration,'running')
+-        return {'ok':True,'deployment_id':deployment_id,'project_slug':slug,'environment':environment,'source_kind':'linked-compose','snapshot_id':snapshot_id,'snapshot_digest':snapshot['snapshot_digest'],'artifact_image_id':'sha256:'+snapshot['snapshot_digest'],'source_commit':snapshot['source_commit'],'status':'running','services':safe_services,'routes':routes,'edge_service':snapshot['edge_service'],'edge_port':snapshot['edge_port'],'snapshotBacked':True,'sameSnapshotReusable':True,'secretValuesIncluded':False,'secretValuesPersistedRootOnly':True,'idempotent':False}
++        result={'ok':True,'deployment_id':deployment_id,'project_slug':slug,'environment':environment,'source_kind':'linked-compose','snapshot_id':snapshot_id,'snapshot_digest':snapshot['snapshot_digest'],'artifact_image_id':'sha256:'+snapshot['snapshot_digest'],'source_commit':snapshot['source_commit'],'status':'running','services':safe_services,'routes':routes,'edge_service':snapshot['edge_service'],'edge_port':snapshot['edge_port'],'snapshotBacked':True,'sameSnapshotReusable':True,'secretValuesIncluded':False,'secretValuesPersistedRootOnly':True,'idempotent':False}
++        if slug=='agenda-unica' and environment in {'homologation','production'}:
++            result.update({'targetIsolationPolicy':'agenda-v1','sourceEnvironmentStripped':True,'persistentDataPolicy':'fresh-empty' if environment=='homologation' else 'stable-project-volume','productionRollbackPolicy':'pre-release-volume-backup-auto-restore-v1','persistentBackupRefs':[str(path) for _,path in production_backups]})
++        return result
+     except Exception as error:
+-        cleanup_resources(deployment_id);detail=error.as_dict() if isinstance(error,DeploymentError) else {'code':'compose_snapshot_deploy_failed','message':type(error).__name__}
++        cleanup_resources(deployment_id)
++        rollback_errors=[]
++        if slug=='agenda-unica' and environment=='production':
++            for volume,backup in production_backups:
++                try:_replace_volume_archive(backup,volume)
++                except Exception as rollback_error:rollback_errors.append(type(rollback_error).__name__)
++            for volume in production_new_volumes:
++                try:docker('volume','rm',volume,timeout=60,check=False)
++                except Exception as rollback_error:rollback_errors.append(type(rollback_error).__name__)
++        detail=error.as_dict() if isinstance(error,DeploymentError) else {'code':'compose_snapshot_deploy_failed','message':type(error).__name__}
++        if rollback_errors:detail['persistentRollbackErrors']=rollback_errors
+         now=int(time.time());connection=db();connection.execute('insert or replace into deployments(deployment_id,project_slug,environment,build_job_id,plan_digest,build_plan_digest,config_revision,config_digest,toolchain_digest,archive_sha256,variables_digest,status,services_json,routes_json,error_json,created_at,updated_at,snapshot_id) values(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,',?)',(deployment_id,slug,environment,snapshot_id,plan,str(snapshot.get('snapshot_digest') or '0'*64),config_revision,config_digest,toolchain_digest,str(snapshot.get('snapshot_digest') or '0'*64),variables_digest,'failed','[]',json.dumps(payload.get('routes') or [],separators=(',',':')),json.dumps(detail,separators=(',',':')),now,now,snapshot_id));connection.commit();connection.close();raise
+ 
+
