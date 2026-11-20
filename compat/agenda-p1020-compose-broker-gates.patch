@@ -1,0 +1,51 @@
+--- a/cloudif-deployment-broker.py
++++ b/cloudif-deployment-broker.py
+@@ -487,7 +487,7 @@
+  if not SLUG.fullmatch(slug) or environment not in DEPLOY_ENVIRONMENTS or not trace or source_kind!='linked-compose':raise ValueError('invalid_request')
+  if snapshot_id and not re.fullmatch(r'snap_[a-f0-9]{24}',snapshot_id):raise ValueError('invalid_snapshot_id')
+  config=_multiservice_configuration(slug);configuration=config.get('configuration') or {};state=_multiservice_reconciliation(slug);blockers=[]
+- project=(config.get('project') or configuration.get('project') or {});services=configuration.get('services') or {};primary=str(project.get('primaryService') or '');primary_cfg=services.get(primary) if isinstance(services,dict) else None
++ identity_project=config.get('project') or {};runtime_project=configuration.get('project') or {};project={**identity_project,**runtime_project};services=configuration.get('services') or {};primary=str(project.get('primaryService') or '');primary_cfg=services.get(primary) if isinstance(services,dict) else None
+  canonical_slug=str(project.get('slug') or '')
+  if canonical_slug and canonical_slug!=slug:blockers.append('project-identity-mismatch')
+  # Older configured manifests still get their explicit runtime contract validated. Current identity-only records rely on the live Compose source.
+@@ -509,6 +509,30 @@
+   code,wource=_compose_source_proxy(slug)
+   if code!=200 or not isinstance(source,dict) or source.get('ok') is not True:blockers.append('compose-source-unavailable');source=None
+  if source and str(source.get('source_kind') or '')!='linked-compose':blockers.append('compose-source-kind-mismatch')
++ source_services=(source or {}).get('services') or []
++ sensitive_source_environment=False;writable_persistent_mounts=False;writable_bind_mounts=False;sensitive_by_service={}
++ for source_service in source_services:
++  if not isinstance(source_service,dict):continue
++  service_name=str(source_service.get('service') or '')
++  names=[str(x) for x in (source_service.get('environment_names') or [])]
++  sensitive={name for name in names if re.search(r'(?i)(PASSWORD|SECRET|TOKEN|KEY|DATABASE_URL|BOOTSTRAP)',name)}
++  if sensitive:sensitive_source_environment=True;sensitive_by_service[service_name]=sensitive
++  for mount in source_service.get('mounts') or []:
++   if isinstance(mount,dict) and mount.get('rw') is True and str(mount.get('type') or '') in {'volume','bind'}:
++    writable_persistent_mounts=True
++    if str(mount.get('type') or '')=='bind':writable_bind_mounts=True
++ target_public=(runtime or {}).get('publicRuntimeEnvironment') or {};target_secret=(runtime or {}).get('secretRuntimeReferences') or {}
++ target_names={}
++ for service_name in set(target_public)|set(target_secret):
++  target_names[str(service_name)]=set((target_public.get(service_name) or {}).keys())|set((target_secret.get(service_name) or {}).keys())
++ secret_isolation_ready=bool(source and source.get('targetIsolationPolicy')=='agenda-v1' and source.get('sourceEnvironmentStripped') is True and all(names<=target_names.get(service_name,set()) for service_name,names in sensitive_by_service.items()))
++ policy=(source or {}).get('persistentDataPolicy') or {};expected_policy='fresh-empty' if environment=='homologation' else 'stable-project-volume'
++ snapshot_sanitization_ready=bool(slug!='agenda-unica' or (source and source.get('snapshotSourceEnvironmentValuesIncluded') is False and source.get('snapshotSourceWritableVolumeDataIncluded') is False))
++ rollback_capability_ready=(environment!='production' or (source or {}).get('productionRollbackPolicy')=='pre-release-volume-backup-auto-restore-v1')
++ persistent_data_policy_ready=bool(not writable_persistent_mounts or (not writable_bind_mounts and source and source.get('targetIsolationPolicy')=='agenda-v1' and policy.get(environment)==expected_policy and rollback_capability_ready))
++ if not snapshot_sanitization_ready:blockers.append('compose-snapshot-source-sanitization-required')
++ if sensitive_source_environment and not secret_isolation_ready:blockers.append('compose-source-secret-isolation-required')
++ if writable_persistent_mounts and not persistent_data_policy_ready:blockers.append('compose-persistent-data-policy-required')
+  source_digest=str((source or {}).get('source_digest') or '');source_commit=str((source or {}).get('source_commit') or '');snapshot_digest=str((snapshot or {}).get('snapshot_digest') or '')
+  if source and not SHA256_RE.fullmatch(source_digest):blockers.append('compose-source-digest-invalid')
+  if source and not re.fullmatch(r'[a-f0-9]{40,64}',source_commit):blockers.append('compose-source-commit-invalid')
+@@ -529,7 +553,7 @@
+  for item in (source or {}).get('services') or []:
+   if not isinstance(item,dict):continue
+   safe_services.append({k:item.get(k) for k in ('service','image_id','service_digest','port','ports','environment_names') if k in item})
+- summary={'sourceKind':'linked-compose','snapshotId':snapshot_id,'snapshotDigest':snapshot_digest,'sourceDigest':source_digest,'sourceCommit':source_commit,'edgeService':edge_service,'edgePort':edge_port,'services':safe_services,'routes':routes,'runtimeEnvironment':runtime_summary,'secretResolutionRequired':bool(runtime_summary.get('secretReferencesPresent')),'secretResolverAvailable':bool(SECRET_RESOLVER_TOKEN)}
++ summary={'sourceKind':'linked-compose','snapshotId':snapshot_id,'snapshotDigest':snapshot_digest,'sourceDigest':source_digest,'sourceCommit':source_commit,'edgeService':edge_service,'edgePort':edge_port,'services':safe_services,'routes':routes,'runtimeEnvironment':runtime_summary,'secretResolutionRequired':bool(runtime_summary.get('secretReferencesPresent')),'secretResolverAvailable':bool(SECRET_RESOLVER_TOKEN),'sourceSensitiveEnvironmentDetected':sensitive_source_environment,'sourceWritablePersistentMountsDetected':writable_persistent_mounts,'secretIsolationReady':secret_isolation_ready,'persistentDataPolicyReady':persistent_data_policy_ready,'targetIsolationPolicy':(source or {}).get('targetIsolationPolicy'),'productionRollbackPolicy':(source or {}).get('productionRollbackPolicy'),'rollbackCapabilityReady':rollback_capability_ready,'snapshotSanitizationReady':snapshot_sanitization_ready}
+  result={'ok':True,'side_effect_free':True,'project_slug':slug,'environment':environment,'source_kind':'linked-compose','snapshot_id':snapshot_id,'deployment_plan_digest':plan_digest,'operation':material,'summary':summary,'artifactImageId':artifact,'blockers':blockers,'execution_allowed':not blockers,'approval_required':True,'variables_digest':variables_digest,'secret_values_included':False,'secret_references_included':False,'secretValuesIncluded':False,'secretReferencesIncluded':False,'containers_created':False,'trace_id':trace}
+  if include_internal:result['_internal_runtime_configuration']=runtime
+  return result
