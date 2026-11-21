@@ -1,0 +1,33 @@
+--- a/cloudif_project_secret_web.py
++++ b/cloudif_project_secret_web.py
+@@ -116,6 +116,10 @@
+     if not PLAN_RE.fullmatch(plan_digest) or not APPROVAL_RE.fullmatch(approval_id):raise ValueError('invalid_secret_execution_binding')
+     plan=_plan(slug,plan_digest);action_key=str(plan.get('action') or '');action=ACTIONS.get(action_key)
+     (_require_secret_read if action_key=='read' else _require_write)(slug,username,groups)
++    target_environment=str(plan.get('targetEnvironment') or plan.get('environment') or '')
++    if action_key!='read' and target_environment in {'preview','homologation','production'}:
++        import cloudif_portal_publications as publications
++        publications.environment_runtime_target(slug,target_environment)
+     if not action:raise ValueError('unsupported_secret_action')
+     approval=_approval_get(approval_id)
+     if not approval:raise LookupError('approval_not_found')
+@@ -154,7 +158,18 @@
+         if action_key=='read':
+             if result.get('secretValueIncluded') is not True or not isinstance(result.get('secretValue'),str):raise RuntimeError('secret_read_contract_invalid')
+             result['secretValuesIncluded']=True;result['oneTime']=True;result['cacheControl']='no-store';return result
+-        result.pop('secretValue',None);result['secretValueIncluded']=False;result['secretValuesIncluded']=False;return result
++        result.pop('secretValue',None);result['secretValueIncluded']=False;result['secretValuesIncluded']=False
++        environment=str(result.get('environment') or plan.get('targetEnvironment') or plan.get('environment') or '')
++        try:
++            import cloudif_portal_publications as publications
++            result['runtimeApply']=publications.apply_environment_to_runtime(slug,environment,actor)
++        except Exception as exc:
++            result['runtimeApply']={'ok':False,'environment':environment,'error':type(exc).__name__,'message':str(exc)[:300],'secretValuesIncluded':False}
++        try:
++            from cloudif_reconcile_client import enqueue
++            result['reconcile']=enqueue('project.configuration.changed',actor=actor or 'portal',username=actor or '',project=slug,payload={'source':'secret_wizard','operation':'secret_change','reason':'environment_changed','environment':environment,'environment_revision':int(result.get('environmentRevision') or 0)},dedupe_seconds=0)
++        except Exception as exc:result['reconcile']={'ok':False,'error':type(exc).__name__}
++        return result
+     if current and current.get('status')=='reserved':_approval_transition(approval_id,'release',{'reservation_id':reservation_id})
+     error=result.get('error') or {};raise RuntimeError(str(error.get('message') if isinstance(error,dict) else error or 'secret_apply_failed'))
+ 

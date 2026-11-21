@@ -1,0 +1,158 @@
+--- a/cloudif_portal_publications.py
++++ b/cloudif_portal_publications.py
+@@ -238,6 +238,98 @@
+     return result
+ 
+ 
++
++def _executor_runtime_client():
++    cfg=_env('/etc/cloudif/multiservice-deployment-executor.env');token=cfg.get('CLOUDIF_MULTISERVICE_DEPLOYMENT_EXECUTOR_TOKEN','')
++    if not token:raise RuntimeError('Credencial interna do executor ausente.')
++    return 'http://10.62.91.2:18098/cloudif/executor',token
++
++
++def _remove_compose_runtime(deployment_id):
++    base,token=_executor_runtime_client();status,result=_bearer_json('DELETE',base+'/v1/deployments/'+urllib.parse.quote(str(deployment_id),safe=''),token,timeout=180)
++    if status//100!=2 or result.get('ok') is not True:raise RuntimeError('Não foi possível remover o runtime da Homologação substituída.')
++    return result
++
++
++def _active_compose_environment_target(slug,environment):
++    con=sqlite3.connect(DB);con.row_factory=sqlite3.Row;_ensure_schema(con)
++    try:
++        if environment=='homologation':
++            rows=con.execute("select * from publication_candidates where project_slug=? and status in ('awaiting_homologation','homologated') order by candidate_number desc",(slug,)).fetchall()
++            for row in rows:
++                meta=_candidate_runtime_metadata(row);dep=str(meta.get('homologationDeploymentId') or '')
++                if meta.get('sameInstancePromotionRequired') is True and re.fullmatch(r'dep_[a-f0-9]{24}',dep):
++                    return {'deploymentId':dep,'rowId':int(row['id']),'candidateNumber':int(row['candidate_number']),'hostname':str(row['hostname'] or ''),'kind':'candidate'}
++            raise RuntimeError('Nenhuma Homologação ativa existe para receber variáveis.')
++        if environment=='production':
++            release=con.execute("select * from production_releases where project_slug=? and is_active=1 and status='published' order by publication_number desc limit 1",(slug,)).fetchone()
++            if not release:raise RuntimeError('Nenhuma Produção ativa existe para receber variáveis.')
++            candidate=con.execute('select * from publication_candidates where project_slug=? and candidate_number=?',(slug,int(release['candidate_number']))).fetchone()
++            meta=_candidate_runtime_metadata(candidate) if candidate else {};dep=str(meta.get('homologationDeploymentId') or '')
++            if not re.fullmatch(r'dep_[a-f0-9]{24}',dep):
++                publication=con.execute('select detail_json from project_publications where project_slug=? and is_active=1 order by id desc limit 1',(slug,)).fetchone()
++                try:detail=json.loads(publication['detail_json'] or '{}') if publication else {}
++                except Exception:detail={}
++                dep=str(detail.get('productionDeploymentId') or '')
++            if not re.fullmatch(r'dep_[a-f0-9]{24}',dep):raise RuntimeError('Produção ativa não possui deployment configurável.')
++            return {'deploymentId':dep,'releaseId':int(release['id']),'candidateNumber':int(release['candidate_number']),'publicationNumber':int(release['publication_number']),'hostname':str(release['stable_hostname'] or release['hostname'] or ''),'kind':'release'}
++        raise ValueError('Ambiente não possui target Compose configurável.')
++    finally:con.close()
++
++
++def environment_runtime_target(slug,environment):
++    environment=str(environment or '').strip().lower()
++    if environment=='preview':
++        if slug=='agenda-unica' or _is_linked_compose_project(slug):return {'environment':'preview','kind':'linked-preview'}
++        return {'environment':'preview','kind':'preview'}
++    if environment in {'homologation','production'}:
++        target=_active_compose_environment_target(slug,environment);target['environment']=environment;return target
++    raise ValueError('Ambiente inválido.')
++
++
++def apply_environment_to_runtime(slug,environment,actor='portal'):
++    environment=str(environment or '').strip().lower()
++    if environment not in {'preview','homologation','production'}:raise ValueError('Ambiente inválido.')
++    pc=_publication_config();runtime=pc.execution_environment_services(slug,environment)
++    values=runtime.get('valuesByService') or {};names=runtime.get('managedNamesByService') or {}
++    material={'managed_names_by_service':names,'values_by_service':values};variables_digest=hashlib.sha256(json.dumps(material,sort_keys=True,separators=(',',':')).encode()).hexdigest()
++    try:
++        if environment=='preview':
++            if slug=='agenda-unica' or _is_linked_compose_project(slug):
++                ku,kt,_=_clients();status,result=_post(ku+'/komodo/project/linked-preview/environment/apply',{'project':slug,'actor':actor,'values_by_service':values,'managed_names_by_service':names,'variables_digest':variables_digest,'environment_revision':int(runtime['environmentRevision']),'environment_digest':str(runtime['environmentDigest'])},kt,timeout=360)
++                if status//100!=2 or result.get('ok') is not True:raise RuntimeError(str(result.get('message') or result.get('error') or 'Falha ao aplicar variáveis no Preview.'))
++            else:
++                con=sqlite3.connect(DB);con.row_factory=sqlite3.Row;_ensure_schema(con);num=_number(con,slug);con.close();flat={}
++                for service_values in values.values():
++                    for key,value in service_values.items():
++                        if key in flat and flat[key]!=value:raise RuntimeError('Variável global possui valores conflitantes entre serviços: '+key)
++                        flat[key]=value
++                result=_runtime_preview(slug,num,'ensure',{'actor':actor,'environment_revision':int(runtime['environmentRevision']),'environment_digest':str(runtime['environmentDigest']),'environment_variables':flat},240)
++            return {'ok':True,'environment':'preview','environmentRevision':int(runtime['environmentRevision']),'environmentDigest':str(runtime['environmentDigest']),'changedServices':result.get('changedServices') or [],'containersRecreated':bool(result.get('containersRecreated')),'databasePreserved':bool(result.get('databasePreserved',True)),'secretValuesIncluded':False}
++        target=_active_compose_environment_target(slug,environment);base,token=_executor_runtime_client()
++        payload={'deployment_id':target['deploymentId'],'project_slug':slug,'environment':environment,'values_by_service':values,'managed_names_by_service':names,'variables_digest':variables_digest,'runtime_environment_digest':str(runtime.get('runtimeEnvironmentDigest') or runtime['environmentDigest']),'environment_digest':str(runtime['environmentDigest'])}
++        status,result=_bearer_json('POST',base+'/v1/compose-deployments/reconfigure',token,payload,timeout=360)
++        if status//100!=2 or result.get('ok') is not True:
++            error=result.get('error') or {};message=error.get('message') if isinstance(error,dict) else str(error or '')
++            raise RuntimeError(message or 'Falha ao aplicar variáveis no runtime do estágio.')
++        if target.get('hostname') and not _external_ok(str(target['hostname'])):raise RuntimeError('Runtime reconfigurado, mas a validação HTTPS do estágio falhou.')
++        con=sqlite3.connect(DB);con.row_factory=sqlite3.Row;_ensure_schema(con)
++        if environment=='homologation':con.execute('update publication_candidates set environment_revision=?,environment_digest=? where id=?',(int(runtime['environmentRevision']),str(runtime['environmentDigest']),int(target['rowId'])))
++        else:
++            con.execute('update production_releases set environment_revision=?,environment_digest=? where id=?',(int(runtime['environmentRevision']),str(runtime['environmentDigest']),int(target['releaseId'])))
++            prow=con.execute('select id,detail_json from project_publications where project_slug=? and is_active=1 order by id desc limit 1',(slug,)).fetchone()
++            if prow:
++                try:detail=json.loads(prow['detail_json'] or '{}')
++                except Exception:detail={}
++                detail['environmentRevision']=int(runtime['environmentRevision']);detail['environmentDigest']=str(runtime['environmentDigest']);con.execute('update project_publications set detail_json=? where id=?',(json.dumps(detail,ensure_ascii=False,separators=(',',':')),int(prow['id'])))
++        con.commit();con.close()
++        return {'ok':True,'environment':environment,'deploymentId':target['deploymentId'],'environmentRevision':int(runtime['environmentRevision']),'environmentDigest':str(runtime['environmentDigest']),'changedServices':result.get('changedServices') or [],'deploymentIdentityPreserved':bool(result.get('deploymentIdentityPreserved')),'snapshotPreserved':bool(result.get('snapshotPreserved')),'volumesPreserved':bool(result.get('volumesPreserved')),'containersRecreated':bool(result.get('containersRecreated')),'secretValuesIncluded':False}
++    finally:
++        for service_values in values.values():
++            if isinstance(service_values,dict):service_values.clear()
++        runtime['valuesByService']={}
++
++
+ def _create_linked_compose_homologation_candidate(slug,num,candidate,actor,progress=None):
+     notify=lambda step,msg:progress(step,msg) if progress else None
+     con=sqlite3.connect(DB);con.row_factory=sqlite3.Row;_ensure_schema(con);binding=_linked_compose_binding(con,slug);con.close()
+@@ -248,6 +340,8 @@
+     if not re.fullmatch(r'[a-f0-9]{40,64}',source_commit):raise RuntimeError('A origem Compose não possui commit Forgejo completo válido.')
+     preview_head=str((source.get('git') or {}).get('head') or '')
+     if preview_head and not source_commit.startswith(preview_head):raise RuntimeError('O HEAD exibido no Preview diverge do commit Compose materializado; atualize o Preview e tente novamente.')
++    notify('configuration','Herdando para Homologação as variáveis configuradas no Preview.')
++    inherited_environment=_publication_config().clone_environment_configuration(slug,'preview','homologation',actor)
+     previous=_linked_compose_previous_active_homologation(slug)
+     notify('snapshot','Clonando integralmente containers, configuração e volumes do Preview W1.')
+     trace='portal-hc-'+hashlib.sha256((slug+source_commit+str(candidate)).encode()).hexdigest()[:20]
+@@ -263,18 +357,21 @@
+     ident=_stage_identity(num,'homologation',candidate)
+     if not _external_ok(ident['hostname']):raise RuntimeError('Validação HTTPS externa falhou para '+ident['hostname'])
+     if previous and previous.get('deploymentId') and previous['deploymentId']!=deployment_id:
+-        try:_multiservice_deactivate(slug,previous['deploymentId'],'substituída pela Homologação H'+str(candidate),trace+'-deactivate-previous-h')
++        try:
++            _remove_compose_runtime(previous['deploymentId'])
++            _publisher_delete_stage(num,'homologation',int(previous.get('candidateNumber') or 0),npm_token)
+         except Exception:
+-            try:_multiservice_deactivate(slug,deployment_id,'rollback: não foi possível desativar a Homologação anterior',trace+'-rollback-new-h')
++            try:_multiservice_deactivate(slug,deployment_id,'rollback: não foi possível remover a Homologação anterior',trace+'-rollback-new-h')
+             except Exception:pass
+             raise
+     diff={'runtimeKind':'compose-snapshot','sourceMode':'forgejo-linked-stack','sourceCommit':source_commit,'sourceDigest':str(operation.get('source_digest') or ''),'snapshotId':snapshot_id,'snapshotDigest':snapshot_digest,'cloneMode':'full-preview-runtime','secretValuesIncluded':False}
+     runtime_meta={'runtimeKind':'compose-snapshot','composeSnapshotId':snapshot_id,'snapshotDigest':snapshot_digest,'homologationDeploymentId':deployment_id,'deploymentPlanDigest':str(plan.get('deployment_plan_digest') or ''),'environment':'homologation','bridge':str(bridge.get('bridge') or ''),'sourceCommit':source_commit,'sourceDigest':str(operation.get('source_digest') or ''),'sourcePreviewStageCode':'W1','cloneMode':'full-preview-runtime','sameInstancePromotionRequired':True,'containersRecreatedForProduction':False,'secretValuesIncluded':False}
+     now=_now();con=sqlite3.connect(DB);con.row_factory=sqlite3.Row;_ensure_schema(con)
+     sql="insert into publication_candidates(project_slug,public_number,candidate_number,deploy_number,preview_generation,stage_code,hostname,status,parent_commit,commit_sha,artifact_image,artifact_image_id,diff_json,runtime_diff_json,environment_revision,environment_digest,created_by,created_at) values(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
+-    values=(slug,num,candidate,candidate,1,ident['code'],ident['hostname'],'awaiting_homologation',source_commit,source_commit,'compose-snapshot:'+snapshot_id,artifact_id,json.dumps(diff,ensure_ascii=False),json.dumps(runtime_meta,ensure_ascii=False),0,snapshot_digest,actor,now)
++    environment_revision=int(inherited_environment.get('environmentRevision') or 0);environment_digest=str(inherited_environment.get('environmentDigest') or '')
++    values=(slug,num,candidate,candidate,1,ident['code'],ident['hostname'],'awaiting_homologation',source_commit,source_commit,'compose-snapshot:'+snapshot_id,artifact_id,json.dumps(diff,ensure_ascii=False),json.dumps(runtime_meta,ensure_ascii=False),environment_revision,environment_digest,actor,now)
+     con.execute(sql,values);con.commit();con.close()
+-    return {'ok':True,'project':slug,'candidateNumber':candidate,'stageCode':ident['code'],'url':ident['url'],'hostname':ident['hostname'],'commit':source_commit,'parentCommit':source_commit,'artifactImageId':artifact_id,'previewGeneration':1,'diff':diff,'runtimeDiff':runtime_meta,'environmentRevision':0,'environmentDigest':snapshot_digest,'snapshotId':snapshot_id,'snapshotDigest':snapshot_digest,'cloneMode':'full-preview-runtime','sameInstancePromotionRequired':True,'secretValuesIncluded':False}
++    return {'ok':True,'project':slug,'candidateNumber':candidate,'stageCode':ident['code'],'url':ident['url'],'hostname':ident['hostname'],'commit':source_commit,'parentCommit':source_commit,'artifactImageId':artifact_id,'previewGeneration':1,'diff':diff,'runtimeDiff':runtime_meta,'environmentRevision':environment_revision,'environmentDigest':environment_digest,'snapshotId':snapshot_id,'snapshotDigest':snapshot_digest,'cloneMode':'full-preview-runtime','sameInstancePromotionRequired':True,'secretValuesIncluded':False}
+ 
+ 
+ def _publisher_delete_stage(public_number,stage,number,npm_token):
+@@ -291,6 +388,8 @@
+     if meta.get('sameInstancePromotionRequired') is not True:raise RuntimeError('O candidato não declara promoção da mesma instância homologada.')
+     artifact_id='sha256:'+snapshot_digest
+     if not hmac.compare_digest(artifact_id,str(candidate['artifact_image_id'] or '')):raise RuntimeError('Identidade do snapshot Compose não confere com o candidato homologado.')
++    notify('configuration','Herdando para Produção as variáveis correntes da Homologação.')
++    inherited_environment=_publication_config().clone_environment_configuration(slug,'homologation','production',actor)
+     previous_production=_linked_compose_previous_active_production(slug)
+     notify('production','Promovendo a própria instância homologada para Produção, sem rebuild/reclone.')
+     trace='portal-pc-'+hashlib.sha256((slug+deployment_id+snapshot_id+str(publication)).encode()).hexdigest()[:20]
+@@ -315,9 +414,11 @@
+     previous_pub=int((previous_production or {}).get('publicationNumber') or 0)
+     if previous_dep and previous_dep!=deployment_id:
+         _multiservice_deactivate(slug,previous_dep,'substituída pela Produção P'+str(publication),trace+'-deactivate-previous-p')
++        if previous_pub:_publisher_delete_stage(num,'publication',previous_pub,npm_token)
+     elif not previous_dep and previous_pub and previous_pub!=publication:
+         _legacy_publication_deactivate(slug,num,previous_pub)
+-    now=_now();environment_revision=int(candidate['environment_revision'] or 0);environment_digest=str(candidate['environment_digest'] or snapshot_digest)
++        _publisher_delete_stage(num,'publication',previous_pub,npm_token)
++    now=_now();environment_revision=int(inherited_environment.get('environmentRevision') or candidate['environment_revision'] or 0);environment_digest=str(inherited_environment.get('environmentDigest') or candidate['environment_digest'] or snapshot_digest)
+     con=sqlite3.connect(DB);con.row_factory=sqlite3.Row;_ensure_schema(con)
+     con.execute('update production_releases set is_active=0 where project_slug=?',(slug,))
+     sql="insert into production_releases(project_slug,public_number,publication_number,candidate_number,deploy_number,stage_code,hostname,stable_hostname,artifact_image_id,status,is_active,environment_revision,environment_digest,created_by,created_at,published_at) values(?,?,?,?,?,?,?,?,?,'published',1,?,?,?,?,?)"

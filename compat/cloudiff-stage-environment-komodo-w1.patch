@@ -1,0 +1,138 @@
+--- a/cloudif-komodo-agent.py
++++ b/cloudif-komodo-agent.py
+@@ -3272,6 +3272,7 @@
+     runtime=Path("/srv/cloudif/preview-workspaces/p1020/runtime")
+     env=runtime/"w1-native.env"
+     compose=native/"cloudiff-w1.compose.yaml"
++    environment_override=runtime/"w1-environment.override.yaml"
+     stack_dir=Path("/etc/komodo/stacks/cloudif-agenda-unica")
+     stack_compose=stack_dir/"cloudiff-w1.compose.yaml"
+     stack_env=stack_dir/".cloudiff"/"w1.env"
+@@ -3306,13 +3307,18 @@
+             check=subprocess.run(["docker","image","inspect",image],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=30)
+             if check.returncode:
+                 return {"ok":False,"operation":"agenda_w1_protected_deploy","error":"expected_image_missing","tag":tag}
+-        validate=subprocess.run(["docker","compose","--env-file",str(env),"-p","cloudif-agenda-unica","-f",str(compose),"config","-q"],stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True,timeout=90)
++        compose_files=["-f",str(compose)]
++        if environment_override.is_file():
++            ost=environment_override.stat()
++            if (ost.st_mode & 0o777)!=0o600 or ost.st_uid!=0:return {"ok":False,"operation":"agenda_w1_protected_deploy","error":"environment_override_permissions_invalid"}
++            compose_files.extend(["-f",str(environment_override)])
++        validate=subprocess.run(["docker","compose","--env-file",str(env),"-p","cloudif-agenda-unica",*compose_files,"config","-q"],stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True,timeout=90)
+         if validate.returncode:
+             return {"ok":False,"operation":"agenda_w1_protected_deploy","error":"compose_validation_failed","tag":tag}
+         db="cloudif-agenda-unica-db-1"
+         db_id=subprocess.check_output(["docker","inspect","-f","{{.Id}}",db],text=True,timeout=30).strip()
+         db_mount=subprocess.check_output(["docker","inspect","-f",'{{range .Mounts}}{{if eq .Destination "/var/lib/postgresql/data"}}{{.Name}}{{end}}{{end}}',db],text=True,timeout=30).strip()
+-        up=subprocess.run(["docker","compose","--env-file",str(env),"-p","cloudif-agenda-unica","-f",str(compose),"up","-d","--no-deps","--no-build","--force-recreate","api","web"],stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True,timeout=300)
++        up=subprocess.run(["docker","compose","--env-file",str(env),"-p","cloudif-agenda-unica",*compose_files,"up","-d","--no-deps","--no-build","--force-recreate","api","web"],stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True,timeout=300)
+         if up.returncode:
+             return {"ok":False,"operation":"agenda_w1_protected_deploy","error":"compose_up_failed","tag":tag}
+         deadline=time.time()+180
+@@ -3339,6 +3345,80 @@
+     except Exception as exc:
+         return {"ok":False,"operation":"agenda_w1_protected_deploy","error":"protected_deploy_exception","detail":type(exc).__name__}
+ 
++
++def _cloudif_agenda_container_environment(name):
++    try:
++        info=json.loads(subprocess.check_output(['docker','inspect',name],text=True,timeout=30))[0]
++    except Exception:return None,{}
++    values={}
++    for item in ((info.get('Config') or {}).get('Env') or []):
++        if '=' in str(item):key,value=str(item).split('=',1);values[key]=value
++    return info,values
++
++
++def _cloudif_agenda_write_environment_override(values_by_service):
++    runtime=Path('/srv/cloudif/preview-workspaces/p1020/runtime');runtime.mkdir(parents=True,exist_ok=True)
++    target=runtime/'w1-environment.override.yaml';tmp=runtime/'.w1-environment.override.yaml.tmp'
++    lines=['services:']
++    for service in ('api','db','web'):
++        values=values_by_service.get(service) or {}
++        if not values:continue
++        lines.append('  '+service+':');lines.append('    environment:')
++        for key in sorted(values):lines.append('      '+key+': '+json.dumps(str(values[key]),ensure_ascii=False))
++    body='\n'.join(lines)+'\n'
++    tmp.write_text(body,encoding='utf-8');os.chmod(tmp,0o600);os.replace(tmp,target);os.chmod(target,0o600)
++    return target
++
++
++def cloudif_agenda_w1_environment_apply(handler):
++    if not _cloudif_pub_auth(handler):return send(handler,403,{'ok':False,'error':'forbidden'})
++    payload=_cloudif_pub_json(handler);project=safe_slug(payload.get('project') or '')
++    if project!='agenda-unica':return send(handler,404,{'ok':False,'error':'linked_preview_not_supported'})
++    values=payload.get('values_by_service') or {};managed=payload.get('managed_names_by_service') or {}
++    if not isinstance(values,dict) or not isinstance(managed,dict):return send(handler,400,{'ok':False,'error':'invalid_environment_variables'})
++    normalized={};normalized_managed={}
++    try:
++        for service,raw in values.items():
++            service=str(service or '');
++            if service not in {'','api','db','web'} or not isinstance(raw,dict):raise ValueError('invalid_service_environment')
++            normalized[service]=_cloudif_validate_publication_environment(raw)
++        for service,names in managed.items():
++            service=str(service or '')
++            if service not in {'','api','db','web'} or not isinstance(names,list):raise ValueError('invalid_managed_environment')
++            normalized_managed[service]=sorted({_cloudif_validate_publication_environment({str(x):''}).popitem()[0] for x in names})
++    except Exception as exc:return send(handler,400,{'ok':False,'error':'invalid_environment_variables','detail':type(exc).__name__})
++    material={'managed_names_by_service':normalized_managed,'values_by_service':normalized};expected=str(payload.get('variables_digest') or '')
++    actual=hashlib.sha256(json.dumps(material,sort_keys=True,separators=(',',':')).encode()).hexdigest()
++    if not re.fullmatch(r'[a-f0-9]{64}',expected) or not hmac.compare_digest(expected,actual):return send(handler,409,{'ok':False,'error':'variables_digest_mismatch'})
++    current={};desired={};changed=[];bootstrap={'POSTGRES_DB','POSTGRES_USER','POSTGRES_PASSWORD'};global_values=normalized.get('') or {};global_names=set(normalized_managed.get('') or [])
++    for service in ('api','db','web'):
++        info,env=_cloudif_agenda_container_environment('cloudif-agenda-unica-'+service+'-1')
++        if info is None:return send(handler,409,{'ok':False,'error':'preview_service_missing','service':service})
++        current[service]=env;next_env=dict(env);names=set(normalized_managed.get(service) or [])|global_names
++        for key in names:next_env.pop(key,None)
++        next_env.update(global_values);next_env.update(normalized.get(service) or {});desired[service]=next_env
++        if service=='db':
++            changed_db=sorted(key for key in bootstrap if env.get(key)!=next_env.get(key))
++            persistent=any(str(m.get('Type') or '')=='volume' and str(m.get('Destination') or '').startswith('/var/lib/postgresql') for m in info.get('Mounts') or [])
++            if persistent and changed_db:return send(handler,409,{'ok':False,'error':'persistent_database_environment_change_requires_migration','message':'Variáveis de bootstrap do PostgreSQL exigem migração do banco antes da alteração.','variable_names':changed_db})
++        if next_env!=env:changed.append(service)
++    override_values={service:{key:value for key,value in desired[service].items() if key in (set(normalized_managed.get(service) or [])|global_names)} for service in ('api','db','web')}
++    target=Path('/srv/cloudif/preview-workspaces/p1020/runtime/w1-environment.override.yaml');before=target.read_bytes() if target.is_file() else None
++    _cloudif_agenda_write_environment_override(override_values)
++    if not any(service in {'api','web'} for service in changed):
++        return send(handler,200,{'ok':True,'project':project,'environment':'preview','changedServices':sorted(changed),'containersRecreated':False,'databasePreserved':True,'idempotent':not bool(changed),'secretValuesIncluded':False})
++    result=_cloudif_agenda_w1_protected_deploy()
++    if not result.get('ok'):
++        try:
++            if before is None:target.unlink(missing_ok=True)
++            else:
++                rollback=target.with_name('.w1-environment.override.rollback');rollback.write_bytes(before);os.chmod(rollback,0o600);os.replace(rollback,target)
++            _cloudif_agenda_w1_protected_deploy()
++        except Exception:pass
++        return send(handler,422,{'ok':False,'error':'preview_environment_apply_failed','message':'Falha ao aplicar variáveis no Preview; rollback tentado.','secretValuesIncluded':False})
++    return send(handler,200,{'ok':True,'project':project,'environment':'preview','changedServices':sorted(changed),'containersRecreated':True,'databasePreserved':bool(result.get('databasePreserved')),'idempotent':False,'secretValuesIncluded':False})
++
++
+ def cloudif_v132_project_deploy_full(handler):
+     payload = _cloudif_v131_read_json(handler)
+ 
+@@ -4811,6 +4891,7 @@
+         _EXECUTOR_PROXY_PREFIX+'/v1/deployments',
+         _EXECUTOR_PROXY_PREFIX+'/v1/compose-snapshots/deploy',
+         _EXECUTOR_PROXY_PREFIX+'/v1/compose-deployments/promote',
++        _EXECUTOR_PROXY_PREFIX+'/v1/compose-deployments/reconfigure',
+         _EXECUTOR_PROXY_PREFIX+'/v1/deployments/deactivate',
+         _EXECUTOR_PROXY_PREFIX+'/v1/compose-source-preview-bridge',
+         _EXECUTOR_PROXY_PREFIX+'/v1/publication-bridges',
+@@ -4824,7 +4905,7 @@
+         except Exception:return send(handler,400,{'ok':False,'error':'invalid_json'})
+         if not isinstance(payload,dict):return send(handler,400,{'ok':False,'error':'invalid_request'})
+         downstream=path[len(_EXECUTOR_PROXY_PREFIX):]
+-        timeout={'/v1/deployments':600,'/v1/compose-snapshots/deploy':1200,'/v1/compose-deployments/promote':180,'/v1/deployments/deactivate':120,'/v1/compose-source-preview-bridge':120,'/v1/publication-bridges':120,'/v1/publication-bridges/activate':60,'/v1/publication-bridges/deactivate':60}[downstream]
++        timeout={'/v1/deployments':600,'/v1/compose-snapshots/deploy':1200,'/v1/compose-deployments/promote':180,'/v1/compose-deployments/reconfigure':300,'/v1/deployments/deactivate':120,'/v1/compose-source-preview-bridge':120,'/v1/publication-bridges':120,'/v1/publication-bridges/activate':60,'/v1/publication-bridges/deactivate':60}[downstream]
+     elif method=='DELETE' and not parsed.query:
+         deployment=re.fullmatch(r'/cloudif/executor/v1/deployments/(dep_[a-f0-9]{24})',path)
+         if deployment:downstream='/v1/deployments/'+deployment.group(1);timeout=120
+@@ -4956,6 +5037,8 @@
+             return cloudif_preview_request(self,'ensure')
+         if _cloudif_pub_path == "/komodo/project/preview/recreate":
+             return cloudif_preview_request(self,'recreate')
++        if _cloudif_pub_path == "/komodo/project/linked-preview/environment/apply":
++            return cloudif_agenda_w1_environment_apply(self)
+         if _cloudif_pub_path == "/komodo/project/preview/terminal":
+             return cloudif_preview_terminal(self)
+         if _cloudif_pub_path == "/komodo/project/stage/terminal":

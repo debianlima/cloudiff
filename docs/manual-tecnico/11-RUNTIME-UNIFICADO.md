@@ -70,3 +70,13 @@ A remoção elimina apenas recursos que a CloudIFF gerenciou para aquele víncul
 ## Rede e HTTPS
 
 Os containers atendem internamente na porta 80 e participam da rede `cloudif-publications`. O TLS é terminado no proxy público, que encaminha o endereço estável para o alias da versão ativa.
+
+## Variáveis pertencem ao estágio ativo
+
+A partir do contrato operacional vigente em 21/11/2026, Preview, Homologação e Produção não compartilham um cadastro de variáveis desacoplado do runtime. O ambiente exibido no Portal representa o container/deployment daquele estágio e toda alteração aprovada é aplicada ao runtime correspondente.
+
+A herança é direcional: Preview → Homologação copia a configuração existente no Preview no instante do clone; Homologação → Produção copia a configuração corrente da H e promove o mesmo deployment. Alterações posteriores continuam permitidas no estágio ativo. Em Docker, editar `Env` pode substituir apenas os containers afetados, preservando deployment e volumes; isso não altera a regra de que a promoção H→P não faz rebuild/reclone.
+
+Secrets são promovidos por referências com escopo próprio do ambiente e seus valores só são resolvidos em memória. Variáveis de bootstrap de PostgreSQL persistente exigem migração própria e são bloqueadas para alteração direta enquanto não houver essa operação.
+
+Homologações não promovidas/substituídas não são mantidas como runtime ocioso; Produções antigas ficam paradas apenas para rollback. O contrato detalhado e evidências mecânicas estão em `compat/cloudiff-stage-environment-runtime-contract.md`.

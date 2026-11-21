@@ -582,3 +582,13 @@
 - Instalador versionado commit `6f994ba6093b3dd3f9fd4aa7053a052eb7dd34af`, SHA256 `d09c21f50a099018027d2ccda0a8bb96a793ae9f920f8db52f689cd5e50c393c`; preserva live/previous/canary no rollback, state/Nginx, usa canary e smoke local via `--resolve` para evitar hairpin.
 - v15 e v16 foram rejeitados automaticamente pelos gates e permaneceram nunca-live, rotulados no diretório de releases. v17 passou canary, `nginx -t`, endpoint live, ingress real e smoke externo.
 - Pós-cutover Agenda: H5 ausente do state/config do Publisher, P2 `exited`, H5 bridge `exited`, P3 bridge `running`; `agendaunica.cloudiff.duckdns.org`, `1020.cloudiff.duckdns.org` e P3 retornam revisão `e32213d0b4d2`.
+
+## Autoridade de variáveis por estágio — Preview/Homologação/Produção (21/11/2026)
+
+- Variáveis passaram a ser estado do runtime do estágio: Preview edita Preview; H edita a H ativa; P edita a P ativa. Sem runtime correspondente, a edição do estágio é bloqueada para impedir configuração fantasma.
+- W→H promove a configuração corrente do Preview antes do clone; H→P promove a configuração corrente da H antes do cutover. Secrets recebem referências próprias por ambiente e plaintext não sai do caminho interno.
+- O Executor Compose expõe reconfiguração do deployment existente: serviços cujo env mudou podem ter container substituído com health+rollback, preservando `deployment_id`, snapshot e volumes. Promoção H→P continua sem recriação.
+- PostgreSQL persistente bloqueia alteração direta de `POSTGRES_DB`, `POSTGRES_USER` e `POSTGRES_PASSWORD`; exige operação de migração própria para não divergir o banco interno do env do container.
+- Agenda P1020 foi migrado a partir do runtime real: controller/W1=10/10, controller/P6=10/10 e baseline H/Preview=10/10 por hashes. W3 foi desligado; H4 runtime removido com snapshot preservado; bridges H residuais e rotas antigas foram removidos; Publisher mantém apenas W1 e P6.
+- Política de retenção: H substituída/não promovida é removida como runtime; P anterior é desligada e preservada para rollback, sem rota pública versionada antiga.
+- Referência: `compat/cloudiff-stage-environment-runtime-contract.md` e patches `compat/cloudiff-stage-environment-*.patch` / `compat/cloudiff-stage-sensitive-web.patch`.

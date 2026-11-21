@@ -1,0 +1,34 @@
+--- a/cloudif-reconcile-worker.py
++++ b/cloudif-reconcile-worker.py
+@@ -328,7 +328,7 @@
+                          enabled=1,updated_at=excluded.updated_at""",
+                     (project,tenant,repo_full,repo_url,now,now))
+         con.commit(); con.close()
+-        membership=None;runtime_reconcile=None;taiga=None;source_state=None
++        membership=None;runtime_apply=None;runtime_reconcile=None;taiga=None;source_state=None
+         membership_failed=False;taiga_failed=False
+         if event in {"project.created","project.updated","project.integrated","project.source.reconcile","repository.created","repository.updated","reconcile.requested"}:
+             source_state=source_reconcile.reconcile_project(project,apply=True)
+@@ -346,7 +346,13 @@
+             raise RuntimeError('taiga_project_reconcile_failed')
+         if event=="project.configuration.changed":
+             environment=str(payload.get('environment') or 'production')
++            try:
++                import cloudif_portal_publications as publications
++                runtime_apply=publications.apply_environment_to_runtime(project,environment,str(row['actor'] or row['username'] or 'reconcile-worker'))
++            except Exception as exc:
++                runtime_apply={'ok':False,'error':type(exc).__name__,'message':str(exc)[:300],'secretValuesIncluded':False}
+             runtime_reconcile=reconcile_project_runtime(project,environment)
++            if not runtime_apply.get('ok'):raise RuntimeError('project_runtime_apply_failed')
+             if not runtime_reconcile.get('ok'):raise RuntimeError('project_runtime_reconcile_failed')
+         taiga_waiting=bool(taiga and isinstance(taiga.get('data'),dict) and taiga['data'].get('status')=='waiting_identity')
+         forgejo_waiting=bool(membership and membership.get('forgejo_pending'))
+@@ -366,7 +372,7 @@
+         elif membership:msg="Membros Forgejo, Komodo, Supabase e Taiga reconciliados a partir da ACL CloudIFF."
+         else:msg="Projeto CloudIFF e correspondente Taiga reconciliados." if repo_full else "Projeto preparado; Taiga reconciliado; aguardando criação do repositório."
+         configuration_event=config_events.notify(project,event,payload)
+-        update_request(rid,status,msg,{"project":project,"tenant":tenant,"repo_full_name":repo_full,"repo_url":repo_url,"membership":membership,"taiga":taiga,"source_reconcile":source_state,"runtime_reconcile":runtime_reconcile,"configuration_event":configuration_event})
++        update_request(rid,status,msg,{"project":project,"tenant":tenant,"repo_full_name":repo_full,"repo_url":repo_url,"membership":membership,"taiga":taiga,"source_reconcile":source_state,"runtime_apply":runtime_apply,"runtime_reconcile":runtime_reconcile,"configuration_event":configuration_event})
+         return
+     if event in {"tenant.created","tenant.ready","tenant.bound","tenant.membership.changed"}:
+         tenant=row["tenant"] or str(payload.get("tenant") or "")
