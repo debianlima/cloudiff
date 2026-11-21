@@ -86,15 +86,17 @@ class HelpExternalConnectionsTests(unittest.TestCase):
         self.assertIn("Aplicações, Git, Komodo e MCP", self.navigation)
         self.assertNotIn("ChatGPT, Claude e Llama", self.navigation)
 
-    def test_help_documents_source_root_and_versioned_runtimes(self):
+    def test_help_documents_source_root_and_whp_runtime(self):
         for marker in (
             "Código e runtime",
             "pasta <code>site/</code> transformada na raiz",
-            "publicação inicial <code>d1</code> em container próprio",
-            "Cada versão <code>d1</code>, <code>d2</code>",
-            "stack, imagem, container e terminais próprios",
+            "Preview fixo",
+            "clone integral para Homologação",
+            "própria instância homologada",
+            "Histórico e rollback",
         ):
             self.assertIn(marker, self.canonical)
+        self.assertNotIn("Cada versão <code>d1</code>, <code>d2</code>", self.canonical)
         for marker in (
             "Código-fonte e runtime",
             "não existe pasta obrigatória <code>site/</code>",

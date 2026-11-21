@@ -4,13 +4,11 @@ A CloudIFF mantém o código-fonte separado da infraestrutura. O repositório do
 
 ```mermaid
 flowchart LR
-  G[Forgejo: código na raiz] --> S[Snapshot imutável do commit]
-  S --> R[Runtime Apache + PHP + Node.js]
-  R --> D1[d1: stack, imagem e container]
-  R --> D2[d2: stack, imagem e container]
-  D1 --> A[Alias estável]
-  D2 --> A
-  A --> P[Proxy HTTPS]
+  G[Forgejo: código na raiz] --> W[W1 · Preview fixo]
+  W -->|clone integral| H[Hn · código/origem congelados]
+  H -->|aprovação| P[Pn · mesma instância promovida]
+  P --> A[Alias estável]
+  O[P anterior · parada] -->|rollback controlado| A
 ```
 
 ## Estrutura do repositório
@@ -37,23 +35,21 @@ Os seguintes arquivos não pertencem ao repositório do projeto:
 
 ## Runtime externo ao Git
 
-A plataforma registra as versões de PHP e Node selecionadas no estado interno do projeto. Para cada publicação, ela:
+A plataforma mantém Dockerfiles, Compose, healthchecks e metadados fora do repositório do projeto. No fluxo atual:
 
-1. resolve o commit imutável no Forgejo;
-2. cria um snapshot em `/srv/cloudif/publications/p<numero>/d<versao>/source`;
-3. gera o Dockerfile e o Compose fora do Git;
-4. cria uma imagem `cloudif/publication-p<numero>-d<versao>:php<php>-node<node>`;
-5. cria a stack `cloudif-p<numero>-d<versao>`;
-6. cria o container `cloudif-p<numero>-d<versao>-web`;
-7. valida o healthcheck antes de permitir a ativação.
+1. o Forgejo alimenta um único slot W1 de Preview;
+2. atualizar código sincroniza o mesmo W1 e preserva sua identidade/URL;
+3. criar H clona o runtime W saudável, incluindo a configuração efetiva do estágio por referências seguras;
+4. H não recebe commits novos automaticamente; variáveis podem ser alteradas explicitamente pelo usuário autorizado antes do aceite;
+5. promover H→P muda papel/roteamento da própria instância aprovada, sem rebuild/reclone;
+6. a P anterior é parada somente depois do health/readback da nova e permanece enquanto necessária para rollback exato.
 
-A imagem-base compartilhada segue o padrão `cloudif/runtime-apache-php8.3-node22:v2`, ajustado às versões escolhidas.
+Builders, imagens e redes continuam gerenciados pela plataforma. Identificadores `dN` existem apenas para compatibilidade com publicações legadas e não definem o lifecycle novo.
 
-## Publicações independentes
+## Publicação e retenção
 
-Cada `dN` possui recursos próprios. Ativar uma versão move somente o alias interno `cloudif-p<numero>-active-web`; os containers das demais versões não são reutilizados como se fossem a mesma publicação.
+O objetivo operacional é um Preview ativo e uma Produção ativa por projeto, com no máximo uma H ativa durante homologação. H promovida vira P e não permanece como runtime H; H substituída/não promovida pode ter runtime removido depois de preservar snapshot/evidência. Bridges e rotas antigas são reconstruíveis. Produções históricas podem manter containers/volumes parados enquanto forem necessários para rollback do estado persistente.
 
-Quando um container antigo estiver ausente, a ativação reconstrói o commit registrado daquela versão, valida a saúde e só então move o alias.
 
 ## Membros e permissões
 
@@ -80,3 +76,11 @@ A herança é direcional: Preview → Homologação copia a configuração exist
 Secrets são promovidos por referências com escopo próprio do ambiente e seus valores só são resolvidos em memória. Variáveis de bootstrap de PostgreSQL persistente exigem migração própria e são bloqueadas para alteração direta enquanto não houver essa operação.
 
 Homologações não promovidas/substituídas não são mantidas como runtime ocioso; Produções antigas ficam paradas apenas para rollback. O contrato detalhado e evidências mecânicas estão em `compat/cloudiff-stage-environment-runtime-contract.md`.
+
+## Refresh terminal, histórico e retenção
+
+A H é congelada contra sincronização automática do Forgejo, mas aceita edição explícita das variáveis do próprio estágio antes do aceite. A P é a mesma H promovida; alterações posteriores de variáveis são mutações explícitas da Produção.
+
+Jobs terminais de H, P e rollback disparam refresh do modal de Ambiente de publicação. Uma H publicada deixa de ser runtime ativo e não oferece Site/Terminal/Variáveis.
+
+Produções históricas podem permanecer com containers/volumes parados para rollback exato. O Histórico reativa esses containers, exige health, recria bridge/rota se necessário, valida a URL estável e só depois desativa a P anterior. Bridges antigos não precisam ficar parados consumindo metadados; são reconstruíveis.

@@ -1,0 +1,49 @@
+--- a/cloudif-komodo-agent.py
++++ b/cloudif-komodo-agent.py
+@@ -4409,7 +4409,19 @@
+     rows=db_query("select * from stage_production_releases where project=? and publication_number=? and status='ready'",(project,publication))
+     if not rows:return send(handler,404,{'ok':False,'error':'production_release_not_found'})
+     target=str(rows[0].get('container') or '')
+-    if not _cloudif_wait_health(target,2).get('ok'):return send(handler,422,{'ok':False,'error':'production_release_not_healthy'})
++    inspect=subprocess.run(['docker','inspect',target],stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,text=True)
++    if inspect.returncode!=0:return send(handler,404,{'ok':False,'error':'production_release_runtime_missing'})
++    started=False
++    try:
++        state=(json.loads(inspect.stdout or '[]') or [{}])[0].get('State') or {}
++        if not state.get('Running'):
++            subprocess.check_call(['docker','start',target],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL);started=True
++        if not _cloudif_wait_health(target,75).get('ok'):
++            if started:subprocess.run(['docker','stop','-t','10',target],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
++            return send(handler,422,{'ok':False,'error':'production_release_not_healthy'})
++    except Exception as exc:
++        if started:subprocess.run(['docker','stop','-t','10',target],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
++        return send(handler,422,{'ok':False,'error':'production_release_reactivation_failed','detail':str(exc)[:240]})
+     network='cloudif-publications';active=f'cloudif-p{num}-active-web';names=subprocess.check_output(['docker','ps','-a','--format','{{.Names}}'],text=True).splitlines()
+     candidates=[n for n in names if re.match(rf'^cloudif-p{num}-p\d+-publication-web$',n)]
+     legacy=[n for n in names if re.match(rf'^cloudif-p{num}-d\d+-web$',n)]
+@@ -4417,7 +4429,7 @@
+         subprocess.run(['docker','network','disconnect',network,name],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL);cmd=['docker','network','connect','--alias',name]
+         if name==target:cmd+=['--alias',active]
+         cmd+=[network,name];subprocess.check_call(cmd)
+-    db_exec('update stage_production_releases set is_active=case when publication_number=? then 1 else 0 end,updated_at=? where project=?',(publication,now(),project));return send(handler,200,{'ok':True,'project':project,'publication_number':publication,'stageCode':'P'+str(publication),'container':target,'activeAlias':active,'secretValuesIncluded':False})
++    db_exec('update stage_production_releases set is_active=case when publication_number=? then 1 else 0 end,updated_at=? where project=?',(publication,now(),project));return send(handler,200,{'ok':True,'project':project,'publication_number':publication,'stageCode':'P'+str(publication),'container':target,'activeAlias':active,'historicalRuntimeReactivated':bool(started),'containersRecreated':False,'secretValuesIncluded':False})
+ 
+ def cloudif_publication_deploy(handler):
+     import shutil
+@@ -4893,6 +4905,7 @@
+         _EXECUTOR_PROXY_PREFIX+'/v1/compose-deployments/promote',
+         _EXECUTOR_PROXY_PREFIX+'/v1/compose-deployments/reconfigure',
+         _EXECUTOR_PROXY_PREFIX+'/v1/deployments/deactivate',
++        _EXECUTOR_PROXY_PREFIX+'/v1/deployments/reactivate',
+         _EXECUTOR_PROXY_PREFIX+'/v1/compose-source-preview-bridge',
+         _EXECUTOR_PROXY_PREFIX+'/v1/publication-bridges',
+         _EXECUTOR_PROXY_PREFIX+'/v1/publication-bridges/activate',
+@@ -4905,7 +4918,7 @@
+         except Exception:return send(handler,400,{'ok':False,'error':'invalid_json'})
+         if not isinstance(payload,dict):return send(handler,400,{'ok':False,'error':'invalid_request'})
+         downstream=path[len(_EXECUTOR_PROXY_PREFIX):]
+-        timeout={'/v1/deployments':600,'/v1/compose-snapshots/deploy':1200,'/v1/compose-deployments/promote':180,'/v1/compose-deployments/reconfigure':300,'/v1/deployments/deactivate':120,'/v1/compose-source-preview-bridge':120,'/v1/publication-bridges':120,'/v1/publication-bridges/activate':60,'/v1/publication-bridges/deactivate':60}[downstream]
++        timeout={'/v1/deployments':600,'/v1/compose-snapshots/deploy':1200,'/v1/compose-deployments/promote':180,'/v1/compose-deployments/reconfigure':300,'/v1/deployments/deactivate':120,'/v1/deployments/reactivate':300,'/v1/compose-source-preview-bridge':120,'/v1/publication-bridges':120,'/v1/publication-bridges/activate':60,'/v1/publication-bridges/deactivate':60}[downstream]
+     elif method=='DELETE' and not parsed.query:
+         deployment=re.fullmatch(r'/cloudif/executor/v1/deployments/(dep_[a-f0-9]{24})',path)
+         if deployment:downstream='/v1/deployments/'+deployment.group(1);timeout=120

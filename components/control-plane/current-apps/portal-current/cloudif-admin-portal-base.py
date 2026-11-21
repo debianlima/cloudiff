@@ -4899,14 +4899,15 @@ _CPX_SCRIPT=r"""
  function publicationStageContext(){
    const release=publicationEnvironmentModel.release||{},environment=publicationEnvironmentModel.active,overview=publicationEnvironmentModel.data||{},fallback=(overview.environments||[]).find(x=>x.name===environment)||{},publicNumber=Number(release.publicNumber||0);
    if(environment==='preview'){
-     const item=release.preview||{};return {environment,label:'Preview',stageCode:item.stageCode||'W',url:publicationSafeSiteUrl(item.url||fallback.url||''),container:item.container||'',status:item.configured?(item.healthy?'Online':'Atenção'):'Não preparado',exists:Boolean(item.configured||fallback.url)};
+     const item=release.preview||{},linked=fallback.linkMode==='forgejo_source_preview_w1'&&fallback.status==='active'&&Boolean(fallback.url);
+     return {environment,label:'Preview',stageCode:linked?'W1':(item.stageCode||'W'),url:publicationSafeSiteUrl(linked?fallback.url:(item.url||fallback.url||'')),container:linked?(fallback.runtimeContainer||'cloudif-sgrep-v2-preview-app'):(item.container||''),status:linked?'Online · código Forgejo':(item.configured?(item.healthy?'Online':'Atenção'):'Não preparado'),exists:Boolean(linked||item.configured||fallback.url)};
    }
    if(environment==='homologation'){
      const items=release.candidates||[],eligible=items.filter(x=>['awaiting_homologation','homologated'].includes(x.status)&&((x.runtimeDiff||{}).runtimeKind!=='compose-snapshot'||(x.runtimeDiff||{}).sameInstancePromotionRequired===true)).sort((a,b)=>Number(b.candidate_number||0)-Number(a.candidate_number||0)),item=eligible[0]||null;if(!item)return {environment,label:'Homologação',stageCode:'H',url:'',container:'',status:'Sem homologação ativa',exists:false};
      const deploy=Number(item.deploy_number||0),container=publicNumber&&deploy?'cloudif-p'+publicNumber+'-d'+deploy+'-web':'';return {environment,label:'Homologação',stageCode:item.stage_code||'H'+Number(item.candidate_number||0),url:publicationSafeSiteUrl(item.url||fallback.url||''),container,status:String(item.status||'Candidato'),exists:true};
    }
    const active=(release.releases||[]).find(x=>Number(x.is_active)===1)||release.legacyProduction||null;
-   if(!active)return {environment,label:'Produção',stageCode:'P',url:publicationSafeSiteUrl(fallback.url||''),container:'',status:'Sem publicação',exists:Boolean(fallback.url)};
+   if(!active){const linked=fallback.status==='externally_served_unversioned'&&fallback.linkMode==='existing_public_endpoint';return {environment,label:'Produção',stageCode:linked?'EXT':'P',url:publicationSafeSiteUrl(fallback.url||''),container:'',status:linked?'Site público existente (sem release CloudIFF)':'Sem publicação',exists:Boolean(fallback.url),externalUnversioned:linked};}
    const publication=Number(active.publication_number||0),deploy=Number(active.deploy_number||publication||0),isLegacy=!('candidate_number' in active),container=publicNumber?(isLegacy&&deploy?'cloudif-p'+publicNumber+'-d'+deploy+'-web':publication?'cloudif-p'+publicNumber+'-p'+publication+'-publication-web':''):'';
    return {environment,label:'Produção',stageCode:active.stage_code||('P'+publication),url:publicationSafeSiteUrl(active.stableUrl||active.url||fallback.url||''),embedUrl:publicationSafeSiteUrl(active.url||active.stableUrl||fallback.url||''),container,status:String(active.status||'Publicado'),exists:true};
  }
@@ -5002,6 +5003,7 @@ _CPX_SCRIPT=r"""
  publicationEnvironmentLayer.querySelector('.publication-environments-close').onclick=publicationEnvironmentClose;
  publicationEnvironmentLayer.querySelector('[data-publication-environments-close]').onclick=publicationEnvironmentClose;
  publicationEnvironmentLayer.querySelector('[data-publication-environments-refresh]').onclick=publicationEnvironmentLoad;
+ document.addEventListener('cloudif:publication-state-changed',event=>{const detail=event.detail||{};if(publicationEnvironmentLayer.style.display==='grid'&&String(detail.slug||'')===publicationEnvironmentModel.slug){void publicationEnvironmentLoad()}});
  publicationEnvironmentLayer.querySelectorAll('[data-publication-env-tab]').forEach(button=>button.onclick=()=>publicationEnvironmentSelect(button.dataset.publicationEnvTab));
  publicationEnvironmentLayer.querySelectorAll('[data-publication-tool]').forEach(button=>button.onclick=()=>publicationEnvironmentToolSelect(button.dataset.publicationTool));
  document.addEventListener('cloudif:publication-environment-select',event=>{const detail=event.detail||{};if(publicationEnvironmentLayer.style.display==='grid'&&(!detail.slug||detail.slug===publicationEnvironmentModel.slug))publicationEnvironmentSelect(detail.environment)});

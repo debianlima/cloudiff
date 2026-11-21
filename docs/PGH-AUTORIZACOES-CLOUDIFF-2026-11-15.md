@@ -60,8 +60,8 @@ Nos outros pedidos, não houve observações adicionais além dos gates.
 4. G4 executa contenção e rotação somente com owners e plano
    aprovados. G5 reaudita independentemente.
 5. F1/F2/F3/F4 não dispensam esses gates. O contrato de publicação
-   exige Preview fixo, Homologação isolada e promoção da mesma
-   instância aprovada com rollback e variáveis efetivas.
+   exige Preview fixo, Homologação clonada/congelada em relação ao Forgejo (com ajustes explícitos de configuração permitidos) e promoção da mesma
+   instância aprovada, com rollback transacional e variáveis efetivas por estágio.
 6. T1 somente com identidade de teste autorizada pelo cofre.
 7. R1 não realiza merge ou deploy só porque o CI está verde;
    M1 não autoriza reboot automático.

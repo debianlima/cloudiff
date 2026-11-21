@@ -55,9 +55,9 @@ class ReleaseFlowWizardUITests(unittest.TestCase):
         release=RELEASE_JS_PATH.read_text()
         self.assertIn("job.operation === 'homologation_candidate'",release)
         self.assertIn("['queued', 'running'].includes(job.status)",release)
-        self.assertIn('Criando candidato imutável',release)
+        self.assertIn('Criando candidato congelado',release)
         self.assertIn('Candidato em preparação',release)
-        self.assertIn("job.message || 'Criando candidato imutável…'",release)
+        self.assertIn("job.message || 'Criando candidato congelado…'",release)
         self.assertIn('disabled>Criando candidato…</button>',release)
 
     def test_release_manager_is_promotion_only(self):
@@ -68,7 +68,7 @@ class ReleaseFlowWizardUITests(unittest.TestCase):
         self.assertIn('cloudif:publication-release-mount',release)
         self.assertIn('Enviar Preview para homologação',release)
         self.assertIn('Homologar',release)
-        self.assertIn('Publicar em Produção',release)
+        self.assertIn('Enviar para Produção',release)
         self.assertNotIn('data-release-view=',release)
         self.assertNotIn('release-tools',release)
         self.assertNotIn('Abrir terminal do Preview',release)
@@ -76,6 +76,23 @@ class ReleaseFlowWizardUITests(unittest.TestCase):
         self.assertNotIn('preview-recreate-template',release)
         self.assertNotIn('Homologar e publicar',release)
         self.assertNotIn('data-env-wizard',release)
+
+    def test_terminal_jobs_refresh_environment_workspace(self):
+        release=RELEASE_JS_PATH.read_text()
+        self.assertIn("pendingEnvironmentRefresh",release)
+        self.assertIn("cloudif:publication-state-changed",release)
+        self.assertIn("['homologation/enqueue', 'rollback'].includes(operation)",release)
+        self.assertIn("model.pendingEnvironmentRefresh = true;",release)
+        self.assertIn("data.job && ['succeeded', 'failed'].includes",release)
+        self.assertIn("cloudif:publication-state-changed",BASE)
+        self.assertIn("publicationEnvironmentLoad()",BASE)
+
+    def test_production_history_exposes_controlled_reactivation(self):
+        release=RELEASE_JS_PATH.read_text()
+        self.assertIn('Histórico de Produção',release)
+        self.assertIn('data-release-action="production-rollback"',release)
+        self.assertIn("act('rollback', { publicationNumber: publication }",release)
+        self.assertIn('A Produção atual será desligada somente depois que a versão histórica estiver saudável.',release)
 
     def test_preview_transport_failure_recovers_from_healthy_readback(self):
         release=RELEASE_JS_PATH.read_text()

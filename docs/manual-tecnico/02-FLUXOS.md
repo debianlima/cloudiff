@@ -81,13 +81,13 @@ flowchart TD
 
 ## Publicação W → H → P
 
-A entrega separa desenvolvimento, validação e Produção em três estágios com continuidade de instância. W é um Preview fixo sincronizado ao Forgejo; H é clone integral e congelado de W; P promove a própria H aprovada, sem rebuild/reclone.
+A entrega separa desenvolvimento, validação e Produção em três estágios com continuidade de instância. W é um Preview fixo sincronizado ao Forgejo; H é clone integral de W com código/origem congelados contra sincronização automática e configuração explícita do estágio controlada pelo usuário; P promove a própria H aprovada, sem rebuild/reclone.
 
 ```mermaid
 flowchart LR
   G[Workspace Git local] --> W[W · Preview vivo]
   W -->|alterar e visualizar| W
-  W -->|clone integral do runtime| H[H · Homologação imutável]
+  W -->|clone integral do runtime| H[H · código/origem congelados]
   H -->|rejeitar| W
   H -->|homologar| A[Aprovação crítica de Produção]
   A -->|aprovada| P[P · Publication]

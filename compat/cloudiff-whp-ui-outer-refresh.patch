@@ -1,0 +1,10 @@
+--- a/cloudif-admin-portal-base.py
++++ b/cloudif-admin-portal-base.py
+@@ -5003,6 +5003,7 @@
+  publicationEnvironmentLayer.querySelector('.publication-environments-close').onclick=publicationEnvironmentClose;
+  publicationEnvironmentLayer.querySelector('[data-publication-environments-close]').onclick=publicationEnvironmentClose;
+  publicationEnvironmentLayer.querySelector('[data-publication-environments-refresh]').onclick=publicationEnvironmentLoad;
++ document.addEventListener('cloudif:publication-state-changed',event=>{const detail=event.detail||{};if(publicationEnvironmentLayer.style.display==='grid'&&String(detail.slug||'')===publicationEnvironmentModel.slug){void publicationEnvironmentLoad()}});
+  publicationEnvironmentLayer.querySelectorAll('[data-publication-env-tab]').forEach(button=>button.onclick=()=>publicationEnvironmentSelect(button.dataset.publicationEnvTab));
+  publicationEnvironmentLayer.querySelectorAll('[data-publication-tool]').forEach(button=>button.onclick=()=>publicationEnvironmentToolSelect(button.dataset.publicationTool));
+  document.addEventListener('cloudif:publication-environment-select',event=>{const detail=event.detail||{};if(publicationEnvironmentLayer.style.display==='grid'&&(!detail.slug||detail.slug===publicationEnvironmentModel.slug))publicationEnvironmentSelect(detail.environment)});

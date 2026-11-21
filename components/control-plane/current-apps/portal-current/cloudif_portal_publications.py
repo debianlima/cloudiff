@@ -714,7 +714,7 @@ def stage_terminal(slug,user,environment='preview'):
     if environment=='production' and not _owner_or_admin(con,slug,user):con.close();raise PermissionError('O terminal de Produção exige o responsável pelo projeto ou administrador.')
     num=_number(con,slug);payload={'project':slug,'public_number':num,'environment':environment,'actor':user.get('username') or 'portal'};expected=''
     if environment=='homologation':
-        row=con.execute("select candidate_number,deploy_number,stage_code,status from publication_candidates where project_slug=? and status in ('awaiting_homologation','homologated','published') order by candidate_number desc limit 1",(slug,)).fetchone()
+        row=con.execute("select candidate_number,deploy_number,stage_code,status from publication_candidates where project_slug=? and status in ('awaiting_homologation','homologated') order by candidate_number desc limit 1",(slug,)).fetchone()
         if not row:con.close();raise RuntimeError('Nenhum candidato de Homologação está disponível para abrir o terminal.')
         dep=int(row['deploy_number'] or 0);candidate=int(row['candidate_number'] or 0)
         if dep<1 or candidate<1:con.close();raise RuntimeError('O candidato de Homologação não possui runtime válido.')

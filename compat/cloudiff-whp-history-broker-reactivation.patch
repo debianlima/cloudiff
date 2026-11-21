@@ -1,0 +1,40 @@
+--- a/cloudif-deployment-broker.py
++++ b/cloudif-deployment-broker.py
+@@ -425,7 +425,8 @@
+  if not SLUG.fullmatch(slug) or not DEPLOYMENT_ID_RE.fullmatch(deployment_id) or stage not in {'homologation','publication'} or not (1<=public_number<=999999999 and 1<=number<=999999) or not trace:raise ValueError('invalid_publication_bridge_request')
+  code,status=_deployment_executor_call('GET','/v1/deployments/'+urllib.parse.quote(deployment_id,safe=''),None,timeout=30)
+  expected='homologation' if stage=='homologation' else 'production'
+- if code!=200 or status.get('status')!='running' or status.get('project_slug')!=slug or status.get('environment')!=expected:raise ValueError('publication_bridge_deployment_mismatch')
++ allowed_status={'running'} if stage=='homologation' else {'running','rollback_ready'}
++ if code!=200 or status.get('status') not in allowed_status or status.get('project_slug')!=slug or status.get('environment')!=expected:raise ValueError('publication_bridge_deployment_mismatch')
+  code,result=_deployment_executor_call('POST','/v1/publication-bridges',{'project_slug':slug,'deployment_id':deployment_id,'public_number':public_number,'stage':stage,'number':number},timeout=90)
+  if isinstance(result,dict):result['trace_id']=trace;result['secretValuesIncluded']=False
+  return code,result
+@@ -607,6 +608,16 @@
+  return code,result
+ 
+ 
++
++def _deployment_reactivate(payload):
++ if not isinstance(payload,dict) or set(payload)!={'project_slug','deployment_id','phase','environment_digest','trace_id'}:raise ValueError('invalid_reactivation_request')
++ slug=str(payload.get('project_slug') or '').strip().lower();deployment_id=str(payload.get('deployment_id') or '').strip();phase=str(payload.get('phase') or '').strip().lower();environment_digest=str(payload.get('environment_digest') or '').strip().lower();trace=str(payload.get('trace_id') or '').strip()
++ if not SLUG.fullmatch(slug) or not DEPLOYMENT_ID_RE.fullmatch(deployment_id) or phase not in {'prepare','commit','abort'} or not SHA256_RE.fullmatch(environment_digest) or not trace:raise ValueError('invalid_reactivation_request')
++ code,result=_deployment_executor_call('POST','/v1/deployments/reactivate',{'project_slug':slug,'deployment_id':deployment_id,'phase':phase,'environment_digest':environment_digest},timeout=300)
++ if isinstance(result,dict):result['trace_id']=trace;result['secretValuesIncluded']=False
++ return code,result
++
++
+ def _deployment_id(execution_id):
+  return 'dep_'+hashlib.sha256(execution_id.encode()).hexdigest()[:24]
+ 
+@@ -935,6 +946,10 @@
+    try:code,result=_deployment_deactivate(d)
+    except ValueError as e:return send(self,409,{'ok':False,'error':{'code':str(e),'message':'Desativação de deployment incompatível.'}})
+    return send(self,code,result)
++  if self.path=='/v1/multiservice-reactivate':
++   try:code,result=_deployment_reactivate(d)
++   except ValueError as e:return send(self,409,{'ok':False,'error':{'code':str(e),'message':'Reativação de deployment incompatível.'}})
++   return send(self,code,result)
+   if self.path=='/v1/multiservice-plan':
+    try:result=_multiservice_deployment_plan(d)
+    except LookupError as e:return send(self,404,{'ok':False,'error':{'code':str(e),'message':'Configuração do projeto não encontrada.'}})

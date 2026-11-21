@@ -1,0 +1,97 @@
+--- a/publication-release.js
++++ b/publication-release.js
+@@ -7,7 +7,8 @@
+   const model = {
+     slug: '', tab: 'preview', data: null, csrf: '', approval: null,
+     poll: null, busy: false, opener: null, autoPreviewAttempted: false,
+-    previewPreparing: false, previewError: '', permissionsOpen: false, authRedirecting: false
++    previewPreparing: false, previewError: '', permissionsOpen: false, authRedirecting: false,
++    pendingEnvironmentRefresh: false
+   };
+   let body = null;
+   const environmentToTab = { preview: 'preview', homologation: 'homologation', production: 'publication' };
+@@ -159,10 +160,10 @@
+         : previewReady && data.canSubmitHomologation
+           ? '<button class="btn" type="button" data-release-action="homologation-create">Enviar Preview para homologação</button>'
+           : '<button class="btn" type="button" disabled>Aguardando Preview</button>';
+-      const title = creatingCandidate ? 'Criando candidato imutável' : 'Aguardando candidato';
++      const title = creatingCandidate ? 'Criando candidato congelado' : 'Aguardando candidato';
+       const description = creatingCandidate
+-        ? (job.message || 'Criando candidato imutável…')
+-        : 'Homologação recebe uma cópia imutável do Preview atual.';
++        ? (job.message || 'Criando candidato congelado…')
++        : 'Homologação recebe uma cópia congelada do Preview atual. Código e origem Forgejo não mudam automaticamente; variáveis do estágio podem ser ajustadas explicitamente.';
+       const badge = creatingCandidate ? 'Candidato em preparação' : 'Sem candidato';
+       return jobHtml() + `<section class="release-stage">${stageIntro(
+         'H · Homologação', title, description, badge
+@@ -198,7 +199,7 @@
+     const stageTitle = promoted ? 'Promovida para Produção' : (labels[candidate.status] || candidate.status);
+     const stageDescription = promoted
+       ? `Esta Homologação foi concluída e promovida como ${promotedCode}. O registro H é mantido somente como histórico de auditoria.`
+-      : 'Este candidato é imutável. Homologue ou rejeite; o Preview pode continuar evoluindo em paralelo.';
++      : 'O código e o clone de origem estão congelados em relação ao Forgejo. Variáveis da Homologação podem ser ajustadas explicitamente antes do aceite; o Preview continua evoluindo em paralelo.';
+     const stageBadge = promoted ? `${promotedCode} ativa` : (labels[candidate.status] || candidate.status);
+     return jobHtml() + `<section class="release-stage">${stageIntro(
+       stageCode + (promoted ? ' · Ciclo concluído' : ' · Homologação'),
+@@ -227,6 +228,9 @@
+     const current = active
+       ? `<div class="release-grid"><div class="release-box"><span>Produção atual</span><strong>${esc(active.stage_code || 'P ativa')}</strong></div><div class="release-box"><span>Endereço</span><strong>${esc(active.stableUrl || active.stable_hostname || active.url || 'Ativo')}</strong></div></div>`
+       : '<div class="release-note"><strong>Ainda não há Produção ativa.</strong><span>Homologue um candidato para habilitar a publicação.</span></div>';
++    const historical = (data.releases || []).filter(item => Number(item.is_active) !== 1);
++    const canRollback = Boolean(data.isOwner || data.isAdmin);
++    const history = historical.length ? `<div class="release-history"><strong>Histórico de Produção</strong><span class="small">Versões anteriores ficam paradas. Reativar troca a Produção estável somente após o runtime histórico ficar saudável.</span>${historical.map(item => `<div class="release-history-row"><span><strong>${esc(item.stage_code || ('P' + Number(item.publication_number || 0)))}</strong><small>${esc((item.runtime || {}).sourceCommit || item.created_at || '')}</small></span>${canRollback ? `<button class="btn light" type="button" data-release-action="production-rollback" data-publication="${Number(item.publication_number || 0)}">Reativar ${esc(item.stage_code || ('P' + Number(item.publication_number || 0)))}</button>` : '<span class="pill muted">Somente responsável/admin</span>'}</div>`).join('')}</div>` : '';
+ 
+     return jobHtml() + `<section class="release-stage">${stageIntro(
+       'P · Produção',
+@@ -234,7 +238,7 @@
+       'Produção recebe exatamente o artefato homologado, sem reconstrução entre H e P.',
+       active ? (active.stage_code || 'Ativa') : 'Sem P ativa',
+       active ? 'ok' : ''
+-    )}${current}${permissionNote}<div class="release-primary-action">${action}</div></section>`;
++    )}${current}${permissionNote}<div class="release-primary-action">${action}</div>${history}</section>`;
+   }
+ 
+ 
+@@ -364,6 +368,13 @@
+       }
+       render();
+       updateSummary(model.slug, data);
++      const terminalJob = data.job && ['succeeded', 'failed'].includes(String(data.job.status || ''));
++      if (model.pendingEnvironmentRefresh && terminalJob) {
++        model.pendingEnvironmentRefresh = false;
++        document.dispatchEvent(new CustomEvent('cloudif:publication-state-changed', {
++          detail: { slug: model.slug, status: String(data.job.status || ''), operation: String(data.job.operation || '') }
++        }));
++      }
+       if (model.tab === 'preview' && !(data.preview || {}).configured && !model.autoPreviewAttempted) {
+         void ensurePreviewAutomatically();
+       }
+@@ -379,6 +390,7 @@
+     body.insertAdjacentHTML('afterbegin', `<div class="release-job"><strong>${esc(message)}</strong><progress></progress></div>`);
+     try {
+       await post(operation, payload);
++      if (['homologation/enqueue', 'rollback'].includes(operation)) model.pendingEnvironmentRefresh = true;
+       if (nextTab) { model.tab = nextTab; syncEnvironment(nextTab); }
+       await load();
+     } catch (error) {
+@@ -394,6 +406,7 @@
+     model.busy = true;
+     try {
+       await post('production/publish', { candidateNumber: Number(candidate) });
++      model.pendingEnvironmentRefresh = true;
+       model.tab = 'publication';
+       syncEnvironment('publication');
+       await load();
+@@ -443,6 +456,12 @@
+           return;
+         }
+         if (action === 'production-publish') return requestProduction(candidate);
++        if (action === 'production-rollback') {
++          const publication = Number(button.dataset.publication || 0);
++          if (!publication) return;
++          if (!confirm('Reativar P' + publication + '? A Produção atual será desligada somente depois que a versão histórica estiver saudável.')) return;
++          return act('rollback', { publicationNumber: publication }, 'Reativando P' + publication + '…', 'publication');
++        }
+         if (action === 'permissions-save') return savePermissions();
+         if (action === 'permissions-close') { model.permissionsOpen = false; return render(); }
+       };

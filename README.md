@@ -20,7 +20,7 @@ Ela foi projetada para:
 | Código | Repositório privado no Forgejo, acessível por Git HTTPS. |
 | Runtime | Runtime gerado fora do Git, com Apache, PHP e Node.js nas versões escolhidas. |
 | Dados | Tenant Supabase com Postgres, Auth, REST, Storage, Realtime e Studio. |
-| Publicação | Fluxo **W → H → P**: Preview vivo, Homologação imutável e Publicação do mesmo artefato aprovado, com rollback. |
+| Publicação | Fluxo **W → H → P**: Preview vivo, H com código/origem congelados e configuração explícita controlada, e promoção da mesma instância para P, com rollback. |
 | Agentes de IA | Identidade MCP própria, OAuth, escopos, ACL, aprovação humana e auditoria. |
 | Governança | Permissões por projeto, backups, logs, monitoramento e reconciliação idempotente. |
 
@@ -245,3 +245,7 @@ Diretório versionado da CloudIFF.
 ## Padrão canônico de lifecycle — 20/11/2026
 
 Antes de alterar Preview, Homologação ou Produção, consulte [`docs/PADRAO-CLOUDIFF-PREVIEW-HOMOLOGACAO-PRODUCAO-20261120.md`](docs/PADRAO-CLOUDIFF-PREVIEW-HOMOLOGACAO-PRODUCAO-20261120.md). A decisão humana vigente para **todo CloudIFF** é: **Forgejo → Preview fixo sincronizado → clone integral/congelado para Homologação → promoção da mesma instância homologada para Produção**.
+
+### Fechamento operacional W/H/P — 21/11/2026
+
+O padrão global inclui variáveis por estágio, refresh automático ao terminar jobs de H/P/rollback e Histórico de Produção com reativação controlada. H publicada é somente histórico; o objetivo é zero runtime H residual. Produções antigas ficam paradas apenas quando necessárias ao rollback exato de seu estado persistente; bridges e rotas antigas são reconstruíveis.

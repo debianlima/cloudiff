@@ -9,12 +9,12 @@ A CloudIFF separa desenvolvimento, validação e produção em três estágios e
 | Estágio | Significado | Natureza | Função principal |
 |---|---|---|---|
 | **W** | Workspace / Preview | Vivo e mutável | Desenvolver e visualizar alterações imediatamente. |
-| **H** | Homologation / Homologação | Imutável | Congelar código + runtime e obter aprovação funcional. |
-| **P** | Publication / Publicação | Imutável e controlada | Colocar em Produção exatamente o artefato homologado. |
+| **H** | Homologation / Homologação | Código/clone congelado; configuração explícita controlada | Congelar a origem do Preview, testar e permitir ajustes deliberados de variáveis antes do aceite. |
+| **P** | Publication / Publicação | Instância promovida e controlada | Colocar em Produção a mesma instância homologada; alterações posteriores de variáveis são explícitas do estágio P. |
 
 A regra central é simples:
 
-> **W muda continuamente; H congela; P publica o mesmo digest de H, sem rebuild.**
+> **W muda continuamente; H congela código/origem e permite ajustes explícitos de configuração; P promove a mesma H, sem rebuild.**
 
 ## W · Preview vivo
 
@@ -37,7 +37,7 @@ O Preview é **fail-soft** para indisponibilidade do remoto Git. Se Forgejo ou a
 
 Esse modo degradado não autoriza uma promoção silenciosa. A criação de H exige novamente validação da procedência do código. Se o remoto estiver indisponível ou houver conflito entre alterações locais e remotas, o envio para Homologação é bloqueado até a situação ser reconciliada.
 
-## H · Homologação imutável
+## H · Homologação congelada em relação ao Forgejo
 
 Quando o Preview está pronto para validação, a ação **Enviar Preview para homologação** cria um **clone integral do estado runtime do Preview** e congela esse clone como candidato H. A origem da H é o Preview saudável corrente, não um rebuild independente a partir do Git.
 
@@ -53,7 +53,7 @@ O snapshot inclui:
 
 O hostname segue o padrão `<numero>-h<N>-homologation.cloudiff.duckdns.org`.
 
-Depois da criação, H é imutável. O desenvolvedor pode continuar alterando W sem modificar o candidato que está sendo homologado. Quando uma nova H é criada e ativada para teste, a H anterior é desativada e preservada apenas conforme política de rollback/retenção.
+Depois da criação, H é congelada em relação ao Forgejo: código/imagens não recebem commits novos automaticamente. O usuário autorizado ainda pode alterar variáveis do próprio estágio H; essa configuração explícita passa a compor o estado homologado. O desenvolvedor pode continuar alterando W sem modificar o código do candidato. Quando uma nova H é criada, a H anterior deixa de ser ativa e seu runtime pode ser removido após preservar snapshot/evidência.
 
 ### Homologadores
 
@@ -126,9 +126,17 @@ A URL do terminal é validada pelo Portal e deve apontar para `https://komodoiff
 
 ## Rollback
 
-Cada estado produtivo promovido permanece identificável e rastreável. O rollback não reconstrói uma versão antiga; ele reativa a instância produtiva anterior preservada e saudável e atualiza o alias estável.
+Cada estado produtivo promovido permanece identificável e rastreável. O rollback prepara/religa a instância produtiva anterior preservada, valida containers e URL versionada, troca a rota estável e somente então desliga a P que estava ativa. Bridges antigos podem ser reconstruídos; volumes persistentes da P histórica permanecem preservados enquanto sustentarem rollback exato.
 
 A troca de P ativa é separada da existência do artefato. Isso reduz o tempo de recuperação e mantém rastreabilidade sobre qual candidato H originou cada publicação.
+
+### Atualização automática do Portal
+
+Quando termina o job de criar Homologação, promover para Produção ou reativar uma Produção histórica, o wizard emite atualização de estado e o modal recarrega automaticamente a aba corrente (Visão geral, Site, Variáveis etc.). O usuário não precisa clicar manualmente em **Atualizar** para enxergar o estado final.
+
+### Histórico de Produção
+
+A aba Produção lista releases anteriores. Responsável/admin pode solicitar **Reativar Pn**; a operação é transacional: liga e valida o runtime histórico sem recriar containers/volumes, prepara bridge/rota, valida o cutover e desliga a P atual somente após sucesso. Se o runtime histórico já tiver sido removido e não houver reidratação comprovada, o rollback é bloqueado.
 
 ## Nomenclatura pública
 
@@ -161,7 +169,7 @@ Durante a migração:
 flowchart LR
     G[Workspace Git local] --> W[W · Preview vivo]
     W -->|editar + visualizar| W
-    W -->|clonar integralmente e congelar| H[H · Homologação imutável]
+    W -->|clonar integralmente e congelar| H[H · código/origem congelados]
     H -->|rejeitar| W
     H -->|homologar a própria instância| A[Aprovação crítica de Produção]
     A -->|aprovada| P[P · Publication]
@@ -198,7 +206,7 @@ Esses endpoints são internos à plataforma e não substituem autenticação, AC
 Qualquer evolução do sistema de entrega deve preservar estes invariantes:
 
 1. W pode mudar sem gerar release.
-2. H é imutável depois de criada.
+2. H não recebe mudanças automáticas do Forgejo depois de criada; ajustes explícitos de variáveis do estágio continuam permitidos e passam a compor o estado homologado.
 3. P é a própria H homologada promovida, sem rebuild, reclone ou novo container equivalente.
 4. Produção continua sujeita à autorização crítica.
 5. Segredos não entram no Git nem nas respostas do Portal.

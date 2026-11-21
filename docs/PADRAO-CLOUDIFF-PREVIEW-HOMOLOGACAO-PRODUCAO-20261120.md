@@ -18,15 +18,15 @@ O sincronizador deve validar pelo menos: commit esperado, artefatos/imagens corr
 
 Ao solicitar Homologação, o CloudIFF deve capturar/clonar **o estado integral necessário para reproduzir o Preview naquele instante**, incluindo os containers/stack, imagens/rootfs, configuração runtime e volumes/dados persistentes pertencentes ao projeto, preservando referências de segredo sem publicar valores.
 
-A Homologação recebe identidade própria (Hn) e fica **congelada** no estado clonado. Depois do clone, commits novos no Forgejo continuam atualizando somente o Preview e não alteram a Hn já em teste.
+A Homologação recebe identidade própria (Hn). **Código, imagens e origem Forgejo ficam congelados** no estado clonado: commits novos continuam atualizando somente o Preview e não alteram automaticamente a Hn. A configuração runtime do estágio (variáveis públicas/secrets por referência) pode ser alterada **explicitamente pelo usuário autorizado** durante a homologação; o estado configurado no instante do aceite passa a fazer parte do que foi homologado e é o que segue para Produção.
 
-Criar uma nova Homologação não reconstrói a aplicação a partir do Git. A origem é o Preview saudável que está sendo testado. A nova Hn passa a ser a homologação ativa; a homologação anterior é desativada, preservada conforme política de rollback/retenção e não permanece concorrendo como ativa.
+Criar uma nova Homologação não reconstrói a aplicação a partir do Git. A origem é o Preview saudável que está sendo testado. A nova Hn passa a ser a única Homologação ativa; H anterior não promovida deixa de ser runtime ativo e pode ter containers/bridge removidos depois que snapshot/evidência suficiente estiver preservado. H promovida deixa de existir como ambiente H: a própria instância passa a ser P e o registro H permanece somente como histórico/auditoria.
 
 ## 3. Produção promove a própria Homologação aprovada
 
 A aprovação de uma Hn **não autoriza rebuild**. Produção deve receber/promover **a mesma instância/estado de runtime que foi homologado**. O mecanismo preferido é mudança controlada de identidade, roteamento, alias/pointer e estado de ativação; não é permitido reconstruir novamente a aplicação do Forgejo ou gerar outro snapshot logicamente diferente entre aprovação e Produção.
 
-Na promoção, a Produção anterior é desativada e a Hn aprovada torna-se a Produção ativa. A versão anterior deve ser preservada pelo período/política de rollback aplicável. O rollback reativa o estado produtivo anterior; não reconstrói a aplicação a partir do código-fonte.
+Na promoção, a Produção anterior é desativada e a Hn aprovada torna-se a Produção ativa. A Produção anterior fica parada e preservada enquanto for necessária para rollback exato do seu estado persistente. Bridges/rotas versionadas antigas são reconstruíveis e não precisam permanecer como containers ociosos. O rollback prepara/religa a Produção histórica, valida saúde e rota antes da troca do endereço estável e só então desliga a P que estava ativa; não reconstrói a aplicação a partir do código-fonte.
 
 ## 4. Separação entre evolução e aceite
 
@@ -69,3 +69,15 @@ São **não conformes** por padrão:
 
 Registros históricos continuam válidos como evidência do que aconteceu, mas qualquer texto anterior que prescreva "novo banco de H", "novo container de Produção", "rebuild em Produção", "snapshot H→novo P" ou múltiplos Previews como fluxo normal fica **SUPERADO para decisões futuras** por este contrato.
 
+## 9. Variáveis por estágio, refresh e histórico
+
+- Variáveis pertencem ao runtime do estágio ativo: Preview edita W, Homologação edita H ativa e Produção edita P ativa.
+- W→H herda a configuração corrente do Preview; H→P herda a configuração corrente da H. Secrets recebem referências próprias do ambiente de destino e valores não são expostos.
+- Editar uma variável depois da criação pode recriar somente o container do serviço afetado, preservando deployment e volumes. Isso não altera a regra de que a promoção H→P em si usa a mesma instância.
+- Ao terminar o job de criação de H, promoção P ou rollback, o Portal deve recarregar automaticamente Visão geral/Site/Variáveis sem exigir clique manual em “Atualizar”.
+- Uma H `published` é histórico, não ambiente ativo: não deve oferecer Site, Terminal ou Variáveis como H.
+- O Histórico de Produção pode reativar uma P anterior somente com autorização do responsável/admin. A P histórica é preparada e validada antes do cutover; em falha, a P atual permanece/restaura-se como ativa.
+
+## 10. Retenção de containers
+
+O alvo operacional é **zero runtime H residual** e apenas um Preview + uma Produção ativos. Produções anteriores podem manter seus containers/volumes **parados** quando necessários para rollback exato. Proxies/bridges e rotas versionadas antigas são descartáveis/reconstruíveis. Containers legados só devem ser removidos depois de comprovar mecanismo equivalente de restauração; diretórios/volumes de dados não são apagados por limpeza de container.

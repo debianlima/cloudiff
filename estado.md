@@ -609,3 +609,15 @@
 - Antes: logo, ícones, `sw.js` e manifest estavam `0600` dentro do container e retornavam 403. Depois: arquivos públicos `0644` e endpoints públicos retornam 200.
 - Redeploy protegido preservou o DB W1 e deixou API/Web/DB saudáveis. Preflight W1 voltou `READY` na revisão `18416127...`.
 - Delta reproduzível do builder: `compat/agenda-p1020-w1-web-builder-public-assets.patch`.
+
+## Auditoria global W/H/P, Histórico e refresh terminal — 21/11/2026
+
+- Ciclo humano Agenda validado até P7: Forgejo/Preview W1 → H7 → mesma instância promovida como P7; H7 ficou apenas como registro `published` e não como ambiente ativo.
+- Publisher P1020 mantém somente W1 e P7. H residual = 0. W3 legado parado teve apenas containers removidos, preservando diretório de dados; bridges P3/P6 parados foram removidos por serem reconstruíveis.
+- P3/P6 service containers permanecem parados porque ainda representam rollback exato com estado persistente. P2 legado permanece até comprovar restauração legada equivalente.
+- Executor ganhou reativação `prepare/commit/abort` de Produção histórica, sem recriar containers/volumes. Ensaio P6 `prepare → abort` passou e P7 continuou saudável.
+- Histórico de Produção foi exposto no wizard moderno para owner/admin. Rollback prepara/valida a P histórica antes de trocar alias/URL estável; falha tenta restaurar a P atual.
+- Jobs de criar H, publicar P e rollback emitem `cloudif:publication-state-changed`; o modal externo recarrega automaticamente o ambiente. Testes headless de H, P e rollback confirmaram evento terminal `succeeded`.
+- Terminal de Homologação não aceita mais candidato `published`; H publicada é histórico.
+- Ajuda foi atualizada para abandonar o modelo `d1/d2` independente como fluxo principal.
+- “H imutável” foi refinado: código/imagens/origem Forgejo são congelados, mas variáveis do estágio podem ser alteradas explicitamente antes do aceite.

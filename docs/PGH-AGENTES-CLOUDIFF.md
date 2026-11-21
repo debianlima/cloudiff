@@ -96,3 +96,18 @@ O protocolo PGH-AUT-20261115-001 distribuiu 13 pedidos a infra-01, dev-01, dev-0
 ## Regra de retomada W/H/P — 20/11/2026
 
 Todos os agentes que atuarem em Forgejo, Preview, Homologação, Produção, Komodo ou publicação devem ler [`PADRAO-CLOUDIFF-PREVIEW-HOMOLOGACAO-PRODUCAO-20261120.md`](PADRAO-CLOUDIFF-PREVIEW-HOMOLOGACAO-PRODUCAO-20261120.md) antes de executar mudanças. O contrato é global para CloudIFF.
+
+### Checklist de retomada W/H/P — 21/11/2026
+
+Ao retomar qualquer trabalho de publicação CloudIFF, o agente deve assumir e comprovar este contrato antes de alterar runtime:
+
+1. **W é fixo:** Forgejo atualiza o mesmo Preview/URL; não criar W2/W3 por commit.
+2. **W→H clona o runtime:** H nasce do Preview saudável corrente, não de rebuild do Git. Código/origem ficam congelados; variáveis H podem ser alteradas deliberadamente pelo usuário.
+3. **H→P promove a mesma instância:** não rebuildar/reclonar. H deixa de ser ambiente ativo depois da promoção.
+4. **Variáveis pertencem ao estágio:** W→H→P herda a configuração corrente; edição posterior atua somente no estágio selecionado. Secrets usam referências próprias e nunca são exibidos.
+5. **Refresh terminal:** concluir H/P/rollback deve atualizar automaticamente o modal; não exigir clique manual em Atualizar.
+6. **Retenção:** zero H residual; bridges/rotas antigas são reconstruíveis; P anterior fica parada enquanto for necessária para rollback exato.
+7. **Histórico:** rollback prepara e valida a P histórica antes do cutover; se containers/estado persistente necessários não existirem, bloquear em vez de reconstruir silenciosamente do Forgejo.
+8. **Fonte canônica:** ler o padrão W/H/P, `estado.md`, PGH/Atlas e patches de compatibilidade vigentes antes de normalizar componentes a9/Compose.
+
+Registros antigos com “dN independente”, “H isolada permanente”, “rebuild de Produção” ou “novo container P a partir de snapshot” são históricos e não prescrevem o fluxo atual.

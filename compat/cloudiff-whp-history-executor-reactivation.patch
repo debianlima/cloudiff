@@ -1,0 +1,95 @@
+--- a/cloudif-multiservice-deployment-executor.py
++++ b/cloudif-multiservice-deployment-executor.py
+@@ -382,7 +382,8 @@
+     if not SLUG_RE.fullmatch(slug) or not DEPLOYMENT_RE.fullmatch(deployment_id):raise DeploymentError('invalid_publication_bridge_request','Pedido de bridge inválido.',400)
+     status=status_deployment(deployment_id)
+     expected_environment='homologation' if stage=='homologation' else 'production' if stage=='publication' else ''
+-    if status.get('status')!='running' or status.get('project_slug')!=slug or status.get('environment')!=expected_environment:raise DeploymentError('publication_bridge_deployment_mismatch','Deploy não corresponde ao estágio de publicação.',409)
++    allowed_status={'running'} if stage=='homologation' else {'running','rollback_ready'}
++    if status.get('status') not in allowed_status or status.get('project_slug')!=slug or status.get('environment')!=expected_environment:raise DeploymentError('publication_bridge_deployment_mismatch','Deploy não corresponde ao estágio de publicação.',409)
+     image=inspect_image(PUBLICATION_BRIDGE_IMAGE_REF)
+     if str(image.get('Id') or '')!=PUBLICATION_BRIDGE_IMAGE_ID:raise DeploymentError('publication_bridge_image_mismatch','Imagem do bridge diverge do digest homologado.',409)
+     name=publication_bridge_name(public_number,stage,number);network=network_name(deployment_id);root=PUBLICATION_BRIDGE_ROOT/name;config=root/'nginx.conf';root.mkdir(parents=True,exist_ok=True);config.write_text(_publication_bridge_config(status));os.chmod(config,0o644)
+@@ -1110,12 +1111,10 @@
+     if not isinstance(payload,dict) or set(payload)!={'project_slug','deployment_id','stage'}:raise DeploymentError('invalid_bridge_deactivation_request','Pedido de desativação de bridge inválido.',400)
+     slug=str(payload.get('project_slug') or '');deployment_id=str(payload.get('deployment_id') or '');stage=str(payload.get('stage') or '')
+     if not SLUG_RE.fullmatch(slug) or not DEPLOYMENT_RE.fullmatch(deployment_id) or stage not in {'homologation','publication'}:raise DeploymentError('invalid_bridge_deactivation_request','Identidade do bridge inválida.',400)
+-    names=docker('ps','-a','--filter','label=org.cloudiff.publication-bridge=true','--filter',f'label=org.cloudiff.project={slug}','--filter',f'label=org.cloudiff.deployment={deployment_id}','--filter',f'label=org.cloudiff.stage={stage}','--format','{{.Names}}',check=False).stdout.splitlines();stopped=[];removed=[]
++    names=docker('ps','-a','--filter','label=org.cloudiff.publication-bridge=true','--filter',f'label=org.cloudiff.project={slug}','--filter',f'label=org.cloudiff.deployment={deployment_id}','--filter',f'label=org.cloudiff.stage={stage}','--format','{{.Names}}',check=False).stdout.splitlines();removed=[]
+     for name in names:
+-        if stage=='homologation':
+-            if docker('rm','-f',name,timeout=30,check=False).returncode==0:removed.append(name)
+-        elif docker('stop',name,timeout=30,check=False).returncode==0:stopped.append(name)
+-    return {'ok':True,'project_slug':slug,'deployment_id':deployment_id,'stage':stage,'bridgesStopped':sorted(stopped),'bridgesRemoved':sorted(removed),'containersRecreated':False,'secretValuesIncluded':False}
++        if docker('rm','-f',name,timeout=30,check=False).returncode==0:removed.append(name)
++    return {'ok':True,'project_slug':slug,'deployment_id':deployment_id,'stage':stage,'bridgesStopped':[],'bridgesRemoved':sorted(removed),'containersRecreated':False,'secretValuesIncluded':False}
+ 
+ 
+ def deactivate_deployment(payload:Any)->dict:
+@@ -1136,6 +1135,58 @@
+     return {'ok':True,'project_slug':slug,'deployment_id':deployment_id,'status':'inactive','servicesStopped':sorted(stopped_services),'bridgesStopped':sorted(stopped_bridges),'resourcesPreserved':True,'volumesRemoved':0,'containersRemoved':0,'secretValuesIncluded':False}
+ 
+ 
++
++def reactivate_deployment(payload:Any)->dict:
++    if not isinstance(payload,dict) or set(payload)!={'project_slug','deployment_id','phase','environment_digest'}:
++        raise DeploymentError('invalid_reactivation_request','Pedido de reativação inválido.',400)
++    slug=str(payload.get('project_slug') or '').strip().lower();deployment_id=str(payload.get('deployment_id') or '').strip();phase=str(payload.get('phase') or '').strip().lower();environment_digest=str(payload.get('environment_digest') or '')
++    if not SLUG_RE.fullmatch(slug) or not DEPLOYMENT_RE.fullmatch(deployment_id) or phase not in {'prepare','commit','abort'} or not SHA_RE.fullmatch(environment_digest):
++        raise DeploymentError('invalid_reactivation_request','Identidade da reativação inválida.',400)
++    connection=db();row=connection.execute('select * from deployments where deployment_id=?',(deployment_id,)).fetchone();connection.close()
++    if not row:raise DeploymentError('deployment_not_found','Deployment não encontrado.',404)
++    if str(row['project_slug'])!=slug:raise DeploymentError('deployment_project_mismatch','Deployment pertence a outro projeto.',409)
++    if str(row['environment'])!='production':raise DeploymentError('reactivation_requires_production','Somente Produção histórica pode ser reativada.',409)
++    services=json.loads(row['services_json'] or '[]')
++    names=[str(item.get('container_name') or '') for item in services if str(item.get('container_name') or '')]
++    if not names:raise DeploymentError('rollback_runtime_missing','A publicação histórica não possui containers restauráveis.',409,{'snapshot_id':str(row['snapshot_id'] or '')})
++    missing=[name for name in names if docker('inspect',name,timeout=30,check=False).returncode!=0]
++    if missing:raise DeploymentError('rollback_runtime_missing','Os containers históricos não estão mais presentes; reidratação por snapshot é necessária antes deste rollback.',409,{'missing':sorted(missing),'snapshot_id':str(row['snapshot_id'] or '')})
++    if phase=='abort':
++        stopped=[]
++        for name in names:
++            state=_json_rows(docker('inspect',name,timeout=30,check=False))
++            if state and bool((state[0].get('State') or {}).get('Running')) and docker('stop','-t','20',name,timeout=45,check=False).returncode==0:stopped.append(name)
++        now=int(time.time());connection=db();connection.execute("update deployments set status='inactive',updated_at=? where deployment_id=?",(now,deployment_id));connection.execute("update runtime_states set status='inactive',updated_at=? where deployment_id=?",(now,deployment_id));connection.commit();connection.close()
++        return {'ok':True,'project_slug':slug,'deployment_id':deployment_id,'phase':'abort','status':'inactive','servicesStopped':sorted(stopped),'containersRecreated':False,'volumesPreserved':True,'secretValuesIncluded':False}
++    started=[]
++    try:
++        for name in names:
++            rows=_json_rows(docker('inspect',name,timeout=30));state=(rows[0].get('State') or {}) if rows else {}
++            if not state.get('Running'):
++                docker('start',name,timeout=60);started.append(name)
++        deadline=time.time()+240;pending=set(names);last={}
++        while pending and time.time()<deadline:
++            for name in list(pending):
++                ready,status=_compose_container_ready(name);last[name]=status
++                if ready:pending.remove(name)
++            if pending:time.sleep(2)
++        if pending:raise DeploymentError('rollback_runtime_health_failed','A publicação histórica não ficou saudável.',409,{'pending':sorted(pending),'status':last})
++    except Exception:
++        for name in started:docker('stop','-t','10',name,timeout=30,check=False)
++        raise
++    now=int(time.time());connection=db()
++    if phase=='prepare':
++        connection.execute("update deployments set status='rollback_ready',error_json='{}',updated_at=? where deployment_id=?",(now,deployment_id));connection.commit();connection.close()
++        return {'ok':True,'project_slug':slug,'deployment_id':deployment_id,'phase':'prepare','status':'rollback_ready','servicesStarted':sorted(started),'containersRecreated':False,'volumesPreserved':True,'snapshot_id':str(row['snapshot_id'] or ''),'secretValuesIncluded':False}
++    if str(row['status']) not in {'inactive','rollback_ready','running'}:
++        connection.close();raise DeploymentError('reactivation_state_mismatch','Deployment histórico não está em estado reativável.',409,{'status':str(row['status'])})
++    variable_names=sorted({str(name) for item in services for name in (item.get('variable_names') or [])})
++    sql="insert into runtime_states(project_slug,environment,deployment_id,status,config_revision,config_digest,toolchain_digest,build_environment_digest,runtime_environment_digest,environment_digest,build_job_id,variable_names_json,updated_at) values(?,?,?,?,?,?,?,?,?,?,?,?,?) on conflict(project_slug,environment) do update set deployment_id=excluded.deployment_id,status=excluded.status,config_revision=excluded.config_revision,config_digest=excluded.config_digest,toolchain_digest=excluded.toolchain_digest,build_environment_digest=excluded.build_environment_digest,runtime_environment_digest=excluded.runtime_environment_digest,environment_digest=excluded.environment_digest,build_job_id=excluded.build_job_id,variable_names_json=excluded.variable_names_json,updated_at=excluded.updated_at"
++    connection.execute("update deployments set status='running',error_json='{}',updated_at=? where deployment_id=?",(now,deployment_id))
++    connection.execute(sql,(slug,'production',deployment_id,'running',int(row['config_revision'] or 0),str(row['config_digest'] or ''),str(row['toolchain_digest'] or ''),'',str(row['variables_digest'] or ''),environment_digest,str(row['build_job_id'] or row['snapshot_id'] or ''),json.dumps(variable_names,separators=(',',':')),now));connection.commit();connection.close()
++    return {'ok':True,'project_slug':slug,'deployment_id':deployment_id,'phase':'commit','status':'running','servicesStarted':sorted(started),'containersRecreated':False,'volumesPreserved':True,'snapshot_id':str(row['snapshot_id'] or ''),'secretValuesIncluded':False}
++
++
+ def assigned_port(name:str,container_port:int)->int:
+     data=json.loads(docker('inspect',name,timeout=30).stdout)[0]
+     bindings=((data.get('NetworkSettings') or {}).get('Ports') or {}).get(f'{container_port}/tcp') or []
+@@ -1411,6 +1462,7 @@
+             if self.path=='/v1/compose-deployments/promote':return self.out(200,promote_compose_deployment(self.body()))
+             if self.path=='/v1/compose-deployments/reconfigure':return self.out(200,reconfigure_compose_deployment(self.body()))
+             if self.path=='/v1/deployments/deactivate':return self.out(200,deactivate_deployment(self.body()))
++            if self.path=='/v1/deployments/reactivate':return self.out(200,reactivate_deployment(self.body()))
+             if self.path=='/v1/compose-source-preview-bridge':return self.out(201,ensure_source_preview_bridge(self.body()))
+             if self.path=='/v1/publication-bridges':return self.out(201,ensure_publication_bridge(self.body()))
+             if self.path=='/v1/publication-bridges/activate':return self.out(200,activate_publication_bridge(self.body()))

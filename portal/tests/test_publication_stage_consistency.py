@@ -63,7 +63,8 @@ class PublicationStageConsistencyTests(unittest.TestCase):
 
     def test_homologation_environment_prefers_newest_valid_candidate(self):
         source=BASE.read_text()
-        self.assertIn("['awaiting_homologation','homologated','published'].includes(x.status)",source)
+        self.assertIn("['awaiting_homologation','homologated'].includes(x.status)",source)
+        self.assertNotIn("['awaiting_homologation','homologated','published'].includes(x.status)",source)
         self.assertIn(".sort((a,b)=>Number(b.candidate_number||0)-Number(a.candidate_number||0))",source)
         self.assertNotIn("items.find(x=>['homologated','published'].includes(x.status))",source)
 
@@ -92,7 +93,8 @@ class PublicationStageConsistencyTests(unittest.TestCase):
     def test_homologation_terminal_prefers_newest_valid_candidate(self):
         for backend in (CANONICAL_BACKEND,APP_BACKEND):
             source=backend.read_text()
-            self.assertIn("status in ('awaiting_homologation','homologated','published')",source)
+            self.assertIn("status in ('awaiting_homologation','homologated')",source)
+            self.assertNotIn("status in ('awaiting_homologation','homologated','published')",source)
             self.assertIn("order by candidate_number desc limit 1",source)
             self.assertNotIn("case when status in ('homologated','published') then 0 else 1 end",source)
 
