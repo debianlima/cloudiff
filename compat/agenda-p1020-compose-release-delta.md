@@ -54,3 +54,7 @@ runtime versionada.
 Os patches não contêm valores secretos. Eles referenciam somente nomes de
 variáveis e contratos de resolução. Valores H/P permanecem no secret store do
 CloudIFF e nunca entram neste repositório.
+
+## SUPERADO PELO CONTRATO W/H/P DE 20/11/2026
+
+Os patches de isolamento documentados neste arquivo permanecem somente como evidência histórica. A implementação vigente está em `agenda-p1020-fixed-preview-clone-promote.md` e segue: Preview fixo sincronizado → clone integral/congelado para H → promoção da mesma instância H para P, sem rebuild/reclone. Não reaplicar os patches antigos de H/P independentes.
