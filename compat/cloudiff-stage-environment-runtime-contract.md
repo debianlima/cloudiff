@@ -91,3 +91,11 @@ Não substituir componentes live por uma árvore presumidamente equivalente; rec
 Uma Homologação promovida deixa de ser ambiente ativo e passa a ser histórico. O Portal não deve oferecer Site, Terminal ou Variáveis da H publicada como se ainda existisse runtime H. Para Compose snapshot, uma H ativa exige estado `awaiting_homologation`/`homologated` e `sameInstancePromotionRequired=true`.
 
 Projetos com Preview Forgejo/Komodo vinculado usam o W1 oficial como identidade do Preview. O overview não pode cair em um registro do Preview Broker legado quando a consulta ao Broker/Executor estiver temporariamente indisponível; nesse caso mantém a identidade/URL W1 com estado de atenção.
+
+## Builder seguro do W1 e assets públicos
+
+No Agenda P1020, o sync protegido do Preview não usa diretamente `frontend/Dockerfile`; ele constrói a imagem Web com o builder privado `runtime/Dockerfile.web`. Portanto correções de permissões do `dist` precisam existir também nesse builder.
+
+O builder protegido deve executar `chmod -R a+rX /app/dist` após `npm run build`. Sem isso, arquivos copiados de `frontend/public` podem chegar à imagem Nginx como `0600`: `index.html` e bundles continuam funcionando, mas logo, favicons, manifest e service worker retornam HTTP 403 para o usuário `nginx`.
+
+Aceite mínimo do builder Web protegido: logo, ícones, `sw.js`, `manifest.webmanifest` e `/` respondem HTTP 200; arquivos públicos ficam legíveis pelo worker Nginx; DB do W1 permanece com a mesma identidade durante o redeploy.

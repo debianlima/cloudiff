@@ -601,3 +601,11 @@
 - Após H→P, Site/Variáveis de Homologação mostram “não há Homologação ativa” em vez de reutilizar H já promovida. Produção continua apontando para P ativa.
 - Foi encontrado `cloudif-deployment-broker.service` inativo; o serviço foi reativado e voltou a ouvir em `127.0.0.1:18207`. Mesmo com falha futura desse serviço, o overview vinculado não deve regredir para a URL de Preview legado.
 - As variáveis exibidas em Produção permanecem as variáveis reais do deployment P6. Como P6 é a própria H6 promovida, valores iguais aos herdados do Preview são esperados até que o usuário altere explicitamente a Produção.
+
+## Agenda P1020 — faixa visual e assets do Preview (21/11/2026)
+
+- Fonte Agenda `main` `18416127cdf9255cbb61cb4085fe983f97c902e8`: layout da faixa usa `app-root` em coluna e `login-stage` flexível, mantendo `SYSTEM_BANNER_TEXT` visível acima do login sem somar um segundo `100vh`.
+- O Web seguro do W1 usa `runtime/Dockerfile.web`, não o Dockerfile final do repositório. Esse builder foi corrigido para `npm run build && chmod -R a+rX /app/dist`.
+- Antes: logo, ícones, `sw.js` e manifest estavam `0600` dentro do container e retornavam 403. Depois: arquivos públicos `0644` e endpoints públicos retornam 200.
+- Redeploy protegido preservou o DB W1 e deixou API/Web/DB saudáveis. Preflight W1 voltou `READY` na revisão `18416127...`.
+- Delta reproduzível do builder: `compat/agenda-p1020-w1-web-builder-public-assets.patch`.
