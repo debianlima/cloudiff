@@ -1,0 +1,42 @@
+--- a/cloudif_portal_publications.py
++++ b/cloudif_portal_publications.py
+@@ -277,6 +277,13 @@
+     return {'ok':True,'project':slug,'candidateNumber':candidate,'stageCode':ident['code'],'url':ident['url'],'hostname':ident['hostname'],'commit':source_commit,'parentCommit':source_commit,'artifactImageId':artifact_id,'previewGeneration':1,'diff':diff,'runtimeDiff':runtime_meta,'environmentRevision':0,'environmentDigest':snapshot_digest,'snapshotId':snapshot_id,'snapshotDigest':snapshot_digest,'cloneMode':'full-preview-runtime','sameInstancePromotionRequired':True,'secretValuesIncluded':False}
+ 
+ 
++def _publisher_delete_stage(public_number,stage,number,npm_token):
++    if stage not in {'preview','homologation','publication'}:raise RuntimeError('Estágio inválido para remoção no Publisher.')
++    status,data=_post('http://10.62.91.3/stage/delete',{'public_number':int(public_number),'stage':stage,'number':int(number)},npm_token,host='cloudif-publisher.internal',timeout=120)
++    if status//100!=2 or not isinstance(data,dict) or data.get('ok') is not True:raise RuntimeError('O Publisher não conseguiu remover o estágio '+stage+'.')
++    return {'ok':True,'removed':bool(data.get('removed')),'certificatePreserved':bool(data.get('certificate_preserved'))}
++
++
+ def _publish_linked_compose_homologated_candidate(slug,candidate,project,publication,alias,actor,progress=None):
+     notify=lambda step,msg:progress(step,msg) if progress else None
+     meta=_candidate_runtime_metadata(candidate);snapshot_id=str(meta.get('composeSnapshotId') or '');snapshot_digest=str(meta.get('snapshotDigest') or '');deployment_id=str(meta.get('homologationDeploymentId') or '')
+@@ -300,6 +307,9 @@
+     if pstatus//100!=2 or not publisher.get('ok'):raise RuntimeError(_publication_error('https',publisher))
+     stable=f'{num}.cloudiff.duckdns.org'
+     if not _external_ok(stable):raise RuntimeError('Validação da URL estável falhou após ativação.')
++    h_number=int(candidate['candidate_number'])
++    notify('cleanup','Retirando a rota de Homologação após validar a nova Produção.')
++    h_cleanup=_publisher_delete_stage(num,'homologation',h_number,npm_token)
+     _multiservice_deactivate_bridge(slug,deployment_id,'homologation',trace+'-deactivate-h')
+     previous_dep=str((previous_production or {}).get('deploymentId') or '')
+     previous_pub=int((previous_production or {}).get('publicationNumber') or 0)
+@@ -312,13 +322,13 @@
+     con.execute('update production_releases set is_active=0 where project_slug=?',(slug,))
+     sql="insert into production_releases(project_slug,public_number,publication_number,candidate_number,deploy_number,stage_code,hostname,stable_hostname,artifact_image_id,status,is_active,environment_revision,environment_digest,created_by,created_at,published_at) values(?,?,?,?,?,?,?,?,?,'published',1,?,?,?,?,?)"
+     con.execute(sql,(slug,num,publication,int(candidate['candidate_number']),int(candidate['deploy_number']),ident['code'],ident['hostname'],stable,artifact_id,environment_revision,environment_digest,actor,now,now))
+-    detail={'runtimeKind':'compose-snapshot','stageCode':ident['code'],'publicationHostname':ident['hostname'],'candidateNumber':int(candidate['candidate_number']),'publicationNumber':publication,'artifactImageId':artifact_id,'composeSnapshotId':snapshot_id,'snapshotDigest':snapshot_digest,'sourceCommit':str(meta.get('sourceCommit') or candidate['commit_sha'] or ''),'homologationDeploymentId':deployment_id,'productionDeploymentId':deployment_id,'bridge':str(bridge.get('bridge') or ''),'activeAlias':str(activation.get('active_alias') or ''),'sameArtifactAsHomologation':True,'sameSnapshotAsHomologation':True,'sameInstanceAsHomologation':True,'containersRecreated':False,'promotionMode':'in-place-role-and-routing','secretValuesIncluded':False}
++    detail={'runtimeKind':'compose-snapshot','stageCode':ident['code'],'publicationHostname':ident['hostname'],'candidateNumber':int(candidate['candidate_number']),'publicationNumber':publication,'artifactImageId':artifact_id,'composeSnapshotId':snapshot_id,'snapshotDigest':snapshot_digest,'sourceCommit':str(meta.get('sourceCommit') or candidate['commit_sha'] or ''),'homologationDeploymentId':deployment_id,'productionDeploymentId':deployment_id,'bridge':str(bridge.get('bridge') or ''),'activeAlias':str(activation.get('active_alias') or ''),'sameArtifactAsHomologation':True,'sameSnapshotAsHomologation':True,'sameInstanceAsHomologation':True,'containersRecreated':False,'promotionMode':'in-place-role-and-routing','homologationStageRemoved':bool(h_cleanup.get('removed')),'homologationCertificatePreserved':bool(h_cleanup.get('certificatePreserved')),'secretValuesIncluded':False}
+     con.execute('update project_publications set is_active=0 where project_slug=?',(slug,));existing=con.execute('select id from project_publications where project_slug=? and deploy_number=?',(slug,int(candidate['deploy_number']))).fetchone()
+     if existing:con.execute("update project_publications set version=?,commit_sha=?,stable_hostname=?,version_hostname=?,status='published',is_active=1,published_at=?,message=?,detail_json=? where id=?",(ident['code'],str(candidate['commit_sha']),stable,ident['hostname'],now,'Promovida a mesma instância homologada '+str(candidate['stage_code']),json.dumps(detail,ensure_ascii=False),existing['id']))
+     else:con.execute("insert into project_publications(project_slug,public_number,deploy_number,version,commit_sha,stable_hostname,version_hostname,status,is_active,created_by,created_at,published_at,message,detail_json) values(?,?,?,?,?,?,?,'published',1,?,?,?,?,?)",(slug,num,int(candidate['deploy_number']),ident['code'],str(candidate['commit_sha']),stable,ident['hostname'],actor,now,now,'Promovida a mesma instância homologada '+str(candidate['stage_code']),json.dumps(detail,ensure_ascii=False)))
+     con.execute("update publication_candidates set status='published',published_publication_number=? where id=?",(publication,candidate['id']))
+     tenant=str(project['tenant'] if 'tenant' in project.keys() else '');con.commit();con.close();queued=_enqueue_membership_reconcile(slug,actor,tenant)
+-    return {'ok':True,'project':slug,'candidateNumber':int(candidate['candidate_number']),'publicationNumber':publication,'stageCode':ident['code'],'url':ident['url'],'stableUrl':'https://'+stable+'/','aliasUrl':('https://'+alias+'.cloudiff.duckdns.org/' if alias else ''),'artifactImageId':artifact_id,'snapshotId':snapshot_id,'snapshotDigest':snapshot_digest,'deploymentId':deployment_id,'sameArtifactAsHomologation':True,'sameSnapshotAsHomologation':True,'sameInstanceAsHomologation':True,'containersRecreated':False,'environmentRevision':environment_revision,'membership':{'ok':True,'mode':'compose-snapshot-promotion'},'reconcile':queued,'secretValuesIncluded':False}
++    return {'ok':True,'project':slug,'candidateNumber':int(candidate['candidate_number']),'publicationNumber':publication,'stageCode':ident['code'],'url':ident['url'],'stableUrl':'https://'+stable+'/','aliasUrl':('https://'+alias+'.cloudiff.duckdns.org/' if alias else ''),'artifactImageId':artifact_id,'snapshotId':snapshot_id,'snapshotDigest':snapshot_digest,'deploymentId':deployment_id,'sameArtifactAsHomologation':True,'sameSnapshotAsHomologation':True,'sameInstanceAsHomologation':True,'containersRecreated':False,'homologationStageRemoved':bool(h_cleanup.get('removed')),'environmentRevision':environment_revision,'membership':{'ok':True,'mode':'compose-snapshot-promotion'},'reconcile':queued,'secretValuesIncluded':False}
+ 
+ 
+ def _latest_multiservice_build(slug,environment='homologation'):

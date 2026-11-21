@@ -64,14 +64,15 @@
     },
     "routes": {
       "type": "array",
-      "minItems": 8,
-      "maxItems": 8,
+      "minItems": 9,
+      "maxItems": 9,
       "items": {
         "enum": [
           "GET /health",
           "POST /publish",
           "POST /version",
           "POST /stage",
+          "POST /stage/delete",
           "POST /alias",
           "POST /unpublish",
           "POST /tenant",
