@@ -102,9 +102,9 @@ A sincronização aplica permissões a:
 
 O ciclo vigente usa três estágios explícitos:
 
-- **W · Preview:** workspace Git local montado em um container vivo. Alterações aparecem sem criar release.
-- **H · Homologação:** snapshot imutável de código + runtime, com diff, digest e homologadores do projeto.
-- **P · Publicação:** novo container criado a partir do mesmo digest de H, com configuração Production e ativação controlada.
+- **W · Preview:** slot/container lógico fixo por projeto, sincronizado ao Forgejo no mesmo endereço; commit novo não cria outro Preview.
+- **H · Homologação:** clone integral e imutável do runtime W corrente, com proveniência, diff/digest e homologadores do projeto; depois do clone não acompanha novos commits.
+- **P · Publicação:** a própria instância H aprovada é promovida por roteamento/identidade/ativação; não se cria um novo container equivalente e não há rebuild/reclone.
 
 ```mermaid
 flowchart LR
@@ -119,10 +119,10 @@ flowchart LR
 A propriedade de segurança/qualidade do fluxo é:
 
 ```text
-imagem/digest homologado em H == imagem/digest executado em P
+instância/runtime homologado em H == instância/runtime promovido e executado em P
 ```
 
-Não há rebuild entre H e P. A Produção continua sujeita à autorização crítica e, quando aplicável, à dupla aprovação. O rollback reativa uma P anterior saudável em vez de reconstruí-la.
+Não há rebuild, reclone nem criação de runtime equivalente entre H e P. A Produção continua sujeita à autorização crítica e, quando aplicável, à dupla aprovação. A promoção altera o papel/roteamento da própria H aprovada; a P anterior só é desativada após health/readback e o rollback a reativa em vez de reconstruí-la.
 
 Os hostnames públicos seguem os formatos:
 
@@ -176,7 +176,7 @@ São removidos terminais, publicações, builds, imagens específicas, snapshots
 | `komodo/project/preview/snapshot` | Portal | Komodo Agent | Congelar W em candidato H |
 | `komodo/publication/deploy` | Publicador | Komodo Agent | Criar versão imutável |
 | `komodo/publication/promote` | Publicador | Komodo Agent | Promoção técnica legada `dN` |
-| `komodo/publication/release` | Portal/Publicador | Komodo Agent | Criar P a partir do mesmo digest homologado em H |
+| `komodo/publication/release` | Portal/Publicador | Komodo Agent | Promover a própria H homologada para P, sem rebuild/reclone |
 | `komodo/publication/release/activate` | Portal/Publicador | Komodo Agent | Reativar P imutável em rollback |
 | `komodo/stack/destroy` | Exclusão | Komodo Agent | Limpeza principal e derivada |
 
@@ -188,3 +188,7 @@ São removidos terminais, publicações, builds, imagens específicas, snapshots
 - Uma operação só termina quando o estado observado confirma o efeito.
 - A exclusão falha se recursos derivados permanecerem.
 - Recursos compartilhados de runtime e dados preservados não são removidos por uma exclusão de projeto.
+
+## Contrato global W/H/P — decisão humana de 20/11/2026
+
+A referência normativa transversal é [`../PADRAO-CLOUDIFF-PREVIEW-HOMOLOGACAO-PRODUCAO-20261120.md`](../PADRAO-CLOUDIFF-PREVIEW-HOMOLOGACAO-PRODUCAO-20261120.md). Qualquer implementação legada que crie Previews sucessivos por commit ou reconstrua H/P deve ser reconciliada com esse contrato.

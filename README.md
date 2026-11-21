@@ -48,7 +48,7 @@ P · Publicação    → Produção com exatamente o mesmo digest homologado em 
 
 ![Fluxo W → H → P da CloudIFF](docs/assets/cloudiff-fluxo-whp.svg)
 
-W pode mudar continuamente sem criar release. H congela o estado exato que será validado. P **não faz rebuild**: sobe uma nova release a partir do mesmo artefato homologado, aplica a configuração de Production e só então atualiza o endereço estável. `dN` permanece apenas como identificador técnico/legado durante a migração e o rollback de versões históricas.
+W é um **Preview fixo** por projeto: continua mudando no mesmo slot/URL conforme o Forgejo, sem criar outro Preview a cada commit. H clona integralmente e congela o estado exato do Preview que será validado. P **não faz rebuild, reclone nem cria outro runtime**: a própria instância H aprovada é promovida para Produção por mudança controlada de identidade/roteamento/ativação. A Produção anterior só é desativada após health/readback da nova e permanece conforme a política de rollback.
 
 O contrato completo está em [Fluxo W → H → P de publicação](docs/FLUXO-WHP-PUBLICACAO.md).
 
@@ -73,7 +73,7 @@ Projetos novos recebem uma página inicial que ensina a publicar, clonar o Forge
 O diagrama resume os quatro algoritmos centrais da plataforma:
 
 1. **Provisionamento:** valida a solicitação, cria o repositório somente com código na raiz e permanece em execução até o tenant, a rota HTTPS e o runtime/publicação inicial compatível (`d1` técnico/P legado) estarem realmente prontos.
-2. **Publicação:** mantém um Preview W vivo, congela candidatos H imutáveis e promove para P exatamente o mesmo digest homologado, sem rebuild entre H e P.
+2. **Publicação:** mantém um único Preview W fixo e sincronizado ao Forgejo, clona seu estado integral para uma H imutável e promove a **mesma instância H aprovada** para P, sem rebuild, reclone ou novo container intermediário.
 3. **Agentes MCP:** autentica o cliente, aplica escopos e ACL, solicita aprovação quando necessário e audita a execução.
 4. **Reconciliação:** reage a mudanças de projeto, banco e membresia, compara o estado desejado com o observado e repete correções idempotentes até convergir.
 
@@ -241,3 +241,7 @@ Diretório versionado da CloudIFF.
 > Esta seção é gerada por `scripts/generate-directory-readmes.py`. Conteúdo manual fora dos marcadores é preservado.
 
 <!-- CLOUDIFF-AUTO-DOC:END -->
+
+## Padrão canônico de lifecycle — 20/11/2026
+
+Antes de alterar Preview, Homologação ou Produção, consulte [`docs/PADRAO-CLOUDIFF-PREVIEW-HOMOLOGACAO-PRODUCAO-20261120.md`](docs/PADRAO-CLOUDIFF-PREVIEW-HOMOLOGACAO-PRODUCAO-20261120.md). A decisão humana vigente para **todo CloudIFF** é: **Forgejo → Preview fixo sincronizado → clone integral/congelado para Homologação → promoção da mesma instância homologada para Produção**.

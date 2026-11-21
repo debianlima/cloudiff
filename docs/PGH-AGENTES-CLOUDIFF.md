@@ -92,3 +92,7 @@ Ver também ATLAS-CLOUDIFF-PGH-OPERACAO.md e ATLAS-CLOUDIFF-CONCILIACAO.md.
 ## Autorizações condicionadas de 15/11/2026
 
 O protocolo PGH-AUT-20261115-001 distribuiu 13 pedidos a infra-01, dev-01, dev-02, aud-01 e surface-01, sem duplicar tarefas. Autorizar condicionalmente não comprova um gate nem concede privilégios irrestritos. Ver [matriz de responsáveis e condições](PGH-AUTORIZACOES-CLOUDIFF-2026-11-15.md). A memória PGH no LabIFF permanece canônica.
+
+## Regra de retomada W/H/P — 20/11/2026
+
+Todos os agentes que atuarem em Forgejo, Preview, Homologação, Produção, Komodo ou publicação devem ler [`PADRAO-CLOUDIFF-PREVIEW-HOMOLOGACAO-PRODUCAO-20261120.md`](PADRAO-CLOUDIFF-PREVIEW-HOMOLOGACAO-PRODUCAO-20261120.md) antes de executar mudanças. O contrato é global para CloudIFF.

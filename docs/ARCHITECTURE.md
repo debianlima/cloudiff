@@ -34,3 +34,7 @@ A interface v2 mantém as superfícies homologadas, mas carrega dados caros por 
 O agente-base C++ é a autoridade de heartbeat de nó. Serviços especializados (`--publisher`, `--artifact-executor`, `--runtime-executor`, `--mcp-upload`, `--secure-distribution`, `--admin-observability`) não substituem o heartbeat do agente-base. Saúde do agente exige sessão NATS + retomada de heartbeat, não apenas processo especializado ativo.
 
 Rotas máquina-a-máquina não podem depender de `remote_addr` depois de uma bridge/proxy que perde a origem real. Controles de origem devem permanecer em uma camada com peer confiável; tokens/capabilities continuam necessários como autorização independente. Nunca ampliar allowlist para o IP genérico da bridge Docker como atalho.
+
+## Lifecycle global CloudIFF — 20/11/2026
+
+A arquitetura W/H/P segue [`PADRAO-CLOUDIFF-PREVIEW-HOMOLOGACAO-PRODUCAO-20261120.md`](PADRAO-CLOUDIFF-PREVIEW-HOMOLOGACAO-PRODUCAO-20261120.md): Forgejo sincroniza um Preview fixo; H clona e congela esse runtime; P promove a própria H aprovada, sem rebuild/reclone.

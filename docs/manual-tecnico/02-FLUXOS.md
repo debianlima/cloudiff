@@ -81,13 +81,13 @@ flowchart TD
 
 ## Publicação W → H → P
 
-A entrega agora separa desenvolvimento, validação e Produção em três estágios. W é vivo; H congela o estado atual; P promove exatamente o artefato homologado.
+A entrega separa desenvolvimento, validação e Produção em três estágios com continuidade de instância. W é um Preview fixo sincronizado ao Forgejo; H é clone integral e congelado de W; P promove a própria H aprovada, sem rebuild/reclone.
 
 ```mermaid
 flowchart LR
   G[Workspace Git local] --> W[W · Preview vivo]
   W -->|alterar e visualizar| W
-  W -->|snapshot código + runtime| H[H · Homologação imutável]
+  W -->|clone integral do runtime| H[H · Homologação imutável]
   H -->|rejeitar| W
   H -->|homologar| A[Aprovação crítica de Produção]
   A -->|aprovada| P[P · Publication]
@@ -96,7 +96,7 @@ flowchart LR
   R --> S
 ```
 
-O Preview continua operacional com a cópia Git local quando o remoto fica temporariamente indisponível, mas a criação de H exige nova validação da procedência/sincronização. Produção não recompila o candidato: o digest executado em P deve ser o mesmo homologado em H.
+O Preview continua operacional com a cópia Git local quando o remoto fica temporariamente indisponível, mas a criação de H exige nova validação da procedência/sincronização. Produção não recompila nem recria o candidato: a própria instância H homologada é a que passa a executar como P.
 
 `dN` permanece apenas como identificador técnico/legado para compatibilidade com artefatos anteriores. O contrato completo está em [Fluxo W → H → P de publicação](../FLUXO-WHP-PUBLICACAO.md).
 
@@ -104,3 +104,7 @@ O Preview continua operacional com a cópia Git local quando o remoto fica tempo
 ## Fluxos atuais complementares
 
 Os fluxos de ACL, terminal do Preview, publicação W/H/P e exclusão derivada estão detalhados em [Arquitetura operacional atual](12-ARQUITETURA-OPERACIONAL-ATUAL.md). Esse capítulo deve ser considerado o contrato vigente para integrações entre Portal, Forja Agent, Komodo Agent, Publisher e Tenant Guard.
+
+### Contrato 20/11/2026
+
+Veja [`../PADRAO-CLOUDIFF-PREVIEW-HOMOLOGACAO-PRODUCAO-20261120.md`](../PADRAO-CLOUDIFF-PREVIEW-HOMOLOGACAO-PRODUCAO-20261120.md). Esta regra vale para todos os projetos CloudIFF.

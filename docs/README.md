@@ -48,3 +48,7 @@ Documentação técnica, inventários e evidências.
 ## Estado operacional atual
 
 - [Arquitetura operacional atual](manual-tecnico/12-ARQUITETURA-OPERACIONAL-ATUAL.md)
+
+## Padrão W/H/P
+
+A referência canônica de lifecycle dos projetos CloudIFF é [`PADRAO-CLOUDIFF-PREVIEW-HOMOLOGACAO-PRODUCAO-20261120.md`](PADRAO-CLOUDIFF-PREVIEW-HOMOLOGACAO-PRODUCAO-20261120.md).

@@ -18,17 +18,17 @@ A regra central é simples:
 
 ## W · Preview vivo
 
-O Preview é o ambiente de trabalho contínuo do projeto. O workspace Git local gerenciado pela CloudIFF é montado no container W; por isso, alterações no código aparecem no endereço do Preview sem criar uma nova versão a cada edição.
+O Preview é o ambiente de trabalho contínuo e **fixo** do projeto. Há um único slot/identidade Preview ativo por projeto; alterações aceitas no Forgejo são sincronizadas para esse mesmo slot e endereço, sem criar W2/W3 ou um novo Preview por commit. A implementação pode reiniciar/recriar componentes internos quando necessário, mas a identidade lógica e a URL pública do Preview permanecem estáveis.
 
 Características do W:
 
-- possui um container próprio, por exemplo `cloudif-p1007-w1-preview-web`;
-- usa hostname no formato `<numero>-w<N>-preview.cloudiff.duckdns.org`;
+- possui um container/stack de Preview próprio e estável, por exemplo `cloudif-p1007-w1-preview-web`;
+- usa hostname no formato `<numero>-w<N>-preview.cloudiff.duckdns.org`; o `N` identifica o slot, **não** uma nova geração para cada commit;
 - monta o checkout Git local no runtime;
 - usa as variáveis do ambiente **Preview**;
 - oferece terminal no próprio container W;
 - bloqueia exposição pública de `.git`, `.env` e metadados equivalentes;
-- pode ser recriado a partir da Produção ativa ou do template, preservando o workspace Git;
+- não é substituído por outro Preview como consequência normal de um commit; recuperação excepcional do slot exige preservar sua identidade/URL e registrar a operação;
 - não cria H ou P automaticamente.
 
 ### Git indisponível
@@ -39,21 +39,21 @@ Esse modo degradado não autoriza uma promoção silenciosa. A criação de H ex
 
 ## H · Homologação imutável
 
-Quando o Preview está pronto para validação, a ação **Enviar Preview para homologação** congela o estado atual em um candidato H.
+Quando o Preview está pronto para validação, a ação **Enviar Preview para homologação** cria um **clone integral do estado runtime do Preview** e congela esse clone como candidato H. A origem da H é o Preview saudável corrente, não um rebuild independente a partir do Git.
 
 O snapshot inclui:
 
 - commit Git sintético do estado exato do workspace, sem alterar a branch de trabalho do usuário;
 - imagem do runtime do Preview;
 - digest da imagem;
-- revisão e digest das variáveis de **Homologação**;
+- configuração runtime efetivamente usada pelo Preview e suas referências protegidas de segredo, preservadas sem publicar valores;
 - diff de código;
 - resumo das alterações relevantes do runtime;
 - identificação do Preview de origem, como `W1`.
 
 O hostname segue o padrão `<numero>-h<N>-homologation.cloudiff.duckdns.org`.
 
-Depois da criação, H é imutável. O desenvolvedor pode continuar alterando W sem modificar o candidato que está sendo homologado.
+Depois da criação, H é imutável. O desenvolvedor pode continuar alterando W sem modificar o candidato que está sendo homologado. Quando uma nova H é criada e ativada para teste, a H anterior é desativada e preservada apenas conforme política de rollback/retenção.
 
 ### Homologadores
 
@@ -68,7 +68,7 @@ Um candidato pode ficar em estados como:
 
 ## P · Publicação controlada
 
-Produção não recompila o projeto. P inicia um novo container a partir da **mesma imagem/digest do candidato H homologado** e aplica a configuração do ambiente **Production**.
+Produção não recompila, não reclona e **não inicia um novo container equivalente**. A própria instância/stack H homologada é promovida para Produção por alteração controlada de identidade, rota, alias/pointer e estado de ativação. O runtime que entra em P é exatamente o que foi testado em H.
 
 Isso garante a propriedade principal do fluxo:
 
@@ -96,13 +96,15 @@ Quando a política exigir dupla aprovação, dois aprovadores privilegiados e di
 
 ## Variáveis por ambiente
 
-Preview, Homologação e Produção mantêm configurações independentes:
+Preview, Homologação e Produção têm **papéis de lifecycle**, não três rebuilds independentes:
 
 ```text
-preview       → configuração usada por W
-homologation  → configuração congelada com H
-production    → configuração aplicada ao criar P
+preview       → configuração/runtime vivo do slot W fixo, sincronizado ao Forgejo
+homologation  → clone integral e congelado do W no instante do envio
+production    → a mesma H aprovada, ativada como P sem alterar o runtime homologado
 ```
+
+Metadados externos necessários para hostname, roteamento, TLS, autorização e observabilidade podem mudar de papel entre H e P, mas não devem reconstruir nem alterar o comportamento da aplicação já homologada.
 
 Valores públicos podem ser exibidos conforme a política do Portal. Segredos são tratados por referência, resolvidos internamente na execução e não devem aparecer no Git, no MCP, em logs de publicação ou no HTML do Portal.
 
@@ -124,7 +126,7 @@ A URL do terminal é validada pelo Portal e deve apontar para `https://komodoiff
 
 ## Rollback
 
-Cada release P permanece imutável. O rollback não reconstrói uma versão antiga; ele reativa uma P previamente registrada e saudável e atualiza o alias estável.
+Cada estado produtivo promovido permanece identificável e rastreável. O rollback não reconstrói uma versão antiga; ele reativa a instância produtiva anterior preservada e saudável e atualiza o alias estável.
 
 A troca de P ativa é separada da existência do artefato. Isso reduz o tempo de recuperação e mantém rastreabilidade sobre qual candidato H originou cada publicação.
 
@@ -159,9 +161,9 @@ Durante a migração:
 flowchart LR
     G[Workspace Git local] --> W[W · Preview vivo]
     W -->|editar + visualizar| W
-    W -->|congelar código + runtime| H[H · Homologação imutável]
+    W -->|clonar integralmente e congelar| H[H · Homologação imutável]
     H -->|rejeitar| W
-    H -->|homologar| A[Aprovação crítica de Produção]
+    H -->|homologar a própria instância| A[Aprovação crítica de Produção]
     A -->|aprovada| P[P · Publication]
     P --> S[URL estável]
     P -->|rollback| R[P anterior]
@@ -173,7 +175,7 @@ flowchart LR
 A implementação se distribui entre:
 
 - **Portal/control-plane:** estado W/H/P, wizard, homologadores, jobs, aprovação e rollback;
-- **Komodo Agent/runtime:** container W, snapshot W→H, criação P a partir do digest homologado e terminais;
+- **Komodo Agent/runtime:** slot W fixo, clone integral W→H, congelamento de H e promoção da própria H aprovada para P sem rebuild/reclone;
 - **Publisher/proxy:** certificados e hostnames W/H/P;
 - **publication gateway:** roteamento dos hostnames para os containers corretos.
 
@@ -197,8 +199,12 @@ Qualquer evolução do sistema de entrega deve preservar estes invariantes:
 
 1. W pode mudar sem gerar release.
 2. H é imutável depois de criada.
-3. P usa o mesmo digest homologado, sem rebuild.
+3. P é a própria H homologada promovida, sem rebuild, reclone ou novo container equivalente.
 4. Produção continua sujeita à autorização crítica.
 5. Segredos não entram no Git nem nas respostas do Portal.
 6. Falha do Git remoto não derruba um W local saudável.
 7. `dN` permanece apenas como compatibilidade técnica até sua remoção planejada.
+
+## Decisão humana de 20/11/2026
+
+Este documento deve ser lido junto com [`PADRAO-CLOUDIFF-PREVIEW-HOMOLOGACAO-PRODUCAO-20261120.md`](PADRAO-CLOUDIFF-PREVIEW-HOMOLOGACAO-PRODUCAO-20261120.md), que prevalece sobre descrições históricas divergentes do ciclo W/H/P.
