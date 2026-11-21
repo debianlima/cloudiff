@@ -74,7 +74,7 @@ Registros históricos continuam válidos como evidência do que aconteceu, mas q
 - Variáveis pertencem ao runtime do estágio ativo: Preview edita W, Homologação edita H ativa e Produção edita P ativa.
 - W→H herda a configuração corrente do Preview; H→P herda a configuração corrente da H. Secrets recebem referências próprias do ambiente de destino e valores não são expostos.
 - Editar uma variável depois da criação pode recriar somente o container do serviço afetado, preservando deployment e volumes. Isso não altera a regra de que a promoção H→P em si usa a mesma instância.
-- Ao terminar o job de criação de H, promoção P ou rollback, o Portal deve recarregar automaticamente Visão geral/Site/Variáveis sem exigir clique manual em “Atualizar”.
+- Ao terminar com sucesso o job de criação de H, promoção H→P ou rollback/reativação histórica, o Portal deve atualizar o workspace e recarregar a página inteira, sem exigir clique manual em “Atualizar”. Em falha, o erro deve permanecer visível sem reload automático.
 - Uma H `published` é histórico, não ambiente ativo: não deve oferecer Site, Terminal ou Variáveis como H.
 - O Histórico de Produção pode reativar uma P anterior somente com autorização do responsável/admin. A P histórica é preparada e validada antes do cutover; em falha, a P atual permanece/restaura-se como ativa.
 

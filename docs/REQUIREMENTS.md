@@ -206,7 +206,7 @@ O fluxo de Publicações usa autorização vinculada ao projeto, sem exigir uma 
 - a tela enumera delegações individuais a partir de sujeitos `user` da ACL; sujeitos `group` continuam autorizando acesso ao projeto, mas só podem virar delegação individual quando houver uma identidade `user` explícita, evitando inferência de membros sem diretório confiável;
 - apenas Administrador ou Professor pode alterar essas delegações; a capacidade implícita do Administrador não é revogável pela interface do projeto;
 - delegação individual deixa de valer imediatamente quando o usuário deixa de estar vinculado ao projeto;
-- a publicação direta vincula o job ao candidato homologado, à revisão/digest do ambiente e ao papel de autorização observado no enqueue; o worker não pode elevar o ator a Administrador;
+- o envio para Produção vincula o job ao candidato homologado, à revisão/digest do ambiente e ao papel de autorização observado no enqueue; não existe Produção válida sem H homologada e o worker não pode elevar o ator a Administrador;
 - endpoints legados de aprovação crítica permanecem para compatibilidade, mas não são o caminho primário do **Gerenciar publicação**.
 - ao iniciar Produção pelo modo `project_permission`, approvals genéricos ainda pendentes do mesmo projeto são cancelados quando possível e marcados `superseded` localmente, preservando histórico sem deixar pendências obsoletas competindo com o fluxo atual.
 
