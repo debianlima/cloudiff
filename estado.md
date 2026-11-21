@@ -571,3 +571,14 @@
 - CI: adicionada verificação de catálogos técnicos determinísticos com `generate-technical-catalogs.py` + `git diff --exit-code`.
 - Gates: `scripts/validate.sh` PASS; headless/updater PASS; RBAC/Portal focados PASS; suíte Portal em shards 307+395+302+314 = 1.318/1.318 PASS. O traceback assíncrono conhecido de build permanece como ruído de harness, sem falha de teste.
 - Source técnico: `207e60ecb1efc1f47954a5e68fa837fb515320b9`.
+
+## Publisher v17 — cleanup automático H → P (2026-11-21 UTC)
+
+- Contrato W/H/P global efetivado no Publisher live: após health/readback da nova Produção, o Portal chama `POST /stage/delete` para retirar a rota H, desativa o bridge H e só então desativa a Produção anterior, preservando rollback.
+- Runtime Portal ativo contém `_publisher_delete_stage(...)` na ordem: stable health → stage delete H → bridge H off → previous P off → persistência da P ativa.
+- `NpmPublisherProvider` recebeu `/stage/delete` idempotente e correção de byte-idempotência do renderer do bloco gerenciado. Regressão: duas execuções no-op consecutivas mantêm `http.conf` byte a byte.
+- Build limpo na Hospedagem com clang 21.1.8, source `ea4c01c030d281f5e1869a618fe1737b2f5ab18c`, tree `2668ce4065d0fc5b6cded733989e3d8ef23cccd0`, teste `npm_publisher_provider` 1/1 PASS.
+- Release live: `/opt/cloudiff-v2/releases/20261121T102627Z-v17-npm-publisher-stage-delete-ea4c01c`; binário SHA256 `4285033213b925750938d9ceb5e5316e6547dcda61257fd573777a5bfab4cf31`; BuildID `1727c5cf73d913a5d70f38a788d03591fd760f75`.
+- Instalador versionado commit `6f994ba6093b3dd3f9fd4aa7053a052eb7dd34af`, SHA256 `d09c21f50a099018027d2ccda0a8bb96a793ae9f920f8db52f689cd5e50c393c`; preserva live/previous/canary no rollback, state/Nginx, usa canary e smoke local via `--resolve` para evitar hairpin.
+- v15 e v16 foram rejeitados automaticamente pelos gates e permaneceram nunca-live, rotulados no diretório de releases. v17 passou canary, `nginx -t`, endpoint live, ingress real e smoke externo.
+- Pós-cutover Agenda: H5 ausente do state/config do Publisher, P2 `exited`, H5 bridge `exited`, P3 bridge `running`; `agendaunica.cloudiff.duckdns.org`, `1020.cloudiff.duckdns.org` e P3 retornam revisão `e32213d0b4d2`.
