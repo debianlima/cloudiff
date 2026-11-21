@@ -97,9 +97,9 @@ Consulta read-only à API local Atlas na VPS IPsec retornou 213 itens; além das
 
 ## Equipe PGH CloudIFF — catálogo dinâmico
 
-Na leitura canônica de 21/11/2026, o projeto CloudIFF possui nove identidades registradas no PGH: aud-01, dev-01, dev-02, doc-01, gov-01, infra-01, infra-02, infra-03 e surface-01. Há ainda identidades de outros projetos, como documentacao/dotfiles/doc-01, que não devem ser misturadas automaticamente com CloudIFF.
+Na leitura canônica de 21/11/2026, o projeto CloudIFF possui dez identidades registradas no PGH: atd-01, aud-01, dev-01, dev-02, doc-01, gov-01, infra-01, infra-02, infra-03 e surface-01. Há ainda identidades de outros projetos, como documentacao/dotfiles/doc-01, que não devem ser misturadas automaticamente com CloudIFF.
 
-O catálogo é dinâmico: qualquer lista em documentação é fotografia de uma data. Antes de rotear trabalho, consultar `agent-memory-v2.py catalog`/`list` no LabIFF. Infra-01/02/03 atuam em infraestrutura conforme suas tarefas; gov-01 governa política/autorização/exceções; surface-01 valida interfaces; aud-01 executa reauditoria; dev-01/dev-02 e doc-01 mantêm código, SCM/integrações e documentação/Atlas. Veja [catálogo de agentes e roteamento](PGH-AGENTES-CLOUDIFF.md).
+O catálogo é dinâmico: qualquer lista em documentação é fotografia de uma data. Antes de rotear trabalho, consultar `agent-memory-v2.py catalog`/`list` no LabIFF. Atd-01 atende/orienta usuários e encaminha execução; infra-01/02/03 atuam em infraestrutura conforme suas tarefas; gov-01 governa política/autorização/exceções; surface-01 valida interfaces; aud-01 executa reauditoria; dev-01/dev-02 e doc-01 mantêm código, SCM/integrações e documentação/Atlas. Veja [catálogo de agentes e roteamento](PGH-AGENTES-CLOUDIFF.md).
 
 ## Como localizar a plataforma CloudIFF e seus projetos no Atlas
 

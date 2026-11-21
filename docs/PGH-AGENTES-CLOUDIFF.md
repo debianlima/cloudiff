@@ -5,6 +5,7 @@ O catálogo é dinâmico; este documento não é a fonte de opções fixas do pl
 
 | Área | Código | Responsabilidade |
 | --- | --- | --- |
+| atendimento-usuario | atd-01 | Atendimento, orientação de usuários, coleta de solicitações e encaminhamento aos especialistas |
 | auditoria | aud-01 | Auditoria, evidências, segurança, backups, gates e reauditoria |
 | desenvolvimento | dev-01 | Código funcional, bugs de backend, interfaces e integrações |
 | desenvolvimento | dev-02 | GitHub, Forgejo, SCM, CI, releases e integração Atlas |
@@ -16,7 +17,7 @@ O catálogo é dinâmico; este documento não é a fonte de opções fixas do pl
 | testes | surface-01 | Testes visuais em navegador: telas, menus, botões, dados e regressão |
 
 Há também a identidade documentacao/dotfiles/doc-01, de manutenção Dotfiles.
-As nove identidades da tabela pertencem ao projeto cloudiff na leitura de 21/11/2026. Novos agentes
+As dez identidades da tabela pertencem ao projeto cloudiff na leitura de 21/11/2026. Novos agentes
 ou mudanças de identidade devem ser descobertos na memória PGH, nunca inferidos desta lista histórica.
 
 ## Retomada obrigatória
@@ -38,6 +39,8 @@ Ler PROJECT, TASKS, ACCESS, MEMORY, HISTORY e o roteiro operacional de cada
 agente. Respeitar tarefa, dependências, leases, privilégios reais e backlog.
 
 ## Distribuição de defeitos
+
+Atd-01 recebe dúvidas/solicitações humanas, explica o fluxo padrão e encaminha execução técnica à área competente; não assume autoridade de deploy, rollback ou exceção.
 
 1. Reproduzir ou identificar o achado, ambiente, data, gravidade e evidência.
 2. Registrar nota na memória PGH da identidade de origem e obter seq de evento.
@@ -61,7 +64,8 @@ Cada agente é uma ficha de ferramenta com identidade estável, área,
 missão, vínculo com CloudIFF e referência ao roteiro PGH no LabIFF.
 O PGH permanece a fonte de verdade para tarefas e handoffs; Atlas é índice.
 
-Cadastros abaixo foram verificados historicamente na API do Atlas a partir de 14/11/2026; as identidades adicionadas depois exigem reconciliação Atlas antes de serem declaradas publicadas:
+Identidades PGH atuais que o Atlas deve reconciliar. Parte do conjunto foi verificada historicamente na API a partir de 14/11/2026; identidades adicionadas depois não devem ser declaradas publicadas até readback do Atlas:
+- pgh.agent.atendimento_usuario.cloudiff.atd_01
 - pgh.agent.auditoria.cloudiff.aud_01
 - pgh.agent.desenvolvimento.cloudiff.dev_01
 - pgh.agent.desenvolvimento.cloudiff.dev_02
