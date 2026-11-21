@@ -28,12 +28,14 @@ rm -rf "$BUILD" "$RELEASE"
 mkdir -p "$BUILD" "$RELEASE/bin"
 
 COMPILER=$(clang++ --version | head -n1)
-BUILD_COMMAND="cmake -S <source> -B <build> -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=clang++ && cmake --build <build> --target cloudiff-agent test_npm_publisher_provider && ctest --test-dir <build> -R '^npm_publisher_provider$' --output-on-failure"
+JOBS=${CLOUDIFF_BUILD_JOBS:-2}
+[[ "$JOBS" =~ ^[1-4]$ ]] || { echo 'CLOUDIFF_BUILD_JOBS must be 1..4' >&2; exit 64; }
+BUILD_COMMAND="cmake -S <source> -B <build> -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=clang++ && nice -n 10 cmake --build <build> --parallel $JOBS --target cloudiff-agent test_npm_publisher_provider && nice -n 10 ctest --test-dir <build> -R '^npm_publisher_provider$' --output-on-failure"
 BUILD_COMMAND_DIGEST=$(printf '%s' "$BUILD_COMMAND" | sha256sum | awk '{print $1}')
 
 cmake -S "$SOURCE" -B "$BUILD" -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=clang++
-cmake --build "$BUILD" --target cloudiff-agent test_npm_publisher_provider
-ctest --test-dir "$BUILD" -R '^npm_publisher_provider$' --output-on-failure
+nice -n 10 cmake --build "$BUILD" --parallel "$JOBS" --target cloudiff-agent test_npm_publisher_provider
+nice -n 10 ctest --test-dir "$BUILD" -R '^npm_publisher_provider$' --output-on-failure
 
 install -m 0755 "$BUILD/cloudiff-agent" "$RELEASE/bin/cloudiff-agent"
 BINARY_SHA=$(sha256sum "$RELEASE/bin/cloudiff-agent" | awk '{print $1}')
