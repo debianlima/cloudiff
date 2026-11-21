@@ -44,7 +44,7 @@ A plataforma mantém Dockerfiles, Compose, healthchecks e metadados fora do repo
 5. promover H→P muda papel/roteamento da própria instância aprovada, sem rebuild/reclone;
 6. a P anterior é parada somente depois do health/readback da nova e permanece enquanto necessária para rollback exato.
 
-Builders, imagens e redes continuam gerenciados pela plataforma. Identificadores `dN` existem apenas para compatibilidade com publicações legadas e não definem o lifecycle novo.
+Builders, imagens e redes continuam gerenciados pela plataforma. A imagem-base segue o padrão `cloudif/runtime-apache-php8.3-node22:v2`, ajustado às versões de PHP e Node selecionadas. TLS é terminado no proxy nas portas públicas 80 e 443; os containers atendem na rede interna. Identificadores `dN` existem apenas para compatibilidade com publicações legadas e não definem o lifecycle novo.
 
 ## Publicação e retenção
 
