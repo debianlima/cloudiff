@@ -85,3 +85,9 @@ Enquanto as árvores canônicas dos componentes legados ainda não refletirem in
 - `compat/cloudiff-stage-environment-reconcile-worker.patch`.
 
 Não substituir componentes live por uma árvore presumidamente equivalente; reconciliar por base/proveniência e aplicar os deltas de forma verificável.
+
+## Semântica da UI após promoção
+
+Uma Homologação promovida deixa de ser ambiente ativo e passa a ser histórico. O Portal não deve oferecer Site, Terminal ou Variáveis da H publicada como se ainda existisse runtime H. Para Compose snapshot, uma H ativa exige estado `awaiting_homologation`/`homologated` e `sameInstancePromotionRequired=true`.
+
+Projetos com Preview Forgejo/Komodo vinculado usam o W1 oficial como identidade do Preview. O overview não pode cair em um registro do Preview Broker legado quando a consulta ao Broker/Executor estiver temporariamente indisponível; nesse caso mantém a identidade/URL W1 com estado de atenção.

@@ -1,0 +1,63 @@
+--- a/cloudif_project_environments_overview.py
++++ b/cloudif_project_environments_overview.py
+@@ -109,6 +109,51 @@
+         return {}
+ 
+ 
++
++def _linked_integration_identity(slug:str)->dict[str,Any]:
++    if not PORTAL_DB.exists():return {}
++    try:
++        with sqlite3.connect(f'file:{PORTAL_DB}?mode=ro',uri=True,timeout=10) as con:
++            con.row_factory=sqlite3.Row
++            row=con.execute("select komodo_repo_id,komodo_stack_id,komodo_repo_name,komodo_stack_name from project_integrations where project=?",(slug,)).fetchone()
++            public=con.execute("select public_number from project_public_ids where project_slug=?",(slug,)).fetchone()
++        if not row or not public:return {}
++        expected='cloudif-'+slug
++        if str(row['komodo_repo_name'] or '')!=expected or str(row['komodo_stack_name'] or '')!=expected:return {}
++        repo=str(row['komodo_repo_id'] or '');stack=str(row['komodo_stack_id'] or '')
++        if len(repo)!=24 or len(stack)!=24:return {}
++        return {'publicNumber':int(public['public_number']),'repoId':repo,'stackId':stack}
++    except Exception:return {}
++
++
++def _official_preview(slug:str,username:str,groups:list[str]|set[str])->dict[str,Any]:
++    linked=_linked_integration_identity(slug)
++    try:
++        import cloudif_portal_publications as publications
++        lower={str(x).strip().lower() for x in groups}
++        user={'username':username,'email':'','groups':list(groups),'admin':'cloudif-tenants-admin' in lower,'professor':'cloudif-professor' in lower}
++        data=publications.preview_status(slug,user)
++        if data.get('ok') is True and data.get('configured') is True:
++            kind=str(data.get('runtimeKind') or '')
++            return {
++                'status':'active' if data.get('healthy') else 'attention',
++                'previewId':str(data.get('stageCode') or 'W1'),'buildJobId':'',
++                'commit':str(((data.get('git') or {}).get('head')) or ''),
++                'createdAt':0,'expiresAt':0,'url':str(data.get('url') or ''),
++                'linkMode':'forgejo_source_preview_w1' if kind=='linked-compose' else kind,
++                'runtimeContainer':str(data.get('container') or ''),'bridgeContainer':str(data.get('bridge') or ''),
++                'sourceMode':str(data.get('sourceMode') or ''),'managedByCloudiffPreviewFlow':True,
++            }
++    except Exception:
++        if linked:
++            number=int(linked['publicNumber'])
++            return {'status':'attention','previewId':'W1','buildJobId':'','commit':'','createdAt':0,'expiresAt':0,
++                    'url':f'https://{number}-w1-preview.cloudiff.duckdns.org/','linkMode':'forgejo_source_preview_w1',
++                    'runtimeContainer':'','bridgeContainer':f'cloudif-p{number}-w1-preview-web','sourceMode':'forgejo-linked-stack',
++                    'managedByCloudiffPreviewFlow':True}
++    return _preview(slug)
++
++
+ def _preview(slug:str)->dict[str,Any]:
+     if not PREVIEW_DB.exists():return _linked_sgrep_source_preview(slug)
+     try:
+@@ -174,7 +219,7 @@
+ def overview(slug:str,username:str,groups:list[str]|set[str])->dict[str,Any]:
+     auth=authorization(slug,username,groups)
+     if not auth.get('canRead'):raise PermissionError('forbidden')
+-    preview=_preview(slug);production=_production(slug)
++    preview=_official_preview(slug,username,groups);production=_production(slug)
+     environments=[]
+     for environment in ENVIRONMENTS:
+         config=_config(slug,environment,username,groups)

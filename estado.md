@@ -592,3 +592,12 @@
 - Agenda P1020 foi migrado a partir do runtime real: controller/W1=10/10, controller/P6=10/10 e baseline H/Preview=10/10 por hashes. W3 foi desligado; H4 runtime removido com snapshot preservado; bridges H residuais e rotas antigas foram removidos; Publisher mantém apenas W1 e P6.
 - Política de retenção: H substituída/não promovida é removida como runtime; P anterior é desligada e preservada para rollback, sem rota pública versionada antiga.
 - Referência: `compat/cloudiff-stage-environment-runtime-contract.md` e patches `compat/cloudiff-stage-environment-*.patch` / `compat/cloudiff-stage-sensitive-web.patch`.
+
+## UI de estágios — Preview W1 e Homologação histórica (21/11/2026)
+
+- O modal de ambientes não usa mais Preview Broker legado quando o projeto possui integração Forgejo/Komodo vinculada. O `environments-overview` consulta `preview_status` oficial e mantém a identidade W1 mesmo se a consulta remota estiver temporariamente indisponível.
+- Agenda P1020: Preview oficial é `1020-w1-preview.cloudiff.duckdns.org`; o iframe não deve cair em `cloudiff.duckdns.org` nem em preview genérico.
+- Homologação com candidato `published` é histórico de auditoria, não ambiente ativo. A UI só considera H navegável/editável quando o candidato está `awaiting_homologation` ou `homologated` e, para Compose snapshot, declara `sameInstancePromotionRequired=true`.
+- Após H→P, Site/Variáveis de Homologação mostram “não há Homologação ativa” em vez de reutilizar H já promovida. Produção continua apontando para P ativa.
+- Foi encontrado `cloudif-deployment-broker.service` inativo; o serviço foi reativado e voltou a ouvir em `127.0.0.1:18207`. Mesmo com falha futura desse serviço, o overview vinculado não deve regredir para a URL de Preview legado.
+- As variáveis exibidas em Produção permanecem as variáveis reais do deployment P6. Como P6 é a própria H6 promovida, valores iguais aos herdados do Preview são esperados até que o usuário altere explicitamente a Produção.
