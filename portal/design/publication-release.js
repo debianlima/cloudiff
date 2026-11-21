@@ -155,10 +155,20 @@
       homologated: 'Homologado', rejected: 'Rejeitado', published: 'Publicado'
     };
     let actions = '';
+    let compatibilityNote = '';
     if (candidate.status === 'awaiting_homologation' && data.canHomologate) {
       actions = `<button class="btn" type="button" data-release-action="homologation-approve" data-candidate="${Number(candidate.candidate_number)}">Homologar</button><button class="btn light" type="button" data-release-action="homologation-reject" data-candidate="${Number(candidate.candidate_number)}">Rejeitar</button>`;
     } else if (candidate.status === 'homologated') {
-      actions = '<button class="btn" type="button" data-release-action="go-production">Ir para Produção</button>';
+      const sameInstanceCompatible = Boolean((candidate.runtimeDiff || {}).sameInstancePromotionRequired === true);
+      if (sameInstanceCompatible && data.canPublish) {
+        actions = `<button class="btn" type="button" data-release-action="production-publish" data-candidate="${Number(candidate.candidate_number)}">Enviar para Produção</button>`;
+      } else if (sameInstanceCompatible) {
+        actions = '<button class="btn" type="button" disabled>Enviar para Produção</button>';
+        compatibilityNote = '<div class="release-note"><strong>Publicação restrita.</strong><span>Peça a um dono, Professor, Administrador ou usuário autorizado deste projeto.</span></div>';
+      } else {
+        actions = '<button class="btn" type="button" disabled title="Esta Homologação foi criada antes do contrato de promoção da mesma instância.">Enviar para Produção</button>' + (data.canWrite ? '<button class="btn light" type="button" data-release-action="homologation-create">Enviar Preview atual para nova Homologação</button>' : '');
+        compatibilityNote = '<div class="release-note"><strong>Homologação legada.</strong><span>Este candidato foi criado antes do fluxo atual. Para garantir que Produção receba exatamente a mesma instância testada, gere uma nova Homologação a partir do Preview atual.</span></div>';
+      }
     } else if (['rejected', 'published'].includes(candidate.status) && data.canWrite) {
       actions = '<button class="btn" type="button" data-release-action="homologation-create">Enviar novo Preview para homologação</button>';
     }
@@ -168,7 +178,7 @@
       'Este candidato é imutável. Homologue ou rejeite; o Preview pode continuar evoluindo em paralelo.',
       labels[candidate.status] || candidate.status,
       ['homologated', 'published'].includes(candidate.status) ? 'ok' : ''
-    )}<div class="release-grid"><div class="release-box"><span>Commit congelado</span><code>${esc((candidate.commit_sha || '').slice(0, 12))}</code></div><div class="release-box"><span>Origem</span><strong>W${Number(candidate.preview_generation || 0)}</strong></div></div><div class="release-primary-action">${actions}</div></section>`;
+    )}<div class="release-grid"><div class="release-box"><span>Commit congelado</span><code>${esc((candidate.commit_sha || '').slice(0, 12))}</code></div><div class="release-box"><span>Origem</span><strong>W${Number(candidate.preview_generation || 0)}</strong></div></div>${compatibilityNote}<div class="release-primary-action">${actions}</div></section>`;
   }
 
   function renderProduction() {
@@ -180,7 +190,7 @@
 
     if (candidate && candidate.status === 'homologated') {
       if (data.canPublish) {
-        action = `<button class="btn" type="button" data-release-action="production-publish" data-candidate="${Number(candidate.candidate_number)}">Publicar em Produção</button>`;
+        action = `<button class="btn" type="button" data-release-action="production-publish" data-candidate="${Number(candidate.candidate_number)}">Enviar para Produção</button>`;
       } else {
         permissionNote = '<div class="release-note"><strong>Publicação restrita.</strong><span>Peça a um dono, Professor, Administrador ou usuário autorizado deste projeto.</span></div>';
       }
@@ -404,7 +414,6 @@
           if (note.trim()) return act('homologation/reject', { candidateNumber: candidate, note }, 'Registrando rejeição…');
           return;
         }
-        if (action === 'go-production') return selectTab('publication');
         if (action === 'production-publish') return requestProduction(candidate);
         if (action === 'permissions-save') return savePermissions();
         if (action === 'permissions-close') { model.permissionsOpen = false; return render(); }
