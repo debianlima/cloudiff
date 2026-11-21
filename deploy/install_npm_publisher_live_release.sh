@@ -99,10 +99,14 @@ PY
 BEFORE_CONF=$(sha256sum "$LIVE_CONF" | awk '{print $1}')
 systemctl restart cloudiff-v2-npm-publisher-canary.service
 for _ in $(seq 1 20); do curl -fsS --max-time 2 "http://$CANARY_HOST:$CANARY_PORT/health" >/dev/null && break; sleep 0.5; done
-printf 'header = "Content-Type: application/json"\nheader = "X-CloudIF-Token: %s"\ndata = "{\"public_number\":999999999,\"stage\":\"homologation\",\"number\":999999}"\n' "$CANARY_TOKEN" | curl -fsS --max-time 10 --config - "http://$CANARY_HOST:$CANARY_PORT/stage/delete" > "$BACKUP/canary-delete-response.json"
-python3 - "$BACKUP/canary-delete-response.json" <<'PY'
-import json,sys
-x=json.load(open(sys.argv[1]));assert x.get('ok') is True and x.get('removed') is False
+CLOUDIFF_PROBE_TOKEN="$CANARY_TOKEN" CLOUDIFF_PROBE_HOST="$CANARY_HOST" CLOUDIFF_PROBE_PORT="$CANARY_PORT" CLOUDIFF_PROBE_OUT="$BACKUP/canary-delete-response.json" python3 - <<'PY'
+import json,os,urllib.request
+url=f"http://{os.environ['CLOUDIFF_PROBE_HOST']}:{os.environ['CLOUDIFF_PROBE_PORT']}/stage/delete"
+payload=json.dumps({'public_number':999999999,'stage':'homologation','number':999999}).encode()
+r=urllib.request.Request(url,data=payload,method='POST',headers={'X-CloudIF-Token':os.environ['CLOUDIFF_PROBE_TOKEN'],'Content-Type':'application/json','Accept':'application/json'})
+with urllib.request.urlopen(r,timeout=10) as f: code=f.status; body=json.load(f)
+assert code==200 and body.get('ok') is True and body.get('removed') is False
+with open(os.environ['CLOUDIFF_PROBE_OUT'],'w') as f: json.dump({'ok':True,'removed':False},f);f.write('\n')
 PY
 AFTER_STATE=$(python3 - "$LIVE_STATE" <<'PY'
 import json,hashlib,sys
@@ -121,10 +125,14 @@ LIVE_HOST=$LIVE_BIND; [[ "$LIVE_HOST" == '0.0.0.0' || "$LIVE_HOST" == '::' ]] &&
 for _ in $(seq 1 20); do curl -fsS --max-time 2 "http://$LIVE_HOST:$LIVE_PORT/health" >/dev/null && break; sleep 0.5; done
 curl -fsS --max-time 4 "http://$LIVE_HOST:$LIVE_PORT/health" >/dev/null
 # Prove the new endpoint on live with an idempotent no-op.
-printf 'header = "Content-Type: application/json"\nheader = "X-CloudIF-Token: %s"\ndata = "{\"public_number\":999999999,\"stage\":\"homologation\",\"number\":999999}"\n' "$LIVE_TOKEN" | curl -fsS --max-time 10 --config - "http://$LIVE_HOST:$LIVE_PORT/stage/delete" > "$BACKUP/live-delete-response.json"
-python3 - "$BACKUP/live-delete-response.json" <<'PY'
-import json,sys
-x=json.load(open(sys.argv[1]));assert x.get('ok') is True and x.get('removed') is False
+CLOUDIFF_PROBE_TOKEN="$LIVE_TOKEN" CLOUDIFF_PROBE_HOST="$LIVE_HOST" CLOUDIFF_PROBE_PORT="$LIVE_PORT" CLOUDIFF_PROBE_OUT="$BACKUP/live-delete-response.json" python3 - <<'PY'
+import json,os,urllib.request
+url=f"http://{os.environ['CLOUDIFF_PROBE_HOST']}:{os.environ['CLOUDIFF_PROBE_PORT']}/stage/delete"
+payload=json.dumps({'public_number':999999999,'stage':'homologation','number':999999}).encode()
+r=urllib.request.Request(url,data=payload,method='POST',headers={'X-CloudIF-Token':os.environ['CLOUDIFF_PROBE_TOKEN'],'Content-Type':'application/json','Accept':'application/json'})
+with urllib.request.urlopen(r,timeout=10) as f: code=f.status; body=json.load(f)
+assert code==200 and body.get('ok') is True and body.get('removed') is False
+with open(os.environ['CLOUDIFF_PROBE_OUT'],'w') as f: json.dump({'ok':True,'removed':False},f);f.write('\n')
 PY
 docker exec cloudif-nginx-proxy-manager nginx -t >/dev/null
 docker exec cloudif-nginx-proxy-manager nginx -s reload >/dev/null

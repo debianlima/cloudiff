@@ -90,6 +90,10 @@ int main(){
     cloudiff::PublisherOptions live=opts; live.state_path=live_state; live.nginx_conf_path=live_conf; live.dry_run=false;
     live.nginx_test_command={"/bin/true"}; live.nginx_reload_command={"/bin/true"};
     cloudiff::NpmPublisherProvider live_provider(live);
+    r=live_provider.handle("POST","/stage/delete","unit-secret",R"({"public_number":999999999,"stage":"homologation","number":999999})"); assert(r.status==200); assert(r.body.at("removed")==false);
+    std::string first_noop_render; {std::ifstream in(live_conf);first_noop_render.assign((std::istreambuf_iterator<char>(in)),{});}
+    r=live_provider.handle("POST","/stage/delete","unit-secret",R"({"public_number":999999999,"stage":"homologation","number":999999})"); assert(r.status==200); assert(r.body.at("removed")==false);
+    {std::ifstream in(live_conf);std::string second_noop_render((std::istreambuf_iterator<char>(in)),{});assert(second_noop_render==first_noop_render);}
     r=live_provider.handle("POST","/unpublish","unit-secret",R"({"public_number":1007})"); assert(r.status==200);
     {std::ifstream in(live_conf);std::string text((std::istreambuf_iterator<char>(in)),{});assert(text.starts_with("# OUTER PREFIX\n"));assert(text.ends_with("# OUTER SUFFIX\n"));assert(text.find("server_name 1007.cloudiff.duckdns.org;")==std::string::npos);}
     bool found_backup=false;for(const auto& e:std::filesystem::directory_iterator(root))if(e.path().filename().string().starts_with("live-http.conf.bkp-v2-canary-"))found_backup=true;assert(!found_backup);

@@ -160,8 +160,12 @@ void NpmPublisherProvider::render_locked(){
     const std::string old((std::istreambuf_iterator<char>(in)),{});
     const std::string begin="# CloudIF managed publications BEGIN",end="# CloudIF managed publications END";
     std::string next=old;const auto b=old.find(begin);const auto e=b==std::string::npos?std::string::npos:old.find(end,b);
-    if(b!=std::string::npos&&e!=std::string::npos)next.replace(b,e+end.size()-b,managed);
-    else{if(!next.empty()&&next.back()!='\n')next.push_back('\n');next+="\n"+managed+"\n";}
+    if(b!=std::string::npos&&e!=std::string::npos){
+        auto replace_end=e+end.size();
+        if(replace_end<old.size()&&old[replace_end]=='\r')++replace_end;
+        if(replace_end<old.size()&&old[replace_end]=='\n')++replace_end;
+        next.replace(b,replace_end-b,managed);
+    }else{if(!next.empty()&&next.back()!='\n')next.push_back('\n');next+="\n"+managed+"\n";}
     const auto epoch=std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
     auto backup=options_.nginx_conf_path;backup+=".bkp-v2-canary-"+std::to_string(epoch);
     std::filesystem::copy_file(options_.nginx_conf_path,backup,std::filesystem::copy_options::overwrite_existing);
