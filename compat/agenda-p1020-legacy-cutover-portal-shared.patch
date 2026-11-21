@@ -1,0 +1,56 @@
+--- a/cloudif_portal_publications.py
++++ b/cloudif_portal_publications.py
+@@ -218,14 +218,24 @@
+     return {'candidateNumber':int(row['candidate_number']),'deploymentId':dep} if re.fullmatch(r'dep_[a-f0-9]{24}',dep) else None
+ 
+ 
+-def _linked_compose_previous_active_production_deployment(slug):
++def _linked_compose_previous_active_production(slug):
+     con=sqlite3.connect(DB);con.row_factory=sqlite3.Row;_ensure_schema(con)
+-    row=con.execute("select * from project_publications where project_slug=? and is_active=1 and status='published' order by id desc limit 1",(slug,)).fetchone();con.close()
+-    if not row:return ''
+-    try:detail=json.loads(row['detail_json'] or '{}')
+-    except Exception:return ''
++    row=con.execute("select * from project_publications where project_slug=? and is_active=1 and status='published' order by id desc limit 1",(slug,)).fetchone()
++    release=con.execute("select * from production_releases where project_slug=? and is_active=1 and status='published' order by publication_number desc limit 1",(slug,)).fetchone();con.close()
++    detail={}
++    if row:
++        try:detail=json.loads(row['detail_json'] or '{}')
++        except Exception:detail={}
+     dep=str(detail.get('productionDeploymentId') or '')
+-    return dep if re.fullmatch(r'dep_[a-f0-9]{24}',dep) else ''
++    publication=int(release['publication_number']) if release else 0
++    return {'deploymentId':dep if re.fullmatch(r'dep_[a-f0-9]{24}',dep) else '','publicationNumber':publication}
++
++
++def _legacy_publication_deactivate(slug,public_number,publication_number):
++    ku,kt,_=_clients();payload={'project':slug,'public_number':int(public_number),'publication_number':int(publication_number)}
++    status,result=_post(ku+'/komodo/publication/deactivate-legacy',payload,kt,timeout=90)
++    if status//100!=2 or not isinstance(result,dict) or result.get('ok') is not True:raise RuntimeError('Não foi possível desativar a Produção legada anterior.')
++    return result
+ 
+ 
+ def _create_linked_compose_homologation_candidate(slug,num,candidate,actor,progress=None):
+@@ -274,7 +284,7 @@
+     if meta.get('sameInstancePromotionRequired') is not True:raise RuntimeError('O candidato não declara promoção da mesma instância homologada.')
+     artifact_id='sha256:'+snapshot_digest
+     if not hmac.compare_digest(artifact_id,str(candidate['artifact_image_id'] or '')):raise RuntimeError('Identidade do snapshot Compose não confere com o candidato homologado.')
+-    previous_production=_linked_compose_previous_active_production_deployment(slug)
++    previous_production=_linked_compose_previous_active_production(slug)
+     notify('production','Promovendo a própria instância homologada para Produção, sem rebuild/reclone.')
+     trace='portal-pc-'+hashlib.sha256((slug+deployment_id+snapshot_id+str(publication)).encode()).hexdigest()[:20]
+     plan,promoted=_compose_snapshot_promote(slug,deployment_id,snapshot_id,snapshot_digest,trace,'PC|'+slug+'|'+str(publication)+'|'+deployment_id)
+@@ -291,7 +301,12 @@
+     stable=f'{num}.cloudiff.duckdns.org'
+     if not _external_ok(stable):raise RuntimeError('Validação da URL estável falhou após ativação.')
+     _multiservice_deactivate_bridge(slug,deployment_id,'homologation',trace+'-deactivate-h')
+-    if previous_production and previous_production!=deployment_id:_multiservice_deactivate(slug,previous_production,'substituída pela Produção P'+str(publication),trace+'-deactivate-previous-p')
++    previous_dep=str((previous_production or {}).get('deploymentId') or '')
++    previous_pub=int((previous_production or {}).get('publicationNumber') or 0)
++    if previous_dep and previous_dep!=deployment_id:
++        _multiservice_deactivate(slug,previous_dep,'substituída pela Produção P'+str(publication),trace+'-deactivate-previous-p')
++    elif not previous_dep and previous_pub and previous_pub!=publication:
++        _legacy_publication_deactivate(slug,num,previous_pub)
+     now=_now();environment_revision=int(candidate['environment_revision'] or 0);environment_digest=str(candidate['environment_digest'] or snapshot_digest)
+     con=sqlite3.connect(DB);con.row_factory=sqlite3.Row;_ensure_schema(con)
+     con.execute('update production_releases set is_active=0 where project_slug=?',(slug,))

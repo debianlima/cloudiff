@@ -176,11 +176,20 @@
     } else if (['rejected', 'published'].includes(candidate.status) && data.canWrite) {
       actions = '<button class="btn" type="button" data-release-action="homologation-create">Enviar novo Preview para homologação</button>';
     }
+    const active = activeRelease();
+    const promoted = candidate.status === 'published' && active && Number(active.candidate_number) === Number(candidate.candidate_number);
+    const promotedCode = promoted ? (active.stage_code || ('P' + Number(candidate.published_publication_number || 0))) : '';
+    const stageCode = promoted ? `${candidate.stage_code || 'H'} → ${promotedCode}` : (candidate.stage_code || 'H');
+    const stageTitle = promoted ? 'Promovida para Produção' : (labels[candidate.status] || candidate.status);
+    const stageDescription = promoted
+      ? `Esta Homologação foi concluída e promovida como ${promotedCode}. O registro H é mantido somente como histórico de auditoria.`
+      : 'Este candidato é imutável. Homologue ou rejeite; o Preview pode continuar evoluindo em paralelo.';
+    const stageBadge = promoted ? `${promotedCode} ativa` : (labels[candidate.status] || candidate.status);
     return jobHtml() + `<section class="release-stage">${stageIntro(
-      (candidate.stage_code || 'H') + ' · Homologação',
-      labels[candidate.status] || candidate.status,
-      'Este candidato é imutável. Homologue ou rejeite; o Preview pode continuar evoluindo em paralelo.',
-      labels[candidate.status] || candidate.status,
+      stageCode + (promoted ? ' · Ciclo concluído' : ' · Homologação'),
+      stageTitle,
+      stageDescription,
+      stageBadge,
       ['homologated', 'published'].includes(candidate.status) ? 'ok' : ''
     )}<div class="release-grid"><div class="release-box"><span>Commit congelado</span><code>${esc((candidate.commit_sha || '').slice(0, 12))}</code></div><div class="release-box"><span>Origem</span><strong>W${Number(candidate.preview_generation || 0)}</strong></div></div>${compatibilityNote}<div class="release-primary-action">${actions}</div></section>`;
   }
