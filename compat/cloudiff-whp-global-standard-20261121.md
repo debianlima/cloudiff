@@ -38,3 +38,7 @@ Eles se somam aos patches anteriores de clone/promoção/variáveis por estágio
 - P2 legado: container histórico iniciou saudável sem possuir alias ativo e voltou a parar; P7 permaneceu saudável.
 - UI headless: criar H, publicar P e rollback emitiram `cloudif:publication-state-changed` ao job `succeeded`; Histórico exibiu `Reativar P6` e fez POST no endpoint correto.
 - Suíte canônica relevante: 48/48 testes PASS.
+
+### Refresh terminal da interface
+
+Ao concluir com sucesso a criação de H, a promoção H→P ou a reativação histórica, o Portal atualiza o workspace do ambiente e executa recarregamento completo da página. Falhas não recarregam automaticamente: a mensagem de erro permanece visível para diagnóstico. Isso evita depender de F5/manual refresh para exibir o estágio recém-concluído.

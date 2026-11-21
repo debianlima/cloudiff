@@ -84,3 +84,7 @@ A H é congelada contra sincronização automática do Forgejo, mas aceita ediç
 Jobs terminais de H, P e rollback disparam refresh do modal de Ambiente de publicação. Uma H publicada deixa de ser runtime ativo e não oferece Site/Terminal/Variáveis.
 
 Produções históricas podem permanecer com containers/volumes parados para rollback exato. O Histórico reativa esses containers, exige health, recria bridge/rota se necessário, valida a URL estável e só depois desativa a P anterior. Bridges antigos não precisam ficar parados consumindo metadados; são reconstruíveis.
+
+### Refresh terminal da interface
+
+Ao concluir com sucesso a criação de H, a promoção H→P ou a reativação histórica, o Portal atualiza o workspace do ambiente e executa recarregamento completo da página. Falhas não recarregam automaticamente: a mensagem de erro permanece visível para diagnóstico. Isso evita depender de F5/manual refresh para exibir o estágio recém-concluído.

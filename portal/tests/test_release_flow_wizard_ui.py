@@ -86,6 +86,9 @@ class ReleaseFlowWizardUITests(unittest.TestCase):
         self.assertIn("data.job && ['succeeded', 'failed'].includes",release)
         self.assertIn("cloudif:publication-state-changed",BASE)
         self.assertIn("publicationEnvironmentLoad()",BASE)
+        self.assertIn("String(detail.status||'')==='succeeded'",BASE)
+        self.assertIn("window.location.reload()",BASE)
+        self.assertIn("cloudifPublicationReloading",BASE)
 
     def test_production_history_exposes_controlled_reactivation(self):
         release=RELEASE_JS_PATH.read_text()

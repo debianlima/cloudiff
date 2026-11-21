@@ -621,3 +621,13 @@
 - Terminal de Homologação não aceita mais candidato `published`; H publicada é histórico.
 - Ajuda foi atualizada para abandonar o modelo `d1/d2` independente como fluxo principal.
 - “H imutável” foi refinado: código/imagens/origem Forgejo são congelados, mas variáveis do estágio podem ser alteradas explicitamente antes do aceite.
+
+## Fechamento operacional W→H→P após teste humano — 21/11/2026
+
+- O usuário validou visualmente o ciclo Agenda P1020: Preview W1 → H7 → P7; o banner apareceu em W, H e P. O teste manual de **editar a variável em cada estágio e confirmar isolamento/herança** continua pendente e não deve ser marcado como aceito até execução humana.
+- Estado atual do Publisher P1020: somente `1020-w1-preview` e `1020-p7-publication` roteados. H7 é histórico (`published`), sem runtime H ativo.
+- P7 usa `dep_19bc037d073bf2418f9050c7` e está ativa/saudável. P6 (`dep_50cbcc3206cc58f64333c5d1`) e P3 (`dep_23d8e626b85daf7d91bdece4`) ficam paradas para rollback exato; P2 legado também fica parado porque a reativação histórica depende do runtime preservado. Não remover esses containers enquanto esse contrato de rollback estiver vigente.
+- A rede antiga `cloudif-p1020-w3-preview_private` tinha zero endpoints e foi removida como resíduo reconstruível.
+- Smoke de rollback P6: `prepare` iniciou API/DB/Web sem recriar containers, P7 permaneceu HTTP 200/revisão `18416127cdf9`, `abort` parou P6 novamente; volumes foram preservados.
+- Jobs terminais de criação de H, promoção H→P e reativação histórica agora atualizam o workspace e, em sucesso, fazem reload completo da página. Falhas não recarregam automaticamente para manter o erro visível.
+- Ajuda do Portal, fluxo W/H/P e manual técnico documentam o mesmo comportamento.

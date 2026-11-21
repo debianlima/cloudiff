@@ -216,3 +216,7 @@ Qualquer evolução do sistema de entrega deve preservar estes invariantes:
 ## Decisão humana de 20/11/2026
 
 Este documento deve ser lido junto com [`PADRAO-CLOUDIFF-PREVIEW-HOMOLOGACAO-PRODUCAO-20261120.md`](PADRAO-CLOUDIFF-PREVIEW-HOMOLOGACAO-PRODUCAO-20261120.md), que prevalece sobre descrições históricas divergentes do ciclo W/H/P.
+
+### Refresh terminal da interface
+
+Ao concluir com sucesso a criação de H, a promoção H→P ou a reativação histórica, o Portal atualiza o workspace do ambiente e executa recarregamento completo da página. Falhas não recarregam automaticamente: a mensagem de erro permanece visível para diagnóstico. Isso evita depender de F5/manual refresh para exibir o estágio recém-concluído.
