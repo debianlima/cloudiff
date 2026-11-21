@@ -7,7 +7,7 @@
   const model = {
     slug: '', tab: 'preview', data: null, csrf: '', approval: null,
     poll: null, busy: false, opener: null, autoPreviewAttempted: false,
-    previewPreparing: false, previewError: '', permissionsOpen: false
+    previewPreparing: false, previewError: '', permissionsOpen: false, authRedirecting: false
   };
   let body = null;
   const environmentToTab = { preview: 'preview', homologation: 'homologation', production: 'publication' };
@@ -20,12 +20,27 @@
     return '/cloudiff/portal/api/projects/' + encodeURIComponent(model.slug) + '/release-flow';
   }
 
+  function authenticationStartUrl() {
+    return '/outpost.goauthentik.io/start?rd=' + encodeURIComponent(window.location.href);
+  }
+
+  function redirectForAuthentication() {
+    if (model.authRedirecting) return;
+    model.authRedirecting = true;
+    window.setTimeout(() => window.location.assign(authenticationStartUrl()), 30);
+  }
+
   async function call(url, options = {}) {
     const response = await fetch(url, {
       credentials: 'same-origin',
+      redirect: 'manual',
       headers: { Accept: 'application/json', ...(options.headers || {}) },
       ...options
     });
+    if (response.type === 'opaqueredirect' || response.status === 0 || (response.status >= 300 && response.status < 400)) {
+      redirectForAuthentication();
+      throw new Error('Sessão expirada. Redirecionando para autenticação…');
+    }
     const data = await response.json().catch(() => ({ ok: false, error: { message: 'Resposta inválida da plataforma.' } }));
     if (!response.ok || !data.ok) {
       const error = data.error || {};
