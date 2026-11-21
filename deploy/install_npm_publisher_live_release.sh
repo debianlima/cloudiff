@@ -1,18 +1,20 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-usage(){ echo "usage: $0 --release-dir DIR --release-id ID [--smoke-url URL]" >&2; exit 64; }
-INPUT=''; RELEASE_ID=''; SMOKE_URL=''
+usage(){ echo "usage: $0 --release-dir DIR --release-id ID [--smoke-url URL] [--installer-commit SHA]" >&2; exit 64; }
+INPUT=''; RELEASE_ID=''; SMOKE_URL=''; INSTALLER_COMMIT=''
 while (($#)); do
   case "$1" in
     --release-dir) INPUT=${2:-}; shift 2;;
     --release-id) RELEASE_ID=${2:-}; shift 2;;
     --smoke-url) SMOKE_URL=${2:-}; shift 2;;
+    --installer-commit) INSTALLER_COMMIT=${2:-}; shift 2;;
     *) usage;;
   esac
 done
 [[ $EUID -eq 0 ]] || { echo 'root required' >&2; exit 77; }
 [[ -d "$INPUT" && "$RELEASE_ID" =~ ^[A-Za-z0-9._-]+$ ]] || usage
+[[ -z "$INSTALLER_COMMIT" || "$INSTALLER_COMMIT" =~ ^[a-f0-9]{40}$ ]] || usage
 for cmd in python3 sha256sum readelf curl systemctl docker install ln cp; do command -v "$cmd" >/dev/null; done
 
 INPUT=$(readlink -f "$INPUT")
@@ -23,7 +25,8 @@ read -r SOURCE_COMMIT SOURCE_TREE EXPECTED_SHA BUILD_ID < <(python3 - "$MANIFEST
 import json,sys,re
 x=json.load(open(sys.argv[1]))
 vals=[x.get('source_commit',''),x.get('source_tree',''),x.get('binary_sha256',''),x.get('gnu_build_id','')]
-assert re.fullmatch(r'[a-f0-9]{40}',vals[0]);assert re.fullmatch(r'[a-f0-9]{40}',vals[1]);assert re.fullmatch(r'[a-f0-9]{64}',vals[2]);assert re.fullmatch(r'[a-f0-9]+',vals[3]);assert x.get('tests',{}).get('npm_publisher_provider')=='PASS'
+assert re.fullmatch(r'[a-f0-9]{40}',vals[0]); assert re.fullmatch(r'[a-f0-9]{40}',vals[1]); assert re.fullmatch(r'[a-f0-9]{64}',vals[2]); assert re.fullmatch(r'[a-f0-9]+',vals[3])
+assert x.get('tests',{}).get('npm_publisher_provider')=='PASS'
 print(*vals)
 PY
 )
@@ -38,20 +41,28 @@ PREVIOUS_LINK="$ROOT/publisher-live-previous"
 CANARY_LINK="$ROOT/publisher-canary-current"
 [[ ! -e "$DEST" ]] || { echo 'release id already exists' >&2; exit 65; }
 OLD_LIVE=$(readlink -f "$LIVE_LINK")
+OLD_PREVIOUS=$(readlink -f "$PREVIOUS_LINK" 2>/dev/null || true)
+OLD_CANARY=$(readlink -f "$CANARY_LINK" 2>/dev/null || true)
 [[ -x "$OLD_LIVE/bin/cloudiff-agent" ]] || { echo 'current live release invalid' >&2; exit 65; }
 STAMP=$(date -u +%Y%m%dT%H%M%SZ)
 BACKUP="/srv/cloudif/backups/npm-publisher-release-$STAMP"
 install -d -m 0700 "$BACKUP"
 
-# Load envs privately; never print token values.
+# Load live configuration privately. Secret values are never printed or persisted by this script.
 set -a
 . /etc/cloudiff-v2/publisher-live.env
-LIVE_BIND=$CLOUDIFF_PUBLISHER_BIND; LIVE_PORT=$CLOUDIFF_PUBLISHER_PORT; LIVE_TOKEN=$CLOUDIFF_PUBLISHER_TOKEN; LIVE_STATE=$CLOUDIFF_PUBLISHER_STATE; LIVE_CONF=$CLOUDIFF_PUBLISHER_NGINX_CONF
+LIVE_BIND=$CLOUDIFF_PUBLISHER_BIND
+LIVE_PORT=$CLOUDIFF_PUBLISHER_PORT
+LIVE_TOKEN=$CLOUDIFF_PUBLISHER_TOKEN
+LIVE_STATE=$CLOUDIFF_PUBLISHER_STATE
+LIVE_CONF=$CLOUDIFF_PUBLISHER_NGINX_CONF
 set +a
 unset CLOUDIFF_PUBLISHER_TOKEN
 cp -a "$LIVE_STATE" "$BACKUP/state.before.json"
 cp -a "$LIVE_CONF" "$BACKUP/http.conf.before"
 printf '%s\n' "$OLD_LIVE" > "$BACKUP/live-target.before"
+printf '%s\n' "$OLD_PREVIOUS" > "$BACKUP/previous-target.before"
+printf '%s\n' "$OLD_CANARY" > "$BACKUP/canary-target.before"
 chmod 0600 "$BACKUP"/*
 
 install -d -m 0755 "$DEST/bin"
@@ -59,6 +70,7 @@ install -m 0755 "$BINARY" "$DEST/bin/cloudiff-agent"
 install -m 0644 "$MANIFEST" "$DEST/release-manifest.json"
 cp -a "$INPUT/SHA256SUMS" "$DEST/SHA256SUMS"
 printf '%s\n' "$SOURCE_COMMIT" > "$DEST/SOURCE_SHA"
+INSTALLER_SHA=$(sha256sum "$0" | awk '{print $1}')
 cat > "$DEST/DEPLOYMENT-METADATA" <<META
 release_id=$RELEASE_ID
 source_commit=$SOURCE_COMMIT
@@ -67,13 +79,21 @@ binary_sha256=$EXPECTED_SHA
 gnu_build_id=$BUILD_ID
 purpose=publisher_stage_delete_automatic_homologation_cleanup
 build_profile=Release-clang
+installer_commit=$INSTALLER_COMMIT
+installer_sha256=$INSTALLER_SHA
 META
 chmod 0644 "$DEST/SOURCE_SHA" "$DEST/DEPLOYMENT-METADATA" "$DEST/SHA256SUMS"
 
+restore_link(){
+  local target=$1 link=$2
+  if [[ -n "$target" ]]; then ln -sfn "$target" "$link"; else rm -f "$link"; fi
+}
 rollback(){
   set +e
   systemctl stop cloudiff-v2-npm-publisher-canary.service >/dev/null 2>&1
-  ln -sfn "$OLD_LIVE" "$LIVE_LINK"
+  restore_link "$OLD_CANARY" "$CANARY_LINK"
+  restore_link "$OLD_LIVE" "$LIVE_LINK"
+  restore_link "$OLD_PREVIOUS" "$PREVIOUS_LINK"
   cp -a "$BACKUP/state.before.json" "$LIVE_STATE"
   cp -a "$BACKUP/http.conf.before" "$LIVE_CONF"
   systemctl restart cloudiff-v2-npm-publisher-live.service
@@ -81,24 +101,30 @@ rollback(){
 }
 trap 'rc=$?; if ((rc!=0)); then rollback; fi; exit $rc' EXIT
 
-# Canary uses its own env/port but same managed state/config. Test a guaranteed-absent stage delete and require zero semantic drift.
+# Canary: same state/config, isolated port. Test a guaranteed-absent stage deletion and require exact byte stability.
 ln -sfn "$DEST" "$CANARY_LINK"
 set -a
 . /etc/cloudiff-v2/publisher-canary.env
-CANARY_BIND=$CLOUDIFF_PUBLISHER_BIND; CANARY_PORT=$CLOUDIFF_PUBLISHER_PORT; CANARY_TOKEN=$CLOUDIFF_PUBLISHER_TOKEN; CANARY_STATE=$CLOUDIFF_PUBLISHER_STATE; CANARY_CONF=$CLOUDIFF_PUBLISHER_NGINX_CONF
+CANARY_BIND=$CLOUDIFF_PUBLISHER_BIND
+CANARY_PORT=$CLOUDIFF_PUBLISHER_PORT
+CANARY_TOKEN=$CLOUDIFF_PUBLISHER_TOKEN
+CANARY_STATE=$CLOUDIFF_PUBLISHER_STATE
+CANARY_CONF=$CLOUDIFF_PUBLISHER_NGINX_CONF
 set +a
 unset CLOUDIFF_PUBLISHER_TOKEN
 [[ "$CANARY_STATE" == "$LIVE_STATE" && "$CANARY_CONF" == "$LIVE_CONF" ]] || { echo 'canary/live managed paths mismatch' >&2; exit 65; }
-CANARY_HOST=$CANARY_BIND; [[ "$CANARY_HOST" == '0.0.0.0' || "$CANARY_HOST" == '::' ]] && CANARY_HOST=127.0.0.1
+CANARY_HOST=$CANARY_BIND
+[[ "$CANARY_HOST" == '0.0.0.0' || "$CANARY_HOST" == '::' ]] && CANARY_HOST=127.0.0.1
 BEFORE_STATE=$(python3 - "$LIVE_STATE" <<'PY'
 import json,hashlib,sys
-x=json.load(open(sys.argv[1]));assert '999999999-h999999-homologation' not in (x.get('stages') or {})
+x=json.load(open(sys.argv[1])); assert '999999999-h999999-homologation' not in (x.get('stages') or {})
 print(hashlib.sha256(json.dumps(x,sort_keys=True,separators=(',',':')).encode()).hexdigest())
 PY
 )
 BEFORE_CONF=$(sha256sum "$LIVE_CONF" | awk '{print $1}')
 systemctl restart cloudiff-v2-npm-publisher-canary.service
-for _ in $(seq 1 20); do curl -fsS --max-time 2 "http://$CANARY_HOST:$CANARY_PORT/health" >/dev/null && break; sleep 0.5; done
+for _ in $(seq 1 20); do curl -fsS --max-time 2 "http://$CANARY_HOST:$CANARY_PORT/health" >/dev/null 2>&1 && break; sleep 0.5; done
+curl -fsS --max-time 4 "http://$CANARY_HOST:$CANARY_PORT/health" >/dev/null
 CLOUDIFF_PROBE_TOKEN="$CANARY_TOKEN" CLOUDIFF_PROBE_HOST="$CANARY_HOST" CLOUDIFF_PROBE_PORT="$CANARY_PORT" CLOUDIFF_PROBE_OUT="$BACKUP/canary-delete-response.json" python3 - <<'PY'
 import json,os,urllib.request
 url=f"http://{os.environ['CLOUDIFF_PROBE_HOST']}:{os.environ['CLOUDIFF_PROBE_PORT']}/stage/delete"
@@ -106,11 +132,11 @@ payload=json.dumps({'public_number':999999999,'stage':'homologation','number':99
 r=urllib.request.Request(url,data=payload,method='POST',headers={'X-CloudIF-Token':os.environ['CLOUDIFF_PROBE_TOKEN'],'Content-Type':'application/json','Accept':'application/json'})
 with urllib.request.urlopen(r,timeout=10) as f: code=f.status; body=json.load(f)
 assert code==200 and body.get('ok') is True and body.get('removed') is False
-with open(os.environ['CLOUDIFF_PROBE_OUT'],'w') as f: json.dump({'ok':True,'removed':False},f);f.write('\n')
+with open(os.environ['CLOUDIFF_PROBE_OUT'],'w') as f: json.dump({'ok':True,'removed':False},f); f.write('\n')
 PY
 AFTER_STATE=$(python3 - "$LIVE_STATE" <<'PY'
 import json,hashlib,sys
-x=json.load(open(sys.argv[1]));print(hashlib.sha256(json.dumps(x,sort_keys=True,separators=(',',':')).encode()).hexdigest())
+x=json.load(open(sys.argv[1])); print(hashlib.sha256(json.dumps(x,sort_keys=True,separators=(',',':')).encode()).hexdigest())
 PY
 )
 AFTER_CONF=$(sha256sum "$LIVE_CONF" | awk '{print $1}')
@@ -118,11 +144,13 @@ AFTER_CONF=$(sha256sum "$LIVE_CONF" | awk '{print $1}')
 docker exec cloudif-nginx-proxy-manager nginx -t >/dev/null
 systemctl stop cloudiff-v2-npm-publisher-canary.service
 
+# Promote atomically. Previous live becomes the rollback target.
 ln -sfn "$OLD_LIVE" "$PREVIOUS_LINK"
 ln -sfn "$DEST" "$LIVE_LINK"
 systemctl restart cloudiff-v2-npm-publisher-live.service
-LIVE_HOST=$LIVE_BIND; [[ "$LIVE_HOST" == '0.0.0.0' || "$LIVE_HOST" == '::' ]] && LIVE_HOST=127.0.0.1
-for _ in $(seq 1 20); do curl -fsS --max-time 2 "http://$LIVE_HOST:$LIVE_PORT/health" >/dev/null && break; sleep 0.5; done
+LIVE_HOST=$LIVE_BIND
+[[ "$LIVE_HOST" == '0.0.0.0' || "$LIVE_HOST" == '::' ]] && LIVE_HOST=127.0.0.1
+for _ in $(seq 1 20); do curl -fsS --max-time 2 "http://$LIVE_HOST:$LIVE_PORT/health" >/dev/null 2>&1 && break; sleep 0.5; done
 curl -fsS --max-time 4 "http://$LIVE_HOST:$LIVE_PORT/health" >/dev/null
 # Prove the new endpoint on live with an idempotent no-op.
 CLOUDIFF_PROBE_TOKEN="$LIVE_TOKEN" CLOUDIFF_PROBE_HOST="$LIVE_HOST" CLOUDIFF_PROBE_PORT="$LIVE_PORT" CLOUDIFF_PROBE_OUT="$BACKUP/live-delete-response.json" python3 - <<'PY'
@@ -132,10 +160,24 @@ payload=json.dumps({'public_number':999999999,'stage':'homologation','number':99
 r=urllib.request.Request(url,data=payload,method='POST',headers={'X-CloudIF-Token':os.environ['CLOUDIFF_PROBE_TOKEN'],'Content-Type':'application/json','Accept':'application/json'})
 with urllib.request.urlopen(r,timeout=10) as f: code=f.status; body=json.load(f)
 assert code==200 and body.get('ok') is True and body.get('removed') is False
-with open(os.environ['CLOUDIFF_PROBE_OUT'],'w') as f: json.dump({'ok':True,'removed':False},f);f.write('\n')
+with open(os.environ['CLOUDIFF_PROBE_OUT'],'w') as f: json.dump({'ok':True,'removed':False},f); f.write('\n')
 PY
 docker exec cloudif-nginx-proxy-manager nginx -t >/dev/null
 docker exec cloudif-nginx-proxy-manager nginx -s reload >/dev/null
-if [[ -n "$SMOKE_URL" ]]; then curl -fsS --max-time 15 "$SMOKE_URL" >/dev/null; fi
+
+# Local vhost smoke avoids public hairpin from the NPM host; external smoke is performed by the orchestrator afterwards.
+if [[ -n "$SMOKE_URL" ]]; then
+  read -r SMOKE_SCHEME SMOKE_HOST < <(python3 - "$SMOKE_URL" <<'PY'
+import sys,urllib.parse
+u=urllib.parse.urlparse(sys.argv[1]); assert u.scheme in {'http','https'} and u.hostname
+print(u.scheme,u.hostname)
+PY
+)
+  if [[ "$SMOKE_SCHEME" == 'https' ]]; then
+    curl -kfsS --max-time 15 --resolve "$SMOKE_HOST:443:127.0.0.1" "$SMOKE_URL" >/dev/null
+  else
+    curl -fsS --max-time 15 --resolve "$SMOKE_HOST:80:127.0.0.1" "$SMOKE_URL" >/dev/null
+  fi
+fi
 trap - EXIT
 printf 'install_ok=true\nrelease_id=%s\nsource_commit=%s\nbinary_sha256=%s\nbackup=%s\n' "$RELEASE_ID" "$SOURCE_COMMIT" "$EXPECTED_SHA" "$BACKUP"
