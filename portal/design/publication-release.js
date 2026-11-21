@@ -85,11 +85,15 @@
 
   function jobHtml() {
     const job = model.data && model.data.job;
-    if (!job || !['queued', 'running'].includes(job.status)) return '';
+    if (!job) return '';
     const labels = {
       homologation_candidate: 'Preparando Homologação',
       production_release: 'Publicando em Produção'
     };
+    if (job.status === 'failed') {
+      return `<div class="release-note"><strong>Falha na última operação.</strong><span>${esc(job.message || 'A operação não foi concluída.')}</span></div>`;
+    }
+    if (!['queued', 'running'].includes(job.status)) return '';
     const percent = jobProgressPercent(job);
     return `<div class="release-job"><div class="release-job-head"><strong>${esc(labels[job.operation] || 'Operação em andamento')}</strong><span class="release-job-percent">${percent}%</span></div><span>${esc(job.message || 'Processando…')}</span><progress max="100" value="${percent}" aria-label="Progresso ${percent}%"></progress></div>`;
   }
