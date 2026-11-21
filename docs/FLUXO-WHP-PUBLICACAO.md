@@ -108,6 +108,12 @@ Metadados externos necessários para hostname, roteamento, TLS, autorização e 
 
 Valores públicos podem ser exibidos conforme a política do Portal. Segredos são tratados por referência, resolvidos internamente na execução e não devem aparecer no Git, no MCP, em logs de publicação ou no HTML do Portal.
 
+### Alteração humana no Portal
+
+A edição de variáveis/secrets por usuário humano autenticado no Portal não usa o Approval Service: sessão, CSRF e ACL de escrita já constituem a autorização da operação. O botão **Salvar alterações** atualiza controller + runtime do estágio. Secrets permanecem mascarados; vazio = manter, novo valor = rotacionar/aplicar. O caminho de approval continua reservado aos clientes MCP/automação e a operações que o contrato marque explicitamente como críticas.
+
+O digest da configuração runtime é calculado com JSON canônico UTF-8 (`ensure_ascii=false`) em Portal, Komodo e Executor, para que acentos e outros caracteres Unicode produzam a mesma identidade em todos os hops.
+
 ## Terminal
 
 O terminal padrão do projeto prioriza o Preview W quando ele existe. Isso faz com que a personalização de runtime e o desenvolvimento ocorram no mesmo ambiente que o usuário está visualizando.

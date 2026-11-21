@@ -1,0 +1,11 @@
+--- a/cloudif_portal_publications.py
++++ b/cloudif_portal_publications.py
+@@ -306,7 +306,7 @@
+     if environment not in {'preview','homologation','production'}:raise ValueError('Ambiente inválido.')
+     pc=_publication_config();runtime=pc.execution_environment_services(slug,environment)
+     values=runtime.get('valuesByService') or {};names=runtime.get('managedNamesByService') or {}
+-    material={'managed_names_by_service':names,'values_by_service':values};variables_digest=hashlib.sha256(json.dumps(material,sort_keys=True,separators=(',',':')).encode()).hexdigest()
++    material={'managed_names_by_service':names,'values_by_service':values};variables_digest=hashlib.sha256(json.dumps(material,ensure_ascii=False,sort_keys=True,separators=(',',':')).encode()).hexdigest()
+     try:
+         if environment=='preview':
+             if slug=='agenda-unica' or _is_linked_compose_project(slug):

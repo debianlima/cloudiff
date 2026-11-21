@@ -121,3 +121,9 @@ Ao retomar qualquer trabalho de publicação CloudIFF, o agente deve assumir e c
 8. **Fonte canônica:** ler o padrão W/H/P, `estado.md`, PGH/Atlas e patches de compatibilidade vigentes antes de normalizar componentes a9/Compose.
 
 Registros antigos com “dN independente”, “H isolada permanente”, “rebuild de Produção” ou “novo container P a partir de snapshot” são históricos e não prescrevem o fluxo atual.
+
+## Humano ≠ MCP para variáveis
+
+Para edição de variáveis/secrets, não aplicar o gate de aprovação MCP a um usuário humano que já está autenticado no Portal e tem ACL de escrita. O Portal usa sessão + CSRF + ACL e salva diretamente no estágio. Secrets permanecem mascarados e podem ser substituídos no mesmo formulário; campo vazio mantém o valor. Approval Service é preservado para MCP/automação e contratos explicitamente críticos.
+
+Para PostgreSQL persistente, a experiência humana continua sendo um único `Salvar alterações`: `POSTGRES_PASSWORD` aciona migração interna de role + `DATABASE_URL` com health/rollback e volume preservado. `POSTGRES_DB`/`POSTGRES_USER` continuam mudanças estruturais.

@@ -212,6 +212,15 @@ O fluxo de Publicações usa autorização vinculada ao projeto, sem exigir uma 
 
 A UI de **Permissões** fica dentro de Gerenciar publicação e separa quem pode **Homologar** de quem pode **Publicar**. Perfis implícitos aparecem protegidos contra revogação; membros delegados são editáveis.
 
+### Edição humana de variáveis de ambiente
+
+- um usuário autenticado no Portal com ACL de escrita não passa por Approval Service para salvar variáveis do próprio projeto;
+- o endpoint humano é protegido por sessão, CSRF, ACL, revisão otimista e binding ao runtime ativo do estágio;
+- secrets são mascarados e editáveis: vazio mantém, valor novo rotaciona; plaintext não é retornado ao cliente;
+- clientes MCP/automação mantêm os endpoints de plan/approval/execute e suas políticas;
+- `POSTGRES_PASSWORD` é migrado junto com a credencial de `DATABASE_URL`, com health/rollback e volume preservado; `POSTGRES_DB`/`POSTGRES_USER` exigem migração estrutural;
+- digests de variáveis são JSON canônico UTF-8 (`ensure_ascii=false`) em todos os hops.
+
 ## 5. Critérios de aceite por módulo
 
 Um módulo só é considerado pronto quando **todos** os itens abaixo passam:

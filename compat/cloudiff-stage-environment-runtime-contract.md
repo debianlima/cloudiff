@@ -10,7 +10,7 @@ Variável de ambiente é **estado do estágio/runtime**. O Portal não mantém u
 - `homologation`: leitura e escrita representam a Homologação ativa; sem H ativa, a edição é bloqueada;
 - `production`: leitura e escrita representam a Produção ativa; sem P ativa, a edição é bloqueada.
 
-O Project Config Controller é o catálogo/auditoria da configuração, mas uma alteração aprovada só é considerada concluída quando o runtime daquele estágio confirma a aplicação. O reconciler assíncrono é retry, não fonte paralela de verdade.
+O Project Config Controller é o catálogo/auditoria da configuração, mas uma alteração humana autenticada só é considerada concluída quando o runtime daquele estágio confirma a aplicação. No Portal, sessão autenticada + CSRF + ACL de escrita autorizam o salvamento diretamente; o Approval Service não faz parte desse caminho humano. O reconciler assíncrono é retry, não fonte paralela de verdade. Endpoints de approval continuam disponíveis para MCP/automação e contratos que explicitamente exigem esse gate.
 
 ## Herança W → H → P
 
@@ -50,7 +50,9 @@ Esse arquivo nunca entra em Git e nunca deve ser exibido. O deploy protegido do 
 
 ## Secrets
 
-Secrets seguem o mesmo lifecycle de estágio. O valor é resolvido somente em memória no caminho interno e nunca volta ao navegador/log/evidência. W→H e H→P promovem referências para o ambiente de destino em vez de reutilizar uma referência com escopo incorreto.
+Secrets seguem o mesmo lifecycle de estágio. No Portal humano eles aparecem mascarados: campo vazio mantém o material atual; um novo valor digitado é staged/rotacionado internamente e aplicado no mesmo `Salvar alterações`, sem segunda tela de aprovação. O valor anterior nunca é carregado no navegador e o novo valor nunca volta na resposta/log/evidência. W→H e H→P promovem referências para o ambiente de destino em vez de reutilizar uma referência com escopo incorreto.
+
+`POSTGRES_PASSWORD` pode ser alterado pelo mesmo campo humano. A plataforma acopla internamente `DATABASE_URL`, migra a role PostgreSQL, valida a nova credencial e preserva o volume; em falha executa rollback. `POSTGRES_DB` e `POSTGRES_USER` continuam exigindo migração estrutural específica.
 
 ## Retenção e limpeza
 
@@ -99,3 +101,7 @@ No Agenda P1020, o sync protegido do Preview não usa diretamente `frontend/Dock
 O builder protegido deve executar `chmod -R a+rX /app/dist` após `npm run build`. Sem isso, arquivos copiados de `frontend/public` podem chegar à imagem Nginx como `0600`: `index.html` e bundles continuam funcionando, mas logo, favicons, manifest e service worker retornam HTTP 403 para o usuário `nginx`.
 
 Aceite mínimo do builder Web protegido: logo, ícones, `sw.js`, `manifest.webmanifest` e `/` respondem HTTP 200; arquivos públicos ficam legíveis pelo worker Nginx; DB do W1 permanece com a mesma identidade durante o redeploy.
+
+### Digest Unicode de variáveis
+
+O digest de `values_by_service`/`managed_names_by_service` usa JSON canônico UTF-8 com `ensure_ascii=false`, `sort_keys=true` e separadores compactos em Portal, Komodo e Executor. Textos humanos com acentos, `º` ou outros caracteres Unicode não podem produzir hash diferente entre control-plane e runtime.

@@ -631,3 +631,13 @@
 - Smoke de rollback P6: `prepare` iniciou API/DB/Web sem recriar containers, P7 permaneceu HTTP 200/revisão `18416127cdf9`, `abort` parou P6 novamente; volumes foram preservados.
 - Jobs terminais de criação de H, promoção H→P e reativação histórica agora atualizam o workspace e, em sucesso, fazem reload completo da página. Falhas não recarregam automaticamente para manter o erro visível.
 - Ajuda do Portal, fluxo W/H/P e manual técnico documentam o mesmo comportamento.
+
+## Variáveis humanas diretas, secrets editáveis e digest Unicode — 21/11/2026
+
+- O wizard humano de Variáveis não cria mais `approval/request`. `human/save` usa sessão autenticada + CSRF + ACL de escrita e aplica controller + runtime diretamente. Endpoints de approval permanecem para MCP/automação.
+- Secrets aparecem como inputs `password` vazios/mascarados: vazio mantém; novo valor faz stage/rotation interna e nunca retorna plaintext.
+- `POSTGRES_PASSWORD` em H/P ganhou migração transacional no Executor: valida acoplamento com `DATABASE_URL`, executa `ALTER ROLE`, valida TCP, recria somente serviços afetados preservando deployment/snapshot/volume e faz rollback em falha. W1 ganhou o equivalente via Komodo + Compose, preservando `agenda_w1_pg`.
+- `POSTGRES_DB` e `POSTGRES_USER` continuam bloqueados como mudanças estruturais.
+- Corrigido digest de variáveis Unicode (`ensure_ascii=false`) entre Portal/Komodo/Executor. Isso era a causa de `SYSTEM_BANNER_TEXT` com `º`/acentos ficar no controller sem chegar ao P7.
+- Prova P7: antes controller=228 caracteres/runtime=224; após `human/save`, runtime=228 e hash idêntico; somente API foi recriada, DB/Web mantiveram os mesmos IDs. Smoke de `JWT_SECRET` com o mesmo material avançou a revisão para 52 sem approval, sem plaintext e sem recriação.
+- P7 e domínio estável permaneceram saudáveis na revisão `18416127cdf9`. Preview W1 `human/save` no-op passou sem approval e saudável; helpers de migração PostgreSQL passaram em containers descartáveis no Executor e no Komodo.

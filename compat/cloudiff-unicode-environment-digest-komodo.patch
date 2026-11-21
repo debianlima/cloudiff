@@ -1,0 +1,11 @@
+--- a/cloudif-komodo-agent.py
++++ b/cloudif-komodo-agent.py
+@@ -3388,7 +3388,7 @@
+             normalized_managed[service]=sorted({_cloudif_validate_publication_environment({str(x):''}).popitem()[0] for x in names})
+     except Exception as exc:return send(handler,400,{'ok':False,'error':'invalid_environment_variables','detail':type(exc).__name__})
+     material={'managed_names_by_service':normalized_managed,'values_by_service':normalized};expected=str(payload.get('variables_digest') or '')
+-    actual=hashlib.sha256(json.dumps(material,sort_keys=True,separators=(',',':')).encode()).hexdigest()
++    actual=hashlib.sha256(json.dumps(material,ensure_ascii=False,sort_keys=True,separators=(',',':')).encode()).hexdigest()
+     if not re.fullmatch(r'[a-f0-9]{64}',expected) or not hmac.compare_digest(expected,actual):return send(handler,409,{'ok':False,'error':'variables_digest_mismatch'})
+     current={};desired={};changed=[];bootstrap={'POSTGRES_DB','POSTGRES_USER','POSTGRES_PASSWORD'};global_values=normalized.get('') or {};global_names=set(normalized_managed.get('') or [])
+     for service in ('api','db','web'):

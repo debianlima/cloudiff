@@ -38,6 +38,12 @@ O Preview continua sincronizando o Forgejo mesmo enquanto uma Homologação est�
 
 Isso é esperado e não é drift. O vínculo obrigatório é de proveniência: cada Hn registra de qual estado/commit do Preview foi clonada; cada Produção registra qual Hn aprovada foi promovida.
 
+### Edição humana de variáveis e secrets
+
+No Portal humano, autenticação da sessão, CSRF e ACL de escrita do projeto autorizam diretamente a edição de variáveis. Não criar uma aprovação separada para esse salvamento. O Approval Service permanece no caminho MCP/automação e em operações cujo contrato declare approval explicitamente.
+
+Secrets aparecem mascarados. Campo vazio preserva o valor atual; preencher um novo valor rotaciona a referência internamente e aplica no estágio sem devolver plaintext ao navegador. `POSTGRES_PASSWORD` é migrado de forma transacional junto com `DATABASE_URL` e com preservação do volume; `POSTGRES_DB` e `POSTGRES_USER` são mudanças estruturais e exigem operação específica.
+
 ## 5. Regras para agentes e serviços
 
 Todos os agentes PGH e componentes CloudIFF (Portal, Forgejo integration, Komodo, deployment broker, executor e reconciliadores) devem tratar este fluxo como contrato global. Antes de mudar pipelines de Preview/Homologação/Produção, consultar este documento.
