@@ -25,7 +25,7 @@ funcional, modificação de ACL, exclusão de itens ou reconfiguração de conec
 4. A aplicação CloudIFF usa github.com/debianlima/cloudiff; o Dotfiles usa
    github.com/debianlima/dotfiles; Atlas possui Git próprio separado.
 5. Mudanças em W1/Hn/Pn, runtime, banco, ACL, links de proxy, SHA e containers
-   devem estar associadas a evidência de origem e data.
+   devem estar associadas a evidência de origem e data. O contrato vigente é W fixo → clone integral W→H → promoção da mesma H para P; H `published` é histórico, e variáveis do estágio podem ser alteradas explicitamente sem autorizar sync automático do Forgejo em H.
 6. O status administrativo published/draft não equivale à saúde funcional.
 7. Não assumir sincronização bidirecional nem versionar segredos.
 
@@ -84,3 +84,7 @@ identidade de leitura, quotas, locks, logs, teste e rollback.
 Referências: ATLAS-CLOUDIFF-PGH-OPERACAO.md,
 INVENTARIO-CLOUDIFF-PARA-ATLAS-2026-11-14.md no LabIFF,
 memória PGH documentacao/cloudiff/doc-01 e auditoria de 13/11/2026.
+
+### Regra de reconciliação W/H/P — 21/11/2026
+
+Ao comparar Atlas/PGH/Portal, considerar divergência quando qualquer fonte prescritiva indicar novo Preview por commit, H isolada permanente, rebuild/reclone entre H e P ou H `published` como ambiente ativo. O estado desejado é: um Preview fixo, no máximo uma H ativa durante homologação, uma P ativa, H residual zero após promoção/substituição e P históricas paradas somente enquanto necessárias para rollback exato. Bridges/rotas antigas são reconstruíveis.

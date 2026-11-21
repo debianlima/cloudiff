@@ -53,10 +53,10 @@ tags, links a runbooks, relacionamentos e referências de segurança sem credenc
 Indicar NAO VERIFICADO quando não houver fonte; nunca inventar health ou SHA.
 
 ## W1 / Hn / Pn
-Documentar por projeto W1 preview (fonte sincronizada aprovada),
-Hn homologação isolada e congelada e Pn produção promovida por artefato rastreável.
-Conferir SHA, digest, volumes, banco, ACL, proxy, health, dependências e rollback.
-Não presumir que esta arquitetura está funcional em todos os tenants.
+Documentar por projeto W1 Preview fixo (fonte sincronizada aprovada),
+Hn como clone integral do W com código/imagens/origem Forgejo congelados contra sincronização automática — admitindo ajustes explícitos de variáveis do próprio estágio — e Pn como a mesma instância H aprovada promovida sem rebuild/reclone.
+Conferir SHA, digest, deployment/container IDs quando aplicável, volumes, banco, ACL, proxy, health, dependências, variáveis por estágio e rollback. H `published` é histórico, não ambiente ativo. Produções antigas podem permanecer paradas apenas enquanto sustentarem rollback exato; bridges/rotas antigas são reconstruíveis.
+Não presumir que esta arquitetura está funcional em todos os tenants; auditar cada projeto antes de mutação.
 
 ## Procedimento para cada atualização
 1. Retomar doc-01 pelo CLI PGH v2, ler tarefas e verificar locks e concorrência.
@@ -95,9 +95,11 @@ mudanças de documentação rastreadas por SHA/PR; revisões de aud-01 nas incon
 ## Atualização de inventário — 14/11/2026T13:56Z
 Consulta read-only à API local Atlas na VPS IPsec retornou 213 itens; além das oito fichas cloudiff.project.*, existem oito fichas cloudiff.repo.* (CloudIFF / Forgejo) referenciando os tenants. As 205 fichas anteriores são baseline histórico, não o total atual. Ver [procedimento de conciliação](ATLAS-CLOUDIFF-CONCILIACAO.md) para verificações e gatilhos.
 
-## Equipe PGH de seis agentes
+## Equipe PGH CloudIFF — catálogo dinâmico
 
-A equipe operacional do projeto CloudIFF possui aud-01, dev-01, dev-02, doc-01, infra-01 e surface-01. Infra-01 cuida de segurança/infraestrutura; surface-01 testa interfaces como usuário autorizado. Ambos usam finding-dispatch para distribuir achados; aud-01 utiliza audit-dispatch. As seis identidades operacionais CloudIFF e a identidade Dotfiles estão registradas no Atlas. Veja [catálogo de agentes e roteamento](PGH-AGENTES-CLOUDIFF.md). Sempre consultar o catálogo online do LabIFF em vez de fixar a lista no plugin.
+Na leitura canônica de 21/11/2026, o projeto CloudIFF possui nove identidades registradas no PGH: aud-01, dev-01, dev-02, doc-01, gov-01, infra-01, infra-02, infra-03 e surface-01. Há ainda identidades de outros projetos, como documentacao/dotfiles/doc-01, que não devem ser misturadas automaticamente com CloudIFF.
+
+O catálogo é dinâmico: qualquer lista em documentação é fotografia de uma data. Antes de rotear trabalho, consultar `agent-memory-v2.py catalog`/`list` no LabIFF. Infra-01/02/03 atuam em infraestrutura conforme suas tarefas; gov-01 governa política/autorização/exceções; surface-01 valida interfaces; aud-01 executa reauditoria; dev-01/dev-02 e doc-01 mantêm código, SCM/integrações e documentação/Atlas. Veja [catálogo de agentes e roteamento](PGH-AGENTES-CLOUDIFF.md).
 
 ## Como localizar a plataforma CloudIFF e seus projetos no Atlas
 

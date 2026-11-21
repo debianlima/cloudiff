@@ -9,12 +9,15 @@ O catálogo é dinâmico; este documento não é a fonte de opções fixas do pl
 | desenvolvimento | dev-01 | Código funcional, bugs de backend, interfaces e integrações |
 | desenvolvimento | dev-02 | GitHub, Forgejo, SCM, CI, releases e integração Atlas |
 | documentacao | doc-01 | Atlas, manuais, runbooks, inventários e memória persistente |
-| infraestrutura | infra-01 | PHP, SO, CVEs, SSH, firewall, containers, proxy, TLS e serviços |
+| governanca | gov-01 | Política, autorizações, exceções, gates e coerência do contrato PGH |
+| infraestrutura | infra-01 | Segurança/infra principal, SO, CVEs, SSH, firewall, containers, proxy, TLS e serviços |
+| infraestrutura | infra-02 | Diagnóstico e correções de infraestrutura delegadas/subtarefas, respeitando escopo PGH |
+| infraestrutura | infra-03 | Projetos/migrações de infraestrutura especializados e integrações delegadas |
 | testes | surface-01 | Testes visuais em navegador: telas, menus, botões, dados e regressão |
 
 Há também a identidade documentacao/dotfiles/doc-01, de manutenção Dotfiles.
-As seis identidades da tabela pertencem ao projeto cloudiff. Novos agentes
-devem ser descobertos na memória PGH, nunca inferidos da lista histórica.
+As nove identidades da tabela pertencem ao projeto cloudiff na leitura de 21/11/2026. Novos agentes
+ou mudanças de identidade devem ser descobertos na memória PGH, nunca inferidos desta lista histórica.
 
 ## Retomada obrigatória
 
@@ -58,12 +61,15 @@ Cada agente é uma ficha de ferramenta com identidade estável, área,
 missão, vínculo com CloudIFF e referência ao roteiro PGH no LabIFF.
 O PGH permanece a fonte de verdade para tarefas e handoffs; Atlas é índice.
 
-Cadastros verificados na API do Atlas em 14/11/2026:
+Cadastros abaixo foram verificados historicamente na API do Atlas a partir de 14/11/2026; as identidades adicionadas depois exigem reconciliação Atlas antes de serem declaradas publicadas:
 - pgh.agent.auditoria.cloudiff.aud_01
 - pgh.agent.desenvolvimento.cloudiff.dev_01
 - pgh.agent.desenvolvimento.cloudiff.dev_02
 - pgh.agent.documentacao.cloudiff.doc_01
+- pgh.agent.governanca.cloudiff.gov_01
 - pgh.agent.infraestrutura.cloudiff.infra_01
+- pgh.agent.infraestrutura.cloudiff.infra_02
+- pgh.agent.infraestrutura.cloudiff.infra_03
 - pgh.agent.testes.cloudiff.surface_01
 - pgh.agent.documentacao.dotfiles.doc_01 (identidade adicional Dotfiles)
 
