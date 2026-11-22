@@ -4,29 +4,32 @@ ROOT=Path(__file__).resolve().parents[2]
 HELPER=ROOT/'components/control-plane/usr/local/libexec/cloudif-pgh-dashboard-session.py'
 PANEL=ROOT/'components/control-plane/current-apps/portal-current/cloudif_approval_panel.py'
 BASE=ROOT/'components/control-plane/current-apps/portal-current/cloudif-admin-portal-base.py'
-class TestPGHAtlasDashboardSession(unittest.TestCase):
- def test_url_parser_is_fail_closed(self):
-  spec=importlib.util.spec_from_file_location('pghhelper',HELPER);m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
-  base='https://164-152-61-172.sslip.io'
-  good='open https://164-152-61-172.sslip.io/dashboard/bootstrap?ticket=opaque now'
-  self.assertTrue(m.extract_bootstrap_url(good,base).startswith(base+'/dashboard/bootstrap'))
-  for bad in ['https://evil.example/dashboard/bootstrap?ticket=x','http://164-152-61-172.sslip.io/dashboard/bootstrap?ticket=x','https://164-152-61-172.sslip.io/vault-admin/bootstrap?ticket=x']:
-   with self.assertRaises(ValueError):m.extract_bootstrap_url(bad,base)
+class TestPGHAtlasAdminSession(unittest.TestCase):
+ def helper(self):
+  spec=importlib.util.spec_from_file_location('pghhelper',HELPER);m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m);return m
+ def test_url_parser_modes_are_fail_closed(self):
+  m=self.helper();base='https://164-152-61-172.sslip.io'
+  cases={'dashboard':'/dashboard/bootstrap','vault':'/vault-admin/bootstrap','openbao':'/openbao/bootstrap'}
+  for mode,path in cases.items():
+   good=f'open {base}{path}?ticket=opaque now'
+   self.assertTrue(m.extract_bootstrap_url(good,base,path).startswith(base+path))
+   with self.assertRaises(ValueError):m.extract_bootstrap_url(good,base,'/wrong/bootstrap')
+  with self.assertRaises(ValueError):m.extract_bootstrap_url('https://evil.example/dashboard/bootstrap?ticket=x',base,'/dashboard/bootstrap')
  def test_helper_uses_restricted_ssh_contract(self):
   s=HELPER.read_text()
-  for x in ('pgh-vault-admin@127.0.0.1','dashboard-session','IdentitiesOnly=yes','StrictHostKeyChecking=yes','BatchMode=yes','/dashboard/bootstrap'):
+  for x in ('pgh-vault-admin@127.0.0.1','dashboard-session','web-session','openbao-session','IdentitiesOnly=yes','StrictHostKeyChecking=yes','BatchMode=yes'):
    self.assertIn(x,s)
   self.assertNotIn('StrictHostKeyChecking=no',s)
- def test_portal_has_same_origin_admin_session_action(self):
-  p=PANEL.read_text(); b=BASE.read_text()
-  self.assertIn('/action/pgh_dashboard_session',p)
+ def test_portal_policies_are_separate_from_pairing(self):
+  p=PANEL.read_text();b=BASE.read_text()
+  for action in ('pgh.dashboard.session','pgh.vault.session','pgh.openbao.session'):self.assertIn(action,p);self.assertIn(action,b)
+  self.assertIn('/action/pgh_admin_session',p);self.assertIn("path.endswith('/action/pgh_admin_session')",b)
+  self.assertIn("policy.get('requested_by')!='principal:admin.atlas'",b)
+  self.assertIn("run([helper,mode],15)",b)
+  self.assertNotIn('/action/pgh_dashboard_session',p)
+ def test_pairing_card_remains_passwordless_and_public_key_only(self):
+  p=PANEL.read_text()
+  self.assertIn('Recuperação PGHD — fluxo sem senha:',p)
   self.assertIn('pgh-atlas-access-admin-v1.pub',p)
-  self.assertIn('Chave pública Atlas para autorizar uma única vez no Core',p)
-  self.assertIn('fluxo sem senha',p)
-  self.assertIn('Abrir sessão administrativa pelo Atlas — sem senha',p)
   self.assertIn('não forneça senha ao ChatGPT',p)
-  self.assertIn('textarea readonly',p)
-  self.assertIn("path.endswith('/action/pgh_dashboard_session')",b)
-  self.assertIn('PGH_DASHBOARD_SESSION_HELPER',b)
-  self.assertIn('approval_policy',b)
 if __name__=='__main__':unittest.main()

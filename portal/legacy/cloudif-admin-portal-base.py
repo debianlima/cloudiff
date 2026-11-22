@@ -5677,7 +5677,7 @@ if 'Portal' in globals() and not globals().get('_ap_portal_wrapped'):
         return _ap_prev_get(self)
     def _ap_post(self):
         path=urllib.parse.urlparse(self.path).path.rstrip('/')
-        if path.endswith('/action/pgh_dashboard_session'):
+        if path.endswith('/action/pgh_admin_session'):
             if not _cloudif_security_valid_origin(self):return _cloudif_security_reject(self,'Origem da requisição não autorizada.')
             length=int(self.headers.get('Content-Length','0') or '0')
             if length<0 or length>200000:return _cloudif_security_reject(self,'Corpo da requisição inválido.',413)
@@ -5685,23 +5685,26 @@ if 'Portal' in globals() and not globals().get('_ap_portal_wrapped'):
             user=self.user()
             if not _prod_csrf_equal(val('csrf_token'),_prod_csrf_token(user)):return _cloudif_security_reject(self,'Token CSRF inválido ou ausente.',403)
             groups=set(user.get('groups') or [])
-            if not (user.get('admin') or 'CloudIF-Tenants-Admin' in groups):return _cloudif_security_reject(self,'A recuperação administrativa PGH exige perfil administrador.',403)
+            if not (user.get('admin') or 'CloudIF-Tenants-Admin' in groups):return _cloudif_security_reject(self,'A sessão administrativa PGH exige perfil administrador.',403)
+            mode=val('mode').strip();spec={'dashboard':('pgh.dashboard.session','/dashboard/bootstrap'),'vault':('pgh.vault.session','/vault-admin/bootstrap'),'openbao':('pgh.openbao.session','/openbao/bootstrap')}.get(mode)
+            if not spec:return _cloudif_security_reject(self,'Modo administrativo PGH inválido.',400)
+            required_action,expected_path=spec
             policy_id=val('policy_id').strip();policies={x['policy_id']:x for x in _ap_visible_policies(user)};policy=policies.get(policy_id)
-            if not policy or not policy.get('active') or policy.get('project_slug')!='pghd-contexto' or policy.get('action')!='pgh.device.pair':return _cloudif_security_reject(self,'Política de recuperação PGH ausente, revogada ou fora do escopo.',409)
-            helper=_ap_cfg('CLOUDIF_PGH_DASHBOARD_SESSION_HELPER','/usr/local/libexec/cloudif-pgh-dashboard-session.py')
-            rc,out,err=run([helper],15)
+            if not policy or not policy.get('active') or policy.get('project_slug')!='pghd-contexto' or policy.get('action')!=required_action or policy.get('requested_by')!='principal:admin.atlas':return _cloudif_security_reject(self,'Política administrativa PGH ausente, revogada ou fora do escopo.',409)
+            helper=_ap_cfg('CLOUDIF_PGH_ADMIN_SESSION_HELPER',_ap_cfg('CLOUDIF_PGH_DASHBOARD_SESSION_HELPER','/usr/local/libexec/cloudif-pgh-dashboard-session.py'))
+            rc,out,err=run([helper,mode],15)
             if rc!=0:
-                log_action(user['username'],'pgh_dashboard_session',policy_id,rc,'helper_failed','')
-                return _cloudif_security_reject(self,'Canal administrativo PGH ainda não está autorizado ou disponível no Core.',503)
+                log_action(user['username'],'pgh_admin_session_'+mode,policy_id,rc,'helper_failed','')
+                return _cloudif_security_reject(self,'Canal administrativo PGH indisponível no Core.',503)
             bootstrap=(out or '').strip().splitlines()[-1] if (out or '').strip() else ''
             try:
                 u=urllib.parse.urlparse(bootstrap);b=urllib.parse.urlparse(_ap_cfg('CLOUDIF_PGH_CORE_BASE_URL',''))
-                valid=(u.scheme=='https' and u.hostname==b.hostname and (u.port or 443)==(b.port or 443) and u.path.startswith('/dashboard/bootstrap'))
+                valid=(u.scheme=='https' and u.hostname==b.hostname and (u.port or 443)==(b.port or 443) and u.path==expected_path and bool(u.query))
             except Exception:valid=False
             if not valid:
-                log_action(user['username'],'pgh_dashboard_session',policy_id,24,'invalid_bootstrap','')
+                log_action(user['username'],'pgh_admin_session_'+mode,policy_id,24,'invalid_bootstrap','')
                 return _cloudif_security_reject(self,'Resposta administrativa PGH inválida.',502)
-            log_action(user['username'],'pgh_dashboard_session',policy_id,0,'redirect_ready','')
+            log_action(user['username'],'pgh_admin_session_'+mode,policy_id,0,'redirect_ready','')
             self.send_response(303);self.send_header('Location',bootstrap);self.send_header('Cache-Control','no-store');self.send_header('Pragma','no-cache');self.end_headers();return
         if path.endswith('/action/approval'):
             if not _cloudif_security_valid_origin(self):return _cloudif_security_reject(self,'Origem da requisição não autorizada.')
