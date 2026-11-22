@@ -902,5 +902,6 @@ O caminho quente da interface é o SQLite `/var/lib/cloudif/portal/cloudif-porta
 - Conectores e Aprovações já invalidam seus namespaces após mutação.
 - Refresh periódico reduzido de 60 s para 5 min; consistência primária é event-driven.
 - Auditor noturno `cloudif-portal-readmodel-audit.timer` roda 03:20 America/Sao_Paulo, baixa prioridade, somente leitura de runtime; primeira execução manual: 25 projetos, 8 operacionais, 0 issues, nenhuma mutação/secrets.
+- O auditor fica na Hospedagem por depender do SQLite local e ser oneshot; Faro segue preferência para novos serviços autônomos, não para mover estado local do Portal pela rede.
 - Leituras indexadas observadas: Projetos ~0,28 ms, Publicações Agenda ~0,44 ms, Conectores ~0,81 ms. T-046 cobre paginação/normalização de Aprovações, cujo histórico atual tem ~6 MB/6.136 registros.
 - Norma: `docs/PADRAO-CLOUDIFF-INDICE-READMODEL-PORTAL-20261122.md`.

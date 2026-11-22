@@ -145,6 +145,10 @@ A auditoria:
 
 O serviço roda com `Nice=15`, `IOSchedulingClass=idle`, `CPUWeight=10` e `IOWeight=10`.
 
+### Local de execução
+
+O auditor fica na **Hospedagem**, junto do banco SQLite do Portal. Ele é `Type=oneshot` e não mantém processo residente. Esta é uma exceção deliberada à preferência pelo Faro para novos serviços auxiliares: mover a reconciliação para outro nó exigiria expor/copiar o SQLite ou criar acesso remoto ao banco local. A preferência pelo **Faro** continua válida para novos serviços autônomos que não dependem de acesso local ao estado do Portal.
+
 Primeira prova manual em 22/11/2026:
 
 - 25 IDs públicos indexados;
