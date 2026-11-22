@@ -66,6 +66,13 @@ class PersistentApprovalPortalContractTests(unittest.TestCase):
             self.assertIn('name="always_allow" value="1"',source)
             self.assertIn('Sempre permitir esta ação neste projeto para este agente.',source)
 
+    def test_pgh_device_pair_policy_has_resilient_label_and_no_session_persistence(self):
+        for path in (PANEL,LEGACY_PANEL):
+            source=path.read_text()
+            self.assertIn("'pgh.device.pair':'PGHD — Pareamento resiliente'",source)
+            self.assertIn('Recuperação PGHD:',source)
+            self.assertIn('Código e cookie de pareamento continuam efêmeros e não são armazenados.',source)
+
     def test_existing_web_surfaces_remain_separate_modules(self):
         self.assertNotEqual(PANEL,BASE)
         self.assertIn('import cloudif_approval_panel as _ap_panel',BASE.read_text())
