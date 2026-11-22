@@ -5764,6 +5764,7 @@ if 'Portal' in globals() and not globals().get('_ati_wrapped'):
 # CloudIF access telemetry ingest END
 
 # CloudIF project identities and immediate onboarding BEGIN
+import cloudif_publication_permissions as _oi_permissions
 import urllib.request as _oi_request, urllib.error as _oi_error, json as _oi_json, subprocess as _oi_subprocess
 import cloudif_project_identity_panel as _oi_panel_module
 
@@ -5850,7 +5851,11 @@ if 'Portal' in globals() and not globals().get('_oi_portal_wrapped'):
                 return _cloudif_security_reject(self,'Sem permissão no tenant.',403)
             if not tenant and not setting_bool('CLOUDIF_ALLOW_GIT_ONLY_PROJECT',True):
                 return _cloudif_security_reject(self,'Projeto sem banco desabilitado.',403)
-            con=db();con.execute('''INSERT INTO projects(slug,name,tenant,owner,description,created_at,updated_at) VALUES(?,?,?,?,?,?,?) ON CONFLICT(slug) DO UPDATE SET name=excluded.name,tenant=excluded.tenant,description=excluded.description,updated_at=excluded.updated_at''',(slug,name,tenant,user['username'],desc,now_iso(),now_iso()));con.execute('INSERT OR IGNORE INTO project_acl(slug,subject_type,subject) VALUES(?,?,?)',(slug,'user',user['username']));con.commit();con.close()
+            con=db()
+            existing=con.execute('select 1 from projects where slug=?',(slug,)).fetchone()
+            if existing and not _oi_permissions.project_slug_write_allowed(con,slug,user):
+                con.close();return _cloudif_security_reject(self,'Este nome já pertence a um projeto que você não pode alterar. Escolha outro nome.',409)
+            con.execute('''INSERT INTO projects(slug,name,tenant,owner,description,created_at,updated_at) VALUES(?,?,?,?,?,?,?) ON CONFLICT(slug) DO UPDATE SET name=excluded.name,tenant=excluded.tenant,description=excluded.description,updated_at=excluded.updated_at''',(slug,name,tenant,user['username'],desc,now_iso(),now_iso()));con.execute('INSERT OR IGNORE INTO project_acl(slug,subject_type,subject) VALUES(?,?,?)',(slug,'user',user['username']));con.commit();con.close()
             log_action(user['username'],'create_project',slug,0,'tenant='+tenant,'')
             _oi_trigger();_rm.invalidate('projects');_rm.invalidate('connectors');_rm.invalidate('project-job-state',slug);_rm.invalidate('project-runtime-state',slug);_rm.record_event('project-created',slug,['projects','connectors','project-job-state','project-runtime-state']);_rm.trigger_refresh()
             return self.redirect('/?tab=projetos&project='+urllib.parse.quote(slug))

@@ -189,3 +189,25 @@ def replace_homologators(con:sqlite3.Connection,slug:str,user:dict[str,Any],user
         for name in clean:con.execute('insert into project_homologators(project_slug,username,created_by,created_at) values(?,?,?,?)',(slug,name,actor,now))
     con.commit()
     return snapshot(con,slug,user)
+
+
+def project_slug_write_allowed(con:sqlite3.Connection,slug:str,user:dict[str,Any]|None)->bool:
+    """T-010: writing an EXISTING project slug requires admin/professor, ownership or ACL.
+
+    Prevents create-with-conflict from modifying another tenant's project or
+    granting the requester an improper ACL entry. New slugs are not evaluated here.
+    """
+    if is_admin(user) or is_professor(user):return True
+    username=str((user or {}).get('username') or '').strip().lower()
+    if not username:return False
+    row=con.execute('select * from projects where slug=?',(slug,)).fetchone()
+    if not row:return False
+    keys=set(row.keys()) if hasattr(row,'keys') else set()
+    for k in ('owner','created_by'):
+        if (not keys or k in keys) and row[k] and str(row[k]).strip().lower()==username:return True
+    groups=_groups(user)
+    for acl in con.execute('select subject_type,subject from project_acl where slug=?',(slug,)):
+        st=str(acl[0] or '').lower();sub=str(acl[1] or '').strip().lower()
+        if st=='user' and sub==username:return True
+        if st=='group' and sub in groups:return True
+    return False
