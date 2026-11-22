@@ -56,7 +56,9 @@ health(){
     sleep 1
   done
   [ "$h" = healthy ]
-  curl -fsS --max-time 5 http://127.0.0.1:14444/status >/dev/null
+  curl -fsS --max-time 5 http://127.0.0.1:14444/status | grep -Eq '"ready"[[:space:]]*:[[:space:]]*true'
+  code=$(docker exec cloudiff-webdev-browser sh -lc "curl -ksS --resolve cloudiff.duckdns.org:443:10.62.91.3 --max-time 5 -o /dev/null -w '%{http_code}' https://cloudiff.duckdns.org/cloudiff/portal/")
+  echo "$code" | grep -Eq '^(200|302)$'
 }
 
 runtime_equivalent(){

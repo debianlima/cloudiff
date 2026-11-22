@@ -1,176 +1,121 @@
-# Auditoria global dos projetos — padrão CloudIFF Preview → Homologação → Produção
+# Auditoria global CloudIFF — adequação Preview → Homologação → Produção
 
-Data técnica: 2026-11-22 UTC (2026-11-21 America/Sao_Paulo).
+Data: 22/11/2026. Esta versão substitui a visão anterior limitada a 8 projetos e preserva as remediações históricas em documentos próprios.
 
-## Escopo e método
+## Escopo
 
-Auditoria somente leitura dos 8 projetos cadastrados no Portal, cruzando:
+- **25 IDs públicos** em `project_public_ids`.
+- Read-model `release_flow_status()` para W/H/P e histórico.
+- Integrações Forgejo/Komodo/Supabase quando cadastradas.
+- Navegação com Chrome/Selenium real no WebDev da Forja.
+- Probes de URL W/P/alias e confirmação de runtimes pelo Executor nos projetos operacionais.
+- Nenhuma promoção H→P foi disparada por esta auditoria.
 
-- `projects`, `project_public_ids`, `publication_candidates`, `production_releases`, `project_publications`, `project_publication_aliases` e `project_preview_source_links`;
-- `release_flow_status()` / estado do Preview;
-- Komodo repo/stack status e hash conhecido;
-- Executor Compose (`deployment_id`, snapshot e estado);
-- Docker real na Forja/Hospedagem;
-- HTTP/HTTPS das URLs W/H/P e aliases principais;
-- contrato em `docs/RUNBOOK-PADRAO-CLOUDIFF-WHP-CONTINUIDADE.md`.
+## Contrato obrigatório
 
-Nenhum runtime de projeto foi alterado nesta unidade.
+- `docs/PADRAO-CLOUDIFF-PREVIEW-HOMOLOGACAO-PRODUCAO-20261120.md`
+- `docs/RUNBOOK-PADRAO-CLOUDIFF-WHP-CONTINUIDADE.md`
+- `docs/FLUXO-WHP-PUBLICACAO.md`
+- `docs/AGENDA-P1020-PROCEDIMENTO-GERENCIAMENTO-PUBLICACOES.md`
 
-### Atualização de fechamento
+## Readiness/browser
 
-A linha da Agenda abaixo incorpora as remediações posteriores executadas no mesmo ciclo de auditoria. Evidências históricas anteriores de P7/P6/P3/P2 permanecem nos documentos de remediação, mas não representam o estado operacional atual.
+- Browser: `cloudiff-webdev-browser` na **Forja** (`cloudiff-webdev.service`).
+- Readiness corrigido para exigir Selenium `ready=true` e conectividade HTTPS interna ao Portal CloudIFF.
+- Navegação de auditoria usa resolução interna `*.cloudiff.duckdns.org → 10.62.91.3` somente na sessão Chrome, evitando hairpin pelo IP público.
+- Rodada de validação: **49/49 superfícies navegadas pelo Chrome**; o resultado funcional de cada superfície permanece registrado por projeto.
+- Faro é o nó mais leve observado nesta rodada e passa a ser **preferência para novos serviços auxiliares**, condicionado a gates de rede, backup, capacidade e compatibilidade. Serviços existentes não são migrados automaticamente.
 
-## Resultado geral
+## Matriz atual
 
-| Projeto | Preview | Forgejo → Preview | Produção | H→P mesma instância | Histórico/resíduos | Classificação |
-|---|---|---|---|---|---|---|
-| `agenda-unica` | W3 saudável | alinhado | P8 + alias `agendaunica` saudáveis | **sim**, H8→P8 same-instance | P2/P3/P6/P7 `archived`, sem runtime físico | **CONFORME** |
-| `cadales` | W1 contínuo saudável após migração v144 | alinhado `ad8e67c...` | P2 saudável | não comprovado; P2 é legado | W2/H2 removidos; D1/D2 metadata inativa | **PARCIAL — aguarda próximo H→P humano** |
-| `cpuhub` | W1 contínuo saudável | alinhado `97af1e3...` | P5 saudável | não comprovado; P5 é legado | H3 superseded; H2–H5/W2 sem rota; D2–D5 removidos; P2/P3 Offline | **PARCIAL — aguarda próximo H→P humano** |
-| `laboratorio-de-hardware` | W1 saudável após remediação | alinhado `3b399e9` | P12/alias saudáveis | **não** historicamente: H13 `dep_51a7...` → P12 `dep_210f...` | H11/H13/P5 agora Offline; snapshots preservados | **PARCIAL — aguarda novo H→P humano** |
-| `msha` | não configurado | n/a | nenhuma | n/a | nenhum runtime de publicação | **DRAFT / N/A** |
-| `paperclip` | W1 saudável após correção de healthcheck | hash `dfcaaf8...` alinhado | D1 legado permanece placeholder | n/a | resíduos W1 removidos; volume preservado | **PARCIAL — aguarda H→P humano** |
-| `sgrep-v2` | W1 source-linked saudável e reconhecido | source commit `f29f752...` | nenhuma | n/a | resíduos exited removidos; Terminal source-linked validado no preview-app | **CONFORME PARA PREVIEW / SEM PRODUÇÃO** |
-| `silvipro` | W1 contínuo saudável | alinhado `ad2273de...` | P1 real reconciliada + alias `silvipro` | não comprovado; P1 importada como legado | D1 histórico; D2 parado; W2 removido | **PARCIAL — aguarda novo H→P humano** |
+| Nº | Projeto | Integração | Preview | Produção | Browser/destaque | Classificação |
+|---:|---|---|---|---|---|---|
+| 1001 | `laboratorio-de-hardware` | `ready` | `W1` / True | `P12` | alias: Login - Lab Hardware; preview: Login - Lab Hardware; production: Login - Lab Har… | **PARCIAL_PRODUCAO_LEGADA** |
+| 1002 | `silvipro` | `ready` | `W1` / True | `P1` | alias: silvipro · primeiros passos; preview: silvipro · primeiros passos; production: s… | **PARCIAL_PRODUCAO_LEGADA_PLACEHOLDER** |
+| 1003 | `silvipro2` | `não cadastrada` | `—` / None | `—` | Authentik/Portal | **LEGADO_NAO_PROVISIONADO** |
+| 1004 | `lima-teste` | `não cadastrada` | `—` / None | `—` | Authentik/Portal | **LEGADO_TESTE_NAO_PROVISIONADO** |
+| 1005 | `teste-lima` | `não cadastrada` | `—` / None | `—` | Authentik/Portal | **LEGADO_TESTE_NAO_PROVISIONADO** |
+| 1006 | `lima-teste-3` | `não cadastrada` | `—` / None | `—` | Authentik/Portal | **LEGADO_TESTE_NAO_PROVISIONADO** |
+| 1007 | `silvipro-jt-2026` | `não cadastrada` | `W1` / False | `—` | preview: silvipro-jt-2026 · primeiros passos | **PREVIEW_LEGADO_PLACEHOLDER** |
+| 1008 | `teste` | `não cadastrada` | `—` / None | `—` | Authentik/Portal | **LEGADO_TESTE_NAO_PROVISIONADO** |
+| 1010 | `teste-sofa` | `não cadastrada` | `W1` / False | `—` | preview: teste-sofa · primeiros passos | **PREVIEW_LEGADO_PLACEHOLDER** |
+| 1011 | `tuleap-laboratorio-de-hardware` | `não cadastrada` | `—` / None | `—` | Authentik/Portal | **LEGADO_NAO_PROVISIONADO** |
+| 1014 | `grupix` | `não cadastrada` | `W1` / False | `—` | preview: 502 | **QUEBRADO_PREVIEW_502** |
+| 1015 | `teste-4` | `não cadastrada` | `—` / None | `—` | Authentik/Portal | **LEGADO_TESTE_NAO_PROVISIONADO** |
+| 1016 | `teste-3` | `não cadastrada` | `—` / None | `—` | Authentik/Portal | **LEGADO_TESTE_NAO_PROVISIONADO** |
+| 1017 | `teste-5` | `não cadastrada` | `—` / None | `—` | Authentik/Portal | **LEGADO_TESTE_NAO_PROVISIONADO** |
+| 1018 | `testando123` | `não cadastrada` | `W1` / False | `—` | preview: 502 | **QUEBRADO_PREVIEW_502** |
+| 1019 | `hardness-e2e-0254` | `não cadastrada` | `W1` / False | `—` | preview: hardness-e2e-0254 · primeiros passos | **ATIVO_TESTE_HARDNESS** |
+| 1020 | `agenda-unica` | `ready` | `W3` / True | `P11` | alias: Agenda Única; preview: Agenda Única; production: Agenda Única | **CONFORME_REFERENCIA** |
+| 1021 | `cpuhub` | `ready` | `W1` / True | `P5` | alias: Acesso · CPUHub; preview: Acesso · CPUHub; production: Acesso · CPUHub | **PARCIAL_PRODUCAO_LEGADA** |
+| 1022 | `cadales` | `ready` | `W1` / True | `P2` | alias: cadales · primeiros passos; preview: cadales · primeiros passos; production: cad… | **PARCIAL_PRODUCAO_LEGADA_PLACEHOLDER** |
+| 1023 | `isha` | `não cadastrada` | `W1` / False | `—` | preview: isha · primeiros passos | **PREVIEW_LEGADO_PLACEHOLDER** |
+| 1024 | `mvplanner` | `não cadastrada` | `W1` / False | `—` | preview: mvplanner · primeiros passos | **PREVIEW_LEGADO_PLACEHOLDER** |
+| 1025 | `paperclip` | `ready` | `W1` / True | `—` | preview: Paperclip | **BLOQUEADO_RUNTIME_COMPOSTO_STABLE_502** |
+| 1026 | `sgrep-v2` | `adopted_existing_staging` | `W1` / True | `—` | preview: SGREP - Fine Comp | **PREVIEW_SOURCE_LINKED_SEM_PRODUCAO** |
+| 1027 | `msha` | `degraded` | `—` / None | `—` | Authentik/Portal | **DEGRADADO_INTEGRACAO** |
+| 1028 | `pghd-contexto` | `não cadastrada` | `—` / None | `—` | Authentik/Portal | **REGISTRO_INFRA_NAO_PROVISIONADO** |
 
-## 1. Agenda Única — conforme
+## Prioridade de remediação
 
-- Public number 1020.
-- Preview fixo W3: `1020-w3-preview.cloudiff.duckdns.org`, HTTP 200.
-- Preview Git: `1841612...`, status `synced`.
-- Produção ativa P8 e alias `agendaunica.cloudiff.duckdns.org`: HTTP 200, revisão `18416127cdf9` no fechamento.
-- H8→P8 preserva a mesma instância homologada no fluxo atual.
-- P2/P3/P6/P7 estão `archived`, fora das listas operacionais e sem containers/volumes históricos ativos; P2 legado foi removido em `legacy-final`.
-- Terminal W3 linked-compose aponta para o serviço `api`; PHP/Node ausentes são reportados como diagnóstico válido.
+### P0/P1 — falha operacional ou integração
 
-Nota importante: labels Docker dos containers promovidos podem ainda indicar `homologation` porque labels são imutáveis. **Não recriar containers só para alterar label**; a identidade preservada é justamente a prova do H→P in-place.
+- **Paperclip 1025:** Preview real saudável, mas stable 502 e D1 legado fora do modelo moderno; manifest/volume e rota precisam ser reconciliados com gate do proprietário.
+- **MSHA 1027:** integração degradada (`tenant_runtime_error`) e sem Preview.
+- **Grupix 1014 / Testando123 1018:** W1 confirmado 502 pelo Chrome.
 
-## 2. Cadales — W1 contínuo sincronizado; P2 ainda legado
+### P1/P2 — migração ao contrato moderno
 
-- Public number 1022; W1, P2 e alias `cadales` respondem HTTP 200.
-- O mecanismo v144 migrou o W2 legado para o Preview contínuo W1 `cloudif-p1022-preview-web` com alias Docker `cloudif-p1022-w1-preview-web`.
-- Checkout e `origin/main` estão em `ad8e67cee97f12f0c3826d46ded8f612add2ba2f`, dirty=false.
-- O W2 e o stage H2 foram removidos do Publisher; o container H2 foi removido após backup e prova de mesma imagem que P2, sem volume de dados.
-- Metadata Komodo legada D1/D2 ficou `inactive`; a P2 moderna é a única Produção `is_active=1`.
-- H2/P2 continuam sem metadados `sameInstancePromotionRequired`/`homologationDeploymentId`; portanto P2 é legado e não prova promoção da mesma instância.
-- `assistente-interativo` não possui ACL do projeto; o próximo H→P precisa ser iniciado pelo proprietário.
+- Laboratório de Hardware, CPUHub, Cadales e SilviPro têm runtime W/P acessível, mas a Produção atual é legado histórico; o próximo release humano deve ser H→mesma H em P.
+- Cadales e SilviPro ainda servem página `primeiros passos`; isso é gap de conteúdo/fonte, não falha de proxy.
+- SGREP v2 tem Preview source-linked saudável, mas ainda precisa contrato explícito para H/P.
 
-### Próximo passo
+### Legado/teste sem pipeline moderno
 
-Usar o W1 atual como origem da próxima Homologação e promover a mesma instância para a próxima P. Somente depois P2 deve virar histórico/offline. Evidência: `docs/REMEDIACAO-CADALES-W1-SYNC-20261122.md`.
+- IDs sem integração/Preview devem permanecer sem novos recursos até finalidade e proprietário serem confirmados.
+- Previews legados que apenas servem `primeiros passos` não devem ser promovidos automaticamente.
+- `hardness-e2e-0254` permanece ferramenta de teste/hardness, não Produção por padrão.
 
-## 3. CPUHub — W1 contínuo e legado limpo; P5 preservada
+## Próximas ondas
 
-- Public number 1021; W1, P5, `1021.cloudiff` e alias `cpuhub` respondem HTTP 200.
-- Preview contínuo W1 está em `97af1e386fabb9b718f8aa100f200acfe6333264`, status `synced`.
-- P5 é a única Produção ativa no read-model moderno.
-- H3 antiga foi marcada `superseded`; H2/H4/H5 permanecem apenas como histórico `published`.
-- Stages W2, H2–H5 e P2/P3 foram removidos do Publisher. URLs antigas caem no fallback do Portal, sem upstream 502.
-- Containers H legados D2–D5 foram removidos após backup; imagens/stacks preservados e sem volumes de dados.
-- D5 era duplicata exata da imagem de P5 e não possuía alias ativo. P5 permaneceu running/healthy com `cloudif-p1021-active-web`.
-- P2/P3 permanecem Offline e podem ser reativadas pelo Histórico.
-- P5 não comprova H→P same-instance e continua classificada como legado.
-- `assistente-interativo` não possui ACL do projeto; próximo H→P deve ser iniciado pelo proprietário.
+1. Corrigir P0/P1 com lease por projeto, prestate e rollback.
+2. Migrar projetos operacionais legados no próximo ciclo humano H→P, sem reconstrução entre H e P.
+3. Reconciliar projetos com Preview órfão/placeholder somente depois de confirmar ownership e Forgejo canônico.
+4. Manter Agenda Única como regressão obrigatória do padrão.
+5. A tarefa **T-044** registra a futura aba Banco para PostgreSQL/MySQL embutido por estágio; não implementar durante esta sincronização.
 
-Evidência: `docs/REMEDIACAO-CPUHUB-LEGADO-20261122.md`.
-## 4. Laboratório de Hardware — W1 recuperado; P12 legado preservado
+## Auditorias individuais
 
-- Public number 1001.
-- W1 foi recuperado sem rebuild: Stack existente voltou via Komodo, MySQL ficou healthy, app running e bridge W1 foi republicada.
-- Forgejo/Komodo do Preview estão alinhados em `3b399e9f72133b63a9471ccc25e7af50fedeba30`.
-- P12 e alias `labhard` permaneceram saudáveis durante toda a remediação.
-- H11 e H13 foram desativadas com snapshots/volumes preservados; bridges e rotas H removidas.
-- P5 histórica parcialmente viva foi desativada; DB residual parou; snapshot permaneceu preservado.
-- A P12 atual continua legado factual: H13 usava `dep_51a7...`, P12 usa `dep_210f...`. Não alterar metadata para mascarar essa diferença.
-- `assistente-interativo` não possui ACL do projeto; a primeira migração ao contrato atual precisa ser iniciada pelo proprietário.
+- 1001 `laboratorio-de-hardware`: `docs/audits/publication-standard/20261122/laboratorio-de-hardware.md`
+- 1002 `silvipro`: `docs/audits/publication-standard/20261122/silvipro.md`
+- 1003 `silvipro2`: `docs/audits/publication-standard/20261122/silvipro2.md`
+- 1004 `lima-teste`: `docs/audits/publication-standard/20261122/lima-teste.md`
+- 1005 `teste-lima`: `docs/audits/publication-standard/20261122/teste-lima.md`
+- 1006 `lima-teste-3`: `docs/audits/publication-standard/20261122/lima-teste-3.md`
+- 1007 `silvipro-jt-2026`: `docs/audits/publication-standard/20261122/silvipro-jt-2026.md`
+- 1008 `teste`: `docs/audits/publication-standard/20261122/teste.md`
+- 1010 `teste-sofa`: `docs/audits/publication-standard/20261122/teste-sofa.md`
+- 1011 `tuleap-laboratorio-de-hardware`: `docs/audits/publication-standard/20261122/tuleap-laboratorio-de-hardware.md`
+- 1014 `grupix`: `docs/audits/publication-standard/20261122/grupix.md`
+- 1015 `teste-4`: `docs/audits/publication-standard/20261122/teste-4.md`
+- 1016 `teste-3`: `docs/audits/publication-standard/20261122/teste-3.md`
+- 1017 `teste-5`: `docs/audits/publication-standard/20261122/teste-5.md`
+- 1018 `testando123`: `docs/audits/publication-standard/20261122/testando123.md`
+- 1019 `hardness-e2e-0254`: `docs/audits/publication-standard/20261122/hardness-e2e-0254.md`
+- 1020 `agenda-unica`: `docs/audits/publication-standard/20261122/agenda-unica.md`
+- 1021 `cpuhub`: `docs/audits/publication-standard/20261122/cpuhub.md`
+- 1022 `cadales`: `docs/audits/publication-standard/20261122/cadales.md`
+- 1023 `isha`: `docs/audits/publication-standard/20261122/isha.md`
+- 1024 `mvplanner`: `docs/audits/publication-standard/20261122/mvplanner.md`
+- 1025 `paperclip`: `docs/audits/publication-standard/20261122/paperclip.md`
+- 1026 `sgrep-v2`: `docs/audits/publication-standard/20261122/sgrep-v2.md`
+- 1027 `msha`: `docs/audits/publication-standard/20261122/msha.md`
+- 1028 `pghd-contexto`: `docs/audits/publication-standard/20261122/pghd-contexto.md`
+## Remediações globais executadas na própria auditoria
 
-### Próximo passo
-
-Usar o W1 saudável como origem de uma nova Homologação e promover **a própria instância H** para a próxima P. Somente depois P12 deve virar histórico/offline. Evidência: `docs/REMEDIACAO-LABORATORIO-HARDWARE-W1-20261122.md`.
-## 5. MSHA — draft sem runtime
-
-- Projeto `draft`, sem public number efetivo de publicação, sem Preview e sem Produção.
-- Komodo conhece repo/stack, mas deploy não está pronto.
-
-Sem não conformidade operacional enquanto permanecer intencionalmente `draft`. Se o usuário pedir Preview, o provisionamento deve entrar diretamente no padrão atual.
-
-## 6. Paperclip — W1 saudável; runtime composto protegido contra snapshot genérico
-
-- Public number 1025.
-- W1 responde HTTP 200 e `/api/health` confirma `status=ok` no commit `dfcaaf831438cf0402d54a5ede388c3dc66bf222`.
-- O HTML inicial que dizia `Paperclip couldn’t start` era fallback transitório; o backend atual está saudável.
-- Preview é composto: `cloudif-p1025-w1-preview-app` contém a aplicação e volume persistente; `cloudif-p1025-w1-preview-web` é sidecar/gateway.
-- Produção ativa continua D1 legada/placeholder e não foi alterada.
-- Project Config Controller continua `configuration_required` (`review_and_apply_manifest`).
-- Gate global no Komodo impede `cloudif_preview_snapshot()` de congelar sidecar/gateway como aplicação. Paperclip retorna `preview_composite_runtime_requires_manifest` antes de qualquer efeito.
-- Prova: tentativa sintética de snapshot retornou HTTP 409, `candidate_count=0`, sem imagem H, W1/D1 intactos.
-
-### Remediação segura
-
-Definir manifest completo do runtime composto (incluindo política do volume) antes de habilitar H. Depois executar o primeiro ciclo moderno W1→H→mesma H em P pelo proprietário. Não usar o snapshot genérico e não inferir automaticamente o tratamento dos dados persistentes.
-## 7. SGREP v2 — Preview source-linked reconhecido
-
-- Projeto continua `draft`, public number 1026.
-- `project_preview_source_links` registra W1 online, source commit `f29f752f2aadbdad46b46570b29b2895007fb6cb`, fonte readonly e dados isolados.
-- O Portal agora reconhece esse contrato como `runtimeKind=source-linked-preview`, valida a URL externamente e mostra W1 saudável.
-- Diagnóstico Node aponta para `cloudif-sgrep-v2-preview-app` (Node 24.22.3); PHP é corretamente reportado como ausente.
-- `public_external_verified=1` após prova HTTP.
-- Cinco containers exited de smoke/rollback foram removidos após backup; app/db/sat/gateway ativos foram preservados.
-- O Stack Komodo legado ainda reporta `deploy_status=failed`; isso não representa o W1 source-linked e não deve ser usado como health do Preview.
-- Terminal source-linked agora usa exclusivamente o `preview-app` cadastrado, com validação de projeto/estágio/commit; identidade adulterada é rejeitada com HTTP 409.
-
-Evidências: `docs/REMEDIACAO-SGREP-V2-PREVIEW-READMODEL-20261122.md` e `docs/REMEDIACAO-SGREP-V2-TERMINAL-SOURCE-LINKED-20261122.md`.
-
-## 8. SilviPro — W1 contínuo recuperado, P1 real reconciliada
-
-- Public number 1002.
-- W1 contínuo agora responde HTTP 200 e usa o checkout Git `ad2273de...`; chamadas `ensure` repetidas preservam W1, stack e container.
-- O bug v143 que incrementava Wn na recuperação foi corrigido materializando o v144 live; o container contínuo mantém alias Docker público `cloudif-p1002-w1-preview-web`.
-- P1 (`cloudif-p1002-p1-publication-web`) é a Produção real: possui `cloudif-p1002-active-web` e serve exatamente o mesmo conteúdo de `1002.cloudiff.duckdns.org` e `silvipro.cloudiff.duckdns.org`.
-- O Portal foi reconciliado: D1 ficou histórico/inativo e P1 foi importada como legado ativo, sem inventar Homologação nem marcar same-instance.
-- D2, sem alias ativo nem rota, foi parado; W2 residual foi removido do Publisher.
-- `assistente-interativo` não possui ACL do projeto; a próxima H/P pelo contrato atual deve ser iniciada pelo proprietário.
-
-### Próximo passo
-
-O proprietário deve enviar o W1 atual para Homologação e promover essa mesma instância para a próxima P. Só após a nova P saudável, P1 passa a histórico/offline. Evidência detalhada: `docs/REMEDIACAO-SILVIPRO-P1002-20261122.md`.
-
-## Resíduos de host relevantes após remediações
-
-### Forja
-
-- Agenda: somente W3 e P8 permanecem operacionais; P2/P3/P6/P7 estão arquivadas e sem runtime físico.
-- Cadales: W2/H2 antigos removidos; P2 ativa legada preservada.
-- CPUHub: D2–D5 removidos; W2/H2–H5/P2/P3 sem stages ativos; P5 é a única Produção ativa.
-- Laboratório: H11/H13/P5 residuais desativados; somente W1 e P12 consomem runtime de aplicação relevante.
-- Paperclip: canary/rollback antigos removidos pela remediação concorrente; W1 composto app+gateway preservado.
-- SGREP: resíduos exited de smoke/rollback removidos; W1 source-linked preservado.
-- SilviPro: D2 parado; W1 contínuo e P1 ativa preservados.
-
-### Hospedagem
-
-Containers Agenda antigos exited ainda podem existir como evidência/rollback; não há indicação de consumo ativo. Qualquer remoção definitiva exige nova prova de ausência de referência em systemd/Nginx/Portal.
-
-## Prioridade atual depois da auditoria/remediação
-
-1. **Gate humano — Laboratório:** executar novo W1→H→mesma H em P; P12 permanece legado até esse ciclo.
-2. **Gate de manifest — Paperclip:** definir runtime composto completo (app/gateway/volume) antes de H; snapshot genérico está bloqueado com segurança.
-3. **Gate humano — Cadales:** próximo H→P deve usar o contrato atual; P2 permanece legado saudável até lá.
-4. **Gate humano — CPUHub:** próximo H→P deve usar o contrato atual; P5 permanece legado saudável até lá.
-5. **Gate humano — SilviPro:** próximo H→P deve usar o contrato atual; P1 importada como legado permanece ativa.
-6. **Gap funcional — SGREP v2:** Terminal source-linked ainda precisa de contrato explícito; Preview está saudável/read-model conforme.
-7. **N/A — MSHA:** permanece draft sem runtime; entrar diretamente no padrão quando houver pedido de publicação.
-8. **Referência — Agenda Única:** manter como projeto de regressão para o padrão completo same-instance.
-## Portões para qualquer correção futura
-
-Para cada projeto, abrir unidade separada com lease própria e preservar Produção ativa até existir rollback comprovado. O agente deve:
-
-1. reler `docs/RUNBOOK-PADRAO-CLOUDIFF-WHP-CONTINUIDADE.md`;
-2. capturar prestate de W/H/P/alias/containers;
-3. corrigir somente uma classe de drift por vez;
-4. validar Preview e, quando aplicável, nova H;
-5. promover somente a mesma instância homologada;
-6. provar health do alias antes de desativar a P anterior;
-7. deixar P históricas Offline;
-8. registrar evidência, backup e rollback;
-9. nunca usar HTTP 200 isolado como prova de aplicação saudável (Paperclip demonstra o motivo).
+- Readiness WebDev da Forja corrigido: health agora exige Selenium `ready=true` **e** conectividade HTTPS do container até o NPM interno.
+- Harness canônico `scripts/audit-cloudiff-browser-readiness.py` registra navegação Chrome sem armazenar credenciais; 49/49 superfícies da rodada foram navegadas.
+- Publisher: removidas todas as rotas H sem candidata/runtime e W2/W3 que não correspondiam ao Preview fixo atual; certificados preservados. Após a limpeza não existe bridge H ativa.
+- Executor: órfão do Laboratório (`dep_2d71...`) e dois H órfãos do Grupix foram marcados `inactive`; volumes/snapshots preservados.
+- Estado Compose final: somente Agenda P11 e Laboratório P12 permanecem `running`; não existe deployment Compose de Homologação rodando.
+- Paperclip D1 não foi desligado porque existe conflito de autoridade entre labels de canário PGH e estado legado `active_deploy=1`; exige decisão do proprietário.

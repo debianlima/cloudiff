@@ -9,6 +9,10 @@ compose=(root/'deploy/compose.webdev.yaml').read_text();install=(root/'deploy/in
 assert cfg['version']==2;assert cfg['host']['address']=='10.62.91.2';assert cfg['simulation']['physical_ad_host']=='10.68.128.252';assert cfg['network']['fixed_link']=='https://cloudiff.duckdns.org/__cloudiff_webdev/';assert cfg['network']['direct_link']=='http://10.62.91.2:17900/';assert cfg['network']['fixed_link_access']=='vpn-only-10.0.0.0/16';assert cfg['network']['public_exposure'] is False
 assert '9569014786466376d3e5cf8a7758562368cd9637f783dcd3abdb2eaf3a0d5cd7' in compose
 assert '127.0.0.1:14444:4444' in compose and '10.62.91.2:17900:7900' in compose
+assert 'grep -Eq' in compose and 'ready' in compose
+assert '--resolve cloudiff.duckdns.org:443:10.62.91.3' in compose
+assert 'docker exec cloudiff-webdev-browser' in install and '--resolve cloudiff.duckdns.org:443:10.62.91.3' in install
+assert '"ready"[[:space:]]*:[[:space:]]*true' in install
 assert '10.68.128.252' in compose and 'SE_VNC_NO_PASSWORD: "true"' in compose
 for banned in ('/var/run/docker.sock','privileged: true','opencode','open-code','OpenCodeWorkspace'):
  assert banned.lower() not in compose.lower(),banned

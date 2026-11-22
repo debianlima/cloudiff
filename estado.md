@@ -878,3 +878,14 @@ O backup parcial da unidade foi substituído por rollback direcionado de 28 KB (
 - `online=true, healthy=false` exibe `Online · atenção` + `Desligar`; Offline exibe `Subir`.
 - Tabela principal não oferece `Abrir` para P histórica até o estado real ser carregado; Offline mostra `Offline · suba para abrir`.
 - Asset live: `publication-release.js?v=20261122-runtime-state-v12`.
+
+## Auditoria global dos 25 projetos — 22/11/2026
+
+- Catálogo auditado: 25 IDs em `project_public_ids`; relatório global em `docs/AUDITORIA-GLOBAL-PROJETOS-WHP-20261122.md` e 25 relatórios em `docs/audits/publication-standard/20261122/`.
+- Chrome WebDev navegou 49/49 superfícies após correção do readiness/hairpin; harness versionado sem credenciais.
+- WebDev permanece na Forja. Faro é preferência para novos serviços auxiliares condicionada a gates; nenhuma migração automática foi feita.
+- Todas as H antigas sem runtime foram removidas do Publisher; W antigos não fixos foram removidos; certificados preservados.
+- Executor final sem Homologação running: apenas Agenda P11 e Laboratório P12 estão running como Produção.
+- Laboratório: órfão `dep_2d71...` desativado, DB 0B. Grupix: dois H órfãos desativados e H1/H2/H3/W2 limpos; W1 502 permanece para remediação.
+- Paperclip: D1 consome runtime, mas há conflito entre labels de canário e `active_deploy=1`; não foi desligado por gate PGH.
+- T-044: futura aba Banco por estágio para PostgreSQL/MySQL embutido não-Supabase, sem implementação nesta unidade.

@@ -1,0 +1,1155 @@
+{
+  "generated_at": "2026-11-22",
+  "project_count": 25,
+  "projects": [
+    {
+      "active_production": {
+        "environment_revision": 0,
+        "hostname": "1001-p12-publication.cloudiff.duckdns.org",
+        "publication_number": 12,
+        "runtimeState": {
+          "canStart": false,
+          "canStop": false,
+          "healthy": true,
+          "online": true,
+          "state": "active"
+        },
+        "stage_code": "P12",
+        "status": "published",
+        "url": "https://1001-p12-publication.cloudiff.duckdns.org/"
+      },
+      "aliases": [
+        "labhard"
+      ],
+      "browser": [
+        {
+          "browser_ok": true,
+          "kind": "alias",
+          "result": "Login - Lab Hardware",
+          "url": "https://labhard.cloudiff.duckdns.org/"
+        },
+        {
+          "browser_ok": true,
+          "kind": "preview",
+          "result": "Login - Lab Hardware",
+          "url": "https://1001-w1-preview.cloudiff.duckdns.org/"
+        },
+        {
+          "browser_ok": true,
+          "kind": "production",
+          "result": "Login - Lab Hardware",
+          "url": "https://1001-p12-publication.cloudiff.duckdns.org/"
+        },
+        {
+          "browser_ok": true,
+          "kind": "stable",
+          "result": "Login - Lab Hardware",
+          "url": "https://1001.cloudiff.duckdns.org/"
+        }
+      ],
+      "classification": "PARCIAL_PRODUCAO_LEGADA",
+      "historical_count": 1,
+      "homologation": {
+        "candidateNumber": null,
+        "deploymentId": null,
+        "exists": null,
+        "runtimeKind": null,
+        "stageCode": null,
+        "status": null,
+        "url": null
+      },
+      "integration_status": "ready",
+      "preview": {
+        "commit": null,
+        "configured": true,
+        "deploymentId": null,
+        "environmentRevision": null,
+        "healthy": true,
+        "runtimeKind": "linked-compose",
+        "stageCode": "W1",
+        "url": "https://1001-w1-preview.cloudiff.duckdns.org/"
+      },
+      "public_number": 1001,
+      "required_action": "Preview e Produção estão saudáveis. No próximo release humano, criar H a partir do W fixo e promover a mesma H; depois deixar P12 histórica Offline.",
+      "slug": "laboratorio-de-hardware"
+    },
+    {
+      "active_production": {
+        "environment_revision": 0,
+        "hostname": "1002-p1-publication.cloudiff.duckdns.org",
+        "publication_number": 1,
+        "runtimeState": {
+          "canStart": false,
+          "canStop": false,
+          "healthy": true,
+          "online": true,
+          "state": "active"
+        },
+        "stage_code": "P1",
+        "status": "published",
+        "url": "https://1002-p1-publication.cloudiff.duckdns.org/"
+      },
+      "aliases": [
+        "silvipro"
+      ],
+      "browser": [
+        {
+          "browser_ok": true,
+          "kind": "alias",
+          "result": "silvipro · primeiros passos",
+          "url": "https://silvipro.cloudiff.duckdns.org/"
+        },
+        {
+          "browser_ok": true,
+          "kind": "preview",
+          "result": "silvipro · primeiros passos",
+          "url": "https://1002-w1-preview.cloudiff.duckdns.org/"
+        },
+        {
+          "browser_ok": true,
+          "kind": "production",
+          "result": "silvipro · primeiros passos",
+          "url": "https://1002-p1-publication.cloudiff.duckdns.org/"
+        },
+        {
+          "browser_ok": true,
+          "kind": "stable",
+          "result": "silvipro · primeiros passos",
+          "url": "https://1002.cloudiff.duckdns.org/"
+        }
+      ],
+      "classification": "PARCIAL_PRODUCAO_LEGADA_PLACEHOLDER",
+      "historical_count": 0,
+      "homologation": {
+        "candidateNumber": null,
+        "deploymentId": null,
+        "exists": null,
+        "runtimeKind": null,
+        "stageCode": null,
+        "status": null,
+        "url": null
+      },
+      "integration_status": "ready",
+      "preview": {
+        "commit": null,
+        "configured": true,
+        "deploymentId": null,
+        "environmentRevision": 0,
+        "healthy": true,
+        "runtimeKind": "generic-preview",
+        "stageCode": "W1",
+        "url": "https://1002-w1-preview.cloudiff.duckdns.org/"
+      },
+      "public_number": 1002,
+      "required_action": "Transporte W/P funciona, mas a aplicação ainda serve a página de primeiros passos. Corrigir código-fonte e migrar P1 legada no próximo ciclo H→P humano.",
+      "slug": "silvipro"
+    },
+    {
+      "active_production": {},
+      "aliases": [],
+      "browser": [
+        {
+          "browser_ok": true,
+          "kind": "stable",
+          "result": "Authentik/Portal",
+          "url": "https://1003.cloudiff.duckdns.org/"
+        }
+      ],
+      "classification": "LEGADO_NAO_PROVISIONADO",
+      "historical_count": 0,
+      "homologation": {
+        "candidateNumber": null,
+        "deploymentId": null,
+        "exists": null,
+        "runtimeKind": null,
+        "stageCode": null,
+        "status": null,
+        "url": null
+      },
+      "integration_status": null,
+      "preview": {
+        "commit": null,
+        "configured": false,
+        "deploymentId": null,
+        "environmentRevision": null,
+        "healthy": null,
+        "runtimeKind": null,
+        "stageCode": null,
+        "url": null
+      },
+      "public_number": 1003,
+      "required_action": "Registro público sem Preview/Produção modernos. Confirmar se é duplicata/legado; não criar recursos automaticamente.",
+      "slug": "silvipro2"
+    },
+    {
+      "active_production": {},
+      "aliases": [],
+      "browser": [
+        {
+          "browser_ok": true,
+          "kind": "stable",
+          "result": "Authentik/Portal",
+          "url": "https://1004.cloudiff.duckdns.org/"
+        }
+      ],
+      "classification": "LEGADO_TESTE_NAO_PROVISIONADO",
+      "historical_count": 0,
+      "homologation": {
+        "candidateNumber": null,
+        "deploymentId": null,
+        "exists": null,
+        "runtimeKind": null,
+        "stageCode": null,
+        "status": null,
+        "url": null
+      },
+      "integration_status": null,
+      "preview": {
+        "commit": null,
+        "configured": false,
+        "deploymentId": null,
+        "environmentRevision": null,
+        "healthy": null,
+        "runtimeKind": null,
+        "stageCode": null,
+        "url": null
+      },
+      "public_number": 1004,
+      "required_action": "Registro de teste sem pipeline moderno. Manter apenas como histórico até confirmação de finalidade.",
+      "slug": "lima-teste"
+    },
+    {
+      "active_production": {},
+      "aliases": [],
+      "browser": [
+        {
+          "browser_ok": true,
+          "kind": "stable",
+          "result": "Authentik/Portal",
+          "url": "https://1005.cloudiff.duckdns.org/"
+        }
+      ],
+      "classification": "LEGADO_TESTE_NAO_PROVISIONADO",
+      "historical_count": 0,
+      "homologation": {
+        "candidateNumber": null,
+        "deploymentId": null,
+        "exists": null,
+        "runtimeKind": null,
+        "stageCode": null,
+        "status": null,
+        "url": null
+      },
+      "integration_status": null,
+      "preview": {
+        "commit": null,
+        "configured": false,
+        "deploymentId": null,
+        "environmentRevision": null,
+        "healthy": null,
+        "runtimeKind": null,
+        "stageCode": null,
+        "url": null
+      },
+      "public_number": 1005,
+      "required_action": "Registro de teste sem pipeline moderno. Manter apenas como histórico até confirmação de finalidade.",
+      "slug": "teste-lima"
+    },
+    {
+      "active_production": {},
+      "aliases": [],
+      "browser": [
+        {
+          "browser_ok": true,
+          "kind": "stable",
+          "result": "Authentik/Portal",
+          "url": "https://1006.cloudiff.duckdns.org/"
+        }
+      ],
+      "classification": "LEGADO_TESTE_NAO_PROVISIONADO",
+      "historical_count": 0,
+      "homologation": {
+        "candidateNumber": null,
+        "deploymentId": null,
+        "exists": null,
+        "runtimeKind": null,
+        "stageCode": null,
+        "status": null,
+        "url": null
+      },
+      "integration_status": null,
+      "preview": {
+        "commit": null,
+        "configured": false,
+        "deploymentId": null,
+        "environmentRevision": null,
+        "healthy": null,
+        "runtimeKind": null,
+        "stageCode": null,
+        "url": null
+      },
+      "public_number": 1006,
+      "required_action": "Registro de teste sem pipeline moderno. Manter apenas como histórico até confirmação de finalidade.",
+      "slug": "lima-teste-3"
+    },
+    {
+      "active_production": {},
+      "aliases": [],
+      "browser": [
+        {
+          "browser_ok": true,
+          "kind": "preview",
+          "result": "silvipro-jt-2026 · primeiros passos",
+          "url": "https://1007-w1-preview.cloudiff.duckdns.org/"
+        },
+        {
+          "browser_ok": true,
+          "kind": "stable",
+          "result": "Authentik/Portal",
+          "url": "https://1007.cloudiff.duckdns.org/"
+        }
+      ],
+      "classification": "PREVIEW_LEGADO_PLACEHOLDER",
+      "historical_count": 0,
+      "homologation": {
+        "candidateNumber": null,
+        "deploymentId": null,
+        "exists": null,
+        "runtimeKind": null,
+        "stageCode": null,
+        "status": null,
+        "url": null
+      },
+      "integration_status": null,
+      "preview": {
+        "commit": null,
+        "configured": true,
+        "deploymentId": null,
+        "environmentRevision": 0,
+        "healthy": false,
+        "runtimeKind": null,
+        "stageCode": "W1",
+        "url": "https://1007-w1-preview.cloudiff.duckdns.org/"
+      },
+      "public_number": 1007,
+      "required_action": "Preview responde com primeiros passos, sem integração moderna. Confirmar proprietário/finalidade e integrar Forgejo+runtime antes de H/P.",
+      "slug": "silvipro-jt-2026"
+    },
+    {
+      "active_production": {},
+      "aliases": [],
+      "browser": [
+        {
+          "browser_ok": true,
+          "kind": "stable",
+          "result": "Authentik/Portal",
+          "url": "https://1008.cloudiff.duckdns.org/"
+        }
+      ],
+      "classification": "LEGADO_TESTE_NAO_PROVISIONADO",
+      "historical_count": 0,
+      "homologation": {
+        "candidateNumber": null,
+        "deploymentId": null,
+        "exists": null,
+        "runtimeKind": null,
+        "stageCode": null,
+        "status": null,
+        "url": null
+      },
+      "integration_status": null,
+      "preview": {
+        "commit": null,
+        "configured": false,
+        "deploymentId": null,
+        "environmentRevision": null,
+        "healthy": null,
+        "runtimeKind": null,
+        "stageCode": null,
+        "url": null
+      },
+      "public_number": 1008,
+      "required_action": "Registro de teste sem pipeline moderno. Manter apenas como histórico até confirmação de finalidade.",
+      "slug": "teste"
+    },
+    {
+      "active_production": {},
+      "aliases": [],
+      "browser": [
+        {
+          "browser_ok": true,
+          "kind": "preview",
+          "result": "teste-sofa · primeiros passos",
+          "url": "https://1010-w1-preview.cloudiff.duckdns.org/"
+        },
+        {
+          "browser_ok": true,
+          "kind": "stable",
+          "result": "Authentik/Portal",
+          "url": "https://1010.cloudiff.duckdns.org/"
+        }
+      ],
+      "classification": "PREVIEW_LEGADO_PLACEHOLDER",
+      "historical_count": 0,
+      "homologation": {
+        "candidateNumber": null,
+        "deploymentId": null,
+        "exists": null,
+        "runtimeKind": null,
+        "stageCode": null,
+        "status": null,
+        "url": null
+      },
+      "integration_status": null,
+      "preview": {
+        "commit": null,
+        "configured": true,
+        "deploymentId": null,
+        "environmentRevision": 0,
+        "healthy": false,
+        "runtimeKind": null,
+        "stageCode": "W1",
+        "url": "https://1010-w1-preview.cloudiff.duckdns.org/"
+      },
+      "public_number": 1010,
+      "required_action": "Preview responde com primeiros passos, sem integração moderna. Confirmar proprietário/finalidade e integrar antes de H/P.",
+      "slug": "teste-sofa"
+    },
+    {
+      "active_production": {},
+      "aliases": [],
+      "browser": [
+        {
+          "browser_ok": true,
+          "kind": "stable",
+          "result": "Authentik/Portal",
+          "url": "https://1011.cloudiff.duckdns.org/"
+        }
+      ],
+      "classification": "LEGADO_NAO_PROVISIONADO",
+      "historical_count": 0,
+      "homologation": {
+        "candidateNumber": null,
+        "deploymentId": null,
+        "exists": null,
+        "runtimeKind": null,
+        "stageCode": null,
+        "status": null,
+        "url": null
+      },
+      "integration_status": null,
+      "preview": {
+        "commit": null,
+        "configured": false,
+        "deploymentId": null,
+        "environmentRevision": null,
+        "healthy": null,
+        "runtimeKind": null,
+        "stageCode": null,
+        "url": null
+      },
+      "public_number": 1011,
+      "required_action": "Registro sem pipeline moderno. Confirmar se ainda representa aplicação ativa antes de provisionar.",
+      "slug": "tuleap-laboratorio-de-hardware"
+    },
+    {
+      "active_production": {},
+      "aliases": [],
+      "browser": [
+        {
+          "browser_ok": true,
+          "kind": "preview",
+          "result": "502",
+          "url": "https://1014-w1-preview.cloudiff.duckdns.org/"
+        },
+        {
+          "browser_ok": true,
+          "kind": "stable",
+          "result": "Authentik/Portal",
+          "url": "https://1014.cloudiff.duckdns.org/"
+        }
+      ],
+      "classification": "QUEBRADO_PREVIEW_502",
+      "historical_count": 0,
+      "homologation": {
+        "candidateNumber": null,
+        "deploymentId": null,
+        "exists": null,
+        "runtimeKind": null,
+        "stageCode": null,
+        "status": null,
+        "url": null
+      },
+      "integration_status": null,
+      "preview": {
+        "commit": null,
+        "configured": true,
+        "deploymentId": null,
+        "environmentRevision": 18,
+        "healthy": false,
+        "runtimeKind": null,
+        "stageCode": "W1",
+        "url": "https://1014-w1-preview.cloudiff.duckdns.org/"
+      },
+      "public_number": 1014,
+      "required_action": "W1 existe mas navegador confirma 502. Descobrir ownership/runtime real e reconciliar bridge/upstream antes de H/P.",
+      "slug": "grupix"
+    },
+    {
+      "active_production": {},
+      "aliases": [],
+      "browser": [
+        {
+          "browser_ok": true,
+          "kind": "stable",
+          "result": "Authentik/Portal",
+          "url": "https://1015.cloudiff.duckdns.org/"
+        }
+      ],
+      "classification": "LEGADO_TESTE_NAO_PROVISIONADO",
+      "historical_count": 0,
+      "homologation": {
+        "candidateNumber": null,
+        "deploymentId": null,
+        "exists": null,
+        "runtimeKind": null,
+        "stageCode": null,
+        "status": null,
+        "url": null
+      },
+      "integration_status": null,
+      "preview": {
+        "commit": null,
+        "configured": false,
+        "deploymentId": null,
+        "environmentRevision": null,
+        "healthy": null,
+        "runtimeKind": null,
+        "stageCode": null,
+        "url": null
+      },
+      "public_number": 1015,
+      "required_action": "Registro de teste sem pipeline moderno. Não provisionar automaticamente.",
+      "slug": "teste-4"
+    },
+    {
+      "active_production": {},
+      "aliases": [],
+      "browser": [
+        {
+          "browser_ok": true,
+          "kind": "stable",
+          "result": "Authentik/Portal",
+          "url": "https://1016.cloudiff.duckdns.org/"
+        }
+      ],
+      "classification": "LEGADO_TESTE_NAO_PROVISIONADO",
+      "historical_count": 0,
+      "homologation": {
+        "candidateNumber": null,
+        "deploymentId": null,
+        "exists": null,
+        "runtimeKind": null,
+        "stageCode": null,
+        "status": null,
+        "url": null
+      },
+      "integration_status": null,
+      "preview": {
+        "commit": null,
+        "configured": false,
+        "deploymentId": null,
+        "environmentRevision": null,
+        "healthy": null,
+        "runtimeKind": null,
+        "stageCode": null,
+        "url": null
+      },
+      "public_number": 1016,
+      "required_action": "Registro de teste sem pipeline moderno. Não provisionar automaticamente.",
+      "slug": "teste-3"
+    },
+    {
+      "active_production": {},
+      "aliases": [],
+      "browser": [
+        {
+          "browser_ok": true,
+          "kind": "stable",
+          "result": "Authentik/Portal",
+          "url": "https://1017.cloudiff.duckdns.org/"
+        }
+      ],
+      "classification": "LEGADO_TESTE_NAO_PROVISIONADO",
+      "historical_count": 0,
+      "homologation": {
+        "candidateNumber": null,
+        "deploymentId": null,
+        "exists": null,
+        "runtimeKind": null,
+        "stageCode": null,
+        "status": null,
+        "url": null
+      },
+      "integration_status": null,
+      "preview": {
+        "commit": null,
+        "configured": false,
+        "deploymentId": null,
+        "environmentRevision": null,
+        "healthy": null,
+        "runtimeKind": null,
+        "stageCode": null,
+        "url": null
+      },
+      "public_number": 1017,
+      "required_action": "Registro de teste sem pipeline moderno. Não provisionar automaticamente.",
+      "slug": "teste-5"
+    },
+    {
+      "active_production": {},
+      "aliases": [],
+      "browser": [
+        {
+          "browser_ok": true,
+          "kind": "preview",
+          "result": "502",
+          "url": "https://1018-w1-preview.cloudiff.duckdns.org/"
+        },
+        {
+          "browser_ok": true,
+          "kind": "stable",
+          "result": "Authentik/Portal",
+          "url": "https://1018.cloudiff.duckdns.org/"
+        }
+      ],
+      "classification": "QUEBRADO_PREVIEW_502",
+      "historical_count": 0,
+      "homologation": {
+        "candidateNumber": null,
+        "deploymentId": null,
+        "exists": null,
+        "runtimeKind": null,
+        "stageCode": null,
+        "status": null,
+        "url": null
+      },
+      "integration_status": null,
+      "preview": {
+        "commit": null,
+        "configured": true,
+        "deploymentId": null,
+        "environmentRevision": 0,
+        "healthy": false,
+        "runtimeKind": null,
+        "stageCode": "W1",
+        "url": "https://1018-w1-preview.cloudiff.duckdns.org/"
+      },
+      "public_number": 1018,
+      "required_action": "W1 existe mas navegador confirma 502. Descobrir ownership/runtime real e reconciliar bridge/upstream antes de H/P.",
+      "slug": "testando123"
+    },
+    {
+      "active_production": {},
+      "aliases": [],
+      "browser": [
+        {
+          "browser_ok": true,
+          "kind": "preview",
+          "result": "hardness-e2e-0254 · primeiros passos",
+          "url": "https://1019-w1-preview.cloudiff.duckdns.org/"
+        },
+        {
+          "browser_ok": true,
+          "kind": "stable",
+          "result": "Authentik/Portal",
+          "url": "https://1019.cloudiff.duckdns.org/"
+        }
+      ],
+      "classification": "ATIVO_TESTE_HARDNESS",
+      "historical_count": 0,
+      "homologation": {
+        "candidateNumber": null,
+        "deploymentId": null,
+        "exists": null,
+        "runtimeKind": null,
+        "stageCode": null,
+        "status": null,
+        "url": null
+      },
+      "integration_status": null,
+      "preview": {
+        "commit": null,
+        "configured": true,
+        "deploymentId": null,
+        "environmentRevision": 0,
+        "healthy": false,
+        "runtimeKind": null,
+        "stageCode": "W1",
+        "url": "https://1019-w1-preview.cloudiff.duckdns.org/"
+      },
+      "public_number": 1019,
+      "required_action": "Preview responde e é ativo de teste/hardness. Manter como ferramenta de validação; não criar Produção sem redefinir explicitamente seu propósito.",
+      "slug": "hardness-e2e-0254"
+    },
+    {
+      "active_production": {
+        "environment_revision": 98,
+        "hostname": "1020-p11-publication.cloudiff.duckdns.org",
+        "publication_number": 11,
+        "runtimeState": {
+          "canStart": false,
+          "canStop": false,
+          "healthy": true,
+          "online": true,
+          "state": "active"
+        },
+        "stage_code": "P11",
+        "status": "published",
+        "url": "https://1020-p11-publication.cloudiff.duckdns.org/"
+      },
+      "aliases": [
+        "agendaunica"
+      ],
+      "browser": [
+        {
+          "browser_ok": true,
+          "kind": "alias",
+          "result": "Agenda Única",
+          "url": "https://agendaunica.cloudiff.duckdns.org/"
+        },
+        {
+          "browser_ok": true,
+          "kind": "preview",
+          "result": "Agenda Única",
+          "url": "https://1020-w3-preview.cloudiff.duckdns.org/"
+        },
+        {
+          "browser_ok": true,
+          "kind": "production",
+          "result": "Agenda Única",
+          "url": "https://1020-p11-publication.cloudiff.duckdns.org/"
+        },
+        {
+          "browser_ok": true,
+          "kind": "stable",
+          "result": "Agenda Única",
+          "url": "https://1020.cloudiff.duckdns.org/"
+        }
+      ],
+      "classification": "CONFORME_REFERENCIA",
+      "historical_count": 0,
+      "homologation": {
+        "candidateNumber": null,
+        "deploymentId": null,
+        "exists": null,
+        "runtimeKind": null,
+        "stageCode": null,
+        "status": null,
+        "url": null
+      },
+      "integration_status": "ready",
+      "preview": {
+        "commit": null,
+        "configured": true,
+        "deploymentId": null,
+        "environmentRevision": null,
+        "healthy": true,
+        "runtimeKind": "linked-compose",
+        "stageCode": "W3",
+        "url": "https://1020-w3-preview.cloudiff.duckdns.org/"
+      },
+      "public_number": 1020,
+      "required_action": "Manter como projeto de regressão do padrão completo W3→Hn→mesma H em Pn; não normalizar o W3 histórico.",
+      "slug": "agenda-unica"
+    },
+    {
+      "active_production": {
+        "environment_revision": 6,
+        "hostname": "1021-p5-publication.cloudiff.duckdns.org",
+        "publication_number": 5,
+        "runtimeState": {
+          "canStart": false,
+          "canStop": false,
+          "healthy": true,
+          "online": true,
+          "state": "active"
+        },
+        "stage_code": "P5",
+        "status": "published",
+        "url": "https://1021-p5-publication.cloudiff.duckdns.org/"
+      },
+      "aliases": [
+        "cpuhub"
+      ],
+      "browser": [
+        {
+          "browser_ok": true,
+          "kind": "alias",
+          "result": "Acesso · CPUHub",
+          "url": "https://cpuhub.cloudiff.duckdns.org/"
+        },
+        {
+          "browser_ok": true,
+          "kind": "preview",
+          "result": "Acesso · CPUHub",
+          "url": "https://1021-w1-preview.cloudiff.duckdns.org/"
+        },
+        {
+          "browser_ok": true,
+          "kind": "production",
+          "result": "Acesso · CPUHub",
+          "url": "https://1021-p5-publication.cloudiff.duckdns.org/"
+        },
+        {
+          "browser_ok": true,
+          "kind": "stable",
+          "result": "Acesso · CPUHub",
+          "url": "https://1021.cloudiff.duckdns.org/"
+        }
+      ],
+      "classification": "PARCIAL_PRODUCAO_LEGADA",
+      "historical_count": 2,
+      "homologation": {
+        "candidateNumber": null,
+        "deploymentId": null,
+        "exists": null,
+        "runtimeKind": null,
+        "stageCode": null,
+        "status": null,
+        "url": null
+      },
+      "integration_status": "ready",
+      "preview": {
+        "commit": null,
+        "configured": true,
+        "deploymentId": null,
+        "environmentRevision": 6,
+        "healthy": true,
+        "runtimeKind": null,
+        "stageCode": "W1",
+        "url": "https://1021-w1-preview.cloudiff.duckdns.org/"
+      },
+      "public_number": 1021,
+      "required_action": "Preview e Produção estão saudáveis. Migrar para same-instance no próximo H→P humano e preservar P5 até o novo cutover saudável.",
+      "slug": "cpuhub"
+    },
+    {
+      "active_production": {
+        "environment_revision": 0,
+        "hostname": "1022-p2-publication.cloudiff.duckdns.org",
+        "publication_number": 2,
+        "runtimeState": {
+          "canStart": false,
+          "canStop": false,
+          "healthy": true,
+          "online": true,
+          "state": "active"
+        },
+        "stage_code": "P2",
+        "status": "published",
+        "url": "https://1022-p2-publication.cloudiff.duckdns.org/"
+      },
+      "aliases": [
+        "cadales"
+      ],
+      "browser": [
+        {
+          "browser_ok": true,
+          "kind": "alias",
+          "result": "cadales · primeiros passos",
+          "url": "https://cadales.cloudiff.duckdns.org/"
+        },
+        {
+          "browser_ok": true,
+          "kind": "preview",
+          "result": "cadales · primeiros passos",
+          "url": "https://1022-w1-preview.cloudiff.duckdns.org/"
+        },
+        {
+          "browser_ok": true,
+          "kind": "production",
+          "result": "cadales · primeiros passos",
+          "url": "https://1022-p2-publication.cloudiff.duckdns.org/"
+        },
+        {
+          "browser_ok": true,
+          "kind": "stable",
+          "result": "cadales · primeiros passos",
+          "url": "https://1022.cloudiff.duckdns.org/"
+        }
+      ],
+      "classification": "PARCIAL_PRODUCAO_LEGADA_PLACEHOLDER",
+      "historical_count": 0,
+      "homologation": {
+        "candidateNumber": null,
+        "deploymentId": null,
+        "exists": null,
+        "runtimeKind": null,
+        "stageCode": null,
+        "status": null,
+        "url": null
+      },
+      "integration_status": "ready",
+      "preview": {
+        "commit": null,
+        "configured": true,
+        "deploymentId": null,
+        "environmentRevision": 0,
+        "healthy": true,
+        "runtimeKind": null,
+        "stageCode": "W1",
+        "url": "https://1022-w1-preview.cloudiff.duckdns.org/"
+      },
+      "public_number": 1022,
+      "required_action": "Transporte W/P funciona, mas a aplicação ainda serve a página de primeiros passos. Substituir o conteúdo no Forgejo e usar o próximo ciclo H→P same-instance.",
+      "slug": "cadales"
+    },
+    {
+      "active_production": {},
+      "aliases": [],
+      "browser": [
+        {
+          "browser_ok": true,
+          "kind": "preview",
+          "result": "isha · primeiros passos",
+          "url": "https://1023-w1-preview.cloudiff.duckdns.org/"
+        },
+        {
+          "browser_ok": true,
+          "kind": "stable",
+          "result": "Authentik/Portal",
+          "url": "https://1023.cloudiff.duckdns.org/"
+        }
+      ],
+      "classification": "PREVIEW_LEGADO_PLACEHOLDER",
+      "historical_count": 0,
+      "homologation": {
+        "candidateNumber": null,
+        "deploymentId": null,
+        "exists": null,
+        "runtimeKind": null,
+        "stageCode": null,
+        "status": null,
+        "url": null
+      },
+      "integration_status": null,
+      "preview": {
+        "commit": null,
+        "configured": true,
+        "deploymentId": null,
+        "environmentRevision": 0,
+        "healthy": false,
+        "runtimeKind": null,
+        "stageCode": "W1",
+        "url": "https://1023-w1-preview.cloudiff.duckdns.org/"
+      },
+      "public_number": 1023,
+      "required_action": "Preview responde com primeiros passos, sem integração moderna. Confirmar proprietário/finalidade e integrar antes de H/P.",
+      "slug": "isha"
+    },
+    {
+      "active_production": {},
+      "aliases": [],
+      "browser": [
+        {
+          "browser_ok": true,
+          "kind": "preview",
+          "result": "mvplanner · primeiros passos",
+          "url": "https://1024-w1-preview.cloudiff.duckdns.org/"
+        },
+        {
+          "browser_ok": true,
+          "kind": "stable",
+          "result": "Authentik/Portal",
+          "url": "https://1024.cloudiff.duckdns.org/"
+        }
+      ],
+      "classification": "PREVIEW_LEGADO_PLACEHOLDER",
+      "historical_count": 0,
+      "homologation": {
+        "candidateNumber": null,
+        "deploymentId": null,
+        "exists": null,
+        "runtimeKind": null,
+        "stageCode": null,
+        "status": null,
+        "url": null
+      },
+      "integration_status": null,
+      "preview": {
+        "commit": null,
+        "configured": true,
+        "deploymentId": null,
+        "environmentRevision": 0,
+        "healthy": false,
+        "runtimeKind": null,
+        "stageCode": "W1",
+        "url": "https://1024-w1-preview.cloudiff.duckdns.org/"
+      },
+      "public_number": 1024,
+      "required_action": "Preview responde com primeiros passos, sem integração moderna. Confirmar runtime/código correto e integrar antes de H/P.",
+      "slug": "mvplanner"
+    },
+    {
+      "active_production": {},
+      "aliases": [],
+      "browser": [
+        {
+          "browser_ok": true,
+          "kind": "preview",
+          "result": "Paperclip",
+          "url": "https://1025-w1-preview.cloudiff.duckdns.org/"
+        },
+        {
+          "browser_ok": true,
+          "kind": "stable",
+          "result": "502",
+          "url": "https://1025.cloudiff.duckdns.org/"
+        }
+      ],
+      "classification": "BLOQUEADO_RUNTIME_COMPOSTO_STABLE_502",
+      "historical_count": 0,
+      "homologation": {
+        "candidateNumber": null,
+        "deploymentId": null,
+        "exists": null,
+        "runtimeKind": null,
+        "stageCode": null,
+        "status": null,
+        "url": null
+      },
+      "integration_status": "ready",
+      "preview": {
+        "commit": null,
+        "configured": true,
+        "deploymentId": null,
+        "environmentRevision": 0,
+        "healthy": true,
+        "runtimeKind": null,
+        "stageCode": "W1",
+        "url": "https://1025-w1-preview.cloudiff.duckdns.org/"
+      },
+      "public_number": 1025,
+      "required_action": "W1 real está saudável; endereço estável retorna 502 e existe D1 legado fora do modelo moderno. Preservar volume, definir manifest do runtime composto, reconciliar D1/stable e só então habilitar H→P.",
+      "slug": "paperclip"
+    },
+    {
+      "active_production": {},
+      "aliases": [],
+      "browser": [
+        {
+          "browser_ok": true,
+          "kind": "preview",
+          "result": "SGREP - Fine Comp",
+          "url": "https://1026-w1-preview.cloudiff.duckdns.org/"
+        },
+        {
+          "browser_ok": true,
+          "kind": "stable",
+          "result": "Authentik/Portal",
+          "url": "https://1026.cloudiff.duckdns.org/"
+        }
+      ],
+      "classification": "PREVIEW_SOURCE_LINKED_SEM_PRODUCAO",
+      "historical_count": 0,
+      "homologation": {
+        "candidateNumber": null,
+        "deploymentId": null,
+        "exists": null,
+        "runtimeKind": null,
+        "stageCode": null,
+        "status": null,
+        "url": null
+      },
+      "integration_status": "adopted_existing_staging",
+      "preview": {
+        "commit": null,
+        "configured": true,
+        "deploymentId": null,
+        "environmentRevision": null,
+        "healthy": true,
+        "runtimeKind": "source-linked-preview",
+        "stageCode": "W1",
+        "url": "https://1026-w1-preview.cloudiff.duckdns.org/"
+      },
+      "public_number": 1026,
+      "required_action": "W1 source-linked está saudável. Formalizar contrato H/P que preserve separação fonte/dados antes de qualquer Produção.",
+      "slug": "sgrep-v2"
+    },
+    {
+      "active_production": {},
+      "aliases": [],
+      "browser": [
+        {
+          "browser_ok": true,
+          "kind": "stable",
+          "result": "Authentik/Portal",
+          "url": "https://1027.cloudiff.duckdns.org/"
+        }
+      ],
+      "classification": "DEGRADADO_INTEGRACAO",
+      "historical_count": 0,
+      "homologation": {
+        "candidateNumber": null,
+        "deploymentId": null,
+        "exists": null,
+        "runtimeKind": null,
+        "stageCode": null,
+        "status": null,
+        "url": null
+      },
+      "integration_status": "degraded",
+      "preview": {
+        "commit": null,
+        "configured": false,
+        "deploymentId": null,
+        "environmentRevision": null,
+        "healthy": null,
+        "runtimeKind": null,
+        "stageCode": null,
+        "url": null
+      },
+      "public_number": 1027,
+      "required_action": "Integração está degradada por tenant runtime/Supabase e não há Preview. Corrigir a integração primeiro e só depois criar o Preview fixo no padrão atual.",
+      "slug": "msha"
+    },
+    {
+      "active_production": {},
+      "aliases": [],
+      "browser": [
+        {
+          "browser_ok": true,
+          "kind": "stable",
+          "result": "Authentik/Portal",
+          "url": "https://1028.cloudiff.duckdns.org/"
+        }
+      ],
+      "classification": "REGISTRO_INFRA_NAO_PROVISIONADO",
+      "historical_count": 0,
+      "homologation": {
+        "candidateNumber": null,
+        "deploymentId": null,
+        "exists": null,
+        "runtimeKind": null,
+        "stageCode": null,
+        "status": null,
+        "url": null
+      },
+      "integration_status": null,
+      "preview": {
+        "commit": null,
+        "configured": false,
+        "deploymentId": null,
+        "environmentRevision": null,
+        "healthy": null,
+        "runtimeKind": null,
+        "stageCode": null,
+        "url": null
+      },
+      "public_number": 1028,
+      "required_action": "Registro de infraestrutura sem pipeline W/H/P atual. Manter fora de publicação de aplicação até existir contrato explícito.",
+      "slug": "pghd-contexto"
+    }
+  ]
+}

@@ -151,3 +151,13 @@ Não reintroduzir varreduras de filesystem/Komodo/serviços remotos a cada cliqu
 ## Continuidade W→H→P: leitura obrigatória
 
 Antes de operar Preview/Homologação/Produção, ler `docs/PADRAO-CLOUDIFF-PREVIEW-HOMOLOGACAO-PRODUCAO-20261120.md` e `docs/RUNBOOK-PADRAO-CLOUDIFF-WHP-CONTINUIDADE.md`. Em especial: preservar Wn histórico, clonar rootfs/config/volumes W→H, não reconstruir H→P, distinguir Online de Produção ativa, usar alias principal no cutover, resolver diagnóstico pelo estágio real e tratar `archived` como auditoria fora da lista operacional. `Excluir container` pode preservar snapshot Compose ou usar `legacy-final` em P legada inativa validada; a P ativa nunca pode ser excluída. O Executor live possui deltas adicionais versionados em `compat/`; reconciliação é incremental, nunca substituição cega pelo arquivo canônico antigo.
+
+## Auditoria global de adequação — 22/11/2026
+
+- Fonte de referência: `docs/AUDITORIA-GLOBAL-PROJETOS-WHP-20261122.md`.
+- Auditoria individual de cada ID público: `docs/audits/publication-standard/20261122/README.md`.
+- Todo agente que assumir um projeto deve ler a auditoria individual antes de mutar runtime, rotas ou publicação.
+- `project_public_ids` é o catálogo enumerado desta rodada; não usar a tabela `projects` vazia como prova de inexistência.
+- Readiness/navegador canônico está na Forja (`cloudiff-webdev.service` / `cloudiff-webdev-browser`). Health exige Grid `ready=true` e caminho HTTPS interno funcional. Harness: `scripts/audit-cloudiff-browser-readiness.py`.
+- Faro foi o nó mais leve na rodada e é a **preferência para novos serviços auxiliares**, desde que passem gates de rede, capacidade, backup, observabilidade e compatibilidade. Não mover serviços existentes automaticamente.
+- A futura aba Banco para PostgreSQL/MySQL embutido fora do Supabase está registrada como **T-044**. Não expor porta de DB e não implementar sem contrato de ACL/auditoria por estágio.
