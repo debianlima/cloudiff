@@ -735,3 +735,13 @@ Os módulos `cloudif_portal_publications.py` (app/lib), `cloudif_portal_v2_coexi
 - P1 versionada foi registrada no Publisher; D2 residual foi parado; W1/P1/1002/silvipro permanecem HTTP 200 com conteúdo idêntico.
 - `assistente-interativo` não possui ACL do projeto; próxima H/P same-instance é gate do proprietário.
 - Evidência: `docs/REMEDIACAO-SILVIPRO-P1002-20261122.md`; patch live: `compat/cloudiff-komodo-v144-fixed-preview-live.patch`.
+
+## Cadales P1022 — W1 contínuo sincronizado e resíduos W2/H2 removidos — 22/11/2026
+
+- `preview/ensure` v144 migrou o W2 legado para o Preview contínuo W1 `cloudif-p1022-preview-web`, mantendo alias Docker `cloudif-p1022-w1-preview-web`.
+- Checkout avançou de `0599c798...` para `ad8e67c...`; `HEAD == origin/main`, dirty=false, W1 healthy.
+- W2 e H2 foram removidos do Publisher; H2 container removido após backup e prova de mesma imagem que P2, sem volume de dados.
+- P2 permaneceu `running/healthy` e `cadales.cloudiff.duckdns.org` HTTP 200.
+- Metadata legada D1/D2 foi reconciliada para inactive; P2 moderna é a única `is_active=1`. Backup Komodo Agent: `/srv/cloudif/backups/cadales-komodo-readmodel-20261122T024756Z`.
+- P2 continua legado sem prova de H→P same-instance. `assistente-interativo` não tem ACL do projeto; próxima H/P é gate humano.
+- Evidência: `docs/REMEDIACAO-CADALES-W1-SYNC-20261122.md`.

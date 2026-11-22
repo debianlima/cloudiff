@@ -21,7 +21,7 @@ Nenhum runtime de projeto foi alterado nesta unidade.
 | Projeto | Preview | Forgejo → Preview | Produção | H→P mesma instância | Histórico/resíduos | Classificação |
 |---|---|---|---|---|---|---|
 | `agenda-unica` | W3 saudável | alinhado | P7 + alias `agendaunica` saudáveis | **sim**, `dep_19bc...` em H7/P7 | P6/P3 Offline; P2 legado Offline | **CONFORME** |
-| `cadales` | W2 saudável | **não**: bind `0599c798...`, Komodo `ad8e67c` | P2 saudável | não comprovado; fluxo antigo | sem P histórica moderna ativa | **NÃO CONFORME — Preview atrasado** |
+| `cadales` | W1 contínuo saudável após migração v144 | alinhado `ad8e67c...` | P2 saudável | não comprovado; P2 é legado | W2/H2 removidos; D1/D2 metadata inativa | **PARCIAL — aguarda próximo H→P humano** |
 | `cpuhub` | W2 saudável | alinhado (`97af1e3...`) | P5 saudável | não comprovado; fluxo antigo | H3 ainda `awaiting_homologation`; P2/P3 Offline | **PARCIAL / LEGADO** |
 | `laboratorio-de-hardware` | W1 saudável após remediação | alinhado `3b399e9` | P12/alias saudáveis | **não** historicamente: H13 `dep_51a7...` → P12 `dep_210f...` | H11/H13/P5 agora Offline; snapshots preservados | **PARCIAL — aguarda novo H→P humano** |
 | `msha` | não configurado | n/a | nenhuma | n/a | nenhum runtime de publicação | **DRAFT / N/A** |
@@ -40,21 +40,19 @@ Nenhum runtime de projeto foi alterado nesta unidade.
 
 Nota importante: labels Docker dos containers promovidos podem ainda indicar `homologation` porque labels são imutáveis. **Não recriar containers só para alterar label**; a identidade preservada é justamente a prova do H→P in-place.
 
-## 2. Cadales — Preview fixo não acompanha Forgejo
+## 2. Cadales — W1 contínuo sincronizado; P2 ainda legado
 
-- Public number 1022; W2 e P2 respondem HTTP 200.
-- Bind ativo de `/var/www/html` está no commit `0599c7985678491878fe987da2ead65d957d1371`.
-- Komodo/Forgejo anuncia `ad8e67c` como `latest_hash`.
-- O read-model do Portal informa `synced`, portanto há também um falso positivo de sincronização.
-- Stack Komodo ainda espera `docker-compose.yml` no Git e retorna `deploy_status=failed`; o Preview continua funcionando por mecanismo legado/bind.
-- H2/P2 não possuem metadados `sameInstancePromotionRequired`/`homologationDeploymentId`; não existe evidência suficiente para afirmar promoção da mesma instância.
+- Public number 1022; W1, P2 e alias `cadales` respondem HTTP 200.
+- O mecanismo v144 migrou o W2 legado para o Preview contínuo W1 `cloudif-p1022-preview-web` com alias Docker `cloudif-p1022-w1-preview-web`.
+- Checkout e `origin/main` estão em `ad8e67cee97f12f0c3826d46ded8f612add2ba2f`, dirty=false.
+- O W2 e o stage H2 foram removidos do Publisher; o container H2 foi removido após backup e prova de mesma imagem que P2, sem volume de dados.
+- Metadata Komodo legada D1/D2 ficou `inactive`; a P2 moderna é a única Produção `is_active=1`.
+- H2/P2 continuam sem metadados `sameInstancePromotionRequired`/`homologationDeploymentId`; portanto P2 é legado e não prova promoção da mesma instância.
+- `assistente-interativo` não possui ACL do projeto; o próximo H→P precisa ser iniciado pelo proprietário.
 
-### Remediação segura
+### Próximo passo
 
-1. corrigir a fonte de sincronização do W2 para o `main` atual sem trocar URL/slot;
-2. corrigir o read-model para não declarar `synced` quando checkout e `latest_hash` divergem;
-3. remover a expectativa legada de `docker-compose.yml` do caminho gerenciado, sem adicionar infraestrutura ao repositório da aplicação;
-4. somente no próximo ciclo gerar nova H pelo fluxo atual e promover a mesma instância para P; não reescrever P2 ativa sem candidato testado.
+Usar o W1 atual como origem da próxima Homologação e promover a mesma instância para a próxima P. Somente depois P2 deve virar histórico/offline. Evidência: `docs/REMEDIACAO-CADALES-W1-SYNC-20261122.md`.
 
 ## 3. CPUHub — operacional, mas ainda legado no ciclo de release
 
