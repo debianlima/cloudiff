@@ -269,3 +269,9 @@ Depois que a nova P passa por health/readback e assume o alias principal, a P an
 O NPM/Publisher usa o Host numérico para rotear aliases ao gateway interno e preserva o host público em `X-Forwarded-Host`. O publication-gateway deve validar esse `X-Forwarded-Host` como `*.cloudiff.duckdns.org` e entregá-lo como `Host`/`X-Forwarded-Host` ao backend. Assim o roteamento continua numérico internamente, enquanto aplicações recebem a identidade pública correta para CSRF/same-origin.
 
 Variáveis públicas específicas do projeto, como `APP_BASE_URL` e `ALLOWED_ORIGINS`, continuam pertencendo ao estágio. Se o operador quiser valores próprios da Produção, deve alterá-los explicitamente em P; o Portal aplica a configuração à Produção ativa e atualiza revision/digest sem alterar secrets.
+
+### Estado real de Produção histórica
+
+Não confundir atividade com saúde. `runtimeState.online` é a fonte para decidir se uma P histórica está ligada e consumindo runtime; `runtimeState.healthy` apenas qualifica a saúde do runtime ligado. Uma P `online=true, healthy=false` continua **Online · atenção** e deve oferecer `Desligar`. Só `online=false` é Offline e oferece `Subir`.
+
+Na tabela principal, versões históricas não devem oferecer `Abrir` antes da consulta do runtime. O `release-flow` atualiza a linha dinamicamente; Offline mostra `Offline · suba para abrir`. URL histórica que redireciona para o Portal/proxy não prova que o container esteja executando.

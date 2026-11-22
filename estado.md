@@ -868,3 +868,13 @@ O backup parcial da unidade foi substituído por rollback direcionado de 28 KB (
 - Solução final: publication-gateway roteia pelo Host numérico, valida `X-Forwarded-Host *.cloudiff.duckdns.org` e encaminha esse host público como Host/X-Forwarded-Host à bridge.
 - Publisher permanece v17 live. Candidato experimental v18 que mudava Host no NPM foi rejeitado pelos gates e nunca ativado; a mudança de Publisher foi revertida no canônico.
 - Provas finais: `agendaunica`, `1020` e P10 versionada health HTTP 200; login com credencial falsa retorna 401 nos três Origins, não 403.
+
+## Agenda P1020 — P11 e histórico runtime real — 22/11/2026
+
+- P11 é a Produção ativa: `dep_77c8800218b8ddf20d17bc7a`, api/db/web `Up/healthy`.
+- P10 é histórica Offline: `dep_00b101221eb813f671146b98`, api/db/web `Exited`, Executor `inactive`.
+- URL P10 responde 302 para `/cloudiff/portal/`; não é conteúdo servido pelo runtime P10.
+- Modal e tabela principal agora usam `runtimeState.online` para Online/Offline e `healthy` apenas como qualificador de saúde.
+- `online=true, healthy=false` exibe `Online · atenção` + `Desligar`; Offline exibe `Subir`.
+- Tabela principal não oferece `Abrir` para P histórica até o estado real ser carregado; Offline mostra `Offline · suba para abrir`.
+- Asset live: `publication-release.js?v=20261122-runtime-state-v12`.
