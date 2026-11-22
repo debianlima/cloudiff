@@ -751,3 +751,12 @@ Os módulos `cloudif_portal_publications.py` (app/lib), `cloudif_portal_v2_coexi
 Durante a limpeza de metadata Cadales, um backup integral ad hoc do `komodo-agent.db` (4,5 GB) permaneceu executando após perda da conexão e provocou `database is locked` em requisições concorrentes. O processo pertencente à unidade foi identificado por PID/path e encerrado; um `cp` separado de outra unidade não foi tocado. O Komodo Agent foi reiniciado isoladamente, `BEGIN IMMEDIATE` voltou a passar e W1/P2/alias permaneceram HTTP 200.
 
 O backup parcial da unidade foi substituído por rollback direcionado de 28 KB (`d2.inspect.json`, prestate JSON e `restore-publication-runtimes.sql`). Regra incorporada ao runbook: remediação de poucas linhas não deve copiar o SQLite live inteiro.
+
+## SGREP v2 P1026 — source-linked Preview reconhecido — 22/11/2026
+
+- Portal passou a reconhecer `project_preview_source_links` quando multiservice/genérico não existe, sem recriar runtime.
+- W1 source-linked saudável, commit `f29f752...`, fonte readonly, banco Preview isolado; `public_external_verified=1`.
+- Diagnóstico Node usa `cloudif-sgrep-v2-preview-app` (Node 24.22.3); PHP ausente é resposta válida.
+- Cinco containers exited de smoke/rollback removidos após backup; app/db/sat/gateway ativos preservados.
+- Terminal source-linked segue como lacuna explícita por ACL/seleção segura de container; não usar stack genérica como fallback.
+- Evidência: `docs/REMEDIACAO-SGREP-V2-PREVIEW-READMODEL-20261122.md`.

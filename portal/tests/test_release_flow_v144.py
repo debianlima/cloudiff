@@ -87,6 +87,13 @@ class ReleaseFlowV144Tests(unittest.TestCase):
         self.assertIn("/komodo/project/preview/status",PORTAL)
         self.assertIn("'runtimeKind':'generic-preview'",PORTAL)
 
+    def test_source_link_preview_is_recognized_without_runtime_recreation(self):
+        self.assertIn('def _source_link_preview_status',PORTAL)
+        self.assertIn('project_preview_source_links',PORTAL)
+        self.assertIn("'runtimeKind':'source-linked-preview'",PORTAL)
+        self.assertIn("'sourceMode':'project-preview-source-link'",PORTAL)
+        self.assertIn("'status':'linked'",PORTAL)
+
     def test_history_delete_and_stage_diagnostic_contracts_are_present(self):
         source=Path('components/control-plane/srv/cloudif/lib/cloudif_portal_publications.py').read_text()
         self.assertIn('def historical_publication_delete_runtime',source)

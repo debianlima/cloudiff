@@ -200,3 +200,9 @@ Preferir, nesta ordem:
 Um backup direcionado deve registrar valores anteriores suficientes para um `restore.sql`/JSON reproduzível e não incluir secrets. Se uma cópia integral ad hoc for interrompida, ela não é evidência confiável: substituí-la por rollback mínimo validado e remover o arquivo parcial criado pela própria unidade.
 
 Se um backup longo deixar o processo do agente com transação/conexão presa, primeiro encerrar **somente o processo inequivocamente pertencente à unidade**, provar que nenhum outro backup concorrente foi tocado e, se necessário, reiniciar apenas o serviço do agente para liberar conexões SQLite. Depois executar um `BEGIN IMMEDIATE` de prova antes de continuar.
+
+### Preview source-linked
+
+Projetos com Preview provisionado por infraestrutura externa podem registrar `project_preview_source_links`. Esse vínculo é uma fonte válida de read-model quando não existe Preview multiservice/genérico gerenciado. O Portal deve validar `stage_code`, URL pública e status antes de retornar `runtimeKind=source-linked-preview`; nunca recriar o stack só para fazer o painel reconhecê-lo.
+
+O status Git desse contrato é `linked`, não `synced`, salvo quando houver um sincronizador explícito. Diagnóstico de runtime deve usar os containers de aplicação registrados no source-link, não apenas o gateway. Terminal source-linked exige contrato próprio com validação de ACL + labels do container; não apontar silenciosamente para outra Stack.

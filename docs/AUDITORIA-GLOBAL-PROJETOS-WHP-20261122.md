@@ -26,7 +26,7 @@ Nenhum runtime de projeto foi alterado nesta unidade.
 | `laboratorio-de-hardware` | W1 saudável após remediação | alinhado `3b399e9` | P12/alias saudáveis | **não** historicamente: H13 `dep_51a7...` → P12 `dep_210f...` | H11/H13/P5 agora Offline; snapshots preservados | **PARCIAL — aguarda novo H→P humano** |
 | `msha` | não configurado | n/a | nenhuma | n/a | nenhum runtime de publicação | **DRAFT / N/A** |
 | `paperclip` | W1 saudável após correção de healthcheck | hash `dfcaaf8...` alinhado | D1 legado permanece placeholder | n/a | resíduos W1 removidos; volume preservado | **PARCIAL — aguarda H→P humano** |
-| `sgrep-v2` | W1 real existe, mas read-model diz “não configurado” | source link `f29f752...` coincide com Komodo | nenhuma | n/a | runtime Preview fora do fluxo do Portal | **DRIFT DE READ-MODEL** |
+| `sgrep-v2` | W1 source-linked saudável e reconhecido | source commit `f29f752...` | nenhuma | n/a | resíduos exited removidos; Terminal source-linked pendente | **PARCIAL — read-model conforme** |
 | `silvipro` | W1 contínuo saudável | alinhado `ad2273de...` | P1 real reconciliada + alias `silvipro` | não comprovado; P1 importada como legado | D1 histórico; D2 parado; W2 removido | **PARCIAL — aguarda novo H→P humano** |
 
 ## 1. Agenda Única — conforme
@@ -110,18 +110,18 @@ Sem não conformidade operacional enquanto permanecer intencionalmente `draft`. 
 
 Corrigir a inicialização funcional no W1 primeiro. Não promover enquanto o W1 só responde HTTP 200 com erro de aplicação. Depois gerar a primeira H moderna e substituir D1 somente após homologação.
 
-## 7. SGREP v2 — Preview existe fora do read-model do fluxo
+## 7. SGREP v2 — Preview source-linked reconhecido
 
-- Projeto está `draft`, public number 1026.
-- `project_preview_source_links` registra W1 `online`, source commit `f29f752f2aadbdad46b46570b29b2895007fb6cb`, bind readonly e dados isolados.
-- Containers `cloudif-sgrep-v2-preview-app`, `preview-db`, `preview-sat` e gateway `cloudif-p1026-w1-preview-web` estão ativos.
-- A URL W1 responde 307 para `/login?path=/` e chega a HTTP 200 após autenticação/login flow.
-- Mesmo assim, `release_flow_status` devolve `configured=false`.
-- `public_external_verified=0` no source link.
+- Projeto continua `draft`, public number 1026.
+- `project_preview_source_links` registra W1 online, source commit `f29f752f2aadbdad46b46570b29b2895007fb6cb`, fonte readonly e dados isolados.
+- O Portal agora reconhece esse contrato como `runtimeKind=source-linked-preview`, valida a URL externamente e mostra W1 saudável.
+- Diagnóstico Node aponta para `cloudif-sgrep-v2-preview-app` (Node 24.22.3); PHP é corretamente reportado como ausente.
+- `public_external_verified=1` após prova HTTP.
+- Cinco containers exited de smoke/rollback foram removidos após backup; app/db/sat/gateway ativos foram preservados.
+- O Stack Komodo legado ainda reporta `deploy_status=failed`; isso não representa o W1 source-linked e não deve ser usado como health do Preview.
+- Terminal source-linked continua pendente de contrato explícito para selecionar `preview-app` com ACL/labels; não redirecionar para outra Stack.
 
-### Remediação segura
-
-Reconciliar `preview_status/release_flow_status` com `project_preview_source_links` e decidir explicitamente se o projeto continua draft ou passa a publicado. Não recriar o Preview existente para corrigir apenas o read-model.
+Evidência: `docs/REMEDIACAO-SGREP-V2-PREVIEW-READMODEL-20261122.md`.
 
 ## 8. SilviPro — W1 contínuo recuperado, P1 real reconciliada
 

@@ -649,11 +649,29 @@ def _runtime_preview(slug,num,operation,payload=None,timeout=180):
     return data
 
 
+def _source_link_preview_status(slug,num,row):
+    if not isinstance(row,dict) or not row:return None
+    stage_code=str(row.get('stage_code') or '').strip().upper();match=re.fullmatch(r'W([1-9][0-9]*)',stage_code)
+    if not match:return None
+    generation=int(match.group(1));ident=_stage_identity(num,'preview',generation);declared=str(row.get('url') or '')
+    if declared and declared.rstrip('/')+'/'!=ident['url']:return None
+    status=str(row.get('status') or '').strip().lower();external_ok=False
+    if status in {'online','ready','healthy'}:
+        try:external_ok=_external_ok(ident['hostname'])
+        except Exception:external_ok=False
+    containers=[x for x in (str(row.get('app_container') or ''),str(row.get('gateway_container') or '')) if x]
+    return {'ok':True,'configured':True,'project':slug,'public_number':int(num),'generation':generation,'stageCode':ident['code'],'url':ident['url'],'hostname':ident['hostname'],'healthy':bool(external_ok),'status':status or 'unknown','container':str(row.get('gateway_container') or ''),'containers':containers,'bridge':str(row.get('gateway_container') or ''),'runtimeKind':'source-linked-preview','sourceMode':'project-preview-source-link','sourceCommit':str(row.get('source_commit') or ''),'sourceRepo':str(row.get('source_repo') or ''),'sourceBranch':str(row.get('source_branch') or ''),'git':{'ok':bool(row.get('source_commit')),'remoteAvailable':True,'status':'linked','message':str(row.get('message') or 'Preview vinculado por infraestrutura.'),'head':str(row.get('source_commit') or '')},'dataIsolated':bool(row.get('data_isolated')),'sourceBindReadonly':bool(row.get('source_bind_readonly')),'httpsVerified':bool(external_ok),'secretValuesIncluded':False,'secretReferencesIncluded':False}
+
+
 def preview_status(slug,user):
     con=sqlite3.connect(DB);con.row_factory=sqlite3.Row;_ensure_schema(con)
     allowed=_project_allowed(con,slug,user) or _can_homologate(con,slug,user)
     if not allowed:con.close();raise PermissionError('Projeto não encontrado ou sem permissão.')
-    num=_number(con,slug);linked=_linked_compose_binding(con,slug) if _is_linked_compose_project(slug) else None;con.close()
+    num=_number(con,slug);linked=_linked_compose_binding(con,slug) if _is_linked_compose_project(slug) else None;source_link=None
+    try:
+        row=con.execute('select * from project_preview_source_links where project_slug=?',(slug,)).fetchone();source_link=dict(row) if row else None
+    except sqlite3.Error:source_link=None
+    con.close()
     if linked:return _linked_compose_status(slug,num,linked)
     if _is_multiservice_project(slug):
         data=_current_multiservice_preview(slug);ident=_stage_identity(num,'preview',1)
@@ -663,12 +681,15 @@ def preview_status(slug,user):
         if fallback_status//100==2 and fallback.get('configured'):
             generation=int(fallback.get('generation') or 1);fallback_ident=_stage_identity(num,'preview',generation);fallback.update({'url':fallback_ident['url'],'hostname':fallback_ident['hostname'],'stageCode':fallback_ident['code'],'runtimeKind':'generic-preview','fallbackFrom':'multiservice'})
             return fallback
+        linked_source=_source_link_preview_status(slug,num,source_link)
+        if linked_source:return linked_source
         return {'ok':True,'configured':False,'project':slug,'public_number':num,'generation':1,'stageCode':'W1','url':ident['url'],'hostname':ident['hostname'],'runtimeKind':'multiservice','secretValuesIncluded':False}
     ku,kt,_=_clients();status,data=_post(ku+'/komodo/project/preview/status',{'project':slug,'public_number':num},kt,timeout=30)
     if status//100!=2:return {'ok':False,'configured':False,'error':'preview_status_unavailable'}
     if data.get('configured'):
-        ident=_stage_identity(num,'preview',int(data.get('generation') or 1));data.update({'url':ident['url'],'hostname':ident['hostname'],'stageCode':ident['code']})
-    return data
+        ident=_stage_identity(num,'preview',int(data.get('generation') or 1));data.update({'url':ident['url'],'hostname':ident['hostname'],'stageCode':ident['code']});return data
+    linked_source=_source_link_preview_status(slug,num,source_link)
+    return linked_source or data
 
 
 def ensure_preview(slug,user):
@@ -765,7 +786,9 @@ def runtime_diagnostic_target(slug,user,environment='preview'):
             if _is_linked_compose_project(slug):
                 binding=_linked_compose_binding(con,slug);base=str(binding.get('stackName') or ('cloudif-'+slug));generation=_fixed_preview_generation(slug);stage_code='W'+str(generation);containers=[base+'-api-1',base+'-web-1']
             else:
-                status=preview_status(slug,user);stage_code=str(status.get('stageCode') or 'W1');candidate=str(status.get('container') or status.get('bridge') or '');containers=[candidate] if candidate else []
+                status=preview_status(slug,user);stage_code=str(status.get('stageCode') or 'W1');listed=status.get('containers') if isinstance(status.get('containers'),list) else [];containers=[str(x) for x in listed if str(x)]
+                if not containers:
+                    candidate=str(status.get('container') or status.get('bridge') or '');containers=[candidate] if candidate else []
         finally:con.close()
         return {'ok':True,'project':slug,'environment':environment,'stageCode':stage_code,'containers':containers,'secretValuesIncluded':False}
     if environment=='homologation':
