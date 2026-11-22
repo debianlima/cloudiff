@@ -58,6 +58,14 @@ Implementação:
 - UI/API: `publicationRuntimeLoad()` e `_rd_runtime_info_with_reconcile()` em `cloudif-admin-portal-base.py`.
 - Komodo: `cloudif_project_runtime_info()`.
 
+## 4.1 Preview composto: gate antes de Homologação
+
+O snapshot genérico de Preview só é válido quando o container registrado representa a aplicação completa. Se o Wn usa app + gateway/sidecar, banco/volume próprio ou outros serviços, **não** congelar apenas o gateway com `docker commit`.
+
+O Komodo deve recusar o snapshot genérico com `preview_composite_runtime_requires_manifest` quando detectar um app irmão `cloudif-p<numero>-w<geracao>-preview-app` ou um `org.cloudiff.artifact-kind` de sidecar/gateway. A operação deve falhar antes de commit Git, imagem H ou candidato no Portal.
+
+Nessa situação é obrigatório definir um manifest/runtime completo com política explícita para serviços e dados. O gate é de segurança: nunca contornar criando H parcial só para avançar o fluxo.
+
 ## 5. Histórico de Produção
 
 ### Offline → Subir

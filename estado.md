@@ -769,3 +769,12 @@ O backup parcial da unidade foi substituído por rollback direcionado de 28 KB (
 - D2 está exited e fora das rotas ativas.
 - Portal DB ainda representa D1 legado, enquanto `stage_production_releases` registra P1; não alterar metadata para inventar H/P inexistente.
 - Próxima migração ao padrão deve ocorrer somente quando houver novo código: Forgejo→W1→H→mesma H em P.
+
+## Paperclip P1025 — gate para Preview composto — 22/11/2026
+
+- W1 está saudável no commit `dfcaaf8...`; `/api/health` retorna status ok.
+- Runtime é composto: app real + volume persistente em `cloudif-p1025-w1-preview-app`; gateway em `cloudif-p1025-w1-preview-web`.
+- Snapshot genérico poderia congelar o gateway e ignorar o volume. Komodo passou a bloquear esse caso com `preview_composite_runtime_requires_manifest`.
+- Prova negativa: HTTP 409, `compositeAppDetected=true`, zero candidatos e zero artefatos H; W1/D1 permaneceram 200.
+- Project Config segue `configuration_required`; manifest completo é gate antes da primeira H moderna.
+- Evidência: `docs/REMEDIACAO-PAPERCLIP-RUNTIME-COMPOSTO-20261122.md`.

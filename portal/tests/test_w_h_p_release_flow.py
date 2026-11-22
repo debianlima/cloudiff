@@ -45,6 +45,9 @@ class WHPReleaseFlowTests(unittest.TestCase):
         self.assertIn("'diff':{'files':files[:300]",latest)
         self.assertIn("'runtimeDiff':{'changes':runtime_changes[:200]",latest)
         self.assertIn("preview-w{generation}-h{candidate}-runtime",latest)
+        self.assertIn("preview_composite_runtime_requires_manifest",latest)
+        self.assertIn("cloudif-p{num}-w{generation}-preview-app",latest)
+        self.assertIn("org.cloudiff.artifact-kind",latest)
 
     def test_large_repository_homologation_has_build_headroom(self):
         self.assertIn('HOMOLOGATION_DEPLOY_RUNTIME_TIMEOUT=900',PORTAL)

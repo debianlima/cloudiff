@@ -97,19 +97,20 @@ Não tentar “converter” P12 atual em mesma-instância por alteração de met
 
 Sem não conformidade operacional enquanto permanecer intencionalmente `draft`. Se o usuário pedir Preview, o provisionamento deve entrar diretamente no padrão atual.
 
-## 6. Paperclip — Preview real falha e Produção é placeholder legado
+## 6. Paperclip — W1 saudável; runtime composto protegido contra snapshot genérico
 
 - Public number 1025.
-- W1 retorna HTTP 200, mas o conteúdo da própria aplicação informa `Paperclip couldn’t start`; por isso `release_flow_status` corretamente marca `healthy=false`.
-- Source commit do Preview `dfcaaf831438cf0402d54a5ede388c3dc66bf222` coincide com o `latest_hash` do Komodo.
-- Produção ativa é D1 legado. `1025.cloudiff.duckdns.org` exibe `paperclip · primeiros passos` / `Seu projeto está publicado.`, não a interface Paperclip.
-- Há runtime W1 restaurado (`cloudif-p1025-w1-preview-app`) e gateway W1, além de resíduos de rollback/canary exited.
-- Não há H/P moderno.
+- W1 responde HTTP 200 e `/api/health` confirma `status=ok` no commit `dfcaaf831438cf0402d54a5ede388c3dc66bf222`.
+- O HTML inicial que dizia `Paperclip couldn’t start` era fallback transitório; o backend atual está saudável.
+- Preview é composto: `cloudif-p1025-w1-preview-app` contém a aplicação e volume persistente; `cloudif-p1025-w1-preview-web` é sidecar/gateway.
+- Produção ativa continua D1 legada/placeholder e não foi alterada.
+- Project Config Controller continua `configuration_required` (`review_and_apply_manifest`).
+- Gate global no Komodo impede `cloudif_preview_snapshot()` de congelar sidecar/gateway como aplicação. Paperclip retorna `preview_composite_runtime_requires_manifest` antes de qualquer efeito.
+- Prova: tentativa sintética de snapshot retornou HTTP 409, `candidate_count=0`, sem imagem H, W1/D1 intactos.
 
 ### Remediação segura
 
-Corrigir a inicialização funcional no W1 primeiro. Não promover enquanto o W1 só responde HTTP 200 com erro de aplicação. Depois gerar a primeira H moderna e substituir D1 somente após homologação.
-
+Definir manifest completo do runtime composto (incluindo política do volume) antes de habilitar H. Depois executar o primeiro ciclo moderno W1→H→mesma H em P pelo proprietário. Não usar o snapshot genérico e não inferir automaticamente o tratamento dos dados persistentes.
 ## 7. SGREP v2 — Preview source-linked reconhecido
 
 - Projeto continua `draft`, public number 1026.

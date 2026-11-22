@@ -4194,8 +4194,14 @@ def cloudif_preview_snapshot(handler):
     except Exception:return send(handler,400,{'ok':False,'error':'invalid_candidate_request'})
     row=_cloudif_preview_row(project)
     if not row:return send(handler,422,{'ok':False,'error':'preview_not_ready','message':'O Preview ainda não foi preparado.'})
-    container=str(row.get('container') or '')
+    container=str(row.get('container') or '');generation=int(row.get('generation') or 1)
     if not _cloudif_wait_health(container,2).get('ok'):return send(handler,422,{'ok':False,'error':'preview_not_healthy','message':'O Preview não está saudável para homologação.'})
+    inspect=subprocess.run(['docker','inspect',container],text=True,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,timeout=15)
+    try:runtime=(json.loads(inspect.stdout or '[]') or [{}])[0] if inspect.returncode==0 else {};labels=(runtime.get('Config') or {}).get('Labels') or {}
+    except Exception:runtime={};labels={}
+    artifact_kind=str(labels.get('org.cloudiff.artifact-kind') or '').strip().lower();composite_app=f'cloudif-p{num}-w{generation}-preview-app';composite_exists=subprocess.run(['docker','inspect',composite_app],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=15).returncode==0
+    if composite_exists or artifact_kind.endswith('sidecar') or 'gateway' in artifact_kind:
+        return send(handler,409,{'ok':False,'error':'preview_composite_runtime_requires_manifest','message':'Este Preview usa runtime composto (app/gateway ou volume próprio). Configure o manifest/runtime completo antes de enviar para Homologação; o gateway não será congelado como se fosse a aplicação.','container':container,'compositeAppDetected':bool(composite_exists),'secretValuesIncluded':False})
     workspace=Path(str(row.get('workspace_path') or ''));git=_cloudif_preview_git_sync(workspace,True,45)
     if not git.get('remoteAvailable'):return send(handler,503,{'ok':False,'error':'git_remote_unavailable','message':'Estamos com dificuldade de conexão com o repositório Git. O Preview continua disponível, mas o envio para homologação está temporariamente bloqueado. Tente novamente em alguns instantes ou procure o administrador.','git':git})
     if git.get('status')=='conflict':return send(handler,409,{'ok':False,'error':'git_sync_conflict','message':git.get('message'),'git':git})
