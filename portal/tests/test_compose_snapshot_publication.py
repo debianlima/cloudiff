@@ -169,7 +169,8 @@ class ComposeSnapshotPublicationTests(unittest.TestCase):
         source=PORTAL.read_text()
         self.assertIn('def _compose_source_preview_bridge(slug,num,generation=1):',source)
         block=source[source.index('def _ensure_linked_compose_preview('):source.index('def _compose_source_preview_bridge(',source.index('def _ensure_linked_compose_preview('))]
-        self.assertIn('bridge=_compose_source_preview_bridge(slug,num,1)',block)
+        self.assertIn('generation=_fixed_preview_generation(slug)',block)
+        self.assertIn('bridge=_compose_source_preview_bridge(slug,num,generation)',block)
         self.assertLess(block.index('bridge=_compose_source_preview_bridge'),block.index("_external_ok(result['hostname'])"))
 
     def test_portal_compose_detection_is_generic_not_tuleap_allowlist(self):

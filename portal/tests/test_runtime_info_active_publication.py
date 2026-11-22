@@ -16,15 +16,15 @@ class RuntimeInfoActivePublicationTests(unittest.TestCase):
         for marker in (
             '_cloudif_active_publication_stack(project,base_stack_id)',
             'active.get("container")',
-            '["docker","inspect",candidate]',
+            "['docker','inspect',candidate]",
             '["docker","exec",container',
         ):
             self.assertIn(marker, self.route)
 
     def test_terminal_health_does_not_block_read_only_diagnostic(self):
         self.assertNotIn('if not audit.get("healthy")', self.route)
-        self.assertIn('active_container_not_running', self.route)
-        self.assertIn('bool(state.get("Running"))', self.route)
+        self.assertIn('stage_containers_not_running', self.route)
+        self.assertIn("state.get('Running')", self.route)
 
     def test_only_fixed_runtime_queries_remain(self):
         self.assertIn('kind not in {"php","node"}', self.route)

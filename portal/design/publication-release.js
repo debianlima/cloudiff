@@ -8,7 +8,7 @@
     slug: '', tab: 'preview', data: null, csrf: '', approval: null,
     poll: null, busy: false, opener: null, autoPreviewAttempted: false,
     previewPreparing: false, previewError: '', permissionsOpen: false, authRedirecting: false,
-    pendingEnvironmentRefresh: false
+    pendingEnvironmentRefresh: false, productionIdentity: ''
   };
   let body = null;
   const environmentToTab = { preview: 'preview', homologation: 'homologation', production: 'publication' };
@@ -68,6 +68,15 @@
   function activeRelease() {
     const data = model.data || {};
     return (data.releases || []).find(item => Number(item.is_active) === 1) || data.legacyProduction || null;
+  }
+
+  function productionIdentity(data = model.data || {}) {
+    const active = (data.releases || []).find(item => Number(item.is_active) === 1) || data.legacyProduction || null;
+    if (!active) return '';
+    const runtime = active.runtime || {};
+    const publication = Number(active.publication_number || active.deploy_number || 0);
+    const deployment = String(runtime.productionDeploymentId || runtime.homologationDeploymentId || '');
+    return publication ? ('P' + publication + '|' + deployment) : '';
   }
 
   function latestCandidate() {
@@ -363,9 +372,6 @@
       await post('preview/ensure', {});
       model.previewPreparing = false;
       await load();
-      if (operation.startsWith('production/history/')) {
-        document.dispatchEvent(new CustomEvent('cloudif:publication-state-changed', { detail: { slug: model.slug, status: 'succeeded', operation } }));
-      }
     } catch (error) {
       model.previewPreparing = false;
       await recoverHealthyPreviewAfterEnsureFailure(error, 'Não foi possível preparar o Preview automaticamente.');
@@ -376,7 +382,10 @@
     clearTimeout(model.poll);
     try {
       const data = await call(apiBase());
+      const previousProductionIdentity = model.productionIdentity;
+      const nextProductionIdentity = productionIdentity(data);
       model.data = data;
+      model.productionIdentity = nextProductionIdentity;
       model.csrf = data.csrfToken || model.csrf;
       model.approval = null;
       const activation = (data.activationRequests || [])[0];
@@ -387,6 +396,11 @@
       }
       render();
       updateSummary(model.slug, data);
+      if (previousProductionIdentity && nextProductionIdentity && previousProductionIdentity !== nextProductionIdentity) {
+        document.dispatchEvent(new CustomEvent('cloudif:publication-state-changed', {
+          detail: { slug: model.slug, status: 'succeeded', operation: 'production/identity-changed', productionIdentity: nextProductionIdentity }
+        }));
+      }
       const terminalJob = data.job && ['succeeded', 'failed'].includes(String(data.job.status || ''));
       if (model.pendingEnvironmentRefresh && terminalJob) {
         model.pendingEnvironmentRefresh = false;
@@ -526,6 +540,7 @@
       model.autoPreviewAttempted = false;
       model.previewPreparing = false;
       model.previewError = '';
+      model.productionIdentity = '';
     }
     render();
     void load();

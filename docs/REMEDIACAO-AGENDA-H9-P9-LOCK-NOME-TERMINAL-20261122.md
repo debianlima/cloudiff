@@ -96,3 +96,16 @@ O Terminal de P9 foi validado com:
 
 Backup pré-reconciliação:
 `/var/lib/cloudif/portal/backups/agenda-h9-p9-reconcile-20261122T163708Z`.
+
+## Addendum de interface — identidade da Produção
+
+O workspace de publicação não pode depender somente do estado transitório do job para atualizar ferramentas do ambiente. O módulo `publication-release.js` mantém a identidade da Produção ativa como `P<n>|deploymentId`.
+
+Quando uma leitura nova de `release-flow` detecta mudança dessa identidade:
+
+- dispara `cloudif:publication-state-changed` com `operation=production/identity-changed`;
+- invalida o read-model visual do modal de ambientes;
+- recarrega Terminal, PHP, Node.js, Site e Variáveis usando a nova Produção ativa;
+- o asset recebe versão nova para impedir cache do JavaScript anterior.
+
+Isso cobre inclusive reconciliações idempotentes em que o runtime já mudou e a interface ainda estava aberta mostrando a P anterior.

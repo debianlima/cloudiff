@@ -255,3 +255,7 @@ A finalização do Portal deve ocorrer em transação curta `BEGIN IMMEDIATE`, s
 ### Terminal Compose após H→P
 
 Terminal de H/P `compose-snapshot` é resolvido por `deployment_id`, projeto e serviço real, não por tabelas Komodo legadas. Como H→P promove a mesma instância, o label de ambiente do container pode continuar `homologation`; não usar esse label para decidir o papel atual. O Portal fornece o papel H/P e o `deployment_id`, e o Komodo valida identidade/saúde do container antes de abrir o terminal.
+
+### Invalidação do workspace após promoção/reconciliação
+
+A interface deve considerar a identidade da Produção ativa como a combinação `Pn + deployment_id`, e não apenas o último status do job. Ao detectar mudança dessa identidade, o Portal invalida/recarrega as ferramentas do ambiente (Terminal, PHP, Node.js, Site e Variáveis). Isso evita manter referências da Produção anterior após cutover ou recuperação parcial.

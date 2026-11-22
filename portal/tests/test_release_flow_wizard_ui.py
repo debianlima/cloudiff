@@ -89,6 +89,10 @@ class ReleaseFlowWizardUITests(unittest.TestCase):
         self.assertIn("String(detail.status||'')==='succeeded'",BASE)
         self.assertIn("window.location.reload()",BASE)
         self.assertIn("cloudifPublicationReloading",BASE)
+        self.assertIn("productionIdentity",release)
+        self.assertIn("production/identity-changed",release)
+        self.assertIn("previousProductionIdentity !== nextProductionIdentity",release)
+        self.assertNotIn("operation.startsWith('production/history/')",release)
 
     def test_production_history_exposes_controlled_reactivation(self):
         release=RELEASE_JS_PATH.read_text()
