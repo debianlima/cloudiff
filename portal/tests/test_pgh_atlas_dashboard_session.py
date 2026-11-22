@@ -20,6 +20,9 @@ class TestPGHAtlasDashboardSession(unittest.TestCase):
  def test_portal_has_same_origin_admin_session_action(self):
   p=PANEL.read_text(); b=BASE.read_text()
   self.assertIn('/action/pgh_dashboard_session',p)
+  self.assertIn('pgh-atlas-access-admin-v1.pub',p)
+  self.assertIn('Chave pública Atlas para autorizar uma única vez no Core',p)
+  self.assertIn('textarea readonly',p)
   self.assertIn("path.endswith('/action/pgh_dashboard_session')",b)
   self.assertIn('PGH_DASHBOARD_SESSION_HELPER',b)
   self.assertIn('approval_policy',b)
