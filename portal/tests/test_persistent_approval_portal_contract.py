@@ -72,6 +72,10 @@ class PersistentApprovalPortalContractTests(unittest.TestCase):
             self.assertIn("'pgh.device.pair':'PGHD — Pareamento resiliente'",source)
             self.assertIn('Recuperação PGHD:',source)
             self.assertIn('Código e cookie de pareamento continuam efêmeros e não são armazenados.',source)
+            self.assertIn('CLOUDIF_PGH_CORE_BASE_URL',source)
+            self.assertIn('Iniciar novo pareamento no Core',source)
+            self.assertIn('Abrir Access Admin',source)
+            self.assertIn('/dashboard/pair/start',source)
 
     def test_existing_web_surfaces_remain_separate_modules(self):
         self.assertNotEqual(PANEL,BASE)
