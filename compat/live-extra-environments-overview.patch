@@ -1,0 +1,145 @@
+--- a/components/control-plane/srv/cloudif/lib/cloudif_project_environments_overview.py
++++ b/components/control-plane/srv/cloudif/lib/cloudif_project_environments_overview.py
+@@ -52,6 +52,63 @@
+     return {}
+ 
+ 
++def _sgrep_w1_live_http()->tuple[bool,str]:
++    # TLS-verifies the public W1 URL and obtains the *running* image commit,
++    # independently from Git checkout and the original adoption record.
++    import re
++    import urllib.error
++    import urllib.request
++    target='https://1026-w1-preview.cloudiff.duckdns.org/health'
++    try:
++        request=urllib.request.Request(target,headers={'Cache-Control':'no-cache'},method='GET')
++        with urllib.request.urlopen(request,timeout=6) as response:
++            if response.status!=200 or response.geturl()!=target:return False,''
++            body=json.loads(response.read(800).decode('utf-8','replace'))
++            if not isinstance(body,dict) or body.get('ok') is not True or body.get('service')!='sgrep-web':
++                return False,''
++            sha=str(response.headers.get('X-CloudIFF-Source-Commit') or '').strip()
++            if not re.fullmatch(r'[a-f0-9]{40}',sha):sha=''
++            return True,sha
++    except (urllib.error.URLError,ValueError,OSError,TimeoutError):
++        return False,''
++
++
++def _linked_sgrep_source_preview(slug:str)->dict[str,Any]:
++    # Read-only adopted Preview W1; no synthetic CloudIFF broker deployment.
++    if slug!='sgrep-v2' or not PORTAL_DB.exists():return {}
++    try:
++        with sqlite3.connect(f'file:{PORTAL_DB}?mode=ro',uri=True,timeout=10) as con:
++            row=con.execute("""
++                SELECT stage_code,status,url,source_repo,source_commit,source_checkout,
++                       app_container,gateway_container,data_isolated,source_bind_readonly,
++                       https_via_internal_proxy_verified
++                  FROM project_preview_source_links
++                 WHERE project_slug=?
++            """,(slug,)).fetchone()
++        if not row:return {}
++        stage,state,url,repo,commit,checkout,app,bridge,db_isolated,source_ro,https_ok=row
++        if (stage!='W1' or state!='online'
++            or url!='https://1026-w1-preview.cloudiff.duckdns.org/'
++            or repo!='cloudif-sgrep-v2/sgrep_v2'
++            or checkout!='/srv/cloudif/sgrep-v2/preview/source'
++            or app!='cloudif-sgrep-v2-preview-app'
++            or bridge!='cloudif-p1026-w1-preview-web'
++            or int(db_isolated)!=1 or int(source_ro)!=1 or int(https_ok)!=1
++            or len(commit)!=40 or any(c not in '0123456789abcdef' for c in commit)):
++            return {}
++        healthy,live_commit=_sgrep_w1_live_http()
++        return {'status':'active' if healthy else 'attention',
++                'previewId':'W1','buildJobId':'',
++                'commit':live_commit or commit,'createdAt':0,'expiresAt':0,'url':url,
++                'liveHealthVerified':healthy,
++                'linkMode':'forgejo_source_preview_w1',
++                'runtimeContainer':app,'bridgeContainer':bridge,
++                'sourceMode':'commit_pinned_optimized_build',
++                'managedByCloudiffPreviewFlow':False}
++    except (sqlite3.Error,OSError,TypeError,ValueError):
++        return {}
++
++
+ 
+ def _linked_integration_identity(slug:str)->dict[str,Any]:
+     if not PORTAL_DB.exists():return {}
+@@ -108,11 +165,11 @@
+ 
+ 
+ def _preview(slug:str)->dict[str,Any]:
+-    if not PREVIEW_DB.exists():return {}
++    if not PREVIEW_DB.exists():return _linked_sgrep_source_preview(slug)
+     try:
+         con=sqlite3.connect(f'file:{PREVIEW_DB}?mode=ro',uri=True,timeout=10);con.row_factory=sqlite3.Row
+         row=con.execute("select id,build_id,commit_ref,status,created_at,expires_at,url,result_json from previews where project_slug=? and status in ('active','validated') order by created_at desc limit 1",(slug,)).fetchone();con.close()
+-        if not row:return {}
++        if not row:return _linked_sgrep_source_preview(slug)
+         now=int(time.time());status=str(row['status'] or '')
+         if int(row['expires_at'] or 0) and int(row['expires_at'])<=now:status='expired'
+         return {
+@@ -121,6 +178,34 @@
+             'url':('/cloudiff/portal/preview/'+str(row['id'])+'/' if status=='active' and row['id'] else ''),
+         }
+     except Exception:
++        return _linked_sgrep_source_preview(slug)
++
++
++def _existing_public_production(slug:str)->dict[str,Any]:
++    # Existing public site, NOT a CloudIFF-managed production release.
++    # Never synthesize a release number, acceptance, or artifact digest.
++    if slug!='sgrep-v2' or not PORTAL_DB.exists():
++        return {}
++    try:
++        with sqlite3.connect(f'file:{PORTAL_DB}?mode=ro',uri=True,timeout=10) as con:
++            row=con.execute("""
++                SELECT url, status, runtime_source, upstream_name
++                  FROM project_external_production_links
++                 WHERE project_slug=? AND status='externally_served_unversioned'
++            """,(slug,)).fetchone()
++        if not row or row[0]!='https://sgrep-v2.cloudiff.duckdns.org/':
++            return {}
++        if row[2]!='staging' or row[3]!='sgrep-v2-edge':
++            return {}
++        return {
++            'status':'externally_served_unversioned',
++            'url':row[0], 'versionUrl':'',
++            'linkMode':'existing_public_endpoint',
++            'sourceRuntime':'staging',
++            'managedByCloudiffReleaseFlow':False,
++            'productionReleaseVerified':False
++        }
++    except (sqlite3.Error,OSError):
+         return {}
+ 
+ 
+@@ -130,7 +215,7 @@
+         con=sqlite3.connect(f'file:{PORTAL_DB}?mode=ro',uri=True,timeout=10);con.row_factory=sqlite3.Row
+         row=con.execute("select public_number,deploy_number,commit_sha,stable_hostname,version_hostname,published_at from project_publications where project_slug=? and status='published' and is_active=1 order by id desc limit 1",(slug,)).fetchone()
+         alias=con.execute('select alias from project_publication_aliases where project_slug=?',(slug,)).fetchone();con.close()
+-        if not row:return {}
++        if not row:return _existing_public_production(slug)
+         host=(str(alias['alias'])+'.cloudiff.duckdns.org') if alias and alias['alias'] else str(row['stable_hostname'] or '')
+         return {
+             'status':'published','deployNumber':int(row['deploy_number'] or 0),'commit':str(row['commit_sha'] or ''),
+@@ -151,13 +236,18 @@
+         runtime=_runtime(slug,environment,username,groups)
+         data:dict[str,Any]={'name':environment,'configuration':config,'runtime':runtime,'url':'','artifact':'','status':'not_created'}
+         if environment=='preview':
+-            data.update({'status':preview.get('status') or 'not_created','url':preview.get('url') or '', 'artifact':preview.get('commit') or preview.get('buildJobId') or '', 'expiresAt':int(preview.get('expiresAt') or 0),'previewId':preview.get('previewId') or ''})
++            data.update({'status':preview.get('status') or 'not_created','url':preview.get('url') or '', 'artifact':preview.get('commit') or preview.get('buildJobId') or '', 'expiresAt':int(preview.get('expiresAt') or 0),'previewId':preview.get('previewId') or '',
++                         'linkMode':preview.get('linkMode') or '', 'runtimeContainer':preview.get('runtimeContainer') or '',
++                         'bridgeContainer':preview.get('bridgeContainer') or '', 'sourceMode':preview.get('sourceMode') or '',
++                         'managedByCloudiffPreviewFlow':preview.get('managedByCloudiffPreviewFlow') if preview.get('linkMode') else True})
+         elif environment=='homologation':
+             data.update({'status':runtime.get('status') or 'not_deployed','artifact':runtime.get('buildJobId') or ''})
+         else:
+             status=production.get('status') or runtime.get('status') or 'not_published'
+             artifact=production.get('commit') or runtime.get('buildJobId') or ''
+-            data.update({'status':status,'url':production.get('url') or '', 'artifact':artifact,'deployNumber':int(production.get('deployNumber') or 0),'versionUrl':production.get('versionUrl') or ''})
++            data.update({'status':status,'url':production.get('url') or '', 'artifact':artifact,'deployNumber':int(production.get('deployNumber') or 0),'versionUrl':production.get('versionUrl') or '',
++                         'linkMode':production.get('linkMode') or '', 'sourceRuntime':production.get('sourceRuntime') or '',
++                         'managedByCloudiffReleaseFlow':production.get('managedByCloudiffReleaseFlow') if production.get('linkMode') else bool(production.get('status')=='published')})
+         environments.append(data)
+     return {
+         'ok':True,'projectSlug':slug,'canWrite':bool(auth.get('canWrite')),'environments':environments,

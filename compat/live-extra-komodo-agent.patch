@@ -1,0 +1,939 @@
+--- a/components/runtime/current-apps/komodo-agent-current/cloudif-komodo-agent.py
++++ b/components/runtime/current-apps/komodo-agent-current/cloudif-komodo-agent.py
+@@ -402,6 +402,17 @@
+         "run_directory": ".",
+         "webhook_enabled": True,
+     }
++    if safe_slug(project) == "agenda-unica":
++        desired_config.update({
++            "file_paths": ["cloudiff-w1.compose.yaml"],
++            "run_directory": ".",
++            "project_name": "cloudif-agenda-unica",
++            "env_file_path": ".cloudiff/w1.env",
++            "environment": "",
++            "webhook_enabled": False,
++            "auto_pull": False,
++            "reclone": False,
++        })
+ 
+     if existing:
+         sid = item_id(existing)
+@@ -477,57 +488,6 @@
+         if tenant_id: related.append(tenant_id)
+     return list(dict.fromkeys(x for x in related if x))
+ 
+-def _cloudif_project_access_payload(payload, project):
+-    """Resolve project membership without letting legacy ensure calls erase known ACL state."""
+-    access=payload.get("access") if isinstance(payload.get("access"),dict) else {}
+-    owner=str(access.get("owner") or payload.get("owner_user") or payload.get("actor") or "").strip().lower()
+-    state_path=Path("/var/lib/cloudif/komodo-project-authz")/(safe_slug(project)+".json")
+-    state={};request={};previous_owner=""
+-    try:
+-        state=json.loads(state_path.read_text()) if state_path.is_file() else {}
+-        request=state.get("request") if isinstance(state.get("request"),dict) else {}
+-        previous_owner=str(request.get("owner") or "").strip().lower()
+-    except Exception:
+-        state={};request={};previous_owner=""
+-    if isinstance(payload.get("access"),dict):
+-        acl=access.get("acl") if isinstance(access.get("acl"),list) else []
+-        return owner or previous_owner,acl,"access"
+-
+-    legacy_users=payload.get("allow_users") if isinstance(payload.get("allow_users"),list) else []
+-    legacy_groups=payload.get("allow_groups") if isinstance(payload.get("allow_groups"),list) else []
+-    if legacy_users or legacy_groups:
+-        owner=previous_owner or owner
+-        acl=[]
+-        seen=set()
+-        for kind,values in (("user",legacy_users),("group",legacy_groups)):
+-            for raw in values:
+-                subject=str(raw or "").strip()
+-                key=(kind,subject.casefold())
+-                if not subject or key in seen:continue
+-                seen.add(key);acl.append({"type":kind,"subject":subject})
+-        return owner,acl,"legacy-allowlist"
+-
+-    try:
+-        previous=request.get("desired") if isinstance(request.get("desired"),list) else []
+-        if previous:
+-            preserved=[]
+-            seen=set()
+-            previous_owner=previous_owner or owner
+-            for item in previous:
+-                if not isinstance(item,dict):continue
+-                kind=str(item.get("type") or "").strip().lower()
+-                subject=str(item.get("subject") or "").strip()
+-                if kind not in {"user","group"} or not subject:continue
+-                if kind=="user" and previous_owner and subject.casefold()==previous_owner.casefold():continue
+-                key=(kind,subject.casefold())
+-                if key in seen:continue
+-                seen.add(key);preserved.append({"type":kind,"subject":subject})
+-            return previous_owner or owner,preserved,"preserved-state"
+-    except Exception:
+-        pass
+-    return owner,[],"owner-only-initial"
+-
+-
+ def _cloudif_sync_project_authz(project, owner, acl, stack_id, repo_id, stack_ids=None, server_id=""):
+     payload={'project':safe_slug(project),'owner':str(owner or '').strip().lower(),'acl':acl if isinstance(acl,list) else [],'stack_id':str(stack_id or ''),'stack_ids':stack_ids if isinstance(stack_ids,list) else ([str(stack_id)] if stack_id else []),'repo_id':str(repo_id or ''),'server_id':str(server_id or '')}
+     try:
+@@ -631,12 +591,11 @@
+     stack_id = item_id(stack)
+     repo_id = item_id(repo)
+     stack_name = stack.get("name") or ("cloudif-" + project)
+-    access_owner,access_acl,access_source=_cloudif_project_access_payload(payload,project)
++    access=payload.get("access") if isinstance(payload.get("access"),dict) else {}
+     temp_integration={'stack_id':stack_id,'repo_id':repo_id,'tenant':tenant}
+     stack_ids=_cloudif_related_stack_ids(project,temp_integration)
+-    authz=_cloudif_sync_project_authz(project,access_owner or actor,access_acl,stack_id,repo_id,stack_ids,server_id)
++    authz=_cloudif_sync_project_authz(project,access.get("owner") or payload.get("owner_user") or actor,access.get("acl") or [],stack_id,repo_id,stack_ids,server_id)
+     result["authz"] = authz
+-    result["authz_access_source"] = access_source
+     if not authz.get("ok"):
+         result["stage"]="authz";result["message"]="Stack criada, mas as permissões do projeto não foram sincronizadas."
+         record_deployment(project,tenant,actor,"ensure","failed",result["message"],stack_id,stack_name,repo_id,repo_info["repo_name"],request=payload,response=result)
+@@ -3306,6 +3265,216 @@
+     return last
+ 
+ 
++
++def _cloudif_agenda_w1_protected_deploy(expected_sha="", allow_stack_mismatch=False):
++    project="agenda-unica"
++    native=Path("/srv/cloudif/preview-workspaces/p1020/native-w1")
++    runtime=Path("/srv/cloudif/preview-workspaces/p1020/runtime")
++    env=runtime/"w1-native.env"
++    compose=native/"cloudiff-w1.compose.yaml"
++    environment_override=runtime/"w1-environment.override.yaml"
++    stack_dir=Path("/etc/komodo/stacks/cloudif-agenda-unica")
++    stack_compose=stack_dir/"cloudiff-w1.compose.yaml"
++    stack_env=stack_dir/".cloudiff"/"w1.env"
++    try:
++        if not native.is_dir() or not env.is_file() or not compose.is_file() or not stack_compose.is_file():
++            return {"ok":False,"operation":"agenda_w1_protected_deploy","error":"required_path_missing"}
++        if stack_env.resolve(strict=True)!=env.resolve(strict=True):
++            return {"ok":False,"operation":"agenda_w1_protected_deploy","error":"protected_env_binding_mismatch"}
++        st=env.stat()
++        if (st.st_mode & 0o777)!=0o600 or st.st_uid!=0:
++            return {"ok":False,"operation":"agenda_w1_protected_deploy","error":"protected_env_permissions_invalid"}
++        if not allow_stack_mismatch and compose.read_bytes()!=stack_compose.read_bytes():
++            return {"ok":False,"operation":"agenda_w1_protected_deploy","error":"compose_checkout_drift"}
++        native_sha=subprocess.check_output(["git","-C",str(native),"rev-parse","HEAD"],text=True,timeout=30).strip()
++        stack_sha=subprocess.check_output(["git","-C",str(stack_dir),"rev-parse","HEAD"],text=True,timeout=30).strip()
++        if expected_sha and not native_sha.startswith(str(expected_sha)):
++            return {"ok":False,"operation":"agenda_w1_protected_deploy","error":"native_head_mismatch"}
++        if not allow_stack_mismatch and native_sha!=stack_sha:
++            return {"ok":False,"operation":"agenda_w1_protected_deploy","error":"stack_head_mismatch"}
++        tag=native_sha[:12]
++        env_tag=""
++        for line in env.read_text().splitlines():
++            if line.startswith("W1_IMAGE_TAG="):
++                env_tag=line.split("=",1)[1].strip()
++        if env_tag!=tag or not re.fullmatch(r"[a-f0-9]{12}",tag):
++            return {"ok":False,"operation":"agenda_w1_protected_deploy","error":"image_tag_mismatch"}
++        expected={
++            "api":f"cloudif/p1020-preview-api-secure:{tag}",
++            "web":f"cloudif/p1020-preview-web:{tag}",
++        }
++        for image in expected.values():
++            check=subprocess.run(["docker","image","inspect",image],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=30)
++            if check.returncode:
++                return {"ok":False,"operation":"agenda_w1_protected_deploy","error":"expected_image_missing","tag":tag}
++        compose_files=["-f",str(compose)]
++        if environment_override.is_file():
++            ost=environment_override.stat()
++            if (ost.st_mode & 0o777)!=0o600 or ost.st_uid!=0:return {"ok":False,"operation":"agenda_w1_protected_deploy","error":"environment_override_permissions_invalid"}
++            compose_files.extend(["-f",str(environment_override)])
++        validate=subprocess.run(["docker","compose","--env-file",str(env),"-p","cloudif-agenda-unica",*compose_files,"config","-q"],stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True,timeout=90)
++        if validate.returncode:
++            return {"ok":False,"operation":"agenda_w1_protected_deploy","error":"compose_validation_failed","tag":tag}
++        db="cloudif-agenda-unica-db-1"
++        db_id=subprocess.check_output(["docker","inspect","-f","{{.Id}}",db],text=True,timeout=30).strip()
++        db_mount=subprocess.check_output(["docker","inspect","-f",'{{range .Mounts}}{{if eq .Destination "/var/lib/postgresql/data"}}{{.Name}}{{end}}{{end}}',db],text=True,timeout=30).strip()
++        up=subprocess.run(["docker","compose","--env-file",str(env),"-p","cloudif-agenda-unica",*compose_files,"up","-d","--no-deps","--no-build","--force-recreate","api","web"],stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True,timeout=300)
++        if up.returncode:
++            return {"ok":False,"operation":"agenda_w1_protected_deploy","error":"compose_up_failed","tag":tag}
++        deadline=time.time()+180
++        observed={}
++        while time.time()<deadline:
++            ready=True
++            for service,image in expected.items():
++                name=f"cloudif-agenda-unica-{service}-1"
++                raw=json.loads(subprocess.check_output(["docker","inspect",name],text=True,timeout=30))[0]
++                state=raw.get("State") or {};health=(state.get("Health") or {}).get("Status") or ""
++                active=str((raw.get("Config") or {}).get("Image") or "")
++                observed[service]={"running":bool(state.get("Running")),"health":health,"image":active}
++                if not state.get("Running") or health!="healthy" or active!=image:ready=False
++            if ready:break
++            time.sleep(3)
++        else:
++            return {"ok":False,"operation":"agenda_w1_protected_deploy","error":"runtime_identity_or_health_failed","tag":tag,"services":observed}
++        after_db_id=subprocess.check_output(["docker","inspect","-f","{{.Id}}",db],text=True,timeout=30).strip()
++        after_db_mount=subprocess.check_output(["docker","inspect","-f",'{{range .Mounts}}{{if eq .Destination "/var/lib/postgresql/data"}}{{.Name}}{{end}}{{end}}',db],text=True,timeout=30).strip()
++        db_state=subprocess.check_output(["docker","inspect","-f","{{.State.Status}}/{{.State.Health.Status}}",db],text=True,timeout=30).strip()
++        if after_db_id!=db_id or after_db_mount!=db_mount or db_state!="running/healthy":
++            return {"ok":False,"operation":"agenda_w1_protected_deploy","error":"database_identity_changed","tag":tag}
++        return {"ok":True,"operation":"agenda_w1_protected_deploy","project":project,"sha":native_sha,"tag":tag,"databasePreserved":True,"rollbackMode":bool(allow_stack_mismatch),"services":observed,"secretValuesIncluded":False}
++    except Exception as exc:
++        return {"ok":False,"operation":"agenda_w1_protected_deploy","error":"protected_deploy_exception","detail":type(exc).__name__}
++
++
++def _cloudif_agenda_container_environment(name):
++    try:
++        info=json.loads(subprocess.check_output(['docker','inspect',name],text=True,timeout=30))[0]
++    except Exception:return None,{}
++    values={}
++    for item in ((info.get('Config') or {}).get('Env') or []):
++        if '=' in str(item):key,value=str(item).split('=',1);values[key]=value
++    return info,values
++
++
++def _cloudif_agenda_write_environment_override(values_by_service):
++    runtime=Path('/srv/cloudif/preview-workspaces/p1020/runtime');runtime.mkdir(parents=True,exist_ok=True)
++    target=runtime/'w1-environment.override.yaml';tmp=runtime/'.w1-environment.override.yaml.tmp'
++    lines=['services:']
++    for service in ('api','db','web'):
++        values=values_by_service.get(service) or {}
++        if not values:continue
++        lines.append('  '+service+':');lines.append('    environment:')
++        for key in sorted(values):lines.append('      '+key+': '+json.dumps(str(values[key]),ensure_ascii=False))
++    body='\n'.join(lines)+'\n'
++    tmp.write_text(body,encoding='utf-8');os.chmod(tmp,0o600);os.replace(tmp,target);os.chmod(target,0o600)
++    return target
++
++
++def _cloudif_agenda_postgres_url_password(value):
++    try:return urllib.parse.unquote(urllib.parse.urlsplit(str(value or '')).password or '')
++    except Exception:return ''
++
++
++def _cloudif_agenda_postgres_set_role_password(container,user,password):
++    user=str(user or '');password=str(password or '')
++    if not user or not password or '\x00' in user or '\x00' in password:raise ValueError('invalid_postgres_password_migration')
++    ident='"'+user.replace('"','""')+'"';literal="'"+password.replace("'","''")+"'";sql=f'ALTER ROLE {ident} WITH LOGIN PASSWORD {literal};\n'
++    result=subprocess.run(['docker','exec','-i',container,'psql','-v','ON_ERROR_STOP=1','-U',user,'-d','postgres'],input=sql,text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=60)
++    sql='';literal=''
++    if result.returncode:raise RuntimeError('postgres_password_migration_failed')
++    verify_script='IFS= read -r PGPASSWORD; export PGPASSWORD; exec psql -h 127.0.0.1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Atc "select 1;"'
++    verify=subprocess.run(['docker','exec','-i',container,'sh','-c',verify_script],input=password+'\n',text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=60)
++    if verify.returncode or verify.stdout.strip()!='1':raise RuntimeError('postgres_password_verification_failed')
++
++
++def _cloudif_agenda_recreate_db_environment(expected_volume):
++    native=Path('/srv/cloudif/preview-workspaces/p1020/native-w1');runtime=Path('/srv/cloudif/preview-workspaces/p1020/runtime')
++    env=runtime/'w1-native.env';compose=native/'cloudiff-w1.compose.yaml';override=runtime/'w1-environment.override.yaml'
++    files=['-f',str(compose)]
++    if override.is_file():files.extend(['-f',str(override)])
++    validate=subprocess.run(['docker','compose','--env-file',str(env),'-p','cloudif-agenda-unica',*files,'config','-q'],stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True,timeout=90)
++    if validate.returncode:raise RuntimeError('compose_validation_failed')
++    up=subprocess.run(['docker','compose','--env-file',str(env),'-p','cloudif-agenda-unica',*files,'up','-d','--no-deps','--no-build','--force-recreate','db'],stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True,timeout=300)
++    if up.returncode:raise RuntimeError('compose_db_recreate_failed')
++    name='cloudif-agenda-unica-db-1';deadline=time.time()+180;last='starting'
++    while time.time()<deadline:
++        raw=json.loads(subprocess.check_output(['docker','inspect',name],text=True,timeout=30))[0];state=raw.get('State') or {};last=(state.get('Health') or {}).get('Status') or state.get('Status') or ''
++        volume=''
++        for mount in raw.get('Mounts') or []:
++            if str(mount.get('Destination') or '')=='/var/lib/postgresql/data':volume=str(mount.get('Name') or '')
++        if state.get('Running') and last=='healthy' and volume==expected_volume:return {'container_id':str(raw.get('Id') or ''),'volume':volume}
++        time.sleep(2)
++    raise RuntimeError('database_recreate_health_or_volume_failed:'+str(last))
++
++
++def cloudif_agenda_w1_environment_apply(handler):
++    if not _cloudif_pub_auth(handler):return send(handler,403,{'ok':False,'error':'forbidden'})
++    payload=_cloudif_pub_json(handler);project=safe_slug(payload.get('project') or '')
++    if project!='agenda-unica':return send(handler,404,{'ok':False,'error':'linked_preview_not_supported'})
++    values=payload.get('values_by_service') or {};managed=payload.get('managed_names_by_service') or {}
++    if not isinstance(values,dict) or not isinstance(managed,dict):return send(handler,400,{'ok':False,'error':'invalid_environment_variables'})
++    normalized={};normalized_managed={}
++    try:
++        for service,raw in values.items():
++            service=str(service or '')
++            if service not in {'','api','db','web'} or not isinstance(raw,dict):raise ValueError('invalid_service_environment')
++            normalized[service]=_cloudif_validate_publication_environment(raw)
++        for service,names in managed.items():
++            service=str(service or '')
++            if service not in {'','api','db','web'} or not isinstance(names,list):raise ValueError('invalid_managed_environment')
++            normalized_managed[service]=sorted({_cloudif_validate_publication_environment({str(x):''}).popitem()[0] for x in names})
++    except Exception as exc:return send(handler,400,{'ok':False,'error':'invalid_environment_variables','detail':type(exc).__name__})
++    material={'managed_names_by_service':normalized_managed,'values_by_service':normalized};expected=str(payload.get('variables_digest') or '')
++    actual=hashlib.sha256(json.dumps(material,ensure_ascii=False,sort_keys=True,separators=(',',':')).encode()).hexdigest()
++    if not re.fullmatch(r'[a-f0-9]{64}',expected) or not hmac.compare_digest(expected,actual):return send(handler,409,{'ok':False,'error':'variables_digest_mismatch'})
++    current={};desired={};changed=[];global_values=normalized.get('') or {};global_names=set(normalized_managed.get('') or []);password_migration=None
++    for service in ('api','db','web'):
++        info,env=_cloudif_agenda_container_environment('cloudif-agenda-unica-'+service+'-1')
++        if info is None:return send(handler,409,{'ok':False,'error':'preview_service_missing','service':service})
++        current[service]=env;next_env=dict(env);names=set(normalized_managed.get(service) or [])|global_names
++        for key in names:next_env.pop(key,None)
++        next_env.update(global_values);next_env.update(normalized.get(service) or {});desired[service]=next_env
++        if service=='db':
++            changed_bootstrap=sorted(key for key in {'POSTGRES_DB','POSTGRES_USER','POSTGRES_PASSWORD'} if env.get(key)!=next_env.get(key))
++            persistent=any(str(m.get('Type') or '')=='volume' and str(m.get('Destination') or '').startswith('/var/lib/postgresql') for m in info.get('Mounts') or [])
++            structural=sorted(set(changed_bootstrap).intersection({'POSTGRES_DB','POSTGRES_USER'}))
++            if persistent and structural:return send(handler,409,{'ok':False,'error':'persistent_database_environment_change_requires_migration','message':'POSTGRES_DB/POSTGRES_USER exigem migração estrutural.','variable_names':structural})
++            if persistent and 'POSTGRES_PASSWORD' in changed_bootstrap:
++                volume=''
++                for mount in info.get('Mounts') or []:
++                    if str(mount.get('Destination') or '')=='/var/lib/postgresql/data':volume=str(mount.get('Name') or '')
++                if not volume:return send(handler,409,{'ok':False,'error':'postgres_volume_identity_missing'})
++                password_migration={'container':'cloudif-agenda-unica-db-1','user':str(env.get('POSTGRES_USER') or ''),'old':str(env.get('POSTGRES_PASSWORD') or ''),'new':str(next_env.get('POSTGRES_PASSWORD') or ''),'volume':volume}
++        if next_env!=env:changed.append(service)
++    if password_migration:
++        urls=[desired.get(service,{}).get('DATABASE_URL') for service in ('api','web') if desired.get(service,{}).get('DATABASE_URL')]
++        if not urls or not any(hmac.compare_digest(_cloudif_agenda_postgres_url_password(url),password_migration['new']) for url in urls):return send(handler,409,{'ok':False,'error':'postgres_password_requires_database_url_update','message':'DATABASE_URL deve usar a mesma nova senha do PostgreSQL.'})
++    override_values={service:{key:value for key,value in desired[service].items() if key in (set(normalized_managed.get(service) or [])|global_names)} for service in ('api','db','web')}
++    target=Path('/srv/cloudif/preview-workspaces/p1020/runtime/w1-environment.override.yaml');before=target.read_bytes() if target.is_file() else None;migration_applied=False;db_recreated=False
++    if not changed:return send(handler,200,{'ok':True,'project':project,'environment':'preview','changedServices':[],'containersRecreated':False,'databasePreserved':True,'postgresPasswordMigrated':False,'idempotent':True,'secretValuesIncluded':False})
++    try:
++        _cloudif_agenda_write_environment_override(override_values)
++        if password_migration:
++            _cloudif_agenda_postgres_set_role_password(password_migration['container'],password_migration['user'],password_migration['new']);migration_applied=True
++            _cloudif_agenda_recreate_db_environment(password_migration['volume']);db_recreated=True
++        result={'ok':True,'databasePreserved':True}
++        if any(service in {'api','web'} for service in changed):
++            result=_cloudif_agenda_w1_protected_deploy()
++            if not result.get('ok'):raise RuntimeError(str(result.get('error') or 'preview_environment_apply_failed'))
++        return send(handler,200,{'ok':True,'project':project,'environment':'preview','changedServices':sorted(changed),'containersRecreated':True,'databasePreserved':bool(result.get('databasePreserved',True)),'databaseContainerRecreated':db_recreated,'postgresPasswordMigrated':bool(password_migration),'idempotent':False,'secretValuesIncluded':False})
++    except Exception as exc:
++        try:
++            if before is None:target.unlink(missing_ok=True)
++            else:
++                rollback=target.with_name('.w1-environment.override.rollback');rollback.write_bytes(before);os.chmod(rollback,0o600);os.replace(rollback,target)
++            if password_migration:
++                _cloudif_agenda_recreate_db_environment(password_migration['volume'])
++                if migration_applied:_cloudif_agenda_postgres_set_role_password(password_migration['container'],password_migration['user'],password_migration['old'])
++            if any(service in {'api','web'} for service in changed):_cloudif_agenda_w1_protected_deploy()
++        except Exception:pass
++        return send(handler,422,{'ok':False,'error':'preview_environment_apply_failed','message':'Falha ao aplicar variáveis no Preview; rollback tentado.','detail':type(exc).__name__,'secretValuesIncluded':False})
++
++
+ def cloudif_v132_project_deploy_full(handler):
+     payload = _cloudif_v131_read_json(handler)
+ 
+@@ -3400,19 +3569,27 @@
+             })
+ 
+     local_after_rebuild = {"ok": False}
++    agenda_protected = {"ok": False}
++    if project == "agenda-unica" and deploy and not force_rebuild:
++        agenda_protected = _cloudif_agenda_w1_protected_deploy(repo_latest or stack_latest or "")
++        actions.append(agenda_protected)
++        if not agenda_protected.get("ok"):
++            return _cloudif_v131_send_json(handler, 500, {"ok":False,"error":"agenda_w1_protected_deploy_failed","project":project,"repo_id":repo_id,"stack_id":stack_id,"actions":actions,"protected_deploy":agenda_protected})
+     if force_rebuild:
+         local_after_rebuild = _cloudif_v132_local_web_health(project, wait_seconds=int(payload.get("local_health_wait_seconds", 90)))
+         actions.append({"operation":"local_web_health","ok":bool(local_after_rebuild.get("ok")),"detail":local_after_rebuild})
+         if not local_after_rebuild.get("ok"):
+             return _cloudif_v131_send_json(handler, 500, {"ok":False,"error":"local_web_health_failed","project":project,"repo_id":repo_id,"stack_id":stack_id,"actions":actions,"local_health":local_after_rebuild})
+-    elif deploy:
++    elif deploy and project != "agenda-unica":
+         deploy_stack = _cloudif_v131_core_call("execute", "DeployStack", {"stack": stack_id}, timeout=60)
+         actions.append(deploy_stack)
+         _cloudif_v131_wait(payload.get("wait_after_stack_deploy", 3))
+ 
+     poll_snapshots = []
+ 
+-    if force_rebuild and local_after_rebuild.get("ok"):
++    if agenda_protected.get("ok"):
++        final_status={"project":project,"repo_id":repo_id,"stack_id":stack_id,"deploy_status":"completed","protected_deploy":agenda_protected}
++    elif force_rebuild and local_after_rebuild.get("ok"):
+         final_status={"project":project,"repo_id":repo_id,"stack_id":stack_id,"deploy_status":"completed","local_reconciled":True,"local_health":local_after_rebuild}
+     elif wait_for_completion:
+         final_status, poll_snapshots = _cloudif_v132_wait_for_completion(
+@@ -4288,7 +4465,19 @@
+     rows=db_query("select * from stage_production_releases where project=? and publication_number=? and status='ready'",(project,publication))
+     if not rows:return send(handler,404,{'ok':False,'error':'production_release_not_found'})
+     target=str(rows[0].get('container') or '')
+-    if not _cloudif_wait_health(target,2).get('ok'):return send(handler,422,{'ok':False,'error':'production_release_not_healthy'})
++    inspect=subprocess.run(['docker','inspect',target],stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,text=True)
++    if inspect.returncode!=0:return send(handler,404,{'ok':False,'error':'production_release_runtime_missing'})
++    started=False
++    try:
++        state=(json.loads(inspect.stdout or '[]') or [{}])[0].get('State') or {}
++        if not state.get('Running'):
++            subprocess.check_call(['docker','start',target],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL);started=True
++        if not _cloudif_wait_health(target,75).get('ok'):
++            if started:subprocess.run(['docker','stop','-t','10',target],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
++            return send(handler,422,{'ok':False,'error':'production_release_not_healthy'})
++    except Exception as exc:
++        if started:subprocess.run(['docker','stop','-t','10',target],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
++        return send(handler,422,{'ok':False,'error':'production_release_reactivation_failed','detail':str(exc)[:240]})
+     network='cloudif-publications';active=f'cloudif-p{num}-active-web';names=subprocess.check_output(['docker','ps','-a','--format','{{.Names}}'],text=True).splitlines()
+     candidates=[n for n in names if re.match(rf'^cloudif-p{num}-p\d+-publication-web$',n)]
+     legacy=[n for n in names if re.match(rf'^cloudif-p{num}-d\d+-web$',n)]
+@@ -4296,7 +4485,7 @@
+         subprocess.run(['docker','network','disconnect',network,name],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL);cmd=['docker','network','connect','--alias',name]
+         if name==target:cmd+=['--alias',active]
+         cmd+=[network,name];subprocess.check_call(cmd)
+-    db_exec('update stage_production_releases set is_active=case when publication_number=? then 1 else 0 end,updated_at=? where project=?',(publication,now(),project));return send(handler,200,{'ok':True,'project':project,'publication_number':publication,'stageCode':'P'+str(publication),'container':target,'activeAlias':active,'secretValuesIncluded':False})
++    db_exec('update stage_production_releases set is_active=case when publication_number=? then 1 else 0 end,updated_at=? where project=?',(publication,now(),project));return send(handler,200,{'ok':True,'project':project,'publication_number':publication,'stageCode':'P'+str(publication),'container':target,'activeAlias':active,'historicalRuntimeReactivated':bool(started),'containersRecreated':False,'secretValuesIncluded':False})
+ 
+ 
+ 
+@@ -4660,6 +4849,28 @@
+         "republished": republished_from is not None, "republished_from": republished_from
+     })
+ 
++def cloudif_publication_deactivate_legacy(handler):
++    if not _cloudif_pub_auth(handler):return send(handler,403,{'ok':False,'error':'forbidden'})
++    payload=_cloudif_pub_json(handler);project=safe_slug(payload.get('project') or '')
++    try:num=int(payload.get('public_number'));publication=int(payload.get('publication_number'))
++    except Exception:return send(handler,400,{'ok':False,'error':'invalid_legacy_deactivation_request'})
++    if not project or num<1 or publication<1:return send(handler,400,{'ok':False,'error':'invalid_legacy_deactivation_request'})
++    container=f'cloudif-p{num}-p{publication}-publication-web'
++    inspect=subprocess.run(['docker','inspect',container],text=True,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL)
++    if inspect.returncode!=0:
++        db_exec('update stage_production_releases set is_active=0,updated_at=? where project=? and publication_number=?',(now(),project,publication));return send(handler,200,{'ok':True,'project':project,'public_number':num,'publication_number':publication,'container':container,'status':'absent','idempotent':True,'resourcesPreserved':True,'secretValuesIncluded':False})
++    try:row=json.loads(inspect.stdout or '[]')[0]
++    except Exception:return send(handler,409,{'ok':False,'error':'legacy_publication_inspect_invalid'})
++    labels=((row.get('Config') or {}).get('Labels') or {})
++    if labels.get('cloudif.project')!=project or labels.get('cloudif.stage')!='publication' or str(labels.get('cloudif.stage-number') or '')!=str(publication):
++        return send(handler,409,{'ok':False,'error':'legacy_publication_identity_mismatch','message':'O container legado não corresponde ao projeto/publicação esperados.'})
++    state=(row.get('State') or {}).get('Status') or ''
++    if state=='running':
++        stop=subprocess.run(['docker','stop','-t','20',container],text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=30)
++        if stop.returncode!=0:return send(handler,422,{'ok':False,'error':'legacy_publication_stop_failed','message':'Não foi possível desativar a Produção anterior.'})
++    db_exec('update stage_production_releases set is_active=0,updated_at=? where project=? and publication_number=?',(now(),project,publication));return send(handler,200,{'ok':True,'project':project,'public_number':num,'publication_number':publication,'container':container,'status':'inactive','idempotent':state!='running','resourcesPreserved':True,'containerRemoved':False,'volumesRemoved':0,'secretValuesIncluded':False})
++
++
+ def cloudif_publication_promote(handler):
+     if not _cloudif_pub_auth(handler):
+         return send(handler, 403, {"ok": False, "error": "forbidden"})
+@@ -4803,9 +5014,14 @@
+     elif method=='POST' and not parsed.query and path in {
+         _EXECUTOR_PROXY_PREFIX+'/v1/deployments',
+         _EXECUTOR_PROXY_PREFIX+'/v1/compose-snapshots/deploy',
++        _EXECUTOR_PROXY_PREFIX+'/v1/compose-deployments/promote',
++        _EXECUTOR_PROXY_PREFIX+'/v1/compose-deployments/reconfigure',
++        _EXECUTOR_PROXY_PREFIX+'/v1/deployments/deactivate',
++        _EXECUTOR_PROXY_PREFIX+'/v1/deployments/reactivate',
+         _EXECUTOR_PROXY_PREFIX+'/v1/compose-source-preview-bridge',
+         _EXECUTOR_PROXY_PREFIX+'/v1/publication-bridges',
+         _EXECUTOR_PROXY_PREFIX+'/v1/publication-bridges/activate',
++        _EXECUTOR_PROXY_PREFIX+'/v1/publication-bridges/deactivate',
+     }:
+         try:length=int(handler.headers.get('Content-Length','0') or 0)
+         except Exception:return send(handler,400,{'ok':False,'error':'invalid_content_length'})
+@@ -4814,7 +5030,7 @@
+         except Exception:return send(handler,400,{'ok':False,'error':'invalid_json'})
+         if not isinstance(payload,dict):return send(handler,400,{'ok':False,'error':'invalid_request'})
+         downstream=path[len(_EXECUTOR_PROXY_PREFIX):]
+-        timeout={'/v1/deployments':600,'/v1/compose-snapshots/deploy':1200,'/v1/compose-source-preview-bridge':120,'/v1/publication-bridges':120,'/v1/publication-bridges/activate':60}[downstream]
++        timeout={'/v1/deployments':600,'/v1/compose-snapshots/deploy':1200,'/v1/compose-deployments/promote':180,'/v1/compose-deployments/reconfigure':300,'/v1/deployments/deactivate':120,'/v1/deployments/reactivate':300,'/v1/compose-source-preview-bridge':120,'/v1/publication-bridges':120,'/v1/publication-bridges/activate':60,'/v1/publication-bridges/deactivate':60}[downstream]
+     elif method=='DELETE' and not parsed.query:
+         deployment=re.fullmatch(r'/cloudif/executor/v1/deployments/(dep_[a-f0-9]{24})',path)
+         if deployment:downstream='/v1/deployments/'+deployment.group(1);timeout=120
+@@ -4946,6 +5162,8 @@
+             return cloudif_preview_request(self,'ensure')
+         if _cloudif_pub_path == "/komodo/project/preview/recreate":
+             return cloudif_preview_request(self,'recreate')
++        if _cloudif_pub_path == "/komodo/project/linked-preview/environment/apply":
++            return cloudif_agenda_w1_environment_apply(self)
+         if _cloudif_pub_path == "/komodo/project/preview/terminal":
+             return cloudif_preview_terminal(self)
+         if _cloudif_pub_path == "/komodo/project/stage/terminal":
+@@ -4964,8 +5182,8 @@
+             return cloudif_publication_deploy(self)
+         if _cloudif_pub_path == "/komodo/publication/promote":
+             return cloudif_publication_promote(self)
+-        if _cloudif_pub_path == "/komodo/publication/reject":
+-            return cloudif_homologation_reject(self)
++        if _cloudif_pub_path == "/komodo/publication/deactivate-legacy":
++            return cloudif_publication_deactivate_legacy(self)
+         if _cloudif_pub_path == "/komodo/publication/release":
+             return cloudif_publication_release(self)
+         if _cloudif_pub_path == "/komodo/publication/release/status":
+@@ -5629,8 +5847,8 @@
+     restart: unless-stopped
+     volumes:
+       - type: bind
+-        source: ./runtime-config
+-        target: /run/cloudif
++        source: ./runtime.env
++        target: /run/cloudif/runtime.env
+         read_only: true
+         bind:
+           create_host_path: false
+@@ -5673,8 +5891,7 @@
+         shutil.copytree(source,staged)
+         shutil.copy2(snap/'Dockerfile.runtime',stack_dir/'Dockerfile.runtime')
+         runtime_source=_cloudif_publication_environment_path(public_number,deploy_number)
+-        runtime_dir=stack_dir/'runtime-config';runtime_dir.mkdir(mode=0o700,exist_ok=True);runtime_dir.chmod(0o700)
+-        runtime_tmp=runtime_dir/'.runtime.env.tmp';runtime_path=runtime_dir/'runtime.env'
++        runtime_tmp=stack_dir/'.runtime.env.tmp';runtime_path=stack_dir/'runtime.env'
+         shutil.copyfile(runtime_source,runtime_tmp);runtime_tmp.chmod(0o600);os.replace(runtime_tmp,runtime_path);runtime_path.chmod(0o600)
+         compose_tmp=stack_dir/'.docker-compose.yml.tmp';compose_path=stack_dir/'docker-compose.yml'
+         compose_tmp.write_text(compose,encoding='utf-8');compose_tmp.chmod(0o600);os.replace(compose_tmp,compose_path);compose_path.chmod(0o600);stack_dir.chmod(0o700)
+@@ -5858,474 +6075,8 @@
+ # CloudIFF v143 END
+ 
+ 
+-
+-# CloudIFF v144 BEGIN - continuous Preview + in-place H->P promotion
+-_V144_SCHEMA_READY=False
+-_V144_PREVIEW_SYNC_STARTED=False
+-
+-def _cloudif_v144_ensure_schema():
+-    global _V144_SCHEMA_READY
+-    if _V144_SCHEMA_READY:return
+-    _cloudif_v143_ensure_schema()
+-    with _DB_SCHEMA_LOCK:
+-        if _V144_SCHEMA_READY:return
+-        con=_db_connect()
+-        cols={r[1] for r in con.execute('pragma table_info(project_preview_state)')}
+-        for name,kind in (('stack_id',"text not null default ''"),('stack_name',"text not null default ''")):
+-            if name not in cols:con.execute(f'alter table project_preview_state add column {name} {kind}')
+-        con.commit();con.close();_V144_SCHEMA_READY=True
+-
+-def _cloudif_v144_stack_item(name):
+-    listed,_=komodo_call('read','ListStacks',{'limit':0})
+-    items=listed.get('data') if isinstance(listed.get('data'),list) else []
+-    return next((x for x in items if isinstance(x,dict) and str(x.get('name') or '')==name),None) or {}
+-
+-def _cloudif_v144_stack_target(stack_id):
+-    stack_id=normalize_resource_id(stack_id)
+-    if not stack_id:return None
+-    listed,_=komodo_call('read','ListStackServices',{'stack':stack_id})
+-    services=listed.get('data') if isinstance(listed.get('data'),list) else []
+-    service=next((x for x in services if isinstance(x,dict) and str(x.get('service') or '')=='web'),None)
+-    if service is None:service=next((x for x in services if isinstance(x,dict)),None)
+-    if not service:return None
+-    return {'type':'Stack','params':{'stack':stack_id,'service':str(service.get('service') or 'web')}}
+-
+-_v143_related_stack_ids=_cloudif_related_stack_ids
+-def _cloudif_related_stack_ids(project,integration=None):
+-    related=list(_v143_related_stack_ids(project,integration))
+-    project=safe_slug(project)
+-    try:
+-        _cloudif_v144_ensure_schema()
+-        row=_cloudif_preview_row(project) or {}
+-        sid=normalize_resource_id(row.get('stack_id'))
+-        if sid:related.append(sid)
+-        for runtime in db_query("select stack_id from publication_runtimes where project=? and status='ready'",(project,)):
+-            sid=normalize_resource_id(runtime.get('stack_id'))
+-            if sid:related.append(sid)
+-    except Exception:pass
+-    return list(dict.fromkeys(x for x in related if x))
+-
+-def _cloudif_v144_preview_stack(project,public_number,source_image,cfg,base_dir,env_path,launcher,apache):
+-    project=safe_slug(project);public_number=int(public_number)
+-    name=f'cloudif-p{public_number}-preview';container=f'cloudif-p{public_number}-preview-web'
+-    stack_dir=Path('/etc/komodo/stacks')/name;stack_dir.mkdir(parents=True,exist_ok=True);stack_dir.chmod(0o700)
+-    mounts=[('/var/www/html',str(base_dir),False),('/run/cloudif/runtime.env',str(env_path),True),('/opt/cloudif/preview-launcher.js',str(launcher),True)]
+-    try:
+-        apache_ok=subprocess.run(['docker','run','--rm','--entrypoint','sh',source_image,'-lc','test -d /etc/apache2/conf-enabled'],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=30).returncode==0
+-    except Exception:apache_ok=False
+-    if apache_ok:mounts.append(('/etc/apache2/conf-enabled/cloudif-preview-security.conf',str(apache),True))
+-    lines=['services:','  web:',f'    image: {json.dumps(source_image)}',f'    container_name: {container}','    restart: unless-stopped','    entrypoint: ["node","/opt/cloudif/preview-launcher.js"]','    command: '+json.dumps(cfg['startup'],separators=(',',':')),'    labels:',f'      cloudif.project: {json.dumps(project)}','      cloudif.stage: "preview"','      cloudif.stage-number: "1"',f'      org.cloudiff.project: {json.dumps(project)}',f'      org.cloudiff.public-number: {json.dumps(str(public_number))}','      org.cloudiff.stage: "preview"','      org.cloudiff.stage-number: "1"','      org.cloudiff.source-preview-bridge: "true"','    volumes:']
+-    for target,source,readonly in mounts:
+-        lines += ['      - type: bind',f'        source: {json.dumps(source)}',f'        target: {json.dumps(target)}','        read_only: '+('true' if readonly else 'false'),'        bind:','          create_host_path: false']
+-    lines += ['    healthcheck:','      test: ["CMD-SHELL","curl -fsS http://127.0.0.1/.cloudif-health >/dev/null"]','      interval: 5s','      timeout: 4s','      retries: 18','      start_period: 15s','    networks: [cloudif-publications]','networks:','  cloudif-publications:','    external: true','']
+-    tmp=stack_dir/'.docker-compose.yml.tmp';path=stack_dir/'docker-compose.yml';tmp.write_text('\n'.join(lines),encoding='utf-8');tmp.chmod(0o600);os.replace(tmp,path)
+-    server_id=_cloudif_v143_server_id(project)
+-    if not server_id:return {'ok':False,'error':'preview_server_missing'}
+-    stack_cfg={'server_id':server_id,'files_on_host':True,'run_build':False,'auto_pull':False,'file_contents':'','file_paths':['docker-compose.yml'],'env_file_path':'','project_name':name.replace('-','_'),'linked_repo':'','repo':'','branch':'','commit':'','git_provider':'','git_https':True,'run_directory':str(stack_dir),'webhook_enabled':False,'reclone':False,'send_alerts':False}
+-    item=_cloudif_v144_stack_item(name)
+-    if item:
+-        stack_id=normalize_resource_id(item.get('_id') or item.get('id'))
+-        update=_cloudif_v131_core_call('write','UpdateStack',{'id':stack_id,'config':stack_cfg},timeout=60)
+-        if not update.get('ok'):return {'ok':False,'error':'preview_stack_update_failed','result':update}
+-    else:
+-        create=_cloudif_v131_core_call('write','CreateStack',{'name':name,'config':stack_cfg},timeout=60)
+-        if not create.get('ok'):return {'ok':False,'error':'preview_stack_create_failed','result':create}
+-        stack_id=_cloudif_v131_oid(create.get('data') or {})
+-        if not stack_id:
+-            time.sleep(1);item=_cloudif_v144_stack_item(name);stack_id=normalize_resource_id(item.get('_id') or item.get('id'))
+-    if not stack_id:return {'ok':False,'error':'preview_stack_id_missing'}
+-    deploy=_cloudif_v131_core_call('execute','DeployStack',{'stack':stack_id},timeout=60)
+-    if not deploy.get('ok'):return {'ok':False,'error':'preview_stack_deploy_failed','result':deploy}
+-    health=_cloudif_wait_health(container,75)
+-    return {'ok':bool(health.get('ok')),'stack_id':stack_id,'stack_name':name,'container':container,'server_id':server_id,'health':health}
+-
+-_v143_preview_create=_cloudif_preview_create
+-def _cloudif_preview_create(project,public_number,actor,environment_values,environment_revision,environment_digest,source='current'):
+-    _cloudif_v144_ensure_schema();project=safe_slug(project);public_number=int(public_number)
+-    base_dir=Path('/etc/komodo/stacks')/('cloudif-'+project);checkout=_cloudif_v143_ensure_checkout(project,base_dir)
+-    if not checkout.get('ok'):return {'ok':False,'error':'preview_workspace_unavailable','message':'Não foi possível montar o repositório local do projeto.'}
+-    old=_cloudif_preview_row(project) or {};source_image=''
+-    if source=='production':
+-        releases=db_query("select * from stage_production_releases where project=? and is_active=1 and status='ready' order by publication_number desc limit 1",(project,))
+-        if releases:source_image=str(releases[0].get('image') or '')
+-    if not source_image and source=='current':source_image=str(old.get('source_image') or '')
+-    if not source_image:
+-        runtime=_cloudif_v143_runtime_settings(project);base=_cloudif_v143_ensure_base_image(runtime['php'],runtime['node'])
+-        if not base.get('ok'):return {'ok':False,'error':'preview_runtime_base_failed'}
+-        source_image=str(base.get('image') or '')
+-    cfg=_cloudif_image_config(source_image)
+-    if not cfg.get('ok'):return {'ok':False,'error':'preview_runtime_invalid'}
+-    root=_cloudif_stage_env_root(public_number,'w',1);env_path=_cloudif_stage_write_environment(public_number,'w',1,environment_values);launcher,apache=_cloudif_preview_launcher(root)
+-    stack=_cloudif_v144_preview_stack(project,public_number,source_image,cfg,base_dir,env_path,launcher,apache)
+-    if not stack.get('ok'):return stack
+-    container=stack['container'];old_container=str(old.get('container') or '')
+-    if old_container and old_container!=container:subprocess.run(['docker','rm','-f',old_container],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+-    git=_cloudif_preview_git_sync(base_dir,True);health=_cloudif_wait_health(container,15);status='online' if health.get('ok') else 'unhealthy'
+-    db_exec('''insert into project_preview_state(project,public_number,generation,container,source_image,source_image_id,startup_json,workspace_path,status,git_sync_status,git_sync_message,git_head,environment_revision,environment_digest,updated_at,updated_by,stack_id,stack_name)
+-      values(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+-      on conflict(project) do update set public_number=excluded.public_number,generation=excluded.generation,container=excluded.container,source_image=excluded.source_image,source_image_id=excluded.source_image_id,startup_json=excluded.startup_json,workspace_path=excluded.workspace_path,status=excluded.status,git_sync_status=excluded.git_sync_status,git_sync_message=excluded.git_sync_message,git_head=excluded.git_head,environment_revision=excluded.environment_revision,environment_digest=excluded.environment_digest,updated_at=excluded.updated_at,updated_by=excluded.updated_by,stack_id=excluded.stack_id,stack_name=excluded.stack_name''',(project,public_number,1,container,source_image,str(cfg['image_id']),json.dumps({'entrypoint':cfg['entrypoint'],'cmd':cfg['cmd']},separators=(',',':')),str(base_dir),status,str(git.get('status') or ''),str(git.get('message') or ''),str(git.get('head') or ''),int(environment_revision or 0),str(environment_digest or ''),now(),str(actor or 'portal')[:128],stack['stack_id'],stack['stack_name']))
+-    return {'ok':bool(health.get('ok')),'project':project,'public_number':public_number,'generation':1,'stage':'preview','stageCode':'W1','container':container,'stack_id':stack['stack_id'],'stack_name':stack['stack_name'],'sourceImage':source_image,'sourceImageId':str(cfg['image_id']),'workspace':str(base_dir),'healthy':bool(health.get('ok')),'git':git,'environmentRevision':int(environment_revision or 0),'environmentDigest':str(environment_digest or ''),'continuous':True,'secretValuesIncluded':False}
+-
+-_v143_preview_request=cloudif_preview_request
+-def cloudif_preview_request(handler,operation):
+-    if not _cloudif_pub_auth(handler):return send(handler,403,{'ok':False,'error':'forbidden'})
+-    payload=_cloudif_pub_json(handler);project=safe_slug(payload.get('project') or '')
+-    try:num=int(payload.get('public_number'));env_rev=int(payload.get('environment_revision') or 0)
+-    except Exception:return send(handler,400,{'ok':False,'error':'invalid_preview_request'})
+-    values=payload.get('environment_variables') if isinstance(payload.get('environment_variables'),dict) else {};digest=str(payload.get('environment_digest') or '')
+-    if not project or num<1:return send(handler,400,{'ok':False,'error':'invalid_preview_request'})
+-    _cloudif_v144_ensure_schema();row=_cloudif_preview_row(project)
+-    if operation=='status':
+-        if not row:return send(handler,200,{'ok':True,'project':project,'configured':False,'secretValuesIncluded':False})
+-        health=_cloudif_wait_health(str(row.get('container') or ''),1);git_status=str(row.get('git_sync_status') or 'unknown')
+-        return send(handler,200,{'ok':True,'project':project,'configured':True,'public_number':int(row.get('public_number') or num),'generation':1,'stageCode':'W1','container':str(row.get('container') or ''),'stack_id':str(row.get('stack_id') or ''),'stack_name':str(row.get('stack_name') or ''),'healthy':bool(health.get('ok')),'continuous':True,'git':{'ok':git_status!='missing','remoteAvailable':git_status not in {'degraded','missing'},'status':git_status,'message':str(row.get('git_sync_message') or ''),'head':str(row.get('git_head') or '')},'environmentRevision':int(row.get('environment_revision') or 0),'environmentDigest':str(row.get('environment_digest') or ''),'secretValuesIncluded':False})
+-    if operation=='ensure':
+-        expected=f'cloudif-p{num}-preview-web';migrated=not row or str(row.get('container') or '')!=expected or not normalize_resource_id((row or {}).get('stack_id'))
+-        if migrated:
+-            result=_cloudif_preview_create(project,num,payload.get('actor') or 'portal',values,env_rev,digest,'current');return send(handler,200 if result.get('ok') else 422,result)
+-        _cloudif_stage_write_environment(num,'w',1,values);old_head=str(row.get('git_head') or '');git=_cloudif_preview_git_sync(row.get('workspace_path') or '',True);new_head=str(git.get('head') or '')
+-        restart=(int(row.get('environment_revision') or 0)!=env_rev or str(row.get('environment_digest') or '')!=digest or (old_head and new_head and old_head!=new_head))
+-        if restart:subprocess.run(['docker','restart',expected],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=60)
+-        health=_cloudif_wait_health(expected,45)
+-        db_exec('update project_preview_state set status=?,git_sync_status=?,git_sync_message=?,git_head=?,environment_revision=?,environment_digest=?,updated_at=?,updated_by=? where project=?',('online' if health.get('ok') else 'unhealthy',str(git.get('status') or ''),str(git.get('message') or ''),new_head,env_rev,digest,now(),str(payload.get('actor') or 'portal')[:128],project))
+-        return send(handler,200 if health.get('ok') else 422,{'ok':bool(health.get('ok')),'project':project,'public_number':num,'generation':1,'stageCode':'W1','container':expected,'stack_id':str(row.get('stack_id') or ''),'stack_name':str(row.get('stack_name') or ''),'healthy':bool(health.get('ok')),'continuous':True,'git':git,'environmentRevision':env_rev,'secretValuesIncluded':False})
+-    if operation=='recreate':
+-        source=str(payload.get('source') or '').strip().lower()
+-        if source not in {'production','template'}:return send(handler,400,{'ok':False,'error':'invalid_preview_source'})
+-        result=_cloudif_preview_create(project,num,payload.get('actor') or 'portal',values,env_rev,digest,source);return send(handler,200 if result.get('ok') else 422,result)
+-    return send(handler,400,{'ok':False,'error':'invalid_preview_operation'})
+-
+-def _cloudif_v144_preview_sync_once():
+-    _cloudif_v144_ensure_schema()
+-    for row in db_query("select * from project_preview_state where status in ('online','unhealthy')"):
+-        project=safe_slug(row.get('project') or '');container=str(row.get('container') or '');workspace=str(row.get('workspace_path') or '')
+-        if not project or not container or not normalize_resource_id(row.get('stack_id')):continue
+-        try:
+-            old=str(row.get('git_head') or '');git=_cloudif_preview_git_sync(workspace,True,12);new=str(git.get('head') or '');restarted=False
+-            if old and new and old!=new and git.get('status')=='synced':
+-                subprocess.run(['docker','restart',container],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=60);restarted=True
+-            health=_cloudif_wait_health(container,45 if restarted else 1);msg=str(git.get('message') or '')
+-            if restarted:msg='Repositório atualizado automaticamente; Preview reiniciado. '+msg
+-            db_exec('update project_preview_state set status=?,git_sync_status=?,git_sync_message=?,git_head=?,updated_at=?,updated_by=? where project=?',('online' if health.get('ok') else 'unhealthy',str(git.get('status') or ''),msg,new or old,now(),'preview-auto-sync',project))
+-        except Exception as exc:
+-            db_exec('update project_preview_state set git_sync_status=?,git_sync_message=?,updated_at=?,updated_by=? where project=?',('degraded','Falha de sincronização automática: '+type(exc).__name__,now(),'preview-auto-sync',project))
+-
+-def _cloudif_v144_preview_sync_loop():
+-    while True:
+-        try:_cloudif_v144_preview_sync_once()
+-        except Exception:pass
+-        time.sleep(max(15,int(os.environ.get('CLOUDIF_PREVIEW_SYNC_SECONDS','30'))))
+-
+-def _cloudif_v144_start_preview_sync():
+-    global _V144_PREVIEW_SYNC_STARTED
+-    if _V144_PREVIEW_SYNC_STARTED:return
+-    _V144_PREVIEW_SYNC_STARTED=True
+-    threading.Thread(target=_cloudif_v144_preview_sync_loop,name='cloudif-preview-auto-sync',daemon=True).start()
+-
+-
+-_v143_preview_terminal=cloudif_preview_terminal
+-def cloudif_preview_terminal(handler):
+-    if not _cloudif_pub_auth(handler):return send(handler,403,{'ok':False,'error':'forbidden'})
+-    payload=_cloudif_pub_json(handler);project=safe_slug(payload.get('project') or '')
+-    try:num=int(payload.get('public_number') or 0)
+-    except Exception:return send(handler,400,{'ok':False,'error':'invalid_preview_terminal_request'})
+-    _cloudif_v144_ensure_schema();row=_cloudif_preview_row(project) or {};stack_id=normalize_resource_id(row.get('stack_id'))
+-    if not stack_id:return send(handler,409,{'ok':False,'error':'preview_stack_not_ready','message':'O Preview ainda precisa ser reconciliado para o runtime persistente.'})
+-    target=_cloudif_v144_stack_target(stack_id)
+-    if not target:return send(handler,422,{'ok':False,'error':'preview_stack_service_missing'})
+-    terminal='cloudif-preview';listed,_=komodo_call('read','ListTerminals',{'target':target});items=listed.get('data') if isinstance(listed.get('data'),list) else []
+-    if not any(isinstance(x,dict) and x.get('name')==terminal for x in items):
+-        created,_=komodo_call('write','CreateTerminal',{'target':target,'name':terminal,'command':'sh','mode':'exec'})
+-        if not created.get('ok'):return send(handler,422,{'ok':False,'error':'preview_terminal_create_failed','result':created})
+-    container=str(row.get('container') or '')
+-    if not _cloudif_wait_health(container,2).get('ok'):return send(handler,409,{'ok':False,'error':'preview_not_healthy','message':'O Preview não está saudável.'})
+-    return send(handler,200,{'ok':True,'project':project,'public_number':num,'generation':1,'stageCode':'W1','container':container,'stack_id':stack_id,'stack_name':str(row.get('stack_name') or ''),'terminal':terminal,'target_mode':'stack','terminalReady':True,'secretValuesIncluded':False})
+-
+-def _cloudif_v144_runtime_env_replace(stack_name,source_path):
+-    stack_name=str(stack_name or '')
+-    if not re.fullmatch(r'cloudif-p\d+-d\d+',stack_name):raise RuntimeError('invalid_homologation_stack_name')
+-    stack_dir=Path('/etc/komodo/stacks')/stack_name;runtime_dir=stack_dir/'runtime-config';target=runtime_dir/'runtime.env'
+-    if not runtime_dir.is_dir() or not Path(source_path).is_file():raise RuntimeError('runtime_environment_path_missing')
+-    tmp=runtime_dir/'.runtime.env.promote.tmp';shutil.copyfile(source_path,tmp);tmp.chmod(0o600);os.replace(tmp,target);target.chmod(0o600)
+-    return str(target)
+-
+-def _cloudif_v144_reconnect_active(num,target):
+-    num=int(num);target=str(target);network='cloudif-publications';active=f'cloudif-p{num}-active-web'
+-    names=subprocess.check_output(['docker','ps','-a','--format','{{.Names}}'],text=True).splitlines()
+-    candidates=[n for n in names if re.match(rf'^cloudif-p{num}-d\d+-web$',n) or re.match(rf'^cloudif-p{num}-p\d+-publication-web$',n)]
+-    def aliases(name):
+-        try:
+-            raw=subprocess.check_output(['docker','inspect',name,'--format','{{json (index .NetworkSettings.Networks "cloudif-publications").Aliases}}'],text=True).strip()
+-            return json.loads(raw) if raw and raw!='null' else []
+-        except Exception:return []
+-    previous=next((n for n in candidates if n!=target and active in aliases(n)),'')
+-    for name in candidates:
+-        subprocess.run(['docker','network','disconnect',network,name],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+-        cmd=['docker','network','connect','--alias',name]
+-        if name==target:cmd+=['--alias',active]
+-        cmd+=[network,name]
+-        subprocess.run(cmd,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,check=True)
+-    if active not in aliases(target):raise RuntimeError('active_alias_not_applied')
+-    return previous
+-
+-def _cloudif_v144_atomic_updates(statements):
+-    """Persist all publication state changes as one SQLite unit (no partial commits)."""
+-    init_db()
+-    con=_db_connect()
+-    try:
+-        con.execute('BEGIN IMMEDIATE')
+-        for sql,params in statements:
+-            con.execute(sql,params)
+-        con.commit()
+-    except Exception:
+-        con.rollback()
+-        raise
+-    finally:
+-        con.close()
+-
+-
+-def _cloudif_v144_retract_initial_alias(num,target):
+-    """Retract only the first failed release's public alias, preserving other aliases.
+-
+-    Docker cannot remove one network alias in place. Reattach only the validated
+-    candidate to the publication network and verify all original other aliases.
+-    No production container or unrelated Docker network may be stopped/removed.
+-    """
+-    try:
+-        num=int(num);target=str(target or '')
+-        if num<1 or not re.fullmatch(rf'cloudif-p{num}-d\d+-web',target):return False
+-        network='cloudif-publications';active=f'cloudif-p{num}-active-web'
+-        def current_aliases():
+-            inspected=subprocess.run(
+-                ['docker','inspect',target,'--format',
+-                 '{{json (index .NetworkSettings.Networks "cloudif-publications").Aliases}}'],
+-                text=True,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,timeout=20)
+-            if inspected.returncode!=0:return None
+-            raw=inspected.stdout.strip()
+-            values=json.loads(raw) if raw and raw!='null' else None
+-            if not isinstance(values,list) or any(not isinstance(v,str) for v in values):return None
+-            return values
+-        old=current_aliases()
+-        if old is None:return False
+-        if active not in old:return True  # Proved no public alias to retract.
+-        keep=list(dict.fromkeys(alias for alias in old if alias!=active))
+-        if target not in keep:keep.insert(0,target)
+-        disconnected=subprocess.run(['docker','network','disconnect',network,target],
+-                                    stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=30)
+-        if disconnected.returncode!=0:return False
+-        command=['docker','network','connect']
+-        for alias in keep:command.extend(['--alias',alias])
+-        command.extend([network,target])
+-        attached=subprocess.run(command,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=30)
+-        if attached.returncode!=0:return False
+-        after=current_aliases()
+-        return after is not None and active not in after and all(alias in after for alias in keep)
+-    except Exception:
+-        return False
+-
+-
+-def _cloudif_v144_recover_previous(num,previous,target):
+-    """Compensate runtime state, never claim recovery without health and alias proof."""
+-    if not previous:return _cloudif_v144_retract_initial_alias(num,target)
+-    if previous==target:return False
+-    try:
+-        started=subprocess.run(['docker','start',previous],text=True,stdout=subprocess.PIPE,
+-                               stderr=subprocess.DEVNULL,timeout=90)
+-        if started.returncode!=0:return False
+-        if not _cloudif_wait_health(previous,90).get('ok'):return False
+-        replaced=_cloudif_v144_reconnect_active(num,previous)
+-        # The expected replacement is the new target, unless another actor raced.
+-        return replaced==target
+-    except Exception:
+-        return False
+-
+-
+-_v143_publication_release=cloudif_publication_release
+-def cloudif_publication_release(handler):
+-    if not _cloudif_pub_auth(handler):return send(handler,403,{'ok':False,'error':'forbidden'})
+-    payload=_cloudif_pub_json(handler);project=safe_slug(payload.get('project') or '')
+-    try:num=int(payload.get('public_number'));dep=int(payload.get('deploy_number'));candidate=int(payload.get('candidate_number'));publication=int(payload.get('publication_number'));env_rev=int(payload.get('environment_revision') or 0)
+-    except Exception:return send(handler,400,{'ok':False,'error':'invalid_release_request'})
+-    if not project or min(num,dep,candidate,publication)<1:return send(handler,400,{'ok':False,'error':'invalid_release_request'})
+-    _cloudif_v144_ensure_schema();rows=db_query("select * from publication_runtimes where project=? and public_number=? and deploy_number=? and status='ready'",(project,num,dep))
+-    if not rows:return send(handler,404,{'ok':False,'error':'homologation_runtime_not_found'})
+-    runtime=rows[0];source=str(runtime.get('container') or '');stack_name=str(runtime.get('stack_name') or '')
+-    chk=subprocess.run(['docker','inspect',source,'--format','{{.State.Status}}|{{if .State.Health}}{{.State.Health.Status}}{{end}}|{{.Config.Image}}|{{.Image}}|{{.Id}}'],text=True,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL)
+-    parts=chk.stdout.strip().split('|',4) if chk.returncode==0 else []
+-    if len(parts)!=5 or parts[0]!='running' or parts[1]!='healthy':return send(handler,422,{'ok':False,'error':'homologation_candidate_not_healthy'})
+-    image,image_id,container_id=parts[2],parts[3],parts[4];expected=str(payload.get('artifact_image_id') or '')
+-    if expected and not hmac.compare_digest(expected,image_id):return send(handler,409,{'ok':False,'error':'homologated_artifact_changed'})
+-    env_path=_cloudif_stage_write_environment(num,'p',publication,payload.get('environment_variables') if isinstance(payload.get('environment_variables'),dict) else {})
+-    try:_cloudif_v144_runtime_env_replace(stack_name,env_path)
+-    except Exception as exc:return send(handler,422,{'ok':False,'error':'production_environment_apply_failed','detail':str(exc)[:300]})
+-    restart=subprocess.run(['docker','restart',source],text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=90)
+-    if restart.returncode!=0:return send(handler,422,{'ok':False,'error':'production_restart_failed','detail':(restart.stderr or restart.stdout)[-500:]})
+-    if not _cloudif_wait_health(source,90).get('ok'):return send(handler,422,{'ok':False,'error':'production_container_not_healthy'})
+-    after=subprocess.run(['docker','inspect',source,'--format','{{.Id}}|{{.Image}}'],text=True,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL).stdout.strip().split('|',1)
+-    if len(after)!=2 or after[0]!=container_id or after[1]!=image_id:return send(handler,409,{'ok':False,'error':'promotion_changed_container_identity'})
+-    try:previous=_cloudif_v144_reconnect_active(num,source)
+-    except Exception as exc:return send(handler,422,{'ok':False,'error':'production_activation_failed','detail':str(exc)[:300]})
+-    if previous and previous!=source:
+-        try:
+-            stopped=subprocess.run(['docker','stop','--time','20',previous],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=45)
+-            if stopped.returncode!=0:raise RuntimeError('previous_stop_failed')
+-        except Exception:
+-            # Restore the old active alias if previous production cannot be stopped;
+-            # never persist the candidate as an accepted production release.
+-            try:_cloudif_v144_reconnect_active(num,previous)
+-            except Exception:return send(handler,503,{'ok':False,'error':'production_activation_rollback_failed'})
+-            return send(handler,422,{'ok':False,'error':'previous_production_stop_failed'})
+-    try:
+-        _cloudif_v144_atomic_updates([
+-            ('update stage_production_releases set is_active=0,updated_at=? where project=?',(now(),project)),
+-            ('''insert into stage_production_releases(project,public_number,publication_number,candidate_number,deploy_number,image,image_id,container,status,is_active,environment_revision,environment_digest,created_at,created_by,updated_at)
+-              values(?,?,?,?,?,?,?,?,?,1,?,?,?,?,?) on conflict(project,publication_number) do update set candidate_number=excluded.candidate_number,deploy_number=excluded.deploy_number,image=excluded.image,image_id=excluded.image_id,container=excluded.container,status=excluded.status,is_active=1,environment_revision=excluded.environment_revision,environment_digest=excluded.environment_digest,updated_at=excluded.updated_at''',
+-              (project,num,publication,candidate,dep,image,image_id,source,'ready',env_rev,str(payload.get('environment_digest') or ''),now(),str(payload.get('actor') or 'portal')[:128],now())),
+-            ('update publication_runtimes set is_active=case when deploy_number=? then 1 else 0 end,updated_at=? where project=?',(dep,now(),project)),
+-            ('update integrations set public_number=?,active_deploy=?,updated_at=? where project=?',(num,dep,now(),project)),
+-        ])
+-    except Exception:
+-        if _cloudif_v144_recover_previous(num,previous,source):
+-            return send(handler,503,{'ok':False,'error':'production_db_commit_failed_rolled_back'})
+-        return send(handler,503,{'ok':False,'error':'production_db_recovery_failed'})
+-    return send(handler,200,{'ok':True,'project':project,'public_number':num,'candidate_number':candidate,'publication_number':publication,'stageCode':'P'+str(publication),'deploy_number':dep,'container':source,'stack_id':normalize_resource_id(runtime.get('stack_id')),'stack_name':stack_name,'image':image,'artifactImageId':image_id,'containerId':container_id,'healthy':True,'previous':previous,'activeAlias':f'cloudif-p{num}-active-web','environmentRevision':env_rev,'environmentDigest':str(payload.get('environment_digest') or ''),'promotedInPlace':True,'sameContainerAsHomologation':True,'secretValuesIncluded':False})
+-
+-_v143_publication_release_activate=cloudif_publication_release_activate
+-def cloudif_publication_release_activate(handler):
+-    if not _cloudif_pub_auth(handler):return send(handler,403,{'ok':False,'error':'forbidden'})
+-    payload=_cloudif_pub_json(handler);project=safe_slug(payload.get('project') or '')
+-    try:num=int(payload.get('public_number'));publication=int(payload.get('publication_number'))
+-    except Exception:return send(handler,400,{'ok':False,'error':'invalid_release_request'})
+-    rows=db_query("select * from stage_production_releases where project=? and publication_number=? and status='ready'",(project,publication))
+-    if not rows:return send(handler,404,{'ok':False,'error':'production_release_not_found'})
+-    target=str(rows[0].get('container') or '')
+-    if subprocess.run(['docker','inspect',target,'--format','{{.State.Running}}'],text=True,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL).stdout.strip()!='true':
+-        start=subprocess.run(['docker','start',target],text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=90)
+-        if start.returncode!=0:return send(handler,422,{'ok':False,'error':'production_release_start_failed'})
+-    if not _cloudif_wait_health(target,90).get('ok'):return send(handler,422,{'ok':False,'error':'production_release_not_healthy'})
+-    try:previous=_cloudif_v144_reconnect_active(num,target)
+-    except Exception as exc:return send(handler,422,{'ok':False,'error':'production_activation_failed','detail':str(exc)[:300]})
+-    if previous and previous!=target:
+-        try:
+-            stopped=subprocess.run(['docker','stop','--time','20',previous],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=45)
+-            if stopped.returncode!=0:raise RuntimeError('previous_stop_failed')
+-        except Exception:
+-            try:_cloudif_v144_reconnect_active(num,previous)
+-            except Exception:return send(handler,503,{'ok':False,'error':'production_activation_rollback_failed'})
+-            return send(handler,422,{'ok':False,'error':'previous_production_stop_failed'})
+-    dep=int(rows[0].get('deploy_number') or 0)
+-    updates=[('update stage_production_releases set is_active=case when publication_number=? then 1 else 0 end,updated_at=? where project=?',(publication,now(),project))]
+-    if dep:updates.append(('update publication_runtimes set is_active=case when deploy_number=? then 1 else 0 end,updated_at=? where project=?',(dep,now(),project)))
+-    try:_cloudif_v144_atomic_updates(updates)
+-    except Exception:
+-        if _cloudif_v144_recover_previous(num,previous,target):
+-            return send(handler,503,{'ok':False,'error':'production_db_commit_failed_rolled_back'})
+-        return send(handler,503,{'ok':False,'error':'production_db_recovery_failed'})
+-    return send(handler,200,{'ok':True,'project':project,'publication_number':publication,'stageCode':'P'+str(publication),'container':target,'previous':previous,'activeAlias':f'cloudif-p{num}-active-web','reactivatedInPlace':True,'secretValuesIncluded':False})
+-
+-def cloudif_homologation_reject(handler):
+-    if not _cloudif_pub_auth(handler):return send(handler,403,{'ok':False,'error':'forbidden'})
+-    payload=_cloudif_pub_json(handler);project=safe_slug(payload.get('project') or '')
+-    try:num=int(payload.get('public_number'));dep=int(payload.get('deploy_number'));candidate=int(payload.get('candidate_number'))
+-    except Exception:return send(handler,400,{'ok':False,'error':'invalid_reject_request'})
+-    rows=db_query("select * from publication_runtimes where project=? and public_number=? and deploy_number=?",(project,num,dep))
+-    if not rows:return send(handler,200,{'ok':True,'project':project,'removed':False,'alreadyAbsent':True})
+-    row=rows[0];prod=db_query("select publication_number from stage_production_releases where project=? and deploy_number=?",(project,dep))
+-    if prod or int(row.get('is_active') or 0):return send(handler,409,{'ok':False,'error':'cannot_reject_production_runtime'})
+-    stack_id=normalize_resource_id(row.get('stack_id'));stack_name=str(row.get('stack_name') or '');container=str(row.get('container') or '')
+-    if stack_id:
+-        destroyed,_=komodo_call('execute','DestroyStack',{'stack':stack_id});opid=_cloudif_v131_oid(destroyed.get('data') or {}) if destroyed.get('ok') else ''
+-        if opid:_cloudif_pub_wait_operation(opid,timeout=180)
+-        komodo_call('write','DeleteStack',{'id':stack_id})
+-    if container:subprocess.run(['docker','rm','-f',container],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+-    if stack_name and re.fullmatch(r'cloudif-p\d+-d\d+',stack_name):shutil.rmtree(Path('/etc/komodo/stacks')/stack_name,ignore_errors=True)
+-    db_exec('delete from project_member_terminals where project=? and stack_id=?',(project,stack_id));db_exec('delete from publication_runtimes where project=? and deploy_number=?',(project,dep))
+-    return send(handler,200,{'ok':True,'project':project,'candidate_number':candidate,'deploy_number':dep,'removed':True,'container':container,'stack_id':stack_id,'resourceFreed':True,'secretValuesIncluded':False})
+-
+-_v143_stage_terminal=cloudif_stage_terminal
+-def cloudif_stage_terminal(handler):
+-    if not _cloudif_pub_auth(handler):return send(handler,403,{'ok':False,'error':'forbidden'})
+-    payload=_cloudif_pub_json(handler);project=safe_slug(payload.get('project') or '');environment=str(payload.get('environment') or '').strip().lower()
+-    try:num=int(payload.get('public_number') or 0);dep=int(payload.get('deploy_number') or 0);publication=int(payload.get('publication_number') or 0);candidate=int(payload.get('candidate_number') or 0)
+-    except Exception:return send(handler,400,{'ok':False,'error':'invalid_stage_terminal_request'})
+-    if not project or num<1 or environment not in {'homologation','production'}:return send(handler,400,{'ok':False,'error':'invalid_stage_terminal_request'})
+-    _cloudif_v144_ensure_schema();row=None;stage_code=''
+-    if environment=='homologation':
+-        rows=db_query("select * from publication_runtimes where project=? and public_number=? and deploy_number=? and status='ready'",(project,num,dep))
+-        if rows:row=rows[0];stage_code='H'+str(candidate)
+-    else:
+-        rows=db_query("select * from stage_production_releases where project=? and public_number=? and publication_number=? and status='ready' and is_active=1",(project,num,publication))
+-        if rows:
+-            prod=rows[0];pr=db_query("select * from publication_runtimes where project=? and deploy_number=?",(project,int(prod.get('deploy_number') or 0),))
+-            if pr:row=pr[0]
+-            stage_code='P'+str(publication)
+-    if not row:return send(handler,409,{'ok':False,'error':'stage_runtime_not_ready'})
+-    container=str(row.get('container') or '');stack_id=normalize_resource_id(row.get('stack_id'))
+-    if not stack_id or not _cloudif_wait_health(container,2).get('ok'):return send(handler,409,{'ok':False,'error':'stage_container_not_healthy'})
+-    target=_cloudif_v144_stack_target(stack_id)
+-    if not target:return send(handler,422,{'ok':False,'error':'stage_stack_service_missing'})
+-    terminal='cloudif-'+environment;listed,_=komodo_call('read','ListTerminals',{'target':target});items=listed.get('data') if isinstance(listed.get('data'),list) else []
+-    if not any(isinstance(x,dict) and x.get('name')==terminal for x in items):
+-        created,_=komodo_call('write','CreateTerminal',{'target':target,'name':terminal,'command':'sh','mode':'exec'})
+-        if not created.get('ok'):return send(handler,422,{'ok':False,'error':'stage_terminal_create_failed','result':created})
+-    return send(handler,200,{'ok':True,'project':project,'public_number':num,'environment':environment,'stageCode':stage_code,'container':container,'stack_id':stack_id,'stack_name':str(row.get('stack_name') or ''),'terminal':terminal,'target_mode':'stack','terminalReady':True,'secretValuesIncluded':False,'secretReferencesIncluded':False})
+-
+-
+-_v143_membership_reconcile=cloudif_project_membership_reconcile
+-def cloudif_project_membership_reconcile(handler):
+-    if not _cloudif_pub_auth(handler):return send(handler,403,{'ok':False,'error':'forbidden'})
+-    payload=_cloudif_pub_json(handler);project=safe_slug(payload.get('project') or payload.get('slug') or '')
+-    access=payload.get('access') if isinstance(payload.get('access'),dict) else {};owner=str(access.get('owner') or payload.get('owner_user') or '').strip().lower();acl=access.get('acl') if isinstance(access.get('acl'),list) else []
+-    integration=find_integration(project)
+-    if not project or not integration:return send(handler,404,{'ok':False,'error':'project_not_integrated','project':project})
+-    _cloudif_v144_ensure_schema();stack_ids=_cloudif_related_stack_ids(project,integration)
+-    authz=_cloudif_sync_project_authz(project,owner,acl,normalize_resource_id(integration.get('stack_id')),normalize_resource_id(integration.get('repo_id')),stack_ids,normalize_resource_id(integration.get('server_id')))
+-    if not authz.get('ok'):return send(handler,422,{'ok':False,'error':'authz_sync_failed','authz':authz})
+-    desired={owner} if owner else set()
+-    for item in acl:
+-        if str(item.get('type') or '').strip().lower()=='user':
+-            username=str(item.get('subject') or '').strip().lower()
+-            if username:desired.add(username)
+-    targets=[];preview=_cloudif_preview_row(project) or {};psid=normalize_resource_id(preview.get('stack_id'))
+-    if psid:
+-        target=_cloudif_v144_stack_target(psid)
+-        if target:targets.append({'stack_id':psid,'deploy_number':0,'container':str(preview.get('container') or ''),'stage':'preview','target':target})
+-    for runtime in db_query("select * from publication_runtimes where project=? and status='ready' order by deploy_number",(project,)):
+-        sid=normalize_resource_id(runtime.get('stack_id'));container=str(runtime.get('container') or '')
+-        if not sid or not container:continue
+-        running=subprocess.run(['docker','inspect',container,'--format','{{.State.Running}}'],text=True,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL).stdout.strip()=='true'
+-        if not running:continue
+-        target=_cloudif_v144_stack_target(sid)
+-        if target:targets.append({'stack_id':sid,'deploy_number':int(runtime.get('deploy_number') or 0),'container':container,'stage':'runtime','target':target})
+-    known_rows=db_query('select * from project_member_terminals where project=?',(project,));known={(str(r.get('username') or ''),normalize_resource_id(r.get('stack_id'))):r for r in known_rows};current={x['stack_id'] for x in targets}
+-    created=[];existing=[];removed=[];errors=[]
+-    for tr in targets:
+-        target=tr['target'];sid=tr['stack_id'];listed,_=komodo_call('read','ListTerminals',{'target':target});items=listed.get('data') if isinstance(listed.get('data'),list) else []
+-        for username in sorted(desired):
+-            terminal=('cloudif-'+project+'-'+safe_slug(username))[:120];found=next((x for x in items if isinstance(x,dict) and x.get('name')==terminal),None);descriptor={'username':username,'stack_id':sid,'deploy_number':tr['deploy_number'],'runtime_stage':tr['stage'],'terminal':terminal}
+-            if found:existing.append(descriptor)
+-            else:
+-                result,_=komodo_call('write','CreateTerminal',{'target':target,'name':terminal,'command':'sh','mode':'exec'})
+-                if result.get('ok'):created.append(descriptor)
+-                else:errors.append({**descriptor,'stage':'create_terminal','result':result});continue
+-            db_exec('''insert into project_member_terminals(project,username,stack_id,terminal,target_json,updated_at) values(?,?,?,?,?,?) on conflict(project,username,stack_id) do update set terminal=excluded.terminal,target_json=excluded.target_json,updated_at=excluded.updated_at''',(project,username,sid,terminal,json.dumps(target,ensure_ascii=False),now()))
+-    for (username,sid),row in known.items():
+-        if username in desired and sid in current:continue
+-        try:old_target=json.loads(row.get('target_json') or '{}')
+-        except Exception:old_target={}
+-        result,_=komodo_call('write','DeleteTerminal',{'target':old_target,'terminal':row.get('terminal')});descriptor={'username':username,'stack_id':sid,'terminal':row.get('terminal')}
+-        if result.get('ok') or 'not found' in json.dumps(result).lower():
+-            db_exec('delete from project_member_terminals where project=? and username=? and stack_id=?',(project,username,sid));removed.append(descriptor)
+-        else:errors.append({**descriptor,'stage':'delete_terminal','result':result})
+-    active=_cloudif_active_publication_stack(project,normalize_resource_id(integration.get('stack_id')))
+-    return send(handler,200 if not errors else 207,{'ok':not errors,'project':project,'owner':owner,'desired_users':sorted(desired),'authz':authz,'active_publication':active,'runtime_targets':len(targets),'terminals':{'created':created,'existing':existing,'removed':removed,'errors':errors},'waiting_for_identity':bool(authz.get('pending')),'waiting_for_publication':not bool(targets),'previewIncluded':bool(psid)})
+-
+-# CloudIFF v144 END
+-
+-
+ if __name__ == "__main__":
+     init_db()
+-    _cloudif_v144_start_preview_sync()
+     env = load_env()
+     host = env.get("KOMODO_AGENT_HOST", "10.62.91.2")
+     port = int(env.get("KOMODO_AGENT_PORT", "18098"))

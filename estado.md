@@ -666,3 +666,9 @@
 - Seis runtimes legados na Hospedagem (`cloudif-agenda-unica`, `agenda-unica-hml`, `agenda-unica-smoke`) foram parados após prova de ausência de referências em Nginx/systemd/Portal. Inspects foram preservados em backup.
 - `envLabel is not defined` no wizard humano foi corrigido para `envLabels[environment]` e coberto por teste.
 - O asset `publication-release.js` live foi sincronizado ao canônico e recebeu cache-bust `20261122-history-runtime-actions-v5`.
+
+## Deltas live adicionais após consolidação W3/Histórico — 22/11/2026
+
+Os assets `cloudif-admin-portal-base.py` e `portal/design/publication-release.js` estão byte a byte alinhados entre live e `main` após `c814a27fcd0b05386872aa7cb62be429f822b49c`.
+
+Os módulos `cloudif_portal_publications.py` (app/lib), `cloudif_portal_v2_coexist.py`, `cloudif_project_environments_overview.py` e `cloudif-komodo-agent.py` ainda contêm hotfixes live adicionais anteriores/adjacentes a esta unidade. Eles **não devem ser substituídos cegamente** pelo arquivo canônico. Foram capturados como patches de compatibilidade em `compat/live-extra-*.patch`, com scan de segredos PASS, para reconciliação incremental futura.

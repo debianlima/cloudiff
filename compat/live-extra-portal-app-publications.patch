@@ -1,0 +1,944 @@
+--- a/components/control-plane/current-apps/portal-current/cloudif_portal_publications.py
++++ b/components/control-plane/current-apps/portal-current/cloudif_portal_publications.py
+@@ -188,6 +188,171 @@
+     return plan,result
+ 
+ 
++def _compose_snapshot_promote(slug,deployment_id,snapshot_id,snapshot_digest,trace,execution_material):
++    client=_multiservice_clients();plan_payload={'project_slug':slug,'deployment_id':deployment_id,'snapshot_id':snapshot_id,'snapshot_digest':snapshot_digest,'trace_id':trace}
++    status,plan=_bearer_json('POST',client['deploymentUrl']+'/v1/compose-promotion-plan',client['deploymentToken'],plan_payload,timeout=75)
++    if status!=200 or plan.get('ok') is not True:raise RuntimeError('O plano de promoção da Homologação não pôde ser criado.')
++    blockers=plan.get('blockers') or []
++    if plan.get('execution_allowed') is not True or blockers:raise RuntimeError('Promoção da Homologação bloqueada: '+','.join(str(x) for x in blockers[:12]))
++    if plan.get('sameDeploymentRequired') is not True or plan.get('containerRecreationForbidden') is not True:raise RuntimeError('O plano não garante promoção da mesma instância homologada.')
++    digest=str(plan.get('promotion_plan_digest') or '')
++    if not re.fullmatch(r'[a-f0-9]{64}',digest):raise RuntimeError('Digest do plano de promoção inválido.')
++    execution_id='exec_'+hashlib.sha256(str(execution_material).encode()).hexdigest()[:24]
++    payload={**plan_payload,'promotion_plan_digest':digest,'execution_id':execution_id}
++    status,result=_bearer_json('POST',client['deploymentUrl']+'/v1/compose-promotion-execute',client['deploymentToken'],payload,timeout=300)
++    if status//100!=2 or result.get('ok') is not True:raise RuntimeError('O Deployment Broker não conseguiu promover a Homologação em Produção.')
++    if str(result.get('deployment_id') or '')!=deployment_id or result.get('sameHomologatedDeployment') is not True or result.get('containersRecreated') is not False:raise RuntimeError('A promoção alterou a identidade da Homologação.')
++    return plan,result
++
++
++def _multiservice_deactivate_bridge(slug,deployment_id,stage,trace):
++    client=_multiservice_clients();payload={'project_slug':slug,'deployment_id':deployment_id,'stage':stage,'trace_id':trace}
++    status,result=_bearer_json('POST',client['deploymentUrl']+'/v1/multiservice-publication-deactivate',client['deploymentToken'],payload,timeout=90)
++    if status//100!=2 or not isinstance(result,dict) or result.get('ok') is not True:raise RuntimeError('Não foi possível desativar o bridge '+stage+' do deployment.')
++    return result
++
++
++def _multiservice_deactivate(slug,deployment_id,reason,trace):
++    client=_multiservice_clients();payload={'project_slug':slug,'deployment_id':deployment_id,'reason':reason,'trace_id':trace}
++    status,result=_bearer_json('POST',client['deploymentUrl']+'/v1/multiservice-deactivate',client['deploymentToken'],payload,timeout=180)
++    if status//100!=2 or not isinstance(result,dict) or result.get('ok') is not True:raise RuntimeError('Não foi possível desativar o deployment anterior.')
++    return result
++
++
++def _multiservice_reactivate(slug,deployment_id,phase,environment_digest,trace):
++    client=_multiservice_clients();payload={'project_slug':slug,'deployment_id':deployment_id,'phase':phase,'environment_digest':environment_digest,'trace_id':trace}
++    status,result=_bearer_json('POST',client['deploymentUrl']+'/v1/multiservice-reactivate',client['deploymentToken'],payload,timeout=360)
++    if status//100!=2 or not isinstance(result,dict) or result.get('ok') is not True:
++        error=result.get('error') if isinstance(result,dict) else {}
++        message=error.get('message') if isinstance(error,dict) else ''
++        raise RuntimeError(message or 'Não foi possível reativar a publicação histórica.')
++    return result
++
++
++def _linked_compose_previous_active_homologation(slug):
++    con=sqlite3.connect(DB);con.row_factory=sqlite3.Row;_ensure_schema(con)
++    row=con.execute("select * from publication_candidates where project_slug=? and status in ('awaiting_homologation','homologated') order by candidate_number desc limit 1",(slug,)).fetchone();con.close()
++    if not row:return None
++    meta=_candidate_runtime_metadata(row);dep=str(meta.get('homologationDeploymentId') or '')
++    return {'candidateNumber':int(row['candidate_number']),'deploymentId':dep} if re.fullmatch(r'dep_[a-f0-9]{24}',dep) else None
++
++
++def _supersede_prior_homologations(con,slug,candidate_number):
++    con.execute("update publication_candidates set status='superseded' where project_slug=? and candidate_number<? and status in ('awaiting_homologation','homologated')",(slug,int(candidate_number)))
++
++
++def _linked_compose_previous_active_production(slug):
++    con=sqlite3.connect(DB);con.row_factory=sqlite3.Row;_ensure_schema(con)
++    row=con.execute("select * from project_publications where project_slug=? and is_active=1 and status='published' order by id desc limit 1",(slug,)).fetchone()
++    release=con.execute("select * from production_releases where project_slug=? and is_active=1 and status='published' order by publication_number desc limit 1",(slug,)).fetchone();con.close()
++    detail={}
++    if row:
++        try:detail=json.loads(row['detail_json'] or '{}')
++        except Exception:detail={}
++    dep=str(detail.get('productionDeploymentId') or '')
++    publication=int(release['publication_number']) if release else 0
++    return {'deploymentId':dep if re.fullmatch(r'dep_[a-f0-9]{24}',dep) else '','publicationNumber':publication}
++
++
++def _legacy_publication_deactivate(slug,public_number,publication_number):
++    ku,kt,_=_clients();payload={'project':slug,'public_number':int(public_number),'publication_number':int(publication_number)}
++    status,result=_post(ku+'/komodo/publication/deactivate-legacy',payload,kt,timeout=90)
++    if status//100!=2 or not isinstance(result,dict) or result.get('ok') is not True:raise RuntimeError('Não foi possível desativar a Produção legada anterior.')
++    return result
++
++
++
++def _executor_runtime_client():
++    cfg=_env('/etc/cloudif/multiservice-deployment-executor.env');token=cfg.get('CLOUDIF_MULTISERVICE_DEPLOYMENT_EXECUTOR_TOKEN','')
++    if not token:raise RuntimeError('Credencial interna do executor ausente.')
++    return 'http://10.62.91.2:18098/cloudif/executor',token
++
++
++def _remove_compose_runtime(deployment_id):
++    base,token=_executor_runtime_client();status,result=_bearer_json('DELETE',base+'/v1/deployments/'+urllib.parse.quote(str(deployment_id),safe=''),token,timeout=180)
++    if status//100!=2 or result.get('ok') is not True:raise RuntimeError('Não foi possível remover o runtime da Homologação substituída.')
++    return result
++
++
++def _active_compose_environment_target(slug,environment):
++    con=sqlite3.connect(DB);con.row_factory=sqlite3.Row;_ensure_schema(con)
++    try:
++        if environment=='homologation':
++            rows=con.execute("select * from publication_candidates where project_slug=? and status in ('awaiting_homologation','homologated') order by candidate_number desc",(slug,)).fetchall()
++            for row in rows:
++                meta=_candidate_runtime_metadata(row);dep=str(meta.get('homologationDeploymentId') or '')
++                if meta.get('sameInstancePromotionRequired') is True and re.fullmatch(r'dep_[a-f0-9]{24}',dep):
++                    return {'deploymentId':dep,'rowId':int(row['id']),'candidateNumber':int(row['candidate_number']),'hostname':str(row['hostname'] or ''),'kind':'candidate'}
++            raise RuntimeError('Nenhuma Homologação ativa existe para receber variáveis.')
++        if environment=='production':
++            release=con.execute("select * from production_releases where project_slug=? and is_active=1 and status='published' order by publication_number desc limit 1",(slug,)).fetchone()
++            if not release:raise RuntimeError('Nenhuma Produção ativa existe para receber variáveis.')
++            candidate=con.execute('select * from publication_candidates where project_slug=? and candidate_number=?',(slug,int(release['candidate_number']))).fetchone()
++            meta=_candidate_runtime_metadata(candidate) if candidate else {};dep=str(meta.get('homologationDeploymentId') or '')
++            if not re.fullmatch(r'dep_[a-f0-9]{24}',dep):
++                publication=con.execute('select detail_json from project_publications where project_slug=? and is_active=1 order by id desc limit 1',(slug,)).fetchone()
++                try:detail=json.loads(publication['detail_json'] or '{}') if publication else {}
++                except Exception:detail={}
++                dep=str(detail.get('productionDeploymentId') or '')
++            if not re.fullmatch(r'dep_[a-f0-9]{24}',dep):raise RuntimeError('Produção ativa não possui deployment configurável.')
++            return {'deploymentId':dep,'releaseId':int(release['id']),'candidateNumber':int(release['candidate_number']),'publicationNumber':int(release['publication_number']),'hostname':str(release['stable_hostname'] or release['hostname'] or ''),'kind':'release'}
++        raise ValueError('Ambiente não possui target Compose configurável.')
++    finally:con.close()
++
++
++def environment_runtime_target(slug,environment):
++    environment=str(environment or '').strip().lower()
++    if environment=='preview':
++        if slug=='agenda-unica' or _is_linked_compose_project(slug):return {'environment':'preview','kind':'linked-preview'}
++        return {'environment':'preview','kind':'preview'}
++    if environment in {'homologation','production'}:
++        target=_active_compose_environment_target(slug,environment);target['environment']=environment;return target
++    raise ValueError('Ambiente inválido.')
++
++
++def apply_environment_to_runtime(slug,environment,actor='portal'):
++    environment=str(environment or '').strip().lower()
++    if environment not in {'preview','homologation','production'}:raise ValueError('Ambiente inválido.')
++    pc=_publication_config();runtime=pc.execution_environment_services(slug,environment)
++    values=runtime.get('valuesByService') or {};names=runtime.get('managedNamesByService') or {}
++    material={'managed_names_by_service':names,'values_by_service':values};variables_digest=hashlib.sha256(json.dumps(material,ensure_ascii=False,sort_keys=True,separators=(',',':')).encode()).hexdigest()
++    try:
++        if environment=='preview':
++            if slug=='agenda-unica' or _is_linked_compose_project(slug):
++                ku,kt,_=_clients();status,result=_post(ku+'/komodo/project/linked-preview/environment/apply',{'project':slug,'actor':actor,'values_by_service':values,'managed_names_by_service':names,'variables_digest':variables_digest,'environment_revision':int(runtime['environmentRevision']),'environment_digest':str(runtime['environmentDigest'])},kt,timeout=360)
++                if status//100!=2 or result.get('ok') is not True:raise RuntimeError(str(result.get('message') or result.get('error') or 'Falha ao aplicar variáveis no Preview.'))
++            else:
++                con=sqlite3.connect(DB);con.row_factory=sqlite3.Row;_ensure_schema(con);num=_number(con,slug);con.close();flat={}
++                for service_values in values.values():
++                    for key,value in service_values.items():
++                        if key in flat and flat[key]!=value:raise RuntimeError('Variável global possui valores conflitantes entre serviços: '+key)
++                        flat[key]=value
++                result=_runtime_preview(slug,num,'ensure',{'actor':actor,'environment_revision':int(runtime['environmentRevision']),'environment_digest':str(runtime['environmentDigest']),'environment_variables':flat},240)
++            return {'ok':True,'environment':'preview','environmentRevision':int(runtime['environmentRevision']),'environmentDigest':str(runtime['environmentDigest']),'changedServices':result.get('changedServices') or [],'containersRecreated':bool(result.get('containersRecreated')),'databasePreserved':bool(result.get('databasePreserved',True)),'secretValuesIncluded':False}
++        target=_active_compose_environment_target(slug,environment);base,token=_executor_runtime_client()
++        payload={'deployment_id':target['deploymentId'],'project_slug':slug,'environment':environment,'values_by_service':values,'managed_names_by_service':names,'variables_digest':variables_digest,'runtime_environment_digest':str(runtime.get('runtimeEnvironmentDigest') or runtime['environmentDigest']),'environment_digest':str(runtime['environmentDigest'])}
++        status,result=_bearer_json('POST',base+'/v1/compose-deployments/reconfigure',token,payload,timeout=360)
++        if status//100!=2 or result.get('ok') is not True:
++            error=result.get('error') or {};message=error.get('message') if isinstance(error,dict) else str(error or '')
++            raise RuntimeError(message or 'Falha ao aplicar variáveis no runtime do estágio.')
++        if target.get('hostname') and not _external_ok(str(target['hostname'])):raise RuntimeError('Runtime reconfigurado, mas a validação HTTPS do estágio falhou.')
++        con=sqlite3.connect(DB);con.row_factory=sqlite3.Row;_ensure_schema(con)
++        if environment=='homologation':con.execute('update publication_candidates set environment_revision=?,environment_digest=? where id=?',(int(runtime['environmentRevision']),str(runtime['environmentDigest']),int(target['rowId'])))
++        else:
++            con.execute('update production_releases set environment_revision=?,environment_digest=? where id=?',(int(runtime['environmentRevision']),str(runtime['environmentDigest']),int(target['releaseId'])))
++            prow=con.execute('select id,detail_json from project_publications where project_slug=? and is_active=1 order by id desc limit 1',(slug,)).fetchone()
++            if prow:
++                try:detail=json.loads(prow['detail_json'] or '{}')
++                except Exception:detail={}
++                detail['environmentRevision']=int(runtime['environmentRevision']);detail['environmentDigest']=str(runtime['environmentDigest']);con.execute('update project_publications set detail_json=? where id=?',(json.dumps(detail,ensure_ascii=False,separators=(',',':')),int(prow['id'])))
++        con.commit();con.close()
++        return {'ok':True,'environment':environment,'deploymentId':target['deploymentId'],'environmentRevision':int(runtime['environmentRevision']),'environmentDigest':str(runtime['environmentDigest']),'changedServices':result.get('changedServices') or [],'deploymentIdentityPreserved':bool(result.get('deploymentIdentityPreserved')),'snapshotPreserved':bool(result.get('snapshotPreserved')),'volumesPreserved':bool(result.get('volumesPreserved')),'containersRecreated':bool(result.get('containersRecreated')),'secretValuesIncluded':False}
++    finally:
++        for service_values in values.values():
++            if isinstance(service_values,dict):service_values.clear()
++        runtime['valuesByService']={}
++
++
+ def _create_linked_compose_homologation_candidate(slug,num,candidate,actor,progress=None):
+     notify=lambda step,msg:progress(step,msg) if progress else None
+     con=sqlite3.connect(DB);con.row_factory=sqlite3.Row;_ensure_schema(con);binding=_linked_compose_binding(con,slug);con.close()
+@@ -198,44 +363,63 @@
+     if not re.fullmatch(r'[a-f0-9]{40,64}',source_commit):raise RuntimeError('A origem Compose não possui commit Forgejo completo válido.')
+     preview_head=str((source.get('git') or {}).get('head') or '')
+     if preview_head and not source_commit.startswith(preview_head):raise RuntimeError('O HEAD exibido no Preview diverge do commit Compose materializado; atualize o Preview e tente novamente.')
+-    pc=_publication_config();summary=pc.environment_summary(slug,'homologation')
+-    if not summary.get('valid'):raise RuntimeError('O ambiente de Homologação possui variáveis obrigatórias pendentes.')
+-    notify('snapshot','Congelando stack Compose, volumes e configuração do Preview W1.')
++    notify('configuration','Herdando para Homologação as variáveis configuradas no Preview.')
++    inherited_environment=_publication_config().clone_environment_configuration(slug,'preview','homologation',actor)
++    previous=_linked_compose_previous_active_homologation(slug)
++    notify('snapshot','Clonando integralmente containers, configuração e volumes do Preview W'+str(preview_generation)+'.')
+     trace='portal-hc-'+hashlib.sha256((slug+source_commit+str(candidate)).encode()).hexdigest()[:20]
+     plan,deployed=_compose_snapshot_deploy(slug,'homologation',trace,'HC|'+slug+'|'+str(candidate)+'|'+source_commit)
+     snapshot_id=str(deployed['snapshot_id']);snapshot_digest=str(deployed['snapshot_digest']);artifact_id='sha256:'+snapshot_digest;deployment_id=str(deployed['deployment_id'])
+     operation=plan.get('operation') or {};planned_commit=str(operation.get('source_commit') or '')
+     if planned_commit and not hmac.compare_digest(planned_commit,source_commit):raise RuntimeError('O HEAD Forgejo mudou durante a criação do candidato; gere novamente.')
++    if deployed.get('homologationCloneMode')!='full-runtime-clone' or deployed.get('environmentOverlayApplied') is not False or deployed.get('writableVolumeDataCloned') is not True:raise RuntimeError('O executor não comprovou clone integral do Preview.')
+     bridge=_multiservice_bridge(slug,deployment_id,num,'homologation',candidate,trace+'-bridge')
+     notify('https','Preparando URL pública de Homologação.')
+     _,_,npm_token=_clients();hstatus,hdata=_post('http://10.62.91.3/stage',{'public_number':num,'stage':'homologation','number':candidate},npm_token,host='cloudif-publisher.internal',timeout=300)
+     if hstatus//100!=2 or not hdata.get('ok'):raise RuntimeError(_publication_error('https',hdata))
+     ident=_stage_identity(num,'homologation',candidate)
+     if not _external_ok(ident['hostname']):raise RuntimeError('Validação HTTPS externa falhou para '+ident['hostname'])
+-    diff={'runtimeKind':'compose-snapshot','sourceMode':'forgejo-linked-stack','sourceCommit':source_commit,'sourceDigest':str(operation.get('source_digest') or ''),'snapshotId':snapshot_id,'snapshotDigest':snapshot_digest,'secretValuesIncluded':False}
+-    runtime_meta={'runtimeKind':'compose-snapshot','composeSnapshotId':snapshot_id,'snapshotDigest':snapshot_digest,'homologationDeploymentId':deployment_id,'deploymentPlanDigest':str(plan.get('deployment_plan_digest') or ''),'environment':'homologation','bridge':str(bridge.get('bridge') or ''),'sourceCommit':source_commit,'sourceDigest':str(operation.get('source_digest') or ''),'sourcePreviewStageCode':'W'+str(preview_generation),'sameSnapshotAsProductionRequired':True,'secretValuesIncluded':False}
++    if previous and previous.get('deploymentId') and previous['deploymentId']!=deployment_id:
++        try:
++            _remove_compose_runtime(previous['deploymentId'])
++            _publisher_delete_stage(num,'homologation',int(previous.get('candidateNumber') or 0),npm_token)
++        except Exception:
++            try:_multiservice_deactivate(slug,deployment_id,'rollback: não foi possível remover a Homologação anterior',trace+'-rollback-new-h')
++            except Exception:pass
++            raise
++    diff={'runtimeKind':'compose-snapshot','sourceMode':'forgejo-linked-stack','sourceCommit':source_commit,'sourceDigest':str(operation.get('source_digest') or ''),'snapshotId':snapshot_id,'snapshotDigest':snapshot_digest,'cloneMode':'full-preview-runtime','secretValuesIncluded':False}
++    runtime_meta={'runtimeKind':'compose-snapshot','composeSnapshotId':snapshot_id,'snapshotDigest':snapshot_digest,'homologationDeploymentId':deployment_id,'deploymentPlanDigest':str(plan.get('deployment_plan_digest') or ''),'environment':'homologation','bridge':str(bridge.get('bridge') or ''),'sourceCommit':source_commit,'sourceDigest':str(operation.get('source_digest') or ''),'sourcePreviewStageCode':'W'+str(preview_generation),'cloneMode':'full-preview-runtime','sameInstancePromotionRequired':True,'containersRecreatedForProduction':False,'secretValuesIncluded':False}
+     now=_now();con=sqlite3.connect(DB);con.row_factory=sqlite3.Row;_ensure_schema(con)
+     sql="insert into publication_candidates(project_slug,public_number,candidate_number,deploy_number,preview_generation,stage_code,hostname,status,parent_commit,commit_sha,artifact_image,artifact_image_id,diff_json,runtime_diff_json,environment_revision,environment_digest,created_by,created_at) values(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
+-    values=(slug,num,candidate,candidate,preview_generation,ident['code'],ident['hostname'],'awaiting_homologation',source_commit,source_commit,'compose-snapshot:'+snapshot_id,artifact_id,json.dumps(diff,ensure_ascii=False),json.dumps(runtime_meta,ensure_ascii=False),int(summary.get('environmentRevision') or 0),str(summary.get('environmentDigest') or ''),actor,now)
+-    con.execute(sql,values);con.commit();con.close()
+-    return {'ok':True,'project':slug,'candidateNumber':candidate,'stageCode':ident['code'],'url':ident['url'],'hostname':ident['hostname'],'commit':source_commit,'parentCommit':source_commit,'artifactImageId':artifact_id,'previewGeneration':preview_generation,'diff':diff,'runtimeDiff':runtime_meta,'environmentRevision':int(summary.get('environmentRevision') or 0),'snapshotId':snapshot_id,'snapshotDigest':snapshot_digest,'secretValuesIncluded':False}
++    environment_revision=int(inherited_environment.get('environmentRevision') or 0);environment_digest=str(inherited_environment.get('environmentDigest') or '')
++    values=(slug,num,candidate,candidate,preview_generation,ident['code'],ident['hostname'],'awaiting_homologation',source_commit,source_commit,'compose-snapshot:'+snapshot_id,artifact_id,json.dumps(diff,ensure_ascii=False),json.dumps(runtime_meta,ensure_ascii=False),environment_revision,environment_digest,actor,now)
++    _supersede_prior_homologations(con,slug,candidate);con.execute(sql,values);con.commit();con.close()
++    return {'ok':True,'project':slug,'candidateNumber':candidate,'stageCode':ident['code'],'url':ident['url'],'hostname':ident['hostname'],'commit':source_commit,'parentCommit':source_commit,'artifactImageId':artifact_id,'previewGeneration':preview_generation,'diff':diff,'runtimeDiff':runtime_meta,'environmentRevision':environment_revision,'environmentDigest':environment_digest,'snapshotId':snapshot_id,'snapshotDigest':snapshot_digest,'cloneMode':'full-preview-runtime','sameInstancePromotionRequired':True,'secretValuesIncluded':False}
++
++
++def _publisher_delete_stage(public_number,stage,number,npm_token):
++    if stage not in {'preview','homologation','publication'}:raise RuntimeError('Estágio inválido para remoção no Publisher.')
++    status,data=_post('http://10.62.91.3/stage/delete',{'public_number':int(public_number),'stage':stage,'number':int(number)},npm_token,host='cloudif-publisher.internal',timeout=120)
++    if status//100!=2 or not isinstance(data,dict) or data.get('ok') is not True:raise RuntimeError('O Publisher não conseguiu remover o estágio '+stage+'.')
++    return {'ok':True,'removed':bool(data.get('removed')),'certificatePreserved':bool(data.get('certificate_preserved'))}
+ 
+ 
+ def _publish_linked_compose_homologated_candidate(slug,candidate,project,publication,alias,actor,progress=None):
+     notify=lambda step,msg:progress(step,msg) if progress else None
+-    meta=_candidate_runtime_metadata(candidate);snapshot_id=str(meta.get('composeSnapshotId') or '');snapshot_digest=str(meta.get('snapshotDigest') or '')
+-    if meta.get('runtimeKind')!='compose-snapshot' or not re.fullmatch(r'snap_[a-f0-9]{24}',snapshot_id) or not re.fullmatch(r'[a-f0-9]{64}',snapshot_digest):raise RuntimeError('Metadados do snapshot Compose homologado estão incompletos.')
++    meta=_candidate_runtime_metadata(candidate);snapshot_id=str(meta.get('composeSnapshotId') or '');snapshot_digest=str(meta.get('snapshotDigest') or '');deployment_id=str(meta.get('homologationDeploymentId') or '')
++    if meta.get('runtimeKind')!='compose-snapshot' or not re.fullmatch(r'snap_[a-f0-9]{24}',snapshot_id) or not re.fullmatch(r'[a-f0-9]{64}',snapshot_digest) or not re.fullmatch(r'dep_[a-f0-9]{24}',deployment_id):raise RuntimeError('Metadados da Homologação Compose estão incompletos.')
++    if meta.get('sameInstancePromotionRequired') is not True:raise RuntimeError('O candidato não declara promoção da mesma instância homologada.')
+     artifact_id='sha256:'+snapshot_digest
+     if not hmac.compare_digest(artifact_id,str(candidate['artifact_image_id'] or '')):raise RuntimeError('Identidade do snapshot Compose não confere com o candidato homologado.')
+-    pc=_publication_config();summary=pc.environment_summary(slug,'production')
+-    if not summary.get('valid'):raise RuntimeError('O ambiente de Produção possui variáveis obrigatórias pendentes.')
+-    notify('production','Subindo em Produção exatamente o snapshot Compose homologado.')
+-    trace='portal-pc-'+hashlib.sha256((slug+snapshot_id+str(publication)).encode()).hexdigest()[:20]
+-    plan,deployed=_compose_snapshot_deploy(slug,'production',trace,'PC|'+slug+'|'+str(publication)+'|'+snapshot_id,snapshot_id=snapshot_id)
+-    if str(deployed.get('snapshot_id') or '')!=snapshot_id or str(deployed.get('snapshot_digest') or '')!=snapshot_digest:raise RuntimeError('Produção recebeu um snapshot diferente do candidato homologado.')
+-    if str(plan.get('artifactImageId') or '')!=artifact_id:raise RuntimeError('O plano de Produção não corresponde ao snapshot homologado.')
+-    deployment_id=str(deployed['deployment_id']);num=int(candidate['public_number']);bridge=_multiservice_bridge(slug,deployment_id,num,'publication',publication,trace+'-bridge')
+-    _,_,npm_token=_clients();notify('https','Preparando URL P e domínio estável.')
++    notify('configuration','Herdando para Produção as variáveis correntes da Homologação.')
++    inherited_environment=_publication_config().clone_environment_configuration(slug,'homologation','production',actor)
++    previous_production=_linked_compose_previous_active_production(slug)
++    notify('production','Promovendo a própria instância homologada para Produção, sem rebuild/reclone.')
++    trace='portal-pc-'+hashlib.sha256((slug+deployment_id+snapshot_id+str(publication)).encode()).hexdigest()[:20]
++    plan,promoted=_compose_snapshot_promote(slug,deployment_id,snapshot_id,snapshot_digest,trace,'PC|'+slug+'|'+str(publication)+'|'+deployment_id)
++    if str(promoted.get('deployment_id') or '')!=deployment_id or promoted.get('containerIdsPreserved') is not True or promoted.get('containersRecreated') is not False:raise RuntimeError('A Produção não preservou a instância homologada.')
++    num=int(candidate['public_number']);bridge=_multiservice_bridge(slug,deployment_id,num,'publication',publication,trace+'-bridge')
++    _,_,npm_token=_clients();notify('https','Preparando URL P e domínio estável para a mesma instância homologada.')
+     pstage,pdata=_post('http://10.62.91.3/stage',{'public_number':num,'stage':'publication','number':publication},npm_token,host='cloudif-publisher.internal',timeout=300)
+     if pstage//100!=2 or not pdata.get('ok'):raise RuntimeError(_publication_error('https',pdata))
+     ident=_stage_identity(num,'publication',publication)
+@@ -245,17 +429,33 @@
+     if pstatus//100!=2 or not publisher.get('ok'):raise RuntimeError(_publication_error('https',publisher))
+     stable=f'{num}.cloudiff.duckdns.org'
+     if not _external_ok(stable):raise RuntimeError('Validação da URL estável falhou após ativação.')
+-    now=_now();con=sqlite3.connect(DB);con.row_factory=sqlite3.Row;_ensure_schema(con)
++    h_number=int(candidate['candidate_number'])
++    notify('cleanup','Retirando a rota de Homologação após validar a nova Produção.')
++    h_cleanup=_publisher_delete_stage(num,'homologation',h_number,npm_token)
++    _multiservice_deactivate_bridge(slug,deployment_id,'homologation',trace+'-deactivate-h')
++    previous_dep=str((previous_production or {}).get('deploymentId') or '')
++    previous_pub=int((previous_production or {}).get('publicationNumber') or 0)
++    if previous_dep and previous_dep!=deployment_id:
++        _multiservice_deactivate(slug,previous_dep,'substituída pela Produção P'+str(publication),trace+'-deactivate-previous-p')
++        try:_multiservice_deactivate_bridge(slug,previous_dep,'publication',trace+'-remove-previous-p-bridge')
++        except Exception:pass
++        if previous_pub:_publisher_delete_stage(num,'publication',previous_pub,npm_token)
++    elif not previous_dep and previous_pub and previous_pub!=publication:
++        _legacy_publication_deactivate(slug,num,previous_pub)
++        _publisher_delete_stage(num,'publication',previous_pub,npm_token)
++    now=_now();environment_revision=int(inherited_environment.get('environmentRevision') or candidate['environment_revision'] or 0);environment_digest=str(inherited_environment.get('environmentDigest') or candidate['environment_digest'] or snapshot_digest)
++    con=sqlite3.connect(DB);con.row_factory=sqlite3.Row;_ensure_schema(con)
+     con.execute('update production_releases set is_active=0 where project_slug=?',(slug,))
+     sql="insert into production_releases(project_slug,public_number,publication_number,candidate_number,deploy_number,stage_code,hostname,stable_hostname,artifact_image_id,status,is_active,environment_revision,environment_digest,created_by,created_at,published_at) values(?,?,?,?,?,?,?,?,?,'published',1,?,?,?,?,?)"
+-    con.execute(sql,(slug,num,publication,int(candidate['candidate_number']),int(candidate['deploy_number']),ident['code'],ident['hostname'],stable,artifact_id,int(summary.get('environmentRevision') or 0),str(summary.get('environmentDigest') or ''),actor,now,now))
+-    detail={'runtimeKind':'compose-snapshot','stageCode':ident['code'],'publicationHostname':ident['hostname'],'candidateNumber':int(candidate['candidate_number']),'publicationNumber':publication,'artifactImageId':artifact_id,'composeSnapshotId':snapshot_id,'snapshotDigest':snapshot_digest,'sourceCommit':str(meta.get('sourceCommit') or candidate['commit_sha'] or ''),'homologationDeploymentId':str(meta.get('homologationDeploymentId') or ''),'productionDeploymentId':deployment_id,'bridge':str(bridge.get('bridge') or ''),'activeAlias':str(activation.get('active_alias') or ''),'sameArtifactAsHomologation':True,'sameSnapshotAsHomologation':True,'secretValuesIncluded':False}
++    con.execute(sql,(slug,num,publication,int(candidate['candidate_number']),int(candidate['deploy_number']),ident['code'],ident['hostname'],stable,artifact_id,environment_revision,environment_digest,actor,now,now))
++    detail={'runtimeKind':'compose-snapshot','stageCode':ident['code'],'publicationHostname':ident['hostname'],'candidateNumber':int(candidate['candidate_number']),'publicationNumber':publication,'artifactImageId':artifact_id,'composeSnapshotId':snapshot_id,'snapshotDigest':snapshot_digest,'sourceCommit':str(meta.get('sourceCommit') or candidate['commit_sha'] or ''),'homologationDeploymentId':deployment_id,'productionDeploymentId':deployment_id,'bridge':str(bridge.get('bridge') or ''),'activeAlias':str(activation.get('active_alias') or ''),'sameArtifactAsHomologation':True,'sameSnapshotAsHomologation':True,'sameInstanceAsHomologation':True,'containersRecreated':False,'promotionMode':'in-place-role-and-routing','homologationStageRemoved':bool(h_cleanup.get('removed')),'homologationCertificatePreserved':bool(h_cleanup.get('certificatePreserved')),'secretValuesIncluded':False}
+     con.execute('update project_publications set is_active=0 where project_slug=?',(slug,));existing=con.execute('select id from project_publications where project_slug=? and deploy_number=?',(slug,int(candidate['deploy_number']))).fetchone()
+-    if existing:con.execute("update project_publications set version=?,commit_sha=?,stable_hostname=?,version_hostname=?,status='published',is_active=1,published_at=?,message=?,detail_json=? where id=?",(ident['code'],str(candidate['commit_sha']),stable,ident['hostname'],now,'Publicada após homologação '+str(candidate['stage_code']),json.dumps(detail,ensure_ascii=False),existing['id']))
+-    else:con.execute("insert into project_publications(project_slug,public_number,deploy_number,version,commit_sha,stable_hostname,version_hostname,status,is_active,created_by,created_at,published_at,message,detail_json) values(?,?,?,?,?,?,?,'published',1,?,?,?,?,?)",(slug,num,int(candidate['deploy_number']),ident['code'],str(candidate['commit_sha']),stable,ident['hostname'],actor,now,now,'Publicada após homologação '+str(candidate['stage_code']),json.dumps(detail,ensure_ascii=False)))
++    if existing:con.execute("update project_publications set version=?,commit_sha=?,stable_hostname=?,version_hostname=?,status='published',is_active=1,published_at=?,message=?,detail_json=? where id=?",(ident['code'],str(candidate['commit_sha']),stable,ident['hostname'],now,'Promovida a mesma instância homologada '+str(candidate['stage_code']),json.dumps(detail,ensure_ascii=False),existing['id']))
++    else:con.execute("insert into project_publications(project_slug,public_number,deploy_number,version,commit_sha,stable_hostname,version_hostname,status,is_active,created_by,created_at,published_at,message,detail_json) values(?,?,?,?,?,?,?,'published',1,?,?,?,?,?)",(slug,num,int(candidate['deploy_number']),ident['code'],str(candidate['commit_sha']),stable,ident['hostname'],actor,now,now,'Promovida a mesma instância homologada '+str(candidate['stage_code']),json.dumps(detail,ensure_ascii=False)))
++    _supersede_prior_homologations(con,slug,int(candidate['candidate_number']))
+     con.execute("update publication_candidates set status='published',published_publication_number=? where id=?",(publication,candidate['id']))
+     tenant=str(project['tenant'] if 'tenant' in project.keys() else '');con.commit();con.close();queued=_enqueue_membership_reconcile(slug,actor,tenant)
+-    return {'ok':True,'project':slug,'candidateNumber':int(candidate['candidate_number']),'publicationNumber':publication,'stageCode':ident['code'],'url':ident['url'],'stableUrl':'https://'+stable+'/','aliasUrl':('https://'+alias+'.cloudiff.duckdns.org/' if alias else ''),'artifactImageId':artifact_id,'snapshotId':snapshot_id,'snapshotDigest':snapshot_digest,'sameArtifactAsHomologation':True,'sameSnapshotAsHomologation':True,'environmentRevision':int(summary.get('environmentRevision') or 0),'membership':{'ok':True,'mode':'compose-snapshot'},'reconcile':queued,'secretValuesIncluded':False}
++    return {'ok':True,'project':slug,'candidateNumber':int(candidate['candidate_number']),'publicationNumber':publication,'stageCode':ident['code'],'url':ident['url'],'stableUrl':'https://'+stable+'/','aliasUrl':('https://'+alias+'.cloudiff.duckdns.org/' if alias else ''),'artifactImageId':artifact_id,'snapshotId':snapshot_id,'snapshotDigest':snapshot_digest,'deploymentId':deployment_id,'sameArtifactAsHomologation':True,'sameSnapshotAsHomologation':True,'sameInstanceAsHomologation':True,'containersRecreated':False,'homologationStageRemoved':bool(h_cleanup.get('removed')),'environmentRevision':environment_revision,'membership':{'ok':True,'mode':'compose-snapshot-promotion'},'reconcile':queued,'secretValuesIncluded':False}
+ 
+ 
+ def _latest_multiservice_build(slug,environment='homologation'):
+@@ -647,11 +847,64 @@
+     return data
+ 
+ 
++def _sgrep_w1_live_http():
++    # Independent authenticated TLS probe of the fixed publisher hostname.
++    # This reports the running commit from the W1 bridge, not the Git HEAD.
++    req=urllib.request.Request(
++        'https://1026-w1-preview.cloudiff.duckdns.org/health',
++        headers={'Cache-Control':'no-cache'},method='GET')
++    try:
++        with urllib.request.urlopen(req,timeout=6) as response:
++            if response.status!=200 or response.geturl()!='https://1026-w1-preview.cloudiff.duckdns.org/health':
++                return False,''
++            body=json.loads(response.read(800).decode('utf-8','replace'))
++            if not isinstance(body,dict) or body.get('ok') is not True or body.get('service')!='sgrep-web':
++                return False,''
++            sha=str(response.headers.get('X-CloudIFF-Source-Commit') or '').strip()
++            if not re.fullmatch(r'[a-f0-9]{40}',sha):sha=''
++            return True,sha
++    except (urllib.error.URLError,ValueError,OSError,TimeoutError):
++        return False,''
++
++
++def _sgrep_existing_source_preview(num):
++    # This read-back is binding only, not authorization or release approval.
++    with sqlite3.connect(DB) as con:
++        row=con.execute("""SELECT stage_code,status,url,source_repo,source_commit,
++                                  app_container,gateway_container,data_isolated,source_bind_readonly,
++                                  https_via_internal_proxy_verified
++                             FROM project_preview_source_links WHERE project_slug=?""",('sgrep-v2',)).fetchone()
++    if not row:return None
++    stage,state,url,repo,sha,app,bridge,db,ro,https_ok=row
++    if (int(num)!=1026 or stage!='W1' or state!='online'
++        or url!='https://1026-w1-preview.cloudiff.duckdns.org/'
++        or repo!='cloudif-sgrep-v2/sgrep_v2'
++        or app!='cloudif-sgrep-v2-preview-app' or bridge!='cloudif-p1026-w1-preview-web'
++        or int(db)!=1 or int(ro)!=1 or int(https_ok)!=1
++        or len(sha)!=40 or any(c not in '0123456789abcdef' for c in sha)):
++        return None
++    healthy,live_sha=_sgrep_w1_live_http()
++    return {'ok':True,'configured':True,'healthy':healthy,'status':'ready' if healthy else 'attention','project':'sgrep-v2',
++            'public_number':1026,'generation':1,'stageCode':'W1',
++            'url':url,'hostname':'1026-w1-preview.cloudiff.duckdns.org',
++            'container':bridge,'applicationContainer':app,
++            'runtimeKind':'source-mounted-optimized','sourceMode':'forgejo-commit-image',
++            'sourceCommit':live_sha or sha,'managed':False,'secretValuesIncluded':False}
++
++
+ def preview_status(slug,user):
+     con=sqlite3.connect(DB);con.row_factory=sqlite3.Row;_ensure_schema(con)
+     allowed=_project_allowed(con,slug,user) or _can_homologate(con,slug,user)
+     if not allowed:con.close();raise PermissionError('Projeto não encontrado ou sem permissão.')
+-    num=_number(con,slug);linked=_linked_compose_binding(con,slug) if _is_linked_compose_project(slug) else None;con.close()
++    num=_number(con,slug);con.close()
++    if slug=='sgrep-v2':
++        source_link=_sgrep_existing_source_preview(num)
++        if source_link is not None:return source_link
++        return {'ok':True,'configured':False,'project':slug,'public_number':num,
++                'generation':1,'stageCode':'W1','healthy':False,'status':'source_preview_unavailable'}
++    con=sqlite3.connect(DB);con.row_factory=sqlite3.Row
++    try:linked=_linked_compose_binding(con,slug) if _is_linked_compose_project(slug) else None
++    finally:con.close()
+     if linked:return _linked_compose_status(slug,num,linked)
+     if _is_multiservice_project(slug):
+         data=_current_multiservice_preview(slug);ident=_stage_identity(num,'preview',1)
+@@ -668,6 +921,10 @@
+     con=sqlite3.connect(DB);con.row_factory=sqlite3.Row;_ensure_schema(con);project=_project_allowed(con,slug,user)
+     if not project:con.close();raise PermissionError('Projeto não encontrado ou sem permissão.')
+     num=_number(con,slug);con.close()
++    if slug=='sgrep-v2':
++        status=_sgrep_existing_source_preview(num)
++        if status is None:raise RuntimeError('Preview SGREP v2 indisponível; não reprovisionar recursos existentes.')
++        return status
+     with _preview_ensure_lock(slug) as contended:
+         if contended:
+             try:current=preview_status(slug,user)
+@@ -752,7 +1009,10 @@
+     if source not in {'production','template'}:raise ValueError('Origem de Preview inválida.')
+     con=sqlite3.connect(DB);con.row_factory=sqlite3.Row;_ensure_schema(con);project=_project_allowed(con,slug,user)
+     if not project or not _owner_or_admin(con,slug,user):con.close();raise PermissionError('Somente o responsável pelo projeto pode recriar o Preview.')
+-    num=_number(con,slug);con.close();pc=_publication_config();summary=pc.environment_summary(slug,'preview')
++    num=_number(con,slug);con.close()
++    if slug=='sgrep-v2':
++        raise RuntimeError('SGREP v2 W1 acompanha o Forgejo; recriação genérica do Preview desabilitada.')
++    pc=_publication_config();summary=pc.environment_summary(slug,'preview')
+     if not summary.get('valid'):raise RuntimeError('O ambiente Preview possui variáveis obrigatórias pendentes.')
+     runtime=pc.execution_environment(slug,int(summary['environmentRevision']),str(summary.get('environmentDigest') or ''),'preview');values=runtime.get('values') or {}
+     ku,kt,nt=_clients()
+@@ -796,28 +1056,15 @@
+     now=_now();con=sqlite3.connect(DB);con.row_factory=sqlite3.Row;_ensure_schema(con)
+     sql="insert into publication_candidates(project_slug,public_number,candidate_number,deploy_number,preview_generation,stage_code,hostname,status,parent_commit,commit_sha,artifact_image,artifact_image_id,diff_json,runtime_diff_json,environment_revision,environment_digest,created_by,created_at) values(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
+     values=(slug,num,candidate,candidate,1,ident['code'],ident['hostname'],'awaiting_homologation',str(build.get('ref') or ''),str(build.get('archive_sha256') or ''),'multiservice:'+job,artifact_id,json.dumps(diff,ensure_ascii=False),json.dumps(runtime_meta,ensure_ascii=False),int(summary.get('environmentRevision') or 0),str(summary.get('environmentDigest') or ''),actor,now)
+-    con.execute(sql,values);con.commit();con.close()
++    _supersede_prior_homologations(con,slug,candidate);con.execute(sql,values);con.commit();con.close()
+     return {'ok':True,'project':slug,'candidateNumber':candidate,'stageCode':ident['code'],'url':ident['url'],'hostname':ident['hostname'],'commit':str(build.get('archive_sha256') or ''),'parentCommit':str(build.get('ref') or ''),'artifactImageId':artifact_id,'previewGeneration':1,'diff':diff,'runtimeDiff':runtime_meta,'environmentRevision':int(summary.get('environmentRevision') or 0),'secretValuesIncluded':False}
+ 
+ 
+ def create_homologation_candidate(slug,user,progress=None,candidate_number=None,authorization_checked=False):
+     notify=lambda step,msg: progress(step,msg) if progress else None
+-    con=sqlite3.connect(DB);con.row_factory=sqlite3.Row;_ensure_schema(con)
+-    try:
+-        if authorization_checked:
+-            # The queued Hn worker revalidates authorization and job identity
+-            # separately. This flag is for that internal guarded call only.
+-            project=con.execute('select * from projects where slug=?',(slug,)).fetchone()
+-        else:
+-            project=_project_allowed(con,slug,user)
+-            if project and not _can_homologate(con,slug,user):
+-                raise PermissionError('homologation_permission_denied')
+-        if not project:raise PermissionError('Projeto não encontrado ou sem permissão.')
+-        num=_number(con,slug)
+-        candidate=int(candidate_number or _next_candidate(con,slug))
+-        actor=(user.get('username') or 'portal').strip().lower()
+-    finally:
+-        con.close()
++    con=sqlite3.connect(DB);con.row_factory=sqlite3.Row;_ensure_schema(con);project=_project_allowed(con,slug,user) if not authorization_checked else con.execute('select * from projects where slug=?',(slug,)).fetchone()
++    if not project:con.close();raise PermissionError('Projeto não encontrado ou sem permissão.')
++    num=_number(con,slug);candidate=int(candidate_number or _next_candidate(con,slug));actor=(user.get('username') or 'portal').strip().lower();con.close()
+     if _is_linked_compose_project(slug):return _create_linked_compose_homologation_candidate(slug,num,candidate,actor,progress)
+     if _is_multiservice_project(slug):return _create_multiservice_homologation_candidate(slug,num,candidate,actor,progress)
+     notify('snapshot','Congelando código e runtime do Preview.')
+@@ -838,7 +1085,7 @@
+     hstatus,hdata=_post('http://10.62.91.3/stage',{'public_number':num,'stage':'homologation','number':candidate},nt,host='cloudif-publisher.internal',timeout=300)
+     if hstatus//100!=2 or not hdata.get('ok'):raise RuntimeError(_publication_error('https',hdata))
+     ident=_stage_identity(num,'homologation',candidate);now=_now();con=sqlite3.connect(DB);con.row_factory=sqlite3.Row;_ensure_schema(con)
+-    con.execute('''insert into publication_candidates(project_slug,public_number,candidate_number,deploy_number,preview_generation,stage_code,hostname,status,parent_commit,commit_sha,artifact_image,artifact_image_id,diff_json,runtime_diff_json,environment_revision,environment_digest,created_by,created_at) values(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',(slug,num,candidate,candidate,int(snap.get('previewGeneration') or 1),ident['code'],ident['hostname'],'awaiting_homologation',str(snap.get('parentCommit') or ''),str(snap['commit']),str(deployed.get('expected_image') or ''),str(deployed.get('publicationImageId') or ''),json.dumps(snap.get('diff') or {},ensure_ascii=False),json.dumps(snap.get('runtimeDiff') or {},ensure_ascii=False),int(runtime['environmentRevision']),str(runtime['environmentDigest']),actor,now));con.commit();con.close()
++    _supersede_prior_homologations(con,slug,candidate);con.execute('''insert into publication_candidates(project_slug,public_number,candidate_number,deploy_number,preview_generation,stage_code,hostname,status,parent_commit,commit_sha,artifact_image,artifact_image_id,diff_json,runtime_diff_json,environment_revision,environment_digest,created_by,created_at) values(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',(slug,num,candidate,candidate,int(snap.get('previewGeneration') or 1),ident['code'],ident['hostname'],'awaiting_homologation',str(snap.get('parentCommit') or ''),str(snap['commit']),str(deployed.get('expected_image') or ''),str(deployed.get('publicationImageId') or ''),json.dumps(snap.get('diff') or {},ensure_ascii=False),json.dumps(snap.get('runtimeDiff') or {},ensure_ascii=False),int(runtime['environmentRevision']),str(runtime['environmentDigest']),actor,now));con.commit();con.close()
+     return {'ok':True,'project':slug,'candidateNumber':candidate,'stageCode':ident['code'],'url':ident['url'],'hostname':ident['hostname'],'commit':str(snap['commit']),'parentCommit':str(snap.get('parentCommit') or ''),'artifactImageId':str(deployed.get('publicationImageId') or ''),'previewGeneration':int(snap.get('previewGeneration') or 1),'diff':snap.get('diff') or {},'runtimeDiff':snap.get('runtimeDiff') or {},'environmentRevision':int(runtime['environmentRevision']),'secretValuesIncluded':False}
+ 
+ 
+@@ -893,6 +1140,7 @@
+     else:
+         sql_pub="insert into project_publications(project_slug,public_number,deploy_number,version,commit_sha,stable_hostname,version_hostname,status,is_active,created_by,created_at,published_at,message,detail_json) values(?,?,?,?,?,?,?,'published',1,?,?,?,?,?)"
+         con.execute(sql_pub,(slug,num,int(candidate['deploy_number']),ident['code'],str(candidate['commit_sha']),stable,ident['hostname'],actor,now,now,'Publicada após homologação '+str(candidate['stage_code']),json.dumps(detail,ensure_ascii=False)))
++    _supersede_prior_homologations(con,slug,int(candidate['candidate_number']))
+     con.execute("update publication_candidates set status='published',published_publication_number=? where id=?",(publication,candidate['id']))
+     cols={x[1] for x in con.execute('pragma table_info(projects)')};updates={k:v for k,v in {'status':'published','komodo_status':'multiservice','updated_at':now}.items() if k in cols}
+     if updates:con.execute('update projects set '+','.join(k+'=?' for k in updates)+' where slug=?',list(updates.values())+[slug])
+@@ -931,7 +1179,7 @@
+     con.execute('update project_publications set is_active=0 where project_slug=?',(slug,))
+     if existing:con.execute("update project_publications set status='published',is_active=1,published_at=?,message=?,detail_json=? where id=?",(now,'Publicada após homologação '+str(candidate['stage_code']),json.dumps(detail,ensure_ascii=False),existing['id']))
+     else:con.execute('''insert into project_publications(project_slug,public_number,deploy_number,version,commit_sha,stable_hostname,version_hostname,status,is_active,created_by,created_at,published_at,message,detail_json) values(?,?,?,?,?,?,?,'published',1,?,?,?,?,?)''',(slug,num,int(candidate['deploy_number']),ident['code'],str(candidate['commit_sha']),stable,f'{num}-d{int(candidate["deploy_number"])}.cloudiff.duckdns.org',actor,now,now,'Publicada após homologação '+str(candidate['stage_code']),json.dumps(detail,ensure_ascii=False)))
+-    con.execute("update publication_candidates set status='published',published_publication_number=? where id=?",(publication,candidate['id']));access=_project_access_snapshot(con,slug);tenant=str(project['tenant'] if 'tenant' in project.keys() else '');con.commit();con.close()
++    _supersede_prior_homologations(con,slug,int(candidate['candidate_number']));con.execute("update publication_candidates set status='published',published_publication_number=? where id=?",(publication,candidate['id']));access=_project_access_snapshot(con,slug);tenant=str(project['tenant'] if 'tenant' in project.keys() else '');con.commit();con.close()
+     membership=_reconcile_publication_members(ku,kt,slug,access);queued=_enqueue_membership_reconcile(slug,actor,tenant)
+     return {'ok':True,'project':slug,'candidateNumber':int(candidate_number),'publicationNumber':publication,'stageCode':ident['code'],'url':ident['url'],'stableUrl':'https://'+stable+'/','aliasUrl':('https://'+alias+'.cloudiff.duckdns.org/' if alias else ''),'artifactImageId':str(candidate['artifact_image_id']),'sameArtifactAsHomologation':True,'environmentRevision':int(runtime['environmentRevision']),'membership':membership,'reconcile':queued,'secretValuesIncluded':False}
+ 
+@@ -1059,35 +1307,93 @@
+     if not _owner_or_admin(con,slug,user):con.close();raise PermissionError('Somente o responsável pelo projeto pode executar rollback.')
+     row=con.execute("select * from production_releases where project_slug=? and publication_number=? and status='published'",(slug,int(publication_number))).fetchone()
+     if not row:con.close();raise ValueError('Publicação P não encontrada.')
+-    num=int(row['public_number']);dep=int(row['deploy_number']);alias_row=con.execute('select alias from project_publication_aliases where project_slug=?',(slug,)).fetchone();alias=str(alias_row[0]) if alias_row else '';pubrow=con.execute('select detail_json from project_publications where project_slug=? and deploy_number=?',(slug,dep)).fetchone();con.close();ku,kt,nt=_clients();detail={}
++    if int(row['is_active'] or 0)==1:
++        result={'ok':True,'project':slug,'publicationNumber':int(publication_number),'stageCode':str(row['stage_code'] or ('P'+str(int(publication_number)))),'stableUrl':'https://'+str(row['stable_hostname'])+'/','idempotent':True,'alreadyActive':True}
++        con.close();return result
++    num=int(row['public_number']);dep=int(row['deploy_number']);alias_row=con.execute('select alias from project_publication_aliases where project_slug=?',(slug,)).fetchone();alias=str(alias_row[0]) if alias_row else ''
++    pubrow=con.execute('select detail_json from project_publications where project_slug=? and deploy_number=?',(slug,dep)).fetchone()
++    current=con.execute("select * from production_releases where project_slug=? and is_active=1 and status='published' order by publication_number desc limit 1",(slug,)).fetchone()
++    current_pubrow=con.execute('select detail_json from project_publications where project_slug=? and deploy_number=?',(slug,int(current['deploy_number'])),).fetchone() if current else None
++    con.close();ku,kt,nt=_clients();detail={};current_detail={}
+     try:detail=json.loads(pubrow['detail_json'] or '{}') if pubrow else {}
+     except Exception:detail={}
++    try:current_detail=json.loads(current_pubrow['detail_json'] or '{}') if current_pubrow else {}
++    except Exception:current_detail={}
+     if detail.get('runtimeKind') in {'multiservice','compose-snapshot'}:
+-        _multiservice_activate_bridge(slug,num,int(publication_number),'portal-rollback-'+hashlib.sha256((slug+str(publication_number)).encode()).hexdigest()[:20])
+-        pstatus,publisher=_post('http://10.62.91.3/publish',{'public_number':num,'deploy_number':dep,'alias':alias},nt,host='cloudif-publisher.internal',timeout=300)
+-        if pstatus//100!=2 or not publisher.get('ok'):raise RuntimeError(_publication_error('https',publisher))
+-        if not _external_ok(str(row['stable_hostname'])):raise RuntimeError('URL estável falhou após rollback.')
+-        con=sqlite3.connect(DB);_ensure_schema(con);con.execute('update production_releases set is_active=case when publication_number=? then 1 else 0 end where project_slug=?',(int(publication_number),slug));con.execute('update project_publications set is_active=case when deploy_number=? then 1 else 0 end where project_slug=?',(dep,slug));con.commit();con.close()
+-        return {'ok':True,'project':slug,'publicationNumber':int(publication_number),'stageCode':'P'+str(int(publication_number)),'stableUrl':'https://'+str(row['stable_hostname'])+'/','runtimeKind':str(detail.get('runtimeKind') or 'multiservice')}
+-    status,data=_post(ku+'/komodo/publication/release/activate',{'project':slug,'public_number':num,'publication_number':int(publication_number)},kt,timeout=120)
++        target_dep=str(detail.get('productionDeploymentId') or '')
++        if not re.fullmatch(r'dep_[a-f0-9]{24}',target_dep):raise RuntimeError('A publicação histórica não possui deployment de Produção reativável.')
++        target_digest=str(row['environment_digest'] or '')
++        if not re.fullmatch(r'[a-f0-9]{64}',target_digest):target_digest=str(detail.get('snapshotDigest') or '')
++        if not re.fullmatch(r'[a-f0-9]{64}',target_digest):raise RuntimeError('A publicação histórica não possui digest de ambiente válido para rollback.')
++        current_dep=str(current_detail.get('productionDeploymentId') or '') if current else ''
++        current_number=int(current['publication_number']) if current else 0
++        current_deploy=int(current['deploy_number']) if current else 0
++        current_digest=str(current['environment_digest'] or '') if current else ''
++        if current and not re.fullmatch(r'[a-f0-9]{64}',current_digest):current_digest=str(current_detail.get('snapshotDigest') or '')
++        trace='portal-rollback-'+hashlib.sha256((slug+str(publication_number)+target_dep).encode()).hexdigest()[:20]
++        prepared=False;switched=False
++        try:
++            _multiservice_reactivate(slug,target_dep,'prepare',target_digest,trace+'-prepare');prepared=True
++            _multiservice_bridge(slug,target_dep,num,'publication',int(publication_number),trace+'-bridge')
++            pstage,pdata=_post('http://10.62.91.3/stage',{'public_number':num,'stage':'publication','number':int(publication_number)},nt,host='cloudif-publisher.internal',timeout=300)
++            if pstage//100!=2 or not pdata.get('ok'):raise RuntimeError(_publication_error('https',pdata))
++            if not _external_ok(str(row['hostname'])):raise RuntimeError('A URL versionada da publicação histórica não ficou saudável.')
++            _multiservice_activate_bridge(slug,num,int(publication_number),trace+'-activate')
++            pstatus,publisher=_post('http://10.62.91.3/publish',{'public_number':num,'deploy_number':dep,'alias':alias},nt,host='cloudif-publisher.internal',timeout=300)
++            if pstatus//100!=2 or not publisher.get('ok'):raise RuntimeError(_publication_error('https',publisher))
++            switched=True
++            if not _external_ok(str(row['stable_hostname'])):raise RuntimeError('URL estável falhou após rollback.')
++            _multiservice_reactivate(slug,target_dep,'commit',target_digest,trace+'-commit')
++            if current_dep and current_dep!=target_dep:
++                _multiservice_deactivate(slug,current_dep,'substituída pelo rollback para P'+str(int(publication_number)),trace+'-deactivate-current')
++                try:_multiservice_deactivate_bridge(slug,current_dep,'publication',trace+'-remove-current-bridge')
++                except Exception:pass
++                if current_number:_publisher_delete_stage(num,'publication',current_number,nt)
++            con=sqlite3.connect(DB);_ensure_schema(con);con.execute('update production_releases set is_active=case when publication_number=? then 1 else 0 end where project_slug=?',(int(publication_number),slug));con.execute('update project_publications set is_active=case when deploy_number=? then 1 else 0 end where project_slug=?',(dep,slug));con.commit();con.close()
++            return {'ok':True,'project':slug,'publicationNumber':int(publication_number),'stageCode':'P'+str(int(publication_number)),'stableUrl':'https://'+str(row['stable_hostname'])+'/','runtimeKind':str(detail.get('runtimeKind') or 'multiservice'),'deploymentId':target_dep,'containersRecreated':False,'volumesPreserved':True,'historicalRuntimeReactivated':True}
++        except Exception:
++            if switched and current_dep and current_number and re.fullmatch(r'[a-f0-9]{64}',current_digest):
++                try:
++                    _multiservice_reactivate(slug,current_dep,'commit',current_digest,trace+'-restore-current-runtime')
++                    _multiservice_bridge(slug,current_dep,num,'publication',current_number,trace+'-restore-current-bridge')
++                    _post('http://10.62.91.3/stage',{'public_number':num,'stage':'publication','number':current_number},nt,host='cloudif-publisher.internal',timeout=300)
++                    _multiservice_activate_bridge(slug,num,current_number,trace+'-restore-current-alias')
++                    _post('http://10.62.91.3/publish',{'public_number':num,'deploy_number':current_deploy,'alias':alias},nt,host='cloudif-publisher.internal',timeout=300)
++                except Exception:pass
++            if prepared:
++                try:_multiservice_deactivate_bridge(slug,target_dep,'publication',trace+'-abort-bridge')
++                except Exception:pass
++                try:_multiservice_reactivate(slug,target_dep,'abort',target_digest,trace+'-abort')
++                except Exception:pass
++            try:_publisher_delete_stage(num,'publication',int(publication_number),nt)
++            except Exception:pass
++            raise
++    status,data=_post(ku+'/komodo/publication/release/activate',{'project':slug,'public_number':num,'publication_number':int(publication_number)},kt,timeout=180)
+     if status//100!=2 or not data.get('ok'):raise RuntimeError(_publication_error('promote',data))
+     pstatus,publisher=_post('http://10.62.91.3/publish',{'public_number':num,'deploy_number':dep,'alias':alias},nt,host='cloudif-publisher.internal',timeout=300)
+     if pstatus//100!=2 or not publisher.get('ok'):raise RuntimeError(_publication_error('https',publisher))
+-    con=sqlite3.connect(DB);_ensure_schema(con);con.execute('update production_releases set is_active=case when publication_number=? then 1 else 0 end where project_slug=?',(int(publication_number),slug));con.execute('update project_publications set is_active=case when deploy_number=? then 1 else 0 end where project_slug=?',(dep,slug));con.commit();con.close();return {'ok':True,'project':slug,'publicationNumber':int(publication_number),'stageCode':'P'+str(int(publication_number)),'stableUrl':'https://'+str(row['stable_hostname'])+'/' }
++    if not _external_ok(str(row['stable_hostname'])):raise RuntimeError('URL estável falhou após rollback legado.')
++    current_dep=str(current_detail.get('productionDeploymentId') or '') if current else ''
++    current_number=int(current['publication_number']) if current else 0
++    if current_dep:
++        try:_multiservice_deactivate(slug,current_dep,'substituída pelo rollback legado para P'+str(int(publication_number)),'portal-legacy-rollback-deactivate-'+str(int(publication_number)))
++        except Exception:pass
++        try:_multiservice_deactivate_bridge(slug,current_dep,'publication','portal-legacy-rollback-bridge-'+str(int(publication_number)))
++        except Exception:pass
++        if current_number:
++            try:_publisher_delete_stage(num,'publication',current_number,nt)
++            except Exception:pass
++    con=sqlite3.connect(DB);_ensure_schema(con);con.execute('update production_releases set is_active=case when publication_number=? then 1 else 0 end where project_slug=?',(int(publication_number),slug));con.execute('update project_publications set is_active=case when deploy_number=? then 1 else 0 end where project_slug=?',(dep,slug));con.commit();con.close();return {'ok':True,'project':slug,'publicationNumber':int(publication_number),'stageCode':'P'+str(int(publication_number)),'stableUrl':'https://'+str(row['stable_hostname'])+'/','historicalRuntimeReactivated':bool(data.get('historicalRuntimeReactivated')),'containersRecreated':False}
+ 
+ def publish_now(slug,user,progress=None,publication_snapshot=None):
+     def notify(step,message):
+         if progress:
+             progress(step,message)
++    notify('preparing','Validando projeto e preparando a publicação.')
++    if slug==TARGET_SLUG:return _publish_production(slug,user)
+     con=sqlite3.connect(DB); con.row_factory=sqlite3.Row; _ensure_schema(con)
+     project=_project_allowed(con,slug,user)
+-    if not project or not _can_publish(con,slug,user):
+-        con.close();raise PermissionError('legacy_publish_permission_denied')
+-    if slug==TARGET_SLUG:
+-        con.close()
+-        notify('preparing','Validando projeto e preparando a publicação.')
+-        return _publish_production(slug,user)
+-    notify('preparing','Validando projeto e preparando a publicação.')
++    if not project: con.close(); raise PermissionError('Projeto não encontrado ou sem permissão.')
+     num=_number(con,slug)
+     dep=int(con.execute('select coalesce(max(deploy_number),0)+1 from project_publications where project_slug=?',(slug,)).fetchone()[0])
+     actor=user.get('username') or 'portal'; ku,kt,nt=_clients();pc=_publication_config()
+@@ -1239,17 +1545,11 @@
+ 
+ def enqueue_homologation(slug,user):
+     con=sqlite3.connect(DB);con.row_factory=sqlite3.Row;_ensure_schema(con);project=_project_allowed(con,slug,user)
+-    if not project or not _can_homologate(con,slug,user):
+-        con.close();raise PermissionError('homologation_permission_denied')
+-    role=_release_permission_role(con,slug,user)
+-    # Group-derived Admin/Professor privileges cannot be reconstructed from a
+-    # queued user name. Require trusted directory refresh before supporting them.
+-    if role not in ('owner','delegated'):
+-        con.close();raise PermissionError('homologation_role_revalidation_unavailable')
++    if not project:con.close();raise PermissionError('Projeto não encontrado ou sem permissão.')
+     active=_active_stage_job(con,slug)
+     if active:
+         out={'ok':True,'queued':True,'job_id':int(active['id']),'existing':True,'operation':str(active['operation'] or '')};con.close();return out
+-    candidate=_next_candidate(con,slug);actor=(user.get('username') or 'portal').strip().lower();cur=con.execute("insert into publication_jobs(project_slug,actor,status,step,message,created_at,operation,candidate_number,environment,authorization_mode,authorization_role) values(?,?,?,?,?,?,?,?,?,?,?)",(slug,actor,'queued','queued','Envio para homologação recebido.',_now(),'homologation_candidate',candidate,'homologation','project_permission',role));con.commit();jid=int(cur.lastrowid);con.close();return {'ok':True,'queued':True,'job_id':jid,'candidateNumber':candidate,'stageCode':'H'+str(candidate),'existing':False}
++    candidate=_next_candidate(con,slug);actor=(user.get('username') or 'portal').strip().lower();cur=con.execute("insert into publication_jobs(project_slug,actor,status,step,message,created_at,operation,candidate_number,environment) values(?,?,?,?,?,?,?,?,?)",(slug,actor,'queued','queued','Envio para homologação recebido.',_now(),'homologation_candidate',candidate,'homologation'));con.commit();jid=int(cur.lastrowid);con.close();return {'ok':True,'queued':True,'job_id':jid,'candidateNumber':candidate,'stageCode':'H'+str(candidate),'existing':False}
+ 
+ def enqueue_candidate_publication(slug,candidate_number,user,approval_id='',activation_digest=''):
+     con=sqlite3.connect(DB);con.row_factory=sqlite3.Row;_ensure_schema(con);project=_project_allowed(con,slug,user)
+@@ -1266,56 +1566,16 @@
+     actor=(user.get('username') or 'portal').strip().lower();con=sqlite3.connect(DB);_ensure_schema(con);cur=con.execute("insert into publication_jobs(project_slug,actor,status,step,message,created_at,operation,candidate_number,publication_number,environment,approval_id,activation_digest,authorization_mode,authorization_role) values(?,?,?,?,?,?,?,?,?,?,?,?,?,?)",(slug,actor,'queued','queued','Publicação do candidato homologado e aprovado recebida.',_now(),'production_release',int(candidate_number),publication,'production',str(approval_id),str(activation_digest),'critical_approval',_release_permission_role(con,slug,user)));con.execute("update production_activation_requests set status='queued',updated_at=? where project_slug=? and candidate_number=? and publication_number=?",(_now(),slug,int(candidate_number),publication));con.commit();jid=int(cur.lastrowid);con.close();return {'ok':True,'queued':True,'job_id':jid,'candidateNumber':int(candidate_number),'publicationNumber':publication,'stageCode':'P'+str(publication),'approvalId':str(approval_id),'existing':False}
+ 
+ 
+-def _validate_project_permission_job(slug,candidate_number,publication_number,activation_digest,actor,authorization_role,job_id):
+-    """Revalidate current role, membership, and queued job before publish mutation.
+-
+-    An authenticated current group lookup is required for Admin/Professor jobs;
+-    historical queue-time group claims cannot authorize production promotion.
+-    """
+-    actor=str(actor or '').strip().lower();role=str(authorization_role or '').strip().lower()
+-    if not actor or actor=='portal' or role not in ('owner','delegated'):
+-        raise PermissionError('publication_role_revalidation_unavailable')
+-
+-    def current_binding():
+-        con=sqlite3.connect(DB);con.row_factory=sqlite3.Row
+-        try:
+-            _ensure_schema(con)
+-            queued=con.execute(
+-                'select id,project_slug,actor,status,operation,authorization_mode,authorization_role, '
+-                'candidate_number,publication_number,activation_digest '
+-                'from publication_jobs where id=? and project_slug=?',
+-                (int(job_id),slug)).fetchone()
+-            if (not queued or str(queued['status'])!='running'
+-                    or str(queued['operation'])!='production_release'
+-                    or str(queued['authorization_mode'])!='project_permission'
+-                    or str(queued['actor'] or '').strip().lower()!=actor
+-                    or str(queued['authorization_role'] or '').strip().lower()!=role
+-                    or int(queued['candidate_number'] or 0)!=int(candidate_number)
+-                    or int(queued['publication_number'] or 0)!=int(publication_number)
+-                    or not hmac.compare_digest(str(queued['activation_digest'] or ''),str(activation_digest or ''))):
+-                raise PermissionError('publication_job_binding_mismatch')
+-            user={'username':actor,'groups':[],'admin':False}
+-            if (not _project_allowed(con,slug,user)
+-                    or not _can_publish(con,slug,user)
+-                    or _release_permission_role(con,slug,user)!=role):
+-                raise PermissionError('publication_permission_revoked')
+-            candidate=con.execute("select * from publication_candidates where project_slug=? and candidate_number=? and status='homologated'",(slug,int(candidate_number))).fetchone()
+-            if not candidate:raise PermissionError('publication_binding_mismatch')
+-            return candidate
+-        finally:
+-            con.close()
+-
+-    candidate=current_binding()
++def _validate_project_permission_job(slug,candidate_number,publication_number,activation_digest):
++    con=sqlite3.connect(DB);con.row_factory=sqlite3.Row;_ensure_schema(con)
++    candidate=con.execute("select * from publication_candidates where project_slug=? and candidate_number=? and status='homologated'",(slug,int(candidate_number))).fetchone();con.close()
++    if not candidate:raise PermissionError('publication_binding_mismatch')
+     summary=_publication_config().environment_summary(slug,'production')
+-    _material,digest=_production_activation_material(slug,candidate,int(publication_number),summary)
++    material,digest=_production_activation_material(slug,candidate,int(publication_number),summary)
+     if not hmac.compare_digest(str(digest),str(activation_digest or '')):raise PermissionError('publication_binding_mismatch')
+-    # Environment materialization may be slow or call external services; revoke
+-    # or cancel during that window must not leave a stale successful preflight.
+-    refreshed_candidate=current_binding()
+-    if dict(refreshed_candidate)!=dict(candidate):
+-        raise PermissionError('publication_binding_mismatch')
+     return candidate,digest
+ 
++
+ def enqueue_authorized_publication(slug,candidate_number,user):
+     con=sqlite3.connect(DB);con.row_factory=sqlite3.Row;_ensure_schema(con);project=_project_allowed(con,slug,user)
+     if not project or not _can_publish(con,slug,user):con.close();raise PermissionError('Você não está autorizado a publicar este projeto em Produção.')
+@@ -1352,18 +1612,14 @@
+ def enqueue_publish(slug,user):
+     con=sqlite3.connect(DB);con.row_factory=sqlite3.Row;_ensure_schema(con)
+     project=_project_allowed(con,slug,user)
+-    if not project or not _can_publish(con,slug,user):
+-        con.close();raise PermissionError('legacy_publish_permission_denied')
+-    role=_release_permission_role(con,slug,user)
+-    if role not in ('owner','delegated'):
+-        con.close();raise PermissionError('legacy_publish_role_revalidation_unavailable')
++    if not project:con.close();raise PermissionError('Projeto não encontrado ou sem permissão.')
+     active=con.execute("select id from publication_jobs where project_slug=? and status in ('queued','running') order by id desc limit 1",(slug,)).fetchone()
+     if active:
+         job_id=int(active[0]);con.close();return {'ok':True,'queued':True,'job_id':job_id,'existing':True}
+     actor=user.get('username') or 'portal';now=_now();num=_number(con,slug)
+     snapshot=_publication_config().capture_snapshot(slug,num,actor)
+-    cur=con.execute("""insert into publication_jobs(project_slug,actor,status,step,message,created_at,base_revision,base_image,base_image_id,environment,environment_revision,environment_digest,operation,authorization_mode,authorization_role)
+-      values(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",(slug,actor,'queued','queued','Solicitação recebida com base e ambiente congelados.',now,int(snapshot['baseRevision']),str(snapshot.get('baseImage') or ''),str(snapshot['baseImageId']),'production',int(snapshot['environmentRevision']),str(snapshot.get('environmentDigest') or ''),'legacy_publish','project_permission',role))
++    cur=con.execute("""insert into publication_jobs(project_slug,actor,status,step,message,created_at,base_revision,base_image,base_image_id,environment,environment_revision,environment_digest)
++      values(?,?,?,?,?,?,?,?,?,?,?,?)""",(slug,actor,'queued','queued','Solicitação recebida com base e ambiente congelados.',now,int(snapshot['baseRevision']),str(snapshot.get('baseImage') or ''),str(snapshot['baseImageId']),'production',int(snapshot['environmentRevision']),str(snapshot.get('environmentDigest') or '')))
+     con.commit();job_id=int(cur.lastrowid);con.close()
+     return {'ok':True,'queued':True,'job_id':job_id,'existing':False,'baseRevision':int(snapshot['baseRevision']),'baseImageId':str(snapshot['baseImageId']),'environmentRevision':int(snapshot['environmentRevision']),'environmentDigest':str(snapshot.get('environmentDigest') or ''),'secretValuesIncluded':False}
+ 
+@@ -1405,90 +1661,6 @@
+     if finished:sets.append('finished_at=?');vals.append(_now())
+     vals.append(job_id);con.execute('update publication_jobs set '+','.join(sets)+' where id=?',vals);con.commit();con.close()
+ 
+-def _validate_homologation_job(slug,candidate_number,actor,authorization_role,job_id):
+-    """Require live project ACL and exact queued job identity before Hn effects.
+-
+-    Never recover implicit Admin/Professor groups from a queue-time role string.
+-    The worker only has the actor name, not a fresh trusted directory identity.
+-    """
+-    actor=str(actor or '').strip().lower()
+-    role=str(authorization_role or '').strip().lower()
+-    if not actor or actor=='portal' or role not in ('owner','delegated'):
+-        raise PermissionError('homologation_role_revalidation_unavailable')
+-    con=sqlite3.connect(DB);con.row_factory=sqlite3.Row
+-    try:
+-        _ensure_schema(con)
+-        row=con.execute('''select id,project_slug,actor,status,operation,candidate_number,
+-            environment,authorization_mode,authorization_role
+-            from publication_jobs where id=? and project_slug=?''',(int(job_id),slug)).fetchone()
+-        if (not row or str(row['status'])!='running'
+-                or str(row['operation'])!='homologation_candidate'
+-                or str(row['environment'])!='homologation'
+-                or str(row['authorization_mode'])!='project_permission'
+-                or str(row['actor'] or '').strip().lower()!=actor
+-                or str(row['authorization_role'] or '').strip().lower()!=role
+-                or int(row['candidate_number'] or 0)!=int(candidate_number)
+-                or int(candidate_number)<=0):
+-            raise PermissionError('homologation_job_binding_mismatch')
+-        user={'username':actor,'groups':[],'admin':False}
+-        if (not _project_allowed(con,slug,user)
+-                or not _can_homologate(con,slug,user)
+-                or _release_permission_role(con,slug,user)!=role):
+-            raise PermissionError('homologation_permission_revoked')
+-    finally:
+-        con.close()
+-    return True
+-
+-
+-def _homologation_job_update_if_running(job_id,step,message,status=None,detail=None,finished=False):
+-    """Do not resurrect cancelled Hn jobs through status/progress writes."""
+-    con=sqlite3.connect(DB);con.row_factory=sqlite3.Row
+-    try:
+-        _ensure_schema(con)
+-        sets=['step=?','message=?'];params=[step,message]
+-        if status is not None:sets.append('status=?');params.append(status)
+-        if detail is not None:sets.append('detail_json=?');params.append(json.dumps(detail,ensure_ascii=False))
+-        if finished:sets.append('finished_at=?');params.append(_now())
+-        params.append(int(job_id))
+-        rc=con.execute('update publication_jobs set '+','.join(sets)+" where id=? and status='running'",params).rowcount
+-        con.commit()
+-    finally:
+-        con.close()
+-    if rc!=1:raise PermissionError('homologation_job_no_longer_running')
+-
+-
+-def _validate_legacy_publish_job(slug,actor,role,job_id,expected_snapshot):
+-    """Fail closed on legacy publication queue jobs without current publish grant.
+-
+-    A queue-time Admin/Professor role is not proof of current group membership.
+-    Every caller must also fence the external publisher before runtime effects.
+-    """
+-    actor=str(actor or '').strip().lower();role=str(role or '').strip().lower()
+-    if not actor or role not in ('owner','delegated'):
+-        raise PermissionError('legacy_publish_role_revalidation_unavailable')
+-    con=sqlite3.connect(DB);con.row_factory=sqlite3.Row
+-    try:
+-        _ensure_schema(con)
+-        row=con.execute('''select * from publication_jobs where id=? and project_slug=?''',(int(job_id),slug)).fetchone()
+-        if (not row or str(row['status'])!='running'
+-                or str(row['operation'])!='legacy_publish'
+-                or str(row['environment'])!='production'
+-                or str(row['authorization_mode'])!='project_permission'
+-                or str(row['authorization_role'] or '').strip().lower()!=role
+-                or str(row['actor'] or '').strip().lower()!=actor):
+-            raise PermissionError('legacy_publish_job_binding_mismatch')
+-        if any(str(row[key])!=str(expected_snapshot.get(key)) for key in
+-               ('base_revision','base_image','base_image_id','environment_revision','environment_digest')):
+-            raise PermissionError('legacy_publish_snapshot_mismatch')
+-        user={'username':actor,'groups':[],'admin':False}
+-        if (not _project_allowed(con,slug,user) or not _can_publish(con,slug,user)
+-                or _release_permission_role(con,slug,user)!=role):
+-            raise PermissionError('legacy_publish_permission_revoked')
+-    finally:
+-        con.close()
+-    return True
+-
+-
+ def run_job(job):
+     job_id=int(job['id']);slug=job['project_slug'];actor=job['actor']
+     user={'username':actor,'groups':[],'admin':False}
+@@ -1497,24 +1669,12 @@
+             _job_update(job_id,status='running',step=step,message=message)
+         operation=str(job.get('operation') or 'legacy_publish')
+         if operation=='homologation_candidate':
+-            candidate_number=int(job.get('candidate_number') or 0)
+-            queued_role=str(job.get('authorization_role') or '')
+-            _validate_homologation_job(slug,candidate_number,actor,queued_role,job_id)
+-            def guarded_progress(step,message):
+-                # Recheck status/membership before every controlled stage.
+-                # A cross-service lock is still required to close TOCTOU after
+-                # the last check; do not claim runtime authorization from this.
+-                _validate_homologation_job(slug,candidate_number,actor,queued_role,job_id)
+-                _homologation_job_update_if_running(job_id,step,message)
+-                _validate_homologation_job(slug,candidate_number,actor,queued_role,job_id)
+-            result=create_homologation_candidate(slug,user,progress=guarded_progress,candidate_number=candidate_number,authorization_checked=True)
+-            _validate_homologation_job(slug,candidate_number,actor,queued_role,job_id)
+-            message='Candidato '+str(result.get('stageCode') or '')+' pronto para homologação.'
++            result=create_homologation_candidate(slug,user,progress=progress,candidate_number=int(job.get('candidate_number') or 0),authorization_checked=True);message='Candidato '+str(result.get('stageCode') or '')+' pronto para homologação.'
+         elif operation=='production_release':
+             authorization_mode=str(job.get('authorization_mode') or 'critical_approval')
+             activation_digest=str(job.get('activation_digest') or '')
+             if authorization_mode=='project_permission':
+-                _validate_project_permission_job(slug,int(job.get('candidate_number') or 0),int(job.get('publication_number') or 0),activation_digest,actor,job.get('authorization_role'),job_id)
++                _validate_project_permission_job(slug,int(job.get('candidate_number') or 0),int(job.get('publication_number') or 0),activation_digest)
+                 result=publish_homologated_candidate(slug,int(job.get('candidate_number') or 0),user,progress=progress,publication_number=int(job.get('publication_number') or 0),authorization_checked=True);message='Publicação '+str(result.get('stageCode') or '')+' ativada em Produção.'
+             else:
+                 approval_id=str(job.get('approval_id') or '');reservation=''
+@@ -1527,37 +1687,12 @@
+                 except Exception:
+                     if reservation:_finalize_production_approval(approval_id,reservation,False)
+                     raise
+-        elif operation=='legacy_publish':
+-            queued_role=str(job.get('authorization_role') or '')
+-            _validate_legacy_publish_job(slug,actor,queued_role,job_id,job)
+-            def guarded_legacy_progress(step,message):
+-                _validate_legacy_publish_job(slug,actor,queued_role,job_id,job)
+-                _homologation_job_update_if_running(job_id,step,message)
+-                _validate_legacy_publish_job(slug,actor,queued_role,job_id,job)
+-            result=publish_now(slug,user,progress=guarded_legacy_progress,publication_snapshot=job)
+-            _validate_legacy_publish_job(slug,actor,queued_role,job_id,job)
+-            message='Site publicado e ativado.'
+-        else:
+-            raise PermissionError('unsupported_publication_operation')
+-        if operation=='homologation_candidate':
+-            _validate_homologation_job(slug,int(job.get('candidate_number') or 0),actor,job.get('authorization_role'),job_id)
+-            _homologation_job_update_if_running(job_id,'completed',message,status='succeeded',detail=result,finished=True)
+-        elif operation=='legacy_publish':
+-            _validate_legacy_publish_job(slug,actor,job.get('authorization_role'),job_id,job)
+-            _homologation_job_update_if_running(job_id,'completed',message,status='succeeded',detail=result,finished=True)
+         else:
+-            _job_update(job_id,status='succeeded',step='completed',message=message,detail=result,finished=True)
++            result=publish_now(slug,user,progress=progress,publication_snapshot=job);message='Site publicado e ativado.'
++        _job_update(job_id,status='succeeded',step='completed',message=message,detail=result,finished=True)
+         return result
+     except Exception as exc:
+-        if str(job.get('operation') or '') in ('homologation_candidate','legacy_publish'):
+-            # Preserve external cancellation; it must never be overwritten by
+-            # the worker's generic failed/succeeded update.
+-            try:
+-                _homologation_job_update_if_running(job_id,'failed',str(exc),status='failed',
+-                    detail={'error':type(exc).__name__,'message':str(exc)[:800]},finished=True)
+-            except PermissionError:pass
+-        else:
+-            _job_update(job_id,status='failed',step='failed',message=str(exc),detail={'error':type(exc).__name__,'message':str(exc)[:800]},finished=True)
++        _job_update(job_id,status='failed',step='failed',message=str(exc),detail={'error':type(exc).__name__,'message':str(exc)[:800]},finished=True)
+         return None
+ 
+ 
+@@ -1567,11 +1702,7 @@
+     if alias in {'www','api','admin','cloudiff','auth','login','status','mail'}:raise ValueError('Alias reservado.')
+     con=sqlite3.connect(DB);con.row_factory=sqlite3.Row;_ensure_schema(con)
+     project=_project_allowed(con,slug,user)
+-    # Changing a public DNS alias is a production-facing mutation, not merely
+-    # viewing a shared project. Require the current publish grant before any
+-    # publisher call or reservation write.
+-    if not project or not _can_publish(con,slug,user):
+-        con.close();raise PermissionError('publication_alias_permission_denied')
++    if not project:con.close();raise PermissionError('Projeto não encontrado ou sem permissão.')
+     other=con.execute('select project_slug from project_publication_aliases where alias=? and project_slug<>?',(alias,slug)).fetchone()
+     if other:con.close();raise ValueError('Este alias já está em uso.')
+     now=_now();actor=user.get('username') or 'portal'
+@@ -1647,111 +1778,3 @@
+     membership=_reconcile_publication_members(ku,kt,slug,access)
+     queued=_enqueue_membership_reconcile(slug,user.get('username') or 'portal',tenant)
+     return {'ok':True,'slug':slug,'public_number':num,'deploy_number':dep,'stable_url':f'https://{num}.cloudiff.duckdns.org/','rebuilt':rebuilt is not None,'runtime':rebuilt,'membership':membership,'reconcile':queued}
+-
+-
+-# CloudIFF v144 BEGIN - terminal Stack contract and temporary homologation cleanup
+-_v143_preview_terminal_portal=preview_terminal
+-def preview_terminal(slug,user):
+-    con=sqlite3.connect(DB);con.row_factory=sqlite3.Row;_ensure_schema(con);project=_project_allowed(con,slug,user)
+-    if not project:con.close();raise PermissionError('Projeto não encontrado ou sem permissão.')
+-    from cloudif_project_environment_web import authorization
+-    auth=authorization(slug,user.get('username') or '',user.get('groups') or [])
+-    if not auth.get('canWrite'):con.close();raise PermissionError('O terminal do Preview exige permissão de escrita no projeto.')
+-    num=_number(con,slug);con.close();ku,kt,_=_clients()
+-    status,data=_post(ku+'/komodo/project/preview/terminal',{'project':slug,'public_number':num,'actor':user.get('username') or 'portal'},kt,timeout=60)
+-    if status//100!=2 or data.get('ok') is not True:raise RuntimeError(str(data.get('message') or 'O terminal do Preview está temporariamente indisponível.'))
+-    container=str(data.get('container') or '');stack_id=str(data.get('stack_id') or '');terminal=str(data.get('terminal') or '');generation=int(data.get('generation') or 1)
+-    expected=f'cloudif-p{num}-preview-web'
+-    if generation!=1 or container!=expected or not stack_id or not terminal or data.get('target_mode')!='stack':raise RuntimeError('preview_terminal_contract_invalid')
+-    target='https://komodoiff.duckdns.org/stacks/'+urllib.parse.quote(stack_id,safe='')+'/service/web/terminal/'+urllib.parse.quote(terminal,safe='')
+-    return {'ok':True,'project':slug,'public_number':num,'generation':1,'stageCode':'W1','container':container,'stackId':stack_id,'terminalUrl':target,'terminalReady':True,'terminalSource':'preview_stack','continuous':True,'secretValuesIncluded':False,'secretReferencesIncluded':False}
+-
+-_v143_stage_terminal_portal=stage_terminal
+-def stage_terminal(slug,user,environment='preview'):
+-    environment=str(environment or '').strip().lower()
+-    if environment not in {'preview','homologation','production'}:raise ValueError('Ambiente de terminal inválido.')
+-    if environment=='preview':return preview_terminal(slug,user)
+-    con=sqlite3.connect(DB);con.row_factory=sqlite3.Row;_ensure_schema(con);project=_project_allowed(con,slug,user)
+-    if not project:con.close();raise PermissionError('Projeto não encontrado ou sem permissão.')
+-    from cloudif_project_environment_web import authorization
+-    auth=authorization(slug,user.get('username') or '',user.get('groups') or [])
+-    if not auth.get('canWrite'):con.close();raise PermissionError('O terminal exige permissão de escrita no projeto.')
+-    if environment=='production' and not _owner_or_admin(con,slug,user):con.close();raise PermissionError('O terminal de Produção exige o responsável pelo projeto ou administrador.')
+-    num=_number(con,slug);payload={'project':slug,'public_number':num,'environment':environment,'actor':user.get('username') or 'portal'};stage_code=''
+-    if environment=='homologation':
+-        row=con.execute("select candidate_number,deploy_number,stage_code,status from publication_candidates where project_slug=? and status in ('awaiting_homologation','homologated') order by candidate_number desc limit 1",(slug,)).fetchone()
+-        if not row:con.close();raise RuntimeError('Nenhum candidato temporário de Homologação está disponível.')
+-        dep=int(row['deploy_number'] or 0);candidate=int(row['candidate_number'] or 0)
+-        if dep<1 or candidate<1:con.close();raise RuntimeError('O candidato de Homologação não possui runtime válido.')
+-        payload.update({'deploy_number':dep,'candidate_number':candidate});stage_code=str(row['stage_code'] or ('H'+str(candidate)))
+-    else:
+-        release=con.execute("select publication_number,candidate_number,deploy_number,stage_code,status from production_releases where project_slug=? and is_active=1 and status='published' order by publication_number desc limit 1",(slug,)).fetchone()
+-        if not release:con.close();return _v143_stage_terminal_portal(slug,user,environment)
+-        publication=int(release['publication_number'] or 0);dep=int(release['deploy_number'] or 0);candidate=int(release['candidate_number'] or 0)
+-        if publication<1 or dep<1:con.close();raise RuntimeError('A Produção ativa não possui runtime válido.')
+-        payload.update({'publication_number':publication,'deploy_number':dep,'candidate_number':candidate,'legacy':False});stage_code=str(release['stage_code'] or ('P'+str(publication)))
+-    con.close();ku,kt,_=_clients();status,data=_post(ku+'/komodo/project/stage/terminal',payload,kt,timeout=60)
+-    if status//100!=2 or data.get('ok') is not True:raise RuntimeError(str(data.get('message') or 'O terminal deste ambiente está temporariamente indisponível.'))
+-    container=str(data.get('container') or '');stack_id=str(data.get('stack_id') or '');terminal=str(data.get('terminal') or '')
+-    expected=f'cloudif-p{num}-d{dep}-web'
+-    if container!=expected or not stack_id or not terminal or data.get('target_mode')!='stack':raise RuntimeError('stage_terminal_contract_invalid')
+-    target='https://komodoiff.duckdns.org/stacks/'+urllib.parse.quote(stack_id,safe='')+'/service/web/terminal/'+urllib.parse.quote(terminal,safe='')
+-    return {'ok':True,'project':slug,'public_number':num,'environment':environment,'stageCode':stage_code,'container':container,'stackId':stack_id,'terminalUrl':target,'terminalReady':True,'terminalSource':'publication_stack','sameRuntimeAcrossPromotion':environment=='production','secretValuesIncluded':False,'secretReferencesIncluded':False}
+-
+-_v143_homologate_candidate=homologate_candidate
+-def homologate_candidate(slug,candidate_number,user,decision='approved',note=''):
+-    decision=str(decision or '').strip().lower()
+-    if decision!='rejected':return _v143_homologate_candidate(slug,candidate_number,user,decision,note)
+-    con=sqlite3.connect(DB);con.row_factory=sqlite3.Row;_ensure_schema(con)
+-    row=con.execute('select * from publication_candidates where project_slug=? and candidate_number=?',(slug,int(candidate_number))).fetchone()
+-    if not row:con.close();raise ValueError('Candidato não encontrado.')
+-    runtime_meta=_candidate_runtime_metadata(row);num=int(row['public_number']);dep=int(row['deploy_number']);con.close()
+-    result=_v143_homologate_candidate(slug,candidate_number,user,decision,note)
+-    cleanup={'ok':True,'skipped':False}
+-    kind=str(runtime_meta.get('runtimeKind') or '')
+-    if kind not in {'multiservice','compose-snapshot'}:
+-        ku,kt,_=_clients();status,data=_post(ku+'/komodo/publication/reject',{'project':slug,'public_number':num,'deploy_number':dep,'candidate_number':int(candidate_number)},kt,timeout=240)
+-        cleanup={'ok':status//100==2 and data.get('ok') is not False,'status':status,'result':data}
+-    else:
+-        cleanup={'ok':True,'skipped':True,'reason':'broker_managed_runtime'}
+-    try:
+-        _,_,nt=_clients()
+-        pstatus,pdata=_post('http://10.62.91.3/stage/delete',{'public_number':num,'stage':'homologation','number':int(candidate_number)},nt,host='cloudif-publisher.internal',timeout=120)
+-        cleanup['publisher']={'ok':pstatus//100==2 and pdata.get('ok') is not False,'status':pstatus}
+-    except Exception as exc:
+-        cleanup['publisher']={'ok':False,'error':type(exc).__name__}
+-    result['runtimeCleanup']=cleanup
+-    return result
+-
+-# CloudIFF v144 END
+-
+-_v144_publish_homologated_candidate_base=publish_homologated_candidate
+-def publish_homologated_candidate(slug,candidate_number,user,progress=None,publication_number=None,authorization_checked=False):
+-    result=_v144_publish_homologated_candidate_base(slug,candidate_number,user,progress,publication_number,authorization_checked)
+-    try:
+-        con=sqlite3.connect(DB);con.row_factory=sqlite3.Row;_ensure_schema(con)
+-        row=con.execute('select public_number from publication_candidates where project_slug=? and candidate_number=?',(slug,int(candidate_number))).fetchone();con.close()
+-        if row:
+-            _,_,nt=_clients();status,data=_post('http://10.62.91.3/stage/delete',{'public_number':int(row['public_number']),'stage':'homologation','number':int(candidate_number)},nt,host='cloudif-publisher.internal',timeout=120)
+-            result['homologationStageRemoved']=bool(status//100==2 and data.get('ok') is not False)
+-    except Exception as exc:
+-        result['homologationStageRemoved']=False;result['homologationStageCleanupError']=type(exc).__name__
+-    return result
+-
+-_v144_ensure_preview_base=ensure_preview
+-def ensure_preview(slug,user):
+-    result=_v144_ensure_preview_base(slug,user)
+-    try:
+-        con=sqlite3.connect(DB);con.row_factory=sqlite3.Row;_ensure_schema(con);project=con.execute('select * from projects where slug=?',(slug,)).fetchone();tenant=str(project['tenant'] if project and 'tenant' in project.keys() else '');con.close()
+-        result['reconcile']=_enqueue_membership_reconcile(slug,user.get('username') or 'portal',tenant)
+-    except Exception as exc:result['reconcile']={'ok':False,'error':type(exc).__name__}
+-    return result
+-
+-_v144_create_homologation_candidate_base=create_homologation_candidate
+-def create_homologation_candidate(slug,user,progress=None,candidate_number=None,authorization_checked=False):
+-    result=_v144_create_homologation_candidate_base(slug,user,progress,candidate_number,authorization_checked)
+-    try:
+-        con=sqlite3.connect(DB);con.row_factory=sqlite3.Row;_ensure_schema(con);project=con.execute('select * from projects where slug=?',(slug,)).fetchone();tenant=str(project['tenant'] if project and 'tenant' in project.keys() else '');con.close()
+-        result['reconcile']=_enqueue_membership_reconcile(slug,user.get('username') or 'portal',tenant)
+-    except Exception as exc:result['reconcile']={'ok':False,'error':type(exc).__name__}
+-    return result
