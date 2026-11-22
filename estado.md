@@ -826,3 +826,12 @@ O backup parcial da unidade foi substituído por rollback direcionado de 28 KB (
 - Publisher mantém apenas W3 e P8.
 - H8→P8 é o ciclo ativo conforme; commit `18416127...`; alias `agendaunica` saudável.
 - Evidência: `docs/REMEDIACAO-AGENDA-HISTORICO-P2-FINAL-20261122.md`.
+
+## Agenda P1020 — checks finais W3/P8 — 22/11/2026
+
+- Terminal W3 linked-compose corrigido: Stack Agenda, serviço `api`, container `cloudif-agenda-unica-api-1`, terminal Komodo `cloudif-preview-api`, HTTP 200.
+- PHP/Node não fazem parte do runtime atual; diagnóstico retorna HTTP 200 `available=false` e mostra Python 3.14.x no API, em vez de falha vazia.
+- Diagnóstico standalone agora respeita o ambiente selecionado.
+- Conta ADMIN de W3 e P8 atualizada para as credenciais solicitadas, sem registrar senha em texto claro; `setup_required=false`, `token_version` incrementado e login HTTP 200 nos dois ambientes.
+- W3/P8/alias permanecem saudáveis na revisão `18416127cdf9`.
+- Evidência: `docs/REMEDIACAO-AGENDA-CHECKS-FINAIS-PREVIEW-20261122.md`.

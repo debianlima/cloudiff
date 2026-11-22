@@ -1832,16 +1832,26 @@ def preview_terminal(slug,user):
     from cloudif_project_environment_web import authorization
     auth=authorization(slug,user.get('username') or '',user.get('groups') or [])
     if not auth.get('canWrite'):con.close();raise PermissionError('O terminal do Preview exige permissão de escrita no projeto.')
-    num=_number(con,slug);source_link=None
+    num=_number(con,slug);source_link=None;linked_compose=None
     try:
         row=con.execute('select * from project_preview_source_links where project_slug=?',(slug,)).fetchone();source_link=dict(row) if row else None
     except sqlite3.Error:source_link=None
+    if _is_linked_compose_project(slug):
+        binding=_linked_compose_binding(con,slug);generation=_fixed_preview_generation(slug)
+        linked_compose={'stack_id':str(binding.get('stackId') or ''),'stack_name':str(binding.get('stackName') or ''),'service':'api','stage_code':'W'+str(generation)}
     con.close();ku,kt,_=_clients();payload={'project':slug,'public_number':num,'actor':user.get('username') or 'portal'}
-    if source_link and str(source_link.get('status') or '').lower() in {'online','ready','healthy'} and str(source_link.get('app_container') or ''):
+    if linked_compose and linked_compose.get('stack_id'):
+        payload['linked_compose']=linked_compose
+    elif source_link and str(source_link.get('status') or '').lower() in {'online','ready','healthy'} and str(source_link.get('app_container') or ''):
         payload['source_link']={'app_container':str(source_link.get('app_container') or ''),'source_commit':str(source_link.get('source_commit') or ''),'stage_code':str(source_link.get('stage_code') or 'W1')}
     status,data=_post(ku+'/komodo/project/preview/terminal',payload,kt,timeout=60)
     if status//100!=2 or data.get('ok') is not True:raise RuntimeError(str(data.get('message') or 'O terminal do Preview está temporariamente indisponível.'))
     container=str(data.get('container') or '');terminal=str(data.get('terminal') or '');generation=int(data.get('generation') or 1)
+    if data.get('linkedCompose') is True:
+        expected_stack=str((linked_compose or {}).get('stack_id') or '');service=str(data.get('service') or '')
+        if generation<1 or str(data.get('stack_id') or '')!=expected_stack or service!='api' or not container or not terminal or data.get('target_mode')!='stack':raise RuntimeError('linked_compose_preview_terminal_contract_invalid')
+        target='https://komodoiff.duckdns.org/stacks/'+urllib.parse.quote(expected_stack,safe='')+'/service/'+urllib.parse.quote(service,safe='')+'/terminal/'+urllib.parse.quote(terminal,safe='')
+        return {'ok':True,'project':slug,'public_number':num,'generation':generation,'stageCode':'W'+str(generation),'container':container,'stackId':expected_stack,'terminalUrl':target,'terminalReady':True,'terminalSource':'linked_compose_preview_api','linkedCompose':True,'secretValuesIncluded':False,'secretReferencesIncluded':False}
     if data.get('sourceLinked') is True:
         expected=str((source_link or {}).get('app_container') or '');server_id=str(data.get('server_id') or '')
         if generation<1 or container!=expected or not server_id or not terminal or data.get('target_mode')!='container':raise RuntimeError('source_linked_preview_terminal_contract_invalid')

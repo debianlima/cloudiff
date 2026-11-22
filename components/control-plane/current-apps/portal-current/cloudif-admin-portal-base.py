@@ -5602,7 +5602,7 @@ if 'Portal' in globals() and not globals().get('_rd_wrapped'):
             project=next((x for x in _rd_projects(user) if x['slug']==slug),None)
             if not project or kind not in ('php','node'):return self.send_error(404)
             try:
-                info=_rd_runtime_info_with_reconcile(project,kind)
+                info=_rd_runtime_info_with_reconcile(project,kind,environment,user)
                 if not info.get('ok'):raise RuntimeError(str(info.get('error') or 'runtime_info_failed'))
                 title='Informações do PHP' if kind=='php' else 'Informações do Node.js'
                 description='Versão, configuração e extensões carregadas.' if kind=='php' else 'Runtime, npm e dependências declaradas da API.'
@@ -6304,7 +6304,7 @@ if 'page' in globals() and not globals().get('_ui144_wrapped'):
 # CloudIF readable modern colors END
 
 # CloudIF W/H/P release wizard BEGIN
-_WHP_RELEASE_ASSETS='<script id="cloudif-whp-release-script" src="/cloudiff/portal/assets/publication-release.js?v=20261122-history-delete-v9" defer></script>'
+_WHP_RELEASE_ASSETS='<script id="cloudif-whp-release-script" src="/cloudiff/portal/assets/publication-release.js?v=20261122-final-preview-v10" defer></script>'
 if 'page' in globals() and not globals().get('_whp_release_wrapped'):
     _whp_release_prev_page=page
     def page(user,tab,body):

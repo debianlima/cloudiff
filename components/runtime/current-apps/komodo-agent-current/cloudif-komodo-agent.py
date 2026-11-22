@@ -6052,6 +6052,23 @@ def cloudif_preview_terminal(handler):
     payload=_cloudif_pub_json(handler);project=safe_slug(payload.get('project') or '')
     try:num=int(payload.get('public_number') or 0)
     except Exception:return send(handler,400,{'ok':False,'error':'invalid_preview_terminal_request'})
+    linked_compose=payload.get('linked_compose') if isinstance(payload.get('linked_compose'),dict) else None
+    if linked_compose:
+        stack_id=normalize_resource_id(linked_compose.get('stack_id'));stack_name=str(linked_compose.get('stack_name') or '').strip();service=safe_slug(linked_compose.get('service') or 'api');stage_code=str(linked_compose.get('stage_code') or 'W1').strip().upper();match=re.fullmatch(r'W([1-9][0-9]*)',stage_code)
+        integration=find_integration(project) or {};expected_stack=normalize_resource_id(integration.get('stack_id') or integration.get('komodo_stack_id'))
+        if not project or num<1 or not match or not stack_id or stack_id!=expected_stack or service!='api' or stack_name!='cloudif-'+project:
+            return send(handler,409,{'ok':False,'error':'linked_compose_preview_identity_invalid','terminalReady':False})
+        stack,_=komodo_call('read','GetStack',{'stack':stack_id});services,_=komodo_call('read','ListStackServices',{'stack':stack_id});items=services.get('data') if isinstance(services.get('data'),list) else []
+        row=next((x for x in items if isinstance(x,dict) and str(x.get('service') or '')==service and isinstance(x.get('container'),dict) and str((x.get('container') or {}).get('state') or '').lower()=='running'),None)
+        if not stack.get('ok') or not row:return send(handler,409,{'ok':False,'error':'linked_compose_preview_service_not_running','terminalReady':False})
+        container=str((row.get('container') or {}).get('name') or '')
+        expected_container=stack_name+'-'+service+'-1'
+        if container!=expected_container:return send(handler,409,{'ok':False,'error':'linked_compose_preview_container_invalid','terminalReady':False})
+        target={'type':'Stack','params':{'stack':stack_id,'service':service}};terminal='cloudif-preview-api';listed,_=komodo_call('read','ListTerminals',{'target':target});existing=listed.get('data') if isinstance(listed.get('data'),list) else []
+        if not any(isinstance(x,dict) and x.get('name')==terminal for x in existing):
+            created,_=komodo_call('write','CreateTerminal',{'target':target,'name':terminal,'command':'sh','mode':'exec'})
+            if not created.get('ok'):return send(handler,422,{'ok':False,'error':'preview_terminal_create_failed','result':created})
+        return send(handler,200,{'ok':True,'project':project,'public_number':num,'generation':int(match.group(1)),'stageCode':stage_code,'container':container,'stack_id':stack_id,'stack_name':stack_name,'service':service,'terminal':terminal,'target_mode':'stack','linkedCompose':True,'terminalReady':True,'secretValuesIncluded':False})
     source_link=payload.get('source_link') if isinstance(payload.get('source_link'),dict) else None
     if source_link:
         container=str(source_link.get('app_container') or '').strip();commit=str(source_link.get('source_commit') or '').strip().lower();stage_code=str(source_link.get('stage_code') or 'W1').strip().upper();match=re.fullmatch(r'W([1-9][0-9]*)',stage_code)

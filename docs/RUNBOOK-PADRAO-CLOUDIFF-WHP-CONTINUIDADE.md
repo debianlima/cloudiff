@@ -223,3 +223,9 @@ As superfícies humanas não devem varrer filesystem nem consultar todos os runt
 Ações humanas que mudam Projeto, Conector, Aprovação ou Publicação devem invalidar a chave correspondente e disparar refresh assíncrono. Projetos/Publicações podem continuar lendo diretamente tabelas canônicas do Portal para dados baratos; somente enriquecimentos remotos/filesystem entram no read-model.
 
 `Excluir container` de P histórica significa também retirar essa P do **histórico operacional**: após remover o runtime de forma segura, marcar os registros de publicação como `archived`. Snapshot e auditoria técnica permanecem internos quando existirem, e a P não continua aparecendo com botões na interface. P Compose usa exclusão reidratável por snapshot; P legada inativa pode usar exclusão final validada pelo Komodo e então não terá reidratação automática.
+
+## Terminal e diagnóstico de Preview linked-compose
+
+Preview `linked-compose` não deve consultar o `project_preview_state` legado para abrir Terminal. O Portal usa o binding canônico do Stack e o Komodo valida o serviço/container real antes de criar o terminal. Para aplicações API+web, o Terminal deve apontar para o serviço aplicativo apropriado (na Agenda, `api`), não para a bridge pública.
+
+As abas PHP/Node são diagnósticos, não requisitos de instalação. Se o estágio real não possui esses runtimes, responder `available=false` com HTTP 200 e listar os binários detectados. Nunca instalar runtime só para a interface parecer preenchida.

@@ -154,5 +154,16 @@ class PublicationSiteTerminalWorkspaceTests(unittest.TestCase):
         self.assertIn("source_linked_preview_commit_mismatch",runtime)
         self.assertIn("'target_mode':'container'",runtime)
 
+    def test_linked_compose_preview_terminal_targets_api_service(self):
+        portal=PUBLICATIONS[PUBLICATIONS.rindex('def preview_terminal('):PUBLICATIONS.index('_v143_stage_terminal_portal',PUBLICATIONS.rindex('def preview_terminal('))]
+        runtime=RUNTIME[RUNTIME.rindex('def cloudif_preview_terminal('):RUNTIME.index('def _cloudif_v144_runtime_env_replace',RUNTIME.rindex('def cloudif_preview_terminal('))]
+        self.assertIn("payload['linked_compose']",portal)
+        self.assertIn("'service':'api'",portal)
+        self.assertIn("terminalSource':'linked_compose_preview_api'",portal)
+        self.assertIn("linked_compose_preview_identity_invalid",runtime)
+        self.assertIn("service!='api'",runtime)
+        self.assertIn("terminal='cloudif-preview-api'",runtime)
+        self.assertIn("'target_mode':'stack'",runtime)
+
 if __name__=='__main__':
     unittest.main()
