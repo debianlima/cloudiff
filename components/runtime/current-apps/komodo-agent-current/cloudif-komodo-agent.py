@@ -3773,66 +3773,55 @@ def cloudif_project_runtime_info(handler):
     if not _cloudif_pub_auth(handler):
         return send(handler,403,{"ok":False,"error":"forbidden"})
     payload=_cloudif_pub_json(handler)
-    project=safe_slug(payload.get("project") or ""); kind=str(payload.get("kind") or "").strip().lower()
-    stack_id=normalize_resource_id(payload.get("stack_id") or ""); service=str(payload.get("service") or "web")
-    if not project or kind not in {"php","node"}:
-        return send(handler,400,{"ok":False,"error":"invalid_request"})
-
-    # O diagnóstico pertence à publicação ativa, não à stack-base usada como
-    # checkout. Terminal, ACL de terminal e metadados do Komodo não devem
-    # bloquear uma consulta somente-leitura executada diretamente no container.
-    integration=find_integration(project) or {}
-    base_stack_id=normalize_resource_id(integration.get("stack_id") or stack_id)
-    active=_cloudif_active_publication_stack(project,base_stack_id)
-    resolved_stack_id=normalize_resource_id(active.get("stack_id") if active.get("ok") else base_stack_id)
-    audit=_cloudif_project_audit_data({"project":project,"stack_id":resolved_stack_id,"service":service,"terminal":"cloudif-"+project,"shell":"sh"})
-
-    candidates=[]
-    for value in (active.get("container"),audit.get("container_name")):
-        value=str(value or "").strip()
-        if value and value not in candidates and re.fullmatch(r"[A-Za-z0-9_.-]+",value):
-            candidates.append(value)
-    container="";container_state={}
+    project=safe_slug(payload.get("project") or "");kind=str(payload.get("kind") or "").strip().lower();environment=str(payload.get('environment') or '').strip().lower();stage_code=str(payload.get('stage_code') or '')
+    stack_id=normalize_resource_id(payload.get("stack_id") or "");service=str(payload.get("service") or "web")
+    if not project or kind not in {"php","node"}:return send(handler,400,{"ok":False,"error":"invalid_request"})
+    explicit=payload.get('container_candidates')
+    candidates=[];audit={};active={}
+    if isinstance(explicit,list):
+        for value in explicit[:16]:
+            value=str(value or '').strip()
+            if value and re.fullmatch(r'[A-Za-z0-9_.-]+',value) and value not in candidates:candidates.append(value)
+    if not candidates:
+        integration=find_integration(project) or {};base_stack_id=normalize_resource_id(integration.get("stack_id") or stack_id);active=_cloudif_active_publication_stack(project,base_stack_id);resolved_stack_id=normalize_resource_id(active.get("stack_id") if active.get("ok") else base_stack_id)
+        audit=_cloudif_project_audit_data({"project":project,"stack_id":resolved_stack_id,"service":service,"terminal":"cloudif-"+project,"shell":"sh"})
+        for value in (active.get("container"),audit.get("container_name")):
+            value=str(value or "").strip()
+            if value and value not in candidates and re.fullmatch(r"[A-Za-z0-9_.-]+",value):candidates.append(value)
+    running=[]
     for candidate in candidates:
         try:
-            inspected=subprocess.run(
-                ["docker","inspect",candidate],text=True,stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,timeout=12,check=False,
-            )
-            rows=json.loads(inspected.stdout or "[]") if inspected.returncode==0 else []
-            state=(rows[0].get("State") or {}) if rows else {}
-            if bool(state.get("Running")):
-                container=candidate;container_state=state;break
-        except Exception:
-            continue
+            rows=json.loads(subprocess.check_output(['docker','inspect',candidate],text=True,stderr=subprocess.DEVNULL,timeout=12) or '[]');state=(rows[0].get('State') or {}) if rows else {}
+            if state.get('Running'):running.append(candidate)
+        except Exception:continue
+    if not running:return send(handler,422,{"ok":False,"error":"stage_containers_not_running","stageCode":stage_code,"environment":environment,"candidates":candidates})
+    binary='php' if kind=='php' else 'node';container=''
+    for candidate in running:
+        probe=subprocess.run(['docker','exec',candidate,'sh','-lc','command -v '+binary+' >/dev/null 2>&1'],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=12)
+        if probe.returncode==0:container=candidate;break
     if not container:
-        return send(handler,422,{"ok":False,"error":"active_container_not_running","active_publication":active,"audit":audit,"candidates":candidates})
+        lines=[(('PHP' if kind=='php' else 'Node.js')+' não está instalado nos serviços deste estágio.','')]
+        for candidate in running:
+            probe=subprocess.run(['docker','exec',candidate,'sh','-lc',"for x in php node npm python python3; do if command -v $x >/dev/null 2>&1; then printf '%s=' $x; $x --version 2>&1 | head -n1; else printf '%s=ausente\\n' $x; fi; done"],text=True,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,timeout=20)
+            lines.append(('--- '+candidate+' ---',probe.stdout.strip()))
+        output='\n'.join(a+(('\n'+b) if b else '') for a,b in lines)
+        return send(handler,200,{"ok":True,"available":False,"project":project,"kind":kind,"environment":environment,"stageCode":stage_code,"container":"","containers":running,"output":output[:120000],"returncode":0})
     if kind=="php":
         script="""php -v
-printf '\n---INI---\n'
-php --ini
-printf '\n---CONFIG---\n'
-php -r '$k=["memory_limit","upload_max_filesize","post_max_size","max_execution_time","date.timezone"]; foreach($k as $x){echo $x,"=",ini_get($x),PHP_EOL;}'
-printf '\n---MODULES---\n'
-php -m
+printf '\n---INI---\n'; php --ini
+printf '\n---CONFIG---\n'; php -r '$k=["memory_limit","upload_max_filesize","post_max_size","max_execution_time","date.timezone"]; foreach($k as $x){echo $x,"=",ini_get($x),PHP_EOL;}'
+printf '\n---MODULES---\n'; php -m
 """
     else:
         script="""node -e 'console.log(process.version); console.log("---VERSIONS---"); console.log(JSON.stringify(process.versions,null,2)); console.log("---PLATFORM---"); console.log(process.platform+" "+process.arch)'
-printf '\n---NPM---\n'
-(npm --version 2>/dev/null || true)
+printf '\n---NPM---\n'; (npm --version 2>/dev/null || true)
 printf '\n---PACKAGE---\n'
-if [ -f /var/www/html/api/package.json ]; then
-  node -e 'const p=require("/var/www/html/api/package.json"); console.log(JSON.stringify({name:p.name||"",version:p.version||"",scripts:p.scripts||{},dependencies:p.dependencies||{},devDependencies:p.devDependencies||{}},null,2))'
-else
-  echo 'package.json não encontrado'
-fi
+for p in /app/package.json /usr/src/app/package.json /var/www/html/api/package.json /var/www/html/package.json; do if [ -f "$p" ]; then echo "$p"; cat "$p"; exit 0; fi; done
+echo 'package.json não encontrado neste container'
 """
-    command=["docker","exec",container,"sh","-lc",script]
-    try:
-        proc=subprocess.run(command,text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=30,check=False)
-    except Exception as exc:
-        return send(handler,500,{"ok":False,"error":"runtime_info_failed","detail":str(exc)[:300]})
-    return send(handler,200 if proc.returncode==0 else 422,{"ok":proc.returncode==0,"project":project,"kind":kind,"container":container,"output":(proc.stdout or "")[:120000],"stderr":(proc.stderr or "")[:4000],"returncode":proc.returncode})
+    try:proc=subprocess.run(["docker","exec",container,"sh","-lc",script],text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=30,check=False)
+    except Exception as exc:return send(handler,500,{"ok":False,"error":"runtime_info_failed","detail":str(exc)[:300]})
+    return send(handler,200 if proc.returncode==0 else 422,{"ok":proc.returncode==0,"available":True,"project":project,"kind":kind,"environment":environment,"stageCode":stage_code,"container":container,"containers":running,"output":(proc.stdout or "")[:120000],"stderr":(proc.stderr or "")[:4000],"returncode":proc.returncode})
 
 
 def _cloudif_active_publication_stack(project, fallback_stack_id=''):
@@ -4803,6 +4792,7 @@ def _cloudif_executor_proxy(handler,method):
     elif method=='POST' and not parsed.query and path in {
         _EXECUTOR_PROXY_PREFIX+'/v1/deployments',
         _EXECUTOR_PROXY_PREFIX+'/v1/compose-snapshots/deploy',
+        _EXECUTOR_PROXY_PREFIX+'/v1/compose-snapshots/rehydrate-historical',
         _EXECUTOR_PROXY_PREFIX+'/v1/compose-source-preview-bridge',
         _EXECUTOR_PROXY_PREFIX+'/v1/publication-bridges',
         _EXECUTOR_PROXY_PREFIX+'/v1/publication-bridges/activate',
@@ -4814,7 +4804,7 @@ def _cloudif_executor_proxy(handler,method):
         except Exception:return send(handler,400,{'ok':False,'error':'invalid_json'})
         if not isinstance(payload,dict):return send(handler,400,{'ok':False,'error':'invalid_request'})
         downstream=path[len(_EXECUTOR_PROXY_PREFIX):]
-        timeout={'/v1/deployments':600,'/v1/compose-snapshots/deploy':1200,'/v1/compose-source-preview-bridge':120,'/v1/publication-bridges':120,'/v1/publication-bridges/activate':60}[downstream]
+        timeout={'/v1/deployments':600,'/v1/compose-snapshots/deploy':1200,'/v1/compose-snapshots/rehydrate-historical':1200,'/v1/compose-source-preview-bridge':120,'/v1/publication-bridges':120,'/v1/publication-bridges/activate':60}[downstream]
     elif method=='DELETE' and not parsed.query:
         deployment=re.fullmatch(r'/cloudif/executor/v1/deployments/(dep_[a-f0-9]{24})',path)
         if deployment:downstream='/v1/deployments/'+deployment.group(1);timeout=120

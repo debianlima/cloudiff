@@ -307,6 +307,8 @@ def _multiservice_activate_bridge(slug,public_number,publication_number,trace):
     return result
 
 
+
+
 def _candidate_runtime_metadata(candidate):
     try:data=json.loads(candidate['runtime_diff_json'] or '{}')
     except Exception:data={}
@@ -747,6 +749,40 @@ def stage_terminal(slug,user,environment='preview'):
     target='https://komodoiff.duckdns.org/servers/'+urllib.parse.quote(server_id,safe='')+'/container/'+urllib.parse.quote(container,safe='')+'/terminal/'+urllib.parse.quote(terminal,safe='')
     return {'ok':True,'project':slug,'public_number':num,'environment':environment,'stageCode':stage_code,'container':container,'terminalUrl':target,'terminalReady':True,'terminalSource':'publication_stage','secretValuesIncluded':False,'secretReferencesIncluded':False}
 
+def runtime_diagnostic_target(slug,user,environment='preview'):
+    environment=str(environment or '').strip().lower()
+    if environment not in {'preview','homologation','production'}:raise ValueError('Ambiente de diagnóstico inválido.')
+    con=sqlite3.connect(DB);con.row_factory=sqlite3.Row;_ensure_schema(con);project=_project_allowed(con,slug,user)
+    if not project:con.close();raise PermissionError('Projeto não encontrado ou sem permissão.')
+    num=_number(con,slug);containers=[];stage_code='';detail={}
+    if environment=='preview':
+        try:
+            if _is_linked_compose_project(slug):
+                binding=_linked_compose_binding(con,slug);base=str(binding.get('stackName') or ('cloudif-'+slug));generation=_fixed_preview_generation(slug);stage_code='W'+str(generation);containers=[base+'-api-1',base+'-web-1']
+            else:
+                status=preview_status(slug,user);stage_code=str(status.get('stageCode') or 'W1');candidate=str(status.get('container') or status.get('bridge') or '');containers=[candidate] if candidate else []
+        finally:con.close()
+        return {'ok':True,'project':slug,'environment':environment,'stageCode':stage_code,'containers':containers,'secretValuesIncluded':False}
+    if environment=='homologation':
+        row=con.execute("select candidate_number,deploy_number,stage_code,runtime_diff_json from publication_candidates where project_slug=? and status in ('awaiting_homologation','homologated') order by candidate_number desc limit 1",(slug,)).fetchone()
+        if not row:con.close();raise RuntimeError('Nenhuma Homologação ativa está disponível para diagnóstico.')
+        try:detail=json.loads(row['runtime_diff_json'] or '{}')
+        except Exception:detail={}
+        deployment_id=str(detail.get('homologationDeploymentId') or '');stage_code=str(row['stage_code'] or ('H'+str(int(row['candidate_number'] or 0))))
+        if re.fullmatch(r'dep_[a-f0-9]{24}',deployment_id):prefix='cloudif-'+deployment_id.replace('_','-');containers=[prefix+'-api',prefix+'-web']
+        else:containers=[f'cloudif-p{num}-d{int(row["deploy_number"] or 0)}-web']
+        con.close();return {'ok':True,'project':slug,'environment':environment,'stageCode':stage_code,'containers':containers,'secretValuesIncluded':False}
+    row=con.execute("select publication_number,deploy_number,stage_code from production_releases where project_slug=? and is_active=1 and status='published' order by publication_number desc limit 1",(slug,)).fetchone()
+    if not row:con.close();raise RuntimeError('Nenhuma Produção ativa está disponível para diagnóstico.')
+    pubrow=con.execute('select detail_json from project_publications where project_slug=? and deploy_number=?',(slug,int(row['deploy_number'] or 0))).fetchone();con.close()
+    try:detail=json.loads(pubrow['detail_json'] or '{}') if pubrow else {}
+    except Exception:detail={}
+    deployment_id=str(detail.get('productionDeploymentId') or '');publication=int(row['publication_number'] or 0);stage_code=str(row['stage_code'] or ('P'+str(publication)))
+    if re.fullmatch(r'dep_[a-f0-9]{24}',deployment_id):prefix='cloudif-'+deployment_id.replace('_','-');containers=[prefix+'-api',prefix+'-web']
+    else:containers=[f'cloudif-p{num}-p{publication}-publication-web']
+    return {'ok':True,'project':slug,'environment':environment,'stageCode':stage_code,'containers':containers,'secretValuesIncluded':False}
+
+
 def recreate_preview(slug,user,source='production'):
     source=str(source or '').strip().lower()
     if source not in {'production','template'}:raise ValueError('Origem de Preview inválida.')
@@ -950,7 +986,7 @@ def _historical_release_runtime_state(slug,row,detail):
             if status!=200 or not isinstance(data,dict) or data.get('ok') is not True:return {'state':'attention','online':False,'healthy':False,'canStart':True,'canStop':False,'deploymentId':deployment_id}
             runtime_status=str(data.get('status') or '')
             online=runtime_status in {'rollback_ready','running'}
-            return {'state':'online' if online else 'offline','online':online,'healthy':online,'canStart':not online,'canStop':online,'deploymentId':deployment_id,'runtimeStatus':runtime_status}
+            return {'state':'online' if online else ('deleted' if runtime_status in {'removed','deleted'} else 'offline'),'online':online,'healthy':online,'canStart':not online,'canStop':online,'canDelete':(not online and runtime_status not in {'removed','deleted'} and kind=='compose-snapshot' and bool((detail or {}).get('composeSnapshotId'))),'deploymentId':deployment_id,'runtimeStatus':runtime_status}
         except Exception:
             return {'state':'attention','online':False,'healthy':False,'canStart':True,'canStop':False,'deploymentId':deployment_id}
     try:
@@ -979,7 +1015,15 @@ def historical_publication_prepare(slug,publication_number,user):
         digest=str(row['environment_digest'] or '')
         if not re.fullmatch(r'[a-f0-9]{64}',digest):digest=str(detail.get('snapshotDigest') or '')
         if not re.fullmatch(r'[a-f0-9]{64}',digest):raise RuntimeError('A publicação histórica não possui digest de ambiente válido.')
-        _multiservice_reactivate(slug,deployment_id,'prepare',digest,trace)
+        try:
+            _multiservice_reactivate(slug,deployment_id,'prepare',digest,trace)
+        except RuntimeError:
+            if str(detail.get('runtimeKind') or '')!='compose-snapshot':raise
+            snapshot_id=str(detail.get('composeSnapshotId') or '');snapshot_digest=str(detail.get('snapshotDigest') or '')
+            if not re.fullmatch(r'snap_[a-f0-9]{24}',snapshot_id) or not re.fullmatch(r'[a-f0-9]{64}',snapshot_digest):raise
+            deployed=_rehydrate_historical_compose_runtime(slug,publication,row,detail);deployment_id=str(deployed.get('deployment_id') or '')
+            detail['productionDeploymentId']=deployment_id;detail['rehydratedAt']=_now();detail['rehydratedFromSnapshot']=snapshot_id;detail['rehydratedThroughHomologation']=True
+            con=sqlite3.connect(DB);_ensure_schema(con);con.execute('update project_publications set detail_json=? where project_slug=? and deploy_number=?',(json.dumps(detail,ensure_ascii=False),slug,int(row['deploy_number'])));con.commit();con.close()
         _multiservice_bridge(slug,deployment_id,num,'publication',publication,trace+'-bridge')
     else:
         ku,kt,_=_clients();status,data=_post(ku+'/komodo/publication/release/prepare',{'project':slug,'public_number':num,'publication_number':publication},kt,timeout=180)
@@ -1015,6 +1059,27 @@ def historical_publication_stop(slug,publication_number,user):
     return {'ok':True,'project':slug,'publicationNumber':publication,'stageCode':str(row['stage_code'] or ('P'+str(publication))),'runtimeState':'offline','stableActivated':False,'resourcesPreserved':True,'secretValuesIncluded':False}
 
 
+def historical_publication_delete_runtime(slug,publication_number,user):
+    con=sqlite3.connect(DB);con.row_factory=sqlite3.Row;_ensure_schema(con)
+    if not _owner_or_admin(con,slug,user):con.close();raise PermissionError('Somente o responsável pelo projeto pode excluir containers históricos.')
+    row=con.execute("select * from production_releases where project_slug=? and publication_number=? and status='published'",(slug,int(publication_number))).fetchone()
+    if not row:con.close();raise ValueError('Publicação P não encontrada.')
+    if int(row['is_active'] or 0)==1:con.close();raise ValueError('A Produção ativa não pode ter seus containers excluídos.')
+    pubrow=con.execute('select detail_json from project_publications where project_slug=? and deploy_number=?',(slug,int(row['deploy_number']))).fetchone();con.close()
+    try:detail=json.loads(pubrow['detail_json'] or '{}') if pubrow else {}
+    except Exception:detail={}
+    if str(detail.get('runtimeKind') or '')!='compose-snapshot':raise RuntimeError('Esta publicação legada não possui snapshot completo para reconstrução segura.')
+    snapshot_id=str(detail.get('composeSnapshotId') or '');deployment_id=str(detail.get('productionDeploymentId') or '')
+    if not re.fullmatch(r'snap_[a-f0-9]{24}',snapshot_id) or not re.fullmatch(r'dep_[a-f0-9]{24}',deployment_id):raise RuntimeError('A publicação não possui snapshot/deployment reidratável válido.')
+    num=int(row['public_number']);publication=int(row['publication_number']);_,_,npm_token=_clients();_publisher_delete_stage(num,'publication',publication,npm_token)
+    try:_multiservice_deactivate_bridge(slug,deployment_id,'publication','portal-history-delete-'+hashlib.sha256((slug+str(publication)).encode()).hexdigest()[:20])
+    except Exception:pass
+    removed=_remove_compose_runtime(deployment_id)
+    detail['runtimeDeletedAt']=_now();detail['runtimeDeletedDeploymentId']=deployment_id;detail['runtimeDeletedSnapshotId']=snapshot_id
+    con=sqlite3.connect(DB);_ensure_schema(con);con.execute('update project_publications set detail_json=? where project_slug=? and deploy_number=?',(json.dumps(detail,ensure_ascii=False),slug,int(row['deploy_number'])));con.commit();con.close()
+    return {'ok':True,'project':slug,'publicationNumber':publication,'stageCode':str(row['stage_code'] or ('P'+str(publication))),'runtimeState':'deleted','containersRemoved':int(removed.get('containersRemoved') or 0),'volumesRemoved':int(removed.get('volumesRemoved') or 0),'snapshotPreserved':True,'snapshotId':snapshot_id,'canRehydrate':True,'stableActivated':False,'secretValuesIncluded':False}
+
+
 def release_flow_status(slug,user):
     con=sqlite3.connect(DB);con.row_factory=sqlite3.Row;_ensure_schema(con)
     if not (_project_allowed(con,slug,user) or _can_homologate(con,slug,user)):con.close();raise PermissionError('Projeto não encontrado ou sem permissão.')
@@ -1024,7 +1089,7 @@ def release_flow_status(slug,user):
         can_write=bool(authorization(slug,user.get('username') or '',user.get('groups') or []).get('canWrite'))
     except Exception:
         can_write=bool(user.get('admin') or (user.get('username') or '').strip().lower()==owner)
-    jobrow=con.execute("select id,status,step,message,operation,candidate_number,publication_number,approval_id,created_at,started_at,finished_at from publication_jobs where project_slug=? order by id desc limit 1",(slug,)).fetchone();legacy=con.execute("select * from project_publications where project_slug=? and status='published' and is_active=1 order by id desc limit 1",(slug,)).fetchone()
+    jobrow=con.execute("select id,status,step,message,operation,candidate_number,publication_number,approval_id,created_at,started_at,finished_at from publication_jobs where project_slug=? order by id desc limit 1",(slug,)).fetchone();legacy=con.execute("select * from project_publications where project_slug=? and status='published' and is_active=1 order by id desc limit 1",(slug,)).fetchone();alias_row=con.execute('select alias from project_publication_aliases where project_slug=?',(slug,)).fetchone();primary_hostname=(str(alias_row['alias'])+'.cloudiff.duckdns.org') if alias_row and str(alias_row['alias'] or '') else (str(next((x.get('stable_hostname') for x in releases if int(x.get('is_active') or 0)==1),'')) or (str(legacy['stable_hostname']) if legacy else ''))
     publication_details={}
     for item in con.execute("select deploy_number,detail_json from project_publications where project_slug=? and status='published' order by id desc",(slug,)).fetchall():
         dep=int(item['deploy_number'] or 0)
@@ -1049,7 +1114,7 @@ def release_flow_status(slug,user):
         try:out['runtimeDiff']=json.loads(row.get('runtime_diff_json') or '{}')
         except Exception:out['runtimeDiff']={}
         return out
-    result={'ok':True,'project':slug,'publicNumber':num,'preview':preview,'candidates':[safe_candidate(x) for x in candidates],'releases':[{**{k:x.get(k) for k in ('publication_number','candidate_number','deploy_number','stage_code','hostname','stable_hostname','artifact_image_id','status','is_active','environment_revision','created_by','created_at','published_at')},'url':'https://'+str(x.get('hostname') or '')+'/' if x.get('hostname') else '','stableUrl':'https://'+str(x.get('stable_hostname') or '')+'/' if x.get('stable_hostname') else '','runtime':publication_details.get(int(x.get('deploy_number') or 0),{}),'runtimeState':release_runtime_states.get(int(x.get('publication_number') or 0),{'state':'offline','online':False,'healthy':False})} for x in releases],'activationRequests':[{k:x.get(k) for k in ('candidate_number','publication_number','activation_digest','approval_id','requested_by','status','created_at','updated_at')} for x in activations],'job':dict(jobrow) if jobrow else None,'homologators':hom,'owner':owner,'canSubmitHomologation':can_submit,'canHomologate':can_homologate,'canPublish':can_publish,'canManagePermissions':bool(permission_state.get('canManagePermissions')),'permissionUsers':permission_state.get('users') or [],'permissionPolicy':permission_state.get('policy') or {},'isAdmin':is_admin,'isProfessor':is_professor,'isOwner':is_owner,'canWrite':can_write,'secretValuesIncluded':False}
+    result={'ok':True,'project':slug,'publicNumber':num,'preview':preview,'candidates':[safe_candidate(x) for x in candidates],'releases':[{**{k:x.get(k) for k in ('publication_number','candidate_number','deploy_number','stage_code','hostname','stable_hostname','artifact_image_id','status','is_active','environment_revision','created_by','created_at','published_at')},'url':'https://'+str(x.get('hostname') or '')+'/' if x.get('hostname') else '','stableUrl':'https://'+str(x.get('stable_hostname') or '')+'/' if x.get('stable_hostname') else '','runtime':publication_details.get(int(x.get('deploy_number') or 0),{}),'runtimeState':release_runtime_states.get(int(x.get('publication_number') or 0),{'state':'offline','online':False,'healthy':False})} for x in releases],'activationRequests':[{k:x.get(k) for k in ('candidate_number','publication_number','activation_digest','approval_id','requested_by','status','created_at','updated_at')} for x in activations],'job':dict(jobrow) if jobrow else None,'homologators':hom,'owner':owner,'canSubmitHomologation':can_submit,'canHomologate':can_homologate,'canPublish':can_publish,'canManagePermissions':bool(permission_state.get('canManagePermissions')),'permissionUsers':permission_state.get('users') or [],'permissionPolicy':permission_state.get('policy') or {},'isAdmin':is_admin,'isProfessor':is_professor,'isOwner':is_owner,'canWrite':can_write,'primaryHostname':primary_hostname,'primaryUrl':('https://'+primary_hostname+'/' if primary_hostname else ''),'secretValuesIncluded':False}
     if not releases and legacy:result['legacyProduction']={'deploy_number':int(legacy['deploy_number']),'stage_code':'D'+str(int(legacy['deploy_number'])),'url':'https://'+str(legacy['version_hostname'])+'/' if legacy['version_hostname'] else 'https://'+str(legacy['stable_hostname'])+'/','stableUrl':'https://'+str(legacy['stable_hostname'])+'/','artifact_image_id':'','status':'published','is_active':1,'legacy':True}
     return result
 
@@ -1059,21 +1124,90 @@ def rollback_publication(slug,publication_number,user):
     if not _owner_or_admin(con,slug,user):con.close();raise PermissionError('Somente o responsável pelo projeto pode executar rollback.')
     row=con.execute("select * from production_releases where project_slug=? and publication_number=? and status='published'",(slug,int(publication_number))).fetchone()
     if not row:con.close();raise ValueError('Publicação P não encontrada.')
-    num=int(row['public_number']);dep=int(row['deploy_number']);alias_row=con.execute('select alias from project_publication_aliases where project_slug=?',(slug,)).fetchone();alias=str(alias_row[0]) if alias_row else '';pubrow=con.execute('select detail_json from project_publications where project_slug=? and deploy_number=?',(slug,dep)).fetchone();con.close();ku,kt,nt=_clients();detail={}
+    alias_row=con.execute('select alias from project_publication_aliases where project_slug=?',(slug,)).fetchone();alias=str(alias_row[0]) if alias_row else '';primary_host=(alias+'.cloudiff.duckdns.org') if alias else str(row['stable_hostname'])
+    if int(row['is_active'] or 0)==1:
+        result={'ok':True,'project':slug,'publicationNumber':int(publication_number),'stageCode':str(row['stage_code'] or ('P'+str(int(publication_number)))),'stableUrl':'https://'+primary_host+'/','numericStableUrl':'https://'+str(row['stable_hostname'])+'/','idempotent':True,'alreadyActive':True}
+        con.close();return result
+    num=int(row['public_number']);dep=int(row['deploy_number'])
+    pubrow=con.execute('select detail_json from project_publications where project_slug=? and deploy_number=?',(slug,dep)).fetchone()
+    current=con.execute("select * from production_releases where project_slug=? and is_active=1 and status='published' order by publication_number desc limit 1",(slug,)).fetchone()
+    current_pubrow=con.execute('select detail_json from project_publications where project_slug=? and deploy_number=?',(slug,int(current['deploy_number'])),).fetchone() if current else None
+    con.close();ku,kt,nt=_clients();detail={};current_detail={}
     try:detail=json.loads(pubrow['detail_json'] or '{}') if pubrow else {}
     except Exception:detail={}
+    state=_historical_release_runtime_state(slug,dict(row),detail)
+    if not (state.get('online') and state.get('healthy')):
+        historical_publication_prepare(slug,int(publication_number),user)
+        con=sqlite3.connect(DB);con.row_factory=sqlite3.Row;_ensure_schema(con);pubrow=con.execute('select detail_json from project_publications where project_slug=? and deploy_number=?',(slug,dep)).fetchone();con.close()
+        try:detail=json.loads(pubrow['detail_json'] or '{}') if pubrow else {}
+        except Exception:detail={}
+    try:current_detail=json.loads(current_pubrow['detail_json'] or '{}') if current_pubrow else {}
+    except Exception:current_detail={}
     if detail.get('runtimeKind') in {'multiservice','compose-snapshot'}:
-        _multiservice_activate_bridge(slug,num,int(publication_number),'portal-rollback-'+hashlib.sha256((slug+str(publication_number)).encode()).hexdigest()[:20])
-        pstatus,publisher=_post('http://10.62.91.3/publish',{'public_number':num,'deploy_number':dep,'alias':alias},nt,host='cloudif-publisher.internal',timeout=300)
-        if pstatus//100!=2 or not publisher.get('ok'):raise RuntimeError(_publication_error('https',publisher))
-        if not _external_ok(str(row['stable_hostname'])):raise RuntimeError('URL estável falhou após rollback.')
-        con=sqlite3.connect(DB);_ensure_schema(con);con.execute('update production_releases set is_active=case when publication_number=? then 1 else 0 end where project_slug=?',(int(publication_number),slug));con.execute('update project_publications set is_active=case when deploy_number=? then 1 else 0 end where project_slug=?',(dep,slug));con.commit();con.close()
-        return {'ok':True,'project':slug,'publicationNumber':int(publication_number),'stageCode':'P'+str(int(publication_number)),'stableUrl':'https://'+str(row['stable_hostname'])+'/','runtimeKind':str(detail.get('runtimeKind') or 'multiservice')}
-    status,data=_post(ku+'/komodo/publication/release/activate',{'project':slug,'public_number':num,'publication_number':int(publication_number)},kt,timeout=120)
+        target_dep=str(detail.get('productionDeploymentId') or '')
+        if not re.fullmatch(r'dep_[a-f0-9]{24}',target_dep):raise RuntimeError('A publicação histórica não possui deployment de Produção reativável.')
+        target_digest=str(row['environment_digest'] or '')
+        if not re.fullmatch(r'[a-f0-9]{64}',target_digest):target_digest=str(detail.get('snapshotDigest') or '')
+        if not re.fullmatch(r'[a-f0-9]{64}',target_digest):raise RuntimeError('A publicação histórica não possui digest de ambiente válido para rollback.')
+        current_dep=str(current_detail.get('productionDeploymentId') or '') if current else ''
+        current_number=int(current['publication_number']) if current else 0
+        current_deploy=int(current['deploy_number']) if current else 0
+        current_digest=str(current['environment_digest'] or '') if current else ''
+        if current and not re.fullmatch(r'[a-f0-9]{64}',current_digest):current_digest=str(current_detail.get('snapshotDigest') or '')
+        trace='portal-rollback-'+hashlib.sha256((slug+str(publication_number)+target_dep).encode()).hexdigest()[:20]
+        prepared=False;switched=False
+        try:
+            _multiservice_reactivate(slug,target_dep,'prepare',target_digest,trace+'-prepare');prepared=True
+            _multiservice_bridge(slug,target_dep,num,'publication',int(publication_number),trace+'-bridge')
+            pstage,pdata=_post('http://10.62.91.3/stage',{'public_number':num,'stage':'publication','number':int(publication_number)},nt,host='cloudif-publisher.internal',timeout=300)
+            if pstage//100!=2 or not pdata.get('ok'):raise RuntimeError(_publication_error('https',pdata))
+            if not _external_ok(str(row['hostname'])):raise RuntimeError('A URL versionada da publicação histórica não ficou saudável.')
+            _multiservice_activate_bridge(slug,num,int(publication_number),trace+'-activate')
+            pstatus,publisher=_post('http://10.62.91.3/publish',{'public_number':num,'deploy_number':dep,'alias':alias},nt,host='cloudif-publisher.internal',timeout=300)
+            if pstatus//100!=2 or not publisher.get('ok'):raise RuntimeError(_publication_error('https',publisher))
+            switched=True
+            if not _external_ok(primary_host):raise RuntimeError('URL principal falhou após rollback.')
+            _multiservice_reactivate(slug,target_dep,'commit',target_digest,trace+'-commit')
+            if current_dep and current_dep!=target_dep:
+                _multiservice_deactivate(slug,current_dep,'substituída pelo rollback para P'+str(int(publication_number)),trace+'-deactivate-current')
+                try:_multiservice_deactivate_bridge(slug,current_dep,'publication',trace+'-remove-current-bridge')
+                except Exception:pass
+                if current_number:_publisher_delete_stage(num,'publication',current_number,nt)
+            con=sqlite3.connect(DB);_ensure_schema(con);con.execute('update production_releases set is_active=case when publication_number=? then 1 else 0 end where project_slug=?',(int(publication_number),slug));con.execute('update project_publications set is_active=case when deploy_number=? then 1 else 0 end where project_slug=?',(dep,slug));con.commit();con.close()
+            return {'ok':True,'project':slug,'publicationNumber':int(publication_number),'stageCode':'P'+str(int(publication_number)),'stableUrl':'https://'+primary_host+'/','numericStableUrl':'https://'+str(row['stable_hostname'])+'/','runtimeKind':str(detail.get('runtimeKind') or 'multiservice'),'deploymentId':target_dep,'containersRecreated':False,'volumesPreserved':True,'historicalRuntimeReactivated':True}
+        except Exception:
+            if switched and current_dep and current_number and re.fullmatch(r'[a-f0-9]{64}',current_digest):
+                try:
+                    _multiservice_reactivate(slug,current_dep,'commit',current_digest,trace+'-restore-current-runtime')
+                    _multiservice_bridge(slug,current_dep,num,'publication',current_number,trace+'-restore-current-bridge')
+                    _post('http://10.62.91.3/stage',{'public_number':num,'stage':'publication','number':current_number},nt,host='cloudif-publisher.internal',timeout=300)
+                    _multiservice_activate_bridge(slug,num,current_number,trace+'-restore-current-alias')
+                    _post('http://10.62.91.3/publish',{'public_number':num,'deploy_number':current_deploy,'alias':alias},nt,host='cloudif-publisher.internal',timeout=300)
+                except Exception:pass
+            if prepared:
+                try:_multiservice_deactivate_bridge(slug,target_dep,'publication',trace+'-abort-bridge')
+                except Exception:pass
+                try:_multiservice_reactivate(slug,target_dep,'abort',target_digest,trace+'-abort')
+                except Exception:pass
+            try:_publisher_delete_stage(num,'publication',int(publication_number),nt)
+            except Exception:pass
+            raise
+    status,data=_post(ku+'/komodo/publication/release/activate',{'project':slug,'public_number':num,'publication_number':int(publication_number)},kt,timeout=180)
     if status//100!=2 or not data.get('ok'):raise RuntimeError(_publication_error('promote',data))
     pstatus,publisher=_post('http://10.62.91.3/publish',{'public_number':num,'deploy_number':dep,'alias':alias},nt,host='cloudif-publisher.internal',timeout=300)
     if pstatus//100!=2 or not publisher.get('ok'):raise RuntimeError(_publication_error('https',publisher))
-    con=sqlite3.connect(DB);_ensure_schema(con);con.execute('update production_releases set is_active=case when publication_number=? then 1 else 0 end where project_slug=?',(int(publication_number),slug));con.execute('update project_publications set is_active=case when deploy_number=? then 1 else 0 end where project_slug=?',(dep,slug));con.commit();con.close();return {'ok':True,'project':slug,'publicationNumber':int(publication_number),'stageCode':'P'+str(int(publication_number)),'stableUrl':'https://'+str(row['stable_hostname'])+'/' }
+    if not _external_ok(primary_host):raise RuntimeError('URL principal falhou após rollback legado.')
+    current_dep=str(current_detail.get('productionDeploymentId') or '') if current else ''
+    current_number=int(current['publication_number']) if current else 0
+    if current_dep:
+        try:_multiservice_deactivate(slug,current_dep,'substituída pelo rollback legado para P'+str(int(publication_number)),'portal-legacy-rollback-deactivate-'+str(int(publication_number)))
+        except Exception:pass
+        try:_multiservice_deactivate_bridge(slug,current_dep,'publication','portal-legacy-rollback-bridge-'+str(int(publication_number)))
+        except Exception:pass
+        if current_number:
+            try:_publisher_delete_stage(num,'publication',current_number,nt)
+            except Exception:pass
+    con=sqlite3.connect(DB);_ensure_schema(con);con.execute('update production_releases set is_active=case when publication_number=? then 1 else 0 end where project_slug=?',(int(publication_number),slug));con.execute('update project_publications set is_active=case when deploy_number=? then 1 else 0 end where project_slug=?',(dep,slug));con.commit();con.close();return {'ok':True,'project':slug,'publicationNumber':int(publication_number),'stageCode':'P'+str(int(publication_number)),'stableUrl':'https://'+primary_host+'/','numericStableUrl':'https://'+str(row['stable_hostname'])+'/','historicalRuntimeReactivated':bool(data.get('historicalRuntimeReactivated')),'containersRecreated':False}
 
 def publish_now(slug,user,progress=None,publication_snapshot=None):
     def notify(step,message):
@@ -1754,4 +1888,23 @@ def create_homologation_candidate(slug,user,progress=None,candidate_number=None,
         con=sqlite3.connect(DB);con.row_factory=sqlite3.Row;_ensure_schema(con);project=con.execute('select * from projects where slug=?',(slug,)).fetchone();tenant=str(project['tenant'] if project and 'tenant' in project.keys() else '');con.close()
         result['reconcile']=_enqueue_membership_reconcile(slug,user.get('username') or 'portal',tenant)
     except Exception as exc:result['reconcile']={'ok':False,'error':type(exc).__name__}
+    return result
+
+def _executor_runtime_client():
+    cfg=_env('/etc/cloudif/multiservice-deployment-executor.env');token=cfg.get('CLOUDIF_MULTISERVICE_DEPLOYMENT_EXECUTOR_TOKEN','')
+    if not token:raise RuntimeError('Credencial interna do executor ausente.')
+    return 'http://10.62.91.2:18098/cloudif/executor',token
+
+def _remove_compose_runtime(deployment_id):
+    base,token=_executor_runtime_client();status,result=_bearer_json('DELETE',base+'/v1/deployments/'+urllib.parse.quote(str(deployment_id),safe=''),token,timeout=180)
+    if status//100!=2 or result.get('ok') is not True:raise RuntimeError('Não foi possível remover o runtime da Homologação substituída.')
+    return result
+
+def _rehydrate_historical_compose_runtime(slug,publication,row,detail):
+    snapshot_id=str(detail.get('composeSnapshotId') or '');snapshot_digest=str(detail.get('snapshotDigest') or '');environment_digest=str(row['environment_digest'] or '')
+    if not re.fullmatch(r'snap_[a-f0-9]{24}',snapshot_id) or not re.fullmatch(r'[a-f0-9]{64}',snapshot_digest) or not re.fullmatch(r'[a-f0-9]{64}',environment_digest):raise RuntimeError('A publicação histórica não possui identidade de snapshot reidratável.')
+    deleted_at=str(detail.get('runtimeDeletedAt') or '');material='historical-rehydrate|'+slug+'|'+str(publication)+'|'+snapshot_id+'|'+snapshot_digest+'|'+deleted_at;deployment_id='dep_'+hashlib.sha256(material.encode()).hexdigest()[:24]
+    base,token=_executor_runtime_client();status,result=_bearer_json('POST',base+'/v1/compose-snapshots/rehydrate-historical',token,{'deployment_id':deployment_id,'project_slug':slug,'snapshot_id':snapshot_id,'snapshot_digest':snapshot_digest,'historical_environment_digest':environment_digest},timeout=1200)
+    if status//100!=2 or not isinstance(result,dict) or result.get('ok') is not True:raise RuntimeError('Não foi possível reidratar a publicação histórica pelo snapshot aprovado.')
+    if str(result.get('deployment_id') or '')!=deployment_id or str(result.get('snapshot_id') or '')!=snapshot_id or str(result.get('snapshot_digest') or '')!=snapshot_digest or str(result.get('environment') or '')!='production' or result.get('rehydratedThroughHomologation') is not True:raise RuntimeError('A reidratação histórica retornou identidade divergente.')
     return result

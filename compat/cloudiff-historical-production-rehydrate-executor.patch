@@ -1,0 +1,37 @@
+--- a/cloudif-multiservice-deployment-executor.py
++++ b/cloudif-multiservice-deployment-executor.py
+@@ -1146,6 +1146,26 @@
+     return {'ok':True,'deployment_id':deployment_id,'project_slug':slug,'from_environment':'homologation','environment':'production','snapshot_id':snapshot_id,'snapshot_digest':snapshot_digest,'containerIdentityDigest':after,'containerIdsPreserved':True,'containersRecreated':False,'sameHomologatedDeployment':True,'promoted_at':now,'idempotent':False,'secretValuesIncluded':False}
+
+
++def rehydrate_historical_compose_snapshot(payload:Any)->dict:
++    if not isinstance(payload,dict) or set(payload)!={'deployment_id','project_slug','snapshot_id','snapshot_digest','historical_environment_digest'}:
++        raise DeploymentError('invalid_historical_rehydrate_request','Pedido de reidratação histórica inválido.',400)
++    deployment_id=str(payload.get('deployment_id') or '');slug=str(payload.get('project_slug') or '');snapshot_id=str(payload.get('snapshot_id') or '');snapshot_digest=str(payload.get('snapshot_digest') or '');environment_digest=str(payload.get('historical_environment_digest') or '')
++    if not DEPLOYMENT_RE.fullmatch(deployment_id) or not SLUG_RE.fullmatch(slug) or not COMPOSE_SNAPSHOT_RE.fullmatch(snapshot_id) or not SHA_RE.fullmatch(snapshot_digest) or not SHA_RE.fullmatch(environment_digest):
++        raise DeploymentError('invalid_historical_rehydrate_request','Identidade da reidratação histórica inválida.',400)
++    snapshot=compose_snapshot_status(snapshot_id)
++    if str(snapshot.get('project_slug') or '')!=slug:raise DeploymentError('historical_snapshot_project_mismatch','Snapshot histórico pertence a outro projeto.',409)
++    if str(snapshot.get('status') or '')!='ready':raise DeploymentError('historical_snapshot_not_ready','Snapshot histórico não está pronto para restauração.',409)
++    if not hmac.compare_digest(str(snapshot.get('snapshot_digest') or ''),snapshot_digest):raise DeploymentError('historical_snapshot_digest_mismatch','Digest do snapshot histórico divergiu.',409)
++    edge_service=str(snapshot.get('edge_service') or '');edge_port=int(snapshot.get('edge_port') or 0)
++    if not edge_service or not 1<=edge_port<=65535:raise DeploymentError('historical_snapshot_edge_invalid','Snapshot histórico não possui serviço público válido.',409)
++    variables={};variables_digest=hashlib.sha256(canonical(variables)).hexdigest()
++    material={'action':'deployment.compose-snapshot.historical-rehydrate','project_slug':slug,'deployment_id':deployment_id,'snapshot_id':snapshot_id,'snapshot_digest':snapshot_digest,'historical_environment_digest':environment_digest,'source_commit':str(snapshot.get('source_commit') or ''),'source_digest':str(snapshot.get('source_digest') or '')}
++    plan_digest=hashlib.sha256(canonical(material)).hexdigest();config_digest=hashlib.sha256(canonical({'mode':'historical-rehydrate','project_slug':slug,'snapshot_id':snapshot_id,'snapshot_digest':snapshot_digest})).hexdigest();toolchain_digest=hashlib.sha256(b'cloudif-compose-historical-rehydrate-v1').hexdigest()
++    deployed=deploy_compose_snapshot({'deployment_id':deployment_id,'project_slug':slug,'environment':'homologation','deployment_plan_digest':plan_digest,'config_revision':1,'config_digest':config_digest,'toolchain_digest':toolchain_digest,'source_digest':str(snapshot.get('source_digest') or ''),'source_commit':str(snapshot.get('source_commit') or ''),'snapshot_id':snapshot_id,'routes':[{'pathPrefix':'/','service':edge_service,'stripPrefix':False}],'variables':variables,'variables_digest':variables_digest,'environment_digest':environment_digest,'runtime_environment_digest':environment_digest})
++    promoted=promote_compose_deployment({'project_slug':slug,'deployment_id':deployment_id,'snapshot_id':snapshot_id,'snapshot_digest':snapshot_digest})
++    return {'ok':True,'deployment_id':deployment_id,'project_slug':slug,'environment':'production','snapshot_id':snapshot_id,'snapshot_digest':snapshot_digest,'source_commit':str(snapshot.get('source_commit') or ''),'historicalRehydrate':True,'rehydratedThroughHomologation':True,'sameHomologatedDeployment':bool(promoted.get('sameHomologatedDeployment')),'containerIdsPreservedAcrossPromotion':bool(promoted.get('containerIdsPreserved')),'containersRecreated':not bool(deployed.get('idempotent')),'stableRouteChanged':False,'secretValuesIncluded':False}
++
++
+ def deactivate_publication_bridges(payload:Any)->dict:
+     if not isinstance(payload,dict) or set(payload)!={'project_slug','deployment_id','stage'}:raise DeploymentError('invalid_bridge_deactivation_request','Pedido de desativação de bridge inválido.',400)
+     slug=str(payload.get('project_slug') or '');deployment_id=str(payload.get('deployment_id') or '');stage=str(payload.get('stage') or '')
+@@ -1498,6 +1518,7 @@
+         try:
+             if self.path=='/v1/deployments':return self.out(201,create_deployment(self.body()))
+             if self.path=='/v1/compose-snapshots/deploy':return self.out(201,deploy_compose_snapshot(self.body()))
++            if self.path=='/v1/compose-snapshots/rehydrate-historical':return self.out(201,rehydrate_historical_compose_snapshot(self.body()))
+             if self.path=='/v1/compose-deployments/promote':return self.out(200,promote_compose_deployment(self.body()))
+             if self.path=='/v1/compose-deployments/reconfigure':return self.out(200,reconfigure_compose_deployment(self.body()))
+             if self.path=='/v1/deployments/deactivate':return self.out(200,deactivate_deployment(self.body()))

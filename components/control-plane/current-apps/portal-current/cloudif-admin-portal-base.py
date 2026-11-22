@@ -4869,7 +4869,7 @@ _CPX_SCRIPT=r"""
  async function envLoad(){envMessage('Carregando…');envList.innerHTML='';try{const data=await envFetch('/cloudiff/portal/api/projects/'+encodeURIComponent(envModel.slug)+'/environment?environment='+encodeURIComponent(envModel.environment)+'&includePublicValues=true');envModel.revision=Number(data.revision||0);envModel.rows=(data.entries||[]).map(x=>x.secret?{name:x.name,service:x.service||'',secret:true}:envPublicRow(x));envModel.original=envModel.rows.filter(x=>!x.secret).map(x=>({...x}));envMessage('');envDraw()}catch(error){envMessage('Não foi possível carregar as variáveis: '+error.message,'bad')}}
  function envCollect(){const current=[];envList.querySelectorAll('[data-env-public-row]').forEach(row=>{const name=(row.querySelector('[data-env-name]').value||'').trim().toUpperCase(),value=row.querySelector('[data-env-value]').value,service=row.dataset.envService||'';if(name)current.push({name,value,service})});const before=new Map(envModel.original.map(x=>[x.service+'|'+x.name,x])),after=new Map(current.map(x=>[x.service+'|'+x.name,x])),changes=[],secretChanges=[];for(const [key,item] of before){if(!after.has(key))changes.push({operation:'delete',name:item.name,service:item.service})}for(const [key,item] of after){const old=before.get(key);if(!old||old.value!==item.value)changes.push({operation:'upsert',name:item.name,service:item.service,value:item.value,definition:{secret:false,runtime:true,buildTime:false,restartRequired:true}})}envList.querySelectorAll('[data-env-secret-row]').forEach(row=>{const index=Number(row.dataset.modelIndex),model=envModel.rows[index]||{},value=row.querySelector('[data-env-secret-value]').value;if(value)secretChanges.push({name:model.name,service:model.service||'',value})});return {changes,secretChanges}}
  async function envPost(operation,payload){const csrf=(document.querySelector('input[name="csrf_token"]')||{}).value||'';return envFetch('/cloudiff/portal/api/projects/'+encodeURIComponent(envModel.slug)+'/environment/'+operation,{method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':csrf},body:JSON.stringify(payload)})}
- async function envSave(){const save=envLayer.querySelector('[data-env-save]');save.disabled=true;try{const collected=envCollect();envMessage('Salvando e aplicando no '+(envLabels[envModel.environment]||envModel.environment)+'…','pending');const result=await envPost('human/save',{environment:envModel.environment,expectedRevision:envModel.revision,changes:collected.changes,secretChanges:collected.secretChanges});const runtime=result.runtimeApply||{};if(runtime.ok!==true)throw new Error(String(runtime.message||'A configuração foi registrada, mas o runtime não confirmou a aplicação.'));const changed=runtime.changedServices||[];envMessage('Revisão '+result.revision+' aplicada no '+(envLabels[envModel.environment]||envModel.environment)+(changed.length?' (serviços: '+changed.join(', ')+').':'.'));await envLoad()}catch(error){envMessage(error.message||'Falha ao salvar variáveis.','bad')}finally{save.disabled=false}}
+ async function envSave(){const save=envLayer.querySelector('[data-env-save]');save.disabled=true;try{const collected=envCollect();envMessage('Salvando e aplicando no '+(envLabels[envModel.environment]||envModel.environment)+'…','pending');const result=await envPost('human/save',{environment:envModel.environment,expectedRevision:envModel.revision,changes:collected.changes,secretChanges:collected.secretChanges});const runtime=result.runtimeApply||{};if(runtime.ok!==true)throw new Error(String(runtime.message||'A configuração foi registrada, mas o runtime não confirmou a aplicação.'));const changed=runtime.changedServices||[],slug=envModel.slug,environment=envModel.environment;envMessage('Revisão '+result.revision+' aplicada no '+(envLabels[environment]||environment)+(changed.length?' (serviços: '+changed.join(', ')+').':'.'));envClose();document.dispatchEvent(new CustomEvent('cloudif:environment-config-applied',{detail:{slug,environment,revision:Number(result.revision||0)}}));if(publicationEnvironmentLayer.style.display==='grid'&&publicationEnvironmentModel.slug===slug){publicationEnvironmentModel.active=environment;publicationEnvironmentUpdateTabs();await publicationEnvironmentLoad()}}catch(error){envMessage(error.message||'Falha ao salvar variáveis.','bad')}finally{save.disabled=false}}
  envLayer.querySelector('.env-wizard-close').onclick=envClose;envLayer.querySelector('[data-env-cancel]').onclick=envClose;envLayer.querySelector('[data-env-add]').onclick=()=>{envModel.rows.push({name:'',value:'',service:'',secret:false,new:true});envDraw()};envLayer.querySelector('[data-env-save]').onclick=envSave;envSelect.onchange=()=>{envModel.environment=envSelect.value;envLoad()};envLayer.addEventListener('click',event=>{if(event.target===envLayer)envClose()});
  document.addEventListener('click',event=>{const button=event.target.closest('[data-env-wizard]');if(!button)return;const requested=['preview','homologation','production'].includes(button.dataset.envEnvironment)?button.dataset.envEnvironment:'production';envModel.slug=button.dataset.projectSlug||'';envModel.environment=requested;envSelect.value=requested;envLayer.querySelector('[data-env-project]').textContent=envModel.slug;envLayer.style.display='grid';document.body.classList.add('cloudif-modal-open');envLoad();setTimeout(()=>envLayer.querySelector('select,input,button')?.focus(),0)});
  const envLabels={preview:'Preview',homologation:'Homologação',production:'Produção'};
@@ -4923,11 +4923,11 @@ _CPX_SCRIPT=r"""
    const label=kind==='php'?'PHP':'Node.js';
    publicationEnvironmentLoading('Consultando '+label+'…');
    try{
-     const response=await fetch('/cloudiff/portal/api/project-runtime-info?slug='+encodeURIComponent(publicationEnvironmentModel.slug)+'&kind='+encodeURIComponent(kind),{credentials:'same-origin',headers:{Accept:'application/json','Cache-Control':'no-store'}}),data=await response.json();
+     const response=await fetch('/cloudiff/portal/api/project-runtime-info?slug='+encodeURIComponent(publicationEnvironmentModel.slug)+'&kind='+encodeURIComponent(kind)+'&environment='+encodeURIComponent(publicationEnvironmentModel.active),{credentials:'same-origin',headers:{Accept:'application/json','Cache-Control':'no-store'}}),data=await response.json();
      if(requestId!==publicationEnvironmentModel.toolRequest)return;
      if(!response.ok||!data.ok)throw new Error(data.error||'runtime_info_failed');
-     const title=kind==='php'?'Informações do PHP':'Informações do Node.js',description=kind==='php'?'Versão, configuração e extensões carregadas.':'Runtime, npm e dependências declaradas da API.',standalone='/cloudiff/portal/action/project-runtime-info?slug='+encodeURIComponent(publicationEnvironmentModel.slug)+'&kind='+encodeURIComponent(kind);
-     publicationEnvironmentBody.innerHTML='<section class="publication-runtime-preview"><header><div><span>Diagnóstico autenticado</span><h4>'+envEsc(title)+'</h4><p>'+envEsc(description)+'</p></div><a class="publication-runtime-newtab" href="'+envEsc(standalone)+'" target="_blank" rel="noopener">Abrir em nova aba</a></header><div class="publication-runtime-preview-meta"><div><span>Projeto</span><strong>'+envEsc(publicationEnvironmentModel.slug)+'</strong></div><div><span>Container</span><strong>'+envEsc(data.container||'—')+'</strong></div></div><pre>'+envEsc(data.output||'')+'</pre></section>';
+     const title=kind==='php'?'Informações do PHP':'Informações do Node.js',description=data.available===false?(label+' não está instalado neste estágio. O diagnóstico abaixo mostra os runtimes realmente presentes.'):(kind==='php'?'Versão, configuração e extensões carregadas.':'Runtime, npm e dependências declaradas da aplicação.'),standalone='/cloudiff/portal/action/project-runtime-info?slug='+encodeURIComponent(publicationEnvironmentModel.slug)+'&kind='+encodeURIComponent(kind)+'&environment='+encodeURIComponent(publicationEnvironmentModel.active);
+     publicationEnvironmentBody.innerHTML='<section class="publication-runtime-preview"><header><div><span>Diagnóstico autenticado · '+envEsc(envLabels[publicationEnvironmentModel.active]||publicationEnvironmentModel.active)+'</span><h4>'+envEsc(title)+'</h4><p>'+envEsc(description)+'</p></div><a class="publication-runtime-newtab" href="'+envEsc(standalone)+'" target="_blank" rel="noopener">Abrir em nova aba</a></header><div class="publication-runtime-preview-meta"><div><span>Projeto</span><strong>'+envEsc(publicationEnvironmentModel.slug)+'</strong></div><div><span>Estágio</span><strong>'+envEsc(data.stageCode||publicationStageContext().stageCode||'—')+'</strong></div><div><span>Container</span><strong>'+envEsc(data.container||'não aplicável')+'</strong></div></div><pre>'+envEsc(data.output||'')+'</pre></section>';
    }catch(error){if(requestId!==publicationEnvironmentModel.toolRequest)return;publicationEnvironmentBody.innerHTML='<div class="publication-environment-error"><strong>Não foi possível consultar '+envEsc(label)+'.</strong><span>Tente atualizar o diagnóstico.</span></div>'}
  }
  function publicationTerminalRender(requestId){
@@ -5529,8 +5529,14 @@ document.getElementById('rd-refresh').onclick=load;document.getElementById('rd-r
     body=body.replace("__CSRF__",_rd_json.dumps(csrf))
     return page(user,'projetos',body)
 
-def _rd_runtime_info_with_reconcile(project, kind):
+def _rd_runtime_info_with_reconcile(project, kind, environment='', user=None):
+    environment=str(environment or '').strip().lower()
     payload={'project':project['slug'],'stack_id':project['stack_id'],'service':project['service'],'kind':kind}
+    if environment in {'preview','homologation','production'}:
+        import cloudif_portal_publications as publications
+        target=publications.runtime_diagnostic_target(project['slug'],user or {},environment)
+        payload.update({'environment':environment,'stage_code':str(target.get('stageCode') or ''),'container_candidates':target.get('containers') or []})
+        return _rd_agent('/komodo/project/runtime-info',payload,timeout=45)
     try:
         return _rd_agent('/komodo/project/runtime-info',payload,timeout=45)
     except Exception as first:
@@ -5550,6 +5556,7 @@ def _rd_runtime_info_with_reconcile(project, kind):
         except Exception:
             pass
         raise first
+
 
 if 'Portal' in globals() and not globals().get('_rd_wrapped'):
     _rd_prev_get=Portal.do_GET;_rd_prev_post=Portal.do_POST
@@ -5578,16 +5585,16 @@ if 'Portal' in globals() and not globals().get('_rd_wrapped'):
                 items.append(base)
             return _cpx_send_json(self,{'ok':True,'items':items,'can_repair':can})
         if path in ('/cloudiff/portal/api/project-runtime-info','/cloudif/portal/api/project-runtime-info','/api/project-runtime-info'):
-            q=_rd_parse.parse_qs(parsed.query);slug=(q.get('slug') or [''])[0];kind=((q.get('kind') or [''])[0]).lower()
+            q=_rd_parse.parse_qs(parsed.query);slug=(q.get('slug') or [''])[0];kind=((q.get('kind') or [''])[0]).lower();environment=((q.get('environment') or [''])[0]).lower()
             p=next((x for x in _rd_projects(user) if x['slug']==slug),None)
             if not p or kind not in ('php','node'):return _cpx_send_json(self,{'ok':False,'error':'not_found'},404)
             try:
-                info=_rd_runtime_info_with_reconcile(p,kind)
+                info=_rd_runtime_info_with_reconcile(p,kind,environment,user)
                 return _cpx_send_json(self,info,200 if info.get('ok') else 422)
             except Exception as exc:
                 return _cpx_send_json(self,{'ok':False,'error':'runtime_info_unavailable','detail':str(exc)[:220]},503)
         if path in ('/cloudiff/portal/action/project-runtime-info','/cloudif/portal/action/project-runtime-info','/action/project-runtime-info'):
-            q=_rd_parse.parse_qs(parsed.query);slug=(q.get('slug') or [''])[0];kind=((q.get('kind') or [''])[0]).lower()
+            q=_rd_parse.parse_qs(parsed.query);slug=(q.get('slug') or [''])[0];kind=((q.get('kind') or [''])[0]).lower();environment=((q.get('environment') or [''])[0]).lower()
             project=next((x for x in _rd_projects(user) if x['slug']==slug),None)
             if not project or kind not in ('php','node'):return self.send_error(404)
             try:
@@ -6265,7 +6272,7 @@ if 'page' in globals() and not globals().get('_ui144_wrapped'):
 # CloudIF readable modern colors END
 
 # CloudIF W/H/P release wizard BEGIN
-_WHP_RELEASE_ASSETS='<script id="cloudif-whp-release-script" src="/cloudiff/portal/assets/publication-release.js?v=20261122-history-runtime-actions-v5" defer></script>'
+_WHP_RELEASE_ASSETS='<script id="cloudif-whp-release-script" src="/cloudiff/portal/assets/publication-release.js?v=20261122-final-pattern-v6" defer></script>'
 if 'page' in globals() and not globals().get('_whp_release_wrapped'):
     _whp_release_prev_page=page
     def page(user,tab,body):

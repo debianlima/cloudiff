@@ -139,3 +139,7 @@ Produções anteriores permanecem **Offline** por padrão. O Histórico separa t
 - **Ativar no endereço principal**: somente quando a versão histórica está online/saudável, executa o cutover do domínio estável e só então desativa a Produção anterior.
 
 O estado Online/Offline deve vir do runtime real, não apenas do banco do Portal. Uma P histórica online não significa Produção ativa. Apenas `is_active=1` + alias estável validado representam a Produção principal.
+
+## Continuidade W→H→P: leitura obrigatória
+
+Antes de operar Preview/Homologação/Produção, ler `docs/RUNBOOK-PADRAO-CLOUDIFF-WHP-CONTINUIDADE.md`. Em especial: preservar Wn histórico, não reconstruir entre H→P, distinguir Online de Produção ativa, usar alias principal no cutover, resolver diagnóstico por estágio e nunca remover P histórica sem snapshot reidratável. O Executor live possui deltas adicionais versionados em `compat/`; reconciliação é incremental, nunca substituição cega pelo arquivo canônico antigo.

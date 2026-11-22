@@ -672,3 +672,13 @@
 Os assets `cloudif-admin-portal-base.py` e `portal/design/publication-release.js` estão byte a byte alinhados entre live e `main` após `c814a27fcd0b05386872aa7cb62be429f822b49c`.
 
 Os módulos `cloudif_portal_publications.py` (app/lib), `cloudif_portal_v2_coexist.py`, `cloudif_project_environments_overview.py` e `cloudif-komodo-agent.py` ainda contêm hotfixes live adicionais anteriores/adjacentes a esta unidade. Eles **não devem ser substituídos cegamente** pelo arquivo canônico. Foram capturados como patches de compatibilidade em `compat/live-extra-*.patch`, com scan de segredos PASS, para reconciliação incremental futura.
+
+## Fechamento Agenda: variáveis, diagnóstico, excluir/reidratar histórico e alias principal — 22/11/2026
+
+- `envSave` fecha o modal após confirmação de controller+runtime e recarrega o ambiente externo; cache-bust `20261122-final-pattern-v6`.
+- PHP/Node passaram a resolver containers do estágio. W3/P7 do Agenda não possuem PHP/Node; retornam diagnóstico válido `available=false`, com Python 3.14 detectado nas APIs.
+- Histórico mostra `Subir`, `Desligar`, `Ativar em <alias principal>` e `Excluir container`; P ativa não é excluível.
+- P6 provou exclusão reversível: 3 containers + 1 volume removidos, snapshot preservado `ready`; reidratação reconstruiu o mesmo snapshot via H técnica→P na mesma instância, sem alterar alias; P6 foi validada e voltou Offline.
+- Alias principal do Agenda é `agendaunica.cloudiff.duckdns.org`; P7 idempotente devolve alias como `stableUrl` e hostname numérico como `numericStableUrl`.
+- 85 testes Portal PASS; UI live/canônico alinhada. Reidratação do Executor live está em `compat/cloudiff-historical-production-rehydrate-executor.patch` até a reconciliação completa da linhagem live do Executor.
+- Próxima unidade obrigatória: auditoria de todos os projetos cadastrados contra `docs/RUNBOOK-PADRAO-CLOUDIFF-WHP-CONTINUIDADE.md`.

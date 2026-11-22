@@ -226,7 +226,7 @@
     }
 
     const current = active
-      ? `<div class="release-grid"><div class="release-box"><span>Produção atual</span><strong>${esc(active.stage_code || 'P ativa')}</strong></div><div class="release-box"><span>Endereço</span><strong>${esc(active.stableUrl || active.stable_hostname || active.url || 'Ativo')}</strong></div></div>`
+      ? `<div class="release-grid"><div class="release-box"><span>Produção atual</span><strong>${esc(active.stage_code || 'P ativa')}</strong></div><div class="release-box"><span>Endereço principal</span><strong>${esc(data.primaryUrl || active.stableUrl || active.stable_hostname || active.url || 'Ativo')}</strong></div></div>`
       : '<div class="release-note"><strong>Ainda não há Produção ativa.</strong><span>Homologue um candidato para habilitar a publicação.</span></div>';
     const historical = (data.releases || []).filter(item => Number(item.is_active) !== 1);
     const canRollback = Boolean(data.isOwner || data.isAdmin);
@@ -235,12 +235,15 @@
       const publication = Number(item.publication_number || 0);
       const runtimeState = item.runtimeState || {};
       const online = Boolean(runtimeState.online && runtimeState.healthy);
-      const badge = online ? '<span class="release-badge ok">Online</span>' : '<span class="release-badge">Offline</span>';
+      const deleted = String(runtimeState.state||'')==='deleted';
+      const badge = online ? '<span class="release-badge ok">Online</span>' : deleted ? '<span class="release-badge">Containers excluídos</span>' : '<span class="release-badge">Offline</span>';
       let actions = '<span class="pill muted">Somente responsável/admin</span>';
       if (canRollback) {
+        const activateLabel = data.primaryHostname ? `Ativar em ${esc(data.primaryHostname)}` : 'Ativar no endereço principal';
+        const deleteAllowed = Boolean(runtimeState.canDelete);
         actions = online
-          ? `<div class="release-actions"><button class="btn light" type="button" data-release-action="production-history-stop" data-publication="${publication}">Desligar</button><button class="btn" type="button" data-release-action="production-rollback" data-publication="${publication}">Ativar no endereço principal</button></div>`
-          : `<div class="release-actions"><button class="btn light" type="button" data-release-action="production-history-prepare" data-publication="${publication}">Subir</button></div>`;
+          ? `<div class="release-actions"><button class="btn light" type="button" data-release-action="production-history-stop" data-publication="${publication}">Desligar</button><button class="btn" type="button" data-release-action="production-rollback" data-publication="${publication}">${activateLabel}</button><button class="btn light" type="button" disabled title="Desligue a publicação antes de excluir os containers.">Excluir container</button></div>`
+          : `<div class="release-actions"><button class="btn light" type="button" data-release-action="production-history-prepare" data-publication="${publication}">Subir</button><button class="btn" type="button" data-release-action="production-rollback" data-publication="${publication}">${activateLabel}</button><button class="btn light" type="button" data-release-action="production-history-delete" data-publication="${publication}" ${deleteAllowed?'':'disabled title="Snapshot completo indisponível para reconstrução segura."'}>Excluir container</button></div>`;
       }
       return `<div class="release-history-row"><span><strong>${esc(code)}</strong><small>${esc((item.runtime || {}).sourceCommit || item.created_at || '')}</small>${badge}</span>${actions}</div>`;
     }).join('')}</div>` : '';
@@ -479,10 +482,16 @@
           if (!publication) return;
           return act('production/history/stop', { publicationNumber: publication }, 'Desligando P' + publication + '…', 'publication');
         }
+        if (action === 'production-history-delete') {
+          const publication = Number(button.dataset.publication || 0);
+          if (!publication) return;
+          if (!confirm('Excluir os containers de P' + publication + '? O registro histórico e o snapshot serão preservados para reconstrução, mas os containers/volumes runtime atuais serão removidos.')) return;
+          return act('production/history/delete', { publicationNumber: publication }, 'Excluindo containers de P' + publication + '…', 'publication');
+        }
         if (action === 'production-rollback') {
           const publication = Number(button.dataset.publication || 0);
           if (!publication) return;
-          if (!confirm('Ativar P' + publication + ' no endereço principal? A Produção atual só será desligada após a versão histórica estar saudável e o cutover concluir.')) return;
+          if (!confirm('Ativar P' + publication + ' em ' + (((model.data||{}).primaryHostname)||'o endereço principal') + '? A versão será subida e validada antes do cutover; a Produção atual só será desligada depois.')) return;
           return act('rollback', { publicationNumber: publication }, 'Ativando P' + publication + ' no endereço principal…', 'publication');
         }
         if (action === 'permissions-save') return savePermissions();

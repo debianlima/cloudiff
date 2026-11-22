@@ -95,7 +95,7 @@ class ReleaseFlowWizardUITests(unittest.TestCase):
         self.assertIn('Histórico de Produção',release)
         self.assertIn('data-release-action="production-rollback"',release)
         self.assertIn("act('rollback', { publicationNumber: publication }",release)
-        self.assertIn('A Produção atual só será desligada após a versão histórica estar saudável e o cutover concluir.',release)
+        self.assertIn('A versão será subida e validada antes do cutover; a Produção atual só será desligada depois.',release)
 
     def test_preview_transport_failure_recovers_from_healthy_readback(self):
         release=RELEASE_JS_PATH.read_text()

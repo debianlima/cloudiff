@@ -82,5 +82,12 @@ class ReleaseFlowV144Tests(unittest.TestCase):
         self.assertIn('"preserved-state"',AGENT)
         self.assertIn('authz_access_source',AGENT)
 
+    def test_history_delete_and_stage_diagnostic_contracts_are_present(self):
+        source=Path('components/control-plane/srv/cloudif/lib/cloudif_portal_publications.py').read_text()
+        self.assertIn('def historical_publication_delete_runtime',source)
+        self.assertIn('def runtime_diagnostic_target',source)
+        self.assertIn('rehydratedFromSnapshot',source)
+        self.assertIn('primaryHostname',source)
+
 if __name__=='__main__':
     unittest.main()

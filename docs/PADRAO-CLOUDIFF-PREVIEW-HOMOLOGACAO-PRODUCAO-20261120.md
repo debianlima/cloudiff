@@ -99,3 +99,9 @@ Produções anteriores permanecem **Offline** por padrão. O Histórico separa t
 - **Ativar no endereço principal**: somente quando a versão histórica está online/saudável, executa o cutover do domínio estável e só então desativa a Produção anterior.
 
 O estado Online/Offline deve vir do runtime real, não apenas do banco do Portal. Uma P histórica online não significa Produção ativa. Apenas `is_active=1` + alias estável validado representam a Produção principal.
+
+### Fechamento de UX, diagnóstico e descarte de runtime histórico
+
+Após sucesso de variável humana, o modal deve fechar e o ambiente externo deve recarregar. PHP/Node/Terminal são sempre resolvidos pelo estágio selecionado; tecnologia ausente é diagnóstico válido, não erro. O Histórico distingue `Subir`, `Desligar`, `Ativar no endereço principal` e `Excluir container`. A exclusão só vale para P inativa com snapshot reidratável e não remove o histórico; a reconstrução passa tecnicamente por H→P na mesma instância e nunca altera o alias estável até a ação explícita `Ativar`.
+
+O endereço principal exibido/ativado vem do alias cadastrado do projeto (`project_publication_aliases`); o hostname numérico permanece como compatibilidade e não substitui o alias na UX.
