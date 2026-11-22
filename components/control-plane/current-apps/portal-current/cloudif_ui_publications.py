@@ -6,6 +6,7 @@ import glob
 import os
 import urllib.request
 import cloudif_portal_readmodel as _rm
+import cloudif_db_stage_panel as _db_panel
 
 DB='/var/lib/cloudif/portal/cloudif-portal.db'
 
@@ -123,6 +124,16 @@ def _project_context(slug, framework_hint=''):
                 if source in {'site','dist','build','public','root'} and not context.get('runtime'):context['framework']='Site estático'
                 elif komodo.get('generated_placeholder'):context['framework']='Não identificado'
             context['security']='HTTPS ativo' + (' · Health validado' if komodo.get('healthy') else '')
+        try:
+            cand_rows=[dict(x) for x in con.execute('select stage_code,candidate_number,runtime_diff_json from publication_candidates where project_slug=?',(slug,)).fetchall()]
+            by_number={int(x['candidate_number']):x for x in cand_rows}
+            rel_rows=[]
+            for x in con.execute('select stage_code,candidate_number from production_releases where project_slug=?',(slug,)).fetchall():
+                cand=by_number.get(int(x['candidate_number'] or 0))
+                rel_rows.append({'stage_code':x['stage_code'],'runtime_diff_json':(cand or {}).get('runtime_diff_json')})
+            context['stage_databases']=_db_panel.stage_databases(cand_rows,rel_rows)
+        except Exception:
+            context['stage_databases']={}
         con.close()
     except Exception:
         pass
@@ -144,9 +155,10 @@ def _project_information(context):
         '<div class="publication-information">'
         f'<div class="publication-info-card"><span>Versões</span><strong>{h((context.get("runtime") or {}).get("versions") or "Não identificadas")}</strong><small>Runtime provisionado</small></div>'
         f'<div class="publication-info-card"><span>Banco vinculado</span>{database_value}<small>Tenant da aplicação</small></div>'
-        f'<div class="publication-info-card"><span>Segurança</span><strong>{h(context.get("security"))}</strong><small>HTTPS e healthcheck</small></div>'
-        f'<div class="publication-info-card"><span>Repositório Forge</span>{repo_value}<small>Código-fonte do projeto</small></div>'
-        '</div>'
+        + _db_panel.render(context.get('stage_databases') or {})
+        + f'<div class="publication-info-card"><span>Segurança</span><strong>{h(context.get("security"))}</strong><small>HTTPS e healthcheck</small></div>'
+        + f'<div class="publication-info-card"><span>Repositório Forge</span>{repo_value}<small>Código-fonte do projeto</small></div>'
+        + '</div>'
     )
 
 
