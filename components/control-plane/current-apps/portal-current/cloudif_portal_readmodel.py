@@ -109,3 +109,69 @@ def trigger_refresh():
         return result.returncode==0
     except Exception:
         return False
+
+# T-046: normalized approval index; canonical records stay in the approval service.
+APPROVAL_LIVE_STATUSES=('pending','pending_second','approved')
+
+def _approval_index_schema(con):
+    con.execute('''create table if not exists approval_index(
+      approval_id text primary key,
+      project_slug text not null default '',
+      status text not null default '',
+      created_at real not null default 0,
+      payload_json text not null
+    )''')
+    con.execute('create index if not exists approval_index_slug_status_created on approval_index(project_slug,status,created_at desc)')
+    con.execute('create index if not exists approval_index_status_created on approval_index(status,created_at desc)')
+
+def approval_index_replace(rows):
+    con=_con()
+    try:
+        _approval_index_schema(con)
+        con.execute('delete from approval_index')
+        for row in rows or []:
+            aid=str(row.get('approval_id') or '')
+            if not aid:continue
+            con.execute('insert or replace into approval_index(approval_id,project_slug,status,created_at,payload_json) values(?,?,?,?,?)',
+              (aid,str(row.get('project_slug') or ''),str(row.get('status') or ''),float(row.get('created_at') or 0),json.dumps(row,ensure_ascii=False,separators=(',',':'))))
+        con.commit()
+    finally:con.close()
+
+def approval_index_available():
+    con=_con()
+    try:
+        _approval_index_schema(con)
+        return bool(con.execute('select 1 from approval_index limit 1').fetchone())
+    finally:con.close()
+
+def _approval_slug_filter(slugs):
+    slugs=[str(s) for s in slugs or []]
+    if not slugs:return "1=0",[]
+    return 'project_slug in ('+','.join('?'*len(slugs))+')',slugs
+
+def approval_index_counts(slugs):
+    where,args=_approval_slug_filter(slugs)
+    live=APPROVAL_LIVE_STATUSES
+    con=_con()
+    try:
+        _approval_index_schema(con)
+        pending=con.execute("select count(*) from approval_index where "+where+" and status in ('pending','pending_second')",args).fetchone()[0]
+        approved=con.execute("select count(*) from approval_index where "+where+" and status='approved'",args).fetchone()[0]
+        history=con.execute("select count(*) from approval_index where "+where+" and status not in ('pending','pending_second','approved')",args).fetchone()[0]
+        return {'pending':pending,'approved':approved,'history':history}
+    finally:con.close()
+
+def approval_index_page(slugs,statuses=None,exclude_statuses=None,limit=50,offset=0):
+    where,args=_approval_slug_filter(slugs)
+    clauses=[where];params=list(args)
+    if statuses:
+        clauses.append('status in ('+','.join('?'*len(statuses))+')');params.extend(statuses)
+    if exclude_statuses:
+        clauses.append('status not in ('+','.join('?'*len(exclude_statuses))+')');params.extend(exclude_statuses)
+    limit=max(1,min(int(limit or 50),200));offset=max(0,int(offset or 0))
+    con=_con()
+    try:
+        _approval_index_schema(con)
+        rows=con.execute('select payload_json from approval_index where '+' and '.join(clauses)+' order by created_at desc,approval_id limit ? offset ?',params+[limit,offset]).fetchall()
+        return [json.loads(r[0]) for r in rows]
+    finally:con.close()

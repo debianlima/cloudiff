@@ -5869,7 +5869,10 @@ def _ap_raw():
     def load():
         try:code,data=_ap_panel.request(_ap_cfg('CLOUDIF_APPROVAL_URL','http://127.0.0.1:18204'),_ap_cfg('CLOUDIF_APPROVAL_TOKEN',''),'GET','/v1/approvals?status=all')
         except Exception:return []
-        return (data.get('approvals') or []) if code==200 and isinstance(data,dict) and data.get('ok') else []
+        rows=(data.get('approvals') or []) if code==200 and isinstance(data,dict) and data.get('ok') else []
+        try:_rm.approval_index_replace(rows)
+        except Exception:pass
+        return rows
     return _rm.stale_while_revalidate('approvals','rows',90,300,load)
 def _ap_raw_policies():
     def load():
@@ -5883,6 +5886,27 @@ def _ap_visible(user):
 def _ap_visible_policies(user):
     slugs={x['slug'] for x in user_visible_projects(user['username'],user['groups'])}
     return _ap_panel.filter_policies(_ap_raw_policies(),slugs)
+def _ap_slugs(user):
+    return {x['slug'] for x in user_visible_projects(user['username'],user['groups'])}
+def _ap_summary(user):
+    slugs=_ap_slugs(user)
+    if _rm.approval_index_available():
+        live=_ap_panel.filter_rows(_rm.approval_index_page(slugs,statuses=list(_rm.APPROVAL_LIVE_STATUSES),limit=80),slugs)
+        return live,_rm.approval_index_counts(slugs)
+    rows=_ap_visible(user)
+    live=[x for x in rows if x['status'] in _rm.APPROVAL_LIVE_STATUSES][:80]
+    return live,{'pending':sum(1 for x in live if x['status'] in ('pending','pending_second')),'approved':sum(1 for x in live if x['status']=='approved'),'history':sum(1 for x in rows if x['status'] not in _rm.APPROVAL_LIVE_STATUSES)}
+def _ap_history_page(user,page,page_size):
+    slugs=_ap_slugs(user)
+    page=max(1,int(page or 1));page_size=max(1,min(int(page_size or 20),100))
+    if _rm.approval_index_available():
+        total=_rm.approval_index_counts(slugs)['history']
+        rows=_ap_panel.filter_rows(_rm.approval_index_page(slugs,exclude_statuses=list(_rm.APPROVAL_LIVE_STATUSES),limit=page_size,offset=(page-1)*page_size),slugs)
+    else:
+        fallback=[x for x in _ap_visible(user) if x['status'] not in _rm.APPROVAL_LIVE_STATUSES]
+        fallback.sort(key=lambda x:float(x.get('created_at') or 0),reverse=True)
+        total=len(fallback);rows=fallback[(page-1)*page_size:page*page_size]
+    return {'history_html':[_ap_panel.history_card(x) for x in rows],'history_total':total,'page':page,'page_size':page_size,'has_more':page*page_size<total}
 def _ap_can_decide(user):
     groups=set(user.get('groups') or [])
     return bool(user.get('admin') or 'CloudIF-Tenants-Admin' in groups or 'CloudIF-Professor' in groups)
@@ -5892,7 +5916,9 @@ def _ap_human_role(user):
     if 'CloudIF-Professor' in groups:return 'professor'
     return 'aluno'
 def _ap_render(user):
-    try:return _ap_panel.render(_ap_visible(user),_prod_csrf_token(user),_ap_can_decide(user),_ap_visible_policies(user),user.get('username') or '')
+    try:
+        live,counts=_ap_summary(user)
+        return _ap_panel.render(live,_prod_csrf_token(user),_ap_can_decide(user),_ap_visible_policies(user),user.get('username') or '',history_total=counts['history'],history_lazy=True,counts=counts)
     except Exception:return '<section class="card"><h2>Aprovações humanas</h2><p class="pill bad">Serviço de aprovações temporariamente indisponível.</p></section>'
 # Dedicated project-context tab; not appended to Todos os projetos.
 if 'Portal' in globals() and not globals().get('_ap_portal_wrapped'):
@@ -5907,7 +5933,13 @@ if 'Portal' in globals() and not globals().get('_ap_portal_wrapped'):
     def _ap_get(self):
         path=urllib.parse.urlparse(self.path).path.rstrip('/')
         if path in ('/cloudiff/portal/api/approvals','/cloudif/portal/api/approvals','/api/approvals'):
-            try:return _ap_send_json(self,200,{'ok':True,'approvals':_ap_visible(self.user()),'policies':_ap_visible_policies(self.user()),'metadata_sanitized':True,'secrets_exposed':False,'can_decide':_ap_can_decide(self.user())})
+            try:
+                qs=urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+                if (qs.get('history') or [''])[0]=='1':
+                    data=_ap_history_page(self.user(),(qs.get('page') or ['1'])[0],(qs.get('page_size') or ['20'])[0])
+                    data.update({'ok':True,'metadata_sanitized':True,'secrets_exposed':False})
+                    return _ap_send_json(self,200,data)
+                return _ap_send_json(self,200,{'ok':True,'approvals':_ap_visible(self.user()),'policies':_ap_visible_policies(self.user()),'metadata_sanitized':True,'secrets_exposed':False,'can_decide':_ap_can_decide(self.user())})
             except Exception:return _ap_send_json(self,503,{'ok':False,'error':'approval_api_unavailable'})
         return _ap_prev_get(self)
     def _ap_post(self):
