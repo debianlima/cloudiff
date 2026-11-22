@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import fcntl, hashlib, hmac, json, os, re, sqlite3, ssl, time, urllib.error, urllib.parse, urllib.request
+import cloudif_portal_readmodel as _rm
 from contextlib import contextmanager
 from pathlib import Path
 import cloudif_publication_permissions as publication_permissions
@@ -1104,14 +1105,20 @@ def historical_publication_delete_runtime(slug,publication_number,user):
     except Exception:pass
     removed=_remove_compose_runtime(deployment_id)
     detail['runtimeDeletedAt']=_now();detail['runtimeDeletedDeploymentId']=deployment_id;detail['runtimeDeletedSnapshotId']=snapshot_id
-    con=sqlite3.connect(DB);_ensure_schema(con);con.execute('update project_publications set detail_json=? where project_slug=? and deploy_number=?',(json.dumps(detail,ensure_ascii=False),slug,int(row['deploy_number'])));con.commit();con.close()
-    return {'ok':True,'project':slug,'publicationNumber':publication,'stageCode':str(row['stage_code'] or ('P'+str(publication))),'runtimeState':'deleted','containersRemoved':int(removed.get('containersRemoved') or 0),'volumesRemoved':int(removed.get('volumesRemoved') or 0),'snapshotPreserved':True,'snapshotId':snapshot_id,'canRehydrate':True,'stableActivated':False,'secretValuesIncluded':False}
+    con=sqlite3.connect(DB);_ensure_schema(con);con.execute('begin immediate');con.execute("update project_publications set detail_json=?,status='archived',is_active=0 where project_slug=? and deploy_number=?",(json.dumps(detail,ensure_ascii=False),slug,int(row['deploy_number'])));con.execute("update production_releases set status='archived',is_active=0 where project_slug=? and publication_number=?",(slug,publication));con.commit();con.close()
+    try:_rm.invalidate('publication-project-context')
+    except Exception:pass
+    for namespace in ('project-runtime-job','project-runtime-state'):
+        try:_rm.invalidate(namespace,slug)
+        except Exception:pass
+    _rm.trigger_refresh()
+    return {'ok':True,'project':slug,'publicationNumber':publication,'stageCode':str(row['stage_code'] or ('P'+str(publication))),'runtimeState':'deleted','historyRemoved':True,'containersRemoved':int(removed.get('containersRemoved') or 0),'volumesRemoved':int(removed.get('volumesRemoved') or 0),'snapshotPreserved':True,'snapshotId':snapshot_id,'canRehydrate':False,'stableActivated':False,'secretValuesIncluded':False}
 
 
 def release_flow_status(slug,user):
     con=sqlite3.connect(DB);con.row_factory=sqlite3.Row;_ensure_schema(con)
     if not (_project_allowed(con,slug,user) or _can_homologate(con,slug,user)):con.close();raise PermissionError('Projeto não encontrado ou sem permissão.')
-    num=_number(con,slug);candidates=[dict(x) for x in con.execute('select * from publication_candidates where project_slug=? order by candidate_number desc limit 20',(slug,)).fetchall()];releases=[dict(x) for x in con.execute('select * from production_releases where project_slug=? order by publication_number desc limit 20',(slug,)).fetchall()];activations=[dict(x) for x in con.execute('select * from production_activation_requests where project_slug=? order by publication_number desc limit 20',(slug,)).fetchall()];hom=[str(x['username']) for x in con.execute('select username from project_homologators where project_slug=? order by username',(slug,)).fetchall()];owner=_project_owner(con,slug);permission_state=publication_permissions.snapshot(con,slug,user);can_submit=bool(_project_allowed(con,slug,user));can_homologate=_can_homologate(con,slug,user);can_publish=_can_publish(con,slug,user);is_owner=bool((user.get('username') or '').strip().lower()==owner);is_admin=publication_permissions.is_admin(user);is_professor=publication_permissions.is_professor(user)
+    num=_number(con,slug);candidates=[dict(x) for x in con.execute('select * from publication_candidates where project_slug=? order by candidate_number desc limit 20',(slug,)).fetchall()];releases=[dict(x) for x in con.execute("select * from production_releases where project_slug=? and status='published' order by publication_number desc limit 20",(slug,)).fetchall()];activations=[dict(x) for x in con.execute('select * from production_activation_requests where project_slug=? order by publication_number desc limit 20',(slug,)).fetchall()];hom=[str(x['username']) for x in con.execute('select username from project_homologators where project_slug=? order by username',(slug,)).fetchall()];owner=_project_owner(con,slug);permission_state=publication_permissions.snapshot(con,slug,user);can_submit=bool(_project_allowed(con,slug,user));can_homologate=_can_homologate(con,slug,user);can_publish=_can_publish(con,slug,user);is_owner=bool((user.get('username') or '').strip().lower()==owner);is_admin=publication_permissions.is_admin(user);is_professor=publication_permissions.is_professor(user)
     try:
         from cloudif_project_environment_web import authorization
         can_write=bool(authorization(slug,user.get('username') or '',user.get('groups') or []).get('canWrite'))

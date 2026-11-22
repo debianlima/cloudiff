@@ -807,3 +807,13 @@ O backup parcial da unidade foi substituído por rollback direcionado de 28 KB (
 - Prova positiva: HTTP 200, target container, W1, sourceLinked=true.
 - Prova negativa: gateway adulterado rejeitado com HTTP 409 `source_linked_preview_identity_invalid`.
 - W1 permaneceu saudável. Evidência: `docs/REMEDIACAO-SGREP-V2-TERMINAL-SOURCE-LINKED-20261122.md`.
+
+## Portal — histórico operacional e read-model indexado — 22/11/2026
+
+- `Excluir` de P histórica agora arquiva a publicação operacionalmente (`archived`) após remover runtime; snapshot/auditoria permanecem internos e a linha desaparece das duas listas.
+- Agenda P6/P3, já com `runtimeDeletedAt`, foram reconciliadas para `archived`; P8 ativa, P7 Offline reidratável e P2 Offline legado permanecem na lista.
+- P2 não recebe mais botão Excluir quando `canDelete=false`; P7 recebe porque possui snapshot seguro.
+- Página principal e modal usam o mesmo conjunto operacional (`production_releases status=published`) e ações de histórico disparam refresh das duas superfícies.
+- Novo `portal_readmodel_cache` pré-aquece Projetos, estados de projeto, contexto de Publicação, Conectores e Aprovações. O timer existente de 60 s faz refresh em background e mutações invalidam/disparam refresh.
+- Medição Agenda: contexto ~970,48 ms sem cache → ~1,43 ms em hit; após pré-aquecimento, primeiro request ~1,89 ms.
+- Evidência: `docs/REMEDIACAO-PORTAL-READMODEL-HISTORICO-20261122.md`.

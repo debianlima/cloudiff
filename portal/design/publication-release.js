@@ -243,7 +243,7 @@
         const deleteAllowed = Boolean(runtimeState.canDelete);
         actions = online
           ? `<div class="release-actions"><button class="btn light" type="button" data-release-action="production-history-stop" data-publication="${publication}">Desligar</button><button class="btn" type="button" data-release-action="production-rollback" data-publication="${publication}">${activateLabel}</button><button class="btn light" type="button" disabled title="Desligue a publicação antes de excluir os containers.">Excluir container</button></div>`
-          : `<div class="release-actions"><button class="btn light" type="button" data-release-action="production-history-prepare" data-publication="${publication}">Subir</button><button class="btn" type="button" data-release-action="production-rollback" data-publication="${publication}">${activateLabel}</button><button class="btn light" type="button" data-release-action="production-history-delete" data-publication="${publication}" ${deleteAllowed?'':'disabled title="Snapshot completo indisponível para reconstrução segura."'}>Excluir container</button></div>`;
+          : `<div class="release-actions"><button class="btn light" type="button" data-release-action="production-history-prepare" data-publication="${publication}">Subir</button><button class="btn" type="button" data-release-action="production-rollback" data-publication="${publication}">${activateLabel}</button>${deleteAllowed?`<button class="btn light" type="button" data-release-action="production-history-delete" data-publication="${publication}">Excluir container</button>`:''}</div>`;
       }
       return `<div class="release-history-row"><span><strong>${esc(code)}</strong><small>${esc((item.runtime || {}).sourceCommit || item.created_at || '')}</small>${badge}</span>${actions}</div>`;
     }).join('')}</div>` : '';
@@ -363,6 +363,9 @@
       await post('preview/ensure', {});
       model.previewPreparing = false;
       await load();
+      if (operation.startsWith('production/history/')) {
+        document.dispatchEvent(new CustomEvent('cloudif:publication-state-changed', { detail: { slug: model.slug, status: 'succeeded', operation } }));
+      }
     } catch (error) {
       model.previewPreparing = false;
       await recoverHealthyPreviewAfterEnsureFailure(error, 'Não foi possível preparar o Preview automaticamente.');
@@ -485,7 +488,7 @@
         if (action === 'production-history-delete') {
           const publication = Number(button.dataset.publication || 0);
           if (!publication) return;
-          if (!confirm('Excluir os containers de P' + publication + '? O registro histórico e o snapshot serão preservados para reconstrução, mas os containers/volumes runtime atuais serão removidos.')) return;
+          if (!confirm('Excluir P' + publication + ' do histórico operacional? Os containers/volumes runtime serão removidos e a linha deixará de aparecer nas listas. A auditoria técnica e o snapshot permanecem preservados internamente.')) return;
           return act('production/history/delete', { publicationNumber: publication }, 'Excluindo containers de P' + publication + '…', 'publication');
         }
         if (action === 'production-rollback') {

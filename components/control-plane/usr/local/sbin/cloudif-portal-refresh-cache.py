@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import csv, datetime, json, os, sqlite3, subprocess, urllib.request
+import csv, datetime, json, os, sqlite3, subprocess, urllib.request, sys
 from pathlib import Path
 
 BASE = Path(os.environ.get("CLOUDIF_BASE", "/srv/cloudif"))
@@ -187,10 +187,50 @@ def refresh_tenants():
     con.commit()
     con.close()
 
+
+def refresh_portal_readmodels():
+    for lib in ('/srv/cloudif/app-pointers/portal-current','/srv/cloudif/lib'):
+        if lib not in sys.path:sys.path.insert(0,lib)
+    try:
+        import cloudif_portal_readmodel as rm
+        from cloudif_ui_data import discover_projects
+        import cloudif_ui_publications as publications
+        import cloudif_project_provision_status as provision
+        import cloudif_project_identity_panel as identities
+        import cloudif_approval_panel as approvals
+    except Exception as exc:
+        print('WARN: readmodel imports',type(exc).__name__);return
+    try:
+        rm.put('tenants','registry',tenants_registry(),'timer')
+    except Exception as exc:print('WARN: tenants readmodel',type(exc).__name__)
+    try:
+        projects=discover_projects() or [];rm.put('projects','discovered',projects,'timer')
+    except Exception as exc:
+        projects=[];print('WARN: projects readmodel',type(exc).__name__)
+    for item in projects:
+        slug=str(item.get('slug') or '').strip()
+        if not slug:continue
+        try:
+            job=provision.status(slug)
+            state={'status':str(job.get('status') or ('not_started' if not job.get('ok') else 'unknown')),'step':str(job.get('current_step') or ''),'error':str(job.get('last_error') or ''),'updated_at':str(job.get('updated_at') or ''),'recoverable':bool(job.get('recoverable')),'recovery_action':str(job.get('recovery_action') or ''),'source':str(job.get('source') or '')}
+            rm.put('project-job-state',slug,state,'timer')
+        except Exception:pass
+        try:
+            rm.invalidate('publication-project-context',slug+'|');rm.invalidate('project-runtime-job',slug)
+            ctx=publications._project_context(slug,'');runtime=ctx.get('runtime') or {};status=str(ctx.get('service_status') or 'Não verificado');rm.put('project-runtime-state',slug,{'label':str(runtime.get('versions') or 'Não identificado'),'service':'web','status':status,'healthy':('saudável' in status.lower() or status.lower() in {'running','healthy'})},'timer')
+        except Exception:pass
+    try:
+        base=os.environ.get('CLOUDIF_ONBOARDING_URL','http://127.0.0.1:18208');token=os.environ.get('CLOUDIF_ONBOARDING_API_TOKEN','');rm.put('connectors','all',identities.fetch(base,token),'timer')
+    except Exception as exc:print('WARN: connectors readmodel',type(exc).__name__)
+    try:
+        base=os.environ.get('CLOUDIF_APPROVAL_URL','http://127.0.0.1:18204');token=os.environ.get('CLOUDIF_APPROVAL_TOKEN','');code,data=approvals.request(base,token,'GET','/v1/approvals?status=all');rm.put('approvals','rows',(data.get('approvals') or []) if code==200 and isinstance(data,dict) and data.get('ok') else [],'timer');code,data=approvals.request(base,token,'GET','/v1/approval-policies?status=active');rm.put('approvals','policies',(data.get('policies') or []) if code==200 and isinstance(data,dict) and data.get('ok') else [],'timer')
+    except Exception as exc:print('WARN: approvals readmodel',type(exc).__name__)
+
 def main():
     init_db()
     refresh_tenants()
     refresh_nodes()
+    refresh_portal_readmodels()
     print("OK: cache atualizado", now_iso())
 
 if __name__ == "__main__":

@@ -3,6 +3,7 @@
 import sys as _cloudif_mod_sys
 if "/srv/cloudif/lib" not in _cloudif_mod_sys.path:
     _cloudif_mod_sys.path.insert(0, "/srv/cloudif/lib")
+import cloudif_portal_readmodel as _rm
 # CloudIF v61 modular lib path END
 
 #!/usr/bin/env python3
@@ -582,15 +583,17 @@ def url(path):
     return BASE_PATH + "/" + path
 
 def tenants_registry():
-    reg = BASE / "registry" / "tenants.csv"
-    rows = []
-    if not reg.exists():
+    def load():
+        reg = BASE / "registry" / "tenants.csv"
+        rows = []
+        if not reg.exists():
+            return rows
+        with reg.open(errors="ignore") as f:
+            for r in csv.DictReader(f):
+                if r.get("tenant"):
+                    rows.append(r)
         return rows
-    with reg.open(errors="ignore") as f:
-        for r in csv.DictReader(f):
-            if r.get("tenant"):
-                rows.append(r)
-    return rows
+    return _rm.cached('tenants','registry',90,load)
 
 def tenant_visible(tenant, username, groups, con=None):
     if is_admin(groups):
@@ -5470,8 +5473,9 @@ def _rd_canonical_repo(slug):
 def _rd_projects(user):
     from cloudif_ui_data import discover_projects
     allowed={p.get('slug') for p in _cpx_allowed_projects(user)}
+    inventory=_rm.cached('projects','discovered',90,discover_projects)
     rows=[]
-    for p in discover_projects():
+    for p in inventory:
         if p.get('slug') not in allowed:continue
         sid=p.get('komodo_stack_id') or p.get('stack_id')
         rows.append({'slug':p.get('slug'),'name':p.get('name') or p.get('slug'),'tenant':p.get('tenant') or p.get('owner') or '',
@@ -5766,7 +5770,7 @@ import cloudif_project_identity_panel as _oi_panel_module
 def _oi_cfg(key,default=''):
     return os.environ.get(key) or setting_value(key,default)
 def _oi_all():
-    return _oi_panel_module.fetch(_oi_cfg('CLOUDIF_ONBOARDING_URL','http://127.0.0.1:18208'),_oi_cfg('CLOUDIF_ONBOARDING_API_TOKEN',''))
+    return _rm.cached('connectors','all',90,lambda:_oi_panel_module.fetch(_oi_cfg('CLOUDIF_ONBOARDING_URL','http://127.0.0.1:18208'),_oi_cfg('CLOUDIF_ONBOARDING_API_TOKEN','')))
 def _oi_visible(user):
     allowed={x['slug'] for x in user_visible_projects(user['username'],user['groups'])}
     return _oi_panel_module.visible(_oi_all(),allowed)
@@ -5795,9 +5799,10 @@ if 'Portal' in globals() and not globals().get('_oi_portal_wrapped'):
             body=_oi_json.dumps(data,ensure_ascii=False,separators=(',',':')).encode();self.send_response(200 if data['ok'] else 503);self.send_header('Content-Type','application/json');self.send_header('Cache-Control','no-store');self.send_header('Content-Length',str(len(body)));self.end_headers();self.wfile.write(body);return
         return _oi_prev_get(self)
     def _oi_trigger():
+        _rm.invalidate('connectors')
         try:
             _oi_subprocess.run(['/usr/bin/systemctl','start','cloudif-control-plane-sync.service'],timeout=30,check=True)
-            token=_oi_cfg('CLOUDIF_ONBOARDING_API_TOKEN','');req=_oi_request.Request(_oi_cfg('CLOUDIF_ONBOARDING_URL','http://127.0.0.1:18208')+'/v1/reconcile',data=b'{}',method='POST',headers={'Authorization':'Bearer '+token,'Content-Type':'application/json'});_oi_request.urlopen(req,timeout=240).read()
+            token=_oi_cfg('CLOUDIF_ONBOARDING_API_TOKEN','');req=_oi_request.Request(_oi_cfg('CLOUDIF_ONBOARDING_URL','http://127.0.0.1:18208')+'/v1/reconcile',data=b'{}',method='POST',headers={'Authorization':'Bearer '+token,'Content-Type':'application/json'});_oi_request.urlopen(req,timeout=240).read();_rm.trigger_refresh()
         except Exception as e:print('onboarding-trigger',type(e).__name__,flush=True)
     def _oi_post(self):
         path=urllib.parse.urlparse(self.path).path.rstrip('/')
@@ -5824,6 +5829,7 @@ if 'Portal' in globals() and not globals().get('_oi_portal_wrapped'):
                 code=e.code
             except Exception:return _oi_send_json(self,{'ok':False,'error':'rotation_unavailable'},503)
             if code!=200 or not data.get('ok') or not data.get('token'):return _oi_send_json(self,{'ok':False,'error':data.get('error') or 'rotation_failed'},code if code in (400,403,404,409) else 502)
+            _rm.invalidate('connectors');_rm.trigger_refresh()
             return _oi_send_json(self,{'ok':True,'project_slug':slug,'client_id':data['client_id'],'rotation_id':data['rotation_id'],'token':data['token'],'one_time_delivery':True,'status':'active'},200)
         if path.endswith('/action/create_project'):
             if not _cloudif_security_valid_origin(self):
@@ -5846,7 +5852,7 @@ if 'Portal' in globals() and not globals().get('_oi_portal_wrapped'):
                 return _cloudif_security_reject(self,'Projeto sem banco desabilitado.',403)
             con=db();con.execute('''INSERT INTO projects(slug,name,tenant,owner,description,created_at,updated_at) VALUES(?,?,?,?,?,?,?) ON CONFLICT(slug) DO UPDATE SET name=excluded.name,tenant=excluded.tenant,description=excluded.description,updated_at=excluded.updated_at''',(slug,name,tenant,user['username'],desc,now_iso(),now_iso()));con.execute('INSERT OR IGNORE INTO project_acl(slug,subject_type,subject) VALUES(?,?,?)',(slug,'user',user['username']));con.commit();con.close()
             log_action(user['username'],'create_project',slug,0,'tenant='+tenant,'')
-            _oi_trigger()
+            _oi_trigger();_rm.invalidate('projects');_rm.invalidate('connectors');_rm.invalidate('project-job-state',slug);_rm.invalidate('project-runtime-state',slug);_rm.trigger_refresh()
             return self.redirect('/?tab=projetos&project='+urllib.parse.quote(slug))
         return _oi_prev_post(self)
     Portal.do_GET=_oi_get;Portal.do_POST=_oi_post;_oi_portal_wrapped=True
@@ -5860,21 +5866,17 @@ import cloudif_approval_panel as _ap_panel
 def _ap_cfg(key,default=''):
     return os.environ.get(key) or setting_value(key,default)
 def _ap_raw():
-    try:
-        code,data=_ap_panel.request(_ap_cfg('CLOUDIF_APPROVAL_URL','http://127.0.0.1:18204'),_ap_cfg('CLOUDIF_APPROVAL_TOKEN',''),'GET','/v1/approvals?status=all')
-    except Exception:
-        return []
-    if code!=200 or not isinstance(data,dict) or not data.get('ok'):
-        return []
-    return data.get('approvals') or []
+    def load():
+        try:code,data=_ap_panel.request(_ap_cfg('CLOUDIF_APPROVAL_URL','http://127.0.0.1:18204'),_ap_cfg('CLOUDIF_APPROVAL_TOKEN',''),'GET','/v1/approvals?status=all')
+        except Exception:return []
+        return (data.get('approvals') or []) if code==200 and isinstance(data,dict) and data.get('ok') else []
+    return _rm.cached('approvals','rows',90,load)
 def _ap_raw_policies():
-    try:
-        code,data=_ap_panel.request(_ap_cfg('CLOUDIF_APPROVAL_URL','http://127.0.0.1:18204'),_ap_cfg('CLOUDIF_APPROVAL_TOKEN',''),'GET','/v1/approval-policies?status=active')
-    except Exception:
-        return []
-    if code!=200 or not isinstance(data,dict) or not data.get('ok'):
-        return []
-    return data.get('policies') or []
+    def load():
+        try:code,data=_ap_panel.request(_ap_cfg('CLOUDIF_APPROVAL_URL','http://127.0.0.1:18204'),_ap_cfg('CLOUDIF_APPROVAL_TOKEN',''),'GET','/v1/approval-policies?status=active')
+        except Exception:return []
+        return (data.get('policies') or []) if code==200 and isinstance(data,dict) and data.get('ok') else []
+    return _rm.cached('approvals','policies',180,load)
 def _ap_visible(user):
     slugs={x['slug'] for x in user_visible_projects(user['username'],user['groups'])}
     return _ap_panel.filter_rows(_ap_raw(),slugs)
@@ -5969,6 +5971,7 @@ if 'Portal' in globals() and not globals().get('_ap_portal_wrapped'):
                     if err in ('production_approver_role_required','critical_approver_role_required'):return _ap_conflict(self,'Esta decisão exige perfil de administrador ou professor.',val('return_to'))
                     return _ap_conflict(self,'A decisão não pôde ser registrada porque o estado da aprovação mudou. Recarregue a página antes de tentar novamente.',val('return_to'))
                 log_action(user['username'],'approval_'+operation,aid,0,item['project_slug'],'always_allow='+('1' if always_allow else '0'))
+            _rm.invalidate('approvals');_rm.trigger_refresh()
             return_to=val('return_to').strip()
             target='/cloudiff/portal/?tab='+('agentes' if return_to=='agentes' else 'aprovacoes')
             self.send_response(303)
@@ -6301,7 +6304,7 @@ if 'page' in globals() and not globals().get('_ui144_wrapped'):
 # CloudIF readable modern colors END
 
 # CloudIF W/H/P release wizard BEGIN
-_WHP_RELEASE_ASSETS='<script id="cloudif-whp-release-script" src="/cloudiff/portal/assets/publication-release.js?v=20261122-final-pattern-v6" defer></script>'
+_WHP_RELEASE_ASSETS='<script id="cloudif-whp-release-script" src="/cloudiff/portal/assets/publication-release.js?v=20261122-readmodel-v8" defer></script>'
 if 'page' in globals() and not globals().get('_whp_release_wrapped'):
     _whp_release_prev_page=page
     def page(user,tab,body):
@@ -6535,7 +6538,7 @@ if 'Portal' in globals() and not globals().get('_tenant_control134_wrapped'):
             result=safe_project.handle_project_action(form,self.headers)
             if isinstance(result,str):
                 return self.send_html(page(user,'projetos',result),200)
-            target=str(result.get('slug') or slug);msg=str(result.get('message') or 'Projeto salvo.')
+            target=str(result.get('slug') or slug);msg=str(result.get('message') or 'Projeto salvo.');_rm.invalidate('projects');_rm.invalidate('connectors');_rm.invalidate('project-job-state',target);_rm.invalidate('project-runtime-state',target);_rm.trigger_refresh()
             log_action(user['username'],'project_action',target,0,json.dumps({'action':action,'global_admin':global_admin},separators=(',',':')),'')
             if (self.headers.get('X-CloudIF-Async') or '').strip()=='project-provision':
                 payload={'ok':True,'slug':target,'tenant':str(result.get('tenant') or ''),'message':msg,'status_url':'/cloudiff/portal/api/project-provision-status?slug='+urllib.parse.quote(target)}
@@ -6624,12 +6627,14 @@ def _pm197_owner(project):
         except Exception:return ''
 
 def _pm197_job_state(slug):
+    cached=_rm.get('project-job-state',slug,90)
+    if isinstance(cached,dict):return cached
     try:
         from cloudif_project_provision_status import status as provision_status
         data=provision_status(slug)
         if not data.get('ok'):
-            return {'status':'not_started','step':'','error':'','updated_at':'','recoverable':False}
-        return {
+            return _rm.put('project-job-state',slug,{'status':'not_started','step':'','error':'','updated_at':'','recoverable':False})
+        return _rm.put('project-job-state',slug,{
             'status':str(data.get('status') or 'unknown'),
             'step':str(data.get('current_step') or ''),
             'error':str(data.get('last_error') or ''),
@@ -6637,12 +6642,14 @@ def _pm197_job_state(slug):
             'recoverable':bool(data.get('recoverable')),
             'recovery_action':str(data.get('recovery_action') or ''),
             'source':str(data.get('source') or ''),
-        }
+        })
     except Exception:
-        return {'status':'unknown','step':'','error':'','updated_at':'','recoverable':False}
+        return _rm.put('project-job-state',slug,{'status':'unknown','step':'','error':'','updated_at':'','recoverable':False})
 
 
 def _pm197_runtime_state(slug, runtime_project=None):
+    cached=_rm.get('project-runtime-state',slug,90)
+    if isinstance(cached,dict):return cached
     info={'label':'Não identificado','service':'web','status':'Não verificado','healthy':False}
     try:
         import pathlib,json
@@ -6658,7 +6665,7 @@ def _pm197_runtime_state(slug, runtime_project=None):
         audit=_rd_agent('/komodo/project/audit',{'project':slug,'stack_id':sid,'service':'web','terminal':'cloudif-'+slug,'shell':'sh'},timeout=15)
         info['healthy']=bool(audit.get('healthy')); info['status']='Rodando e saudável' if info['healthy'] else str(audit.get('state') or 'Atenção')
     except Exception: pass
-    return info
+    return _rm.put('project-runtime-state',slug,info)
 
 def _pm197_provision_status(slug):
     try:

@@ -214,3 +214,11 @@ Se um backup longo deixar o processo do agente com transação/conexão presa, p
 Projetos com Preview provisionado por infraestrutura externa podem registrar `project_preview_source_links`. Esse vínculo é uma fonte válida de read-model quando não existe Preview multiservice/genérico gerenciado. O Portal deve validar `stage_code`, URL pública e status antes de retornar `runtimeKind=source-linked-preview`; nunca recriar o stack só para fazer o painel reconhecê-lo.
 
 O status Git desse contrato é `linked`, não `synced`, salvo quando houver um sincronizador explícito. Diagnóstico de runtime deve usar os containers de aplicação registrados no source-link, não apenas o gateway. Terminal source-linked exige contrato próprio com validação de ACL + labels do container; não apontar silenciosamente para outra Stack.
+
+## Read-model do Portal e histórico operacional
+
+As superfícies humanas não devem varrer filesystem nem consultar todos os runtimes a cada clique. Use `portal_readmodel_cache` como índice descartável em SQLite, pré-aquecido pelo `cloudif-portal-refresh-cache.timer` e invalidado pelas mutações. O índice acelera a leitura, mas nunca substitui a fonte de verdade; em ausência/expiração ele é reconstruído.
+
+Ações humanas que mudam Projeto, Conector, Aprovação ou Publicação devem invalidar a chave correspondente e disparar refresh assíncrono. Projetos/Publicações podem continuar lendo diretamente tabelas canônicas do Portal para dados baratos; somente enriquecimentos remotos/filesystem entram no read-model.
+
+`Excluir container` de P histórica significa também retirar essa P do **histórico operacional**: após remover o runtime de forma segura, marcar os registros de publicação como `archived`. Snapshot e auditoria técnica permanecem internos, mas a P não deve continuar aparecendo com botões na interface. P Offline sem snapshot reidratável não mostra botão `Excluir`.

@@ -5,6 +5,7 @@ import sqlite3
 import glob
 import os
 import urllib.request
+import cloudif_portal_readmodel as _rm
 
 DB='/var/lib/cloudif/portal/cloudif-portal.db'
 
@@ -42,15 +43,16 @@ def _rows(slug):
     except Exception:
         return []
 def _runtime_from_job(slug):
-    paths=sorted(glob.glob('/srv/cloudif/jobs/project-provision-*-'+slug+'.json'),key=lambda x:os.path.getmtime(x),reverse=True)
-    for path in paths:
-        try:
-            job=json.load(open(path)); runtime=str(job.get('runtime_template') or ''); php=str(job.get('php_version') or '')
-            node=runtime.replace('node','') if runtime.startswith('node') else ''
-            if node or php:
-                return {'node':node or '—','php':php or '—','apache':'2.4','environment':'Apache + PHP + Node.js','versions':f"Apache 2.4 · PHP {php or '—'} · Node.js {node or '—'}",'framework':'Aplicação PHP com API Node.js'}
-        except Exception: pass
-    return {}
+    def load():
+        paths=sorted(glob.glob('/srv/cloudif/jobs/project-provision-*-'+slug+'.json'),key=lambda x:os.path.getmtime(x),reverse=True)
+        for path in paths:
+            try:
+                job=json.load(open(path)); runtime=str(job.get('runtime_template') or ''); php=str(job.get('php_version') or '')
+                node=runtime.replace('node','') if runtime.startswith('node') else ''
+                if node or php:return {'node':node or '—','php':php or '—','apache':'2.4','environment':'Apache + PHP + Node.js','versions':f"Apache 2.4 · PHP {php or '—'} · Node.js {node or '—'}",'framework':'Aplicação PHP com API Node.js'}
+            except Exception:pass
+        return {}
+    return _rm.cached('project-runtime-job',slug,90,load)
 
 def _komodo_web_status(slug,stack_id=''):
     env={}
@@ -68,6 +70,9 @@ def _komodo_web_status(slug,stack_id=''):
     except Exception:return {}
 
 def _project_context(slug, framework_hint=''):
+    cache_key=slug+'|'+str(framework_hint or '')
+    cached=_rm.get('publication-project-context',cache_key,90)
+    if isinstance(cached,dict):return cached
     context={'slug':slug,'framework':framework_hint or '', 'database':'', 'repo_url':'', 'security':'Aguardando publicação','service_status':'Não verificado','runtime':{}}
     try:
         con=sqlite3.connect(DB);con.row_factory=sqlite3.Row
@@ -120,7 +125,7 @@ def _project_context(slug, framework_hint=''):
         pass
     context['framework']=context['framework'] or 'Não identificado'
     context['database']=context['database'] or 'Nenhum banco vinculado'
-    return context
+    return _rm.put('publication-project-context',cache_key,context)
 
 
 def _project_information(context):
