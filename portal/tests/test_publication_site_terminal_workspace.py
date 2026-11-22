@@ -143,5 +143,16 @@ class PublicationSiteTerminalWorkspaceTests(unittest.TestCase):
         self.assertGreaterEqual(managed.count("frame-ancestors 'self' https://cloudiff.duckdns.org"),3)
 
 
+    def test_source_linked_preview_terminal_targets_registered_app_only(self):
+        portal=PUBLICATIONS[PUBLICATIONS.rindex('def preview_terminal('):PUBLICATIONS.index('_v143_stage_terminal_portal',PUBLICATIONS.rindex('def preview_terminal('))]
+        runtime=RUNTIME[RUNTIME.rindex('def cloudif_preview_terminal('):RUNTIME.index('if __name__ == "__main__"',RUNTIME.rindex('def cloudif_preview_terminal('))]
+        self.assertIn('project_preview_source_links',portal)
+        self.assertIn("payload['source_link']",portal)
+        self.assertIn("terminalSource':'source_linked_preview_app'",portal)
+        self.assertIn("expected='cloudif-'+project+'-preview-app'",runtime)
+        self.assertIn("org.cloudiff.source-commit",runtime)
+        self.assertIn("source_linked_preview_commit_mismatch",runtime)
+        self.assertIn("'target_mode':'container'",runtime)
+
 if __name__=='__main__':
     unittest.main()

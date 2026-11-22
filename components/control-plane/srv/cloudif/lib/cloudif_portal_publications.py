@@ -1819,11 +1819,22 @@ def preview_terminal(slug,user):
     from cloudif_project_environment_web import authorization
     auth=authorization(slug,user.get('username') or '',user.get('groups') or [])
     if not auth.get('canWrite'):con.close();raise PermissionError('O terminal do Preview exige permissão de escrita no projeto.')
-    num=_number(con,slug);con.close();ku,kt,_=_clients()
-    status,data=_post(ku+'/komodo/project/preview/terminal',{'project':slug,'public_number':num,'actor':user.get('username') or 'portal'},kt,timeout=60)
+    num=_number(con,slug);source_link=None
+    try:
+        row=con.execute('select * from project_preview_source_links where project_slug=?',(slug,)).fetchone();source_link=dict(row) if row else None
+    except sqlite3.Error:source_link=None
+    con.close();ku,kt,_=_clients();payload={'project':slug,'public_number':num,'actor':user.get('username') or 'portal'}
+    if source_link and str(source_link.get('status') or '').lower() in {'online','ready','healthy'} and str(source_link.get('app_container') or ''):
+        payload['source_link']={'app_container':str(source_link.get('app_container') or ''),'source_commit':str(source_link.get('source_commit') or ''),'stage_code':str(source_link.get('stage_code') or 'W1')}
+    status,data=_post(ku+'/komodo/project/preview/terminal',payload,kt,timeout=60)
     if status//100!=2 or data.get('ok') is not True:raise RuntimeError(str(data.get('message') or 'O terminal do Preview está temporariamente indisponível.'))
-    container=str(data.get('container') or '');stack_id=str(data.get('stack_id') or '');terminal=str(data.get('terminal') or '');generation=int(data.get('generation') or 1)
-    expected=f'cloudif-p{num}-preview-web'
+    container=str(data.get('container') or '');terminal=str(data.get('terminal') or '');generation=int(data.get('generation') or 1)
+    if data.get('sourceLinked') is True:
+        expected=str((source_link or {}).get('app_container') or '');server_id=str(data.get('server_id') or '')
+        if generation<1 or container!=expected or not server_id or not terminal or data.get('target_mode')!='container':raise RuntimeError('source_linked_preview_terminal_contract_invalid')
+        target='https://komodoiff.duckdns.org/servers/'+urllib.parse.quote(server_id,safe='')+'/container/'+urllib.parse.quote(container,safe='')+'/terminal/'+urllib.parse.quote(terminal,safe='')
+        return {'ok':True,'project':slug,'public_number':num,'generation':generation,'stageCode':'W'+str(generation),'container':container,'terminalUrl':target,'terminalReady':True,'terminalSource':'source_linked_preview_app','sourceLinked':True,'secretValuesIncluded':False,'secretReferencesIncluded':False}
+    stack_id=str(data.get('stack_id') or '');expected=f'cloudif-p{num}-preview-web'
     if generation!=1 or container!=expected or not stack_id or not terminal or data.get('target_mode')!='stack':raise RuntimeError('preview_terminal_contract_invalid')
     target='https://komodoiff.duckdns.org/stacks/'+urllib.parse.quote(stack_id,safe='')+'/service/web/terminal/'+urllib.parse.quote(terminal,safe='')
     return {'ok':True,'project':slug,'public_number':num,'generation':1,'stageCode':'W1','container':container,'stackId':stack_id,'terminalUrl':target,'terminalReady':True,'terminalSource':'preview_stack','continuous':True,'secretValuesIncluded':False,'secretReferencesIncluded':False}

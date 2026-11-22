@@ -799,3 +799,11 @@ O backup parcial da unidade foi substituído por rollback direcionado de 28 KB (
 - MSHA permanece draft sem runtime.
 - Matriz canônica de continuidade: `docs/STATUS-FINAL-PADRAO-WHP-20261122.md`.
 - Relatório detalhado atualizado: `docs/AUDITORIA-GLOBAL-PROJETOS-WHP-20261122.md`.
+
+## SGREP v2 P1026 — Terminal source-linked concluído — 22/11/2026
+
+- Portal lê `app_container/source_commit/stage_code` de `project_preview_source_links`; navegador não escolhe container.
+- Komodo valida container exato `cloudif-sgrep-v2-preview-app`, projeto, estágio preview e commit antes de criar/reusar terminal.
+- Prova positiva: HTTP 200, target container, W1, sourceLinked=true.
+- Prova negativa: gateway adulterado rejeitado com HTTP 409 `source_linked_preview_identity_invalid`.
+- W1 permaneceu saudável. Evidência: `docs/REMEDIACAO-SGREP-V2-TERMINAL-SOURCE-LINKED-20261122.md`.

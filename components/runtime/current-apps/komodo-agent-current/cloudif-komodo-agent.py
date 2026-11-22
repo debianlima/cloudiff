@@ -6025,6 +6025,25 @@ def cloudif_preview_terminal(handler):
     payload=_cloudif_pub_json(handler);project=safe_slug(payload.get('project') or '')
     try:num=int(payload.get('public_number') or 0)
     except Exception:return send(handler,400,{'ok':False,'error':'invalid_preview_terminal_request'})
+    source_link=payload.get('source_link') if isinstance(payload.get('source_link'),dict) else None
+    if source_link:
+        container=str(source_link.get('app_container') or '').strip();commit=str(source_link.get('source_commit') or '').strip().lower();stage_code=str(source_link.get('stage_code') or 'W1').strip().upper();match=re.fullmatch(r'W([1-9][0-9]*)',stage_code)
+        expected='cloudif-'+project+'-preview-app'
+        if not project or num<1 or container!=expected or not match or (commit and not re.fullmatch(r'[a-f0-9]{40}',commit)):
+            return send(handler,409,{'ok':False,'error':'source_linked_preview_identity_invalid','terminalReady':False})
+        inspect=subprocess.run(['docker','inspect',container],text=True,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,timeout=15)
+        if inspect.returncode!=0:return send(handler,409,{'ok':False,'error':'source_linked_preview_container_missing','terminalReady':False})
+        try:runtime=(json.loads(inspect.stdout or '[]') or [{}])[0];state=runtime.get('State') or {};labels=(runtime.get('Config') or {}).get('Labels') or {}
+        except Exception:return send(handler,409,{'ok':False,'error':'source_linked_preview_inspect_invalid','terminalReady':False})
+        if not state.get('Running') or str(labels.get('org.cloudiff.project') or '')!=project or str(labels.get('org.cloudiff.stage') or '')!='preview':
+            return send(handler,409,{'ok':False,'error':'source_linked_preview_labels_invalid','terminalReady':False})
+        runtime_commit=str(labels.get('org.cloudiff.source-commit') or '').lower()
+        if commit and runtime_commit!=commit:return send(handler,409,{'ok':False,'error':'source_linked_preview_commit_mismatch','terminalReady':False})
+        server_id=_cloudif_v143_server_id(project)
+        if not server_id:return send(handler,422,{'ok':False,'error':'preview_server_missing','terminalReady':False})
+        target=_cloudif_ensure_container_terminal(server_id,container)
+        if not target.get('ok') or not target.get('terminal'):return send(handler,422,{'ok':False,'error':'preview_terminal_create_failed','terminalReady':False})
+        return send(handler,200,{'ok':True,'project':project,'public_number':num,'generation':int(match.group(1)),'stageCode':stage_code,'container':container,'server_id':server_id,'terminal':str(target.get('terminal') or ''),'target_mode':'container','sourceLinked':True,'terminalReady':True,'secretValuesIncluded':False})
     _cloudif_v144_ensure_schema();row=_cloudif_preview_row(project) or {};stack_id=normalize_resource_id(row.get('stack_id'))
     if not stack_id:return send(handler,409,{'ok':False,'error':'preview_stack_not_ready','message':'O Preview ainda precisa ser reconciliado para o runtime persistente.'})
     target=_cloudif_v144_stack_target(stack_id)

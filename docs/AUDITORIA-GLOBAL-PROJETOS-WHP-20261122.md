@@ -26,7 +26,7 @@ Nenhum runtime de projeto foi alterado nesta unidade.
 | `laboratorio-de-hardware` | W1 saudável após remediação | alinhado `3b399e9` | P12/alias saudáveis | **não** historicamente: H13 `dep_51a7...` → P12 `dep_210f...` | H11/H13/P5 agora Offline; snapshots preservados | **PARCIAL — aguarda novo H→P humano** |
 | `msha` | não configurado | n/a | nenhuma | n/a | nenhum runtime de publicação | **DRAFT / N/A** |
 | `paperclip` | W1 saudável após correção de healthcheck | hash `dfcaaf8...` alinhado | D1 legado permanece placeholder | n/a | resíduos W1 removidos; volume preservado | **PARCIAL — aguarda H→P humano** |
-| `sgrep-v2` | W1 source-linked saudável e reconhecido | source commit `f29f752...` | nenhuma | n/a | resíduos exited removidos; Terminal source-linked pendente | **PARCIAL — read-model conforme** |
+| `sgrep-v2` | W1 source-linked saudável e reconhecido | source commit `f29f752...` | nenhuma | n/a | resíduos exited removidos; Terminal source-linked validado no preview-app | **CONFORME PARA PREVIEW / SEM PRODUÇÃO** |
 | `silvipro` | W1 contínuo saudável | alinhado `ad2273de...` | P1 real reconciliada + alias `silvipro` | não comprovado; P1 importada como legado | D1 histórico; D2 parado; W2 removido | **PARCIAL — aguarda novo H→P humano** |
 
 ## 1. Agenda Única — conforme
@@ -112,9 +112,9 @@ Definir manifest completo do runtime composto (incluindo política do volume) an
 - `public_external_verified=1` após prova HTTP.
 - Cinco containers exited de smoke/rollback foram removidos após backup; app/db/sat/gateway ativos foram preservados.
 - O Stack Komodo legado ainda reporta `deploy_status=failed`; isso não representa o W1 source-linked e não deve ser usado como health do Preview.
-- Terminal source-linked continua pendente de contrato explícito para selecionar `preview-app` com ACL/labels; não redirecionar para outra Stack.
+- Terminal source-linked agora usa exclusivamente o `preview-app` cadastrado, com validação de projeto/estágio/commit; identidade adulterada é rejeitada com HTTP 409.
 
-Evidência: `docs/REMEDIACAO-SGREP-V2-PREVIEW-READMODEL-20261122.md`.
+Evidências: `docs/REMEDIACAO-SGREP-V2-PREVIEW-READMODEL-20261122.md` e `docs/REMEDIACAO-SGREP-V2-TERMINAL-SOURCE-LINKED-20261122.md`.
 
 ## 8. SilviPro — W1 contínuo recuperado, P1 real reconciliada
 

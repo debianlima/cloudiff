@@ -15,7 +15,7 @@ Este arquivo é o ponto de entrada curto para continuidade operacional. Para det
 | CPUHub (1021) | W1 saudável/synced | P5 saudável | legado, resíduos H limpos | proprietário cria próxima H/P pelo fluxo atual |
 | Laboratório Hardware (1001) | W1 recuperado/synced | P12 + `labhard` | legado; H13/P12 eram deployments diferentes | proprietário cria nova H e promove a mesma instância |
 | Paperclip (1025) | W1 saudável; app+gateway+volume | D1 legado | **bloqueado com segurança** até manifest composto | definir manifest/runtime completo antes de H |
-| SGREP v2 (1026) | W1 source-linked saudável | nenhuma | ainda sem Produção | fechar contrato de Terminal; publicar apenas quando solicitado |
+| SGREP v2 (1026) | W1 source-linked saudável; Terminal validado no preview-app | nenhuma | Preview conforme; ainda sem Produção | publicar somente quando solicitado |
 | SilviPro (1002) | W1 contínuo saudável/synced | P1 + `silvipro` | P1 importada como legado | proprietário cria próxima H/P same-instance |
 | MSHA | não configurado | nenhuma | n/a | permanece draft |
 
@@ -45,5 +45,5 @@ A identidade operacional `assistente-interativo` não possui ACL dos projetos Ca
 - Cadales: W1 sincronizado; W2/H2 antigos removidos; P2 preservada.
 - CPUHub: W1 sincronizado; H3 superseded; D2–D5 e stages antigos limpos; P5 preservada.
 - Paperclip: snapshot composto retorna 409 antes de qualquer efeito; W1/D1 preservados.
-- SGREP: source-linked reconhecido e saudável.
+- SGREP: source-linked reconhecido/saudável e Terminal validado no `preview-app` com identidade estrita.
 - SilviPro: W1/P1 separados e coerentes; conteúdo placeholder corresponde ao Git atual.
