@@ -6,6 +6,9 @@ AGENT=(ROOT/'components/runtime/current-apps/komodo-agent-current/cloudif-komodo
 PORTAL=(ROOT/'components/control-plane/srv/cloudif/lib/cloudif_portal_publications.py').read_text()
 PUBLISHER=(ROOT/'components/proxy/current-apps/publisher-agent-current/cloudif-npm-publisher-agent.py').read_text()
 TIMER=(ROOT/'components/runtime/etc/systemd/system/cloudif-komodo-authz-sync.timer').read_text()
+UI=(ROOT/'portal/design/publication-release.js').read_text()
+COEX=(ROOT/'components/control-plane/srv/cloudif/lib/cloudif_portal_v2_coexist.py').read_text()
+BASE=(ROOT/'components/control-plane/current-apps/portal-current/cloudif-admin-portal-base.py').read_text()
 
 class ReleaseFlowV144Tests(unittest.TestCase):
     def test_preview_is_persistent_stack_with_fixed_identity(self):
@@ -50,6 +53,29 @@ class ReleaseFlowV144Tests(unittest.TestCase):
     def test_komodo_authz_converges_quickly_after_first_oidc_login(self):
         self.assertIn('OnUnitActiveSec=30s',TIMER)
         self.assertIn('AccuracySec=5s',TIMER)
+
+
+    def test_fixed_preview_preserves_existing_generation(self):
+        self.assertIn("def _fixed_preview_generation",PORTAL)
+        self.assertIn("preview_generation",PORTAL)
+        self.assertIn("'sourcePreviewStageCode':'W'+str(preview_generation)",PORTAL)
+        self.assertIn("forgejo_source_preview_wn",BASE)
+
+    def test_historical_production_has_separate_start_stop_and_activate_actions(self):
+        self.assertIn("def historical_publication_prepare",PORTAL)
+        self.assertIn("def historical_publication_stop",PORTAL)
+        self.assertIn("'stableActivated':False",PORTAL)
+        self.assertIn("production/history/prepare",COEX)
+        self.assertIn("production/history/stop",COEX)
+        self.assertIn("production-history-prepare",UI)
+        self.assertIn("production-history-stop",UI)
+        self.assertIn("Ativar no endereço principal",UI)
+
+    def test_legacy_history_prepare_never_applies_stable_alias(self):
+        self.assertIn("def cloudif_publication_release_prepare",AGENT)
+        self.assertIn("stableAliasApplied':False",AGENT)
+        self.assertIn("/komodo/publication/release/prepare",AGENT)
+        self.assertIn("/komodo/publication/release/status",AGENT)
 
     def test_legacy_ensure_preserves_known_acl(self):
         self.assertIn('def _cloudif_project_access_payload',AGENT)

@@ -127,3 +127,15 @@ Registros antigos com “dN independente”, “H isolada permanente”, “rebu
 Para edição de variáveis/secrets, não aplicar o gate de aprovação MCP a um usuário humano que já está autenticado no Portal e tem ACL de escrita. O Portal usa sessão + CSRF + ACL e salva diretamente no estágio. Secrets permanecem mascarados e podem ser substituídos no mesmo formulário; campo vazio mantém o valor. Approval Service é preservado para MCP/automação e contratos explicitamente críticos.
 
 Para PostgreSQL persistente, a experiência humana continua sendo um único `Salvar alterações`: `POSTGRES_PASSWORD` aciona migração interna de role + `DATABASE_URL` com health/rollback e volume preservado. `POSTGRES_DB`/`POSTGRES_USER` continuam mudanças estruturais.
+
+### Identidade fixa do Preview Wn e histórico de Produção
+
+O Preview é fixo por projeto, mas o número do slot deve **preservar a identidade já existente**. Projetos novos podem iniciar em W1; projetos existentes não podem ser achatados/renumerados para W1. O sistema obtém o Wn canônico do histórico do projeto e mantém URL/bridge coerentes. Para o Agenda P1020, o slot canônico é **W3** (`1020-w3-preview.cloudiff.duckdns.org`).
+
+Produções anteriores permanecem **Offline** por padrão. O Histórico separa três ações:
+
+- **Subir**: liga o runtime histórico e publica somente a URL Pn para teste; não toca no endereço principal;
+- **Desligar**: remove rota/bridge versionada e para o runtime, preservando containers/volumes necessários ao rollback;
+- **Ativar no endereço principal**: somente quando a versão histórica está online/saudável, executa o cutover do domínio estável e só então desativa a Produção anterior.
+
+O estado Online/Offline deve vir do runtime real, não apenas do banco do Portal. Uma P histórica online não significa Produção ativa. Apenas `is_active=1` + alias estável validado representam a Produção principal.

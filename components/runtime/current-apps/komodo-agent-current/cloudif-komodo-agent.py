@@ -4298,6 +4298,61 @@ def cloudif_publication_release_activate(handler):
         cmd+=[network,name];subprocess.check_call(cmd)
     db_exec('update stage_production_releases set is_active=case when publication_number=? then 1 else 0 end,updated_at=? where project=?',(publication,now(),project));return send(handler,200,{'ok':True,'project':project,'publication_number':publication,'stageCode':'P'+str(publication),'container':target,'activeAlias':active,'secretValuesIncluded':False})
 
+
+
+def cloudif_publication_release_status(handler):
+    if not _cloudif_pub_auth(handler):return send(handler,403,{'ok':False,'error':'forbidden'})
+    payload=_cloudif_pub_json(handler);project=safe_slug(payload.get('project') or '')
+    try:num=int(payload.get('public_number'));publication=int(payload.get('publication_number'))
+    except Exception:return send(handler,400,{'ok':False,'error':'invalid_release_request'})
+    rows=db_query("select * from stage_production_releases where project=? and publication_number=? and status='ready'",(project,publication))
+    if not rows:return send(handler,404,{'ok':False,'error':'production_release_not_found'})
+    target=str(rows[0].get('container') or '')
+    inspected=subprocess.run(['docker','inspect',target],stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,text=True)
+    if inspected.returncode!=0:return send(handler,200,{'ok':True,'project':project,'publication_number':publication,'container':target,'exists':False,'online':False,'healthy':False,'isActive':bool(rows[0].get('is_active')),'secretValuesIncluded':False})
+    try:item=(json.loads(inspected.stdout or '[]') or [{}])[0]
+    except Exception:item={}
+    state=item.get('State') or {};health=(state.get('Health') or {}).get('Status') or ''
+    running=bool(state.get('Running'));healthy=bool(running and health in {'','healthy'})
+    aliases=((((item.get('NetworkSettings') or {}).get('Networks') or {}).get('cloudif-publications') or {}).get('Aliases') or [])
+    return send(handler,200,{'ok':True,'project':project,'publication_number':publication,'container':target,'exists':True,'online':running,'healthy':healthy,'health':health,'isActive':bool(rows[0].get('is_active')),'hasActiveAlias':f'cloudif-p{num}-active-web' in aliases,'secretValuesIncluded':False})
+
+
+def cloudif_publication_release_prepare(handler):
+    if not _cloudif_pub_auth(handler):return send(handler,403,{'ok':False,'error':'forbidden'})
+    payload=_cloudif_pub_json(handler);project=safe_slug(payload.get('project') or '')
+    try:num=int(payload.get('public_number'));publication=int(payload.get('publication_number'))
+    except Exception:return send(handler,400,{'ok':False,'error':'invalid_release_request'})
+    rows=db_query("select * from stage_production_releases where project=? and publication_number=? and status='ready'",(project,publication))
+    if not rows:return send(handler,404,{'ok':False,'error':'production_release_not_found'})
+    target=str(rows[0].get('container') or '')
+    inspected=subprocess.run(['docker','inspect',target],stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,text=True)
+    if inspected.returncode!=0:return send(handler,404,{'ok':False,'error':'production_release_runtime_missing'})
+    started=False
+    try:
+        item=(json.loads(inspected.stdout or '[]') or [{}])[0];state=item.get('State') or {}
+        if not state.get('Running'):
+            subprocess.check_call(['docker','start',target],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL);started=True
+        health=_cloudif_wait_health(target,90)
+        if not health.get('ok'):
+            retry=subprocess.run(['docker','restart','--time','10',target],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=120)
+            health=_cloudif_wait_health(target,90) if retry.returncode==0 else {'ok':False}
+            if not health.get('ok'):
+                if started:subprocess.run(['docker','stop','--time','10',target],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+                return send(handler,422,{'ok':False,'error':'production_release_not_healthy'})
+        refreshed=(json.loads(subprocess.check_output(['docker','inspect',target],text=True)) or [{}])[0]
+        aliases=((((refreshed.get('NetworkSettings') or {}).get('Networks') or {}).get('cloudif-publications') or {}).get('Aliases') or [])
+        active=f'cloudif-p{num}-active-web'
+        if active in aliases:
+            subprocess.run(['docker','network','disconnect','cloudif-publications',target],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,check=False)
+            subprocess.check_call(['docker','network','connect','--alias',target,'cloudif-publications',target])
+        db_exec('update stage_production_releases set is_active=0,updated_at=? where project=? and publication_number=?',(now(),project,publication))
+    except Exception as exc:
+        if started:subprocess.run(['docker','stop','--time','10',target],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+        return send(handler,422,{'ok':False,'error':'production_release_prepare_failed','detail':str(exc)[:240]})
+    return send(handler,200,{'ok':True,'project':project,'publication_number':publication,'stageCode':'P'+str(publication),'container':target,'online':True,'healthy':True,'historicalRuntimePrepared':True,'stableAliasApplied':False,'containersRecreated':False,'secretValuesIncluded':False})
+
+
 def cloudif_publication_deploy(handler):
     import shutil
     if not _cloudif_pub_auth(handler):
@@ -4913,6 +4968,10 @@ class H(BaseHTTPRequestHandler):
             return cloudif_homologation_reject(self)
         if _cloudif_pub_path == "/komodo/publication/release":
             return cloudif_publication_release(self)
+        if _cloudif_pub_path == "/komodo/publication/release/status":
+            return cloudif_publication_release_status(self)
+        if _cloudif_pub_path == "/komodo/publication/release/prepare":
+            return cloudif_publication_release_prepare(self)
         if _cloudif_pub_path == "/komodo/publication/release/activate":
             return cloudif_publication_release_activate(self)
 

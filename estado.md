@@ -641,3 +641,28 @@
 - Corrigido digest de variáveis Unicode (`ensure_ascii=false`) entre Portal/Komodo/Executor. Isso era a causa de `SYSTEM_BANNER_TEXT` com `º`/acentos ficar no controller sem chegar ao P7.
 - Prova P7: antes controller=228 caracteres/runtime=224; após `human/save`, runtime=228 e hash idêntico; somente API foi recriada, DB/Web mantiveram os mesmos IDs. Smoke de `JWT_SECRET` com o mesmo material avançou a revisão para 52 sem approval, sem plaintext e sem recriação.
 - P7 e domínio estável permaneceram saudáveis na revisão `18416127cdf9`. Preview W1 `human/save` no-op passou sem approval e saudável; helpers de migração PostgreSQL passaram em containers descartáveis no Executor e no Komodo.
+
+## Agenda P1020 — restauração do Preview W3 e histórico P controlado — 22/11/2026 UTC
+
+- Correção do contrato após validação humana: o Preview fixo histórico do Agenda é **W3**, não W1. Registros anteriores deste `estado.md` que descrevem W1 como slot canônico do Agenda ficam superados por esta entrada; o padrão global passa a preservar o slot Wn já existente de cada projeto.
+- W3 foi criado como bridge para o stack Compose já em execução, validado em HTTP 200/revisão `18416127cdf9` e somente depois o bridge/estágio W1 foi retirado. API/Web/DB e volume do Preview não foram recriados no cutover de identidade.
+- Candidatos H4–H7 foram reconciliados para `preview_generation=3`; H4 está removido, H5/P3 e H6/P6 permanecem históricos/parados e H7/P7 é a mesma instância promovida ativa.
+- Histórico de Produção agora expõe estado real e ações separadas: **Subir** liga apenas a P versionada, **Desligar** volta a parar preservando recursos, e **Ativar no endereço principal** é a única ação que faz cutover estável.
+- Smoke P6: `Subir` deixou P6 online em `1020-p6-publication` com revisão `e32213d0b4d2`, enquanto `agendaunica.cloudiff.duckdns.org` permaneceu em P7/revisão `18416127cdf9`; `Desligar` retornou P6 a `inactive`/containers exited.
+- Smoke P2 legado: `Subir` deixou P2 saudável apenas no hostname P2, sem alias `cloudif-p1020-active-web` e com `is_active=0`; o domínio principal permaneceu em P7. Depois `Desligar` parou novamente o container. Cold-start legado tolera uma reinicialização controlada antes de falhar.
+- Runtimes legados independentes na Hospedagem (`cloudif-agenda-unica`, `agenda-unica-hml`, `agenda-unica-smoke`) foram parados após prova de que não participavam das rotas atuais; inspect preservado em backup e nenhum recurso foi apagado.
+- Formulário humano de Variáveis: o save não chama mais `envLabel(...)` inexistente; testes do wizard/`human/save` passaram. Asset do fluxo W/H/P foi versionado para evitar cache antigo no browser.
+- Gates: `test_release_flow_v144` 11/11 PASS; `test_project_publication_configuration_v1` 7/7 PASS com `PYTHONPATH` do projeto; `publication-release.js` passou `node --jitless --check`; módulos Python live passaram `py_compile`; W3/P7/domínio principal HTTP 200 após restart final.
+- Evidência: `compat/agenda-p1020-w3-history-runtime-actions-20261122.md`; delta reproduzível do Komodo: `compat/agenda-p1020-history-runtime-actions-live-komodo.patch`.
+- Pendência de reconciliação: `portal_publications`, `overview` e `komodo-agent` live contêm hotfixes preexistentes que ainda não estão integralmente no `origin/main`. Não normalizar/copiar arquivos inteiros até fechar `DELTA_INVENTORY`/`LEARNING_PRESERVED` para esses deltas.
+
+## Agenda P1020 — W3 preservado, históricos Offline/Online separados — 22/11/2026
+
+- O Agenda possuía Preview histórico W3; endurecimentos anteriores haviam achatado a identidade para W1. O Portal/overview agora usam `_fixed_preview_generation` e preservam o maior `preview_generation` conhecido. Agenda voltou a `https://1020-w3-preview.cloudiff.duckdns.org/` sem recriar stack/DB.
+- Migração pública W1→W3: bridge W3 criado e validado HTTP 200 na revisão `18416127cdf9`; bridge W1 ficou ausente e W1 retorna 202.
+- Histórico de Produção expõe estado real: Offline mostra **Subir**; Online/saudável mostra **Desligar** e **Ativar no endereço principal**. `Subir` nunca aplica alias estável.
+- Prova P6: `Subir` deixou P6 HTTP 200/revisão `e32213d0b4d2`, enquanto P7/1020/agendaunica permaneceram `18416127cdf9`; `Desligar` parou API/DB/Web e removeu bridge P6.
+- Prova P2 legado: `Subir` deixou P2 HTTP 200 apenas no hostname P2; P7 e domínios estáveis permaneceram `18416127cdf9`; `Desligar` voltou P2 offline.
+- Seis runtimes legados na Hospedagem (`cloudif-agenda-unica`, `agenda-unica-hml`, `agenda-unica-smoke`) foram parados após prova de ausência de referências em Nginx/systemd/Portal. Inspects foram preservados em backup.
+- `envLabel is not defined` no wizard humano foi corrigido para `envLabels[environment]` e coberto por teste.
+- O asset `publication-release.js` live foi sincronizado ao canônico e recebeu cache-bust `20261122-history-runtime-actions-v5`.

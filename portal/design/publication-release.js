@@ -230,7 +230,20 @@
       : '<div class="release-note"><strong>Ainda não há Produção ativa.</strong><span>Homologue um candidato para habilitar a publicação.</span></div>';
     const historical = (data.releases || []).filter(item => Number(item.is_active) !== 1);
     const canRollback = Boolean(data.isOwner || data.isAdmin);
-    const history = historical.length ? `<div class="release-history"><strong>Histórico de Produção</strong><span class="small">Versões anteriores ficam paradas. Reativar troca a Produção estável somente após o runtime histórico ficar saudável.</span>${historical.map(item => `<div class="release-history-row"><span><strong>${esc(item.stage_code || ('P' + Number(item.publication_number || 0)))}</strong><small>${esc((item.runtime || {}).sourceCommit || item.created_at || '')}</small></span>${canRollback ? `<button class="btn light" type="button" data-release-action="production-rollback" data-publication="${Number(item.publication_number || 0)}">Reativar ${esc(item.stage_code || ('P' + Number(item.publication_number || 0)))}</button>` : '<span class="pill muted">Somente responsável/admin</span>'}</div>`).join('')}</div>` : '';
+    const history = historical.length ? `<div class="release-history"><strong>Histórico de Produção</strong><span class="small">Versões anteriores permanecem Offline. <strong>Subir</strong> liga somente a versão Pn para teste; <strong>Ativar no endereço principal</strong> é a única ação que troca a Produção estável.</span>${historical.map(item => {
+      const code = item.stage_code || ('P' + Number(item.publication_number || 0));
+      const publication = Number(item.publication_number || 0);
+      const runtimeState = item.runtimeState || {};
+      const online = Boolean(runtimeState.online && runtimeState.healthy);
+      const badge = online ? '<span class="release-badge ok">Online</span>' : '<span class="release-badge">Offline</span>';
+      let actions = '<span class="pill muted">Somente responsável/admin</span>';
+      if (canRollback) {
+        actions = online
+          ? `<div class="release-actions"><button class="btn light" type="button" data-release-action="production-history-stop" data-publication="${publication}">Desligar</button><button class="btn" type="button" data-release-action="production-rollback" data-publication="${publication}">Ativar no endereço principal</button></div>`
+          : `<div class="release-actions"><button class="btn light" type="button" data-release-action="production-history-prepare" data-publication="${publication}">Subir</button></div>`;
+      }
+      return `<div class="release-history-row"><span><strong>${esc(code)}</strong><small>${esc((item.runtime || {}).sourceCommit || item.created_at || '')}</small>${badge}</span>${actions}</div>`;
+    }).join('')}</div>` : '';
 
     return jobHtml() + `<section class="release-stage">${stageIntro(
       'P · Produção',
@@ -456,11 +469,21 @@
           return;
         }
         if (action === 'production-publish') return requestProduction(candidate);
+        if (action === 'production-history-prepare') {
+          const publication = Number(button.dataset.publication || 0);
+          if (!publication) return;
+          return act('production/history/prepare', { publicationNumber: publication }, 'Subindo P' + publication + ' para teste…', 'publication');
+        }
+        if (action === 'production-history-stop') {
+          const publication = Number(button.dataset.publication || 0);
+          if (!publication) return;
+          return act('production/history/stop', { publicationNumber: publication }, 'Desligando P' + publication + '…', 'publication');
+        }
         if (action === 'production-rollback') {
           const publication = Number(button.dataset.publication || 0);
           if (!publication) return;
-          if (!confirm('Reativar P' + publication + '? A Produção atual será desligada somente depois que a versão histórica estiver saudável.')) return;
-          return act('rollback', { publicationNumber: publication }, 'Reativando P' + publication + '…', 'publication');
+          if (!confirm('Ativar P' + publication + ' no endereço principal? A Produção atual só será desligada após a versão histórica estar saudável e o cutover concluir.')) return;
+          return act('rollback', { publicationNumber: publication }, 'Ativando P' + publication + ' no endereço principal…', 'publication');
         }
         if (action === 'permissions-save') return savePermissions();
         if (action === 'permissions-close') { model.permissionsOpen = false; return render(); }

@@ -69,6 +69,16 @@ def _linked_integration_identity(slug:str)->dict[str,Any]:
     except Exception:return {}
 
 
+def _fixed_preview_generation(slug:str)->int:
+    if not PORTAL_DB.exists():return 1
+    try:
+        with sqlite3.connect(f'file:{PORTAL_DB}?mode=ro',uri=True,timeout=10) as con:
+            row=con.execute("select coalesce(max(preview_generation),0) from publication_candidates where project_slug=? and preview_generation>0",(slug,)).fetchone()
+        generation=int(row[0] or 0) if row else 0
+        return generation if generation>0 else 1
+    except Exception:return 1
+
+
 def _official_preview(slug:str,username:str,groups:list[str]|set[str])->dict[str,Any]:
     linked=_linked_integration_identity(slug)
     try:
@@ -83,16 +93,16 @@ def _official_preview(slug:str,username:str,groups:list[str]|set[str])->dict[str
                 'previewId':str(data.get('stageCode') or 'W1'),'buildJobId':'',
                 'commit':str(((data.get('git') or {}).get('head')) or ''),
                 'createdAt':0,'expiresAt':0,'url':str(data.get('url') or ''),
-                'linkMode':'forgejo_source_preview_w1' if kind=='linked-compose' else kind,
+                'linkMode':'forgejo_source_preview_wn' if kind=='linked-compose' else kind,
                 'runtimeContainer':str(data.get('container') or ''),'bridgeContainer':str(data.get('bridge') or ''),
                 'sourceMode':str(data.get('sourceMode') or ''),'managedByCloudiffPreviewFlow':True,
             }
     except Exception:
         if linked:
-            number=int(linked['publicNumber'])
-            return {'status':'attention','previewId':'W1','buildJobId':'','commit':'','createdAt':0,'expiresAt':0,
-                    'url':f'https://{number}-w1-preview.cloudiff.duckdns.org/','linkMode':'forgejo_source_preview_w1',
-                    'runtimeContainer':'','bridgeContainer':f'cloudif-p{number}-w1-preview-web','sourceMode':'forgejo-linked-stack',
+            number=int(linked['publicNumber']);generation=_fixed_preview_generation(slug)
+            return {'status':'attention','previewId':'W'+str(generation),'buildJobId':'','commit':'','createdAt':0,'expiresAt':0,
+                    'url':f'https://{number}-w{generation}-preview.cloudiff.duckdns.org/','linkMode':'forgejo_source_preview_wn',
+                    'runtimeContainer':'','bridgeContainer':f'cloudif-p{number}-w{generation}-preview-web','sourceMode':'forgejo-linked-stack',
                     'managedByCloudiffPreviewFlow':True}
     return _preview(slug)
 

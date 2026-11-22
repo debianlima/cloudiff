@@ -87,3 +87,15 @@ Registros históricos continuam válidos como evidência do que aconteceu, mas q
 ## 10. Retenção de containers
 
 O alvo operacional é **zero runtime H residual** e apenas um Preview + uma Produção ativos. Produções anteriores podem manter seus containers/volumes **parados** quando necessários para rollback exato. Proxies/bridges e rotas versionadas antigas são descartáveis/reconstruíveis. Containers legados só devem ser removidos depois de comprovar mecanismo equivalente de restauração; diretórios/volumes de dados não são apagados por limpeza de container.
+
+### Identidade fixa do Preview Wn e histórico de Produção
+
+O Preview é fixo por projeto, mas o número do slot deve **preservar a identidade já existente**. Projetos novos podem iniciar em W1; projetos existentes não podem ser achatados/renumerados para W1. O sistema obtém o Wn canônico do histórico do projeto e mantém URL/bridge coerentes. Para o Agenda P1020, o slot canônico é **W3** (`1020-w3-preview.cloudiff.duckdns.org`).
+
+Produções anteriores permanecem **Offline** por padrão. O Histórico separa três ações:
+
+- **Subir**: liga o runtime histórico e publica somente a URL Pn para teste; não toca no endereço principal;
+- **Desligar**: remove rota/bridge versionada e para o runtime, preservando containers/volumes necessários ao rollback;
+- **Ativar no endereço principal**: somente quando a versão histórica está online/saudável, executa o cutover do domínio estável e só então desativa a Produção anterior.
+
+O estado Online/Offline deve vir do runtime real, não apenas do banco do Portal. Uma P histórica online não significa Produção ativa. Apenas `is_active=1` + alias estável validado representam a Produção principal.
