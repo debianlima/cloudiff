@@ -27,7 +27,7 @@ Nenhum runtime de projeto foi alterado nesta unidade.
 | `msha` | não configurado | n/a | nenhuma | n/a | nenhum runtime de publicação | **DRAFT / N/A** |
 | `paperclip` | W1 responde 200, app informa falha de inicialização | hash `dfcaaf8...` alinhado | D1 legado é placeholder “primeiros passos” | n/a | Preview fora do contrato moderno | **BLOQUEADOR / LEGADO** |
 | `sgrep-v2` | W1 real existe, mas read-model diz “não configurado” | source link `f29f752...` coincide com Komodo | nenhuma | n/a | runtime Preview fora do fluxo do Portal | **DRIFT DE READ-MODEL** |
-| `silvipro` | Portal diz não configurado; W1 redireciona ao Portal | não comprovado | D1 legado é placeholder “primeiros passos” | n/a | D2/P1 containers ativos fora do modelo atual | **BLOQUEADOR / LEGADO** |
+| `silvipro` | W2 saudável e reconhecido após remediação | alinhado `ad2273de...`, porém fonte Git é placeholder | D1 legado continua placeholder | n/a | P1/D2 têm conteúdo runtime-only divergente do Forgejo | **PARCIAL — requer decisão humana sobre fonte** |
 
 ## 1. Agenda Única — conforme
 

@@ -657,8 +657,13 @@ def preview_status(slug,user):
     if linked:return _linked_compose_status(slug,num,linked)
     if _is_multiservice_project(slug):
         data=_current_multiservice_preview(slug);ident=_stage_identity(num,'preview',1)
-        if not data.get('configured'):return {'ok':True,'configured':False,'project':slug,'public_number':num,'generation':1,'stageCode':'W1','url':ident['url'],'hostname':ident['hostname'],'runtimeKind':'multiservice','secretValuesIncluded':False}
-        return {'ok':True,'configured':True,'project':slug,'public_number':num,'generation':1,'stageCode':'W1','url':ident['url'],'hostname':ident['hostname'],'healthy':bool(data.get('healthy')),'status':str(data.get('status') or ''),'previewId':str(data.get('preview_id') or ''),'buildJobId':str(data.get('build_job_id') or ''),'archiveSha256':str(data.get('archive_sha256') or ''),'configRevision':int(data.get('config_revision') or 0),'bridge':f'cloudif-p{num}-w1-preview-web','services':data.get('services') or [],'mongoEphemeral':bool(data.get('mongoEphemeral')),'expiresAt':int(data.get('expires_at') or 0),'runtimeKind':'multiservice','secretValuesIncluded':False}
+        if data.get('configured'):
+            return {'ok':True,'configured':True,'project':slug,'public_number':num,'generation':1,'stageCode':'W1','url':ident['url'],'hostname':ident['hostname'],'healthy':bool(data.get('healthy')),'status':str(data.get('status') or ''),'previewId':str(data.get('preview_id') or ''),'buildJobId':str(data.get('build_job_id') or ''),'archiveSha256':str(data.get('archive_sha256') or ''),'configRevision':int(data.get('config_revision') or 0),'bridge':f'cloudif-p{num}-w1-preview-web','services':data.get('services') or [],'mongoEphemeral':bool(data.get('mongoEphemeral')),'expiresAt':int(data.get('expires_at') or 0),'runtimeKind':'multiservice','secretValuesIncluded':False}
+        ku,kt,_=_clients();fallback_status,fallback=_post(ku+'/komodo/project/preview/status',{'project':slug,'public_number':num},kt,timeout=30)
+        if fallback_status//100==2 and fallback.get('configured'):
+            generation=int(fallback.get('generation') or 1);fallback_ident=_stage_identity(num,'preview',generation);fallback.update({'url':fallback_ident['url'],'hostname':fallback_ident['hostname'],'stageCode':fallback_ident['code'],'runtimeKind':'generic-preview','fallbackFrom':'multiservice'})
+            return fallback
+        return {'ok':True,'configured':False,'project':slug,'public_number':num,'generation':1,'stageCode':'W1','url':ident['url'],'hostname':ident['hostname'],'runtimeKind':'multiservice','secretValuesIncluded':False}
     ku,kt,_=_clients();status,data=_post(ku+'/komodo/project/preview/status',{'project':slug,'public_number':num},kt,timeout=30)
     if status//100!=2:return {'ok':False,'configured':False,'error':'preview_status_unavailable'}
     if data.get('configured'):

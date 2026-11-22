@@ -706,3 +706,13 @@ Os módulos `cloudif_portal_publications.py` (app/lib), `cloudif_portal_v2_coexi
 - P12 permanece legado diferente de H13; não alterar metadata para mascarar isso.
 - `assistente-interativo` não possui ACL de projeto no Portal, então a nova H/P same-instance ficou como gate humano do proprietário, sem impersonação.
 - Evidência: `docs/REMEDIACAO-LABORATORIO-HARDWARE-W1-20261122.md`.
+
+## SilviPro P1002 — W2 restaurado e read-model corrigido — 22/11/2026
+
+- Preview genérico W2 criado pelo Komodo a partir da imagem registrada da P1, com checkout Forgejo `ad2273de...` montado e sincronizado; W2 HTTP 200.
+- `preview_status()` agora faz fallback para Preview genérico quando projeto `multi-service` não possui Preview multiservice configurado.
+- Portal passou a reconhecer SilviPro W2 como `configured=true`, `healthy=true`, `runtimeKind=generic-preview`.
+- W1 foi removido do estado do Publisher; não há bloco Nginx específico W1.
+- Forgejo atual contém o placeholder `silvipro · primeiros passos`; P1/D2 têm conteúdo runtime-only diferente. Não copiar runtime para Git automaticamente.
+- Alias estável não foi alterado. `assistente-interativo` não tem ACL do projeto, então ativação/cutover ficou como gate humano.
+- Evidência: `docs/REMEDIACAO-SILVIPRO-PREVIEW-READMODEL-20261122.md`.

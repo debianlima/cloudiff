@@ -82,6 +82,11 @@ class ReleaseFlowV144Tests(unittest.TestCase):
         self.assertIn('"preserved-state"',AGENT)
         self.assertIn('authz_access_source',AGENT)
 
+    def test_multiservice_preview_readmodel_falls_back_to_existing_generic_preview(self):
+        self.assertIn("fallbackFrom':'multiservice'",PORTAL)
+        self.assertIn("/komodo/project/preview/status",PORTAL)
+        self.assertIn("'runtimeKind':'generic-preview'",PORTAL)
+
     def test_history_delete_and_stage_diagnostic_contracts_are_present(self):
         source=Path('components/control-plane/srv/cloudif/lib/cloudif_portal_publications.py').read_text()
         self.assertIn('def historical_publication_delete_runtime',source)
