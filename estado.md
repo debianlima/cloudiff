@@ -778,3 +778,14 @@ O backup parcial da unidade foi substituído por rollback direcionado de 28 KB (
 - Prova negativa: HTTP 409, `compositeAppDetected=true`, zero candidatos e zero artefatos H; W1/D1 permaneceram 200.
 - Project Config segue `configuration_required`; manifest completo é gate antes da primeira H moderna.
 - Evidência: `docs/REMEDIACAO-PAPERCLIP-RUNTIME-COMPOSTO-20261122.md`.
+
+## CPUHub P1021 — W1 contínuo e resíduos H removidos — 22/11/2026
+
+- W1 saudável/synced no commit `97af1e3...`; P5/1021/cpuhub continuam HTTP 200.
+- H3 residual passou a `superseded`.
+- Stages W2, H2–H5 e P2/P3 foram removidos do Publisher; URLs antigas agora caem no fallback, sem 502.
+- Containers D2–D5 removidos após backup; imagens e stacks preservados; D5 era duplicata sem alias ativo da P5.
+- `publication_runtimes` D1–D5 reconciliados para `inactive`; P5 moderna continua única ativa.
+- P2/P3 permanecem históricas Offline/reintegráveis pelo botão Subir.
+- P5 segue legado sem prova same-instance; próxima H→P é gate humano do proprietário.
+- Evidência: `docs/REMEDIACAO-CPUHUB-LEGADO-20261122.md`.

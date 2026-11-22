@@ -22,7 +22,7 @@ Nenhum runtime de projeto foi alterado nesta unidade.
 |---|---|---|---|---|---|---|
 | `agenda-unica` | W3 saudável | alinhado | P7 + alias `agendaunica` saudáveis | **sim**, `dep_19bc...` em H7/P7 | P6/P3 Offline; P2 legado Offline | **CONFORME** |
 | `cadales` | W1 contínuo saudável após migração v144 | alinhado `ad8e67c...` | P2 saudável | não comprovado; P2 é legado | W2/H2 removidos; D1/D2 metadata inativa | **PARCIAL — aguarda próximo H→P humano** |
-| `cpuhub` | W2 saudável | alinhado (`97af1e3...`) | P5 saudável | não comprovado; fluxo antigo | H3 ainda `awaiting_homologation`; P2/P3 Offline | **PARCIAL / LEGADO** |
+| `cpuhub` | W1 contínuo saudável | alinhado `97af1e3...` | P5 saudável | não comprovado; P5 é legado | H3 superseded; H2–H5/W2 sem rota; D2–D5 removidos; P2/P3 Offline | **PARCIAL — aguarda próximo H→P humano** |
 | `laboratorio-de-hardware` | W1 saudável após remediação | alinhado `3b399e9` | P12/alias saudáveis | **não** historicamente: H13 `dep_51a7...` → P12 `dep_210f...` | H11/H13/P5 agora Offline; snapshots preservados | **PARCIAL — aguarda novo H→P humano** |
 | `msha` | não configurado | n/a | nenhuma | n/a | nenhum runtime de publicação | **DRAFT / N/A** |
 | `paperclip` | W1 saudável após correção de healthcheck | hash `dfcaaf8...` alinhado | D1 legado permanece placeholder | n/a | resíduos W1 removidos; volume preservado | **PARCIAL — aguarda H→P humano** |
@@ -54,19 +54,20 @@ Nota importante: labels Docker dos containers promovidos podem ainda indicar `ho
 
 Usar o W1 atual como origem da próxima Homologação e promover a mesma instância para a próxima P. Somente depois P2 deve virar histórico/offline. Evidência: `docs/REMEDIACAO-CADALES-W1-SYNC-20261122.md`.
 
-## 3. CPUHub — operacional, mas ainda legado no ciclo de release
+## 3. CPUHub — W1 contínuo e legado limpo; P5 preservada
 
-- Public number 1021; W2 e P5 respondem HTTP 200.
-- Bind W2 está em `97af1e386fabb9b718f8aa100f200acfe6333264`, igual ao `latest_hash` conhecido.
-- Komodo Stack ainda falha pela expectativa de `docker-compose.yml`, apesar do Preview real saudável.
-- H5/P5 não possuem metadados do contrato atual de mesma instância.
-- H3 permanece `awaiting_homologation` mesmo após H4/P3 e H5/P5, configurando resíduo de estado.
-- P2/P3 estão Offline, como desejado para histórico.
+- Public number 1021; W1, P5, `1021.cloudiff` e alias `cpuhub` respondem HTTP 200.
+- Preview contínuo W1 está em `97af1e386fabb9b718f8aa100f200acfe6333264`, status `synced`.
+- P5 é a única Produção ativa no read-model moderno.
+- H3 antiga foi marcada `superseded`; H2/H4/H5 permanecem apenas como histórico `published`.
+- Stages W2, H2–H5 e P2/P3 foram removidos do Publisher. URLs antigas caem no fallback do Portal, sem upstream 502.
+- Containers H legados D2–D5 foram removidos após backup; imagens/stacks preservados e sem volumes de dados.
+- D5 era duplicata exata da imagem de P5 e não possuía alias ativo. P5 permaneceu running/healthy com `cloudif-p1021-active-web`.
+- P2/P3 permanecem Offline e podem ser reativadas pelo Histórico.
+- P5 não comprova H→P same-instance e continua classificada como legado.
+- `assistente-interativo` não possui ACL do projeto; próximo H→P deve ser iniciado pelo proprietário.
 
-### Remediação segura
-
-Reconciliar o Stack gerenciado, superseder H3 residual por regra de estado e usar o fluxo atual no próximo H→P. Não há motivo para interromper P5 antes disso.
-
+Evidência: `docs/REMEDIACAO-CPUHUB-LEGADO-20261122.md`.
 ## 4. Laboratório de Hardware — maior prioridade
 
 - Public number 1001.
