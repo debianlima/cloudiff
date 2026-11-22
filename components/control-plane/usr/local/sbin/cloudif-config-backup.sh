@@ -5,10 +5,21 @@ STAMP=$(date +%Y%m%d-%H%M%S)
 DEST="$BASE/$STAMP"
 install -d -m 0700 "$DEST"
 python3 - <<PY
-import sqlite3
-src='/var/lib/cloudif/portal/cloudif-portal.db'
-dst='$DEST/cloudif-portal.db'
-a=sqlite3.connect(src); b=sqlite3.connect(dst); a.backup(b); b.close(); a.close()
+import pathlib, sqlite3
+items=(
+    ('/var/lib/cloudif/portal/cloudif-portal.db', '$DEST/cloudif-portal.db'),
+    ('/var/lib/cloudif/approvals/approvals.db', '$DEST/approvals.db'),
+)
+for src,dst in items:
+    if not pathlib.Path(src).is_file():
+        raise SystemExit('BACKUP_SOURCE_MISSING:'+src)
+    a=sqlite3.connect('file:'+src+'?mode=ro',uri=True,timeout=30)
+    b=sqlite3.connect(dst,timeout=30)
+    a.backup(b)
+    check=b.execute('pragma quick_check').fetchone()[0]
+    b.close(); a.close()
+    if check!='ok':
+        raise SystemExit('BACKUP_QUICK_CHECK_FAILED:'+dst)
 PY
 cp -a /etc/systemd/system/cloudif-*.service /etc/systemd/system/cloudif-*.timer "$DEST"/ 2>/dev/null || true
 cp -a /etc/systemd/system/cloudif-*.service.d "$DEST"/ 2>/dev/null || true
