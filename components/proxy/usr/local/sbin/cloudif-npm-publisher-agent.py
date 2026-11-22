@@ -210,7 +210,7 @@ server {{
     '    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;\n'
     '    location ^~ /cloudiff/ {\n'
     '        proxy_http_version 1.1;\n'
-    '        proxy_set_header Host $host;\n'
+    f'        proxy_set_header Host {target};\n'
     '        proxy_set_header X-Real-IP $remote_addr;\n'
     '        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n'
     '        proxy_set_header X-Forwarded-Proto https;\n'

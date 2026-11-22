@@ -34,7 +34,7 @@ O alias do Publisher era renderizado assim:
 - aplicação Agenda compara `Origin` com `Host` como proteção CSRF;
 - resultado: 403 `Origem não permitida`.
 
-O renderer do Publisher foi corrigido para aliases preservarem `Host $host`, mantendo também `X-Forwarded-Host $host`. O upstream continua sendo o endereço estável numérico; somente a identidade HTTP pública deixa de ser sobrescrita.
+O Publisher mantém `Host` numérico para o gateway localizar o backend e envia o host público em `X-Forwarded-Host`. O publication-gateway agora roteia pelo Host numérico, mas restaura um `X-Forwarded-Host` válido `*.cloudiff.duckdns.org` como `Host` ao encaminhar para a bridge. Assim a aplicação recebe a identidade pública correta sem quebrar o roteamento interno.
 
 ## P10 — configuração explícita de Produção
 
@@ -65,3 +65,33 @@ Após a correção, requests de login com Origin em:
 não retornam mais 403; com credencial deliberadamente inválida retornam 401, provando que a checagem de origem passou e a requisição chegou à autenticação.
 
 Os três healthchecks seguem HTTP 200 na revisão `18416127cdf9`.
+
+## Correção final da cadeia de proxy
+
+Uma primeira hipótese de correção colocava `Host $host` diretamente no alias do NPM. O build candidato passou o teste unitário, mas a instalação foi corretamente rejeitada pelos gates operacionais:
+
+1. o primeiro canário detectou drift de renderer esperado;
+2. após normalização controlada, o smoke público mostrou 404 porque o publication-gateway usa o Host numérico para selecionar `cloudif-p<numero>-active-web`.
+
+O instalador fez rollback automático e o Publisher live permaneceu v17. Nenhum binário candidato v18 foi ativado.
+
+A cadeia correta é:
+
+```text
+Browser Host/Origin: agendaunica.cloudiff.duckdns.org
+        ↓
+NPM: Host 1020.cloudiff.duckdns.org (roteamento interno)
+     X-Forwarded-Host agendaunica.cloudiff.duckdns.org (identidade pública)
+        ↓
+publication-gateway: escolhe backend pelo Host numérico,
+                     valida X-Forwarded-Host *.cloudiff.duckdns.org,
+                     entrega Host/X-Forwarded-Host públicos à bridge
+        ↓
+web/api: recebe Host agendaunica.cloudiff.duckdns.org
+```
+
+O gateway ganhou `map $http_x_forwarded_host $cloudif_public_host` com fallback para `$host` e somente aceita forwarded host no domínio CloudIFF. Assim o roteamento interno continua determinístico e a aplicação volta a enxergar mesma origem.
+
+Depois dessa correção o Publisher v17 regenerou o Nginx no formato numérico normal. Os três endpoints (`agendaunica`, `1020` e P10 versionada) retornaram health 200; testes de login com credencial deliberadamente inválida retornaram 401 nos três Origins, provando que não existe mais bloqueio CSRF por origem.
+
+Os diretórios de candidato v18 rejeitado permanecem apenas como evidência/staging e não são symlinks live; não foram apagados por política PGH de não realizar exclusão de árvore sem autorização explícita.

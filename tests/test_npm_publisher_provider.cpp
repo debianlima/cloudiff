@@ -68,8 +68,7 @@ int main(){
     assert(alias_block.find("location ^~ /cloudiff/ {")!=std::string::npos);
     assert(alias_block.find("location ^~ /cloudif/ {")!=std::string::npos);
     assert(alias_block.find("proxy_pass http://10.62.92.7:8099;")!=std::string::npos);
-    assert(alias_block.find("proxy_set_header Host $host;")!=std::string::npos);
-    assert(alias_block.find("proxy_set_header Host 1007.cloudiff.duckdns.org;")==std::string::npos);
+    assert(alias_block.find("proxy_set_header Host 1007.cloudiff.duckdns.org;")!=std::string::npos);
     assert(alias_block.find("proxy_pass http://10.62.91.2:18150;")!=std::string::npos);
     const auto alias_version_block=rendered.substr(alias_version_pos);
     assert(alias_version_block.find("location ^~ /cloudiff/ {")==std::string::npos);

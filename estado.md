@@ -857,3 +857,14 @@ O backup parcial da unidade foi substituído por rollback direcionado de 28 KB (
 - Terminal H/P Compose usa `deployment_id` real; P9 validada com mesmo container de H9 e `sameRuntimeAcrossPromotion=true`.
 - Reconciliação H9→P9 concluída: P9 ativa, P8 inativa, H9 stage removido, job 94 `succeeded`, health estável HTTP 200.
 - Evidência: `docs/REMEDIACAO-AGENDA-H9-P9-LOCK-NOME-TERMINAL-20261122.md`.
+
+## Agenda P1020 — P10, P9 Offline e alias same-origin — 22/11/2026
+
+- Produção ativa: P10 / `dep_00b101221eb813f671146b98`.
+- Produção anterior P9 / `dep_6c524d61f1a4dbe384f47364`: `inactive`; api/db/web `Exited` e sem consumo de memória.
+- Cutover futuro agora espera `_wait_deployment_inactive()` confirmar `inactive|removed` antes de considerar o job concluído.
+- P10 Produção teve edição humana explícita de variáveis públicas, revisão 87→88: `APP_BASE_URL` aponta para `agendaunica` e `ALLOWED_ORIGINS` inclui os hosts públicos necessários; secrets não foram expostos.
+- Causa estrutural do alias: NPM precisava de Host numérico para o gateway, mas a identidade pública ficava só em `X-Forwarded-Host` e era descartada no gateway.
+- Solução final: publication-gateway roteia pelo Host numérico, valida `X-Forwarded-Host *.cloudiff.duckdns.org` e encaminha esse host público como Host/X-Forwarded-Host à bridge.
+- Publisher permanece v17 live. Candidato experimental v18 que mudava Host no NPM foi rejeitado pelos gates e nunca ativado; a mudança de Publisher foi revertida no canônico.
+- Provas finais: `agendaunica`, `1020` e P10 versionada health HTTP 200; login com credencial falsa retorna 401 nos três Origins, não 403.

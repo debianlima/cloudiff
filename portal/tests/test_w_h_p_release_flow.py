@@ -71,6 +71,13 @@ class WHPReleaseFlowTests(unittest.TestCase):
         self.assertNotIn("docker','build",release)
         self.assertNotIn('environment_variables',release[release.index("cmd=['docker','run'"):])
 
+    def test_gateway_routes_by_numeric_host_but_forwards_public_alias_host(self):
+        self.assertIn('map $http_x_forwarded_host $cloudif_public_host',GATEWAY)
+        self.assertIn('default $host;',GATEWAY)
+        self.assertIn('proxy_set_header Host $cloudif_public_host;',GATEWAY)
+        self.assertIn('proxy_set_header X-Forwarded-Host $cloudif_public_host;',GATEWAY)
+        self.assertIn('map $host $cloudif_backend',GATEWAY)
+
     def test_stage_hostnames_are_unambiguous(self):
         for marker in ('-w(?<w>[0-9]+)-preview','-h(?<h>[0-9]+)-homologation','-p(?<r>[0-9]+)-publication'):
             self.assertIn(marker,GATEWAY)

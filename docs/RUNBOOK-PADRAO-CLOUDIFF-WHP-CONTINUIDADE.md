@@ -266,6 +266,6 @@ Depois que a nova P passa por health/readback e assume o alias principal, a P an
 
 ### Aliases e preservação de Host
 
-O Publisher deve preservar o host público de aliases (`proxy_set_header Host $host` e `X-Forwarded-Host $host`). O alias pode encaminhar internamente para o endereço estável numérico, mas não deve substituir a identidade HTTP pública, pois aplicações podem comparar `Origin` e `Host` para CSRF/same-origin.
+O NPM/Publisher usa o Host numérico para rotear aliases ao gateway interno e preserva o host público em `X-Forwarded-Host`. O publication-gateway deve validar esse `X-Forwarded-Host` como `*.cloudiff.duckdns.org` e entregá-lo como `Host`/`X-Forwarded-Host` ao backend. Assim o roteamento continua numérico internamente, enquanto aplicações recebem a identidade pública correta para CSRF/same-origin.
 
 Variáveis públicas específicas do projeto, como `APP_BASE_URL` e `ALLOWED_ORIGINS`, continuam pertencendo ao estágio. Se o operador quiser valores próprios da Produção, deve alterá-los explicitamente em P; o Portal aplica a configuração à Produção ativa e atualiza revision/digest sem alterar secrets.
