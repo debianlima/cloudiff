@@ -186,3 +186,17 @@ Nenhum projeto deve ser marcado `conforme` apenas porque responde HTTP 200; a au
 Uma falha/recriação do container interno **não cria um novo Wn**. `ensure` deve restaurar o mesmo slot público. No runtime contínuo v144, o container interno pode ter nome estável (`cloudif-p<numero>-preview-web`), mas precisa manter o alias Docker `cloudif-p<numero>-w1-preview-web` (ou a identidade pública Wn equivalente) esperado pelo gateway.
 
 Incrementar geração é uma operação deliberada de mudança de identidade e não deve acontecer como efeito colateral de health/recovery. Teste obrigatório: executar `ensure` duas vezes e comprovar mesmo Wn, mesmo stack e mesmo container ID.
+
+## 13. Backup de metadata em remediações: mínimo e sem lock prolongado
+
+Para correções de **poucas linhas de metadata** em bancos SQLite operacionais, não copiar integralmente o banco live durante tráfego. O banco do Komodo Agent pode ter vários GB; uma operação `sqlite3.backup()` longa pode manter conexões/threads presos e fazer requisições retornarem `database is locked` após o `busy_timeout`.
+
+Preferir, nesta ordem:
+
+1. fluxo oficial de backup da plataforma, quando a finalidade é backup completo;
+2. snapshot direcionado das linhas que serão alteradas + `docker inspect`/artefatos necessários ao rollback;
+3. transação CAS (`BEGIN IMMEDIATE`, precondições de identidade, alteração mínima, commit) para a mutação.
+
+Um backup direcionado deve registrar valores anteriores suficientes para um `restore.sql`/JSON reproduzível e não incluir secrets. Se uma cópia integral ad hoc for interrompida, ela não é evidência confiável: substituí-la por rollback mínimo validado e remover o arquivo parcial criado pela própria unidade.
+
+Se um backup longo deixar o processo do agente com transação/conexão presa, primeiro encerrar **somente o processo inequivocamente pertencente à unidade**, provar que nenhum outro backup concorrente foi tocado e, se necessário, reiniciar apenas o serviço do agente para liberar conexões SQLite. Depois executar um `BEGIN IMMEDIATE` de prova antes de continuar.

@@ -745,3 +745,9 @@ Os módulos `cloudif_portal_publications.py` (app/lib), `cloudif_portal_v2_coexi
 - Metadata legada D1/D2 foi reconciliada para inactive; P2 moderna é a única `is_active=1`. Backup Komodo Agent: `/srv/cloudif/backups/cadales-komodo-readmodel-20261122T024756Z`.
 - P2 continua legado sem prova de H→P same-instance. `assistente-interativo` não tem ACL do projeto; próxima H/P é gate humano.
 - Evidência: `docs/REMEDIACAO-CADALES-W1-SYNC-20261122.md`.
+
+## Cadales — lição de backup/lock durante remediação — 22/11/2026
+
+Durante a limpeza de metadata Cadales, um backup integral ad hoc do `komodo-agent.db` (4,5 GB) permaneceu executando após perda da conexão e provocou `database is locked` em requisições concorrentes. O processo pertencente à unidade foi identificado por PID/path e encerrado; um `cp` separado de outra unidade não foi tocado. O Komodo Agent foi reiniciado isoladamente, `BEGIN IMMEDIATE` voltou a passar e W1/P2/alias permaneceram HTTP 200.
+
+O backup parcial da unidade foi substituído por rollback direcionado de 28 KB (`d2.inspect.json`, prestate JSON e `restore-publication-runtimes.sql`). Regra incorporada ao runbook: remediação de poucas linhas não deve copiar o SQLite live inteiro.
