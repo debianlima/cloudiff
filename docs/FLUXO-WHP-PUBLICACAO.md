@@ -29,7 +29,14 @@ Características do W:
 - oferece terminal no próprio container W;
 - bloqueia exposição pública de `.git`, `.env` e metadados equivalentes;
 - não é substituído por outro Preview como consequência normal de um commit; recuperação excepcional do slot exige preservar sua identidade/URL e registrar a operação;
-- não cria H ou P automaticamente.
+- não cria H ou P automaticamente;
+- o estado homologável inclui a camada gravável/rootfs atual do runtime e volumes pertencentes ao projeto, não apenas o conteúdo do Git.
+
+### Alterações manuais de runtime no Preview
+
+Se o usuário autorizado entrar no Terminal do W e instalar um pacote/runtime manualmente, essa alteração acompanha W→H quando ainda estiver presente no container no momento do clone integral. Exemplo: instalar PHP no Preview faz a H capturada depois conter essa instalação; P mantém o mesmo estado porque a própria H é promovida.
+
+Um `restart` do mesmo container preserva a camada gravável; uma recriação do Preview a partir da imagem original pode descartá-la. Por isso alterações permanentes devem preferir imagem/código/configuração gerenciada. Mudança feita depois de H existir exige nova H.
 
 ### Git indisponível
 
@@ -45,6 +52,7 @@ O snapshot inclui:
 
 - commit Git sintético do estado exato do workspace, sem alterar a branch de trabalho do usuário;
 - imagem do runtime do Preview;
+- rootfs/camada gravável efetivamente presente nos containers no instante do clone;
 - digest da imagem;
 - configuração runtime efetivamente usada pelo Preview e suas referências protegidas de segredo, preservadas sem publicar valores;
 - diff de código;
@@ -128,7 +136,9 @@ W existe e está saudável?
     └─ não → fluxo legado de compatibilidade
 ```
 
-A URL do terminal é validada pelo Portal e deve apontar para `https://komodoiff.duckdns.org/.../terminal/...`.
+A URL do terminal é validada pelo Portal e deve apontar para `https://komodoiff.duckdns.org/.../terminal/...`. Em Preview `linked-compose`, o Portal usa o binding canônico do Stack e o Komodo valida serviço/container real; em `source-linked`, usa o `preview-app` cadastrado. O navegador não escolhe container arbitrário.
+
+As abas PHP/Node são diagnósticos do estágio. Runtime ausente deve retornar `available=false` com os binários realmente detectados, nunca versão inventada nem instalação automática apenas para preencher a interface.
 
 ## Rollback
 
@@ -142,7 +152,7 @@ Quando termina o job de criar Homologação, promover para Produção ou reativa
 
 ### Histórico de Produção
 
-A aba Produção lista releases anteriores. Responsável/admin pode solicitar **Reativar Pn**; a operação é transacional: liga e valida o runtime histórico sem recriar containers/volumes, prepara bridge/rota, valida o cutover e desliga a P atual somente após sucesso. Se o runtime histórico já tiver sido removido e não houver reidratação comprovada, o rollback é bloqueado.
+A aba Produção lista somente releases históricas ainda operacionais. Responsável/admin pode usar **Subir** e depois **Ativar no endereço principal** quando houver runtime/artefato reativável. `Excluir container` remove o runtime histórico e marca a publicação como `archived`, retirando-a da lista operacional. Compose pode preservar snapshot para reidratação; legado inativo pode ser removido em modo final validado, sem reidratação automática. A P ativa nunca pode ser excluída por esse fluxo.
 
 ## Nomenclatura pública
 

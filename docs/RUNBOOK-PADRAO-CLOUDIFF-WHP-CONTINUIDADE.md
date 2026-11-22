@@ -216,6 +216,16 @@ Projetos com Preview provisionado por infraestrutura externa podem registrar `pr
 
 O status Git desse contrato é `linked`, não `synced`, salvo quando houver um sincronizador explícito. Diagnóstico de runtime deve usar os containers de aplicação registrados no source-link, não apenas o gateway. Terminal source-linked exige contrato próprio com validação de ACL + labels do container; não apontar silenciosamente para outra Stack.
 
+## Alterações manuais no runtime do Preview
+
+O snapshot/clone W→H captura o estado runtime efetivo do Preview, incluindo rootfs/camada gravável dos containers, configuração e volumes pertencentes ao projeto. Assim, instalação manual feita pelo Terminal antes da homologação acompanha H e depois P, desde que ainda esteja presente no container capturado.
+
+- `restart` do mesmo container preserva sua camada gravável;
+- `recreate` a partir da imagem/Compose original pode descartar alteração manual não persistida por imagem/volume/configuração;
+- alteração feita depois da criação de H não muda a H existente; gerar nova H;
+- para mudança permanente e reproduzível, preferir imagem, código, pacote declarado ou configuração gerenciada;
+- diagnóstico PHP/Node deve refletir o runtime real, não instalar tecnologia automaticamente.
+
 ## Read-model do Portal e histórico operacional
 
 As superfícies humanas não devem varrer filesystem nem consultar todos os runtimes a cada clique. Use `portal_readmodel_cache` como índice descartável em SQLite, pré-aquecido pelo `cloudif-portal-refresh-cache.timer` e invalidado pelas mutações. O índice acelera a leitura, mas nunca substitui a fonte de verdade; em ausência/expiração ele é reconstruído.

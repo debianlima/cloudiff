@@ -835,3 +835,13 @@ O backup parcial da unidade foi substituído por rollback direcionado de 28 KB (
 - Conta ADMIN de W3 e P8 atualizada para as credenciais solicitadas, sem registrar senha em texto claro; `setup_required=false`, `token_version` incrementado e login HTTP 200 nos dois ambientes.
 - W3/P8/alias permanecem saudáveis na revisão `18416127cdf9`.
 - Evidência: `docs/REMEDIACAO-AGENDA-CHECKS-FINAIS-PREVIEW-20261122.md`.
+
+## Consolidação canônica do gerenciamento de Publicações — 22/11/2026
+
+- Norma global W→H→P, fluxo, runbook, manual técnico, instruções PGH, Ajuda e auditoria foram reconciliados com o comportamento live.
+- Preview Wn é fixo e homologável como estado runtime completo: clone W→H inclui rootfs/camada gravável, configuração e volumes pertencentes ao projeto. Instalação manual presente no W no instante do clone acompanha H e a mesma H promovida acompanha P; recriação prévia do W pode descartar mudança manual não persistida.
+- Variáveis são por estágio; edição humana autenticada aplica diretamente ao estágio sem approval MCP separado. H herda W; P é a mesma H promovida e pode receber alterações explícitas posteriores.
+- H publicada deixa de ser runtime H. P histórica excluída vira `archived` e sai da lista operacional; Compose pode preservar snapshot, legado inativo pode usar `legacy-final` validado; P ativa nunca é excluível.
+- `portal_readmodel_cache` evita varredura de filesystem/Komodo/serviços remotos no caminho quente, com prewarm periódico e invalidação por mutação.
+- Terminal/diagnósticos são resolvidos pelo estágio real: linked-compose usa Stack/serviço canônico; source-linked usa preview-app cadastrado; tecnologia ausente retorna diagnóstico válido e não é instalada automaticamente.
+- Procedimento específico da Agenda consolidado em `docs/AGENDA-P1020-PROCEDIMENTO-GERENCIAMENTO-PUBLICACOES.md`; estado de referência: W3 + P8, históricos P2/P3/P6/P7 arquivados sem runtime físico.

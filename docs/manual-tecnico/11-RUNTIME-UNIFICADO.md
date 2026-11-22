@@ -37,18 +37,22 @@ Os seguintes arquivos não pertencem ao repositório do projeto:
 
 A plataforma mantém Dockerfiles, Compose, healthchecks e metadados fora do repositório do projeto. No fluxo atual:
 
-1. o Forgejo alimenta um único slot W1 de Preview;
-2. atualizar código sincroniza o mesmo W1 e preserva sua identidade/URL;
-3. criar H clona o runtime W saudável, incluindo a configuração efetiva do estágio por referências seguras;
+1. o Forgejo alimenta um único slot Wn de Preview, preservando o número histórico já existente;
+2. atualizar código sincroniza o mesmo Wn e preserva sua identidade/URL;
+3. criar H clona o runtime W saudável, incluindo rootfs/camada gravável corrente, volumes pertencentes ao projeto e configuração efetiva do estágio por referências seguras;
 4. H não recebe commits novos automaticamente; variáveis podem ser alteradas explicitamente pelo usuário autorizado antes do aceite;
 5. promover H→P muda papel/roteamento da própria instância aprovada, sem rebuild/reclone;
-6. a P anterior é parada somente depois do health/readback da nova e permanece enquanto necessária para rollback exato.
+6. a P anterior é desativada somente depois do health/readback da nova; pode permanecer operacionalmente reativável ou ter seu runtime removido/arquivado conforme a política de histórico.
 
-Builders, imagens e redes continuam gerenciados pela plataforma. A imagem-base segue o padrão `cloudif/runtime-apache-php8.3-node22:v2`, ajustado às versões de PHP e Node selecionadas. TLS é terminado no proxy nas portas públicas 80 e 443; os containers atendem na rede interna. Identificadores `dN` existem apenas para compatibilidade com publicações legadas e não definem o lifecycle novo.
+Builders, imagens e redes continuam gerenciados pela plataforma. O runtime concreto depende do projeto: PHP, Node.js, Python ou outros componentes só devem ser reportados quando realmente presentes no estágio selecionado. TLS é terminado no proxy nas portas públicas 80 e 443; os containers atendem na rede interna. Identificadores `dN` existem apenas para compatibilidade com publicações legadas e não definem o lifecycle novo.
+
+### Alterações manuais no rootfs do Preview
+
+O clone W→H captura o rootfs/camada gravável atual dos containers. Assim, pacote instalado manualmente pelo Terminal antes da homologação acompanha H e depois P. Isso é estado runtime, não garantia de persistência do Preview: `restart` preserva a camada do mesmo container, mas `recreate` a partir da imagem original pode descartá-la. Mudança durável deve preferir imagem, código, volume ou configuração gerenciada; alteração feita depois de H existir exige nova H.
 
 ## Publicação e retenção
 
-O objetivo operacional é um Preview ativo e uma Produção ativa por projeto, com no máximo uma H ativa durante homologação. H promovida vira P e não permanece como runtime H; H substituída/não promovida pode ter runtime removido depois de preservar snapshot/evidência. Bridges e rotas antigas são reconstruíveis. Produções históricas podem manter containers/volumes parados enquanto forem necessários para rollback do estado persistente.
+O objetivo operacional é um Preview ativo e uma Produção ativa por projeto, com no máximo uma H ativa durante homologação. H promovida vira P e não permanece como runtime H; H substituída/não promovida pode ter runtime removido depois de preservar snapshot/evidência. Bridges e rotas antigas são reconstruíveis. Produção histórica só permanece na lista operacional enquanto houver runtime/artefato reativável. Ao usar `Excluir container`, o runtime é removido e a publicação passa a `archived`; Compose pode preservar snapshot, enquanto legado inativo pode usar exclusão final validada sem reidratação automática.
 
 
 ## Membros e permissões
@@ -77,13 +81,17 @@ Secrets são promovidos por referências com escopo próprio do ambiente e seus 
 
 Homologações não promovidas/substituídas não são mantidas como runtime ocioso; Produções antigas ficam paradas apenas para rollback. O contrato detalhado e evidências mecânicas estão em `compat/cloudiff-stage-environment-runtime-contract.md`.
 
+## Read-model do Portal
+
+Leituras que dependem de filesystem, Komodo ou serviços remotos usam `portal_readmodel_cache`, pré-aquecido pelo timer existente e invalidado pelas mutações. O índice é descartável e nunca substitui as fontes canônicas. Projetos, tenants, contexto/estado de runtime, Publicações, Conectores e Aprovações devem evitar varredura pesada no caminho quente da interface.
+
 ## Refresh terminal, histórico e retenção
 
 A H é congelada contra sincronização automática do Forgejo, mas aceita edição explícita das variáveis do próprio estágio antes do aceite. A P é a mesma H promovida; alterações posteriores de variáveis são mutações explícitas da Produção.
 
 Jobs terminais de H, P e rollback disparam refresh do modal de Ambiente de publicação. Uma H publicada deixa de ser runtime ativo e não oferece Site/Terminal/Variáveis.
 
-Produções históricas podem permanecer com containers/volumes parados para rollback exato. O Histórico reativa esses containers, exige health, recria bridge/rota se necessário, valida a URL estável e só depois desativa a P anterior. Bridges antigos não precisam ficar parados consumindo metadados; são reconstruíveis.
+Produções históricas podem permanecer reativáveis enquanto houver runtime/artefato que sustente rollback. O Histórico prepara e valida a P alvo antes do cutover. Se `Excluir container` for usado, o runtime é removido e a publicação é arquivada: Compose pode manter snapshot; legado inativo pode ser removido definitivamente após validação Komodo. Bridges antigos são reconstruíveis e não devem permanecer consumindo runtime sem necessidade.
 
 ### Refresh terminal da interface
 

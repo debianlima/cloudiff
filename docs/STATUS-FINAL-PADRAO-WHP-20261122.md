@@ -47,3 +47,12 @@ A identidade operacional `assistente-interativo` não possui ACL dos projetos Ca
 - Paperclip: snapshot composto retorna 409 antes de qualquer efeito; W1/D1 preservados.
 - SGREP: source-linked reconhecido/saudável e Terminal validado no `preview-app` com identidade estrita.
 - SilviPro: W1/P1 separados e coerentes; conteúdo placeholder corresponde ao Git atual.
+
+## Referências canônicas de continuidade
+
+- Norma global: `docs/PADRAO-CLOUDIFF-PREVIEW-HOMOLOGACAO-PRODUCAO-20261120.md`.
+- Operação/recuperação: `docs/RUNBOOK-PADRAO-CLOUDIFF-WHP-CONTINUIDADE.md`.
+- Fluxo para usuários/agentes: `docs/FLUXO-WHP-PUBLICACAO.md`.
+- Agenda P1020: `docs/AGENDA-P1020-PROCEDIMENTO-GERENCIAMENTO-PUBLICACOES.md`.
+
+Essas referências prescrevem o comportamento atual. Documentos `REMEDIACAO-*` preservam evidência histórica e não substituem o procedimento vigente.

@@ -16,11 +16,15 @@ Auditoria somente leitura dos 8 projetos cadastrados no Portal, cruzando:
 
 Nenhum runtime de projeto foi alterado nesta unidade.
 
+### Atualização de fechamento
+
+A linha da Agenda abaixo incorpora as remediações posteriores executadas no mesmo ciclo de auditoria. Evidências históricas anteriores de P7/P6/P3/P2 permanecem nos documentos de remediação, mas não representam o estado operacional atual.
+
 ## Resultado geral
 
 | Projeto | Preview | Forgejo → Preview | Produção | H→P mesma instância | Histórico/resíduos | Classificação |
 |---|---|---|---|---|---|---|
-| `agenda-unica` | W3 saudável | alinhado | P7 + alias `agendaunica` saudáveis | **sim**, `dep_19bc...` em H7/P7 | P6/P3 Offline; P2 legado Offline | **CONFORME** |
+| `agenda-unica` | W3 saudável | alinhado | P8 + alias `agendaunica` saudáveis | **sim**, H8→P8 same-instance | P2/P3/P6/P7 `archived`, sem runtime físico | **CONFORME** |
 | `cadales` | W1 contínuo saudável após migração v144 | alinhado `ad8e67c...` | P2 saudável | não comprovado; P2 é legado | W2/H2 removidos; D1/D2 metadata inativa | **PARCIAL — aguarda próximo H→P humano** |
 | `cpuhub` | W1 contínuo saudável | alinhado `97af1e3...` | P5 saudável | não comprovado; P5 é legado | H3 superseded; H2–H5/W2 sem rota; D2–D5 removidos; P2/P3 Offline | **PARCIAL — aguarda próximo H→P humano** |
 | `laboratorio-de-hardware` | W1 saudável após remediação | alinhado `3b399e9` | P12/alias saudáveis | **não** historicamente: H13 `dep_51a7...` → P12 `dep_210f...` | H11/H13/P5 agora Offline; snapshots preservados | **PARCIAL — aguarda novo H→P humano** |
@@ -34,9 +38,10 @@ Nenhum runtime de projeto foi alterado nesta unidade.
 - Public number 1020.
 - Preview fixo W3: `1020-w3-preview.cloudiff.duckdns.org`, HTTP 200.
 - Preview Git: `1841612...`, status `synced`.
-- Produção ativa P7 e alias `agendaunica.cloudiff.duckdns.org`: HTTP 200, mesma revisão observada.
-- H7 e P7 usam o mesmo `deployment_id` `dep_19bc037d073bf2418f9050c7` e o mesmo snapshot `snap_29103714e0b1ac96c11b8955`.
-- P6 e P3 terminam Offline; P6 possui reidratação histórica comprovada; P2 é legado Offline.
+- Produção ativa P8 e alias `agendaunica.cloudiff.duckdns.org`: HTTP 200, revisão `18416127cdf9` no fechamento.
+- H8→P8 preserva a mesma instância homologada no fluxo atual.
+- P2/P3/P6/P7 estão `archived`, fora das listas operacionais e sem containers/volumes históricos ativos; P2 legado foi removido em `legacy-final`.
+- Terminal W3 linked-compose aponta para o serviço `api`; PHP/Node ausentes são reportados como diagnóstico válido.
 
 Nota importante: labels Docker dos containers promovidos podem ainda indicar `homologation` porque labels são imutáveis. **Não recriar containers só para alterar label**; a identidade preservada é justamente a prova do H→P in-place.
 
@@ -134,7 +139,7 @@ O proprietário deve enviar o W1 atual para Homologação e promover essa mesma 
 
 ### Forja
 
-- Agenda: históricos P3/P6 permanecem preservados e Offline; P7 ativa conforme.
+- Agenda: somente W3 e P8 permanecem operacionais; P2/P3/P6/P7 estão arquivadas e sem runtime físico.
 - Cadales: W2/H2 antigos removidos; P2 ativa legada preservada.
 - CPUHub: D2–D5 removidos; W2/H2–H5/P2/P3 sem stages ativos; P5 é a única Produção ativa.
 - Laboratório: H11/H13/P5 residuais desativados; somente W1 e P12 consomem runtime de aplicação relevante.

@@ -14,6 +14,12 @@ O Preview acompanha o repositório Forgejo canônico. Uma mudança aceita no bra
 
 O sincronizador deve validar pelo menos: commit esperado, artefatos/imagens correspondentes, health e resultado real do deploy. Falha de atualização mantém o último estado saudável disponível e registra erro; não declara sucesso apenas porque um job foi aceito.
 
+### Estado runtime e alterações manuais no Preview
+
+O estado homologável do Preview não se limita ao Git. No instante do clone W→H, o executor captura o estado runtime necessário, incluindo rootfs/camada gravável dos containers, configuração efetiva e volumes pertencentes ao projeto. Portanto uma instalação manual feita pelo Terminal no Preview — por exemplo um pacote ou uma versão de PHP — acompanha a H **se ainda estiver presente no container capturado** e, depois, acompanha P porque H→P promove a mesma instância.
+
+Isso não transforma alteração manual em configuração durável do Preview: se o container W for recriado antes da homologação a partir da imagem/Compose original, uma mudança existente apenas na camada gravável pode desaparecer. `restart` do mesmo container preserva essa camada; `recreate` pode substituí-la. Mudança permanente/repetível deve preferir imagem, código, pacote declarado, volume ou configuração gerenciada. Alteração feita depois da criação de H exige nova H.
+
 ## 2. Homologação é clone do Preview existente
 
 Ao solicitar Homologação, o CloudIFF deve capturar/clonar **o estado integral necessário para reproduzir o Preview naquele instante**, incluindo os containers/stack, imagens/rootfs, configuração runtime e volumes/dados persistentes pertencentes ao projeto, preservando referências de segredo sem publicar valores.
@@ -71,11 +77,15 @@ São **não conformes** por padrão:
 - **Promoção P:** a própria H aprovada é ativada em Produção; sem build, rebuild ou novo clone intermediário.
 - **Troca:** versão ativa anterior desativada somente após nova ativa passar health/readback; rollback continua disponível.
 
-## 8. Legado
+## 8. Read-model da interface
+
+Projetos, Publicações, Conectores e Aprovações devem usar o índice persistente descartável `portal_readmodel_cache` para dados de leitura que exigiriam filesystem, Komodo ou serviços remotos. O timer existente pré-aquece o índice e mutações invalidam a chave/namespace correspondente e disparam refresh assíncrono. O índice não substitui a fonte de verdade e pode ser reconstruído a qualquer momento. Listas de Produção operacional exibem somente registros `published`; versões `archived` ficam na auditoria.
+
+## 9. Legado
 
 Registros históricos continuam válidos como evidência do que aconteceu, mas qualquer texto anterior que prescreva "novo banco de H", "novo container de Produção", "rebuild em Produção", "snapshot H→novo P" ou múltiplos Previews como fluxo normal fica **SUPERADO para decisões futuras** por este contrato.
 
-## 9. Variáveis por estágio, refresh e histórico
+## 10. Variáveis por estágio, refresh e histórico
 
 - Variáveis pertencem ao runtime do estágio ativo: Preview edita W, Homologação edita H ativa e Produção edita P ativa.
 - W→H herda a configuração corrente do Preview; H→P herda a configuração corrente da H. Secrets recebem referências próprias do ambiente de destino e valores não são expostos.
@@ -84,9 +94,9 @@ Registros históricos continuam válidos como evidência do que aconteceu, mas q
 - Uma H `published` é histórico, não ambiente ativo: não deve oferecer Site, Terminal ou Variáveis como H.
 - O Histórico de Produção pode reativar uma P anterior somente com autorização do responsável/admin. A P histórica é preparada e validada antes do cutover; em falha, a P atual permanece/restaura-se como ativa.
 
-## 10. Retenção de containers
+## 11. Retenção de containers
 
-O alvo operacional é **zero runtime H residual** e apenas um Preview + uma Produção ativos. Produções anteriores podem manter seus containers/volumes **parados** quando necessários para rollback exato. Proxies/bridges e rotas versionadas antigas são descartáveis/reconstruíveis. Containers legados só devem ser removidos depois de comprovar mecanismo equivalente de restauração; diretórios/volumes de dados não são apagados por limpeza de container.
+O alvo operacional é **zero runtime H residual** e apenas um Preview + uma Produção ativos. Produções históricas só permanecem no histórico operacional enquanto houver runtime/artefato reativável que justifique `Subir`/`Ativar`. O runtime histórico pode ser removido pelo fluxo `Excluir container`: Compose preserva snapshot/auditoria e legado inativo pode usar `legacy-final` após validação de identidade/labels/alias. Depois da exclusão, a publicação fica `archived` e sai da lista operacional. Proxies/bridges e rotas versionadas antigas são descartáveis/reconstruíveis; dados persistentes só são removidos quando o contrato explícito da exclusão os incluir e houver backup/rollback adequado.
 
 ### Identidade fixa do Preview Wn e histórico de Produção
 
@@ -102,6 +112,6 @@ O estado Online/Offline deve vir do runtime real, não apenas do banco do Portal
 
 ### Fechamento de UX, diagnóstico e descarte de runtime histórico
 
-Após sucesso de variável humana, o modal deve fechar e o ambiente externo deve recarregar. PHP/Node/Terminal são sempre resolvidos pelo estágio selecionado; tecnologia ausente é diagnóstico válido, não erro. O Histórico distingue `Subir`, `Desligar`, `Ativar no endereço principal` e `Excluir container`. A exclusão só vale para P inativa com snapshot reidratável e não remove o histórico; a reconstrução passa tecnicamente por H→P na mesma instância e nunca altera o alias estável até a ação explícita `Ativar`.
+Após sucesso de variável humana, o modal deve fechar e o ambiente externo deve recarregar. PHP/Node/Terminal são sempre resolvidos pelo estágio selecionado; tecnologia ausente é diagnóstico válido, não erro. O Histórico distingue `Subir`, `Desligar`, `Ativar no endereço principal` e `Excluir container`. `Excluir` nunca vale para a P ativa; em Compose preserva o snapshot quando existente, e em legado inativo pode executar exclusão final validada (`canRehydrate=false`). Em ambos os casos a P removida passa a `archived` e desaparece do histórico operacional, preservando auditoria técnica interna.
 
 O endereço principal exibido/ativado vem do alias cadastrado do projeto (`project_publication_aliases`); o hostname numérico permanece como compatibilidade e não substitui o alias na UX.

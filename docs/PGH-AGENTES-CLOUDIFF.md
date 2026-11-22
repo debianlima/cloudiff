@@ -140,6 +140,14 @@ Produções anteriores permanecem **Offline** por padrão. O Histórico separa t
 
 O estado Online/Offline deve vir do runtime real, não apenas do banco do Portal. Uma P histórica online não significa Produção ativa. Apenas `is_active=1` + alias estável validado representam a Produção principal.
 
+### Alteração manual do Preview
+
+Mudança manual feita pelo Terminal integra o estado homologável se estiver no runtime no instante do clone W→H. O executor captura rootfs/camada gravável; portanto instalação manual de pacote acompanha H e P. Não assumir que isso sobreviverá a uma recriação do Preview: alteração permanente deve preferir mecanismo durável. Alteração posterior à H exige nova H.
+
+### Read-model e listas operacionais
+
+Não reintroduzir varreduras de filesystem/Komodo/serviços remotos a cada clique. Usar o `portal_readmodel_cache` para enriquecimentos pesados, com prewarm periódico e invalidação por mutação. Publicação `archived` é auditoria e não recebe botões operacionais.
+
 ## Continuidade W→H→P: leitura obrigatória
 
-Antes de operar Preview/Homologação/Produção, ler `docs/RUNBOOK-PADRAO-CLOUDIFF-WHP-CONTINUIDADE.md`. Em especial: preservar Wn histórico, não reconstruir entre H→P, distinguir Online de Produção ativa, usar alias principal no cutover, resolver diagnóstico por estágio e nunca remover P histórica sem snapshot reidratável. O Executor live possui deltas adicionais versionados em `compat/`; reconciliação é incremental, nunca substituição cega pelo arquivo canônico antigo.
+Antes de operar Preview/Homologação/Produção, ler `docs/PADRAO-CLOUDIFF-PREVIEW-HOMOLOGACAO-PRODUCAO-20261120.md` e `docs/RUNBOOK-PADRAO-CLOUDIFF-WHP-CONTINUIDADE.md`. Em especial: preservar Wn histórico, clonar rootfs/config/volumes W→H, não reconstruir H→P, distinguir Online de Produção ativa, usar alias principal no cutover, resolver diagnóstico pelo estágio real e tratar `archived` como auditoria fora da lista operacional. `Excluir container` pode preservar snapshot Compose ou usar `legacy-final` em P legada inativa validada; a P ativa nunca pode ser excluída. O Executor live possui deltas adicionais versionados em `compat/`; reconciliação é incremental, nunca substituição cega pelo arquivo canônico antigo.
