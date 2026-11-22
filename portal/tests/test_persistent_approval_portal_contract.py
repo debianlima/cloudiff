@@ -70,7 +70,7 @@ class PersistentApprovalPortalContractTests(unittest.TestCase):
         for path in (PANEL,LEGACY_PANEL):
             source=path.read_text()
             self.assertIn("'pgh.device.pair':'PGHD — Pareamento resiliente'",source)
-            self.assertIn('Recuperação PGHD:',source)
+            self.assertIn('Recuperação PGHD — fluxo sem senha:',source)
             self.assertIn('Código e cookie de pareamento continuam efêmeros e não são armazenados.',source)
             self.assertIn('CLOUDIF_PGH_CORE_BASE_URL',source)
             self.assertIn('Iniciar novo pareamento no Core',source)
