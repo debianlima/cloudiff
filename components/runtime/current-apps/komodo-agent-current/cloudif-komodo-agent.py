@@ -6304,10 +6304,25 @@ def cloudif_homologation_reject(handler):
 _v143_stage_terminal=cloudif_stage_terminal
 def cloudif_stage_terminal(handler):
     if not _cloudif_pub_auth(handler):return send(handler,403,{'ok':False,'error':'forbidden'})
-    payload=_cloudif_pub_json(handler);project=safe_slug(payload.get('project') or '');environment=str(payload.get('environment') or '').strip().lower()
+    payload=_cloudif_pub_json(handler);project=safe_slug(payload.get('project') or '');environment=str(payload.get('environment') or '').strip().lower();deployment_id=str(payload.get('deployment_id') or '').strip()
     try:num=int(payload.get('public_number') or 0);dep=int(payload.get('deploy_number') or 0);publication=int(payload.get('publication_number') or 0);candidate=int(payload.get('candidate_number') or 0)
     except Exception:return send(handler,400,{'ok':False,'error':'invalid_stage_terminal_request'})
     if not project or num<1 or environment not in {'homologation','production'}:return send(handler,400,{'ok':False,'error':'invalid_stage_terminal_request'})
+    if deployment_id:
+        if not re.fullmatch(r'dep_[a-f0-9]{24}',deployment_id):return send(handler,400,{'ok':False,'error':'invalid_deployment_terminal_request'})
+        container='cloudif-'+deployment_id.replace('_','-')+'-web';inspected=subprocess.run(['docker','inspect',container],stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,text=True)
+        if inspected.returncode!=0:return send(handler,409,{'ok':False,'error':'deployment_terminal_container_missing'})
+        try:item=(json.loads(inspected.stdout or '[]') or [{}])[0]
+        except Exception:item={}
+        labels=(item.get('Config') or {}).get('Labels') or {};state=item.get('State') or {};health=(state.get('Health') or {}).get('Status') or ''
+        if str(labels.get('org.cloudiff.deployment') or '')!=deployment_id or str(labels.get('org.cloudiff.project') or '')!=project or str(labels.get('org.cloudiff.service') or '')!='web':return send(handler,409,{'ok':False,'error':'deployment_terminal_identity_invalid'})
+        if not state.get('Running') or health not in {'','healthy'}:return send(handler,409,{'ok':False,'error':'stage_container_not_healthy'})
+        server_id=_cloudif_v143_server_id(project)
+        if not server_id:return send(handler,422,{'ok':False,'error':'stage_server_missing'})
+        target=_cloudif_ensure_container_terminal(server_id,container);terminal=str(target.get('terminal') or '')
+        if not target.get('ok') or not terminal:return send(handler,422,{'ok':False,'error':'stage_terminal_create_failed'})
+        stage_code=('H'+str(candidate)) if environment=='homologation' else ('P'+str(publication))
+        return send(handler,200,{'ok':True,'project':project,'public_number':num,'environment':environment,'stageCode':stage_code,'container':container,'deployment_id':deployment_id,'server_id':server_id,'terminal':terminal,'target_mode':'container','terminalReady':True,'sameRuntimeAcrossPromotion':True,'secretValuesIncluded':False,'secretReferencesIncluded':False})
     _cloudif_v144_ensure_schema();row=None;stage_code=''
     if environment=='homologation':
         rows=db_query("select * from publication_runtimes where project=? and public_number=? and deploy_number=? and status='ready'",(project,num,dep))

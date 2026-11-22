@@ -239,3 +239,19 @@ Ações humanas que mudam Projeto, Conector, Aprovação ou Publicação devem i
 Preview `linked-compose` não deve consultar o `project_preview_state` legado para abrir Terminal. O Portal usa o binding canônico do Stack e o Komodo valida o serviço/container real antes de criar o terminal. Para aplicações API+web, o Terminal deve apontar para o serviço aplicativo apropriado (na Agenda, `api`), não para a bridge pública.
 
 As abas PHP/Node são diagnósticos, não requisitos de instalação. Se o estágio real não possui esses runtimes, responder `available=false` com HTTP 200 e listar os binários detectados. Nunca instalar runtime só para a interface parecer preenchida.
+
+## Preflight de nome, idempotência e recuperação de promoção parcial
+
+Antes de H→P, reservar Pn por candidata e validar o nome **antes** de qualquer promoção externa. A alocação deve considerar releases concluídas, jobs de Produção e requests pendentes. Retry da mesma candidata reutiliza o mesmo Pn; nunca avança para P(n+1) apenas porque uma tentativa anterior falhou depois do cutover.
+
+Para Compose, o preflight deve validar simultaneamente Portal + Executor + hostname Pn. Se o deployment homologado já estiver com papel `production` e o Pn externo existir para essa mesma candidata/deployment, tratar como **promoção parcial recuperável**: revalidar bridge/stage/alias, terminar cleanup e finalizar o banco de forma idempotente. Se Pn pertencer a outra candidata, bloquear com conflito de nome antes do cutover.
+
+A finalização do Portal deve ocorrer em transação curta `BEGIN IMMEDIATE`, sem I/O remoto dentro da transação.
+
+### Exclusão mútua com o read-model
+
+`cloudif-publication-worker` e `cloudif-portal-refresh-cache` compartilham `/run/cloudif/portal-publication-lifecycle.lock`. O worker mantém o lock durante lifecycle H/P; o refresh não espera nem disputa escrita: registra `DEFERRED` e tenta novamente na próxima rodada. Funções de refresh não devem manter transação de escrita aberta durante HTTP/SSH/Komodo ou qualquer I/O externo.
+
+### Terminal Compose após H→P
+
+Terminal de H/P `compose-snapshot` é resolvido por `deployment_id`, projeto e serviço real, não por tabelas Komodo legadas. Como H→P promove a mesma instância, o label de ambiente do container pode continuar `homologation`; não usar esse label para decidir o papel atual. O Portal fornece o papel H/P e o `deployment_id`, e o Komodo valida identidade/saúde do container antes de abrir o terminal.

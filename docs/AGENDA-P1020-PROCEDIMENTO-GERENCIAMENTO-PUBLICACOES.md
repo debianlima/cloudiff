@@ -137,3 +137,21 @@ A conta ADMIN ativa do projeto usa o e-mail `agendaunica@iff.edu.br`. Credenciai
 - alias principal só muda depois do health da nova P;
 - H deixa de ser runtime H após promoção;
 - Produção anterior segue a política de histórico/exclusão, sem runtime residual desnecessário.
+
+## 12. Preflight e recuperação de promoção
+
+A numeração da Agenda é reservada por candidata. H9 reserva P9; um retry de H9 continua P9. Somente uma nova candidata pode avançar para P10.
+
+Antes de promover, conferir:
+
+- número P não pertence a outra candidata;
+- job/request não reservou o mesmo P para outra candidata;
+- deployment H existe, está saudável e corresponde à candidata;
+- hostname P não conflita com outro runtime;
+- se o mesmo deployment já estiver em `production`, executar recuperação idempotente em vez de promover/criar novamente.
+
+Incidente de referência H9→P9: o cutover externo terminou, mas uma disputa SQLite com o refresh abortou cleanup/finalização. O Portal foi reconciliado para P9 sem criar P10. O mutex lifecycle/read-model impede recorrência.
+
+## 13. Terminal de H/P Compose
+
+H/P Compose usam o `deployment_id` real. Para P9, o Terminal aponta para o mesmo container `web` que foi homologado em H9. Tabelas legadas do Komodo não determinam Terminal de deployments do Executor.

@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-import csv, datetime, json, os, sqlite3, subprocess, urllib.request, sys
+import csv, datetime, json, os, sqlite3, subprocess, urllib.request, sys, fcntl
 from pathlib import Path
 
 BASE = Path(os.environ.get("CLOUDIF_BASE", "/srv/cloudif"))
 DB = Path(os.environ.get("CLOUDIF_PORTAL_DB", "/var/lib/cloudif/portal/cloudif-portal.db"))
 NODES = os.environ.get("CLOUDIF_NODES", "")
+LIFECYCLE_LOCK = Path("/run/cloudif/portal-publication-lifecycle.lock")
 
 DB.parent.mkdir(parents=True, exist_ok=True)
 
@@ -128,38 +129,23 @@ def network_rate(previous_payload, previous_updated_at, current_payload, current
         return None
 
 def refresh_nodes():
-    con = db()
+    samples=[]
     for item in NODES.split(","):
-        if "=" not in item:
-            continue
-        name, url = item.split("=", 1)
-        name = name.strip()
-        url = url.strip().rstrip("/") + "/metrics"
-        previous_row = con.execute(
-            "SELECT payload, updated_at FROM node_metrics_cache WHERE node=?", (name,)
-        ).fetchone()
-        result = fetch_json(url, 15)
-        payload = result.get("data") if result.get("ok") else result
-        sampled_at = now_iso()
-        if result.get("ok") and isinstance(payload, dict) and previous_row:
-            try:
-                previous_payload = json.loads(previous_row["payload"] or "{}")
-            except Exception:
-                previous_payload = {}
-            rate = network_rate(previous_payload, previous_row["updated_at"], payload, sampled_at)
-            if rate:
-                payload.setdefault("network", {}).update(rate)
-        con.execute("""
-          INSERT INTO node_metrics_cache(node,url,ok,payload,updated_at)
-          VALUES(?,?,?,?,?)
-          ON CONFLICT(node) DO UPDATE SET
-            url=excluded.url,
-            ok=excluded.ok,
-            payload=excluded.payload,
-            updated_at=excluded.updated_at
-        """, (name, url, 1 if result.get("ok") else 0, json.dumps(payload, ensure_ascii=False), sampled_at))
-    con.commit()
-    con.close()
+        if "=" not in item:continue
+        name,url=item.split("=",1);name=name.strip();url=url.strip().rstrip("/")+"/metrics"
+        con=db();previous_row=con.execute("SELECT payload, updated_at FROM node_metrics_cache WHERE node=?",(name,)).fetchone();con.close()
+        result=fetch_json(url,15);payload=result.get("data") if result.get("ok") else result;sampled_at=now_iso()
+        if result.get("ok") and isinstance(payload,dict) and previous_row:
+            try:previous_payload=json.loads(previous_row["payload"] or "{}")
+            except Exception:previous_payload={}
+            rate=network_rate(previous_payload,previous_row["updated_at"],payload,sampled_at)
+            if rate:payload.setdefault("network",{}).update(rate)
+        samples.append((name,url,1 if result.get("ok") else 0,json.dumps(payload,ensure_ascii=False),sampled_at))
+    if not samples:return
+    con=db()
+    try:
+        con.executemany("""INSERT INTO node_metrics_cache(node,url,ok,payload,updated_at) VALUES(?,?,?,?,?) ON CONFLICT(node) DO UPDATE SET url=excluded.url,ok=excluded.ok,payload=excluded.payload,updated_at=excluded.updated_at""",samples);con.commit()
+    finally:con.close()
 
 def tenants_registry():
     reg = BASE / "registry" / "tenants.csv"
@@ -227,11 +213,15 @@ def refresh_portal_readmodels():
     except Exception as exc:print('WARN: approvals readmodel',type(exc).__name__)
 
 def main():
-    init_db()
-    refresh_tenants()
-    refresh_nodes()
-    refresh_portal_readmodels()
-    print("OK: cache atualizado", now_iso())
+    LIFECYCLE_LOCK.parent.mkdir(parents=True,exist_ok=True);fd=os.open(LIFECYCLE_LOCK,os.O_CREAT|os.O_RDWR,0o600)
+    try:
+        try:fcntl.flock(fd,fcntl.LOCK_EX|fcntl.LOCK_NB)
+        except BlockingIOError:
+            print("DEFERRED: lifecycle de publicação ativo",now_iso());return
+        init_db();refresh_tenants();refresh_nodes();refresh_portal_readmodels();print("OK: cache atualizado",now_iso())
+    finally:
+        try:fcntl.flock(fd,fcntl.LOCK_UN)
+        finally:os.close(fd)
 
 if __name__ == "__main__":
     main()

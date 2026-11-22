@@ -845,3 +845,15 @@ O backup parcial da unidade foi substituído por rollback direcionado de 28 KB (
 - `portal_readmodel_cache` evita varredura de filesystem/Komodo/serviços remotos no caminho quente, com prewarm periódico e invalidação por mutação.
 - Terminal/diagnósticos são resolvidos pelo estágio real: linked-compose usa Stack/serviço canônico; source-linked usa preview-app cadastrado; tecnologia ausente retorna diagnóstico válido e não é instalada automaticamente.
 - Procedimento específico da Agenda consolidado em `docs/AGENDA-P1020-PROCEDIMENTO-GERENCIAMENTO-PUBLICACOES.md`; estado de referência: W3 + P8, históricos P2/P3/P6/P7 arquivados sem runtime físico.
+
+## Agenda H9→P9 — promoção parcial recuperada e concorrência SQLite corrigida — 22/11/2026
+
+- Job 94 reservou P9 corretamente; erro `database is locked` ocorreu após cutover externo, durante concorrência com `cloudif-portal-refresh-cache.service`.
+- P9 já existia no Executor/Publisher/alias; Portal ainda mostrava P8/H9. Não era colisão real P8.
+- Alocação agora considera jobs/requests e é idempotente por candidata: retry H9=P9; nova candidata=P10.
+- Preflight Compose valida nome/ownership/deployment/hostname antes de promover e reconhece promoção parcial da mesma instância.
+- Worker e refresh compartilham lifecycle lock; refresh retorna `DEFERRED` durante H/P. `refresh_nodes` não segura write transaction durante rede.
+- Finalização Compose usa transação curta/idempotente e invalida read-model.
+- Terminal H/P Compose usa `deployment_id` real; P9 validada com mesmo container de H9 e `sameRuntimeAcrossPromotion=true`.
+- Reconciliação H9→P9 concluída: P9 ativa, P8 inativa, H9 stage removido, job 94 `succeeded`, health estável HTTP 200.
+- Evidência: `docs/REMEDIACAO-AGENDA-H9-P9-LOCK-NOME-TERMINAL-20261122.md`.

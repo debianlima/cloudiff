@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 import json,sqlite3,time,subprocess
-DB='/var/lib/cloudif/portal/cloudif-portal.db'
+DB='/var/lib/cloudif/portal/cloudif-portal-readmodel.db'
 
 def _con():
-    con=sqlite3.connect(DB,timeout=5)
-    con.execute('pragma busy_timeout=5000')
+    con=sqlite3.connect(DB,timeout=30)
+    con.execute('pragma busy_timeout=30000')
     con.execute('''create table if not exists portal_readmodel_cache(
       namespace text not null,
       cache_key text not null,

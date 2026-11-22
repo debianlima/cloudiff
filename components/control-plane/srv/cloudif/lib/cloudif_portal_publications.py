@@ -222,21 +222,118 @@ def _create_linked_compose_homologation_candidate(slug,num,candidate,actor,progr
     return {'ok':True,'project':slug,'candidateNumber':candidate,'stageCode':ident['code'],'url':ident['url'],'hostname':ident['hostname'],'commit':source_commit,'parentCommit':source_commit,'artifactImageId':artifact_id,'previewGeneration':preview_generation,'diff':diff,'runtimeDiff':runtime_meta,'environmentRevision':int(summary.get('environmentRevision') or 0),'snapshotId':snapshot_id,'snapshotDigest':snapshot_digest,'secretValuesIncluded':False}
 
 
+def _supersede_prior_homologations(con,slug,candidate_number):
+    con.execute("update publication_candidates set status='superseded' where project_slug=? and candidate_number<? and status in ('awaiting_homologation','homologated')",(slug,int(candidate_number)))
+
+def _linked_compose_previous_active_production(slug):
+    con=sqlite3.connect(DB);con.row_factory=sqlite3.Row;_ensure_schema(con)
+    row=con.execute("select * from project_publications where project_slug=? and is_active=1 and status='published' order by id desc limit 1",(slug,)).fetchone()
+    release=con.execute("select * from production_releases where project_slug=? and is_active=1 and status='published' order by publication_number desc limit 1",(slug,)).fetchone();con.close()
+    detail={}
+    if row:
+        try:detail=json.loads(row['detail_json'] or '{}')
+        except Exception:detail={}
+    dep=str(detail.get('productionDeploymentId') or '')
+    publication=int(release['publication_number']) if release else 0
+    return {'deploymentId':dep if re.fullmatch(r'dep_[a-f0-9]{24}',dep) else '','publicationNumber':publication}
+
+def _compose_deployment_status(deployment_id):
+    base,token=_executor_runtime_client();status,data=_bearer_json('GET',base+'/v1/deployments/'+urllib.parse.quote(str(deployment_id),safe=''),token,timeout=30)
+    if status!=200 or not isinstance(data,dict) or data.get('ok') is not True:raise RuntimeError('O Executor não confirmou o deployment homologado.')
+    return data
+
+
+def _compose_publication_preflight(slug,candidate,publication):
+    publication=int(publication);candidate_number=int(candidate['candidate_number']);deploy_number=int(candidate['deploy_number']);num=int(candidate['public_number']);meta=_candidate_runtime_metadata(candidate);deployment_id=str(meta.get('homologationDeploymentId') or '')
+    if not re.fullmatch(r'dep_[a-f0-9]{24}',deployment_id):raise RuntimeError('A Homologação não possui deployment válido para promoção.')
+    con=_publication_db(60,True);_ensure_schema(con);con.commit()
+    try:
+        reservation=con.execute('select candidate_number,status from publication_number_reservations where project_slug=? and publication_number=?',(slug,publication)).fetchone()
+        if reservation and int(reservation['candidate_number'])!=candidate_number:raise RuntimeError('Conflito de nome: P'+str(publication)+' está reservada por outra candidata.')
+        if not reservation:_reserve_publication_number(con,slug,candidate_number,publication)
+        release=con.execute('select candidate_number,deploy_number,status,is_active from production_releases where project_slug=? and publication_number=?',(slug,publication)).fetchone()
+        if release and int(release['candidate_number'])!=candidate_number:raise RuntimeError('Conflito de nome: P'+str(publication)+' já pertence a outro candidato.')
+        project_row=con.execute("select deploy_number,status from project_publications where project_slug=? and (version=? or version_hostname=?) order by id desc limit 1",(slug,'P'+str(publication),_stage_identity(num,'publication',publication)['hostname'])).fetchone()
+        if project_row and int(project_row['deploy_number'])!=deploy_number:raise RuntimeError('Conflito de nome: P'+str(publication)+' já existe no histórico de outro deployment.')
+        other=con.execute("select candidate_number,status from publication_jobs where project_slug=? and operation='production_release' and publication_number=? and candidate_number<>? order by id desc limit 1",(slug,publication,candidate_number)).fetchone()
+        if other:raise RuntimeError('Conflito de nome: P'+str(publication)+' já foi usada por outro job de publicação.')
+        request=con.execute("select candidate_number,status from production_activation_requests where project_slug=? and publication_number=? and candidate_number<>? order by created_at desc limit 1",(slug,publication,candidate_number)).fetchone()
+        if request:raise RuntimeError('Conflito de nome: P'+str(publication)+' já foi reservada por outra solicitação.')
+    finally:con.close()
+    runtime=_compose_deployment_status(deployment_id);environment=str(runtime.get('environment') or '');runtime_status=str(runtime.get('status') or '')
+    if runtime_status!='running':raise RuntimeError('O deployment homologado não está em estado executável para promoção.')
+    ident=_stage_identity(num,'publication',publication)
+    # One strict probe is enough for collision detection. Full health retries happen after stage activation.
+    external_exists=False
+    try:
+        req=urllib.request.Request('https://'+ident['hostname']+'/',headers={'User-Agent':'CloudIF-Publication-Name-Preflight/1.0'})
+        with urllib.request.urlopen(req,timeout=6,context=ssl.create_default_context()) as response:external_exists=(response.status==200 and bool(response.read(1024)))
+    except Exception:external_exists=False
+    recovering=(environment=='production')
+    if external_exists and not recovering and not release:raise RuntimeError('Conflito de nome: '+ident['hostname']+' já existe fora do registro desta candidata.')
+    if environment not in {'homologation','production'}:raise RuntimeError('O deployment homologado está em ambiente incompatível com a promoção.')
+    return {'ok':True,'publicationNumber':publication,'stageCode':ident['code'],'hostname':ident['hostname'],'deploymentId':deployment_id,'recoveringPartialPromotion':recovering,'externalExists':external_exists,'alreadyFinalized':bool(release and int(release['candidate_number'])==candidate_number)}
+
+def _finalize_compose_publication_db(slug,candidate,project,publication,actor,ident,artifact_id,snapshot_id,snapshot_digest,deployment_id,bridge,activation,h_cleanup,environment_revision,environment_digest):
+    now=_now();num=int(candidate['public_number']);stable=f'{num}.cloudiff.duckdns.org';candidate_number=int(candidate['candidate_number']);deploy_number=int(candidate['deploy_number']);meta=_candidate_runtime_metadata(candidate)
+    detail={'runtimeKind':'compose-snapshot','stageCode':ident['code'],'publicationHostname':ident['hostname'],'candidateNumber':candidate_number,'publicationNumber':int(publication),'artifactImageId':artifact_id,'composeSnapshotId':snapshot_id,'snapshotDigest':snapshot_digest,'sourceCommit':str(meta.get('sourceCommit') or candidate['commit_sha'] or ''),'homologationDeploymentId':deployment_id,'productionDeploymentId':deployment_id,'bridge':str(bridge.get('bridge') or ''),'activeAlias':str(activation.get('active_alias') or ''),'sameArtifactAsHomologation':True,'sameSnapshotAsHomologation':True,'sameInstanceAsHomologation':True,'containersRecreated':False,'promotionMode':'in-place-role-and-routing','homologationStageRemoved':bool(h_cleanup.get('removed')),'homologationCertificatePreserved':bool(h_cleanup.get('certificatePreserved')),'secretValuesIncluded':False}
+    last=None
+    for attempt in range(4):
+        con=_publication_db(60,True)
+        try:
+            _ensure_schema(con);con.commit();con.execute('begin immediate')
+            existing_release=con.execute('select * from production_releases where project_slug=? and publication_number=?',(slug,int(publication))).fetchone()
+            if existing_release and int(existing_release['candidate_number'])!=candidate_number:raise RuntimeError('Conflito de nome: P'+str(publication)+' foi ocupada durante a promoção.')
+            con.execute('update production_releases set is_active=0 where project_slug=?',(slug,))
+            if existing_release:
+                con.execute("update production_releases set candidate_number=?,deploy_number=?,stage_code=?,hostname=?,stable_hostname=?,artifact_image_id=?,status='published',is_active=1,environment_revision=?,environment_digest=?,created_by=?,published_at=? where id=?",(candidate_number,deploy_number,ident['code'],ident['hostname'],stable,artifact_id,int(environment_revision),str(environment_digest),actor,now,existing_release['id']))
+            else:
+                con.execute("insert into production_releases(project_slug,public_number,publication_number,candidate_number,deploy_number,stage_code,hostname,stable_hostname,artifact_image_id,status,is_active,environment_revision,environment_digest,created_by,created_at,published_at) values(?,?,?,?,?,?,?,?,?,'published',1,?,?,?,?,?)",(slug,num,int(publication),candidate_number,deploy_number,ident['code'],ident['hostname'],stable,artifact_id,int(environment_revision),str(environment_digest),actor,now,now))
+            con.execute('update project_publications set is_active=0 where project_slug=?',(slug,));existing=con.execute('select id from project_publications where project_slug=? and deploy_number=?',(slug,deploy_number)).fetchone()
+            if existing:con.execute("update project_publications set version=?,commit_sha=?,stable_hostname=?,version_hostname=?,status='published',is_active=1,published_at=?,message=?,detail_json=? where id=?",(ident['code'],str(candidate['commit_sha']),stable,ident['hostname'],now,'Promovida a mesma instância homologada '+str(candidate['stage_code']),json.dumps(detail,ensure_ascii=False),existing['id']))
+            else:con.execute("insert into project_publications(project_slug,public_number,deploy_number,version,commit_sha,stable_hostname,version_hostname,status,is_active,created_by,created_at,published_at,message,detail_json) values(?,?,?,?,?,?,?,'published',1,?,?,?,?,?)",(slug,num,deploy_number,ident['code'],str(candidate['commit_sha']),stable,ident['hostname'],actor,now,now,'Promovida a mesma instância homologada '+str(candidate['stage_code']),json.dumps(detail,ensure_ascii=False)))
+            _supersede_prior_homologations(con,slug,candidate_number);con.execute("update publication_candidates set status='published',published_publication_number=? where id=?",(int(publication),candidate['id']))
+            con.execute("insert into publication_number_reservations(project_slug,candidate_number,publication_number,status,created_at,updated_at) values(?,?,?,'published',?,?) on conflict(project_slug,candidate_number) do update set publication_number=excluded.publication_number,status='published',updated_at=excluded.updated_at",(slug,candidate_number,int(publication),now,now))
+            con.commit();last=None;break
+        except sqlite3.OperationalError as exc:
+            if con.in_transaction:con.rollback()
+            last=exc
+            if 'locked' not in str(exc).lower() or attempt==3:raise
+            time.sleep(0.4*(attempt+1))
+        except Exception:
+            if con.in_transaction:con.rollback()
+            raise
+        finally:con.close()
+    if last:raise last
+    try:_rm.invalidate('publication-project-context')
+    except Exception:pass
+    for namespace in ('project-runtime-state','project-runtime-job'):
+        try:_rm.invalidate(namespace,slug)
+        except Exception:pass
+    _rm.trigger_refresh();return detail
+
 def _publish_linked_compose_homologated_candidate(slug,candidate,project,publication,alias,actor,progress=None):
     notify=lambda step,msg:progress(step,msg) if progress else None
-    meta=_candidate_runtime_metadata(candidate);snapshot_id=str(meta.get('composeSnapshotId') or '');snapshot_digest=str(meta.get('snapshotDigest') or '')
-    if meta.get('runtimeKind')!='compose-snapshot' or not re.fullmatch(r'snap_[a-f0-9]{24}',snapshot_id) or not re.fullmatch(r'[a-f0-9]{64}',snapshot_digest):raise RuntimeError('Metadados do snapshot Compose homologado estão incompletos.')
+    meta=_candidate_runtime_metadata(candidate);snapshot_id=str(meta.get('composeSnapshotId') or '');snapshot_digest=str(meta.get('snapshotDigest') or '');deployment_id=str(meta.get('homologationDeploymentId') or '')
+    if meta.get('runtimeKind')!='compose-snapshot' or not re.fullmatch(r'snap_[a-f0-9]{24}',snapshot_id) or not re.fullmatch(r'[a-f0-9]{64}',snapshot_digest) or not re.fullmatch(r'dep_[a-f0-9]{24}',deployment_id):raise RuntimeError('Metadados da Homologação Compose estão incompletos.')
+    if meta.get('sameInstancePromotionRequired') is not True:raise RuntimeError('O candidato não declara promoção da mesma instância homologada.')
     artifact_id='sha256:'+snapshot_digest
     if not hmac.compare_digest(artifact_id,str(candidate['artifact_image_id'] or '')):raise RuntimeError('Identidade do snapshot Compose não confere com o candidato homologado.')
-    pc=_publication_config();summary=pc.environment_summary(slug,'production')
-    if not summary.get('valid'):raise RuntimeError('O ambiente de Produção possui variáveis obrigatórias pendentes.')
-    notify('production','Subindo em Produção exatamente o snapshot Compose homologado.')
-    trace='portal-pc-'+hashlib.sha256((slug+snapshot_id+str(publication)).encode()).hexdigest()[:20]
-    plan,deployed=_compose_snapshot_deploy(slug,'production',trace,'PC|'+slug+'|'+str(publication)+'|'+snapshot_id,snapshot_id=snapshot_id)
-    if str(deployed.get('snapshot_id') or '')!=snapshot_id or str(deployed.get('snapshot_digest') or '')!=snapshot_digest:raise RuntimeError('Produção recebeu um snapshot diferente do candidato homologado.')
-    if str(plan.get('artifactImageId') or '')!=artifact_id:raise RuntimeError('O plano de Produção não corresponde ao snapshot homologado.')
-    deployment_id=str(deployed['deployment_id']);num=int(candidate['public_number']);bridge=_multiservice_bridge(slug,deployment_id,num,'publication',publication,trace+'-bridge')
-    _,_,npm_token=_clients();notify('https','Preparando URL P e domínio estável.')
+    preflight=_compose_publication_preflight(slug,candidate,publication)
+    notify('preflight','Nome P'+str(publication)+' e identidade do deployment validados antes da promoção.')
+    previous_production=_linked_compose_previous_active_production(slug);trace='portal-pc-'+hashlib.sha256((slug+deployment_id+snapshot_id+str(publication)).encode()).hexdigest()[:20]
+    if preflight.get('recoveringPartialPromotion'):
+        notify('recovery','Retomando promoção parcial já materializada para P'+str(publication)+'.')
+        inherited_environment=_publication_config().environment_summary(slug,'production')
+        if not inherited_environment.get('valid'):raise RuntimeError('O ambiente de Produção não está válido para reconciliar a promoção parcial.')
+    else:
+        notify('configuration','Herdando para Produção as variáveis correntes da Homologação.')
+        inherited_environment=_publication_config().clone_environment_configuration(slug,'homologation','production',actor)
+        notify('production','Promovendo a própria instância homologada para Produção, sem rebuild/reclone.')
+        plan,promoted=_compose_snapshot_promote(slug,deployment_id,snapshot_id,snapshot_digest,trace,'PC|'+slug+'|'+str(publication)+'|'+deployment_id)
+        if str(promoted.get('deployment_id') or '')!=deployment_id or promoted.get('containerIdsPreserved') is not True or promoted.get('containersRecreated') is not False:raise RuntimeError('A Produção não preservou a instância homologada.')
+    num=int(candidate['public_number']);bridge=_multiservice_bridge(slug,deployment_id,num,'publication',publication,trace+'-bridge')
+    _,_,npm_token=_clients();notify('https','Preparando URL P e domínio estável para a mesma instância homologada.')
     pstage,pdata=_post('http://10.62.91.3/stage',{'public_number':num,'stage':'publication','number':publication},npm_token,host='cloudif-publisher.internal',timeout=300)
     if pstage//100!=2 or not pdata.get('ok'):raise RuntimeError(_publication_error('https',pdata))
     ident=_stage_identity(num,'publication',publication)
@@ -246,18 +343,20 @@ def _publish_linked_compose_homologated_candidate(slug,candidate,project,publica
     if pstatus//100!=2 or not publisher.get('ok'):raise RuntimeError(_publication_error('https',publisher))
     stable=f'{num}.cloudiff.duckdns.org'
     if not _external_ok(stable):raise RuntimeError('Validação da URL estável falhou após ativação.')
-    now=_now();con=sqlite3.connect(DB);con.row_factory=sqlite3.Row;_ensure_schema(con)
-    con.execute('update production_releases set is_active=0 where project_slug=?',(slug,))
-    sql="insert into production_releases(project_slug,public_number,publication_number,candidate_number,deploy_number,stage_code,hostname,stable_hostname,artifact_image_id,status,is_active,environment_revision,environment_digest,created_by,created_at,published_at) values(?,?,?,?,?,?,?,?,?,'published',1,?,?,?,?,?)"
-    con.execute(sql,(slug,num,publication,int(candidate['candidate_number']),int(candidate['deploy_number']),ident['code'],ident['hostname'],stable,artifact_id,int(summary.get('environmentRevision') or 0),str(summary.get('environmentDigest') or ''),actor,now,now))
-    detail={'runtimeKind':'compose-snapshot','stageCode':ident['code'],'publicationHostname':ident['hostname'],'candidateNumber':int(candidate['candidate_number']),'publicationNumber':publication,'artifactImageId':artifact_id,'composeSnapshotId':snapshot_id,'snapshotDigest':snapshot_digest,'sourceCommit':str(meta.get('sourceCommit') or candidate['commit_sha'] or ''),'homologationDeploymentId':str(meta.get('homologationDeploymentId') or ''),'productionDeploymentId':deployment_id,'bridge':str(bridge.get('bridge') or ''),'activeAlias':str(activation.get('active_alias') or ''),'sameArtifactAsHomologation':True,'sameSnapshotAsHomologation':True,'secretValuesIncluded':False}
-    con.execute('update project_publications set is_active=0 where project_slug=?',(slug,));existing=con.execute('select id from project_publications where project_slug=? and deploy_number=?',(slug,int(candidate['deploy_number']))).fetchone()
-    if existing:con.execute("update project_publications set version=?,commit_sha=?,stable_hostname=?,version_hostname=?,status='published',is_active=1,published_at=?,message=?,detail_json=? where id=?",(ident['code'],str(candidate['commit_sha']),stable,ident['hostname'],now,'Publicada após homologação '+str(candidate['stage_code']),json.dumps(detail,ensure_ascii=False),existing['id']))
-    else:con.execute("insert into project_publications(project_slug,public_number,deploy_number,version,commit_sha,stable_hostname,version_hostname,status,is_active,created_by,created_at,published_at,message,detail_json) values(?,?,?,?,?,?,?,'published',1,?,?,?,?,?)",(slug,num,int(candidate['deploy_number']),ident['code'],str(candidate['commit_sha']),stable,ident['hostname'],actor,now,now,'Publicada após homologação '+str(candidate['stage_code']),json.dumps(detail,ensure_ascii=False)))
-    con.execute("update publication_candidates set status='published',published_publication_number=? where id=?",(publication,candidate['id']))
-    tenant=str(project['tenant'] if 'tenant' in project.keys() else '');con.commit();con.close();queued=_enqueue_membership_reconcile(slug,actor,tenant)
-    return {'ok':True,'project':slug,'candidateNumber':int(candidate['candidate_number']),'publicationNumber':publication,'stageCode':ident['code'],'url':ident['url'],'stableUrl':'https://'+stable+'/','aliasUrl':('https://'+alias+'.cloudiff.duckdns.org/' if alias else ''),'artifactImageId':artifact_id,'snapshotId':snapshot_id,'snapshotDigest':snapshot_digest,'sameArtifactAsHomologation':True,'sameSnapshotAsHomologation':True,'environmentRevision':int(summary.get('environmentRevision') or 0),'membership':{'ok':True,'mode':'compose-snapshot'},'reconcile':queued,'secretValuesIncluded':False}
-
+    h_number=int(candidate['candidate_number']);notify('cleanup','Retirando a rota de Homologação após validar a nova Produção.')
+    h_cleanup=_publisher_delete_stage(num,'homologation',h_number,npm_token);_multiservice_deactivate_bridge(slug,deployment_id,'homologation',trace+'-deactivate-h')
+    previous_dep=str((previous_production or {}).get('deploymentId') or '');previous_pub=int((previous_production or {}).get('publicationNumber') or 0)
+    if previous_dep and previous_dep!=deployment_id:
+        _multiservice_deactivate(slug,previous_dep,'substituída pela Produção P'+str(publication),trace+'-deactivate-previous-p')
+        try:_multiservice_deactivate_bridge(slug,previous_dep,'publication',trace+'-remove-previous-p-bridge')
+        except Exception:pass
+        if previous_pub:_publisher_delete_stage(num,'publication',previous_pub,npm_token)
+    elif not previous_dep and previous_pub and previous_pub!=publication:
+        _legacy_publication_deactivate(slug,num,previous_pub);_publisher_delete_stage(num,'publication',previous_pub,npm_token)
+    environment_revision=int(inherited_environment.get('environmentRevision') or candidate['environment_revision'] or 0);environment_digest=str(inherited_environment.get('environmentDigest') or candidate['environment_digest'] or snapshot_digest)
+    _finalize_compose_publication_db(slug,candidate,project,publication,actor,ident,artifact_id,snapshot_id,snapshot_digest,deployment_id,bridge,activation,h_cleanup,environment_revision,environment_digest)
+    tenant=str(project['tenant'] if 'tenant' in project.keys() else '');queued=_enqueue_membership_reconcile(slug,actor,tenant)
+    return {'ok':True,'project':slug,'candidateNumber':int(candidate['candidate_number']),'publicationNumber':int(publication),'stageCode':ident['code'],'url':ident['url'],'stableUrl':'https://'+stable+'/','aliasUrl':('https://'+alias+'.cloudiff.duckdns.org/' if alias else ''),'artifactImageId':artifact_id,'snapshotId':snapshot_id,'snapshotDigest':snapshot_digest,'deploymentId':deployment_id,'sameArtifactAsHomologation':True,'sameSnapshotAsHomologation':True,'sameInstanceAsHomologation':True,'containersRecreated':False,'homologationStageRemoved':bool(h_cleanup.get('removed')),'environmentRevision':environment_revision,'recoveredPartialPromotion':bool(preflight.get('recoveringPartialPromotion')),'membership':{'ok':True,'mode':'compose-snapshot-promotion'},'reconcile':queued,'secretValuesIncluded':False}
 
 def _latest_multiservice_build(slug,environment='homologation'):
     client=_multiservice_clients();url=client['buildUrl']+'/v1/projects/'+urllib.parse.quote(slug,safe='')+'/multiservice/latest?'+urllib.parse.urlencode({'environment':environment})
@@ -456,6 +555,9 @@ CREATE TABLE IF NOT EXISTS production_activation_requests(
  activation_digest TEXT NOT NULL,approval_id TEXT NOT NULL DEFAULT '',requested_by TEXT NOT NULL,
  status TEXT NOT NULL DEFAULT 'pending',created_at TEXT NOT NULL,updated_at TEXT NOT NULL,
  PRIMARY KEY(project_slug,candidate_number,publication_number),UNIQUE(approval_id));
+CREATE TABLE IF NOT EXISTS publication_number_reservations(
+ project_slug TEXT NOT NULL,candidate_number INTEGER NOT NULL,publication_number INTEGER NOT NULL,status TEXT NOT NULL DEFAULT 'reserved',
+ created_at TEXT NOT NULL,updated_at TEXT NOT NULL,PRIMARY KEY(project_slug,candidate_number),UNIQUE(project_slug,publication_number));
 ''')
     cols={row[1] for row in con.execute('pragma table_info(publication_jobs)')}
     for name,kind in (
@@ -467,6 +569,12 @@ CREATE TABLE IF NOT EXISTS production_activation_requests(
     ):
         if name not in cols:con.execute(f'alter table publication_jobs add column {name} {kind}')
     publication_permissions.ensure_schema(con)
+
+def _publication_db(timeout=60,row_factory=False):
+    con=sqlite3.connect(DB,timeout=float(timeout));con.execute('pragma busy_timeout='+str(int(float(timeout)*1000)))
+    if row_factory:con.row_factory=sqlite3.Row
+    return con
+
 
 def _number(con,slug):
     r=con.execute('select public_number from project_public_ids where project_slug=?',(slug,)).fetchone()
@@ -921,7 +1029,57 @@ def homologate_candidate(slug,candidate_number,user,decision='approved',note='')
 
 
 def _next_publication(con,slug):
-    a=int(con.execute('select coalesce(max(publication_number),0) from production_releases where project_slug=?',(slug,)).fetchone()[0] or 0);b=int(con.execute("select coalesce(max(deploy_number),0) from project_publications where project_slug=? and status='published'",(slug,)).fetchone()[0] or 0);return max(a,b)+1
+    values=[
+      int(con.execute('select coalesce(max(publication_number),0) from production_releases where project_slug=?',(slug,)).fetchone()[0] or 0),
+      int(con.execute("select coalesce(max(deploy_number),0) from project_publications where project_slug=? and status='published'",(slug,)).fetchone()[0] or 0),
+      int(con.execute("select coalesce(max(publication_number),0) from publication_jobs where project_slug=? and operation='production_release' and publication_number>0",(slug,)).fetchone()[0] or 0),
+      int(con.execute('select coalesce(max(publication_number),0) from production_activation_requests where project_slug=?',(slug,)).fetchone()[0] or 0),
+      int(con.execute('select coalesce(max(publication_number),0) from publication_number_reservations where project_slug=?',(slug,)).fetchone()[0] or 0),
+    ]
+    return max(values)+1
+
+
+def _reserve_publication_number(con,slug,candidate_number,publication_number=None):
+    candidate_number=int(candidate_number);now=_now();own=not con.in_transaction
+    try:
+        if own:con.execute('begin immediate')
+        existing=con.execute('select publication_number from publication_number_reservations where project_slug=? and candidate_number=?',(slug,candidate_number)).fetchone()
+        if existing:
+            publication=int(existing[0])
+            if publication_number and int(publication_number)!=publication:raise RuntimeError('A candidata já possui outro número P reservado.')
+        else:
+            publication=int(publication_number or _next_publication(con,slug))
+            owner=con.execute('select candidate_number from publication_number_reservations where project_slug=? and publication_number=?',(slug,publication)).fetchone()
+            if owner and int(owner[0])!=candidate_number:raise RuntimeError('Conflito de nome: P'+str(publication)+' já está reservada por outra candidata.')
+            release=con.execute('select candidate_number from production_releases where project_slug=? and publication_number=?',(slug,publication)).fetchone()
+            if release and int(release[0])!=candidate_number:raise RuntimeError('Conflito de nome: P'+str(publication)+' já pertence a outra candidata.')
+            job=con.execute("select candidate_number from publication_jobs where project_slug=? and operation='production_release' and publication_number=? and candidate_number<>? order by id desc limit 1",(slug,publication,candidate_number)).fetchone()
+            if job:raise RuntimeError('Conflito de nome: P'+str(publication)+' já foi usada por outro job de publicação.')
+            req=con.execute('select candidate_number from production_activation_requests where project_slug=? and publication_number=? and candidate_number<>? order by created_at desc limit 1',(slug,publication,candidate_number)).fetchone()
+            if req:raise RuntimeError('Conflito de nome: P'+str(publication)+' já foi reservada por outra solicitação.')
+            con.execute("insert into publication_number_reservations(project_slug,candidate_number,publication_number,status,created_at,updated_at) values(?,?,?,'reserved',?,?)",(slug,candidate_number,publication,now,now))
+        if own:con.commit()
+        return publication
+    except Exception:
+        if own and con.in_transaction:con.rollback()
+        raise
+
+
+def _publication_for_candidate(con,slug,candidate_number):
+    candidate_number=int(candidate_number)
+    reserved=con.execute('select publication_number from publication_number_reservations where project_slug=? and candidate_number=?',(slug,candidate_number)).fetchone()
+    if reserved:return int(reserved[0])
+    row=con.execute('select published_publication_number from publication_candidates where project_slug=? and candidate_number=?',(slug,candidate_number)).fetchone()
+    if row and int(row[0] or 0)>0:return int(row[0])
+    row=con.execute("select publication_number from publication_jobs where project_slug=? and candidate_number=? and operation='production_release' and publication_number>0 order by id desc limit 1",(slug,candidate_number)).fetchone()
+    if row:
+        publication=int(row[0]);owner=con.execute('select candidate_number from production_releases where project_slug=? and publication_number=?',(slug,publication)).fetchone()
+        if not owner or int(owner[0])==candidate_number:return publication
+    row=con.execute('select publication_number from production_activation_requests where project_slug=? and candidate_number=? order by publication_number desc limit 1',(slug,candidate_number)).fetchone()
+    if row:
+        publication=int(row[0]);owner=con.execute('select candidate_number from production_releases where project_slug=? and publication_number=?',(slug,publication)).fetchone()
+        if not owner or int(owner[0])==candidate_number:return publication
+    return _next_publication(con,slug)
 
 
 def _publish_multiservice_homologated_candidate(slug,candidate,project,publication,alias,actor,progress=None):
@@ -1357,7 +1515,7 @@ def request_production_activation(slug,candidate_number,user,reason='Publicar ca
             return {'ok':True,'existing':True,'candidateNumber':int(candidate_number),'publicationNumber':publication,'stageCode':'P'+str(publication),'activationDigest':str(existing['activation_digest']),'approvalId':aid,**approval}
         con=sqlite3.connect(DB);_ensure_schema(con);con.execute('update production_activation_requests set status=?,updated_at=? where project_slug=? and candidate_number=? and publication_number=?',(approval_status,_now(),slug,int(candidate_number),publication));con.commit();con.close();renewed=True
     else:
-        publication=_next_publication(con,slug);con.close()
+        con.commit();con.execute('begin immediate');publication=_reserve_publication_number(con,slug,int(candidate_number));con.commit();con.close()
     summary=_publication_config().environment_summary(slug,'production')
     if not summary.get('valid'):raise RuntimeError('O ambiente de Produção possui variáveis obrigatórias pendentes.')
     material,digest=_production_activation_material(slug,candidate,publication,summary);username=(user.get('username') or 'portal').strip().lower();requested_by='portal:'+username;groups={str(x).strip().lower() for x in (user.get('groups') or [])};role='admin' if user.get('admin') or groups.intersection({'cloudif-tenants-admin','cloudif-professor'}) else 'owner'
@@ -1483,7 +1641,12 @@ def _validate_project_permission_job(slug,candidate_number,publication_number,ac
     candidate=current_binding()
     summary=_publication_config().environment_summary(slug,'production')
     _material,digest=_production_activation_material(slug,candidate,int(publication_number),summary)
-    if not hmac.compare_digest(str(digest),str(activation_digest or '')):raise PermissionError('publication_binding_mismatch')
+    meta=_candidate_runtime_metadata(candidate);dep=str(meta.get('homologationDeploymentId') or '');partial=False
+    if meta.get('runtimeKind')=='compose-snapshot' and re.fullmatch(r'dep_[a-f0-9]{24}',dep):
+        try:partial=str(_compose_deployment_status(dep).get('environment') or '')=='production'
+        except Exception:partial=False
+    if not partial and not hmac.compare_digest(str(digest),str(activation_digest or '')):raise PermissionError('publication_binding_mismatch')
+    if partial and not re.fullmatch(r'[a-f0-9]{64}',str(activation_digest or '')):raise PermissionError('publication_binding_mismatch')
     # Environment materialization may be slow or call external services; revoke
     # or cancel during that window must not leave a stale successful preflight.
     refreshed_candidate=current_binding()
@@ -1499,7 +1662,7 @@ def enqueue_authorized_publication(slug,candidate_number,user):
     active=_active_stage_job(con,slug)
     if active:
         out={'ok':True,'queued':True,'job_id':int(active['id']),'existing':True,'operation':str(active['operation'] or '')};con.close();return out
-    publication=_next_publication(con,slug);role=_release_permission_role(con,slug,user);actor=(user.get('username') or 'portal').strip().lower();con.close()
+    con.commit();con.execute('begin immediate');publication=_reserve_publication_number(con,slug,int(candidate_number));role=_release_permission_role(con,slug,user);actor=(user.get('username') or 'portal').strip().lower();con.commit();con.close()
     summary=_publication_config().environment_summary(slug,'production')
     if not summary.get('valid'):raise RuntimeError('O ambiente de Produção possui variáveis obrigatórias pendentes.')
     _material,digest=_production_activation_material(slug,candidate,publication,summary)
@@ -1574,7 +1737,7 @@ def claim_next_job():
     con.commit();result=dict(row);result['status']='running';con.close();return result
 
 def _job_update(job_id,status=None,step=None,message=None,detail=None,finished=False):
-    con=sqlite3.connect(DB);_ensure_schema(con);sets=[];vals=[]
+    con=_publication_db(30);_ensure_schema(con);con.commit();sets=[];vals=[]
     for key,value in (('status',status),('step',step),('message',message),('detail_json',json.dumps(detail or {},ensure_ascii=False) if detail is not None else None)):
         if value is not None:sets.append(key+'=?');vals.append(value)
     if finished:sets.append('finished_at=?');vals.append(_now())
@@ -1617,7 +1780,7 @@ def _validate_homologation_job(slug,candidate_number,actor,authorization_role,jo
 
 def _homologation_job_update_if_running(job_id,step,message,status=None,detail=None,finished=False):
     """Do not resurrect cancelled Hn jobs through status/progress writes."""
-    con=sqlite3.connect(DB);con.row_factory=sqlite3.Row
+    con=_publication_db(30,True)
     try:
         _ensure_schema(con)
         sets=['step=?','message=?'];params=[step,message]
@@ -1867,32 +2030,46 @@ def stage_terminal(slug,user,environment='preview'):
     environment=str(environment or '').strip().lower()
     if environment not in {'preview','homologation','production'}:raise ValueError('Ambiente de terminal inválido.')
     if environment=='preview':return preview_terminal(slug,user)
-    con=sqlite3.connect(DB);con.row_factory=sqlite3.Row;_ensure_schema(con);project=_project_allowed(con,slug,user)
+    con=_publication_db(30,True);_ensure_schema(con);project=_project_allowed(con,slug,user)
     if not project:con.close();raise PermissionError('Projeto não encontrado ou sem permissão.')
     from cloudif_project_environment_web import authorization
     auth=authorization(slug,user.get('username') or '',user.get('groups') or [])
     if not auth.get('canWrite'):con.close();raise PermissionError('O terminal exige permissão de escrita no projeto.')
     if environment=='production' and not _owner_or_admin(con,slug,user):con.close();raise PermissionError('O terminal de Produção exige o responsável pelo projeto ou administrador.')
-    num=_number(con,slug);payload={'project':slug,'public_number':num,'environment':environment,'actor':user.get('username') or 'portal'};stage_code=''
+    num=_number(con,slug);payload={'project':slug,'public_number':num,'environment':environment,'actor':user.get('username') or 'portal'};stage_code='';deployment_id='';dep=0
     if environment=='homologation':
-        row=con.execute("select candidate_number,deploy_number,stage_code,status from publication_candidates where project_slug=? and status in ('awaiting_homologation','homologated') order by candidate_number desc limit 1",(slug,)).fetchone()
+        row=con.execute("select * from publication_candidates where project_slug=? and status in ('awaiting_homologation','homologated') order by candidate_number desc limit 1",(slug,)).fetchone()
         if not row:con.close();raise RuntimeError('Nenhum candidato temporário de Homologação está disponível.')
-        dep=int(row['deploy_number'] or 0);candidate=int(row['candidate_number'] or 0)
+        dep=int(row['deploy_number'] or 0);candidate=int(row['candidate_number'] or 0);meta=_candidate_runtime_metadata(row)
         if dep<1 or candidate<1:con.close();raise RuntimeError('O candidato de Homologação não possui runtime válido.')
+        if meta.get('runtimeKind')=='compose-snapshot':deployment_id=str(meta.get('homologationDeploymentId') or '')
         payload.update({'deploy_number':dep,'candidate_number':candidate});stage_code=str(row['stage_code'] or ('H'+str(candidate)))
     else:
-        release=con.execute("select publication_number,candidate_number,deploy_number,stage_code,status from production_releases where project_slug=? and is_active=1 and status='published' order by publication_number desc limit 1",(slug,)).fetchone()
+        release=con.execute("select * from production_releases where project_slug=? and is_active=1 and status='published' order by publication_number desc limit 1",(slug,)).fetchone()
         if not release:con.close();return _v143_stage_terminal_portal(slug,user,environment)
         publication=int(release['publication_number'] or 0);dep=int(release['deploy_number'] or 0);candidate=int(release['candidate_number'] or 0)
         if publication<1 or dep<1:con.close();raise RuntimeError('A Produção ativa não possui runtime válido.')
+        pubrow=con.execute('select detail_json from project_publications where project_slug=? and deploy_number=?',(slug,dep)).fetchone();detail={}
+        try:detail=json.loads(pubrow['detail_json'] or '{}') if pubrow else {}
+        except Exception:detail={}
+        if detail.get('runtimeKind')=='compose-snapshot':deployment_id=str(detail.get('productionDeploymentId') or detail.get('homologationDeploymentId') or '')
         payload.update({'publication_number':publication,'deploy_number':dep,'candidate_number':candidate,'legacy':False});stage_code=str(release['stage_code'] or ('P'+str(publication)))
+    if deployment_id:
+        if not re.fullmatch(r'dep_[a-f0-9]{24}',deployment_id):con.close();raise RuntimeError('O deployment deste ambiente é inválido para Terminal.')
+        payload['deployment_id']=deployment_id
     con.close();ku,kt,_=_clients();status,data=_post(ku+'/komodo/project/stage/terminal',payload,kt,timeout=60)
-    if status//100!=2 or data.get('ok') is not True:raise RuntimeError(str(data.get('message') or 'O terminal deste ambiente está temporariamente indisponível.'))
-    container=str(data.get('container') or '');stack_id=str(data.get('stack_id') or '');terminal=str(data.get('terminal') or '')
-    expected=f'cloudif-p{num}-d{dep}-web'
-    if container!=expected or not stack_id or not terminal or data.get('target_mode')!='stack':raise RuntimeError('stage_terminal_contract_invalid')
+    if status//100!=2 or data.get('ok') is not True:raise RuntimeError(str(data.get('message') or data.get('error') or 'O terminal deste ambiente está temporariamente indisponível.'))
+    container=str(data.get('container') or '');terminal=str(data.get('terminal') or '');mode=str(data.get('target_mode') or '')
+    if deployment_id:
+        expected='cloudif-'+deployment_id.replace('_','-')+'-web';server_id=str(data.get('server_id') or '')
+        if mode!='container' or container!=expected or str(data.get('deployment_id') or '')!=deployment_id or not server_id or not terminal:raise RuntimeError('stage_terminal_compose_contract_invalid')
+        target='https://komodoiff.duckdns.org/servers/'+urllib.parse.quote(server_id,safe='')+'/container/'+urllib.parse.quote(container,safe='')+'/terminal/'+urllib.parse.quote(terminal,safe='')
+        return {'ok':True,'project':slug,'public_number':num,'environment':environment,'stageCode':stage_code,'container':container,'deploymentId':deployment_id,'terminalUrl':target,'terminalReady':True,'terminalSource':'compose_deployment','sameRuntimeAcrossPromotion':True,'secretValuesIncluded':False,'secretReferencesIncluded':False}
+    stack_id=str(data.get('stack_id') or '');expected=f'cloudif-p{num}-d{dep}-web'
+    if container!=expected or not stack_id or not terminal or mode!='stack':raise RuntimeError('stage_terminal_contract_invalid')
     target='https://komodoiff.duckdns.org/stacks/'+urllib.parse.quote(stack_id,safe='')+'/service/web/terminal/'+urllib.parse.quote(terminal,safe='')
     return {'ok':True,'project':slug,'public_number':num,'environment':environment,'stageCode':stage_code,'container':container,'stackId':stack_id,'terminalUrl':target,'terminalReady':True,'terminalSource':'publication_stack','sameRuntimeAcrossPromotion':environment=='production','secretValuesIncluded':False,'secretReferencesIncluded':False}
+
 
 _v143_homologate_candidate=homologate_candidate
 def homologate_candidate(slug,candidate_number,user,decision='approved',note=''):
