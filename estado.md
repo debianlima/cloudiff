@@ -695,3 +695,14 @@ Os módulos `cloudif_portal_publications.py` (app/lib), `cloudif_portal_v2_coexi
 - `silvipro`: D1 estável é placeholder; D1 versionada 502; W1/D2 redirecionam ao Portal; D2/P1 containers ativos fora do modelo atual.
 - Relatório canônico: `docs/AUDITORIA-GLOBAL-PROJETOS-WHP-20261122.md`.
 - Remediação deve ocorrer por projeto/unidade separada, preservando a Produção ativa até rollback e health comprovados.
+
+## Laboratório de Hardware P1001 — W1 recuperado e resíduos desligados — 22/11/2026
+
+- W1 saiu de 502 para saudável após `Komodo StartStack` do checkout já implantado `3b399e9...`; DB ficou healthy, app running e bridge W1 foi garantida pelo Executor.
+- Forgejo/Komodo: `latest_hash == deployed_hash == 3b399e9`.
+- H11/H13 foram desativadas com snapshots/volumes preservados; bridges/rotas H removidas.
+- P5 histórica parcialmente viva foi desativada; rota/bridge removidas e DB residual parado; snapshot preservado.
+- P12/alias `labhard` não foram alterados e continuaram saudáveis.
+- P12 permanece legado diferente de H13; não alterar metadata para mascarar isso.
+- `assistente-interativo` não possui ACL de projeto no Portal, então a nova H/P same-instance ficou como gate humano do proprietário, sem impersonação.
+- Evidência: `docs/REMEDIACAO-LABORATORIO-HARDWARE-W1-20261122.md`.

@@ -23,7 +23,7 @@ Nenhum runtime de projeto foi alterado nesta unidade.
 | `agenda-unica` | W3 saudável | alinhado | P7 + alias `agendaunica` saudáveis | **sim**, `dep_19bc...` em H7/P7 | P6/P3 Offline; P2 legado Offline | **CONFORME** |
 | `cadales` | W2 saudável | **não**: bind `0599c798...`, Komodo `ad8e67c` | P2 saudável | não comprovado; fluxo antigo | sem P histórica moderna ativa | **NÃO CONFORME — Preview atrasado** |
 | `cpuhub` | W2 saudável | alinhado (`97af1e3...`) | P5 saudável | não comprovado; fluxo antigo | H3 ainda `awaiting_homologation`; P2/P3 Offline | **PARCIAL / LEGADO** |
-| `laboratorio-de-hardware` | W1 **502** | degradado | P12/alias saudáveis | **não**: H13 `dep_51a7...` → P12 `dep_210f...` | múltiplas H residuais; P5 parcial | **BLOQUEADOR** |
+| `laboratorio-de-hardware` | W1 saudável após remediação | alinhado `3b399e9` | P12/alias saudáveis | **não** historicamente: H13 `dep_51a7...` → P12 `dep_210f...` | H11/H13/P5 agora Offline; snapshots preservados | **PARCIAL — aguarda novo H→P humano** |
 | `msha` | não configurado | n/a | nenhuma | n/a | nenhum runtime de publicação | **DRAFT / N/A** |
 | `paperclip` | W1 responde 200, app informa falha de inicialização | hash `dfcaaf8...` alinhado | D1 legado é placeholder “primeiros passos” | n/a | Preview fora do contrato moderno | **BLOQUEADOR / LEGADO** |
 | `sgrep-v2` | W1 real existe, mas read-model diz “não configurado” | source link `f29f752...` coincide com Komodo | nenhuma | n/a | runtime Preview fora do fluxo do Portal | **DRIFT DE READ-MODEL** |
