@@ -68,29 +68,20 @@ Usar o W1 atual como origem da próxima Homologação e promover a mesma instân
 - `assistente-interativo` não possui ACL do projeto; próximo H→P deve ser iniciado pelo proprietário.
 
 Evidência: `docs/REMEDIACAO-CPUHUB-LEGADO-20261122.md`.
-## 4. Laboratório de Hardware — maior prioridade
+## 4. Laboratório de Hardware — W1 recuperado; P12 legado preservado
 
 - Public number 1001.
-- W1 retorna HTTP 502; bridge `cloudif-p1001-w1-preview-web` está exited.
-- P12/alias `labhard` respondem e redirecionam para o login da aplicação.
-- H13 usa `dep_51a7b4cfef7adfc42e38700d`, snapshot `snap_3d74a8268ba7ca3881a9075a`.
-- P12 usa **outro deployment**, `dep_210f7ec700eca6fb3353914b`, embora use o mesmo snapshot. Isso é o modelo antigo de reconstrução e viola “mesma instância H→P”.
-- H13 continua com runtime/bridge ativos; H11/H12 e outros estados antigos também deixaram resíduos.
-- P5 histórica tem `dep_74a4...` em estado `failed`: app exited, DB ainda running; URL P5 retorna 502.
-- Existem H2/H3/H5/H6 ainda marcadas `awaiting_homologation`/`homologated` apesar de releases posteriores.
+- W1 foi recuperado sem rebuild: Stack existente voltou via Komodo, MySQL ficou healthy, app running e bridge W1 foi republicada.
+- Forgejo/Komodo do Preview estão alinhados em `3b399e9f72133b63a9471ccc25e7af50fedeba30`.
+- P12 e alias `labhard` permaneceram saudáveis durante toda a remediação.
+- H11 e H13 foram desativadas com snapshots/volumes preservados; bridges e rotas H removidas.
+- P5 histórica parcialmente viva foi desativada; DB residual parou; snapshot permaneceu preservado.
+- A P12 atual continua legado factual: H13 usava `dep_51a7...`, P12 usa `dep_210f...`. Não alterar metadata para mascarar essa diferença.
+- `assistente-interativo` não possui ACL do projeto; a primeira migração ao contrato atual precisa ser iniciada pelo proprietário.
 
-### Ordem obrigatória de remediação
+### Próximo passo
 
-1. restaurar W1 fixo e validar health externo;
-2. reconciliar estados H antigos como superseded sem apagar evidência;
-3. parar/remover runtimes H residuais somente após mapear snapshot/rollback;
-4. criar **nova** Homologação a partir do W1 restaurado;
-5. validar H e promover a própria instância para a próxima P;
-6. só após a nova P saudável desativar P12;
-7. tratar P5 como histórico quebrado e preservar snapshot antes de qualquer limpeza.
-
-Não tentar “converter” P12 atual em mesma-instância por alteração de metadados: a diferença de deployment é factual.
-
+Usar o W1 saudável como origem de uma nova Homologação e promover **a própria instância H** para a próxima P. Somente depois P12 deve virar histórico/offline. Evidência: `docs/REMEDIACAO-LABORATORIO-HARDWARE-W1-20261122.md`.
 ## 5. MSHA — draft sem runtime
 
 - Projeto `draft`, sem public number efetivo de publicação, sem Preview e sem Produção.
@@ -139,32 +130,32 @@ Evidência: `docs/REMEDIACAO-SGREP-V2-PREVIEW-READMODEL-20261122.md`.
 
 O proprietário deve enviar o W1 atual para Homologação e promover essa mesma instância para a próxima P. Só após a nova P saudável, P1 passa a histórico/offline. Evidência detalhada: `docs/REMEDIACAO-SILVIPRO-P1002-20261122.md`.
 
-## Resíduos de host relevantes
+## Resíduos de host relevantes após remediações
 
 ### Forja
 
-- Agenda: P3/P6 históricos exited/preservados; aceitáveis enquanto `canDelete=true`. P7 ativo conforme.
-- CPUHub/Cadales: vários `dN` antigos exited; são legado e podem ser inventariados para limpeza posterior, sem urgência funcional.
-- Laboratório: múltiplos deployments H parcialmente/running — **resíduo ativo prioritário**.
-- Paperclip: canary/rollback antigos exited; Preview atual running.
-- SGREP: smoke/image-test/rollback exited; Preview atual running.
-- SilviPro: D2/P1 ativos sem correspondência limpa no modelo do Portal.
+- Agenda: históricos P3/P6 permanecem preservados e Offline; P7 ativa conforme.
+- Cadales: W2/H2 antigos removidos; P2 ativa legada preservada.
+- CPUHub: D2–D5 removidos; W2/H2–H5/P2/P3 sem stages ativos; P5 é a única Produção ativa.
+- Laboratório: H11/H13/P5 residuais desativados; somente W1 e P12 consomem runtime de aplicação relevante.
+- Paperclip: canary/rollback antigos removidos pela remediação concorrente; W1 composto app+gateway preservado.
+- SGREP: resíduos exited de smoke/rollback removidos; W1 source-linked preservado.
+- SilviPro: D2 parado; W1 contínuo e P1 ativa preservados.
 
 ### Hospedagem
 
-Restam containers Agenda antigos exited (`cloudif-agenda-unica-api-1/web-1`) sem função no runtime atual. São candidatos a limpeza futura após confirmar que nenhuma unit/systemd os referencia.
+Containers Agenda antigos exited ainda podem existir como evidência/rollback; não há indicação de consumo ativo. Qualquer remoção definitiva exige nova prova de ausência de referência em systemd/Nginx/Portal.
 
-## Prioridade de remediação
+## Prioridade atual depois da auditoria/remediação
 
-1. **P1 — Laboratório de Hardware:** W1 502 + H→P diferente + H residual.
-2. **P1 — SilviPro:** produção placeholder + rotas D1/D2/P1 incoerentes.
-3. **P1 — Paperclip:** Preview funcionalmente falho + produção placeholder.
-4. **P1 — Cadales:** Preview fixo atrasado em relação ao Forgejo e falso `synced`.
-5. **P2 — SGREP v2:** Preview real não reconhecido pelo read-model.
-6. **P2 — CPUHub:** migrar sem downtime do ciclo legado para H→P same-instance e limpar H3.
-7. **N/A — MSHA:** nenhuma ação enquanto draft.
-8. **Conforme — Agenda Única:** usar como referência de aceite/regressão.
-
+1. **Gate humano — Laboratório:** executar novo W1→H→mesma H em P; P12 permanece legado até esse ciclo.
+2. **Gate de manifest — Paperclip:** definir runtime composto completo (app/gateway/volume) antes de H; snapshot genérico está bloqueado com segurança.
+3. **Gate humano — Cadales:** próximo H→P deve usar o contrato atual; P2 permanece legado saudável até lá.
+4. **Gate humano — CPUHub:** próximo H→P deve usar o contrato atual; P5 permanece legado saudável até lá.
+5. **Gate humano — SilviPro:** próximo H→P deve usar o contrato atual; P1 importada como legado permanece ativa.
+6. **Gap funcional — SGREP v2:** Terminal source-linked ainda precisa de contrato explícito; Preview está saudável/read-model conforme.
+7. **N/A — MSHA:** permanece draft sem runtime; entrar diretamente no padrão quando houver pedido de publicação.
+8. **Referência — Agenda Única:** manter como projeto de regressão para o padrão completo same-instance.
 ## Portões para qualquer correção futura
 
 Para cada projeto, abrir unidade separada com lease própria e preservar Produção ativa até existir rollback comprovado. O agente deve:

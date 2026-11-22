@@ -789,3 +789,13 @@ O backup parcial da unidade foi substituído por rollback direcionado de 28 KB (
 - P2/P3 permanecem históricas Offline/reintegráveis pelo botão Subir.
 - P5 segue legado sem prova same-instance; próxima H→P é gate humano do proprietário.
 - Evidência: `docs/REMEDIACAO-CPUHUB-LEGADO-20261122.md`.
+
+## Consolidação final da auditoria W→H→P — 22/11/2026
+
+- Agenda é a referência completa same-instance.
+- Cadales, CPUHub, Laboratório e SilviPro ficaram operacionalmente estáveis com Preview saudável e resíduos relevantes reconciliados, mas suas Produções atuais continuam legadas até o próximo ciclo humano W→H→P.
+- Paperclip tem W1 saudável, porém runtime composto app+gateway+volume; snapshot genérico de H está bloqueado até manifest completo.
+- SGREP v2 tem W1 source-linked saudável/read-model conforme; Terminal source-linked é a lacuna restante.
+- MSHA permanece draft sem runtime.
+- Matriz canônica de continuidade: `docs/STATUS-FINAL-PADRAO-WHP-20261122.md`.
+- Relatório detalhado atualizado: `docs/AUDITORIA-GLOBAL-PROJETOS-WHP-20261122.md`.
