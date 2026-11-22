@@ -682,3 +682,16 @@ Os módulos `cloudif_portal_publications.py` (app/lib), `cloudif_portal_v2_coexi
 - Alias principal do Agenda é `agendaunica.cloudiff.duckdns.org`; P7 idempotente devolve alias como `stableUrl` e hostname numérico como `numericStableUrl`.
 - 85 testes Portal PASS; UI live/canônico alinhada. Reidratação do Executor live está em `compat/cloudiff-historical-production-rehydrate-executor.patch` até a reconciliação completa da linhagem live do Executor.
 - Próxima unidade obrigatória: auditoria de todos os projetos cadastrados contra `docs/RUNBOOK-PADRAO-CLOUDIFF-WHP-CONTINUIDADE.md`.
+
+## Auditoria global W→H→P dos 8 projetos — 22/11/2026 UTC
+
+- `agenda-unica`: conforme; W3 saudável/synced, H7→P7 mesma instância, alias `agendaunica`, histórico Offline.
+- `cadales`: W2 saudável mas atrasado (`0599c798...`) frente ao Komodo/Forgejo (`ad8e67c`); read-model dá falso `synced`; P2 é ciclo legado.
+- `cpuhub`: W2 alinhado e P5 saudável, mas ciclo H/P é legado e H3 ficou residual `awaiting_homologation`.
+- `laboratorio-de-hardware`: bloqueador; W1 502, H13 e P12 usam deployments diferentes, H residuais ativos e P5 parcialmente viva/falha.
+- `msha`: draft sem runtime; n/a enquanto não publicado.
+- `paperclip`: W1 chega a 200 porém a aplicação diz `Paperclip couldn’t start`; D1 estável é placeholder `primeiros passos`.
+- `sgrep-v2`: W1 real/source-link online, porém `release_flow_status` diz não configurado; drift de read-model.
+- `silvipro`: D1 estável é placeholder; D1 versionada 502; W1/D2 redirecionam ao Portal; D2/P1 containers ativos fora do modelo atual.
+- Relatório canônico: `docs/AUDITORIA-GLOBAL-PROJETOS-WHP-20261122.md`.
+- Remediação deve ocorrer por projeto/unidade separada, preservando a Produção ativa até rollback e health comprovados.
