@@ -889,3 +889,18 @@ O backup parcial da unidade foi substituído por rollback direcionado de 28 KB (
 - Laboratório: órfão `dep_2d71...` desativado, DB 0B. Grupix: dois H órfãos desativados e H1/H2/H3/W2 limpos; W1 502 permanece para remediação.
 - Paperclip: D1 consome runtime, mas há conflito entre labels de canário e `active_deploy=1`; não foi desligado por gate PGH.
 - T-044: futura aba Banco por estágio para PostgreSQL/MySQL embutido não-Supabase, sem implementação nesta unidade.
+
+## Índice/read-model obrigatório — 22/11/2026
+
+O caminho quente da interface é o SQLite `/var/lib/cloudif/portal/cloudif-portal-readmodel.db`; não varrer Docker/filesystem/Komodo para renderizar listas. Mutação em provisionamento, ambiente, W/H/P, histórico, rollback, exclusão, Conectores ou Aprovações deve invalidar/atualizar o índice no próprio fluxo e disparar refresh em background. Leitura usa stale-while-revalidate. O refresh global é rede de segurança a cada 5 minutos; a auditoria completa roda 03:20 `America/Sao_Paulo` e nunca muta runtime. Norma: `docs/PADRAO-CLOUDIFF-INDICE-READMODEL-PORTAL-20261122.md`.
+
+## Read-model/indexação do Portal — 22/11/2026
+
+- SQLite oficial: `/var/lib/cloudif/portal/cloudif-portal-readmodel.db`; arquivos são apenas backup/export/evidência, nunca hot path da UI.
+- 25 IDs públicos materializados em `projects/public-catalog`; Projetos/Publicações/Conectores/Aprovações usam índice e stale-while-revalidate.
+- Provisionar, concluir/falhar provisionamento, editar variáveis, criar/aprovar/rejeitar H, promover H→P, subir/desligar/excluir P histórica, rollback e excluir projeto atualizam/invaliam o read-model no próprio fluxo.
+- Conectores e Aprovações já invalidam seus namespaces após mutação.
+- Refresh periódico reduzido de 60 s para 5 min; consistência primária é event-driven.
+- Auditor noturno `cloudif-portal-readmodel-audit.timer` roda 03:20 America/Sao_Paulo, baixa prioridade, somente leitura de runtime; primeira execução manual: 25 projetos, 8 operacionais, 0 issues, nenhuma mutação/secrets.
+- Leituras indexadas observadas: Projetos ~0,28 ms, Publicações Agenda ~0,44 ms, Conectores ~0,81 ms. T-046 cobre paginação/normalização de Aprovações, cujo histórico atual tem ~6 MB/6.136 registros.
+- Norma: `docs/PADRAO-CLOUDIFF-INDICE-READMODEL-PORTAL-20261122.md`.

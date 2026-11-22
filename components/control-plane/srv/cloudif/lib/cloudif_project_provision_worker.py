@@ -168,6 +168,14 @@ def enqueue_post_provision(slug,job,event='project.updated'):
         return {'ok':False,'error':type(exc).__name__}
 
 
+def refresh_readmodel(slug,event):
+    try:
+        import cloudif_portal_readmodel as readmodel
+        readmodel.project_changed(slug,event,include_projects=True,include_connectors=True)
+    except Exception as exc:
+        log('READMODEL_REFRESH_WARNING '+type(exc).__name__+': '+str(exc)[:240])
+
+
 def verify_onboarding(slug):
     con = sqlite3.connect('/var/lib/cloudif/onboarding/onboarding.db')
     con.row_factory = sqlite3.Row
@@ -269,6 +277,7 @@ def main():
             result['resume_only']=True
             result['reconciliation']=enqueue_post_provision(slug,job,'project.membership.changed')
             set_state(path,job,'succeeded','complete',result=result)
+            refresh_readmodel(slug,'project-provision-completed')
             log('SUCCEEDED resume-only slug='+slug)
             return
 
@@ -335,9 +344,11 @@ def main():
             slug,job,'project.membership.changed' if result.get('initial_publication') else 'project.updated'
         )
         set_state(path, job, 'succeeded', 'complete', result=result)
+        refresh_readmodel(slug,'project-provision-completed')
         log('SUCCEEDED slug=' + slug)
     except Exception as exc:
         set_state(path, job, 'failed', job.get('current_step') or 'unknown', type(exc).__name__ + ': ' + str(exc), result=result)
+        refresh_readmodel(slug,'project-provision-failed')
         log('FAILED slug=' + slug + ' ' + type(exc).__name__ + ': ' + str(exc))
         raise
     finally:

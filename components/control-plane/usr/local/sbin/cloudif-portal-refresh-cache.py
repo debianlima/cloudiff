@@ -174,6 +174,28 @@ def refresh_tenants():
     con.close()
 
 
+def public_project_catalog():
+    con=db();con.row_factory=sqlite3.Row
+    try:
+        ids=[dict(r) for r in con.execute('select project_slug,public_number,created_at,updated_at from project_public_ids order by public_number')]
+    except Exception:
+        ids=[]
+    try:integrations={str(r['project']):dict(r) for r in con.execute('select * from project_integrations')}
+    except Exception:integrations={}
+    try:aliases={str(r['project_slug']):str(r['alias'] or '') for r in con.execute('select project_slug,alias from project_publication_aliases')}
+    except Exception:aliases={}
+    try:previews={str(r['project_slug']):dict(r) for r in con.execute('select * from project_preview_source_links')}
+    except Exception:previews={}
+    con.close();out=[]
+    for item in ids:
+        slug=str(item.get('project_slug') or '');integ=integrations.get(slug) or {};preview=previews.get(slug) or {}
+        out.append({
+          'slug':slug,'public_number':int(item.get('public_number') or 0),'alias':aliases.get(slug,''),
+          'integration_status':str(integ.get('status') or ''),'forgejo_status':str(integ.get('forgejo_status') or ''),'komodo_status':str(integ.get('komodo_status') or ''),'supabase_status':str(integ.get('supabase_status') or ''),
+          'preview_stage':str(preview.get('stage_code') or ''),'preview_status':str(preview.get('status') or ''),'preview_url':str(preview.get('url') or ''),
+        })
+    return out
+
 def refresh_portal_readmodels():
     for lib in ('/srv/cloudif/app-pointers/portal-current','/srv/cloudif/lib'):
         if lib not in sys.path:sys.path.insert(0,lib)
@@ -189,6 +211,9 @@ def refresh_portal_readmodels():
     try:
         rm.put('tenants','registry',tenants_registry(),'timer')
     except Exception as exc:print('WARN: tenants readmodel',type(exc).__name__)
+    try:
+        rm.put('projects','public-catalog',public_project_catalog(),'timer')
+    except Exception as exc:print('WARN: public project catalog',type(exc).__name__)
     try:
         projects=discover_projects() or [];rm.put('projects','discovered',projects,'timer')
     except Exception as exc:
@@ -211,6 +236,9 @@ def refresh_portal_readmodels():
     try:
         base=os.environ.get('CLOUDIF_APPROVAL_URL','http://127.0.0.1:18204');token=os.environ.get('CLOUDIF_APPROVAL_TOKEN','');code,data=approvals.request(base,token,'GET','/v1/approvals?status=all');rm.put('approvals','rows',(data.get('approvals') or []) if code==200 and isinstance(data,dict) and data.get('ok') else [],'timer');code,data=approvals.request(base,token,'GET','/v1/approval-policies?status=active');rm.put('approvals','policies',(data.get('policies') or []) if code==200 and isinstance(data,dict) and data.get('ok') else [],'timer')
     except Exception as exc:print('WARN: approvals readmodel',type(exc).__name__)
+    try:
+        rm.record_event('background-refresh','',['projects','tenants','project-job-state','project-runtime-state','publication-project-context','connectors','approvals'])
+    except Exception:pass
 
 def main():
     LIFECYCLE_LOCK.parent.mkdir(parents=True,exist_ok=True);fd=os.open(LIFECYCLE_LOCK,os.O_CREAT|os.O_RDWR,0o600)

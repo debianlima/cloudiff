@@ -39,3 +39,7 @@ W1 existe mas navegador confirma 502. Descobrir ownership/runtime real e reconci
 - Dois deployments H órfãos (`dep_832e4c338875edfe6ccaef3c` e `dep_1bc1b35430c82babff01d9af`) estavam marcados `running` sem containers/candidatas. Ambos foram reconciliados para `inactive`.
 - Rotas H1/H2/H3 e W2 antigas foram removidas do Publisher com certificados preservados.
 - W1 foi mantido e continua 502; a correção do Preview exige descoberta do runtime/ownership, não criação cega de recursos.
+
+## Índice/read-model obrigatório — 22/11/2026
+
+O caminho quente da interface é o SQLite `/var/lib/cloudif/portal/cloudif-portal-readmodel.db`; não varrer Docker/filesystem/Komodo para renderizar listas. Mutação em provisionamento, ambiente, W/H/P, histórico, rollback, exclusão, Conectores ou Aprovações deve invalidar/atualizar o índice no próprio fluxo e disparar refresh em background. Leitura usa stale-while-revalidate. O refresh global é rede de segurança a cada 5 minutos; a auditoria completa roda 03:20 `America/Sao_Paulo` e nunca muta runtime. Norma: `docs/PADRAO-CLOUDIFF-INDICE-READMODEL-PORTAL-20261122.md`.

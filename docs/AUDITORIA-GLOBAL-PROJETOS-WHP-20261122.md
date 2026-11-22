@@ -119,3 +119,7 @@ Data: 22/11/2026. Esta versão substitui a visão anterior limitada a 8 projetos
 - Executor: órfão do Laboratório (`dep_2d71...`) e dois H órfãos do Grupix foram marcados `inactive`; volumes/snapshots preservados.
 - Estado Compose final: somente Agenda P11 e Laboratório P12 permanecem `running`; não existe deployment Compose de Homologação rodando.
 - Paperclip D1 não foi desligado porque existe conflito de autoridade entre labels de canário PGH e estado legado `active_deploy=1`; exige decisão do proprietário.
+
+## Índice/read-model obrigatório — 22/11/2026
+
+O caminho quente da interface é o SQLite `/var/lib/cloudif/portal/cloudif-portal-readmodel.db`; não varrer Docker/filesystem/Komodo para renderizar listas. Mutação em provisionamento, ambiente, W/H/P, histórico, rollback, exclusão, Conectores ou Aprovações deve invalidar/atualizar o índice no próprio fluxo e disparar refresh em background. Leitura usa stale-while-revalidate. O refresh global é rede de segurança a cada 5 minutos; a auditoria completa roda 03:20 `America/Sao_Paulo` e nunca muta runtime. Norma: `docs/PADRAO-CLOUDIFF-INDICE-READMODEL-PORTAL-20261122.md`.

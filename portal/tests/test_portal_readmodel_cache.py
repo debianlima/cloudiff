@@ -32,5 +32,24 @@ class PortalReadModelCacheTests(unittest.TestCase):
     def test_tenant_namespace_can_be_prewarmed(self):
         self.rm.put('tenants','registry',[{'tenant':'demo'}])
         self.assertEqual(self.rm.get('tenants','registry',90),[{'tenant':'demo'}])
+    def test_stale_while_revalidate_returns_stale_without_loader(self):
+        self.rm.put('projects','discovered',[{'slug':'demo'}])
+        con=sqlite3.connect(self.db);con.execute("update portal_readmodel_cache set updated_at=?",(time.time()-120,));con.commit();con.close()
+        calls=[]
+        with mock.patch.object(self.rm,'trigger_refresh',return_value=True) as refresh:
+            value=self.rm.stale_while_revalidate('projects','discovered',30,600,lambda:calls.append(1) or [])
+        self.assertEqual(value,[{'slug':'demo'}]);self.assertEqual(calls,[]);refresh.assert_called_once()
+
+    def test_invalidate_prefix_only_removes_project_keys(self):
+        self.rm.put('publication-project-context','a|',{'a':1});self.rm.put('publication-project-context','a|php',{'a':2});self.rm.put('publication-project-context','b|',{'b':1})
+        self.rm.invalidate_prefix('publication-project-context','a|')
+        self.assertIsNone(self.rm.get('publication-project-context','a|',60));self.assertIsNone(self.rm.get('publication-project-context','a|php',60));self.assertEqual(self.rm.get('publication-project-context','b|',60),{'b':1})
+
+    def test_project_changed_records_event_and_invalidates_project(self):
+        self.rm.put('project-runtime-state','demo',{'online':True});self.rm.put('publication-project-context','demo|',{'ok':True})
+        with mock.patch.object(self.rm,'trigger_refresh',return_value=True):self.assertTrue(self.rm.project_changed('demo','runtime-stop'))
+        self.assertIsNone(self.rm.get('project-runtime-state','demo',60));self.assertIsNone(self.rm.get('publication-project-context','demo|',60))
+        con=sqlite3.connect(self.db);row=con.execute('select event_type,project_slug from portal_readmodel_events order by id desc limit 1').fetchone();con.close()
+        self.assertEqual(row,('runtime-stop','demo'))
 
 if __name__=='__main__':unittest.main()

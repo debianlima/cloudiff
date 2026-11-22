@@ -593,7 +593,7 @@ def tenants_registry():
                 if r.get("tenant"):
                     rows.append(r)
         return rows
-    return _rm.cached('tenants','registry',90,load)
+    return _rm.stale_while_revalidate('tenants','registry',90,3600,load)
 
 def tenant_visible(tenant, username, groups, con=None):
     if is_admin(groups):
@@ -5473,7 +5473,7 @@ def _rd_canonical_repo(slug):
 def _rd_projects(user):
     from cloudif_ui_data import discover_projects
     allowed={p.get('slug') for p in _cpx_allowed_projects(user)}
-    inventory=_rm.cached('projects','discovered',90,discover_projects)
+    inventory=_rm.stale_while_revalidate('projects','discovered',90,900,discover_projects)
     rows=[]
     for p in inventory:
         if p.get('slug') not in allowed:continue
@@ -5770,7 +5770,7 @@ import cloudif_project_identity_panel as _oi_panel_module
 def _oi_cfg(key,default=''):
     return os.environ.get(key) or setting_value(key,default)
 def _oi_all():
-    return _rm.cached('connectors','all',90,lambda:_oi_panel_module.fetch(_oi_cfg('CLOUDIF_ONBOARDING_URL','http://127.0.0.1:18208'),_oi_cfg('CLOUDIF_ONBOARDING_API_TOKEN','')))
+    return _rm.stale_while_revalidate('connectors','all',90,600,lambda:_oi_panel_module.fetch(_oi_cfg('CLOUDIF_ONBOARDING_URL','http://127.0.0.1:18208'),_oi_cfg('CLOUDIF_ONBOARDING_API_TOKEN','')))
 def _oi_visible(user):
     allowed={x['slug'] for x in user_visible_projects(user['username'],user['groups'])}
     return _oi_panel_module.visible(_oi_all(),allowed)
@@ -5852,7 +5852,7 @@ if 'Portal' in globals() and not globals().get('_oi_portal_wrapped'):
                 return _cloudif_security_reject(self,'Projeto sem banco desabilitado.',403)
             con=db();con.execute('''INSERT INTO projects(slug,name,tenant,owner,description,created_at,updated_at) VALUES(?,?,?,?,?,?,?) ON CONFLICT(slug) DO UPDATE SET name=excluded.name,tenant=excluded.tenant,description=excluded.description,updated_at=excluded.updated_at''',(slug,name,tenant,user['username'],desc,now_iso(),now_iso()));con.execute('INSERT OR IGNORE INTO project_acl(slug,subject_type,subject) VALUES(?,?,?)',(slug,'user',user['username']));con.commit();con.close()
             log_action(user['username'],'create_project',slug,0,'tenant='+tenant,'')
-            _oi_trigger();_rm.invalidate('projects');_rm.invalidate('connectors');_rm.invalidate('project-job-state',slug);_rm.invalidate('project-runtime-state',slug);_rm.trigger_refresh()
+            _oi_trigger();_rm.invalidate('projects');_rm.invalidate('connectors');_rm.invalidate('project-job-state',slug);_rm.invalidate('project-runtime-state',slug);_rm.record_event('project-created',slug,['projects','connectors','project-job-state','project-runtime-state']);_rm.trigger_refresh()
             return self.redirect('/?tab=projetos&project='+urllib.parse.quote(slug))
         return _oi_prev_post(self)
     Portal.do_GET=_oi_get;Portal.do_POST=_oi_post;_oi_portal_wrapped=True
@@ -5870,13 +5870,13 @@ def _ap_raw():
         try:code,data=_ap_panel.request(_ap_cfg('CLOUDIF_APPROVAL_URL','http://127.0.0.1:18204'),_ap_cfg('CLOUDIF_APPROVAL_TOKEN',''),'GET','/v1/approvals?status=all')
         except Exception:return []
         return (data.get('approvals') or []) if code==200 and isinstance(data,dict) and data.get('ok') else []
-    return _rm.cached('approvals','rows',90,load)
+    return _rm.stale_while_revalidate('approvals','rows',90,300,load)
 def _ap_raw_policies():
     def load():
         try:code,data=_ap_panel.request(_ap_cfg('CLOUDIF_APPROVAL_URL','http://127.0.0.1:18204'),_ap_cfg('CLOUDIF_APPROVAL_TOKEN',''),'GET','/v1/approval-policies?status=active')
         except Exception:return []
         return (data.get('policies') or []) if code==200 and isinstance(data,dict) and data.get('ok') else []
-    return _rm.cached('approvals','policies',180,load)
+    return _rm.stale_while_revalidate('approvals','policies',180,600,load)
 def _ap_visible(user):
     slugs={x['slug'] for x in user_visible_projects(user['username'],user['groups'])}
     return _ap_panel.filter_rows(_ap_raw(),slugs)
@@ -6538,7 +6538,7 @@ if 'Portal' in globals() and not globals().get('_tenant_control134_wrapped'):
             result=safe_project.handle_project_action(form,self.headers)
             if isinstance(result,str):
                 return self.send_html(page(user,'projetos',result),200)
-            target=str(result.get('slug') or slug);msg=str(result.get('message') or 'Projeto salvo.');_rm.invalidate('projects');_rm.invalidate('connectors');_rm.invalidate('project-job-state',target);_rm.invalidate('project-runtime-state',target);_rm.trigger_refresh()
+            target=str(result.get('slug') or slug);msg=str(result.get('message') or 'Projeto salvo.');_rm.invalidate('projects');_rm.invalidate('connectors');_rm.invalidate('project-job-state',target);_rm.invalidate('project-runtime-state',target);_rm.record_event('project-action',target,['projects','connectors','project-job-state','project-runtime-state'],{'action':action});_rm.trigger_refresh()
             log_action(user['username'],'project_action',target,0,json.dumps({'action':action,'global_admin':global_admin},separators=(',',':')),'')
             if (self.headers.get('X-CloudIF-Async') or '').strip()=='project-provision':
                 payload={'ok':True,'slug':target,'tenant':str(result.get('tenant') or ''),'message':msg,'status_url':'/cloudiff/portal/api/project-provision-status?slug='+urllib.parse.quote(target)}
@@ -6629,6 +6629,9 @@ def _pm197_owner(project):
 def _pm197_job_state(slug):
     cached=_rm.get('project-job-state',slug,90)
     if isinstance(cached,dict):return cached
+    stale=_rm.get_stale('project-job-state',slug,900)
+    if isinstance(stale,dict):
+        _rm.trigger_refresh();return stale
     try:
         from cloudif_project_provision_status import status as provision_status
         data=provision_status(slug)
@@ -6650,6 +6653,9 @@ def _pm197_job_state(slug):
 def _pm197_runtime_state(slug, runtime_project=None):
     cached=_rm.get('project-runtime-state',slug,90)
     if isinstance(cached,dict):return cached
+    stale=_rm.get_stale('project-runtime-state',slug,300)
+    if isinstance(stale,dict):
+        _rm.trigger_refresh();return stale
     info={'label':'Não identificado','service':'web','status':'Não verificado','healthy':False}
     try:
         import pathlib,json

@@ -285,3 +285,7 @@ Na tabela principal, versões históricas não devem oferecer `Abrir` antes da c
 - Readiness/navegador canônico está na Forja (`cloudiff-webdev.service` / `cloudiff-webdev-browser`). Health exige Grid `ready=true` e caminho HTTPS interno funcional. Harness: `scripts/audit-cloudiff-browser-readiness.py`.
 - Faro foi o nó mais leve na rodada e é a **preferência para novos serviços auxiliares**, desde que passem gates de rede, capacidade, backup, observabilidade e compatibilidade. Não mover serviços existentes automaticamente.
 - A futura aba Banco para PostgreSQL/MySQL embutido fora do Supabase está registrada como **T-044**. Não expor porta de DB e não implementar sem contrato de ACL/auditoria por estágio.
+
+## Índice/read-model obrigatório — 22/11/2026
+
+O caminho quente da interface é o SQLite `/var/lib/cloudif/portal/cloudif-portal-readmodel.db`; não varrer Docker/filesystem/Komodo para renderizar listas. Mutação em provisionamento, ambiente, W/H/P, histórico, rollback, exclusão, Conectores ou Aprovações deve invalidar/atualizar o índice no próprio fluxo e disparar refresh em background. Leitura usa stale-while-revalidate. O refresh global é rede de segurança a cada 5 minutos; a auditoria completa roda 03:20 `America/Sao_Paulo` e nunca muta runtime. Norma: `docs/PADRAO-CLOUDIFF-INDICE-READMODEL-PORTAL-20261122.md`.

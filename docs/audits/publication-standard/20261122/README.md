@@ -46,3 +46,7 @@ Todas as auditorias desta pasta referenciam o mesmo contrato global e devem ser 
 - 1026 — [`sgrep-v2`](sgrep-v2.md) — `PREVIEW_SOURCE_LINKED_SEM_PRODUCAO`
 - 1027 — [`msha`](msha.md) — `DEGRADADO_INTEGRACAO`
 - 1028 — [`pghd-contexto`](pghd-contexto.md) — `REGISTRO_INFRA_NAO_PROVISIONADO`
+
+## Índice/read-model obrigatório — 22/11/2026
+
+O caminho quente da interface é o SQLite `/var/lib/cloudif/portal/cloudif-portal-readmodel.db`; não varrer Docker/filesystem/Komodo para renderizar listas. Mutação em provisionamento, ambiente, W/H/P, histórico, rollback, exclusão, Conectores ou Aprovações deve invalidar/atualizar o índice no próprio fluxo e disparar refresh em background. Leitura usa stale-while-revalidate. O refresh global é rede de segurança a cada 5 minutos; a auditoria completa roda 03:20 `America/Sao_Paulo` e nunca muta runtime. Norma: `docs/PADRAO-CLOUDIFF-INDICE-READMODEL-PORTAL-20261122.md`.

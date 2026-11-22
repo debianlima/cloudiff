@@ -1,0 +1,11 @@
+[Unit]
+Description=Audit CloudIF Portal read-model against canonical/runtime state nightly
+
+[Timer]
+OnCalendar=*-*-* 03:20:00 America/Sao_Paulo
+Persistent=true
+AccuracySec=1min
+Unit=cloudif-portal-readmodel-audit.service
+
+[Install]
+WantedBy=timers.target

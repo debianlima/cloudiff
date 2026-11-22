@@ -40,3 +40,7 @@ W1 real está saudável; endereço estável retorna 502 e existe D1 legado fora 
 - Labels os identificam como `pgh-test` / `nonproduction-staged-build-v2`, mas o Publisher legado ainda declara `projects.1025.active_deploy=1` e `project_publications` mantém `d1` ativo.
 - Essa divergência é result-determining: **não desligar nem remover D1 automaticamente** até o proprietário reconciliar se ele é canário ou Produção legada.
 - O stable 1025 continua 502 e permanece P1 de remediação.
+
+## Índice/read-model obrigatório — 22/11/2026
+
+O caminho quente da interface é o SQLite `/var/lib/cloudif/portal/cloudif-portal-readmodel.db`; não varrer Docker/filesystem/Komodo para renderizar listas. Mutação em provisionamento, ambiente, W/H/P, histórico, rollback, exclusão, Conectores ou Aprovações deve invalidar/atualizar o índice no próprio fluxo e disparar refresh em background. Leitura usa stale-while-revalidate. O refresh global é rede de segurança a cada 5 minutos; a auditoria completa roda 03:20 `America/Sao_Paulo` e nunca muta runtime. Norma: `docs/PADRAO-CLOUDIFF-INDICE-READMODEL-PORTAL-20261122.md`.

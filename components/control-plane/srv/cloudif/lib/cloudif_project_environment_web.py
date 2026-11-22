@@ -172,6 +172,11 @@ def human_save(slug:str,payload:dict[str,Any],username:str,groups:list[str]|set[
         except Exception as exc:runtime={'ok':False,'environment':environment,'error':type(exc).__name__,'message':str(exc)[:300],'secretValuesIncluded':False}
         result={'ok':True,'environment':environment,'revision':revision,'environmentDigest':environment_digest,'affectedServices':sorted(affected),'secretNamesChanged':sorted(set(secret_names)),'humanInteractive':True,'approvalRequired':False,'runtimeApply':runtime,'secretValuesIncluded':False}
         result['reconcile']=_enqueue_configuration_reconcile(slug,actor,result)
+        try:
+            import cloudif_portal_readmodel as readmodel
+            readmodel.project_changed(slug,'environment-human-save')
+        except Exception:
+            pass
         return result
     finally:
         for item in normalized_secrets:
@@ -261,6 +266,11 @@ def execute(slug:str,plan_digest:str,approval_id:str,username:str,groups:list[st
         data['transaction']={'approvalId':approval_id,'reservationId':reservation_id,'executionId':execution_id,'approvalStatus':'consumed'}
         data['reconcile']=_enqueue_configuration_reconcile(slug,str(username).strip().casefold(),data)
         data['secretValuesIncluded']=False
+        try:
+            import cloudif_portal_readmodel as readmodel
+            readmodel.project_changed(slug,'environment-change-executed')
+        except Exception:
+            pass
         return data
     if current and current.get('status')=='reserved':_approval_transition(approval_id,'release',{'reservation_id':reservation_id})
     raise RuntimeError(str((data.get('error') or {}).get('message') or (data.get('error') or {}).get('code') or 'environment_apply_failed'))

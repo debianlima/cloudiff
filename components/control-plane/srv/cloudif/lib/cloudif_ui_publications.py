@@ -52,7 +52,7 @@ def _runtime_from_job(slug):
                 if node or php:return {'node':node or '—','php':php or '—','apache':'2.4','environment':'Apache + PHP + Node.js','versions':f"Apache 2.4 · PHP {php or '—'} · Node.js {node or '—'}",'framework':'Aplicação PHP com API Node.js'}
             except Exception:pass
         return {}
-    return _rm.cached('project-runtime-job',slug,90,load)
+    return _rm.stale_while_revalidate('project-runtime-job',slug,90,1800,load)
 
 def _komodo_web_status(slug,stack_id=''):
     env={}
@@ -73,6 +73,9 @@ def _project_context(slug, framework_hint=''):
     cache_key=slug+'|'+str(framework_hint or '')
     cached=_rm.get('publication-project-context',cache_key,90)
     if isinstance(cached,dict):return cached
+    stale=_rm.get_stale('publication-project-context',cache_key,900)
+    if isinstance(stale,dict):
+        _rm.trigger_refresh();return stale
     context={'slug':slug,'framework':framework_hint or '', 'database':'', 'repo_url':'', 'security':'Aguardando publicação','service_status':'Não verificado','runtime':{}}
     try:
         con=sqlite3.connect(DB);con.row_factory=sqlite3.Row

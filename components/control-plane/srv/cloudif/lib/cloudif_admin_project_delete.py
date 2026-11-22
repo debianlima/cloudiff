@@ -526,7 +526,9 @@ def _cleanup_already_deleted(slug, actor, progress):
     provision_dir=PROVISIONING/slug
     if provision_dir.exists(): shutil.rmtree(provision_dir);removed_paths.append(str(provision_dir))
     ok=bool(publication.get('ok') and runtime_ok and remote_ok)
-    return {'ok':ok,'already_deleted':True,'slug':slug,'actor':actor,'tenant_preserved':tenant,'public_number_reserved':public_number,'publication':publication,'runtime_destroy':runtime,'remote':remote,'agent_identity':agent_identity,'onboarding_state':onboarding_state,'observability':observability,'backup_state':backup_state,'removed_paths':removed_paths,'message':'Projeto já excluído; resíduos verificados e removidos.' if ok else 'Projeto já excluído do Portal, mas ainda há resíduos a verificar.','finished_at':time.strftime('%Y-%m-%dT%H:%M:%S%z')}
+    result={'ok':ok,'already_deleted':True,'slug':slug,'actor':actor,'tenant_preserved':tenant,'public_number_reserved':public_number,'publication':publication,'runtime_destroy':runtime,'remote':remote,'agent_identity':agent_identity,'onboarding_state':onboarding_state,'observability':observability,'backup_state':backup_state,'removed_paths':removed_paths,'message':'Projeto já excluído; resíduos verificados e removidos.' if ok else 'Projeto já excluído do Portal, mas ainda há resíduos a verificar.','finished_at':time.strftime('%Y-%m-%dT%H:%M:%S%z')}
+    if ok:_refresh_readmodel(slug,'project-deletion-reconciled')
+    return result
 
 
 def execute(slug, confirmation, actor, progress=None):
@@ -636,7 +638,16 @@ def execute(slug, confirmation, actor, progress=None):
         'secrets_exposed': False,
     }
     (audit / 'result.json').write_text(json.dumps(result, ensure_ascii=False, indent=2) + '\n')
+    _refresh_readmodel(slug,'project-deleted')
     return result
+
+
+def _refresh_readmodel(slug,event='project-deleted'):
+    try:
+        import cloudif_portal_readmodel as readmodel
+        readmodel.project_changed(slug,event,include_projects=True,include_connectors=True)
+    except Exception:
+        pass
 
 
 def _stage(label, ok, detail=''):

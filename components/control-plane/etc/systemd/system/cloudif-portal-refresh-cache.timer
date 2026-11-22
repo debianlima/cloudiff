@@ -1,9 +1,9 @@
 [Unit]
-Description=Refresh CloudIF Portal cache every minute
+Description=Refresh CloudIF Portal read-model safety cache every five minutes
 
 [Timer]
 OnBootSec=30s
-OnUnitActiveSec=60s
+OnUnitActiveSec=5min
 Unit=cloudif-portal-refresh-cache.service
 
 [Install]

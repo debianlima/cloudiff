@@ -305,12 +305,8 @@ def _finalize_compose_publication_db(slug,candidate,project,publication,actor,id
             raise
         finally:con.close()
     if last:raise last
-    try:_rm.invalidate('publication-project-context')
-    except Exception:pass
-    for namespace in ('project-runtime-state','project-runtime-job'):
-        try:_rm.invalidate(namespace,slug)
-        except Exception:pass
-    _rm.trigger_refresh();return detail
+    _rm.project_changed(slug,'production-promoted')
+    return detail
 
 def _publish_linked_compose_homologated_candidate(slug,candidate,project,publication,alias,actor,progress=None):
     notify=lambda step,msg:progress(step,msg) if progress else None
@@ -1219,6 +1215,7 @@ def historical_publication_prepare(slug,publication_number,user):
     pstage,pdata=_post('http://10.62.91.3/stage',{'public_number':num,'stage':'publication','number':publication},npm_token,host='cloudif-publisher.internal',timeout=300)
     if pstage//100!=2 or not pdata.get('ok'):raise RuntimeError(_publication_error('https',pdata))
     if not _external_ok(str(row['hostname'])):raise RuntimeError('A URL versionada da publicação histórica não ficou saudável.')
+    _rm.project_changed(slug,'historical-production-started')
     return {'ok':True,'project':slug,'publicationNumber':publication,'stageCode':str(row['stage_code'] or ('P'+str(publication))),'url':'https://'+str(row['hostname'])+'/','runtimeState':'online','stableActivated':False,'containersRecreated':False,'secretValuesIncluded':False}
 
 
@@ -1244,6 +1241,7 @@ def historical_publication_stop(slug,publication_number,user):
         _multiservice_reactivate(slug,deployment_id,'abort',digest,trace+'-abort')
     else:
         _legacy_publication_deactivate(slug,num,publication)
+    _rm.project_changed(slug,'historical-production-stopped')
     return {'ok':True,'project':slug,'publicationNumber':publication,'stageCode':str(row['stage_code'] or ('P'+str(publication))),'runtimeState':'offline','stableActivated':False,'resourcesPreserved':True,'secretValuesIncluded':False}
 
 
@@ -1272,12 +1270,7 @@ def historical_publication_delete_runtime(slug,publication_number,user):
         detail['runtimeDeletedLegacyContainer']=str(data.get('container') or '');detail['runtimeDeletedLegacyImageId']=str(data.get('imageId') or '');detail['runtimeDeleteMode']='legacy-final'
     detail['runtimeDeletedAt']=_now()
     con=sqlite3.connect(DB);_ensure_schema(con);con.execute('begin immediate');con.execute("update project_publications set detail_json=?,status='archived',is_active=0 where project_slug=? and deploy_number=?",(json.dumps(detail,ensure_ascii=False),slug,int(row['deploy_number'])));con.execute("update production_releases set status='archived',is_active=0 where project_slug=? and publication_number=?",(slug,publication));con.commit();con.close()
-    try:_rm.invalidate('publication-project-context')
-    except Exception:pass
-    for namespace in ('project-runtime-job','project-runtime-state'):
-        try:_rm.invalidate(namespace,slug)
-        except Exception:pass
-    _rm.trigger_refresh()
+    _rm.project_changed(slug,'historical-production-deleted')
     return {'ok':True,'project':slug,'publicationNumber':publication,'stageCode':str(row['stage_code'] or ('P'+str(publication))),'runtimeState':'deleted','historyRemoved':True,'containersRemoved':int(removed.get('containersRemoved') or 0),'volumesRemoved':int(removed.get('volumesRemoved') or 0),'snapshotPreserved':snapshot_preserved,'snapshotId':snapshot_id,'imagePreserved':image_preserved,'canRehydrate':False,'stableActivated':False,'secretValuesIncluded':False}
 
 def release_flow_status(slug,user):
@@ -1375,6 +1368,7 @@ def rollback_publication(slug,publication_number,user):
                 except Exception:pass
                 if current_number:_publisher_delete_stage(num,'publication',current_number,nt)
             con=sqlite3.connect(DB);_ensure_schema(con);con.execute('update production_releases set is_active=case when publication_number=? then 1 else 0 end where project_slug=?',(int(publication_number),slug));con.execute('update project_publications set is_active=case when deploy_number=? then 1 else 0 end where project_slug=?',(dep,slug));con.commit();con.close()
+            _rm.project_changed(slug,'production-rollback')
             return {'ok':True,'project':slug,'publicationNumber':int(publication_number),'stageCode':'P'+str(int(publication_number)),'stableUrl':'https://'+primary_host+'/','numericStableUrl':'https://'+str(row['stable_hostname'])+'/','runtimeKind':str(detail.get('runtimeKind') or 'multiservice'),'deploymentId':target_dep,'containersRecreated':False,'volumesPreserved':True,'historicalRuntimeReactivated':True}
         except Exception:
             if switched and current_dep and current_number and re.fullmatch(r'[a-f0-9]{64}',current_digest):
@@ -1408,7 +1402,7 @@ def rollback_publication(slug,publication_number,user):
         if current_number:
             try:_publisher_delete_stage(num,'publication',current_number,nt)
             except Exception:pass
-    con=sqlite3.connect(DB);_ensure_schema(con);con.execute('update production_releases set is_active=case when publication_number=? then 1 else 0 end where project_slug=?',(int(publication_number),slug));con.execute('update project_publications set is_active=case when deploy_number=? then 1 else 0 end where project_slug=?',(dep,slug));con.commit();con.close();return {'ok':True,'project':slug,'publicationNumber':int(publication_number),'stageCode':'P'+str(int(publication_number)),'stableUrl':'https://'+primary_host+'/','numericStableUrl':'https://'+str(row['stable_hostname'])+'/','historicalRuntimeReactivated':bool(data.get('historicalRuntimeReactivated')),'containersRecreated':False}
+    con=sqlite3.connect(DB);_ensure_schema(con);con.execute('update production_releases set is_active=case when publication_number=? then 1 else 0 end where project_slug=?',(int(publication_number),slug));con.execute('update project_publications set is_active=case when deploy_number=? then 1 else 0 end where project_slug=?',(dep,slug));con.commit();con.close();_rm.project_changed(slug,'production-rollback');return {'ok':True,'project':slug,'publicationNumber':int(publication_number),'stageCode':'P'+str(int(publication_number)),'stableUrl':'https://'+primary_host+'/','numericStableUrl':'https://'+str(row['stable_hostname'])+'/','historicalRuntimeReactivated':bool(data.get('historicalRuntimeReactivated')),'containersRecreated':False}
 
 def publish_now(slug,user,progress=None,publication_snapshot=None):
     def notify(step,message):
@@ -2076,7 +2070,8 @@ def stage_terminal(slug,user,environment='preview'):
 _v143_homologate_candidate=homologate_candidate
 def homologate_candidate(slug,candidate_number,user,decision='approved',note=''):
     decision=str(decision or '').strip().lower()
-    if decision!='rejected':return _v143_homologate_candidate(slug,candidate_number,user,decision,note)
+    if decision!='rejected':
+        result=_v143_homologate_candidate(slug,candidate_number,user,decision,note);_rm.project_changed(slug,'homologation-'+decision);return result
     con=sqlite3.connect(DB);con.row_factory=sqlite3.Row;_ensure_schema(con)
     row=con.execute('select * from publication_candidates where project_slug=? and candidate_number=?',(slug,int(candidate_number))).fetchone()
     if not row:con.close();raise ValueError('Candidato não encontrado.')
@@ -2096,6 +2091,7 @@ def homologate_candidate(slug,candidate_number,user,decision='approved',note='')
     except Exception as exc:
         cleanup['publisher']={'ok':False,'error':type(exc).__name__}
     result['runtimeCleanup']=cleanup
+    _rm.project_changed(slug,'homologation-rejected')
     return result
 
 # CloudIFF v144 END
@@ -2111,6 +2107,7 @@ def publish_homologated_candidate(slug,candidate_number,user,progress=None,publi
             result['homologationStageRemoved']=bool(status//100==2 and data.get('ok') is not False)
     except Exception as exc:
         result['homologationStageRemoved']=False;result['homologationStageCleanupError']=type(exc).__name__
+    _rm.project_changed(slug,'production-published')
     return result
 
 _v144_ensure_preview_base=ensure_preview
@@ -2120,6 +2117,7 @@ def ensure_preview(slug,user):
         con=sqlite3.connect(DB);con.row_factory=sqlite3.Row;_ensure_schema(con);project=con.execute('select * from projects where slug=?',(slug,)).fetchone();tenant=str(project['tenant'] if project and 'tenant' in project.keys() else '');con.close()
         result['reconcile']=_enqueue_membership_reconcile(slug,user.get('username') or 'portal',tenant)
     except Exception as exc:result['reconcile']={'ok':False,'error':type(exc).__name__}
+    _rm.project_changed(slug,'preview-ensured')
     return result
 
 _v144_create_homologation_candidate_base=create_homologation_candidate
@@ -2129,6 +2127,7 @@ def create_homologation_candidate(slug,user,progress=None,candidate_number=None,
         con=sqlite3.connect(DB);con.row_factory=sqlite3.Row;_ensure_schema(con);project=con.execute('select * from projects where slug=?',(slug,)).fetchone();tenant=str(project['tenant'] if project and 'tenant' in project.keys() else '');con.close()
         result['reconcile']=_enqueue_membership_reconcile(slug,user.get('username') or 'portal',tenant)
     except Exception as exc:result['reconcile']={'ok':False,'error':type(exc).__name__}
+    _rm.project_changed(slug,'homologation-created')
     return result
 
 def _executor_runtime_client():

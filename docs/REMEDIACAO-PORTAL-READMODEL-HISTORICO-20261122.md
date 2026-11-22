@@ -92,3 +92,7 @@ P8 e `agendaunica.cloudiff.duckdns.org` continuaram saudáveis, revisão `184161
 - `/var/lib/cloudif/portal/backups/readmodel-index-20261122T143221Z`
 - `/var/lib/cloudif/portal/backups/readmodel-prewarm-20261122T143606Z`
 - `/var/lib/cloudif/portal/backups/agenda-archive-deleted-history-20261122T143345Z`
+
+## Índice/read-model obrigatório — 22/11/2026
+
+O caminho quente da interface é o SQLite `/var/lib/cloudif/portal/cloudif-portal-readmodel.db`; não varrer Docker/filesystem/Komodo para renderizar listas. Mutação em provisionamento, ambiente, W/H/P, histórico, rollback, exclusão, Conectores ou Aprovações deve invalidar/atualizar o índice no próprio fluxo e disparar refresh em background. Leitura usa stale-while-revalidate. O refresh global é rede de segurança a cada 5 minutos; a auditoria completa roda 03:20 `America/Sao_Paulo` e nunca muta runtime. Norma: `docs/PADRAO-CLOUDIFF-INDICE-READMODEL-PORTAL-20261122.md`.

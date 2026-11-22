@@ -1,0 +1,16 @@
+[Unit]
+Description=CloudIF Portal nightly read-model reconciliation audit
+After=network-online.target cloudif-admin-portal.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/cloudif/portal.env
+ExecStart=/usr/bin/python3 /usr/local/sbin/cloudif-portal-readmodel-audit.py
+Nice=15
+IOSchedulingClass=idle
+CPUWeight=10
+IOWeight=10
+
+[Install]
+WantedBy=multi-user.target
