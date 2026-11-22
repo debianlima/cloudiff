@@ -25,7 +25,7 @@ Nenhum runtime de projeto foi alterado nesta unidade.
 | `cpuhub` | W2 saudável | alinhado (`97af1e3...`) | P5 saudável | não comprovado; fluxo antigo | H3 ainda `awaiting_homologation`; P2/P3 Offline | **PARCIAL / LEGADO** |
 | `laboratorio-de-hardware` | W1 saudável após remediação | alinhado `3b399e9` | P12/alias saudáveis | **não** historicamente: H13 `dep_51a7...` → P12 `dep_210f...` | H11/H13/P5 agora Offline; snapshots preservados | **PARCIAL — aguarda novo H→P humano** |
 | `msha` | não configurado | n/a | nenhuma | n/a | nenhum runtime de publicação | **DRAFT / N/A** |
-| `paperclip` | W1 responde 200, app informa falha de inicialização | hash `dfcaaf8...` alinhado | D1 legado é placeholder “primeiros passos” | n/a | Preview fora do contrato moderno | **BLOQUEADOR / LEGADO** |
+| `paperclip` | W1 saudável após correção de healthcheck | hash `dfcaaf8...` alinhado | D1 legado permanece placeholder | n/a | resíduos W1 removidos; volume preservado | **PARCIAL — aguarda H→P humano** |
 | `sgrep-v2` | W1 real existe, mas read-model diz “não configurado” | source link `f29f752...` coincide com Komodo | nenhuma | n/a | runtime Preview fora do fluxo do Portal | **DRIFT DE READ-MODEL** |
 | `silvipro` | W2 saudável e reconhecido após remediação | alinhado `ad2273de...`, porém fonte Git é placeholder | D1 legado continua placeholder | n/a | P1/D2 têm conteúdo runtime-only divergente do Forgejo | **PARCIAL — requer decisão humana sobre fonte** |
 

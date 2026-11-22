@@ -716,3 +716,13 @@ Os módulos `cloudif_portal_publications.py` (app/lib), `cloudif_portal_v2_coexi
 - Forgejo atual contém o placeholder `silvipro · primeiros passos`; P1/D2 têm conteúdo runtime-only diferente. Não copiar runtime para Git automaticamente.
 - Alias estável não foi alterado. `assistente-interativo` não tem ACL do projeto, então ativação/cutover ficou como gate humano.
 - Evidência: `docs/REMEDIACAO-SILVIPRO-PREVIEW-READMODEL-20261122.md`.
+
+## Paperclip P1025 — W1 saudável e resíduos removidos — 22/11/2026
+
+- `/api/health` comprovou backend saudável (`status=ok`, bootstrap ready, backup DB ok, commit `dfcaaf8...`).
+- HTML `Paperclip couldn’t start` era fallback inicial e não prova de health; a aplicação autenticada responde pelo backend.
+- Gateway W1 não possuía Docker healthcheck; foi substituído por sidecar equivalente com healthcheck `/api/health` e passou a `running/healthy`.
+- Portal agora informa W1 `configured=true`, `healthy=true`.
+- Quatro containers exited de canary/rollback foram removidos após backup; volume `cloudif-p1025-w1-paperclip-data` preservado.
+- Produção D1 não foi alterada. `assistente-interativo` não tem ACL do projeto; H/P moderna ficou como gate humano.
+- Evidência: `docs/REMEDIACAO-PAPERCLIP-W1-HEALTH-20261122.md`.
