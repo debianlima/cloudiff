@@ -16,7 +16,7 @@ O padrão vale globalmente para projetos gerenciados pelo Portal. Particularidad
 6. `Subir Pn` publica somente a URL versionada Pn. Não altera o endereço principal.
 7. `Ativar no endereço principal` é a única ação que troca o alias público principal. A versão alvo precisa ficar saudável antes do cutover; a anterior só é desativada depois.
 8. `Desligar` remove bridge/rota versionada e deixa o runtime histórico inativo, preservando recursos de rollback conforme o tipo de runtime.
-9. `Excluir container` nunca é permitido para a P ativa. Em P histórica Compose-snapshot, remove containers/volumes runtime mas preserva o snapshot homologado; `Subir` deve reidratar o snapshot antes de publicar Pn.
+9. `Excluir container` nunca é permitido para a P ativa. Em P histórica Compose-snapshot, remove o runtime e preserva o snapshot. Em P histórica legada inativa, a exclusão pode ser final (`legacy-final`) após validação estrita de identidade/labels/alias; nesse caso não há reidratação automática.
 10. Estado visual `Online/Offline/Containers excluídos` vem do runtime real, não apenas do banco do Portal.
 
 ## 2. Endereço principal versus endereço versionado
@@ -102,12 +102,13 @@ Nunca substituir essa função por uma versão simplificada que perca o bloco `r
 `historical_publication_delete_runtime()`:
 - somente owner/admin;
 - somente P inativa;
-- somente quando há snapshot Compose íntegro/reidratável;
-- remove bridge/stage e o deployment runtime via Executor;
-- snapshot e metadados históricos permanecem;
-- a UI passa a `Containers excluídos` e mantém `Subir`/`Ativar`.
+- `compose-snapshot`: remove bridge/stage/deployment runtime e preserva o snapshot;
+- `legacy-final`: Komodo valida container esperado, labels do projeto/estágio/número e ausência do alias ativo antes de remover o container;
+- em ambos os modos, a publicação passa a `archived` e sai do histórico operacional;
+- snapshot/auditoria técnica permanecem internos quando existirem;
+- legado sem snapshot retorna `canRehydrate=false` e não volta a oferecer `Subir`/`Ativar` após a exclusão.
 
-A exclusão é reversível porque `Subir` chama a reidratação histórica.
+A reidratação só existe para modos que possuem artefato/snapshot reconstruível. Nunca apresentar um legado sem imagem/snapshot como reidratável.
 
 ## 6. Reidratação histórica Compose
 
@@ -143,7 +144,7 @@ Nunca recriar DB/stack do Preview só para corrigir o número Wn.
 - P históricas podem existir como metadata/snapshot, mas ficam Offline por padrão.
 - Containers legados fora do Publisher atual devem ser inventariados por host, labels, portas, systemd/Nginx/Publisher antes de parar.
 - Parar é preferível a remover quando ainda não há prova de rollback.
-- Remoção de runtime histórico somente pelo fluxo `Excluir container`, com snapshot reidratável comprovado.
+- Remoção de runtime histórico somente pelo fluxo `Excluir container`. Para Compose, exigir snapshot reidratável; para legado, permitir `legacy-final` apenas em P inativa e após validação de identidade/labels/alias pelo Komodo.
 
 ## 9. Fontes de verdade e reconciliação
 
@@ -221,4 +222,4 @@ As superfícies humanas não devem varrer filesystem nem consultar todos os runt
 
 Ações humanas que mudam Projeto, Conector, Aprovação ou Publicação devem invalidar a chave correspondente e disparar refresh assíncrono. Projetos/Publicações podem continuar lendo diretamente tabelas canônicas do Portal para dados baratos; somente enriquecimentos remotos/filesystem entram no read-model.
 
-`Excluir container` de P histórica significa também retirar essa P do **histórico operacional**: após remover o runtime de forma segura, marcar os registros de publicação como `archived`. Snapshot e auditoria técnica permanecem internos, mas a P não deve continuar aparecendo com botões na interface. P Offline sem snapshot reidratável não mostra botão `Excluir`.
+`Excluir container` de P histórica significa também retirar essa P do **histórico operacional**: após remover o runtime de forma segura, marcar os registros de publicação como `archived`. Snapshot e auditoria técnica permanecem internos quando existirem, e a P não continua aparecendo com botões na interface. P Compose usa exclusão reidratável por snapshot; P legada inativa pode usar exclusão final validada pelo Komodo e então não terá reidratação automática.

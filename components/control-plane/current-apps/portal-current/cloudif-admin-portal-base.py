@@ -6304,7 +6304,7 @@ if 'page' in globals() and not globals().get('_ui144_wrapped'):
 # CloudIF readable modern colors END
 
 # CloudIF W/H/P release wizard BEGIN
-_WHP_RELEASE_ASSETS='<script id="cloudif-whp-release-script" src="/cloudiff/portal/assets/publication-release.js?v=20261122-readmodel-v8" defer></script>'
+_WHP_RELEASE_ASSETS='<script id="cloudif-whp-release-script" src="/cloudiff/portal/assets/publication-release.js?v=20261122-history-delete-v9" defer></script>'
 if 'page' in globals() and not globals().get('_whp_release_wrapped'):
     _whp_release_prev_page=page
     def page(user,tab,body):

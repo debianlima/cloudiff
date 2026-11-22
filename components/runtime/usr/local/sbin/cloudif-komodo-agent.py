@@ -4313,6 +4313,31 @@ def cloudif_publication_release_status(handler):
     return send(handler,200,{'ok':True,'project':project,'publication_number':publication,'container':target,'exists':True,'online':running,'healthy':healthy,'health':health,'isActive':bool(rows[0].get('is_active')),'hasActiveAlias':f'cloudif-p{num}-active-web' in aliases,'secretValuesIncluded':False})
 
 
+
+def cloudif_publication_release_delete(handler):
+    if not _cloudif_pub_auth(handler):return send(handler,403,{'ok':False,'error':'forbidden'})
+    payload=_cloudif_pub_json(handler);project=safe_slug(payload.get('project') or '')
+    try:num=int(payload.get('public_number'));publication=int(payload.get('publication_number'))
+    except Exception:return send(handler,400,{'ok':False,'error':'invalid_release_request'})
+    rows=db_query("select * from stage_production_releases where project=? and public_number=? and publication_number=? and status='ready'",(project,num,publication))
+    if not rows:return send(handler,404,{'ok':False,'error':'production_release_not_found'})
+    row=rows[0]
+    if int(row.get('is_active') or 0)==1:return send(handler,409,{'ok':False,'error':'active_production_cannot_be_deleted'})
+    target=str(row.get('container') or '');expected=f'cloudif-p{num}-p{publication}-publication-web'
+    if target!=expected:return send(handler,409,{'ok':False,'error':'production_container_identity_invalid'})
+    inspected=subprocess.run(['docker','inspect',target],stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,text=True)
+    image_id=str(row.get('image_id') or '');image_preserved=bool(image_id and subprocess.run(['docker','image','inspect',image_id],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL).returncode==0);removed=0
+    if inspected.returncode==0:
+        try:item=(json.loads(inspected.stdout or '[]') or [{}])[0];labels=(item.get('Config') or {}).get('Labels') or {};aliases=((((item.get('NetworkSettings') or {}).get('Networks') or {}).get('cloudif-publications') or {}).get('Aliases') or [])
+        except Exception:return send(handler,409,{'ok':False,'error':'production_container_inspect_invalid'})
+        if str(labels.get('cloudif.project') or '')!=project or str(labels.get('cloudif.stage') or '')!='publication' or str(labels.get('cloudif.stage-number') or '')!=str(publication):return send(handler,409,{'ok':False,'error':'production_container_labels_invalid'})
+        if f'cloudif-p{num}-active-web' in aliases:return send(handler,409,{'ok':False,'error':'active_alias_present'})
+        rm=subprocess.run(['docker','rm','-f',target],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=60)
+        if rm.returncode!=0:return send(handler,422,{'ok':False,'error':'production_container_remove_failed'})
+        removed=1
+    db_exec("update stage_production_releases set status='deleted',is_active=0,updated_at=? where project=? and public_number=? and publication_number=?",(now(),project,num,publication))
+    return send(handler,200,{'ok':True,'project':project,'public_number':num,'publication_number':publication,'stageCode':'P'+str(publication),'container':target,'containersRemoved':removed,'volumesRemoved':0,'imageId':image_id,'imagePreserved':image_preserved,'canRehydrate':False,'secretValuesIncluded':False})
+
 def cloudif_publication_release_prepare(handler):
     if not _cloudif_pub_auth(handler):return send(handler,403,{'ok':False,'error':'forbidden'})
     payload=_cloudif_pub_json(handler);project=safe_slug(payload.get('project') or '')
@@ -4970,6 +4995,8 @@ class H(BaseHTTPRequestHandler):
             return cloudif_publication_release_prepare(self)
         if _cloudif_pub_path == "/komodo/publication/release/activate":
             return cloudif_publication_release_activate(self)
+        if _cloudif_pub_path == "/komodo/publication/release/delete":
+            return cloudif_publication_release_delete(self)
 
         _cloudif_v132_path = self.path.split("?", 1)[0]
         if _cloudif_v132_path in ["/komodo/project/status", "/komodo/status"]:

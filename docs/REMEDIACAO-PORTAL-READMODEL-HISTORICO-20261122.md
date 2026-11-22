@@ -15,7 +15,7 @@ Além disso, enriquecimentos de Projetos/Publicações ainda executavam leitura 
 
 ## Semântica corrigida de `Excluir`
 
-A exclusão de uma P histórica com snapshot seguro agora é uma transição operacional:
+A exclusão de uma P histórica agora é uma transição operacional. Compose-snapshot preserva snapshot; legado inativo pode ser removido em modo final validado pelo Komodo:
 
 1. remove runtime/bridge/stage conforme o contrato já existente;
 2. preserva snapshot, `detail_json` e dados de auditoria;
@@ -26,7 +26,7 @@ A exclusão de uma P histórica com snapshot seguro agora é uma transição ope
 
 `release_flow_status()` e `_rows()` exibem somente publicações canônicas `status='published'`.
 
-No Agenda, P6 e P3 já possuíam `runtimeDeletedAt`; foram reconciliadas para `archived`. P7 permanece Offline/reidratável e P2 permanece Offline legado, sem botão `Excluir` porque não possui snapshot seguro. P8 permanece ativa.
+No Agenda, P6/P3 foram reconciliadas para `archived`; depois P7 também foi excluída pelo fluxo humano e P2 foi removida em `legacy-final`. O histórico operacional agora contém somente P8 ativa; P2/P3/P6/P7 permanecem apenas como auditoria arquivada.
 
 Backup da reconciliação P6/P3:
 `/var/lib/cloudif/portal/backups/agenda-archive-deleted-history-20261122T143345Z`.
@@ -81,11 +81,9 @@ O refresh background dos nove projetos levou ~20 s de wall clock numa execução
 
 Lista operacional comum às duas telas:
 
-- P8 — ativa;
-- P7 — Offline, snapshot seguro, pode Subir/Ativar/Excluir;
-- P2 — Offline legado, pode Subir/Ativar, **sem Excluir**.
+- P8 — ativa.
 
-P6/P3 permanecem somente como registros `archived` para auditoria.
+P2/P3/P6/P7 permanecem somente como registros `archived` para auditoria. Nenhum desses históricos possui container/volume ativo no host.
 
 P8 e `agendaunica.cloudiff.duckdns.org` continuaram saudáveis, revisão `18416127cdf9`.
 

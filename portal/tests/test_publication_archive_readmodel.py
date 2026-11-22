@@ -22,4 +22,13 @@ class PublicationArchiveReadModelTests(unittest.TestCase):
         self.assertIn('deixará de aparecer nas listas',JS)
         self.assertIn("${deleteAllowed?`<button",JS)
         self.assertNotIn('Snapshot completo indisponível para reconstrução segura.',JS)
+    def test_legacy_offline_release_can_be_deleted_finally(self):
+        self.assertIn("'canDelete':(not online and not is_active)",PUB)
+        self.assertIn("/komodo/publication/release/delete",PUB)
+        self.assertIn("'runtimeDeleteMode']='legacy-final'",PUB)
+        self.assertIn("'snapshotPreserved':snapshot_preserved",PUB)
+        self.assertIn("data-delete-mode=\"${runtimeState.legacy?'legacy-final':'snapshot'}\"",JS)
+        self.assertIn('não possui snapshot automático para reidratação',JS)
+        self.assertIn('a auditoria técnica permanece interna',JS)
+
 if __name__=='__main__':unittest.main()

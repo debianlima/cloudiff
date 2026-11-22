@@ -243,7 +243,7 @@
         const deleteAllowed = Boolean(runtimeState.canDelete);
         actions = online
           ? `<div class="release-actions"><button class="btn light" type="button" data-release-action="production-history-stop" data-publication="${publication}">Desligar</button><button class="btn" type="button" data-release-action="production-rollback" data-publication="${publication}">${activateLabel}</button><button class="btn light" type="button" disabled title="Desligue a publicação antes de excluir os containers.">Excluir container</button></div>`
-          : `<div class="release-actions"><button class="btn light" type="button" data-release-action="production-history-prepare" data-publication="${publication}">Subir</button><button class="btn" type="button" data-release-action="production-rollback" data-publication="${publication}">${activateLabel}</button>${deleteAllowed?`<button class="btn light" type="button" data-release-action="production-history-delete" data-publication="${publication}">Excluir container</button>`:''}</div>`;
+          : `<div class="release-actions"><button class="btn light" type="button" data-release-action="production-history-prepare" data-publication="${publication}">Subir</button><button class="btn" type="button" data-release-action="production-rollback" data-publication="${publication}">${activateLabel}</button>${deleteAllowed?`<button class="btn light" type="button" data-release-action="production-history-delete" data-publication="${publication}" data-delete-mode="${runtimeState.legacy?'legacy-final':'snapshot'}">Excluir container</button>`:''}</div>`;
       }
       return `<div class="release-history-row"><span><strong>${esc(code)}</strong><small>${esc((item.runtime || {}).sourceCommit || item.created_at || '')}</small>${badge}</span>${actions}</div>`;
     }).join('')}</div>` : '';
@@ -488,7 +488,11 @@
         if (action === 'production-history-delete') {
           const publication = Number(button.dataset.publication || 0);
           if (!publication) return;
-          if (!confirm('Excluir P' + publication + ' do histórico operacional? Os containers/volumes runtime serão removidos e a linha deixará de aparecer nas listas. A auditoria técnica e o snapshot permanecem preservados internamente.')) return;
+          const legacyFinal = button.dataset.deleteMode === 'legacy-final';
+          const warning = legacyFinal
+            ? ('Excluir P' + publication + ' definitivamente do histórico operacional? O container será removido e a linha deixará de aparecer. Esta versão legada não possui snapshot automático para reidratação; a auditoria técnica permanece interna.')
+            : ('Excluir P' + publication + ' do histórico operacional? Os containers/volumes runtime serão removidos e a linha deixará de aparecer nas listas. A auditoria técnica e o snapshot permanecem preservados internamente.');
+          if (!confirm(warning)) return;
           return act('production/history/delete', { publicationNumber: publication }, 'Excluindo containers de P' + publication + '…', 'publication');
         }
         if (action === 'production-rollback') {

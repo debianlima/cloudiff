@@ -1021,8 +1021,8 @@ def _historical_release_runtime_state(slug,row,detail):
     try:
         ku,kt,_=_clients();status,data=_post(ku+'/komodo/publication/release/status',{'project':slug,'public_number':int(row.get('public_number') or 0),'publication_number':int(row.get('publication_number') or 0)},kt,timeout=30)
         if status//100==2 and isinstance(data,dict) and data.get('ok') is True:
-            online=bool(data.get('online'));healthy=bool(data.get('healthy'))
-            return {'state':'online' if online and healthy else 'offline','online':online,'healthy':healthy,'canStart':not online,'canStop':online,'legacy':True,'container':str(data.get('container') or '')}
+            online=bool(data.get('online'));healthy=bool(data.get('healthy'));is_active=bool(data.get('isActive'));exists=bool(data.get('exists',True))
+            return {'state':'online' if online and healthy else 'offline','online':online,'healthy':healthy,'canStart':not online,'canStop':online,'canDelete':(not online and not is_active),'legacy':True,'container':str(data.get('container') or ''),'exists':exists,'isActive':is_active,'deleteMode':'legacy-final'}
     except Exception:pass
     return {'state':'offline','online':False,'healthy':False,'canStart':True,'canStop':False,'legacy':True}
 
@@ -1097,14 +1097,21 @@ def historical_publication_delete_runtime(slug,publication_number,user):
     pubrow=con.execute('select detail_json from project_publications where project_slug=? and deploy_number=?',(slug,int(row['deploy_number']))).fetchone();con.close()
     try:detail=json.loads(pubrow['detail_json'] or '{}') if pubrow else {}
     except Exception:detail={}
-    if str(detail.get('runtimeKind') or '')!='compose-snapshot':raise RuntimeError('Esta publicação legada não possui snapshot completo para reconstrução segura.')
-    snapshot_id=str(detail.get('composeSnapshotId') or '');deployment_id=str(detail.get('productionDeploymentId') or '')
-    if not re.fullmatch(r'snap_[a-f0-9]{24}',snapshot_id) or not re.fullmatch(r'dep_[a-f0-9]{24}',deployment_id):raise RuntimeError('A publicação não possui snapshot/deployment reidratável válido.')
     num=int(row['public_number']);publication=int(row['publication_number']);_,_,npm_token=_clients();_publisher_delete_stage(num,'publication',publication,npm_token)
-    try:_multiservice_deactivate_bridge(slug,deployment_id,'publication','portal-history-delete-'+hashlib.sha256((slug+str(publication)).encode()).hexdigest()[:20])
-    except Exception:pass
-    removed=_remove_compose_runtime(deployment_id)
-    detail['runtimeDeletedAt']=_now();detail['runtimeDeletedDeploymentId']=deployment_id;detail['runtimeDeletedSnapshotId']=snapshot_id
+    kind=str(detail.get('runtimeKind') or '');snapshot_id='';deployment_id='';snapshot_preserved=False;image_preserved=False
+    if kind=='compose-snapshot':
+        snapshot_id=str(detail.get('composeSnapshotId') or '');deployment_id=str(detail.get('productionDeploymentId') or '')
+        if not re.fullmatch(r'snap_[a-f0-9]{24}',snapshot_id) or not re.fullmatch(r'dep_[a-f0-9]{24}',deployment_id):raise RuntimeError('A publicação não possui snapshot/deployment reidratável válido.')
+        try:_multiservice_deactivate_bridge(slug,deployment_id,'publication','portal-history-delete-'+hashlib.sha256((slug+str(publication)).encode()).hexdigest()[:20])
+        except Exception:pass
+        removed=_remove_compose_runtime(deployment_id);snapshot_preserved=True
+        detail['runtimeDeletedDeploymentId']=deployment_id;detail['runtimeDeletedSnapshotId']=snapshot_id;detail['runtimeDeleteMode']='compose-snapshot'
+    else:
+        ku,kt,_=_clients();status,data=_post(ku+'/komodo/publication/release/delete',{'project':slug,'public_number':num,'publication_number':publication,'actor':user.get('username') or 'portal'},kt,timeout=90)
+        if status//100!=2 or data.get('ok') is not True:raise RuntimeError(str(data.get('message') or data.get('error') or 'Falha ao excluir publicação legada.'))
+        removed={'containersRemoved':int(data.get('containersRemoved') or 0),'volumesRemoved':int(data.get('volumesRemoved') or 0)};image_preserved=bool(data.get('imagePreserved'))
+        detail['runtimeDeletedLegacyContainer']=str(data.get('container') or '');detail['runtimeDeletedLegacyImageId']=str(data.get('imageId') or '');detail['runtimeDeleteMode']='legacy-final'
+    detail['runtimeDeletedAt']=_now()
     con=sqlite3.connect(DB);_ensure_schema(con);con.execute('begin immediate');con.execute("update project_publications set detail_json=?,status='archived',is_active=0 where project_slug=? and deploy_number=?",(json.dumps(detail,ensure_ascii=False),slug,int(row['deploy_number'])));con.execute("update production_releases set status='archived',is_active=0 where project_slug=? and publication_number=?",(slug,publication));con.commit();con.close()
     try:_rm.invalidate('publication-project-context')
     except Exception:pass
@@ -1112,8 +1119,7 @@ def historical_publication_delete_runtime(slug,publication_number,user):
         try:_rm.invalidate(namespace,slug)
         except Exception:pass
     _rm.trigger_refresh()
-    return {'ok':True,'project':slug,'publicationNumber':publication,'stageCode':str(row['stage_code'] or ('P'+str(publication))),'runtimeState':'deleted','historyRemoved':True,'containersRemoved':int(removed.get('containersRemoved') or 0),'volumesRemoved':int(removed.get('volumesRemoved') or 0),'snapshotPreserved':True,'snapshotId':snapshot_id,'canRehydrate':False,'stableActivated':False,'secretValuesIncluded':False}
-
+    return {'ok':True,'project':slug,'publicationNumber':publication,'stageCode':str(row['stage_code'] or ('P'+str(publication))),'runtimeState':'deleted','historyRemoved':True,'containersRemoved':int(removed.get('containersRemoved') or 0),'volumesRemoved':int(removed.get('volumesRemoved') or 0),'snapshotPreserved':snapshot_preserved,'snapshotId':snapshot_id,'imagePreserved':image_preserved,'canRehydrate':False,'stableActivated':False,'secretValuesIncluded':False}
 
 def release_flow_status(slug,user):
     con=sqlite3.connect(DB);con.row_factory=sqlite3.Row;_ensure_schema(con)

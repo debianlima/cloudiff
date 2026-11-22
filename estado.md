@@ -817,3 +817,12 @@ O backup parcial da unidade foi substituído por rollback direcionado de 28 KB (
 - Novo `portal_readmodel_cache` pré-aquece Projetos, estados de projeto, contexto de Publicação, Conectores e Aprovações. O timer existente de 60 s faz refresh em background e mutações invalidam/disparam refresh.
 - Medição Agenda: contexto ~970,48 ms sem cache → ~1,43 ms em hit; após pré-aquecimento, primeiro request ~1,89 ms.
 - Evidência: `docs/REMEDIACAO-PORTAL-READMODEL-HISTORICO-20261122.md`.
+
+## Agenda P1020 — histórico operacional zerado, somente P8 ativa — 22/11/2026
+
+- P2 legado foi removido fisicamente via novo contrato `legacy-final`: container excluído, nenhum volume, imagem já ausente antes da exclusão, sem reidratação automática.
+- P2/P3/P6/P7 estão `archived` e fora das duas listas operacionais.
+- Containers versionados P2/P3/P6/P7 estão ausentes; deployments Compose P3/P6/P7 estão `removed`; nenhum volume vinculado foi encontrado.
+- Publisher mantém apenas W3 e P8.
+- H8→P8 é o ciclo ativo conforme; commit `18416127...`; alias `agendaunica` saudável.
+- Evidência: `docs/REMEDIACAO-AGENDA-HISTORICO-P2-FINAL-20261122.md`.
