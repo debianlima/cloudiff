@@ -760,3 +760,12 @@ O backup parcial da unidade foi substituído por rollback direcionado de 28 KB (
 - Cinco containers exited de smoke/rollback removidos após backup; app/db/sat/gateway ativos preservados.
 - Terminal source-linked segue como lacuna explícita por ACL/seleção segura de container; não usar stack genérica como fallback.
 - Evidência: `docs/REMEDIACAO-SGREP-V2-PREVIEW-READMODEL-20261122.md`.
+
+## SilviPro P1002 — legado operacionalmente coerente — 22/11/2026
+
+- W1 oficial está online/healthy no commit `ad2273de...`; o placeholder `primeiros passos` é o conteúdo real do Forgejo.
+- Preview e Produção são distintos: W1 usa alias de rede `cloudif-p1002-w1-preview-web`; P1 usa `cloudif-p1002-p1-publication-web` e alias ativo `cloudif-p1002-active-web`.
+- `silvipro` reescreve Host para `1002.cloudiff`, que o Publication Gateway resolve para P1; não há apontamento da Produção para o Preview.
+- D2 está exited e fora das rotas ativas.
+- Portal DB ainda representa D1 legado, enquanto `stage_production_releases` registra P1; não alterar metadata para inventar H/P inexistente.
+- Próxima migração ao padrão deve ocorrer somente quando houver novo código: Forgejo→W1→H→mesma H em P.
