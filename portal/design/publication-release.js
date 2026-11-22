@@ -243,9 +243,15 @@
       const code = item.stage_code || ('P' + Number(item.publication_number || 0));
       const publication = Number(item.publication_number || 0);
       const runtimeState = item.runtimeState || {};
-      const online = Boolean(runtimeState.online && runtimeState.healthy);
+      const online = Boolean(runtimeState.online);
+      const healthy = Boolean(runtimeState.healthy);
       const deleted = String(runtimeState.state||'')==='deleted';
-      const badge = online ? '<span class="release-badge ok">Online</span>' : deleted ? '<span class="release-badge">Containers excluídos</span>' : '<span class="release-badge">Offline</span>';
+      const attention = String(runtimeState.state||'')==='attention';
+      const badge = online
+        ? (healthy ? '<span class="release-badge ok">Online</span>' : '<span class="release-badge warn">Online · atenção</span>')
+        : deleted ? '<span class="release-badge">Containers excluídos</span>'
+        : attention ? '<span class="release-badge warn">Estado indisponível</span>'
+        : '<span class="release-badge">Offline</span>';
       let actions = '<span class="pill muted">Somente responsável/admin</span>';
       if (canRollback) {
         const activateLabel = data.primaryHostname ? `Ativar em ${esc(data.primaryHostname)}` : 'Ativar no endereço principal';
@@ -334,7 +340,41 @@
       const p = root.querySelector('[data-release-summary-p]');
       const preview = data.preview || {};
       const candidate = (data.candidates || [])[0];
-      const release = (data.releases || []).find(item => Number(item.is_active) === 1) || data.legacyProduction;
+      const releases = data.releases || [];
+      const release = releases.find(item => Number(item.is_active) === 1) || data.legacyProduction;
+      const manager = root.closest('.publication-manager-resource');
+      if (manager) {
+        const byNumber = new Map(releases.map(item => [Number(item.publication_number || item.deploy_number || 0), item]));
+        manager.querySelectorAll('[data-publication-runtime-row]').forEach(row => {
+          const publication = Number(row.dataset.publicationNumber || 0);
+          const item = byNumber.get(publication);
+          if (!item) return;
+          const runtimeState = item.runtimeState || {};
+          const online = Boolean(runtimeState.online);
+          const healthy = Boolean(runtimeState.healthy);
+          const deleted = String(runtimeState.state || '') === 'deleted';
+          const attention = String(runtimeState.state || '') === 'attention';
+          const active = Number(item.is_active || 0) === 1;
+          const stateCell = row.querySelector('[data-publication-runtime-state]');
+          const openCell = row.querySelector('[data-publication-runtime-open]');
+          if (stateCell) {
+            stateCell.textContent = active
+              ? (online ? (healthy ? 'Ativa · Online' : 'Ativa · Online com atenção') : 'Ativa · atenção')
+              : online ? (healthy ? 'Online' : 'Online · atenção')
+              : deleted ? 'Containers excluídos'
+              : attention ? 'Estado indisponível'
+              : 'Offline';
+          }
+          if (openCell) {
+            const url = String(item.url || row.dataset.publicationUrl || '');
+            openCell.innerHTML = (online && url)
+              ? `<a href="${esc(url)}" target="_blank" rel="noopener">Abrir</a>`
+              : deleted ? '<span class="cm-muted">Containers excluídos</span>'
+              : attention ? '<span class="cm-muted">Verifique no Ambiente de publicação</span>'
+              : '<span class="cm-muted">Offline · suba para abrir</span>';
+          }
+        });
+      }
       w.textContent = preview.configured ? (preview.stageCode + ' · ' + (preview.healthy ? 'online' : 'atenção')) : 'Preparação automática';
       const candidateJob = data.job || {};
       const creatingCandidate = !candidate && candidateJob.operation === 'homologation_candidate' && ['queued', 'running'].includes(candidateJob.status);

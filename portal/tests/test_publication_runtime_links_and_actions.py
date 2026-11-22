@@ -33,6 +33,14 @@ class PublicationRuntimeLinksAndActionsTests(unittest.TestCase):
         self.assertIn('Alternar entre Publicações',panel);self.assertNotIn('Detalhes técnicos e versões legadas',panel)
         self.assertNotIn('Publicar nova versão',panel)
         self.assertNotIn('publication-new-version',panel)
+    def test_historical_open_link_waits_for_real_runtime_state(self):
+        panel=self.pub[self.pub.index('def publication_panel'):self.pub.index('def admin_publications')]
+        self.assertIn('data-publication-runtime-row',panel)
+        self.assertIn('data-publication-runtime-open',panel)
+        self.assertIn('data-publication-runtime-state',panel)
+        self.assertIn('Consultando runtime…',panel)
+        self.assertNotIn('else h(r.get("status") or "")',panel)
+
     def test_direct_publish_and_activation_actions_are_not_rendered(self):
         self.assertNotIn('value="publish_version"',self.pub)
         self.assertNotIn('value="activate_version"',self.pub)

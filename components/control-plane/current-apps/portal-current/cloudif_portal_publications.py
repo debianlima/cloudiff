@@ -1181,7 +1181,7 @@ def _historical_release_runtime_state(slug,row,detail):
         ku,kt,_=_clients();status,data=_post(ku+'/komodo/publication/release/status',{'project':slug,'public_number':int(row.get('public_number') or 0),'publication_number':int(row.get('publication_number') or 0)},kt,timeout=30)
         if status//100==2 and isinstance(data,dict) and data.get('ok') is True:
             online=bool(data.get('online'));healthy=bool(data.get('healthy'));is_active=bool(data.get('isActive'));exists=bool(data.get('exists',True))
-            return {'state':'online' if online and healthy else 'offline','online':online,'healthy':healthy,'canStart':not online,'canStop':online,'canDelete':(not online and not is_active),'legacy':True,'container':str(data.get('container') or ''),'exists':exists,'isActive':is_active,'deleteMode':'legacy-final'}
+            return {'state':'online' if online else 'offline','online':online,'healthy':healthy,'canStart':not online,'canStop':online,'canDelete':(not online and not is_active),'legacy':True,'container':str(data.get('container') or ''),'exists':exists,'isActive':is_active,'deleteMode':'legacy-final'}
     except Exception:pass
     return {'state':'offline','online':False,'healthy':False,'canStart':True,'canStop':False,'legacy':True}
 

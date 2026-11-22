@@ -135,6 +135,15 @@ class ReleaseFlowWizardUITests(unittest.TestCase):
         self.assertNotIn('>Publicar nova versão<',UI)
         self.assertIn('Alternar entre Publicações',UI);self.assertNotIn('Detalhes técnicos e versões legadas',UI)
 
+    def test_runtime_state_drives_history_badge_open_link_and_stop_button(self):
+        release=RELEASE_JS_PATH.read_text()
+        self.assertIn('const online = Boolean(runtimeState.online);',release)
+        self.assertIn('Online · atenção',release)
+        self.assertIn('data-publication-runtime-row',release)
+        self.assertIn('Offline · suba para abrir',release)
+        self.assertIn("production-history-stop",release)
+        self.assertNotIn('Boolean(runtimeState.online && runtimeState.healthy)',release)
+
     def test_primary_ui_has_one_publication_workspace_entry_point(self):
         controls=UI[UI.index('def _configuration_controls'):UI.index('def publication_panel')]
         tools=controls[controls.index('publication-release-flow__tools'):]

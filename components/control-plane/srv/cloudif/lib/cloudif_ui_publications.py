@@ -185,8 +185,10 @@ def publication_panel(slug, framework_hint=''):
         def table(items,legacy=False):
             trs=[]
             for r in items:
-                number=int(r.get('number') or 0);label=(f'D{number}' if legacy else f'P{number}')
-                trs.append(f'<tr><td>{h(label)}</td><td><code>{h((r.get("commit_sha") or "")[:12])}</code></td><td><a href="https://{h(r.get("version_hostname") or "")}/" target="_blank" rel="noopener">Abrir</a></td><td>{"ativa" if int(r.get("is_active") or 0)==1 else h(r.get("status") or "")}</td></tr>')
+                number=int(r.get('number') or 0);label=(f'D{number}' if legacy else f'P{number}');active_row=int(r.get('is_active') or 0)==1;url='https://'+str(r.get('version_hostname') or '')+'/' if r.get('version_hostname') else ''
+                open_cell=(f'<a href="{h(url)}" target="_blank" rel="noopener">Abrir</a>' if active_row and url else '<span class="cm-muted">Consultando…</span>')
+                state_cell=('Ativa · Online' if active_row else 'Consultando runtime…')
+                trs.append(f'<tr data-publication-runtime-row data-publication-number="{number}" data-publication-url="{h(url)}"><td>{h(label)}</td><td><code>{h((r.get("commit_sha") or "")[:12])}</code></td><td data-publication-runtime-open>{open_cell}</td><td data-publication-runtime-state>{h(state_cell)}</td></tr>')
             return '<div style="overflow:auto"><table><tr><th>Publicação</th><th>Commit</th><th>Endereço</th><th>Estado</th></tr>'+''.join(trs)+'</table></div>'
         canonical_html=table(p_rows) if p_rows else '<p class="small">Nenhuma publicação P concluída ainda.</p>'
         legacy_html=('<details class="publication-legacy-history"><summary>Histórico legado</summary>'+table(d_rows,True)+'</details>') if d_rows else ''
