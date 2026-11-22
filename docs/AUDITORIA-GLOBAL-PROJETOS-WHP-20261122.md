@@ -27,7 +27,7 @@ Nenhum runtime de projeto foi alterado nesta unidade.
 | `msha` | não configurado | n/a | nenhuma | n/a | nenhum runtime de publicação | **DRAFT / N/A** |
 | `paperclip` | W1 saudável após correção de healthcheck | hash `dfcaaf8...` alinhado | D1 legado permanece placeholder | n/a | resíduos W1 removidos; volume preservado | **PARCIAL — aguarda H→P humano** |
 | `sgrep-v2` | W1 real existe, mas read-model diz “não configurado” | source link `f29f752...` coincide com Komodo | nenhuma | n/a | runtime Preview fora do fluxo do Portal | **DRIFT DE READ-MODEL** |
-| `silvipro` | W2 saudável e reconhecido após remediação | alinhado `ad2273de...`, porém fonte Git é placeholder | D1 legado continua placeholder | n/a | P1/D2 têm conteúdo runtime-only divergente do Forgejo | **PARCIAL — requer decisão humana sobre fonte** |
+| `silvipro` | W1 contínuo saudável | alinhado `ad2273de...` | P1 real reconciliada + alias `silvipro` | não comprovado; P1 importada como legado | D1 histórico; D2 parado; W2 removido | **PARCIAL — aguarda novo H→P humano** |
 
 ## 1. Agenda Única — conforme
 
@@ -125,19 +125,19 @@ Corrigir a inicialização funcional no W1 primeiro. Não promover enquanto o W1
 
 Reconciliar `preview_status/release_flow_status` com `project_preview_source_links` e decidir explicitamente se o projeto continua draft ou passa a publicado. Não recriar o Preview existente para corrigir apenas o read-model.
 
-## 8. SilviPro — Produção placeholder e rotas inconsistentes
+## 8. SilviPro — W1 contínuo recuperado, P1 real reconciliada
 
 - Public number 1002.
-- D1 é a única publicação registrada como ativa.
-- Alias `silvipro.cloudiff.duckdns.org` responde 200, porém mostra `silvipro · primeiros passos` / `Seu projeto está publicado.` — placeholder da plataforma.
-- `1002-d1` retorna 502.
-- W1 e D2 redirecionam para `/cloudiff/portal/`, não para a aplicação.
-- Containers `cloudif-p1002-d2-web` e `cloudif-p1002-p1-publication-web` estão running/healthy, mas não correspondem ao modelo de release atual do banco.
-- O corpo de P1/D2 difere do alias estável, comprovando drift de roteamento/conteúdo.
+- W1 contínuo agora responde HTTP 200 e usa o checkout Git `ad2273de...`; chamadas `ensure` repetidas preservam W1, stack e container.
+- O bug v143 que incrementava Wn na recuperação foi corrigido materializando o v144 live; o container contínuo mantém alias Docker público `cloudif-p1002-w1-preview-web`.
+- P1 (`cloudif-p1002-p1-publication-web`) é a Produção real: possui `cloudif-p1002-active-web` e serve exatamente o mesmo conteúdo de `1002.cloudiff.duckdns.org` e `silvipro.cloudiff.duckdns.org`.
+- O Portal foi reconciliado: D1 ficou histórico/inativo e P1 foi importada como legado ativo, sem inventar Homologação nem marcar same-instance.
+- D2, sem alias ativo nem rota, foi parado; W2 residual foi removido do Publisher.
+- `assistente-interativo` não possui ACL do projeto; a próxima H/P pelo contrato atual deve ser iniciada pelo proprietário.
 
-### Remediação segura
+### Próximo passo
 
-Primeiro mapear commit/origem de D2/P1 e provar rollback; depois restaurar um W1 de aplicação real. Não parar D2/P1 até entender se alguma rota interna ainda depende deles. Só então criar H moderna e substituir o placeholder D1.
+O proprietário deve enviar o W1 atual para Homologação e promover essa mesma instância para a próxima P. Só após a nova P saudável, P1 passa a histórico/offline. Evidência detalhada: `docs/REMEDIACAO-SILVIPRO-P1002-20261122.md`.
 
 ## Resíduos de host relevantes
 

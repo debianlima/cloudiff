@@ -180,3 +180,9 @@ Após estabilizar o projeto de referência, auditar **todos os projetos cadastra
 - evidência e rollback.
 
 Nenhum projeto deve ser marcado `conforme` apenas porque responde HTTP 200; a auditoria precisa provar identidade, rota, estado e capacidade de rollback.
+
+## 12. Recuperação do Preview fixo não incrementa Wn
+
+Uma falha/recriação do container interno **não cria um novo Wn**. `ensure` deve restaurar o mesmo slot público. No runtime contínuo v144, o container interno pode ter nome estável (`cloudif-p<numero>-preview-web`), mas precisa manter o alias Docker `cloudif-p<numero>-w1-preview-web` (ou a identidade pública Wn equivalente) esperado pelo gateway.
+
+Incrementar geração é uma operação deliberada de mudança de identidade e não deve acontecer como efeito colateral de health/recovery. Teste obrigatório: executar `ensure` duas vezes e comprovar mesmo Wn, mesmo stack e mesmo container ID.

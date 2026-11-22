@@ -726,3 +726,12 @@ Os módulos `cloudif_portal_publications.py` (app/lib), `cloudif_portal_v2_coexi
 - Quatro containers exited de canary/rollback foram removidos após backup; volume `cloudif-p1025-w1-paperclip-data` preservado.
 - Produção D1 não foi alterada. `assistente-interativo` não tem ACL do projeto; H/P moderna ficou como gate humano.
 - Evidência: `docs/REMEDIACAO-PAPERCLIP-W1-HEALTH-20261122.md`.
+
+## SilviPro P1002 — W1 contínuo e P1 reconciliada — 22/11/2026
+
+- Komodo live recebeu incrementalmente o bloco v144 de Preview contínuo; o canônico ganhou alias Docker público W1 para compatibilidade com o publication-gateway.
+- W2 transitório foi migrado de volta para W1. `ensure` repetido preserva W1/stack/container ID; Git alinhado em `ad2273de...`.
+- Portal deixou de apontar para D1 e passou a refletir P1 real, sem inventar H: P1 marcada `legacyImported=true` e `sameInstancePromotionRequired=false`.
+- P1 versionada foi registrada no Publisher; D2 residual foi parado; W1/P1/1002/silvipro permanecem HTTP 200 com conteúdo idêntico.
+- `assistente-interativo` não possui ACL do projeto; próxima H/P same-instance é gate do proprietário.
+- Evidência: `docs/REMEDIACAO-SILVIPRO-P1002-20261122.md`; patch live: `compat/cloudiff-komodo-v144-fixed-preview-live.patch`.
