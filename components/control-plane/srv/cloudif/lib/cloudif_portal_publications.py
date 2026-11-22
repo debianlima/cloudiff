@@ -348,6 +348,7 @@ def _publish_linked_compose_homologated_candidate(slug,candidate,project,publica
     previous_dep=str((previous_production or {}).get('deploymentId') or '');previous_pub=int((previous_production or {}).get('publicationNumber') or 0)
     if previous_dep and previous_dep!=deployment_id:
         _multiservice_deactivate(slug,previous_dep,'substituída pela Produção P'+str(publication),trace+'-deactivate-previous-p')
+        _wait_deployment_inactive(previous_dep)
         try:_multiservice_deactivate_bridge(slug,previous_dep,'publication',trace+'-remove-previous-p-bridge')
         except Exception:pass
         if previous_pub:_publisher_delete_stage(num,'publication',previous_pub,npm_token)
@@ -1369,6 +1370,7 @@ def rollback_publication(slug,publication_number,user):
             _multiservice_reactivate(slug,target_dep,'commit',target_digest,trace+'-commit')
             if current_dep and current_dep!=target_dep:
                 _multiservice_deactivate(slug,current_dep,'substituída pelo rollback para P'+str(int(publication_number)),trace+'-deactivate-current')
+                _wait_deployment_inactive(current_dep)
                 try:_multiservice_deactivate_bridge(slug,current_dep,'publication',trace+'-remove-current-bridge')
                 except Exception:pass
                 if current_number:_publisher_delete_stage(num,'publication',current_number,nt)
@@ -2147,3 +2149,151 @@ def _rehydrate_historical_compose_runtime(slug,publication,row,detail):
     if status//100!=2 or not isinstance(result,dict) or result.get('ok') is not True:raise RuntimeError('Não foi possível reidratar a publicação histórica pelo snapshot aprovado.')
     if str(result.get('deployment_id') or '')!=deployment_id or str(result.get('snapshot_id') or '')!=snapshot_id or str(result.get('snapshot_digest') or '')!=snapshot_digest or str(result.get('environment') or '')!='production' or result.get('rehydratedThroughHomologation') is not True:raise RuntimeError('A reidratação histórica retornou identidade divergente.')
     return result
+
+# Reconciled live lifecycle helpers — 2026-11-22
+def _active_compose_environment_target(slug,environment):
+    con=sqlite3.connect(DB);con.row_factory=sqlite3.Row;_ensure_schema(con)
+    try:
+        if environment=='homologation':
+            rows=con.execute("select * from publication_candidates where project_slug=? and status in ('awaiting_homologation','homologated') order by candidate_number desc",(slug,)).fetchall()
+            for row in rows:
+                meta=_candidate_runtime_metadata(row);dep=str(meta.get('homologationDeploymentId') or '')
+                if meta.get('sameInstancePromotionRequired') is True and re.fullmatch(r'dep_[a-f0-9]{24}',dep):
+                    return {'deploymentId':dep,'rowId':int(row['id']),'candidateNumber':int(row['candidate_number']),'hostname':str(row['hostname'] or ''),'kind':'candidate'}
+            raise RuntimeError('Nenhuma Homologação ativa existe para receber variáveis.')
+        if environment=='production':
+            release=con.execute("select * from production_releases where project_slug=? and is_active=1 and status='published' order by publication_number desc limit 1",(slug,)).fetchone()
+            if not release:raise RuntimeError('Nenhuma Produção ativa existe para receber variáveis.')
+            candidate=con.execute('select * from publication_candidates where project_slug=? and candidate_number=?',(slug,int(release['candidate_number']))).fetchone()
+            meta=_candidate_runtime_metadata(candidate) if candidate else {};dep=str(meta.get('homologationDeploymentId') or '')
+            if not re.fullmatch(r'dep_[a-f0-9]{24}',dep):
+                publication=con.execute('select detail_json from project_publications where project_slug=? and is_active=1 order by id desc limit 1',(slug,)).fetchone()
+                try:detail=json.loads(publication['detail_json'] or '{}') if publication else {}
+                except Exception:detail={}
+                dep=str(detail.get('productionDeploymentId') or '')
+            if not re.fullmatch(r'dep_[a-f0-9]{24}',dep):raise RuntimeError('Produção ativa não possui deployment configurável.')
+            return {'deploymentId':dep,'releaseId':int(release['id']),'candidateNumber':int(release['candidate_number']),'publicationNumber':int(release['publication_number']),'hostname':str(release['stable_hostname'] or release['hostname'] or ''),'kind':'release'}
+        raise ValueError('Ambiente não possui target Compose configurável.')
+    finally:con.close()
+
+def _compose_snapshot_promote(slug,deployment_id,snapshot_id,snapshot_digest,trace,execution_material):
+    client=_multiservice_clients();plan_payload={'project_slug':slug,'deployment_id':deployment_id,'snapshot_id':snapshot_id,'snapshot_digest':snapshot_digest,'trace_id':trace}
+    status,plan=_bearer_json('POST',client['deploymentUrl']+'/v1/compose-promotion-plan',client['deploymentToken'],plan_payload,timeout=75)
+    if status!=200 or plan.get('ok') is not True:raise RuntimeError('O plano de promoção da Homologação não pôde ser criado.')
+    blockers=plan.get('blockers') or []
+    if plan.get('execution_allowed') is not True or blockers:raise RuntimeError('Promoção da Homologação bloqueada: '+','.join(str(x) for x in blockers[:12]))
+    if plan.get('sameDeploymentRequired') is not True or plan.get('containerRecreationForbidden') is not True:raise RuntimeError('O plano não garante promoção da mesma instância homologada.')
+    digest=str(plan.get('promotion_plan_digest') or '')
+    if not re.fullmatch(r'[a-f0-9]{64}',digest):raise RuntimeError('Digest do plano de promoção inválido.')
+    execution_id='exec_'+hashlib.sha256(str(execution_material).encode()).hexdigest()[:24]
+    payload={**plan_payload,'promotion_plan_digest':digest,'execution_id':execution_id}
+    status,result=_bearer_json('POST',client['deploymentUrl']+'/v1/compose-promotion-execute',client['deploymentToken'],payload,timeout=300)
+    if status//100!=2 or result.get('ok') is not True:raise RuntimeError('O Deployment Broker não conseguiu promover a Homologação em Produção.')
+    if str(result.get('deployment_id') or '')!=deployment_id or result.get('sameHomologatedDeployment') is not True or result.get('containersRecreated') is not False:raise RuntimeError('A promoção alterou a identidade da Homologação.')
+    return plan,result
+
+def _legacy_publication_deactivate(slug,public_number,publication_number):
+    ku,kt,_=_clients();payload={'project':slug,'public_number':int(public_number),'publication_number':int(publication_number)}
+    status,result=_post(ku+'/komodo/publication/deactivate-legacy',payload,kt,timeout=90)
+    if status//100!=2 or not isinstance(result,dict) or result.get('ok') is not True:raise RuntimeError('Não foi possível desativar a Produção legada anterior.')
+    return result
+
+def _linked_compose_previous_active_homologation(slug):
+    con=sqlite3.connect(DB);con.row_factory=sqlite3.Row;_ensure_schema(con)
+    row=con.execute("select * from publication_candidates where project_slug=? and status in ('awaiting_homologation','homologated') order by candidate_number desc limit 1",(slug,)).fetchone();con.close()
+    if not row:return None
+    meta=_candidate_runtime_metadata(row);dep=str(meta.get('homologationDeploymentId') or '')
+    return {'candidateNumber':int(row['candidate_number']),'deploymentId':dep} if re.fullmatch(r'dep_[a-f0-9]{24}',dep) else None
+
+def _multiservice_deactivate(slug,deployment_id,reason,trace):
+    client=_multiservice_clients();payload={'project_slug':slug,'deployment_id':deployment_id,'reason':reason,'trace_id':trace}
+    status,result=_bearer_json('POST',client['deploymentUrl']+'/v1/multiservice-deactivate',client['deploymentToken'],payload,timeout=180)
+    if status//100!=2 or not isinstance(result,dict) or result.get('ok') is not True:raise RuntimeError('Não foi possível desativar o deployment anterior.')
+    return result
+
+def _multiservice_deactivate_bridge(slug,deployment_id,stage,trace):
+    client=_multiservice_clients();payload={'project_slug':slug,'deployment_id':deployment_id,'stage':stage,'trace_id':trace}
+    status,result=_bearer_json('POST',client['deploymentUrl']+'/v1/multiservice-publication-deactivate',client['deploymentToken'],payload,timeout=90)
+    if status//100!=2 or not isinstance(result,dict) or result.get('ok') is not True:raise RuntimeError('Não foi possível desativar o bridge '+stage+' do deployment.')
+    return result
+
+def _multiservice_reactivate(slug,deployment_id,phase,environment_digest,trace):
+    client=_multiservice_clients();payload={'project_slug':slug,'deployment_id':deployment_id,'phase':phase,'environment_digest':environment_digest,'trace_id':trace}
+    status,result=_bearer_json('POST',client['deploymentUrl']+'/v1/multiservice-reactivate',client['deploymentToken'],payload,timeout=360)
+    if status//100!=2 or not isinstance(result,dict) or result.get('ok') is not True:
+        error=result.get('error') if isinstance(result,dict) else {}
+        message=error.get('message') if isinstance(error,dict) else ''
+        raise RuntimeError(message or 'Não foi possível reativar a publicação histórica.')
+    return result
+
+def _multiservice_remove_deployment(slug,deployment_id):
+    client=_multiservice_clients();status,result=_bearer_json('DELETE',client['deploymentUrl']+'/v1/deployments/'+urllib.parse.quote(str(deployment_id),safe=''),client['deploymentToken'],timeout=120)
+    if status//100!=2 or not isinstance(result,dict) or result.get('ok') is not True:raise RuntimeError('Não foi possível excluir os containers da publicação histórica.')
+    return result
+
+def _publisher_delete_stage(public_number,stage,number,npm_token):
+    if stage not in {'preview','homologation','publication'}:raise RuntimeError('Estágio inválido para remoção no Publisher.')
+    status,data=_post('http://10.62.91.3/stage/delete',{'public_number':int(public_number),'stage':stage,'number':int(number)},npm_token,host='cloudif-publisher.internal',timeout=120)
+    if status//100!=2 or not isinstance(data,dict) or data.get('ok') is not True:raise RuntimeError('O Publisher não conseguiu remover o estágio '+stage+'.')
+    return {'ok':True,'removed':bool(data.get('removed')),'certificatePreserved':bool(data.get('certificate_preserved'))}
+
+def apply_environment_to_runtime(slug,environment,actor='portal'):
+    environment=str(environment or '').strip().lower()
+    if environment not in {'preview','homologation','production'}:raise ValueError('Ambiente inválido.')
+    pc=_publication_config();runtime=pc.execution_environment_services(slug,environment)
+    values=runtime.get('valuesByService') or {};names=runtime.get('managedNamesByService') or {}
+    material={'managed_names_by_service':names,'values_by_service':values};variables_digest=hashlib.sha256(json.dumps(material,ensure_ascii=False,sort_keys=True,separators=(',',':')).encode()).hexdigest()
+    try:
+        if environment=='preview':
+            if slug=='agenda-unica' or _is_linked_compose_project(slug):
+                ku,kt,_=_clients();status,result=_post(ku+'/komodo/project/linked-preview/environment/apply',{'project':slug,'actor':actor,'values_by_service':values,'managed_names_by_service':names,'variables_digest':variables_digest,'environment_revision':int(runtime['environmentRevision']),'environment_digest':str(runtime['environmentDigest'])},kt,timeout=360)
+                if status//100!=2 or result.get('ok') is not True:raise RuntimeError(str(result.get('message') or result.get('error') or 'Falha ao aplicar variáveis no Preview.'))
+            else:
+                con=sqlite3.connect(DB);con.row_factory=sqlite3.Row;_ensure_schema(con);num=_number(con,slug);con.close();flat={}
+                for service_values in values.values():
+                    for key,value in service_values.items():
+                        if key in flat and flat[key]!=value:raise RuntimeError('Variável global possui valores conflitantes entre serviços: '+key)
+                        flat[key]=value
+                result=_runtime_preview(slug,num,'ensure',{'actor':actor,'environment_revision':int(runtime['environmentRevision']),'environment_digest':str(runtime['environmentDigest']),'environment_variables':flat},240)
+            return {'ok':True,'environment':'preview','environmentRevision':int(runtime['environmentRevision']),'environmentDigest':str(runtime['environmentDigest']),'changedServices':result.get('changedServices') or [],'containersRecreated':bool(result.get('containersRecreated')),'databasePreserved':bool(result.get('databasePreserved',True)),'secretValuesIncluded':False}
+        target=_active_compose_environment_target(slug,environment);base,token=_executor_runtime_client()
+        payload={'deployment_id':target['deploymentId'],'project_slug':slug,'environment':environment,'values_by_service':values,'managed_names_by_service':names,'variables_digest':variables_digest,'runtime_environment_digest':str(runtime.get('runtimeEnvironmentDigest') or runtime['environmentDigest']),'environment_digest':str(runtime['environmentDigest'])}
+        status,result=_bearer_json('POST',base+'/v1/compose-deployments/reconfigure',token,payload,timeout=360)
+        if status//100!=2 or result.get('ok') is not True:
+            error=result.get('error') or {};message=error.get('message') if isinstance(error,dict) else str(error or '')
+            raise RuntimeError(message or 'Falha ao aplicar variáveis no runtime do estágio.')
+        if target.get('hostname') and not _external_ok(str(target['hostname'])):raise RuntimeError('Runtime reconfigurado, mas a validação HTTPS do estágio falhou.')
+        con=sqlite3.connect(DB);con.row_factory=sqlite3.Row;_ensure_schema(con)
+        if environment=='homologation':con.execute('update publication_candidates set environment_revision=?,environment_digest=? where id=?',(int(runtime['environmentRevision']),str(runtime['environmentDigest']),int(target['rowId'])))
+        else:
+            con.execute('update production_releases set environment_revision=?,environment_digest=? where id=?',(int(runtime['environmentRevision']),str(runtime['environmentDigest']),int(target['releaseId'])))
+            prow=con.execute('select id,detail_json from project_publications where project_slug=? and is_active=1 order by id desc limit 1',(slug,)).fetchone()
+            if prow:
+                try:detail=json.loads(prow['detail_json'] or '{}')
+                except Exception:detail={}
+                detail['environmentRevision']=int(runtime['environmentRevision']);detail['environmentDigest']=str(runtime['environmentDigest']);con.execute('update project_publications set detail_json=? where id=?',(json.dumps(detail,ensure_ascii=False,separators=(',',':')),int(prow['id'])))
+        con.commit();con.close()
+        return {'ok':True,'environment':environment,'deploymentId':target['deploymentId'],'environmentRevision':int(runtime['environmentRevision']),'environmentDigest':str(runtime['environmentDigest']),'changedServices':result.get('changedServices') or [],'deploymentIdentityPreserved':bool(result.get('deploymentIdentityPreserved')),'snapshotPreserved':bool(result.get('snapshotPreserved')),'volumesPreserved':bool(result.get('volumesPreserved')),'containersRecreated':bool(result.get('containersRecreated')),'secretValuesIncluded':False}
+    finally:
+        for service_values in values.values():
+            if isinstance(service_values,dict):service_values.clear()
+        runtime['valuesByService']={}
+
+def environment_runtime_target(slug,environment):
+    environment=str(environment or '').strip().lower()
+    if environment=='preview':
+        if slug=='agenda-unica' or _is_linked_compose_project(slug):return {'environment':'preview','kind':'linked-preview'}
+        return {'environment':'preview','kind':'preview'}
+    if environment in {'homologation','production'}:
+        target=_active_compose_environment_target(slug,environment);target['environment']=environment;return target
+    raise ValueError('Ambiente inválido.')
+
+def _wait_deployment_inactive(deployment_id,timeout_seconds=45):
+    deadline=time.time()+max(5,int(timeout_seconds));last={}
+    while time.time()<deadline:
+        last=_compose_deployment_status(deployment_id)
+        status=str(last.get('status') or '').lower()
+        if status in {'inactive','removed'}:
+            return {'ok':True,'deploymentId':deployment_id,'status':status}
+        time.sleep(1.0)
+    raise RuntimeError('A Produção anterior não confirmou estado Offline após a ativação da nova Produção.')

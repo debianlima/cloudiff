@@ -259,3 +259,13 @@ Terminal de H/P `compose-snapshot` é resolvido por `deployment_id`, projeto e s
 ### Invalidação do workspace após promoção/reconciliação
 
 A interface deve considerar a identidade da Produção ativa como a combinação `Pn + deployment_id`, e não apenas o último status do job. Ao detectar mudança dessa identidade, o Portal invalida/recarrega as ferramentas do ambiente (Terminal, PHP, Node.js, Site e Variáveis). Isso evita manter referências da Produção anterior após cutover ou recuperação parcial.
+
+### Cutover: Produção anterior realmente Offline
+
+Depois que a nova P passa por health/readback e assume o alias principal, a P anterior deve ser desativada e o job deve aguardar confirmação do Executor em `inactive` ou `removed`. Não considerar o cutover concluído apenas porque a requisição de desativação foi aceita. Isso evita janela em que duas Produções permanecem consumindo memória.
+
+### Aliases e preservação de Host
+
+O Publisher deve preservar o host público de aliases (`proxy_set_header Host $host` e `X-Forwarded-Host $host`). O alias pode encaminhar internamente para o endereço estável numérico, mas não deve substituir a identidade HTTP pública, pois aplicações podem comparar `Origin` e `Host` para CSRF/same-origin.
+
+Variáveis públicas específicas do projeto, como `APP_BASE_URL` e `ALLOWED_ORIGINS`, continuam pertencendo ao estágio. Se o operador quiser valores próprios da Produção, deve alterá-los explicitamente em P; o Portal aplica a configuração à Produção ativa e atualiza revision/digest sem alterar secrets.

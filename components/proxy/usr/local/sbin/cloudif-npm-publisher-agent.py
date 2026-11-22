@@ -228,7 +228,7 @@ server {{
     '    }\n'
     '    location / {\n'
     '        proxy_http_version 1.1;\n'
-    f'        proxy_set_header Host {target};\n'
+    '        proxy_set_header Host $host;\n'
     '        proxy_set_header X-Forwarded-Host $host;\n'
     '        proxy_set_header X-Forwarded-Proto https;\n'
     '        proxy_pass http://10.62.91.2:18150;\n'

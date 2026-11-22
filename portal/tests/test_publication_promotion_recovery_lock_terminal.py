@@ -68,6 +68,12 @@ class PublicationPromotionRecoveryTests(unittest.TestCase):
         self.assertIn('samples.append(',body)
         self.assertIn('executemany(',body)
 
+    def test_cutover_waits_previous_production_inactive(self):
+        self.assertIn('def _wait_deployment_inactive(',PUB)
+        self.assertIn("status in {'inactive','removed'}",PUB)
+        self.assertIn("_wait_deployment_inactive(previous_dep)",PUB)
+        self.assertIn("_wait_deployment_inactive(current_dep)",PUB)
+
     def test_compose_terminal_uses_deployment_identity(self):
         self.assertIn("payload['deployment_id']=deployment_id",PUB)
         self.assertIn("terminalSource':'compose_deployment'",PUB)
