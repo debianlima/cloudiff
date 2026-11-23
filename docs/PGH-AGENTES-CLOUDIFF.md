@@ -178,3 +178,9 @@ Fontes fornecidas pelo operador:
 - prompt local WORK SSH/CloudIFF: somente projeção sanitizada é documentada; credenciais, tokens e senhas não entram em Git/Atlas/memória.
 
 Alteração de prompt/instrução compartilhada exige inventário de delta, preservação de aprendizado, atualização deste catálogo, Atlas e memórias; nunca substituir silenciosamente nem elevar proposta a norma sem decisão humana.
+
+## Ferramentas de runtime por estágio — 23/11/2026
+
+Norma: `docs/PADRAO-CLOUDIFF-FERRAMENTAS-RUNTIME-ESTAGIO-20261123.md`.
+
+PHP, Node.js e Terminal devem resolver o mesmo `project + stageCode + runtime identity` selecionado; não derivar `api/web/app` por convenção, não copiar Wn de outro projeto e não recriar URL/container para diagnóstico. Preview linked-compose usa stack real; H/P Compose usam `services/routes` do Executor; Preview composto usa par numerado app/web; P legada usa container versionado exato. Ausência de PHP/Node é `available=false`, não erro. Terminal nunca contorna ACL.

@@ -5539,7 +5539,7 @@ def _rd_runtime_info_with_reconcile(project, kind, environment='', user=None):
     if environment in {'preview','homologation','production'}:
         import cloudif_portal_publications as publications
         target=publications.runtime_diagnostic_target(project['slug'],user or {},environment)
-        payload.update({'environment':environment,'stage_code':str(target.get('stageCode') or ''),'container_candidates':target.get('containers') or []})
+        payload.update({'environment':environment,'stage_code':str(target.get('stageCode') or ''),'public_number':int(target.get('publicNumber') or project.get('public_number') or 0),'container_candidates':target.get('containers') or [],'deployment_id':str(target.get('deploymentId') or ''),'stack_id':str(target.get('stackId') or '')})
         return _rd_agent('/komodo/project/runtime-info',payload,timeout=45)
     try:
         return _rd_agent('/komodo/project/runtime-info',payload,timeout=45)

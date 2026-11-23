@@ -243,6 +243,29 @@ def _compose_deployment_status(deployment_id):
     return data
 
 
+def _compose_deployment_runtime_targets(slug,deployment_id):
+    deployment_id=str(deployment_id or '').strip()
+    if not re.fullmatch(r'dep_[a-f0-9]{24}',deployment_id):raise RuntimeError('Deployment Compose inválido para diagnóstico.')
+    runtime=_compose_deployment_status(deployment_id)
+    if str(runtime.get('project_slug') or '')!=str(slug):raise RuntimeError('O deployment Compose pertence a outro projeto.')
+    services=runtime.get('services') if isinstance(runtime.get('services'),list) else []
+    routes=runtime.get('routes') if isinstance(runtime.get('routes'),list) else []
+    routed=[]
+    for route in routes:
+        service=str((route or {}).get('service') or '').strip()
+        if service and service not in routed:routed.append(service)
+    db_like={'db','database','postgres','postgresql','mysql','mariadb','mongo','mongodb','redis','valkey'}
+    rows=[]
+    for item in services:
+        if not isinstance(item,dict):continue
+        service=str(item.get('service') or '').strip();container=str(item.get('container_name') or '').strip()
+        if not service or not re.fullmatch(r'[A-Za-z0-9_.-]+',container):continue
+        rows.append({'service':service,'container':container,'routed':service in routed,'databaseLike':service.lower() in db_like})
+    rows.sort(key=lambda x:(0 if x['routed'] else 1,1 if x['databaseLike'] else 0,x['service'],x['container']))
+    if not rows:raise RuntimeError('O Executor não retornou containers válidos para este deployment.')
+    return {'deploymentId':deployment_id,'status':str(runtime.get('status') or ''),'environment':str(runtime.get('environment') or ''),'targets':rows,'containers':[x['container'] for x in rows],'services':[x['service'] for x in rows]}
+
+
 def _compose_publication_preflight(slug,candidate,publication):
     publication=int(publication);candidate_number=int(candidate['candidate_number']);deploy_number=int(candidate['deploy_number']);num=int(candidate['public_number']);meta=_candidate_runtime_metadata(candidate);deployment_id=str(meta.get('homologationDeploymentId') or '')
     if not re.fullmatch(r'dep_[a-f0-9]{24}',deployment_id):raise RuntimeError('A Homologação não possui deployment válido para promoção.')
@@ -890,31 +913,42 @@ def runtime_diagnostic_target(slug,user,environment='preview'):
     if environment=='preview':
         try:
             if _is_linked_compose_project(slug):
-                binding=_linked_compose_binding(con,slug);base=str(binding.get('stackName') or ('cloudif-'+slug));generation=_fixed_preview_generation(slug);stage_code='W'+str(generation);containers=[base+'-api-1',base+'-web-1']
+                binding=_linked_compose_binding(con,slug);status=_linked_compose_status(slug,num,binding);stage_code=str(status.get('stageCode') or ('W'+str(_fixed_preview_generation(slug))));candidate=str(status.get('container') or '').strip();containers=[candidate] if candidate else []
+                stack_id=str(status.get('stackId') or binding.get('stackId') or '')
             else:
                 status=preview_status(slug,user);stage_code=str(status.get('stageCode') or 'W1');listed=status.get('containers') if isinstance(status.get('containers'),list) else [];containers=[str(x) for x in listed if str(x)]
                 if not containers:
                     candidate=str(status.get('container') or status.get('bridge') or '');containers=[candidate] if candidate else []
+                match=re.fullmatch(r'W([1-9][0-9]*)',stage_code.strip().upper())
+                if match:
+                    generation=int(match.group(1));stage_bridge=f'cloudif-p{num}-w{generation}-preview-web';composite_app=f'cloudif-p{num}-w{generation}-preview-app'
+                    if stage_bridge in containers and composite_app not in containers:containers.insert(0,composite_app)
         finally:con.close()
-        return {'ok':True,'project':slug,'environment':environment,'stageCode':stage_code,'containers':containers,'secretValuesIncluded':False}
+        result={'ok':True,'project':slug,'publicNumber':num,'environment':environment,'stageCode':stage_code,'containers':containers,'secretValuesIncluded':False}
+        if 'stack_id' in locals() and stack_id:result['stackId']=stack_id
+        return result
     if environment=='homologation':
         row=con.execute("select candidate_number,deploy_number,stage_code,runtime_diff_json from publication_candidates where project_slug=? and status in ('awaiting_homologation','homologated') order by candidate_number desc limit 1",(slug,)).fetchone()
         if not row:con.close();raise RuntimeError('Nenhuma Homologação ativa está disponível para diagnóstico.')
         try:detail=json.loads(row['runtime_diff_json'] or '{}')
         except Exception:detail={}
         deployment_id=str(detail.get('homologationDeploymentId') or '');stage_code=str(row['stage_code'] or ('H'+str(int(row['candidate_number'] or 0))))
-        if re.fullmatch(r'dep_[a-f0-9]{24}',deployment_id):prefix='cloudif-'+deployment_id.replace('_','-');containers=[prefix+'-api',prefix+'-web']
-        else:containers=[f'cloudif-p{num}-d{int(row["deploy_number"] or 0)}-web']
-        con.close();return {'ok':True,'project':slug,'environment':environment,'stageCode':stage_code,'containers':containers,'secretValuesIncluded':False}
+        if re.fullmatch(r'dep_[a-f0-9]{24}',deployment_id):
+            targets=_compose_deployment_runtime_targets(slug,deployment_id);containers=targets['containers']
+            con.close();return {'ok':True,'project':slug,'publicNumber':num,'environment':environment,'stageCode':stage_code,'containers':containers,'deploymentId':deployment_id,'serviceTargets':targets['targets'],'secretValuesIncluded':False}
+        containers=[f'cloudif-p{num}-d{int(row["deploy_number"] or 0)}-web']
+        con.close();return {'ok':True,'project':slug,'publicNumber':num,'environment':environment,'stageCode':stage_code,'containers':containers,'secretValuesIncluded':False}
     row=con.execute("select publication_number,deploy_number,stage_code from production_releases where project_slug=? and is_active=1 and status='published' order by publication_number desc limit 1",(slug,)).fetchone()
     if not row:con.close();raise RuntimeError('Nenhuma Produção ativa está disponível para diagnóstico.')
     pubrow=con.execute('select detail_json from project_publications where project_slug=? and deploy_number=?',(slug,int(row['deploy_number'] or 0))).fetchone();con.close()
     try:detail=json.loads(pubrow['detail_json'] or '{}') if pubrow else {}
     except Exception:detail={}
-    deployment_id=str(detail.get('productionDeploymentId') or '');publication=int(row['publication_number'] or 0);stage_code=str(row['stage_code'] or ('P'+str(publication)))
-    if re.fullmatch(r'dep_[a-f0-9]{24}',deployment_id):prefix='cloudif-'+deployment_id.replace('_','-');containers=[prefix+'-api',prefix+'-web']
-    else:containers=[f'cloudif-p{num}-p{publication}-publication-web']
-    return {'ok':True,'project':slug,'environment':environment,'stageCode':stage_code,'containers':containers,'secretValuesIncluded':False}
+    deployment_id=str(detail.get('productionDeploymentId') or detail.get('homologationDeploymentId') or '');publication=int(row['publication_number'] or 0);stage_code=str(row['stage_code'] or ('P'+str(publication)))
+    if re.fullmatch(r'dep_[a-f0-9]{24}',deployment_id):
+        targets=_compose_deployment_runtime_targets(slug,deployment_id);containers=targets['containers']
+        return {'ok':True,'project':slug,'publicNumber':num,'environment':environment,'stageCode':stage_code,'containers':containers,'deploymentId':deployment_id,'serviceTargets':targets['targets'],'secretValuesIncluded':False}
+    containers=[f'cloudif-p{num}-p{publication}-publication-web']
+    return {'ok':True,'project':slug,'publicNumber':num,'environment':environment,'stageCode':stage_code,'containers':containers,'secretValuesIncluded':False}
 
 
 def recreate_preview(slug,user,source='production'):
@@ -1996,26 +2030,36 @@ def preview_terminal(slug,user):
         row=con.execute('select * from project_preview_source_links where project_slug=?',(slug,)).fetchone();source_link=dict(row) if row else None
     except sqlite3.Error:source_link=None
     if _is_linked_compose_project(slug):
-        binding=_linked_compose_binding(con,slug);generation=_fixed_preview_generation(slug)
-        linked_compose={'stack_id':str(binding.get('stackId') or ''),'stack_name':str(binding.get('stackName') or ''),'service':'api','stage_code':'W'+str(generation)}
+        binding=_linked_compose_binding(con,slug);status=_linked_compose_status(slug,num,binding);generation=int(status.get('generation') or _fixed_preview_generation(slug))
+        linked_compose={'stack_id':str(binding.get('stackId') or ''),'stack_name':str(binding.get('stackName') or ''),'container':str(status.get('container') or ''),'stage_code':str(status.get('stageCode') or ('W'+str(generation)))}
     con.close();ku,kt,_=_clients();payload={'project':slug,'public_number':num,'actor':user.get('username') or 'portal'}
     if linked_compose and linked_compose.get('stack_id'):
         payload['linked_compose']=linked_compose
     elif source_link and str(source_link.get('status') or '').lower() in {'online','ready','healthy'} and str(source_link.get('app_container') or ''):
         payload['source_link']={'app_container':str(source_link.get('app_container') or ''),'source_commit':str(source_link.get('source_commit') or ''),'stage_code':str(source_link.get('stage_code') or 'W1')}
+    else:
+        current=preview_status(slug,user);stage=str(current.get('stageCode') or 'W1').strip().upper();match=re.fullmatch(r'W([1-9][0-9]*)',stage);bridge=str(current.get('container') or current.get('bridge') or '')
+        if match:
+            generation=int(match.group(1));expected_bridge=f'cloudif-p{num}-w{generation}-preview-web'
+            if bridge==expected_bridge:payload['composite_app']={'container':f'cloudif-p{num}-w{generation}-preview-app','stage_code':stage}
     status,data=_post(ku+'/komodo/project/preview/terminal',payload,kt,timeout=60)
     if status//100!=2 or data.get('ok') is not True:raise RuntimeError(str(data.get('message') or 'O terminal do Preview está temporariamente indisponível.'))
     container=str(data.get('container') or '');terminal=str(data.get('terminal') or '');generation=int(data.get('generation') or 1)
     if data.get('linkedCompose') is True:
-        expected_stack=str((linked_compose or {}).get('stack_id') or '');service=str(data.get('service') or '')
-        if generation<1 or str(data.get('stack_id') or '')!=expected_stack or service!='api' or not container or not terminal or data.get('target_mode')!='stack':raise RuntimeError('linked_compose_preview_terminal_contract_invalid')
+        expected_stack=str((linked_compose or {}).get('stack_id') or '');expected_container=str((linked_compose or {}).get('container') or '');service=str(data.get('service') or '');expected_stage=str((linked_compose or {}).get('stage_code') or ('W'+str(generation)))
+        if generation<1 or str(data.get('stack_id') or '')!=expected_stack or (expected_container and container!=expected_container) or not service or not container or not terminal or data.get('target_mode')!='stack' or str(data.get('stageCode') or '')!=expected_stage:raise RuntimeError('linked_compose_preview_terminal_contract_invalid')
         target='https://komodoiff.duckdns.org/stacks/'+urllib.parse.quote(expected_stack,safe='')+'/service/'+urllib.parse.quote(service,safe='')+'/terminal/'+urllib.parse.quote(terminal,safe='')
-        return {'ok':True,'project':slug,'public_number':num,'generation':generation,'stageCode':'W'+str(generation),'container':container,'stackId':expected_stack,'terminalUrl':target,'terminalReady':True,'terminalSource':'linked_compose_preview_api','linkedCompose':True,'secretValuesIncluded':False,'secretReferencesIncluded':False}
+        return {'ok':True,'project':slug,'public_number':num,'generation':generation,'stageCode':expected_stage,'container':container,'stackId':expected_stack,'service':service,'terminalUrl':target,'terminalReady':True,'terminalSource':'linked_compose_preview_service','linkedCompose':True,'secretValuesIncluded':False,'secretReferencesIncluded':False}
     if data.get('sourceLinked') is True:
         expected=str((source_link or {}).get('app_container') or '');server_id=str(data.get('server_id') or '')
         if generation<1 or container!=expected or not server_id or not terminal or data.get('target_mode')!='container':raise RuntimeError('source_linked_preview_terminal_contract_invalid')
         target='https://komodoiff.duckdns.org/servers/'+urllib.parse.quote(server_id,safe='')+'/container/'+urllib.parse.quote(container,safe='')+'/terminal/'+urllib.parse.quote(terminal,safe='')
         return {'ok':True,'project':slug,'public_number':num,'generation':generation,'stageCode':'W'+str(generation),'container':container,'terminalUrl':target,'terminalReady':True,'terminalSource':'source_linked_preview_app','sourceLinked':True,'secretValuesIncluded':False,'secretReferencesIncluded':False}
+    if data.get('compositePreview') is True:
+        expected=f'cloudif-p{num}-w{generation}-preview-app';server_id=str(data.get('server_id') or '')
+        if generation<1 or container!=expected or not server_id or not terminal or data.get('target_mode')!='container':raise RuntimeError('composite_preview_terminal_contract_invalid')
+        target='https://komodoiff.duckdns.org/servers/'+urllib.parse.quote(server_id,safe='')+'/container/'+urllib.parse.quote(container,safe='')+'/terminal/'+urllib.parse.quote(terminal,safe='')
+        return {'ok':True,'project':slug,'public_number':num,'generation':generation,'stageCode':'W'+str(generation),'container':container,'service':'app','terminalUrl':target,'terminalReady':True,'terminalSource':'composite_preview_app','compositePreview':True,'secretValuesIncluded':False,'secretReferencesIncluded':False}
     stack_id=str(data.get('stack_id') or '');expected=f'cloudif-p{num}-preview-web'
     if generation!=1 or container!=expected or not stack_id or not terminal or data.get('target_mode')!='stack':raise RuntimeError('preview_terminal_contract_invalid')
     target='https://komodoiff.duckdns.org/stacks/'+urllib.parse.quote(stack_id,safe='')+'/service/web/terminal/'+urllib.parse.quote(terminal,safe='')
@@ -2049,18 +2093,26 @@ def stage_terminal(slug,user,environment='preview'):
         try:detail=json.loads(pubrow['detail_json'] or '{}') if pubrow else {}
         except Exception:detail={}
         if detail.get('runtimeKind')=='compose-snapshot':deployment_id=str(detail.get('productionDeploymentId') or detail.get('homologationDeploymentId') or '')
-        payload.update({'publication_number':publication,'deploy_number':dep,'candidate_number':candidate,'legacy':False});stage_code=str(release['stage_code'] or ('P'+str(publication)))
+        legacy_publication=not bool(deployment_id);payload.update({'publication_number':publication,'deploy_number':dep,'candidate_number':candidate,'legacy':legacy_publication});stage_code=str(release['stage_code'] or ('P'+str(publication)))
+        if legacy_publication:payload['container_candidates']=[f'cloudif-p{num}-p{publication}-publication-web']
+    deployment_targets=None
     if deployment_id:
         if not re.fullmatch(r'dep_[a-f0-9]{24}',deployment_id):con.close();raise RuntimeError('O deployment deste ambiente é inválido para Terminal.')
-        payload['deployment_id']=deployment_id
+        deployment_targets=_compose_deployment_runtime_targets(slug,deployment_id)
+        payload['deployment_id']=deployment_id;payload['container_candidates']=deployment_targets['containers'];payload['service_candidates']=deployment_targets['services']
     con.close();ku,kt,_=_clients();status,data=_post(ku+'/komodo/project/stage/terminal',payload,kt,timeout=60)
     if status//100!=2 or data.get('ok') is not True:raise RuntimeError(str(data.get('message') or data.get('error') or 'O terminal deste ambiente está temporariamente indisponível.'))
     container=str(data.get('container') or '');terminal=str(data.get('terminal') or '');mode=str(data.get('target_mode') or '')
     if deployment_id:
-        expected='cloudif-'+deployment_id.replace('_','-')+'-web';server_id=str(data.get('server_id') or '')
-        if mode!='container' or container!=expected or str(data.get('deployment_id') or '')!=deployment_id or not server_id or not terminal:raise RuntimeError('stage_terminal_compose_contract_invalid')
+        server_id=str(data.get('server_id') or '');service=str(data.get('service') or '');allowed={(x['container'],x['service']) for x in (deployment_targets or {}).get('targets',[])}
+        if mode!='container' or (container,service) not in allowed or str(data.get('deployment_id') or '')!=deployment_id or not server_id or not terminal:raise RuntimeError('stage_terminal_compose_contract_invalid')
         target='https://komodoiff.duckdns.org/servers/'+urllib.parse.quote(server_id,safe='')+'/container/'+urllib.parse.quote(container,safe='')+'/terminal/'+urllib.parse.quote(terminal,safe='')
-        return {'ok':True,'project':slug,'public_number':num,'environment':environment,'stageCode':stage_code,'container':container,'deploymentId':deployment_id,'terminalUrl':target,'terminalReady':True,'terminalSource':'compose_deployment','sameRuntimeAcrossPromotion':True,'secretValuesIncluded':False,'secretReferencesIncluded':False}
+        return {'ok':True,'project':slug,'public_number':num,'environment':environment,'stageCode':stage_code,'container':container,'service':service,'deploymentId':deployment_id,'terminalUrl':target,'terminalReady':True,'terminalSource':'compose_deployment_service','sameRuntimeAcrossPromotion':True,'secretValuesIncluded':False,'secretReferencesIncluded':False}
+    if environment=='production' and data.get('legacyPublication') is True:
+        expected=f'cloudif-p{num}-p{publication}-publication-web';server_id=str(data.get('server_id') or '');service=str(data.get('service') or '')
+        if mode!='container' or container!=expected or service!='web' or not server_id or not terminal:raise RuntimeError('stage_terminal_legacy_contract_invalid')
+        target='https://komodoiff.duckdns.org/servers/'+urllib.parse.quote(server_id,safe='')+'/container/'+urllib.parse.quote(container,safe='')+'/terminal/'+urllib.parse.quote(terminal,safe='')
+        return {'ok':True,'project':slug,'public_number':num,'environment':environment,'stageCode':stage_code,'container':container,'service':'web','terminalUrl':target,'terminalReady':True,'terminalSource':'legacy_publication_container','sameRuntimeAcrossPromotion':False,'secretValuesIncluded':False,'secretReferencesIncluded':False}
     stack_id=str(data.get('stack_id') or '');expected=f'cloudif-p{num}-d{dep}-web'
     if container!=expected or not stack_id or not terminal or mode!='stack':raise RuntimeError('stage_terminal_contract_invalid')
     target='https://komodoiff.duckdns.org/stacks/'+urllib.parse.quote(stack_id,safe='')+'/service/web/terminal/'+urllib.parse.quote(terminal,safe='')

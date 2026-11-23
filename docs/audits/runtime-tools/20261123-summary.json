@@ -1,0 +1,51 @@
+{
+  "schema": "cloudiff-runtime-tools-audit/1",
+  "date": "2026-11-23",
+  "contract": "project+stageCode+real-runtime-identity",
+  "runtime_containers_recreated": false,
+  "urls_changed": false,
+  "terminal_sessions_may_be_created": true,
+  "variables_exercised_on_labhardware": false,
+  "variables_note": "LabHardware had no application variables configured; no artificial variable was created for testing.",
+  "modern_previews_ok": [
+    {"public_number": 1001, "project": "laboratorio-de-hardware", "stage": "W1", "terminal_service": "app"},
+    {"public_number": 1002, "project": "silvipro", "stage": "W1", "terminal_service": "web"},
+    {"public_number": 1020, "project": "agenda-unica", "stage": "W3", "terminal_service": "api"},
+    {"public_number": 1021, "project": "cpuhub", "stage": "W1", "terminal_service": "web"},
+    {"public_number": 1022, "project": "cadales", "stage": "W1", "terminal_service": "web"},
+    {"public_number": 1025, "project": "paperclip", "stage": "W1", "terminal_service": "app"},
+    {"public_number": 1026, "project": "sgrep-v2", "stage": "W1", "terminal_service": "source-linked-app"}
+  ],
+  "active_productions_ok": [
+    {"public_number": 1001, "project": "laboratorio-de-hardware", "stage": "P14", "runtime": "compose-snapshot", "terminal_service": "app"},
+    {"public_number": 1002, "project": "silvipro", "stage": "P1", "runtime": "legacy-versioned-container", "terminal_service": "web"},
+    {"public_number": 1020, "project": "agenda-unica", "stage": "P11", "runtime": "compose-snapshot", "terminal_service": "web"},
+    {"public_number": 1021, "project": "cpuhub", "stage": "P5", "runtime": "legacy-versioned-container", "terminal_service": "web"},
+    {"public_number": 1022, "project": "cadales", "stage": "P2", "runtime": "legacy-versioned-container", "terminal_service": "web"}
+  ],
+  "legacy_records_without_modern_project_acl": [
+    {"public_number": 1007, "project": "silvipro-jt-2026"},
+    {"public_number": 1010, "project": "teste-sofa"},
+    {"public_number": 1014, "project": "grupix"},
+    {"public_number": 1018, "project": "testando123"},
+    {"public_number": 1019, "project": "hardness-e2e-0254"},
+    {"public_number": 1023, "project": "isha"},
+    {"public_number": 1024, "project": "mvplanner"}
+  ],
+  "paperclip": {
+    "preview_tools_ok": true,
+    "homologation_manifest_block_preserved": true,
+    "volume_changed": false
+  },
+  "labhardware": {
+    "preview_stage": "W1",
+    "production_stage": "P14",
+    "container_ids_unchanged": true,
+    "urls_preserved": true
+  },
+  "agenda": {
+    "preview_stage": "W3",
+    "w3_is_project_specific": true
+  },
+  "next_human_validation": "Create a new homologation, promote the same instance to production, verify previous P offline, then delete only a historical inactive P."
+}

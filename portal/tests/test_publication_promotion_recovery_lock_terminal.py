@@ -76,10 +76,12 @@ class PublicationPromotionRecoveryTests(unittest.TestCase):
 
     def test_compose_terminal_uses_deployment_identity(self):
         self.assertIn("payload['deployment_id']=deployment_id",PUB)
-        self.assertIn("terminalSource':'compose_deployment'",PUB)
-        self.assertIn("cloudif-'+deployment_id.replace('_','-')+'-web",KOMODO)
+        self.assertIn("payload['container_candidates']=deployment_targets['containers']",PUB)
+        self.assertIn("terminalSource':'compose_deployment_service'",PUB)
+        self.assertIn("label=org.cloudiff.deployment=",KOMODO)
         self.assertIn("labels.get('org.cloudiff.deployment')",KOMODO)
-        self.assertIn("labels.get('org.cloudiff.service')",KOMODO)
+        self.assertIn("labels.get('org.cloudiff.project')",KOMODO)
+        self.assertIn("selected_service",KOMODO)
         self.assertIn("'target_mode':'container'",KOMODO)
         self.assertIn("'sameRuntimeAcrossPromotion':True",KOMODO)
 
