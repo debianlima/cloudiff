@@ -165,3 +165,16 @@ Antes de operar Preview/Homologação/Produção, ler `docs/PADRAO-CLOUDIFF-PREV
 ## Índice/read-model obrigatório — 22/11/2026
 
 O caminho quente da interface é o SQLite `/var/lib/cloudif/portal/cloudif-portal-readmodel.db`; não varrer Docker/filesystem/Komodo para renderizar listas. Mutação em provisionamento, ambiente, W/H/P, histórico, rollback, exclusão, Conectores ou Aprovações deve invalidar/atualizar o índice no próprio fluxo e disparar refresh em background. Leitura usa stale-while-revalidate. O refresh global é rede de segurança a cada 5 minutos; a auditoria completa roda 03:20 `America/Sao_Paulo` e nunca muta runtime. Norma: `docs/PADRAO-CLOUDIFF-INDICE-READMODEL-PORTAL-20261122.md`.
+
+## Catálogo de prompts e autoridade — 22/11/2026
+
+Antes de qualquer retomada estrutural/operacional, ler `docs/PROMPTS-PGH-CLOUDIFF-20261122.md` e o registro máquina-legível `docs/prompts/cloudiff-prompt-registry.json`.
+
+Fontes fornecidas pelo operador:
+
+- `Meu-Terminal-Oracle-Instrucoes-PGH-1.2.0.md`: instrução operacional PGH 1.2.0; provar estado real e respeitar gates/rollback.
+- `Prompt-Mantenedor-PGH-1.2.0.md`: estrutura, documentação, memória e reconciliação incremental antes de normalização.
+- `PGH-DWP-Agent-Instructions.txt`: `PROPOSED 0.1.0`, alvo PGH 3.0 candidate, sem autoridade até aceite formal. CloudIFF registra `DWP_NOT_ACTIVE` enquanto não existir DWP formalmente aceito/ativo.
+- prompt local WORK SSH/CloudIFF: somente projeção sanitizada é documentada; credenciais, tokens e senhas não entram em Git/Atlas/memória.
+
+Alteração de prompt/instrução compartilhada exige inventário de delta, preservação de aprendizado, atualização deste catálogo, Atlas e memórias; nunca substituir silenciosamente nem elevar proposta a norma sem decisão humana.

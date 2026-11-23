@@ -88,3 +88,16 @@ memória PGH documentacao/cloudiff/doc-01 e auditoria de 13/11/2026.
 ### Regra de reconciliação W/H/P — 21/11/2026
 
 Ao comparar Atlas/PGH/Portal, considerar divergência quando qualquer fonte prescritiva indicar novo Preview por commit, H isolada permanente, rebuild/reclone entre H e P ou H `published` como ambiente ativo. O estado desejado é: um Preview fixo, no máximo uma H ativa durante homologação, uma P ativa, H residual zero após promoção/substituição e P históricas paradas somente enquanto necessárias para rollback exato. Bridges/rotas antigas são reconstruíveis.
+
+## Catálogo de prompts e autoridade — 22/11/2026
+
+Antes de qualquer retomada estrutural/operacional, ler `docs/PROMPTS-PGH-CLOUDIFF-20261122.md` e o registro máquina-legível `docs/prompts/cloudiff-prompt-registry.json`.
+
+Fontes fornecidas pelo operador:
+
+- `Meu-Terminal-Oracle-Instrucoes-PGH-1.2.0.md`: instrução operacional PGH 1.2.0; provar estado real e respeitar gates/rollback.
+- `Prompt-Mantenedor-PGH-1.2.0.md`: estrutura, documentação, memória e reconciliação incremental antes de normalização.
+- `PGH-DWP-Agent-Instructions.txt`: `PROPOSED 0.1.0`, alvo PGH 3.0 candidate, sem autoridade até aceite formal. CloudIFF registra `DWP_NOT_ACTIVE` enquanto não existir DWP formalmente aceito/ativo.
+- prompt local WORK SSH/CloudIFF: somente projeção sanitizada é documentada; credenciais, tokens e senhas não entram em Git/Atlas/memória.
+
+Alteração de prompt/instrução compartilhada exige inventário de delta, preservação de aprendizado, atualização deste catálogo, Atlas e memórias; nunca substituir silenciosamente nem elevar proposta a norma sem decisão humana.

@@ -331,3 +331,16 @@ sensíveis, além dos testes de controle Markdown, hierarquia e
 vínculo PGH. Deve ser revisado por dev-02, aud-01 e infra-01;
 surface-01 precisa testar acessibilidade e interface autenticada.
 **Nenhum deploy foi realizado por doc-01** nesta entrega.
+
+## Catálogo de prompts e autoridade — 22/11/2026
+
+Antes de qualquer retomada estrutural/operacional, ler `docs/PROMPTS-PGH-CLOUDIFF-20261122.md` e o registro máquina-legível `docs/prompts/cloudiff-prompt-registry.json`.
+
+Fontes fornecidas pelo operador:
+
+- `Meu-Terminal-Oracle-Instrucoes-PGH-1.2.0.md`: instrução operacional PGH 1.2.0; provar estado real e respeitar gates/rollback.
+- `Prompt-Mantenedor-PGH-1.2.0.md`: estrutura, documentação, memória e reconciliação incremental antes de normalização.
+- `PGH-DWP-Agent-Instructions.txt`: `PROPOSED 0.1.0`, alvo PGH 3.0 candidate, sem autoridade até aceite formal. CloudIFF registra `DWP_NOT_ACTIVE` enquanto não existir DWP formalmente aceito/ativo.
+- prompt local WORK SSH/CloudIFF: somente projeção sanitizada é documentada; credenciais, tokens e senhas não entram em Git/Atlas/memória.
+
+Alteração de prompt/instrução compartilhada exige inventário de delta, preservação de aprendizado, atualização deste catálogo, Atlas e memórias; nunca substituir silenciosamente nem elevar proposta a norma sem decisão humana.

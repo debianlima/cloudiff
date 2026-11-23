@@ -905,3 +905,16 @@ O caminho quente da interface é o SQLite `/var/lib/cloudif/portal/cloudif-porta
 - O auditor fica na Hospedagem por depender do SQLite local e ser oneshot; Faro segue preferência para novos serviços autônomos, não para mover estado local do Portal pela rede.
 - Leituras indexadas observadas: Projetos ~0,28 ms, Publicações Agenda ~0,44 ms, Conectores ~0,81 ms. T-046 cobre paginação/normalização de Aprovações, cujo histórico atual tem ~6 MB/6.136 registros.
 - Norma: `docs/PADRAO-CLOUDIFF-INDICE-READMODEL-PORTAL-20261122.md`.
+
+## Catálogo de prompts e autoridade — 22/11/2026
+
+Antes de qualquer retomada estrutural/operacional, ler `docs/PROMPTS-PGH-CLOUDIFF-20261122.md` e o registro máquina-legível `docs/prompts/cloudiff-prompt-registry.json`.
+
+Fontes fornecidas pelo operador:
+
+- `Meu-Terminal-Oracle-Instrucoes-PGH-1.2.0.md`: instrução operacional PGH 1.2.0; provar estado real e respeitar gates/rollback.
+- `Prompt-Mantenedor-PGH-1.2.0.md`: estrutura, documentação, memória e reconciliação incremental antes de normalização.
+- `PGH-DWP-Agent-Instructions.txt`: `PROPOSED 0.1.0`, alvo PGH 3.0 candidate, sem autoridade até aceite formal. CloudIFF registra `DWP_NOT_ACTIVE` enquanto não existir DWP formalmente aceito/ativo.
+- prompt local WORK SSH/CloudIFF: somente projeção sanitizada é documentada; credenciais, tokens e senhas não entram em Git/Atlas/memória.
+
+Alteração de prompt/instrução compartilhada exige inventário de delta, preservação de aprendizado, atualização deste catálogo, Atlas e memórias; nunca substituir silenciosamente nem elevar proposta a norma sem decisão humana.

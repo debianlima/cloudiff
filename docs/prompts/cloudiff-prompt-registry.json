@@ -1,0 +1,45 @@
+{
+  "schema": "cloudiff-prompt-registry/1",
+  "updated_at": "2026-11-22",
+  "project": "cloudiff",
+  "secrets_included": false,
+  "dwp_state": "DWP_NOT_ACTIVE",
+  "prompts": [
+    {
+      "name": "Meu-Terminal-Oracle-Instrucoes-PGH-1.2.0.md",
+      "role": "operacao-pgh",
+      "status": "normative-projection",
+      "authority": "PGH-1.2.0 operational instructions",
+      "must_reload_for": ["infraestrutura", "runtime", "deploy", "diagnostico", "reconciliacao"],
+      "source_metadata": {
+        "origin_core": "dotfiles:base/agentes/meu-terminal-oracle-core.md",
+        "sha256_core": "4be4beb679813db99c30e9fdae4c9bbe1c25a447318ae21ace8c9806f50b788f",
+        "origin_ontology": "competencias-catalogo:metodo/governanca-ontologica-de-skills/SKILL.md",
+        "sha256_ontology": "ee32db11ce71e3d2c831559e9af6d6de807702df8ac7c3d4941530732721c6ab"
+      }
+    },
+    {
+      "name": "Prompt-Mantenedor-PGH-1.2.0.md",
+      "role": "estrutura-documentacao-memoria",
+      "status": "normative-project-maintenance",
+      "authority": "PGH-1.2.0 maintainer instructions",
+      "must_reload_for": ["bootstrap", "retomada", "documentacao", "atlas", "normalizacao", "release-structure"]
+    },
+    {
+      "name": "PGH-DWP-Agent-Instructions.txt",
+      "role": "distributed-work-plan",
+      "status": "PROPOSED",
+      "version": "0.1.0",
+      "target": "PGH 3.0 candidate",
+      "authority": "NONE_UNTIL_FORMAL_ACCEPT",
+      "cloudiff_state": "DWP_NOT_ACTIVE"
+    },
+    {
+      "name": "WORK-SSH-CloudIFF-operational-prompt",
+      "role": "environment-local",
+      "status": "sanitized-projection",
+      "authority": "human environment instructions constrained by PGH and actual grants",
+      "secrets_included": false
+    }
+  ]
+}
