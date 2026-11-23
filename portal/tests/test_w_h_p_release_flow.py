@@ -50,17 +50,17 @@ class WHPReleaseFlowTests(unittest.TestCase):
         self.assertIn("org.cloudiff.artifact-kind",latest)
 
     def test_large_repository_homologation_has_build_headroom(self):
-        self.assertIn('HOMOLOGATION_DEPLOY_RUNTIME_TIMEOUT=900',PORTAL)
-        self.assertIn('HOMOLOGATION_DEPLOY_HTTP_TIMEOUT=1020',PORTAL)
-        self.assertIn("'timeout':HOMOLOGATION_DEPLOY_RUNTIME_TIMEOUT",PORTAL)
-        self.assertIn("'build_timeout':HOMOLOGATION_DEPLOY_RUNTIME_TIMEOUT",PORTAL)
+        self.assertIn("timeout=1260",PORTAL)
+        self.assertIn("_EXECUTOR_PROXY_PREFIX+'/v1/preview-runtime-snapshots'",RUNTIME)
+        self.assertIn("'/v1/preview-runtime-snapshots':1200",RUNTIME)
+        self.assertIn('_create_preview_runtime_homologation_candidate',PORTAL)
         self.assertIn('hashlib',PORTAL.splitlines()[1])
         self.assertIn('hmac',PORTAL.splitlines()[1])
         self.assertIn('json',PORTAL.splitlines()[1])
         self.assertIn('hmac.compare_digest',PORTAL)
-        self.assertIn("payload.get('build_timeout') or payload.get('timeout') or 300",RUNTIME)
-        self.assertIn("timeout=HOMOLOGATION_DEPLOY_HTTP_TIMEOUT",PORTAL)
-        self.assertGreater(900,300)
+        core=PORTAL[PORTAL.index('def create_homologation_candidate('):PORTAL.index('def homologate_candidate(',PORTAL.index('def create_homologation_candidate('))]
+        self.assertNotIn('/komodo/project/preview/snapshot',core)
+        self.assertGreater(1200,300)
 
     def test_publication_uses_exact_homologated_artifact_without_rebuild(self):
         release=RUNTIME[RUNTIME.index('def cloudif_publication_release(handler):'):RUNTIME.index('def cloudif_publication_release_activate(handler):')]

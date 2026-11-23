@@ -12,7 +12,9 @@ class HomologationPreviewRuntimeSelectionTests(unittest.TestCase):
         self.assertIn("current_preview=preview_status(slug,user)",block)
         self.assertIn("runtime_kind=str(current_preview.get('runtimeKind')",block)
         self.assertIn("if runtime_kind=='multiservice'",block)
-        self.assertIn("runtime_kind=='source-linked-preview'",block)
+        self.assertIn("runtime_kind=='multiservice'",block)
+        self.assertIn("return _create_preview_runtime_homologation_candidate",block)
+        self.assertNotIn("/komodo/project/preview/snapshot",block)
         self.assertNotIn("if _is_multiservice_project(slug):return _create_multiservice_homologation_candidate",block)
 
     def test_preview_runtime_snapshot_is_strictly_derived_from_stage_identity(self):
@@ -32,6 +34,11 @@ class HomologationPreviewRuntimeSelectionTests(unittest.TestCase):
         self.assertIn("'environment':env",block)
         self.assertIn("private-spec.json",block)
         self.assertIn("os.chmod(private_path,0o600)",block)
+        self.assertIn("snapshot_id='snap_'+secrets.token_hex(12)",block)
+        self.assertIn("paused.clear()",block)
+        self.assertNotIn("_compress_rootfs(rootfs_archive)",block)
+        self.assertIn("for service,name,row,aliases in services",block)
+        self.assertIn("for name in reversed(paused):docker('unpause',name",block)
 
     def test_broker_accepts_preview_runtime_only_with_matching_snapshot_kind(self):
         self.assertIn("source_kind not in {'linked-compose','preview-runtime'}",BROKER)
@@ -52,5 +59,21 @@ class HomologationPreviewRuntimeSelectionTests(unittest.TestCase):
         self.assertIn("current=preview_status(slug,user)",block)
         self.assertIn("runtimeKind",block)
         self.assertIn("or not current.get('configured')",block)
+
+    def test_generic_preview_w1_is_an_explicit_allowed_runtime_identity(self):
+        block=EXEC[EXEC.index('def _preview_runtime_row'):EXEC.index('def _preview_runtime_bind_ref',EXEC.index('def _preview_runtime_row'))]
+        self.assertIn("generic=f'cloudif-p{int(public_number)}-preview-web'",block)
+        self.assertIn("if int(generation)==1:allowed.add(generic)",block)
+        self.assertIn("if name not in allowed",block)
+        helper=PUB[PUB.index('def _create_preview_runtime_homologation_candidate'):PUB.index('def _supersede_prior_homologations',PUB.index('def _create_preview_runtime_homologation_candidate'))]
+        self.assertIn("generic=f'cloudif-p{int(num)}-preview-web'",helper)
+        self.assertIn("elif generation==1 and selected==generic",helper)
+        self.assertIn("app_container=generic",helper)
+
+    def test_final_candidate_wrapper_keeps_runtime_core_and_readmodel_event(self):
+        pos=PUB.rindex('def create_homologation_candidate(')
+        block=PUB[pos:PUB.index('def _executor_runtime_client',pos)]
+        self.assertIn('_v144_create_homologation_candidate_base',block)
+        self.assertIn("_rm.project_changed(slug,'homologation-created')",block)
 
 if __name__=='__main__':unittest.main()

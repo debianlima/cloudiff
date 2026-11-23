@@ -6,6 +6,7 @@ REFRESH=(ROOT/'components/control-plane/usr/local/sbin/cloudif-portal-refresh-ca
 AUDIT=(ROOT/'components/control-plane/usr/local/sbin/cloudif-portal-readmodel-audit.py').read_text()
 PUBLICATIONS=(ROOT/'components/control-plane/srv/cloudif/lib/cloudif_portal_publications.py').read_text()
 PROVISION=(ROOT/'components/control-plane/srv/cloudif/lib/cloudif_project_provision_status.py').read_text()
+KOMODO=(ROOT/'components/runtime/current-apps/komodo-agent-current/cloudif-komodo-agent.py').read_text()
 
 class ReservedDeletedProjectLifecycleTests(unittest.TestCase):
     def test_unpublish_removes_all_stage_routes_for_public_number(self):
@@ -24,6 +25,11 @@ class ReservedDeletedProjectLifecycleTests(unittest.TestCase):
         self.assertIn("reserved-deleted-preview-runtime",AUDIT)
         self.assertIn("/komodo/project/preview/status",AUDIT)
         self.assertIn("reserved_public_number_count",AUDIT)
+    def test_preview_status_fails_closed_when_persisted_container_is_missing(self):
+        self.assertIn("staleState':True",KOMODO)
+        self.assertIn("configured':False",KOMODO)
+        self.assertIn("docker','inspect',container",KOMODO)
+
     def test_runtime_mutations_require_current_project_row(self):
         self.assertIn("project=_project_allowed(con,slug,user)",PUBLICATIONS)
         self.assertIn("if not project:con.close();raise PermissionError('Projeto não encontrado ou sem permissão.')",PUBLICATIONS)

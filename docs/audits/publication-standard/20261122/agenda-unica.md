@@ -50,3 +50,7 @@ PHP, Node.js e Terminal devem resolver o mesmo `project + stageCode + runtime id
 ## Prova runtime tools — 23/11/2026
 
 Agenda preserva Preview **W3** e Terminal resolve o serviço real `api`. W3 é identidade deste projeto, não default global. Produção P11 resolve o deployment real e Terminal `web`.
+
+## Homologação pelo runtime real — 23/11/2026
+
+Agenda continua no caminho linked-compose W3 próprio do projeto; W3 não é default global e nenhuma identidade foi alterada.

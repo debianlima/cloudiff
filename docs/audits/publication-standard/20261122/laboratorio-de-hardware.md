@@ -55,3 +55,7 @@ PHP, Node.js e Terminal devem resolver o mesmo `project + stageCode + runtime id
 ## Prova runtime tools — 23/11/2026
 
 W1/P14: PHP e Terminal resolvem `app`; Node ausente é exibido sem erro. IDs de `lab_hardware_app`, `lab_hardware_db`, bridge W1, app/db do deployment P14 e bridge P14 permaneceram idênticos antes/depois da correção. URLs W1/P14/stable preservadas.
+
+## Homologação pelo runtime real — 23/11/2026
+
+LabHardware continua no caminho linked-compose W1 já validado; não houve recriação ou alteração de URL/container nesta auditoria.

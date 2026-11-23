@@ -1,0 +1,26 @@
+{
+  "schema": "cloudiff-homologation-preflight/1",
+  "date": "2026-11-23",
+  "real_candidate_created_by_audit": false,
+  "production_promoted_by_audit": false,
+  "runtime_mutations_performed_by_preflight": false,
+  "secrets_included": false,
+  "projects": [
+    {"public_number":1001,"project":"laboratorio-de-hardware","preview":"W1","route":"linked-compose","preflight":"ready"},
+    {"public_number":1020,"project":"agenda-unica","preview":"W3","route":"linked-compose","preflight":"ready"},
+    {"public_number":1002,"project":"silvipro","preview":"W1","route":"preview-runtime","services":["app"],"preflight":"ready"},
+    {"public_number":1021,"project":"cpuhub","preview":"W1","route":"preview-runtime","services":["app"],"preflight":"ready"},
+    {"public_number":1022,"project":"cadales","preview":"W1","route":"preview-runtime","services":["app"],"preflight":"ready"},
+    {"public_number":1025,"project":"paperclip","preview":"W1","route":"preview-runtime","services":["app"],"volume_snapshot_required":true,"preflight":"ready"},
+    {"public_number":1026,"project":"sgrep-v2","preview":"W1","route":"preview-runtime","services":["app","db","sat"],"network_aliases_preserved":["preview-db","preview-sat"],"preflight":"ready"},
+    {"public_number":1027,"project":"msha","route":"draft-no-application-runtime","preflight":"not-applicable","reason":"source-incomplete"},
+    {"public_number":1028,"project":"pghd-contexto","route":"draft-no-runtime","preflight":"not-applicable"}
+  ],
+  "homologation_environment_valid": [
+    "laboratorio-de-hardware","agenda-unica","silvipro","cpuhub","cadales","paperclip","sgrep-v2"
+  ],
+  "reserved_deleted_count": 16,
+  "reserved_deleted_runtime_residue_count": 0,
+  "nightly_audit": {"project_count":9,"issue_count":0,"runtime_mutations_performed":false},
+  "next_human_gate": "Create H from the selected Preview, promote the same H deployment to P, verify previous P is truly offline, then delete only an inactive historical P."
+}

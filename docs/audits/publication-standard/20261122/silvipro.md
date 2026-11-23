@@ -50,3 +50,7 @@ PHP, Node.js e Terminal devem resolver o mesmo `project + stageCode + runtime id
 ## Prova runtime tools — 23/11/2026
 
 Preview genérico W1 e Produção legada P1 passaram PHP/Node/Terminal. O Terminal P1 usa o container versionado real e não altera a natureza legada da Produção.
+
+## Homologação pelo runtime real — 23/11/2026
+
+SilviPro W1 passou no preflight `preview-runtime` do container genérico real; o caminho legado de snapshot foi removido. Nenhuma H foi criada pela auditoria.

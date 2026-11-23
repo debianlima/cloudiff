@@ -53,3 +53,7 @@ PHP, Node.js e Terminal devem resolver o mesmo `project + stageCode + runtime id
 ## Prova runtime tools — 23/11/2026
 
 W1 composto: Node e Terminal agora usam `cloudif-p1025-w1-preview-app`; PHP ausente é exibido sem erro. O bloqueio de Homologação por manifest composto continua vigente; volume não foi alterado.
+
+## Homologação pelo runtime real — 23/11/2026
+
+Paperclip W1 passou no preflight `preview-runtime`: app real + volume persistente entram no snapshot; a bridge pública fica fora e será recriada em H. O bloqueio antigo de “manifest composto” foi substituído por este snapshot integral validado. Nenhuma H foi criada pela auditoria.

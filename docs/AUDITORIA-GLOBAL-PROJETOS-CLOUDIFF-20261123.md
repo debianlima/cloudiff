@@ -24,8 +24,8 @@ Estados canônicos:
 | 1020 | agenda-unica | current-runtime; W3 específico do projeto e Produção moderna |
 | 1021 | cpuhub | current-runtime; W1 e Produção legada P5 |
 | 1022 | cadales | current-runtime; W1 e Produção legada P2 |
-| 1025 | paperclip | current-runtime; W1 composto; H bloqueada por manifest composto |
-| 1026 | sgrep-v2 | current-runtime source-linked W1; H/P dependem do contrato source/data |
+| 1025 | paperclip | current-runtime; W1 composto; preflight H por snapshot integral app+volume |
+| 1026 | sgrep-v2 | current-runtime source-linked W1; preflight H integral app+db+sat |
 | 1027 | msha | draft; repositório sem `docker-compose.yml` de aplicação e sem Preview; tenant Supabase existente é camada separada |
 | 1028 | pghd-contexto | draft-no-runtime; agregador/documentação, sem aplicação executável configurada |
 
@@ -108,3 +108,22 @@ Nunca usar `project_public_ids` como catálogo de projetos ativos.
 - `docs/PADRAO-CLOUDIFF-INDICE-READMODEL-PORTAL-20261122.md`
 - `docs/RUNBOOK-PADRAO-CLOUDIFF-WHP-CONTINUIDADE.md`
 - `docs/AUDITORIA-GLOBAL-PROJETOS-WHP-20261122.md`
+
+## Homologação pelo runtime real do Preview — 23/11/2026
+
+O botão **Enviar Preview para homologação** usa a mesma identidade de runtime já adotada por PHP/Node/Terminal. Não existe mais fallback para o snapshot legado de `project_preview_state` quando o Preview vivo é genérico/source-linked/composto.
+
+Rotas atuais:
+
+- LabHardware W1 e Agenda W3: `linked-compose` existente;
+- SilviPro W1, CPUHub W1 e Cadales W1: `preview-runtime` do container genérico real;
+- Paperclip W1: `preview-runtime` do app real + volume persistente; a bridge pública é infraestrutura e é recriada para H;
+- SGREP v2 W1: snapshot completo `app + db + sat`, incluindo volume do banco, binds autorizados e aliases internos `preview-db`/`preview-sat`;
+- MSHA: `draft/source-incomplete`, sem aplicação para homologar;
+- PGHD Contexto: `draft-no-runtime` por contrato.
+
+O Executor aceita `cloudif-p<NUM>-preview-web` somente como identidade genérica **W1 exata**, valida labels/projeto/stage/Git e nunca aceita nome livre. Source-linked descobre companheiros somente pelo prefixo/labels do mesmo projeto e restringe binds a checkout, stage-runtime ou `/srv/cloudif/<slug>`.
+
+A restauração H preserva aliases internos de rede, mounts, rootfs e ambiente privado root-only. A bridge pública Wn não entra no snapshot; H recebe sua própria bridge/URL.
+
+Pré-flight live sem criar candidato: 7 projetos publicáveis `ready`; ambientes de Homologação válidos e sem variável obrigatória faltante. Auditoria noturna: 9 projetos atuais, 16 reservas excluídas, 0 issues, nenhuma mutação. Evidência: `docs/audits/homologation/20261123-preflight-summary.json`.

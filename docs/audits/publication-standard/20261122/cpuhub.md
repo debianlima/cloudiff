@@ -50,3 +50,7 @@ PHP, Node.js e Terminal devem resolver o mesmo `project + stageCode + runtime id
 ## Prova runtime tools — 23/11/2026
 
 Preview genérico W1 e Produção legada P5 passaram PHP/Node/Terminal. O Terminal P5 usa o container versionado real; próxima migração H→P continua sendo humana.
+
+## Homologação pelo runtime real — 23/11/2026
+
+CPUHub W1 passou no preflight `preview-runtime` do container genérico real; nenhuma H foi criada pela auditoria.

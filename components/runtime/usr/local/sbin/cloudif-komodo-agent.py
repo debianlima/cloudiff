@@ -6040,8 +6040,11 @@ def cloudif_preview_request(handler,operation):
     _cloudif_v144_ensure_schema();row=_cloudif_preview_row(project)
     if operation=='status':
         if not row:return send(handler,200,{'ok':True,'project':project,'configured':False,'secretValuesIncluded':False})
-        health=_cloudif_wait_health(str(row.get('container') or ''),1);git_status=str(row.get('git_sync_status') or 'unknown')
-        return send(handler,200,{'ok':True,'project':project,'configured':True,'public_number':int(row.get('public_number') or num),'generation':1,'stageCode':'W1','container':str(row.get('container') or ''),'stack_id':str(row.get('stack_id') or ''),'stack_name':str(row.get('stack_name') or ''),'healthy':bool(health.get('ok')),'continuous':True,'git':{'ok':git_status!='missing','remoteAvailable':git_status not in {'degraded','missing'},'status':git_status,'message':str(row.get('git_sync_message') or ''),'head':str(row.get('git_head') or '')},'environmentRevision':int(row.get('environment_revision') or 0),'environmentDigest':str(row.get('environment_digest') or ''),'secretValuesIncluded':False})
+        container=str(row.get('container') or '');inspect=subprocess.run(['docker','inspect',container],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=15) if container else None
+        if not container or inspect is None or inspect.returncode!=0:
+            return send(handler,200,{'ok':True,'project':project,'configured':False,'public_number':int(row.get('public_number') or num),'generation':1,'stageCode':'W1','staleState':True,'secretValuesIncluded':False})
+        health=_cloudif_wait_health(container,1);git_status=str(row.get('git_sync_status') or 'unknown')
+        return send(handler,200,{'ok':True,'project':project,'configured':True,'public_number':int(row.get('public_number') or num),'generation':1,'stageCode':'W1','container':container,'stack_id':str(row.get('stack_id') or ''),'stack_name':str(row.get('stack_name') or ''),'healthy':bool(health.get('ok')),'continuous':True,'git':{'ok':git_status!='missing','remoteAvailable':git_status not in {'degraded','missing'},'status':git_status,'message':str(row.get('git_sync_message') or ''),'head':str(row.get('git_head') or '')},'environmentRevision':int(row.get('environment_revision') or 0),'environmentDigest':str(row.get('environment_digest') or ''),'secretValuesIncluded':False})
     if operation=='ensure':
         expected=f'cloudif-p{num}-preview-web';migrated=not row or str(row.get('container') or '')!=expected or not normalize_resource_id((row or {}).get('stack_id'))
         if migrated:

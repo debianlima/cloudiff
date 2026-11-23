@@ -226,41 +226,59 @@ def _create_linked_compose_homologation_candidate(slug,num,candidate,actor,progr
 
 
 def _preview_runtime_snapshot(slug,num,generation,source_commit='',app_container='',source_checkout=''):
-    base,token=_executor_runtime_client();payload={'project_slug':slug,'public_number':int(num),'generation':int(generation)}
+    base,token=_executor_runtime_client();snapshot_id='snap_'+os.urandom(12).hex();payload={'project_slug':slug,'public_number':int(num),'generation':int(generation),'snapshot_id':snapshot_id}
     if source_commit:payload['expected_source_commit']=str(source_commit)
     if app_container:payload['app_container']=str(app_container)
     if source_checkout:payload['source_checkout']=str(source_checkout)
-    status,result=_bearer_json('POST',base+'/v1/preview-runtime-snapshots',token,payload,timeout=1260)
-    if status//100!=2 or not isinstance(result,dict) or result.get('ok') is not True:
-        error=result.get('error') if isinstance(result,dict) else {};code=str(error.get('code') if isinstance(error,dict) else error or '')
-        messages={
-          'preview_runtime_app_not_found':'O Preview não possui app congelável associado à bridge Wn.',
-          'preview_runtime_app_not_running':'O app do Preview não está ativo para criar a Homologação.',
-          'preview_runtime_identity_invalid':'A identidade do app do Preview diverge do projeto/estágio selecionado.',
-          'preview_runtime_source_commit_changed':'O código do Preview mudou durante a criação da Homologação.',
-          'preview_runtime_source_commit_mismatch':'O container do Preview não corresponde ao commit Forgejo validado.',
-          'preview_runtime_bind_outside_allowed_roots':'O Preview usa bind fora das raízes publicáveis; ajuste o runtime antes de homologar.',
-          'preview_runtime_mount_unsupported':'O Preview usa um mount ainda não publicável.',
-          'preview_runtime_security_blocked':'O Preview usa configuração privilegiada que não pode ser promovida.',
-          'compose_snapshot_too_large':'O snapshot integral do Preview excede o limite configurado.',
-        }
-        raise RuntimeError(messages.get(code,'Não foi possível congelar o runtime integral do Preview.'))
-    if str(result.get('source_kind') or '')!='preview-runtime':raise RuntimeError('O Executor retornou origem de snapshot divergente.')
-    if not re.fullmatch(r'snap_[a-f0-9]{24}',str(result.get('snapshot_id') or '')) or not re.fullmatch(r'[a-f0-9]{64}',str(result.get('snapshot_digest') or '')):raise RuntimeError('Snapshot integral do Preview sem identidade válida.')
-    return result
-
+    immediate=None;network_error=None
+    try:
+        status,immediate=_bearer_json('POST',base+'/v1/preview-runtime-snapshots',token,payload,timeout=12)
+    except Exception as exc:
+        status=0;network_error=type(exc).__name__
+    messages={
+      'preview_runtime_app_not_found':'O Preview não possui app congelável associado à bridge Wn.',
+      'preview_runtime_app_not_running':'O app do Preview não está ativo para criar a Homologação.',
+      'preview_runtime_identity_invalid':'A identidade do app do Preview diverge do projeto/estágio selecionado.',
+      'preview_runtime_source_commit_changed':'O código do Preview mudou durante a criação da Homologação.',
+      'preview_runtime_source_commit_mismatch':'O container do Preview não corresponde ao commit Forgejo validado.',
+      'preview_runtime_bind_outside_allowed_roots':'O Preview usa bind fora das raízes publicáveis; ajuste o runtime antes de homologar.',
+      'preview_runtime_mount_unsupported':'O Preview usa um mount ainda não publicável.',
+      'preview_runtime_security_blocked':'O Preview usa configuração privilegiada que não pode ser promovida.',
+      'compose_snapshot_too_large':'O snapshot integral do Preview excede o limite configurado.',
+      'executor_restarted_during_capture':'O Executor reiniciou durante a captura; tente criar a Homologação novamente.',
+    }
+    if status and status//100!=2:
+        error=immediate.get('error') if isinstance(immediate,dict) else {};code=str(error.get('code') if isinstance(error,dict) else error or '')
+        raise RuntimeError(messages.get(code,'Não foi possível iniciar o snapshot integral do Preview.'))
+    deadline=time.time()+1260
+    while True:
+        result=immediate if isinstance(immediate,dict) and str(immediate.get('snapshot_id') or '')==snapshot_id else None;immediate=None
+        if result is None:
+            poll_status,result=_bearer_json('GET',base+'/v1/compose-snapshots/'+snapshot_id,token,timeout=30)
+            if poll_status==404:result=None
+            elif poll_status!=200:raise RuntimeError('Não foi possível consultar o snapshot integral do Preview.')
+        if isinstance(result,dict):
+            state=str(result.get('status') or '')
+            if state=='ready' and result.get('ok') is True:
+                if str(result.get('source_kind') or '')!='preview-runtime':raise RuntimeError('O Executor retornou origem de snapshot divergente.')
+                if not re.fullmatch(r'snap_[a-f0-9]{24}',str(result.get('snapshot_id') or '')) or not re.fullmatch(r'[a-f0-9]{64}',str(result.get('snapshot_digest') or '')):raise RuntimeError('Snapshot integral do Preview sem identidade válida.')
+                return result
+            if state=='failed' or result.get('ok') is False:
+                code=str(result.get('errorCode') or '')
+                raise RuntimeError(messages.get(code,'A captura integral do Preview falhou.'))
+        if time.time()>=deadline:raise RuntimeError('Tempo excedido ao congelar o runtime integral do Preview ('+(network_error or 'capturing')+').')
+        time.sleep(2)
 
 def _create_preview_runtime_homologation_candidate(slug,num,candidate,actor,user,source,progress=None):
     notify=lambda step,msg:progress(step,msg) if progress else None
     generation=int(source.get('generation') or 0);stage_code=str(source.get('stageCode') or '').strip().upper();match=re.fullmatch(r'W([1-9][0-9]*)',stage_code)
     if not source.get('configured') or not source.get('healthy') or not match or generation!=int(match.group(1)):
         raise RuntimeError('Prepare um Preview Wn saudável antes de criar a Homologação.')
-    expected_bridge=f'cloudif-p{int(num)}-w{generation}-preview-web';bridge=str(source.get('bridge') or source.get('container') or '')
-    if bridge!=expected_bridge:raise RuntimeError('O Preview selecionado não possui bridge Wn compatível com snapshot integral.')
+    expected_bridge=f'cloudif-p{int(num)}-w{generation}-preview-web';selected=str(source.get('bridge') or source.get('container') or '').strip();generic=f'cloudif-p{int(num)}-preview-web';numbered_app=f'cloudif-p{int(num)}-w{generation}-preview-app'
     source_commit=str(source.get('sourceCommit') or ((source.get('git') or {}).get('head') if isinstance(source.get('git'),dict) else '') or '').strip().lower()
     if source_commit and not re.fullmatch(r'[a-f0-9]{40,64}',source_commit):raise RuntimeError('O Preview não possui commit Forgejo válido para congelamento.')
-    app_container='';source_checkout=''
-    if str(source.get('runtimeKind') or '')=='source-linked-preview':
+    app_container='';source_checkout='';runtime_kind=str(source.get('runtimeKind') or '')
+    if runtime_kind=='source-linked-preview':
         con=sqlite3.connect(DB);con.row_factory=sqlite3.Row
         try:row=con.execute('select app_container,source_checkout,source_commit from project_preview_source_links where project_slug=?',(slug,)).fetchone()
         finally:con.close()
@@ -268,6 +286,12 @@ def _create_preview_runtime_homologation_candidate(slug,num,candidate,actor,user
         app_container=str(row['app_container'] or '');source_checkout=str(row['source_checkout'] or '');registered_commit=str(row['source_commit'] or '').strip().lower()
         if registered_commit and source_commit and not hmac.compare_digest(registered_commit,source_commit):raise RuntimeError('O vínculo source-linked diverge do commit exibido no Preview.')
         source_commit=registered_commit or source_commit
+    elif selected==expected_bridge:
+        app_container=numbered_app
+    elif generation==1 and selected==generic:
+        app_container=generic
+    else:
+        raise RuntimeError('O Preview selecionado não possui identidade de runtime compatível com snapshot integral.')
     notify('snapshot','Congelando app, volumes, binds e rootfs do Preview '+stage_code+'.')
     snapshot=_preview_runtime_snapshot(slug,num,generation,source_commit,app_container,source_checkout);snapshot_id=str(snapshot['snapshot_id']);snapshot_digest=str(snapshot['snapshot_digest']);source_commit=str(snapshot.get('source_commit') or source_commit)
     if not re.fullmatch(r'[a-f0-9]{40,64}',source_commit):raise RuntimeError('O snapshot integral não possui commit Forgejo válido.')
@@ -1078,49 +1102,21 @@ def _create_multiservice_homologation_candidate(slug,num,candidate,actor,progres
 
 
 def create_homologation_candidate(slug,user,progress=None,candidate_number=None,authorization_checked=False):
-    notify=lambda step,msg: progress(step,msg) if progress else None
     con=sqlite3.connect(DB);con.row_factory=sqlite3.Row;_ensure_schema(con)
     try:
         if authorization_checked:
-            # The queued Hn worker revalidates authorization and job identity
-            # separately. This flag is for that internal guarded call only.
             project=con.execute('select * from projects where slug=?',(slug,)).fetchone()
         else:
             project=_project_allowed(con,slug,user)
-            if project and not _can_homologate(con,slug,user):
-                raise PermissionError('homologation_permission_denied')
+            if project and not _can_homologate(con,slug,user):raise PermissionError('homologation_permission_denied')
         if not project:raise PermissionError('Projeto não encontrado ou sem permissão.')
-        num=_number(con,slug)
-        candidate=int(candidate_number or _next_candidate(con,slug))
-        actor=(user.get('username') or 'portal').strip().lower()
+        num=_number(con,slug);candidate=int(candidate_number or _next_candidate(con,slug));actor=(user.get('username') or 'portal').strip().lower()
     finally:
         con.close()
     if _is_linked_compose_project(slug):return _create_linked_compose_homologation_candidate(slug,num,candidate,actor,progress)
     current_preview=preview_status(slug,user);runtime_kind=str(current_preview.get('runtimeKind') or '')
     if runtime_kind=='multiservice':return _create_multiservice_homologation_candidate(slug,num,candidate,actor,progress)
-    generation=int(current_preview.get('generation') or 0);numbered_bridge=f'cloudif-p{num}-w{generation}-preview-web' if generation>0 else ''
-    if runtime_kind=='source-linked-preview' or (numbered_bridge and str(current_preview.get('bridge') or current_preview.get('container') or '')==numbered_bridge):
-        return _create_preview_runtime_homologation_candidate(slug,num,candidate,actor,user,current_preview,progress)
-    notify('snapshot','Congelando código e runtime do Preview.')
-    ku,kt,nt=_clients();status,snap=_post(ku+'/komodo/project/preview/snapshot',{'project':slug,'public_number':num,'candidate_number':candidate,'actor':actor},kt,timeout=360)
-    if status//100!=2 or not snap.get('ok'):raise RuntimeError(str(snap.get('message') or 'Não foi possível congelar o Preview para homologação.'))
-    pc=_publication_config();summary=pc.environment_summary(slug,'homologation')
-    if not summary.get('valid'):raise RuntimeError('O ambiente de Homologação possui variáveis obrigatórias pendentes.')
-    runtime=pc.execution_environment(slug,int(summary['environmentRevision']),str(summary.get('environmentDigest') or ''),'homologation');values=runtime.get('values') or {}
-    payload={'project':slug,'public_number':num,'deploy_number':candidate,'commit':str(snap['commit']),'timeout':HOMOLOGATION_DEPLOY_RUNTIME_TIMEOUT,'build_timeout':HOMOLOGATION_DEPLOY_RUNTIME_TIMEOUT,'actor':actor,'base_revision':int(snap['baseRevision']),'base_image':str(snap['baseImage']),'base_image_id':str(snap['baseImageId']),'environment_revision':int(runtime['environmentRevision']),'environment_digest':str(runtime['environmentDigest']),'environment_variables':values}
-    notify('deploying','Criando candidato imutável de Homologação.')
-    try:dstatus,deployed=_post(ku+'/komodo/publication/deploy',payload,kt,timeout=HOMOLOGATION_DEPLOY_HTTP_TIMEOUT)
-    finally:
-        if isinstance(values,dict):values.clear();runtime['values']={};payload['environment_variables']={}
-    if dstatus//100!=2 or not deployed.get('ok'):raise RuntimeError(_publication_error('deploy',deployed))
-    notify('https','Preparando URL de Homologação.')
-    vstatus,vdata=_post('http://10.62.91.3/version',{'public_number':num,'deploy_number':candidate},nt,host='cloudif-publisher.internal',timeout=300)
-    if vstatus//100!=2 or not vdata.get('ok'):raise RuntimeError(_publication_error('https',vdata))
-    hstatus,hdata=_post('http://10.62.91.3/stage',{'public_number':num,'stage':'homologation','number':candidate},nt,host='cloudif-publisher.internal',timeout=300)
-    if hstatus//100!=2 or not hdata.get('ok'):raise RuntimeError(_publication_error('https',hdata))
-    ident=_stage_identity(num,'homologation',candidate);now=_now();con=sqlite3.connect(DB);con.row_factory=sqlite3.Row;_ensure_schema(con)
-    con.execute('''insert into publication_candidates(project_slug,public_number,candidate_number,deploy_number,preview_generation,stage_code,hostname,status,parent_commit,commit_sha,artifact_image,artifact_image_id,diff_json,runtime_diff_json,environment_revision,environment_digest,created_by,created_at) values(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',(slug,num,candidate,candidate,int(snap.get('previewGeneration') or 1),ident['code'],ident['hostname'],'awaiting_homologation',str(snap.get('parentCommit') or ''),str(snap['commit']),str(deployed.get('expected_image') or ''),str(deployed.get('publicationImageId') or ''),json.dumps(snap.get('diff') or {},ensure_ascii=False),json.dumps(snap.get('runtimeDiff') or {},ensure_ascii=False),int(runtime['environmentRevision']),str(runtime['environmentDigest']),actor,now));con.commit();con.close()
-    return {'ok':True,'project':slug,'candidateNumber':candidate,'stageCode':ident['code'],'url':ident['url'],'hostname':ident['hostname'],'commit':str(snap['commit']),'parentCommit':str(snap.get('parentCommit') or ''),'artifactImageId':str(deployed.get('publicationImageId') or ''),'previewGeneration':int(snap.get('previewGeneration') or 1),'diff':snap.get('diff') or {},'runtimeDiff':snap.get('runtimeDiff') or {},'environmentRevision':int(runtime['environmentRevision']),'secretValuesIncluded':False}
+    return _create_preview_runtime_homologation_candidate(slug,num,candidate,actor,user,current_preview,progress)
 
 
 def homologate_candidate(slug,candidate_number,user,decision='approved',note=''):

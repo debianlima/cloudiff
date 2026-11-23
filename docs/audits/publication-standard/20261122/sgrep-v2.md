@@ -47,3 +47,7 @@ PHP, Node.js e Terminal devem resolver o mesmo `project + stageCode + runtime id
 ## Prova runtime tools — 23/11/2026
 
 Preview source-linked W1 passou PHP/Node/Terminal usando a identidade source-linked existente. Não criar H/P sem contrato source/data já documentado.
+
+## Homologação pelo runtime real — 23/11/2026
+
+SGREP v2 W1 passou no preflight completo com `app + db + sat`; aliases `preview-db` e `preview-sat`, volume PostgreSQL e binds autorizados são preservados no snapshot/restauração. Nenhuma H foi criada pela auditoria.
