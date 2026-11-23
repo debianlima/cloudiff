@@ -188,3 +188,7 @@ Referências complementares:
 - `docs/RUNBOOK-PADRAO-CLOUDIFF-WHP-CONTINUIDADE.md`;
 - `docs/AUDITORIA-GLOBAL-PROJETOS-WHP-20261122.md`;
 - `docs/REMEDIACAO-PORTAL-READMODEL-HISTORICO-20261122.md`.
+
+## Inventário current x reserved-deleted — 23/11/2026
+
+Referência canônica: `docs/AUDITORIA-GLOBAL-PROJETOS-CLOUDIFF-20261123.md`. `project_public_ids` preserva números de projetos excluídos e não é catálogo de projetos ativos. Read-model e recovery devem sempre cruzar com `projects`.

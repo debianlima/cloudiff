@@ -12,7 +12,12 @@ def portal_con():
     con=sqlite3.connect(PORTAL_DB,timeout=30);con.row_factory=sqlite3.Row;con.execute('pragma busy_timeout=30000');return con
 
 def public_projects(con):
-    try:return [dict(r) for r in con.execute('select project_slug,public_number from project_public_ids order by public_number')]
+    try:return [dict(r) for r in con.execute('select i.project_slug,i.public_number from project_public_ids i join projects p on p.slug=i.project_slug order by i.public_number')]
+    except Exception:return []
+
+
+def reserved_projects(con):
+    try:return [dict(r) for r in con.execute('select i.project_slug,i.public_number from project_public_ids i left join projects p on p.slug=i.project_slug where p.slug is null order by i.public_number')]
     except Exception:return []
 
 def operational_projects(con):
@@ -39,8 +44,10 @@ def main():
         try:
             subprocess.run(['/usr/bin/systemctl','start','cloudif-portal-refresh-cache.service'],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=240,check=False)
         except Exception:pass
-        con=portal_con();projects=public_projects(con);operational=operational_projects(con);issues=[]
-        db_slugs={str(x.get('project_slug') or '') for x in projects}
+        con=portal_con();projects=public_projects(con);reserved=reserved_projects(con);operational=operational_projects(con);issues=[]
+        db_slugs={str(x.get('project_slug') or '') for x in projects};reserved_slugs={str(x.get('project_slug') or '') for x in reserved}
+        residual=sorted(reserved_slugs & operational)
+        if residual:issues.append({'code':'reserved-deleted-operational-residue','projects':residual})
         cached=cache_catalog(rm);cache_slugs={str(x.get('slug') or '') for x in cached}
         missing=sorted(db_slugs-cache_slugs);extra=sorted(cache_slugs-db_slugs)
         if missing:issues.append({'code':'catalog-missing-projects','projects':missing})
@@ -56,6 +63,19 @@ def main():
         user={'username':'nightly-readmodel-audit','groups':['CloudIF-Tenants-Admin','CloudIF-Professor'],'admin':True,'professor':True}
         audited=[]
         if publications:
+            try:
+                ku,kt,_=publications._clients()
+                for item in reserved:
+                    slug=str(item.get('project_slug') or '');num=int(item.get('public_number') or 0)
+                    if not slug or num<1:continue
+                    try:
+                        code,data=publications._post(ku+'/komodo/project/preview/status',{'project':slug,'public_number':num},kt,timeout=20)
+                        if code//100==2 and isinstance(data,dict) and data.get('configured'):
+                            issues.append({'code':'reserved-deleted-preview-runtime','project':slug,'public_number':num,'stage':str(data.get('stageCode') or '')})
+                    except Exception:
+                        pass
+            except Exception:
+                pass
             for item in projects:
                 slug=str(item.get('project_slug') or '')
                 if slug not in operational:continue
@@ -75,7 +95,7 @@ def main():
                 except Exception as exc:
                     entry['ok']=False;entry['error']=type(exc).__name__;issues.append({'code':'release-flow-error','project':slug,'error':type(exc).__name__})
                 audited.append(entry)
-        finished=iso_now();report={'started_at':started,'finished_at':finished,'project_count':len(projects),'operational_project_count':len(operational),'cached_catalog_count':len(cached),'issues':issues,'audited':audited,'runtime_mutations_performed':False,'secrets_included':False}
+        finished=iso_now();report={'started_at':started,'finished_at':finished,'project_count':len(projects),'operational_project_count':len(operational),'cached_catalog_count':len(cached),'reserved_public_number_count':len(reserved),'issues':issues,'audited':audited,'runtime_mutations_performed':False,'secrets_included':False}
         status='ok' if not issues else 'issues'
         rcon=rm._con()
         try:

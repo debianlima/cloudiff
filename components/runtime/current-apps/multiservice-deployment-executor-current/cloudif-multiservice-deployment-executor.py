@@ -711,9 +711,132 @@ def compose_source_state(slug:str)->dict:
 
 
 
+
+def _preview_runtime_row(slug:str,public_number:int,generation:int,expected_source_commit:str='',app_container:str='',source_checkout:str='')->tuple[str,Path,str,dict]:
+    if not SLUG_RE.fullmatch(str(slug or '')) or not (1<=int(public_number)<=999999999 and 1<=int(generation)<=999999):
+        raise DeploymentError('invalid_preview_runtime_request','Identidade do Preview é inválida.',400)
+    numbered=f'cloudif-p{int(public_number)}-w{int(generation)}-preview-app';source_linked=f'cloudif-{slug}-preview-app';name=str(app_container or numbered).strip()
+    if name not in {numbered,source_linked}:raise DeploymentError('preview_runtime_identity_invalid','Nome do app do Preview não é uma identidade permitida.',409)
+    rows=_json_rows(docker('inspect',name,timeout=30,check=False))
+    if not rows:raise DeploymentError('preview_runtime_app_not_found','O app do Preview não foi localizado.',404,{'container':name})
+    row=rows[0];state=row.get('State') or {};config=row.get('Config') or {};labels=config.get('Labels') or {};host=row.get('HostConfig') or {}
+    if not state.get('Running') or state.get('Restarting') or state.get('Dead'):
+        raise DeploymentError('preview_runtime_app_not_running','O app do Preview não está ativo.',409,{'container':name})
+    project_label=str(labels.get('org.cloudiff.project') or labels.get('cloudif.project') or '')
+    stage_label=str(labels.get('org.cloudiff.stage') or labels.get('com.cloudiff.environment') or labels.get('cloudif.stage') or '')
+    if project_label!=slug or stage_label not in {'preview','restored-candidate'}:
+        raise DeploymentError('preview_runtime_identity_invalid','O app do Preview não corresponde ao projeto/estágio solicitado.',409,{'container':name})
+    declared_public=str(labels.get('org.cloudiff.public-number') or labels.get('cloudif.public-number') or '')
+    declared_stage=str(labels.get('org.cloudiff.stage-number') or labels.get('cloudif.stage-number') or '')
+    if declared_public and declared_public!=str(int(public_number)):
+        raise DeploymentError('preview_runtime_identity_invalid','O número público do app diverge do Preview.',409)
+    if declared_stage and declared_stage!=str(int(generation)):
+        raise DeploymentError('preview_runtime_identity_invalid','A geração do app diverge do Preview.',409)
+    if host.get('Privileged') or str(host.get('NetworkMode') or '')=='host' or str(host.get('NetworkMode') or '').startswith('container:') or host.get('Devices') or host.get('DeviceRequests'):
+        raise DeploymentError('preview_runtime_security_blocked','O app do Preview usa privilégio/device/network mode não publicável.',409)
+    caps={str(x).upper() for x in (host.get('CapAdd') or [])};dangerous=sorted(caps&COMPOSE_DANGEROUS_CAPS)
+    if dangerous:raise DeploymentError('preview_runtime_capability_blocked','O app do Preview usa capability não publicável.',409,{'capabilities':dangerous})
+    default_checkout=(Path('/etc/komodo/stacks')/('cloudif-'+slug)).resolve();source_link_checkout=(Path('/srv/cloudif')/slug/'preview'/'source').resolve();checkout=Path(source_checkout).resolve() if source_checkout else default_checkout
+    if checkout not in {default_checkout,source_link_checkout}:raise DeploymentError('preview_runtime_checkout_invalid','Checkout do Preview não pertence a uma raiz autorizada.',409)
+    if not (checkout/'.git').exists():raise DeploymentError('preview_runtime_git_unavailable','Checkout Forgejo do Preview não foi localizado.',409)
+    git=subprocess.run(['git','-C',str(checkout),'rev-parse','HEAD'],text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=30)
+    commit=git.stdout.strip() if git.returncode==0 else ''
+    if not re.fullmatch(r'[a-f0-9]{40,64}',commit):raise DeploymentError('preview_runtime_git_unavailable','Checkout Forgejo do Preview não possui HEAD válido.',409)
+    if expected_source_commit and not hmac.compare_digest(commit,str(expected_source_commit)):
+        raise DeploymentError('preview_runtime_source_commit_changed','O HEAD Forgejo mudou desde a validação do Preview.',409)
+    runtime_commit=str(labels.get('org.cloudiff.source-commit') or labels.get('com.cloudiff.source-commit') or '').strip().lower()
+    if runtime_commit and runtime_commit!=commit:
+        raise DeploymentError('preview_runtime_source_commit_mismatch','O app do Preview não corresponde ao HEAD Forgejo validado.',409)
+    return name,checkout,commit,row
+
+
+def _preview_runtime_bind_ref(source:Path,checkout:Path,public_number:int,generation:int)->str:
+    source=source.resolve();checkout=checkout.resolve();stage_root=Path(f'/srv/cloudif/stage-runtime/p{int(public_number)}/w{int(generation)}').resolve()
+    try:return 'checkout/'+str(source.relative_to(checkout))
+    except ValueError:pass
+    try:return 'stage-runtime/'+str(source.relative_to(stage_root))
+    except ValueError:pass
+    raise DeploymentError('preview_runtime_bind_outside_allowed_roots','Bind do Preview está fora do checkout/stage-runtime permitido.',409)
+
+
+def _preview_runtime_edge_port(row:dict,public_number:int,generation:int)->int:
+    try:return _compose_public_port(row)
+    except DeploymentError:pass
+    gateway=f'cloudif-p{int(public_number)}-w{int(generation)}-preview-web';inspect=docker('inspect',gateway,timeout=30,check=False)
+    if inspect.returncode:raise DeploymentError('preview_runtime_public_port_ambiguous','O app não declara porta pública e a bridge Wn não foi localizada.',409)
+    grow=(_json_rows(inspect) or [{}])[0];state=grow.get('State') or {}
+    if not state.get('Running'):raise DeploymentError('preview_runtime_public_port_ambiguous','A bridge Wn não está ativa para resolver a porta do app.',409)
+    rendered=docker('exec',gateway,'nginx','-T',timeout=30,check=False)
+    if rendered.returncode:raise DeploymentError('preview_runtime_public_port_ambiguous','Não foi possível inspecionar a bridge Wn.',409)
+    ports=sorted({int(x) for x in re.findall(r'proxy_pass\s+http://[^\s;:]+:(\d{1,5})',rendered.stdout or '') if 1<=int(x)<=65535})
+    if len(ports)!=1:raise DeploymentError('preview_runtime_public_port_ambiguous','A bridge Wn não possui uma única porta upstream publicável.',409,{'ports':ports})
+    return ports[0]
+
+
+def preview_runtime_source_state(slug:str,public_number:int,generation:int,expected_source_commit:str='',app_container:str='',source_checkout:str='')->dict:
+    name,checkout,commit,row=_preview_runtime_row(slug,public_number,generation,expected_source_commit,app_container,source_checkout)
+    config=row.get('Config') or {};host=row.get('HostConfig') or {};labels=config.get('Labels') or {};mounts=[];destinations=[]
+    for item in row.get('Mounts') or []:
+        kind=str(item.get('Type') or '');dest=str(item.get('Destination') or '');rw=bool(item.get('RW'))
+        if kind not in {'volume','bind'} or not dest.startswith('/'):
+            raise DeploymentError('preview_runtime_mount_unsupported','Mount do Preview não é publicável.',409,{'type':kind,'destination':dest})
+        if kind=='volume':source_ref=str(item.get('Name') or '')
+        else:source_ref=_preview_runtime_bind_ref(Path(str(item.get('Source') or '')),checkout,public_number,generation)
+        mounts.append({'type':kind,'sourceRef':source_ref,'destination':dest,'rw':rw});destinations.append(dest)
+    mounts=sorted(mounts,key=lambda x:(x['destination'],x['type'],x['sourceRef'],bool(x['rw'])))
+    networks=((row.get('NetworkSettings') or {}).get('Networks') or {});network_contract=[];requires_egress=False
+    for network_name_source in sorted(networks):
+        nrows=_json_rows(docker('network','inspect',network_name_source,timeout=30,check=False));internal=bool((nrows[0] if nrows else {}).get('Internal'))
+        network_contract.append({'name':network_name_source,'internal':internal,'publication':network_name_source==PUBLICATION_NETWORK})
+        if network_name_source!=PUBLICATION_NETWORK and not internal:requires_egress=True
+    ports=_compose_tcp_ports(row);edge_port=_preview_runtime_edge_port(row,public_number,generation);env=[str(x) for x in (config.get('Env') or [])]
+    material={'service':'app','image_id':str(row.get('Image') or ''),'environment_digest':hashlib.sha256(canonical(sorted(env))).hexdigest(),'environment_names':sorted({x.split('=',1)[0] for x in env if '=' in x}),'entrypoint':config.get('Entrypoint') or [],'cmd':config.get('Cmd') or [],'user':str(config.get('User') or ''),'working_dir':str(config.get('WorkingDir') or ''),'mounts':mounts,'rootfs_overlays':[],'rootfs_snapshot':'full-export','ports':ports,'port':edge_port,'source_networks':network_contract,'requires_egress':requires_egress,'cap_add':sorted(str(x) for x in (host.get('CapAdd') or [])),'cap_drop':sorted(str(x) for x in (host.get('CapDrop') or [])),'read_only':bool(host.get('ReadonlyRootfs'))}
+    material['service_digest']=hashlib.sha256(canonical(material)).hexdigest();digest=hashlib.sha256(canonical({'source_kind':'preview-runtime','project_slug':slug,'public_number':int(public_number),'generation':int(generation),'source_commit':commit,'edge_service':'app','edge_port':edge_port,'services':[material]})).hexdigest()
+    return {'ok':True,'source_kind':'preview-runtime','project_slug':slug,'public_number':int(public_number),'generation':int(generation),'source_digest':digest,'source_commit':commit,'edge_service':'app','edge_port':edge_port,'services':[material],'service_count':1,'secretValuesIncluded':False,'effectsExecuted':False}
+
+
+def create_preview_runtime_snapshot(payload:Any)->dict:
+    if not isinstance(payload,dict) or not set(payload).issubset({'project_slug','public_number','generation','expected_source_commit','app_container','source_checkout'}) or not {'project_slug','public_number','generation'}.issubset(payload):
+        raise DeploymentError('invalid_preview_runtime_snapshot_request','Pedido de snapshot do Preview inválido.',400)
+    slug=str(payload.get('project_slug') or '').strip().lower();public_number=int(payload.get('public_number') or 0);generation=int(payload.get('generation') or 0);expected=str(payload.get('expected_source_commit') or '').strip().lower();app_container=str(payload.get('app_container') or '').strip();source_checkout=str(payload.get('source_checkout') or '').strip()
+    if expected and not re.fullmatch(r'[a-f0-9]{40,64}',expected):raise DeploymentError('invalid_source_commit','Commit do Preview é inválido.',400)
+    current=preview_runtime_source_state(slug,public_number,generation,expected,app_container,source_checkout)
+    snapshot_id='snap_'+hashlib.sha256(('preview-runtime|'+slug+'|'+str(public_number)+'|'+str(generation)+'|'+current['source_digest']).encode()).hexdigest()[:24]
+    connection=db();existing=connection.execute('select * from compose_snapshots where snapshot_id=?',(snapshot_id,)).fetchone();connection.close()
+    if existing:return _snapshot_safe_status(existing)
+    name,checkout,commit,row=_preview_runtime_row(slug,public_number,generation,expected,app_container,source_checkout);root=COMPOSE_SNAPSHOT_ROOT/snapshot_id;tmp=COMPOSE_SNAPSHOT_ROOT/('.'+snapshot_id+'.tmp-'+secrets.token_hex(4))
+    COMPOSE_SNAPSHOT_ROOT.mkdir(parents=True,exist_ok=True);os.chmod(COMPOSE_SNAPSHOT_ROOT,0o700);tmp.mkdir(mode=0o700);paused=False;total=0
+    config=row.get('Config') or {};host=row.get('HostConfig') or {};env=[str(x) for x in (config.get('Env') or [])];mount_records=[];safe_mounts=[]
+    try:
+        docker('pause',name,timeout=30);paused=True;subprocess.run(['sync'],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=60)
+        for index,item in enumerate(row.get('Mounts') or []):
+            kind=str(item.get('Type') or '');dest=str(item.get('Destination') or '');rw=bool(item.get('RW'));source=Path(str(item.get('Source') or '')).resolve();archive=tmp/'artifacts'/'app'/f'mount-{index}.tar'
+            if kind=='volume':source_ref=str(item.get('Name') or '');_tar_container_path(name,dest,archive)
+            elif kind=='bind':source_ref=_preview_runtime_bind_ref(source,checkout,public_number,generation);_path_size(source);_tar_path(source,archive)
+            else:raise DeploymentError('preview_runtime_mount_unsupported','Mount do Preview não é publicável.',409,{'type':kind,'destination':dest})
+            total+=archive.stat().st_size
+            if total>COMPOSE_SNAPSHOT_MAX_BYTES:raise DeploymentError('compose_snapshot_too_large','Snapshot do Preview excede o limite configurado.',409,{'bytes':total,'limit':COMPOSE_SNAPSHOT_MAX_BYTES})
+            mount_records.append({'type':kind,'source_ref':source_ref,'destination':dest,'rw':rw,'archive':str(archive.relative_to(tmp)),'source_name':source.name});safe_mounts.append({'type':kind,'sourceRef':source_ref,'destination':dest,'rw':rw,**_snapshot_archive_record(archive)})
+        rootfs_archive=tmp/'artifacts'/'app'/'rootfs.tar';_export_rootfs(name,rootfs_archive);total+=rootfs_archive.stat().st_size
+        if total>COMPOSE_SNAPSHOT_MAX_BYTES:raise DeploymentError('compose_snapshot_too_large','Snapshot do Preview excede o limite configurado.',409,{'bytes':total,'limit':COMPOSE_SNAPSHOT_MAX_BYTES})
+        compressed=_compress_rootfs(rootfs_archive);rootfs={'archive':str(compressed.relative_to(tmp)),'sha256':_sha_file(compressed),'bytes':compressed.stat().st_size}
+        private={'project_slug':slug,'source_kind':'preview-runtime','public_number':public_number,'generation':generation,'source_commit':commit,'services':[{'service':'app','image_id':str(row.get('Image') or ''),'environment':env,'entrypoint':config.get('Entrypoint') or [],'cmd':config.get('Cmd') or [],'user':str(config.get('User') or ''),'working_dir':str(config.get('WorkingDir') or ''),'healthcheck':config.get('Healthcheck') or {},'cap_add':[str(x) for x in (host.get('CapAdd') or [])],'cap_drop':[str(x) for x in (host.get('CapDrop') or [])],'security_opt':[str(x) for x in (host.get('SecurityOpt') or [])],'read_only':bool(host.get('ReadonlyRootfs')),'pids_limit':host.get('PidsLimit'),'memory':int(host.get('Memory') or 0),'nano_cpus':int(host.get('NanoCpus') or 0),'shm_size':int(host.get('ShmSize') or 0),'tmpfs':host.get('Tmpfs') or {},'mounts':mount_records,'overlays':[],'rootfs':rootfs,'ports':_compose_tcp_ports(row),'requires_egress':bool((current.get('services') or [{}])[0].get('requires_egress'))}]}
+        private_path=tmp/'private-spec.json';private_path.write_text(json.dumps(private,ensure_ascii=False,separators=(',',':')));os.chmod(private_path,0o600)
+        safe={'service':'app','image_id':str(row.get('Image') or ''),'environment_digest':hashlib.sha256(canonical(sorted(env))).hexdigest(),'environment_names':sorted({x.split('=',1)[0] for x in env if '=' in x}),'mounts':safe_mounts,'rootfs_overlays':[],'rootfs':{'sha256':rootfs['sha256'],'bytes':rootfs['bytes']},'ports':_compose_tcp_ports(row),'port':int(current['edge_port']),'requires_egress':bool((current.get('services') or [{}])[0].get('requires_egress'))}
+        safe['service_digest']=hashlib.sha256(canonical(safe)).hexdigest();manifest={'project_slug':slug,'source_kind':'preview-runtime','public_number':public_number,'generation':generation,'source_digest':current['source_digest'],'source_commit':commit,'edge_service':'app','edge_port':int(current['edge_port']),'services':[safe],'private_spec_sha256':_sha_file(private_path),'artifact_bytes':sum(int(x.get('bytes') or 0) for x in safe_mounts)+int(rootfs['bytes'])}
+        snapshot_digest=hashlib.sha256(canonical(manifest)).hexdigest();(tmp/'manifest.json').write_text(json.dumps(manifest,ensure_ascii=False,sort_keys=True,indent=2)+'\n');os.chmod(tmp/'manifest.json',0o600)
+        if root.exists():shutil.rmtree(tmp,ignore_errors=True)
+        else:os.replace(tmp,root);os.chmod(root,0o700)
+        now=int(time.time());connection=db();connection.execute('insert into compose_snapshots(snapshot_id,project_slug,source_digest,snapshot_digest,source_commit,edge_service,edge_port,manifest_json,status,created_at) values(?,?,?,?,?,?,?,?,?,?)',(snapshot_id,slug,current['source_digest'],snapshot_digest,commit,'app',int(current['edge_port']),json.dumps(manifest,ensure_ascii=False,separators=(',',':')),'ready',now));connection.commit();saved=connection.execute('select * from compose_snapshots where snapshot_id=?',(snapshot_id,)).fetchone();connection.close();return _snapshot_safe_status(saved)
+    except Exception:
+        shutil.rmtree(tmp,ignore_errors=True);raise
+    finally:
+        if paused:docker('unpause',name,timeout=30,check=False)
+
+
 def _snapshot_safe_status(row:sqlite3.Row)->dict:
     manifest=json.loads(row['manifest_json'] or '{}')
-    return {'ok':True,'source_kind':'linked-compose','snapshot_id':row['snapshot_id'],'project_slug':row['project_slug'],'source_digest':row['source_digest'],'snapshot_digest':row['snapshot_digest'],'source_commit':row['source_commit'],'edge_service':row['edge_service'],'edge_port':int(row['edge_port']),'services':manifest.get('services') or [],'status':row['status'],'created_at':int(row['created_at']),'secretValuesIncluded':False,'secretValuesPersistedRootOnly':True,'effectsExecuted':False}
+    return {'ok':True,'source_kind':str(manifest.get('source_kind') or 'linked-compose'),'snapshot_id':row['snapshot_id'],'project_slug':row['project_slug'],'source_digest':row['source_digest'],'snapshot_digest':row['snapshot_digest'],'source_commit':row['source_commit'],'edge_service':row['edge_service'],'edge_port':int(row['edge_port']),'services':manifest.get('services') or [],'status':row['status'],'created_at':int(row['created_at']),'secretValuesIncluded':False,'secretValuesPersistedRootOnly':True,'effectsExecuted':False}
 
 
 def compose_snapshot_status(snapshot_id:str)->dict:
@@ -910,7 +1033,7 @@ def deploy_compose_snapshot(payload:Any)->dict:
         connection=db();connection.execute('insert into deployments(deployment_id,project_slug,environment,build_job_id,plan_digest,build_plan_digest,config_revision,config_digest,toolchain_digest,archive_sha256,variables_digest,status,services_json,routes_json,error_json,created_at,updated_at,snapshot_id) values(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',(deployment_id,slug,environment,snapshot_id,plan,snapshot['snapshot_digest'],config_revision,config_digest,toolchain_digest,snapshot['snapshot_digest'],variables_digest,'running',json.dumps(services,separators=(',',':')),json.dumps(routes,separators=(',',':')),'{}',now,now,snapshot_id));connection.commit();connection.close()
         runtime_configuration={'buildEnvironmentDigest':'','runtimeEnvironmentDigest':str(payload.get('runtime_environment_digest') or variables_digest),'environmentDigest':str(payload.get('environment_digest') or variables_digest),'buildJobId':snapshot_id}
         _runtime_state_record({'project_slug':slug,'environment':environment,'deployment_id':deployment_id,'config_revision':config_revision,'config_digest':config_digest,'toolchain_digest':toolchain_digest,'build_job_id':snapshot_id,'variables':variables},runtime_configuration,'running')
-        return {'ok':True,'deployment_id':deployment_id,'project_slug':slug,'environment':environment,'source_kind':'linked-compose','snapshot_id':snapshot_id,'snapshot_digest':snapshot['snapshot_digest'],'artifact_image_id':'sha256:'+snapshot['snapshot_digest'],'source_commit':snapshot['source_commit'],'status':'running','services':safe_services,'routes':routes,'edge_service':snapshot['edge_service'],'edge_port':snapshot['edge_port'],'snapshotBacked':True,'sameSnapshotReusable':True,'secretValuesIncluded':False,'secretValuesPersistedRootOnly':True,'idempotent':False}
+        return {'ok':True,'deployment_id':deployment_id,'project_slug':slug,'environment':environment,'source_kind':str(snapshot.get('source_kind') or 'linked-compose'),'snapshot_id':snapshot_id,'snapshot_digest':snapshot['snapshot_digest'],'artifact_image_id':'sha256:'+snapshot['snapshot_digest'],'source_commit':snapshot['source_commit'],'status':'running','services':safe_services,'routes':routes,'edge_service':snapshot['edge_service'],'edge_port':snapshot['edge_port'],'snapshotBacked':True,'sameSnapshotReusable':True,'secretValuesIncluded':False,'secretValuesPersistedRootOnly':True,'idempotent':False}
     except Exception as error:
         cleanup_resources(deployment_id);detail=error.as_dict() if isinstance(error,DeploymentError) else {'code':'compose_snapshot_deploy_failed','message':type(error).__name__}
         now=int(time.time());connection=db();connection.execute('insert or replace into deployments(deployment_id,project_slug,environment,build_job_id,plan_digest,build_plan_digest,config_revision,config_digest,toolchain_digest,archive_sha256,variables_digest,status,services_json,routes_json,error_json,created_at,updated_at,snapshot_id) values(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',(deployment_id,slug,environment,snapshot_id,plan,str(snapshot.get('snapshot_digest') or '0'*64),config_revision,config_digest,toolchain_digest,str(snapshot.get('snapshot_digest') or '0'*64),variables_digest,'failed','[]',json.dumps(payload.get('routes') or [],separators=(',',':')),json.dumps(detail,separators=(',',':')),now,now,snapshot_id));connection.commit();connection.close();raise
@@ -1187,6 +1310,7 @@ class Handler(BaseHTTPRequestHandler):
         if not self.authorized():return self.out(401,{'ok':False,'error':{'code':'unauthorized','message':'Credencial interna inválida.'}})
         try:
             if self.path=='/v1/deployments':return self.out(201,create_deployment(self.body()))
+            if self.path=='/v1/preview-runtime-snapshots':return self.out(201,create_preview_runtime_snapshot(self.body()))
             if self.path=='/v1/compose-snapshots/deploy':return self.out(201,deploy_compose_snapshot(self.body()))
             if self.path=='/v1/compose-source-preview-bridge':return self.out(201,ensure_source_preview_bridge(self.body()))
             if self.path=='/v1/publication-bridges':return self.out(201,ensure_publication_bridge(self.body()))

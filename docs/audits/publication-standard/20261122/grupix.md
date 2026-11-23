@@ -53,3 +53,7 @@ PHP, Node.js e Terminal devem resolver o mesmo `project + stageCode + runtime id
 ## Ferramentas de runtime — legado sem ACL moderna — 23/11/2026
 
 Este registro não possui linha moderna suficiente em `projects`/ACL para autorizar PHP/Node/Terminal pelo contrato atual. Não contornar `_project_allowed()` e não criar ownership implícito. A migração exige confirmar responsável/finalidade e reconciliar o projeto moderno antes de habilitar Terminal.
+
+## Classificação final — reserved-deleted — 23/11/2026
+
+Este slug **não é projeto atual**. O registro `1014` existe somente em `project_public_ids` para preservar o número público após exclusão. Não criar Preview/H/P, não abrir Terminal e não reconstruir ACL a partir deste registro isolado. Uma recriação futura deve ser um novo onboarding humano explícito, preservando o histórico deste número.

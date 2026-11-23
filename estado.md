@@ -924,3 +924,11 @@ Alteração de prompt/instrução compartilhada exige inventário de delta, pres
 Norma: `docs/PADRAO-CLOUDIFF-FERRAMENTAS-RUNTIME-ESTAGIO-20261123.md`.
 
 PHP, Node.js e Terminal devem resolver o mesmo `project + stageCode + runtime identity` selecionado; não derivar `api/web/app` por convenção, não copiar Wn de outro projeto e não recriar URL/container para diagnóstico. Preview linked-compose usa stack real; H/P Compose usam `services/routes` do Executor; Preview composto usa par numerado app/web; P legada usa container versionado exato. Ausência de PHP/Node é `available=false`, não erro. Terminal nunca contorna ACL.
+
+## Inventário current x reserved-deleted — 23/11/2026
+
+Referência canônica: `docs/AUDITORIA-GLOBAL-PROJETOS-CLOUDIFF-20261123.md`. `project_public_ids` preserva números de projetos excluídos e não é catálogo de projetos ativos. Read-model e recovery devem sempre cruzar com `projects`.
+
+## MSHA tenant reconciliado — 23/11/2026
+
+Projeto 1027 permanece `draft` e `source_incomplete`: o repositório não possui `docker-compose.yml` de aplicação, portanto não foi criado W1 artificial. O tenant Supabase existente foi completado sem reset de dados; DB/Auth/Studio/Kong/Meta/Realtime/Storage/Supavisor ficaram saudáveis e Functions running.

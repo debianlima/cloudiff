@@ -13,7 +13,8 @@ REFRESH_TIMER=(ROOT/'components/control-plane/etc/systemd/system/cloudif-portal-
 
 class PortalReadModelNightlyAuditTests(unittest.TestCase):
     def test_public_catalog_is_db_backed(self):
-        self.assertIn("select project_slug,public_number,created_at,updated_at from project_public_ids",REFRESH)
+        self.assertIn("join projects p on p.slug=i.project_slug",REFRESH)
+        self.assertIn("reserved-public-numbers",REFRESH)
         self.assertIn("rm.put('projects','public-catalog'",REFRESH)
     def test_nightly_audit_is_read_only_for_runtime(self):
         self.assertIn("runtime_mutations_performed':False",AUDIT)

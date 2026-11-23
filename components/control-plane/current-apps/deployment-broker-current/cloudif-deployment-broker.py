@@ -484,7 +484,7 @@ def _compose_publication_plan(payload,include_internal=False):
  allowed={'project_slug','environment','trace_id','source_kind','snapshot_id'}
  if not isinstance(payload,dict) or not set(payload).issubset(allowed) or not {'project_slug','environment','trace_id'}.issubset(payload):raise ValueError('invalid_request')
  slug=str(payload.get('project_slug') or '').strip().lower();environment=str(payload.get('environment') or '').strip().lower();trace=str(payload.get('trace_id') or '').strip();source_kind=str(payload.get('source_kind') or 'linked-compose').strip().lower();snapshot_id=str(payload.get('snapshot_id') or '').strip()
- if not SLUG.fullmatch(slug) or environment not in DEPLOY_ENVIRONMENTS or not trace or source_kind!='linked-compose':raise ValueError('invalid_request')
+ if not SLUG.fullmatch(slug) or environment not in DEPLOY_ENVIRONMENTS or not trace or source_kind not in {'linked-compose','preview-runtime'}:raise ValueError('invalid_request')
  if snapshot_id and not re.fullmatch(r'snap_[a-f0-9]{24}',snapshot_id):raise ValueError('invalid_snapshot_id')
  config=_multiservice_configuration(slug);configuration=config.get('configuration') or {};state=_multiservice_reconciliation(slug);blockers=[]
  project=(config.get('project') or configuration.get('project') or {});services=configuration.get('services') or {};primary=str(project.get('primaryService') or '');primary_cfg=services.get(primary) if isinstance(services,dict) else None
@@ -504,11 +504,12 @@ def _compose_publication_plan(payload,include_internal=False):
   code,snapshot=_deployment_executor_call('GET','/v1/compose-snapshots/'+urllib.parse.quote(snapshot_id,safe=''),None,timeout=30)
   if code!=200 or not isinstance(snapshot,dict) or snapshot.get('ok') is not True:blockers.append('compose-snapshot-not-found');snapshot=None
   elif str(snapshot.get('project_slug') or '')!=slug:blockers.append('compose-snapshot-project-mismatch')
+  elif str(snapshot.get('source_kind') or 'linked-compose')!=source_kind:blockers.append('compose-snapshot-source-kind-mismatch')
   source=snapshot
  elif environment=='homologation':
   code,source=_compose_source_proxy(slug)
   if code!=200 or not isinstance(source,dict) or source.get('ok') is not True:blockers.append('compose-source-unavailable');source=None
- if source and str(source.get('source_kind') or '')!='linked-compose':blockers.append('compose-source-kind-mismatch')
+ if source and str(source.get('source_kind') or '')!=source_kind:blockers.append('compose-source-kind-mismatch')
  source_digest=str((source or {}).get('source_digest') or '');source_commit=str((source or {}).get('source_commit') or '');snapshot_digest=str((snapshot or {}).get('snapshot_digest') or '')
  if source and not SHA256_RE.fullmatch(source_digest):blockers.append('compose-source-digest-invalid')
  if source and not re.fullmatch(r'[a-f0-9]{40,64}',source_commit):blockers.append('compose-source-commit-invalid')
@@ -523,14 +524,14 @@ def _compose_publication_plan(payload,include_internal=False):
  routes=[{'pathPrefix':'/','service':edge_service,'stripPrefix':False}] if edge_service and edge_port else []
  if source and (not edge_service or not 1<=edge_port<=65535):blockers.append('compose-public-edge-invalid')
  public_runtime=(runtime or {}).get('publicRuntimeEnvironment') or {};variables_digest=hashlib.sha256(json.dumps(public_runtime,ensure_ascii=False,sort_keys=True,separators=(',',':')).encode()).hexdigest()
- material={'action':'deployment.compose-snapshot.deploy','source_kind':'linked-compose','project_slug':slug,'environment':environment,'snapshot_id':snapshot_id,'snapshot_digest':snapshot_digest,'source_digest':source_digest,'source_commit':source_commit,'config_revision':config_revision,'config_digest':config_digest,'toolchain_digest':toolchain_digest,'environment_digest':str((runtime or {}).get('environmentDigest') or ''),'runtime_environment_digest':str((runtime or {}).get('runtimeEnvironmentDigest') or ''),'edge_service':edge_service,'edge_port':edge_port,'routes':routes,'variables_digest':variables_digest}
+ material={'action':'deployment.compose-snapshot.deploy','source_kind':source_kind,'project_slug':slug,'environment':environment,'snapshot_id':snapshot_id,'snapshot_digest':snapshot_digest,'source_digest':source_digest,'source_commit':source_commit,'config_revision':config_revision,'config_digest':config_digest,'toolchain_digest':toolchain_digest,'environment_digest':str((runtime or {}).get('environmentDigest') or ''),'runtime_environment_digest':str((runtime or {}).get('runtimeEnvironmentDigest') or ''),'edge_service':edge_service,'edge_port':edge_port,'routes':routes,'variables_digest':variables_digest}
  plan_digest=hashlib.sha256(json.dumps(material,sort_keys=True,separators=(',',':')).encode()).hexdigest();blockers=sorted(set(blockers));artifact='sha256:'+snapshot_digest if SHA256_RE.fullmatch(snapshot_digest) else ''
  safe_services=[]
  for item in (source or {}).get('services') or []:
   if not isinstance(item,dict):continue
   safe_services.append({k:item.get(k) for k in ('service','image_id','service_digest','port','ports','environment_names') if k in item})
- summary={'sourceKind':'linked-compose','snapshotId':snapshot_id,'snapshotDigest':snapshot_digest,'sourceDigest':source_digest,'sourceCommit':source_commit,'edgeService':edge_service,'edgePort':edge_port,'services':safe_services,'routes':routes,'runtimeEnvironment':runtime_summary,'secretResolutionRequired':bool(runtime_summary.get('secretReferencesPresent')),'secretResolverAvailable':bool(SECRET_RESOLVER_TOKEN)}
- result={'ok':True,'side_effect_free':True,'project_slug':slug,'environment':environment,'source_kind':'linked-compose','snapshot_id':snapshot_id,'deployment_plan_digest':plan_digest,'operation':material,'summary':summary,'artifactImageId':artifact,'blockers':blockers,'execution_allowed':not blockers,'approval_required':True,'variables_digest':variables_digest,'secret_values_included':False,'secret_references_included':False,'secretValuesIncluded':False,'secretReferencesIncluded':False,'containers_created':False,'trace_id':trace}
+ summary={'sourceKind':source_kind,'snapshotId':snapshot_id,'snapshotDigest':snapshot_digest,'sourceDigest':source_digest,'sourceCommit':source_commit,'edgeService':edge_service,'edgePort':edge_port,'services':safe_services,'routes':routes,'runtimeEnvironment':runtime_summary,'secretResolutionRequired':bool(runtime_summary.get('secretReferencesPresent')),'secretResolverAvailable':bool(SECRET_RESOLVER_TOKEN)}
+ result={'ok':True,'side_effect_free':True,'project_slug':slug,'environment':environment,'source_kind':source_kind,'snapshot_id':snapshot_id,'deployment_plan_digest':plan_digest,'operation':material,'summary':summary,'artifactImageId':artifact,'blockers':blockers,'execution_allowed':not blockers,'approval_required':True,'variables_digest':variables_digest,'secret_values_included':False,'secret_references_included':False,'secretValuesIncluded':False,'secretReferencesIncluded':False,'containers_created':False,'trace_id':trace}
  if include_internal:result['_internal_runtime_configuration']=runtime
  return result
 
@@ -554,7 +555,7 @@ def _compose_publication_execute(d,execution_id):
   payload={'deployment_id':deployment_id,'project_slug':plan['project_slug'],'environment':plan['environment'],'deployment_plan_digest':digest,'config_revision':op['config_revision'],'config_digest':op['config_digest'],'toolchain_digest':op['toolchain_digest'],'source_digest':op['source_digest'],'source_commit':op['source_commit'],'snapshot_id':op['snapshot_id'],'routes':op['routes'],'variables':variables,'variables_digest':variables_digest,'environment_digest':op['environment_digest'],'runtime_environment_digest':op['runtime_environment_digest']}
   idem_mark_effect(execution_id);code,result=_deployment_executor_call('POST','/v1/compose-snapshots/deploy',payload,timeout=1200)
  finally:resolved.clear()
- safe=dict(result) if isinstance(result,dict) else {'ok':False};safe.pop('variables',None);safe['variable_values_returned']=False;safe['secret_values_in_metadata']=False;safe['effect_started']=True;safe['deployment_plan_digest']=digest;safe['source_kind']='linked-compose'
+ safe=dict(result) if isinstance(result,dict) else {'ok':False};safe.pop('variables',None);safe['variable_values_returned']=False;safe['secret_values_in_metadata']=False;safe['effect_started']=True;safe['deployment_plan_digest']=digest;safe['source_kind']=str(plan.get('source_kind') or d.get('source_kind') or 'linked-compose')
  return code,safe
 
 

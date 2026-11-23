@@ -177,7 +177,8 @@ def refresh_tenants():
 def public_project_catalog():
     con=db();con.row_factory=sqlite3.Row
     try:
-        ids=[dict(r) for r in con.execute('select project_slug,public_number,created_at,updated_at from project_public_ids order by public_number')]
+        ids=[dict(r) for r in con.execute('''select i.project_slug,i.public_number,i.created_at,i.updated_at
+          from project_public_ids i join projects p on p.slug=i.project_slug order by i.public_number''')]
     except Exception:
         ids=[]
     try:integrations={str(r['project']):dict(r) for r in con.execute('select * from project_integrations')}
@@ -190,11 +191,22 @@ def public_project_catalog():
     for item in ids:
         slug=str(item.get('project_slug') or '');integ=integrations.get(slug) or {};preview=previews.get(slug) or {}
         out.append({
-          'slug':slug,'public_number':int(item.get('public_number') or 0),'alias':aliases.get(slug,''),
+          'slug':slug,'public_number':int(item.get('public_number') or 0),'alias':aliases.get(slug,''),'lifecycle':'current',
           'integration_status':str(integ.get('status') or ''),'forgejo_status':str(integ.get('forgejo_status') or ''),'komodo_status':str(integ.get('komodo_status') or ''),'supabase_status':str(integ.get('supabase_status') or ''),
           'preview_stage':str(preview.get('stage_code') or ''),'preview_status':str(preview.get('status') or ''),'preview_url':str(preview.get('url') or ''),
         })
     return out
+
+def reserved_public_numbers():
+    con=db();con.row_factory=sqlite3.Row
+    try:
+        rows=[dict(r) for r in con.execute('''select i.project_slug,i.public_number,i.created_at,i.updated_at
+          from project_public_ids i left join projects p on p.slug=i.project_slug
+          where p.slug is null order by i.public_number''')]
+    except Exception:
+        rows=[]
+    finally:con.close()
+    return [{'slug':str(r.get('project_slug') or ''),'public_number':int(r.get('public_number') or 0),'lifecycle':'reserved-deleted'} for r in rows]
 
 def refresh_portal_readmodels():
     for lib in ('/srv/cloudif/app-pointers/portal-current','/srv/cloudif/lib'):
@@ -212,7 +224,7 @@ def refresh_portal_readmodels():
         rm.put('tenants','registry',tenants_registry(),'timer')
     except Exception as exc:print('WARN: tenants readmodel',type(exc).__name__)
     try:
-        rm.put('projects','public-catalog',public_project_catalog(),'timer')
+        rm.put('projects','public-catalog',public_project_catalog(),'timer');rm.put('projects','reserved-public-numbers',reserved_public_numbers(),'timer')
     except Exception as exc:print('WARN: public project catalog',type(exc).__name__)
     try:
         projects=discover_projects() or [];rm.put('projects','discovered',projects,'timer')

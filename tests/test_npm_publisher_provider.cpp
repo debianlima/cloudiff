@@ -76,7 +76,10 @@ int main(){
     assert(rendered.find("# CloudIF managed publications BEGIN")!=std::string::npos);
     assert(rendered.find("# CloudIF managed publications END")!=std::string::npos);
 
+    r=provider.handle("POST","/stage","unit-secret",R"({"public_number":1010,"stage":"preview","number":1})"); assert(r.status==200);
+    r=provider.handle("POST","/stage","unit-secret",R"({"public_number":1010,"stage":"publication","number":2})"); assert(r.status==200);
     r=provider.handle("POST","/unpublish","unit-secret",R"({"public_number":1010})"); assert(r.status==200); assert(r.body.at("removed")==true); assert(!provider.state_snapshot().at("aliases").contains("demoalias"));
+    assert(r.body.at("removed_stages").size()==2); assert(!provider.state_snapshot().at("stages").contains("1010-w1-preview")); assert(!provider.state_snapshot().at("stages").contains("1010-p2-publication"));
     r=provider.handle("POST","/tenant/delete","unit-secret",R"({"tenant":"tenantnew"})"); assert(r.status==200); assert(r.body.at("removed")==true); assert(r.body.at("certificate_preserved")=="cloudif-tenant-tenantnew");
 
     const auto perms=std::filesystem::status(state_file).permissions(); assert((perms&std::filesystem::perms::group_read)==std::filesystem::perms::none); assert((perms&std::filesystem::perms::others_read)==std::filesystem::perms::none);
@@ -94,8 +97,8 @@ int main(){
     std::string first_noop_render; {std::ifstream in(live_conf);first_noop_render.assign((std::istreambuf_iterator<char>(in)),{});}
     r=live_provider.handle("POST","/stage/delete","unit-secret",R"({"public_number":999999999,"stage":"homologation","number":999999})"); assert(r.status==200); assert(r.body.at("removed")==false);
     {std::ifstream in(live_conf);std::string second_noop_render((std::istreambuf_iterator<char>(in)),{});assert(second_noop_render==first_noop_render);}
-    r=live_provider.handle("POST","/unpublish","unit-secret",R"({"public_number":1007})"); assert(r.status==200);
-    {std::ifstream in(live_conf);std::string text((std::istreambuf_iterator<char>(in)),{});assert(text.starts_with("# OUTER PREFIX\n"));assert(text.ends_with("# OUTER SUFFIX\n"));assert(text.find("server_name 1007.cloudiff.duckdns.org;")==std::string::npos);}
+    r=live_provider.handle("POST","/unpublish","unit-secret",R"({"public_number":1007})"); assert(r.status==200); assert(r.body.at("removed_stages").size()==1); assert(!live_provider.state_snapshot().at("stages").contains("1007-w1-preview"));
+    {std::ifstream in(live_conf);std::string text((std::istreambuf_iterator<char>(in)),{});assert(text.starts_with("# OUTER PREFIX\n"));assert(text.ends_with("# OUTER SUFFIX\n"));assert(text.find("server_name 1007.cloudiff.duckdns.org;")==std::string::npos);assert(text.find("server_name 1007-w1-preview.cloudiff.duckdns.org;")==std::string::npos);}
     bool found_backup=false;for(const auto& e:std::filesystem::directory_iterator(root))if(e.path().filename().string().starts_with("live-http.conf.bkp-v2-canary-"))found_backup=true;assert(!found_backup);
 
     // Forced nginx -t failure must restore the exact previous config, remove the temporary backup after successful rollback, and leave state file uncommitted.

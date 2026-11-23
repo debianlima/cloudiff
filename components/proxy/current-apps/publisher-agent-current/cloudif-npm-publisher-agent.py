@@ -375,8 +375,14 @@ def unpublish(payload):
  for alias,data in list(aliases.items()):
   if int(data.get('public_number') or 0)==num:
    aliases.pop(alias,None);removed_aliases.append(alias)
+ stages=state.setdefault('stages',{});removed_stages=[];preserved_certificates=[]
+ for name,data in list(stages.items()):
+  if int((data or {}).get('public_number') or 0)==num:
+   removed_stage=stages.pop(name,None) or {};removed_stages.append(name)
+   cert=str(removed_stage.get('cert') or '')
+   if cert:preserved_certificates.append(cert)
  render(state);save_state(state)
- return {'ok':True,'public_number':num,'removed':bool(removed),'removed_aliases':removed_aliases}
+ return {'ok':True,'public_number':num,'removed':bool(removed),'removed_aliases':removed_aliases,'removed_stages':sorted(removed_stages),'certificates_preserved':sorted(set(preserved_certificates))}
 
 def ensure_tenant(payload):
  tenant=str(payload.get('tenant') or '').strip().lower()
