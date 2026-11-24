@@ -46,3 +46,7 @@ PHP, Node.js e Terminal devem resolver o mesmo `project + stageCode + runtime id
 ## Classificação final — draft sem Preview — 23/11/2026
 
 Projeto atual 1027. O stack Komodo aponta para `docker-compose.yml`, porém o arquivo não existe no repositório atual; não há aplicação/container para criar W1 sem inventar runtime. O tenant Supabase existente é camada independente e foi reconciliado: serviços principais saudáveis e Functions running, sem reset de banco/volume.
+
+## Fechamento de padronização — 23/11/2026
+
+Classificação atual: `draft-source-incomplete`. Estado: tenant pronto; sem W. A norma PHP/Node/Terminal, read-model e lifecycle W/H/P está referenciada em `docs/audits/FINAL-PADRONIZACAO-PROJETOS-20261123.json`.

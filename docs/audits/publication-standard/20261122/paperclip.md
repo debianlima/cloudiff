@@ -57,3 +57,7 @@ W1 composto: Node e Terminal agora usam `cloudif-p1025-w1-preview-app`; PHP ause
 ## Homologação pelo runtime real — 23/11/2026
 
 Paperclip W1 passou no preflight `preview-runtime`: app real + volume persistente entram no snapshot; a bridge pública fica fora e será recriada em H. O bloqueio antigo de “manifest composto” foi substituído por este snapshot integral validado. Nenhuma H foi criada pela auditoria.
+
+## Fechamento de padronização — 23/11/2026
+
+Classificação atual: `current-runtime`. Estado: W1 / P1. A norma PHP/Node/Terminal, read-model e lifecycle W/H/P está referenciada em `docs/audits/FINAL-PADRONIZACAO-PROJETOS-20261123.json`.

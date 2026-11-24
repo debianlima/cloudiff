@@ -168,11 +168,12 @@ def _compose_source_preview_bridge(slug,num,generation=1):
     return result
 
 
-def _compose_snapshot_deploy(slug,environment,trace,execution_material,snapshot_id='',source_kind='linked-compose'):
+def _compose_snapshot_deploy(slug,environment,trace,execution_material,snapshot_id='',source_kind='linked-compose',stage_identity=None):
     source_kind=str(source_kind or 'linked-compose').strip().lower()
     if source_kind not in {'linked-compose','preview-runtime'}:raise RuntimeError('Origem do snapshot Compose inválida.')
     client=_multiservice_clients();plan_payload={'project_slug':slug,'environment':environment,'trace_id':trace,'source_kind':source_kind}
     if snapshot_id:plan_payload['snapshot_id']=snapshot_id
+    if isinstance(stage_identity,dict) and stage_identity:plan_payload['stage_identity']=stage_identity
     status,plan=_bearer_json('POST',client['deploymentUrl']+'/v1/compose-publication-plan',client['deploymentToken'],plan_payload,timeout=75)
     if status!=200 or plan.get('ok') is not True:raise RuntimeError('O plano de publicação Compose não pôde ser criado.')
     blockers=plan.get('blockers') or []
@@ -199,8 +200,8 @@ def _create_linked_compose_homologation_candidate(slug,num,candidate,actor,progr
     probe=_compose_source_probe(slug);source_state=probe.get('source') or {}
     source_commit=str(source_state.get('source_commit') or '')
     if not re.fullmatch(r'[a-f0-9]{40,64}',source_commit):raise RuntimeError('A origem Compose não possui commit Forgejo completo válido.')
-    preview_head=str((source.get('git') or {}).get('head') or '')
-    if preview_head and not source_commit.startswith(preview_head):raise RuntimeError('O HEAD exibido no Preview diverge do commit Compose materializado; atualize o Preview e tente novamente.')
+    preview_head=str((source.get('git') or {}).get('head') or '').strip().lower()
+    if re.fullmatch(r'[a-f0-9]{40,64}',preview_head) and not hmac.compare_digest(source_commit[:len(preview_head)],preview_head):raise RuntimeError('O HEAD exibido no Preview diverge do commit Compose materializado; atualize o Preview e tente novamente.')
     pc=_publication_config();summary=pc.environment_summary(slug,'homologation')
     if not summary.get('valid'):raise RuntimeError('O ambiente de Homologação possui variáveis obrigatórias pendentes.')
     notify('snapshot','Congelando stack Compose, volumes e configuração do Preview W1.')
@@ -225,8 +226,8 @@ def _create_linked_compose_homologation_candidate(slug,num,candidate,actor,progr
 
 
 
-def _preview_runtime_snapshot(slug,num,generation,source_commit='',app_container='',source_checkout=''):
-    base,token=_executor_runtime_client();snapshot_id='snap_'+os.urandom(12).hex();payload={'project_slug':slug,'public_number':int(num),'generation':int(generation),'snapshot_id':snapshot_id}
+def _preview_runtime_snapshot(slug,num,generation,source_commit='',app_container='',source_checkout='',snapshot_id=''):
+    base,token=_executor_runtime_client();snapshot_id=str(snapshot_id or '').strip() or ('snap_'+os.urandom(12).hex());payload={'project_slug':slug,'public_number':int(num),'generation':int(generation),'snapshot_id':snapshot_id}
     if source_commit:payload['expected_source_commit']=str(source_commit)
     if app_container:payload['app_container']=str(app_container)
     if source_checkout:payload['source_checkout']=str(source_checkout)
@@ -293,13 +294,15 @@ def _create_preview_runtime_homologation_candidate(slug,num,candidate,actor,user
     else:
         raise RuntimeError('O Preview selecionado não possui identidade de runtime compatível com snapshot integral.')
     notify('snapshot','Congelando app, volumes, binds e rootfs do Preview '+stage_code+'.')
-    snapshot=_preview_runtime_snapshot(slug,num,generation,source_commit,app_container,source_checkout);snapshot_id=str(snapshot['snapshot_id']);snapshot_digest=str(snapshot['snapshot_digest']);source_commit=str(snapshot.get('source_commit') or source_commit)
+    snapshot_id='snap_'+hashlib.sha256((slug+'|preview-runtime|'+str(num)+'|W'+str(generation)+'|H'+str(candidate)+'|'+source_commit).encode()).hexdigest()[:24]
+    snapshot=_preview_runtime_snapshot(slug,num,generation,source_commit,app_container,source_checkout,snapshot_id);snapshot_id=str(snapshot['snapshot_id']);snapshot_digest=str(snapshot['snapshot_digest']);source_commit=str(snapshot.get('source_commit') or source_commit)
     if not re.fullmatch(r'[a-f0-9]{40,64}',source_commit):raise RuntimeError('O snapshot integral não possui commit Forgejo válido.')
     pc=_publication_config();summary=pc.environment_summary(slug,'homologation')
     if not summary.get('valid'):raise RuntimeError('O ambiente de Homologação possui variáveis obrigatórias pendentes.')
     trace='portal-hpr-'+hashlib.sha256((slug+snapshot_id+str(candidate)).encode()).hexdigest()[:20]
     notify('deploying','Criando Homologação a partir do snapshot integral do Preview.')
-    plan,deployed=_compose_snapshot_deploy(slug,'homologation',trace,'HPR|'+slug+'|'+str(candidate)+'|'+snapshot_id,snapshot_id,'preview-runtime')
+    stage_identity={'public_number':num,'stage':'homologation','number':candidate} if slug=='paperclip' else None
+    plan,deployed=_compose_snapshot_deploy(slug,'homologation',trace,'HPR|'+slug+'|'+str(candidate)+'|'+snapshot_id,snapshot_id,'preview-runtime',stage_identity=stage_identity)
     if str(deployed.get('snapshot_id') or '')!=snapshot_id or str(deployed.get('snapshot_digest') or '')!=snapshot_digest:raise RuntimeError('O deployment da Homologação diverge do snapshot congelado.')
     deployment_id=str(deployed.get('deployment_id') or '');artifact_id='sha256:'+snapshot_digest
     bridge_result=_multiservice_bridge(slug,deployment_id,num,'homologation',candidate,trace+'-bridge')
@@ -446,7 +449,8 @@ def _publish_linked_compose_homologated_candidate(slug,candidate,project,publica
         notify('production','Promovendo a própria instância homologada para Produção, sem rebuild/reclone.')
         plan,promoted=_compose_snapshot_promote(slug,deployment_id,snapshot_id,snapshot_digest,trace,'PC|'+slug+'|'+str(publication)+'|'+deployment_id)
         if str(promoted.get('deployment_id') or '')!=deployment_id or promoted.get('containerIdsPreserved') is not True or promoted.get('containersRecreated') is not False:raise RuntimeError('A Produção não preservou a instância homologada.')
-    num=int(candidate['public_number']);bridge=_multiservice_bridge(slug,deployment_id,num,'publication',publication,trace+'-bridge')
+    num=int(candidate['public_number']);runtime_host=(f'{num}.cloudiff.duckdns.org' if slug=='paperclip' else '')
+    bridge=_multiservice_bridge(slug,deployment_id,num,'publication',publication,trace+'-bridge',runtime_host=runtime_host)
     _,_,npm_token=_clients();notify('https','Preparando URL P e domínio estável para a mesma instância homologada.')
     pstage,pdata=_post('http://10.62.91.3/stage',{'public_number':num,'stage':'publication','number':publication},npm_token,host='cloudif-publisher.internal',timeout=300)
     if pstage//100!=2 or not pdata.get('ok'):raise RuntimeError(_publication_error('https',pdata))
@@ -508,8 +512,10 @@ def _multiservice_deploy(slug,build_job_id,environment,trace,execution_material)
     return plan,result
 
 
-def _multiservice_bridge(slug,deployment_id,public_number,stage,number,trace):
+def _multiservice_bridge(slug,deployment_id,public_number,stage,number,trace,runtime_host=''):
     client=_multiservice_clients();payload={'project_slug':slug,'deployment_id':deployment_id,'public_number':int(public_number),'stage':stage,'number':int(number),'trace_id':trace}
+    runtime_host=str(runtime_host or '').strip().lower()
+    if runtime_host:payload['runtime_host']=runtime_host
     status,result=_bearer_json('POST',client['deploymentUrl']+'/v1/multiservice-publication-bridge',client['deploymentToken'],payload,timeout=120)
     if status//100!=2 or result.get('ok') is not True:raise RuntimeError('Não foi possível ligar o deployment ao gateway público.')
     return result
@@ -831,9 +837,15 @@ def _can_publish(con,slug,user):
 
 
 def _release_permission_role(con,slug,user):
+    who=(user.get('username') or '').strip().lower()
+    if who and who==_project_owner(con,slug):return 'owner'
+    if who:
+        try:
+            can_hom,can_pub=publication_permissions._grant(con,slug,who)
+            if can_hom or can_pub:return 'delegated'
+        except Exception:pass
     if publication_permissions.is_admin(user):return 'admin'
     if publication_permissions.is_professor(user):return 'professor'
-    if (user.get('username') or '').strip().lower()==_project_owner(con,slug):return 'owner'
     return 'delegated'
 
 
@@ -899,14 +911,15 @@ def preview_status(slug,user):
     if linked:return _linked_compose_status(slug,num,linked)
     if _is_multiservice_project(slug):
         data=_current_multiservice_preview(slug);ident=_stage_identity(num,'preview',1)
-        if data.get('configured'):
-            return {'ok':True,'configured':True,'project':slug,'public_number':num,'generation':1,'stageCode':'W1','url':ident['url'],'hostname':ident['hostname'],'healthy':bool(data.get('healthy')),'status':str(data.get('status') or ''),'previewId':str(data.get('preview_id') or ''),'buildJobId':str(data.get('build_job_id') or ''),'archiveSha256':str(data.get('archive_sha256') or ''),'configRevision':int(data.get('config_revision') or 0),'bridge':f'cloudif-p{num}-w1-preview-web','services':data.get('services') or [],'mongoEphemeral':bool(data.get('mongoEphemeral')),'expiresAt':int(data.get('expires_at') or 0),'runtimeKind':'multiservice','secretValuesIncluded':False}
+        multi={'ok':True,'configured':True,'project':slug,'public_number':num,'generation':1,'stageCode':'W1','url':ident['url'],'hostname':ident['hostname'],'healthy':bool(data.get('healthy')),'status':str(data.get('status') or ''),'previewId':str(data.get('preview_id') or ''),'buildJobId':str(data.get('build_job_id') or ''),'archiveSha256':str(data.get('archive_sha256') or ''),'configRevision':int(data.get('config_revision') or 0),'bridge':f'cloudif-p{num}-w1-preview-web','services':data.get('services') or [],'mongoEphemeral':bool(data.get('mongoEphemeral')),'expiresAt':int(data.get('expires_at') or 0),'runtimeKind':'multiservice','secretValuesIncluded':False} if data.get('configured') else None
+        if multi and multi.get('healthy'):return multi
         ku,kt,_=_clients();fallback_status,fallback=_post(ku+'/komodo/project/preview/status',{'project':slug,'public_number':num},kt,timeout=30)
         if fallback_status//100==2 and fallback.get('configured'):
-            generation=int(fallback.get('generation') or 1);fallback_ident=_stage_identity(num,'preview',generation);fallback.update({'url':fallback_ident['url'],'hostname':fallback_ident['hostname'],'stageCode':fallback_ident['code'],'runtimeKind':'generic-preview','fallbackFrom':'multiservice'})
-            return fallback
+            generation=int(fallback.get('generation') or 1);fallback_ident=_stage_identity(num,'preview',generation);fallback.update({'url':fallback_ident['url'],'hostname':fallback_ident['hostname'],'stageCode':fallback_ident['code'],'runtimeKind':'generic-preview','fallbackFrom':'multiservice-unhealthy' if multi else 'multiservice'})
+            if fallback.get('healthy') or not multi:return fallback
         linked_source=_source_link_preview_status(slug,num,source_link)
-        if linked_source:return linked_source
+        if linked_source and (linked_source.get('healthy') or not multi):return linked_source
+        if multi:return multi
         return {'ok':True,'configured':False,'project':slug,'public_number':num,'generation':1,'stageCode':'W1','url':ident['url'],'hostname':ident['hostname'],'runtimeKind':'multiservice','secretValuesIncluded':False}
     ku,kt,_=_clients();status,data=_post(ku+'/komodo/project/preview/status',{'project':slug,'public_number':num},kt,timeout=30)
     if status//100!=2:return {'ok':False,'configured':False,'error':'preview_status_unavailable'}
@@ -1044,8 +1057,12 @@ def runtime_diagnostic_target(slug,user,environment='preview'):
     if re.fullmatch(r'dep_[a-f0-9]{24}',deployment_id):
         targets=_compose_deployment_runtime_targets(slug,deployment_id);containers=targets['containers']
         return {'ok':True,'project':slug,'publicNumber':num,'environment':environment,'stageCode':stage_code,'containers':containers,'deploymentId':deployment_id,'serviceTargets':targets['targets'],'secretValuesIncluded':False}
-    containers=[f'cloudif-p{num}-p{publication}-publication-web']
-    return {'ok':True,'project':slug,'publicNumber':num,'environment':environment,'stageCode':stage_code,'containers':containers,'secretValuesIncluded':False}
+    bridge=f'cloudif-p{num}-p{publication}-publication-web';legacy_backend=str(detail.get('legacyBackendContainer') or '').strip()
+    valid_legacy_backend=bool(re.fullmatch(rf'cloudif-p{num}-d{int(row["deploy_number"] or 0)}-(?:app|web)',legacy_backend))
+    containers=([legacy_backend] if valid_legacy_backend else [])+[bridge]
+    result={'ok':True,'project':slug,'publicNumber':num,'environment':environment,'stageCode':stage_code,'containers':containers,'secretValuesIncluded':False}
+    if valid_legacy_backend:result['legacyBackendContainer']=legacy_backend
+    return result
 
 
 def recreate_preview(slug,user,source='production'):
@@ -1678,9 +1695,9 @@ def enqueue_homologation(slug,user):
     if not project or not _can_homologate(con,slug,user):
         con.close();raise PermissionError('homologation_permission_denied')
     role=_release_permission_role(con,slug,user)
-    # Group-derived Admin/Professor privileges cannot be reconstructed from a
-    # queued user name. Require trusted directory refresh before supporting them.
-    if role not in ('owner','delegated'):
+    # Owner/delegated are project-scoped. Admin/Professor are allowed only
+    # because the worker revalidates their current Authentik/AD identity before effects.
+    if role not in ('owner','delegated','admin','professor'):
         con.close();raise PermissionError('homologation_role_revalidation_unavailable')
     active=_active_stage_job(con,slug)
     if active:
@@ -1846,15 +1863,34 @@ def _job_update(job_id,status=None,step=None,message=None,detail=None,finished=F
     if finished:sets.append('finished_at=?');vals.append(_now())
     vals.append(job_id);con.execute('update publication_jobs set '+','.join(sets)+' where id=?',vals);con.commit();con.close()
 
+def _current_release_directory_user(actor,max_age_seconds=900):
+    actor=str(actor or '').strip().lower()
+    if not actor or actor=='portal':raise PermissionError('release_identity_unavailable')
+    import cloudif_ad_directory_module as directory
+    status=directory.cache_status();synced=str(status.get('synced_at') or '')
+    if not status.get('available') or not synced:raise PermissionError('release_directory_unavailable')
+    try:
+        from datetime import datetime,timezone
+        stamp=datetime.fromisoformat(synced.replace('Z','+00:00'))
+        age=abs((datetime.now(timezone.utc)-stamp.astimezone(timezone.utc)).total_seconds())
+    except Exception:raise PermissionError('release_directory_timestamp_invalid')
+    if age>int(max_age_seconds):raise PermissionError('release_directory_stale')
+    result=directory.search(actor,'user',diagnostics=True,page=1,page_size=20)
+    exact=[x for x in (result.get('items') or []) if str(x.get('principal') or '').strip().lower()==actor and str(x.get('type') or '')=='user']
+    if len(exact)!=1:raise PermissionError('release_identity_not_found')
+    item=exact[0];groups=[str(x).strip() for x in (item.get('groups') or []) if str(x).strip()]
+    return {'username':actor,'groups':groups,'admin':bool(item.get('admin')),'professor':bool(item.get('professor')),'directorySource':str(item.get('source') or ''),'directorySyncedAt':synced}
+
+
 def _validate_homologation_job(slug,candidate_number,actor,authorization_role,job_id):
     """Require live project ACL and exact queued job identity before Hn effects.
 
-    Never recover implicit Admin/Professor groups from a queue-time role string.
-    The worker only has the actor name, not a fresh trusted directory identity.
+    Admin/Professor roles are revalidated from the current Authentik-derived
+    directory projection; queue-time group claims never authorize effects.
     """
     actor=str(actor or '').strip().lower()
     role=str(authorization_role or '').strip().lower()
-    if not actor or actor=='portal' or role not in ('owner','delegated'):
+    if not actor or actor=='portal' or role not in ('owner','delegated','admin','professor'):
         raise PermissionError('homologation_role_revalidation_unavailable')
     con=sqlite3.connect(DB);con.row_factory=sqlite3.Row
     try:
@@ -1871,14 +1907,14 @@ def _validate_homologation_job(slug,candidate_number,actor,authorization_role,jo
                 or int(row['candidate_number'] or 0)!=int(candidate_number)
                 or int(candidate_number)<=0):
             raise PermissionError('homologation_job_binding_mismatch')
-        user={'username':actor,'groups':[],'admin':False}
+        user=_current_release_directory_user(actor) if role in {'admin','professor'} else {'username':actor,'groups':[],'admin':False,'professor':False}
         if (not _project_allowed(con,slug,user)
                 or not _can_homologate(con,slug,user)
                 or _release_permission_role(con,slug,user)!=role):
             raise PermissionError('homologation_permission_revoked')
     finally:
         con.close()
-    return True
+    return user
 
 
 def _homologation_job_update_if_running(job_id,step,message,status=None,detail=None,finished=False):
@@ -1940,7 +1976,7 @@ def run_job(job):
         if operation=='homologation_candidate':
             candidate_number=int(job.get('candidate_number') or 0)
             queued_role=str(job.get('authorization_role') or '')
-            _validate_homologation_job(slug,candidate_number,actor,queued_role,job_id)
+            current_user=_validate_homologation_job(slug,candidate_number,actor,queued_role,job_id)
             def guarded_progress(step,message):
                 # Recheck status/membership before every controlled stage.
                 # A cross-service lock is still required to close TOCTOU after
@@ -1948,7 +1984,7 @@ def run_job(job):
                 _validate_homologation_job(slug,candidate_number,actor,queued_role,job_id)
                 _homologation_job_update_if_running(job_id,step,message)
                 _validate_homologation_job(slug,candidate_number,actor,queued_role,job_id)
-            result=create_homologation_candidate(slug,user,progress=guarded_progress,candidate_number=candidate_number,authorization_checked=True)
+            result=create_homologation_candidate(slug,current_user,progress=guarded_progress,candidate_number=candidate_number,authorization_checked=True)
             _validate_homologation_job(slug,candidate_number,actor,queued_role,job_id)
             message='Candidato '+str(result.get('stageCode') or '')+' pronto para homologação.'
         elif operation=='production_release':
@@ -2149,7 +2185,7 @@ def stage_terminal(slug,user,environment='preview'):
     auth=authorization(slug,user.get('username') or '',user.get('groups') or [])
     if not auth.get('canWrite'):con.close();raise PermissionError('O terminal exige permissão de escrita no projeto.')
     if environment=='production' and not _owner_or_admin(con,slug,user):con.close();raise PermissionError('O terminal de Produção exige o responsável pelo projeto ou administrador.')
-    num=_number(con,slug);payload={'project':slug,'public_number':num,'environment':environment,'actor':user.get('username') or 'portal'};stage_code='';deployment_id='';dep=0
+    num=_number(con,slug);payload={'project':slug,'public_number':num,'environment':environment,'actor':user.get('username') or 'portal'};stage_code='';deployment_id='';dep=0;legacy_backend_container=''
     if environment=='homologation':
         row=con.execute("select * from publication_candidates where project_slug=? and status in ('awaiting_homologation','homologated') order by candidate_number desc limit 1",(slug,)).fetchone()
         if not row:con.close();raise RuntimeError('Nenhum candidato temporário de Homologação está disponível.')
@@ -2167,7 +2203,11 @@ def stage_terminal(slug,user,environment='preview'):
         except Exception:detail={}
         if detail.get('runtimeKind')=='compose-snapshot':deployment_id=str(detail.get('productionDeploymentId') or detail.get('homologationDeploymentId') or '')
         legacy_publication=not bool(deployment_id);payload.update({'publication_number':publication,'deploy_number':dep,'candidate_number':candidate,'legacy':legacy_publication});stage_code=str(release['stage_code'] or ('P'+str(publication)))
-        if legacy_publication:payload['container_candidates']=[f'cloudif-p{num}-p{publication}-publication-web']
+        if legacy_publication:
+            bridge=f'cloudif-p{num}-p{publication}-publication-web';legacy_backend_container=str(detail.get('legacyBackendContainer') or '').strip()
+            if not re.fullmatch(rf'cloudif-p{num}-d{dep}-(?:app|web)',legacy_backend_container):legacy_backend_container=''
+            payload['container_candidates']=([legacy_backend_container] if legacy_backend_container else [])+[bridge]
+            if legacy_backend_container:payload['legacy_backend_container']=legacy_backend_container
     deployment_targets=None
     if deployment_id:
         if not re.fullmatch(r'dep_[a-f0-9]{24}',deployment_id):con.close();raise RuntimeError('O deployment deste ambiente é inválido para Terminal.')
@@ -2182,10 +2222,13 @@ def stage_terminal(slug,user,environment='preview'):
         target='https://komodoiff.duckdns.org/servers/'+urllib.parse.quote(server_id,safe='')+'/container/'+urllib.parse.quote(container,safe='')+'/terminal/'+urllib.parse.quote(terminal,safe='')
         return {'ok':True,'project':slug,'public_number':num,'environment':environment,'stageCode':stage_code,'container':container,'service':service,'deploymentId':deployment_id,'terminalUrl':target,'terminalReady':True,'terminalSource':'compose_deployment_service','sameRuntimeAcrossPromotion':True,'secretValuesIncluded':False,'secretReferencesIncluded':False}
     if environment=='production' and data.get('legacyPublication') is True:
-        expected=f'cloudif-p{num}-p{publication}-publication-web';server_id=str(data.get('server_id') or '');service=str(data.get('service') or '')
-        if mode!='container' or container!=expected or service!='web' or not server_id or not terminal:raise RuntimeError('stage_terminal_legacy_contract_invalid')
+        bridge=f'cloudif-p{num}-p{publication}-publication-web';server_id=str(data.get('server_id') or '');service=str(data.get('service') or '');backend=legacy_backend_container
+        allowed={(bridge,'web')}
+        if backend:allowed.add((backend,'app' if backend.endswith('-app') else 'web'))
+        if mode!='container' or (container,service) not in allowed or not server_id or not terminal:raise RuntimeError('stage_terminal_legacy_contract_invalid')
         target='https://komodoiff.duckdns.org/servers/'+urllib.parse.quote(server_id,safe='')+'/container/'+urllib.parse.quote(container,safe='')+'/terminal/'+urllib.parse.quote(terminal,safe='')
-        return {'ok':True,'project':slug,'public_number':num,'environment':environment,'stageCode':stage_code,'container':container,'service':'web','terminalUrl':target,'terminalReady':True,'terminalSource':'legacy_publication_container','sameRuntimeAcrossPromotion':False,'secretValuesIncluded':False,'secretReferencesIncluded':False}
+        source='legacy_publication_backend' if backend and container==backend else 'legacy_publication_container'
+        return {'ok':True,'project':slug,'public_number':num,'environment':environment,'stageCode':stage_code,'container':container,'service':service,'terminalUrl':target,'terminalReady':True,'terminalSource':source,'sameRuntimeAcrossPromotion':False,'secretValuesIncluded':False,'secretReferencesIncluded':False}
     stack_id=str(data.get('stack_id') or '');expected=f'cloudif-p{num}-d{dep}-web'
     if container!=expected or not stack_id or not terminal or mode!='stack':raise RuntimeError('stage_terminal_contract_invalid')
     target='https://komodoiff.duckdns.org/stacks/'+urllib.parse.quote(stack_id,safe='')+'/service/web/terminal/'+urllib.parse.quote(terminal,safe='')
@@ -2208,7 +2251,19 @@ def homologate_candidate(slug,candidate_number,user,decision='approved',note='')
         ku,kt,_=_clients();status,data=_post(ku+'/komodo/publication/reject',{'project':slug,'public_number':num,'deploy_number':dep,'candidate_number':int(candidate_number)},kt,timeout=240)
         cleanup={'ok':status//100==2 and data.get('ok') is not False,'status':status,'result':data}
     else:
-        cleanup={'ok':True,'skipped':True,'reason':'broker_managed_runtime'}
+        deployment_id=str(runtime_meta.get('homologationDeploymentId') or runtime_meta.get('deploymentId') or '')
+        cleanup={'ok':True,'skipped':False,'brokerManaged':True,'deploymentId':deployment_id}
+        if re.fullmatch(r'dep_[a-f0-9]{24}',deployment_id):
+            try:
+                try:_multiservice_deactivate_bridge(slug,deployment_id,'homologation','reject-h-'+hashlib.sha256((slug+deployment_id+str(candidate_number)).encode()).hexdigest()[:16])
+                except Exception:pass
+                cleanup['runtime']=_remove_compose_runtime(deployment_id)
+                snapshot_id=str(runtime_meta.get('composeSnapshotId') or runtime_meta.get('snapshotId') or '')
+                if re.fullmatch(r'snap_[a-f0-9]{24}',snapshot_id):cleanup['snapshot']=_remove_compose_snapshot_artifact(snapshot_id)
+            except Exception as exc:
+                cleanup['ok']=False;cleanup['runtimeError']=type(exc).__name__
+        else:
+            cleanup['ok']=False;cleanup['runtimeError']='missing_deployment_id'
     try:
         _,_,nt=_clients()
         pstatus,pdata=_post('http://10.62.91.3/stage/delete',{'public_number':num,'stage':'homologation','number':int(candidate_number)},nt,host='cloudif-publisher.internal',timeout=120)
@@ -2263,6 +2318,14 @@ def _executor_runtime_client():
 def _remove_compose_runtime(deployment_id):
     base,token=_executor_runtime_client();status,result=_bearer_json('DELETE',base+'/v1/deployments/'+urllib.parse.quote(str(deployment_id),safe=''),token,timeout=180)
     if status//100!=2 or result.get('ok') is not True:raise RuntimeError('Não foi possível remover o runtime da Homologação substituída.')
+    return result
+
+
+def _remove_compose_snapshot_artifact(snapshot_id):
+    snapshot_id=str(snapshot_id or '').strip()
+    if not re.fullmatch(r'snap_[a-f0-9]{24}',snapshot_id):raise RuntimeError('Identidade de snapshot inválida para limpeza.')
+    base,token=_executor_runtime_client();status,result=_bearer_json('DELETE',base+'/v1/compose-snapshots/'+urllib.parse.quote(snapshot_id,safe=''),token,timeout=360)
+    if status//100!=2 or result.get('removed') is not True:raise RuntimeError('Não foi possível retirar o artefato da Homologação rejeitada.')
     return result
 
 def _rehydrate_historical_compose_runtime(slug,publication,row,detail):

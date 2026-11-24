@@ -192,3 +192,7 @@ Referências complementares:
 ## Inventário current x reserved-deleted — 23/11/2026
 
 Referência canônica: `docs/AUDITORIA-GLOBAL-PROJETOS-CLOUDIFF-20261123.md`. `project_public_ids` preserva números de projetos excluídos e não é catálogo de projetos ativos. Read-model e recovery devem sempre cruzar com `projects`.
+
+## Catálogo atual versus reservas excluídas — 23/11/2026
+
+`projects/public-catalog` contém somente projetos com linha atual em `projects`; no fechamento são 9. `projects/reserved-public-numbers` contém 16 IDs preservados de projetos excluídos (`lifecycle=reserved-deleted`). Reserva numérica nunca autoriza recovery/provisionamento/runtime. Auditoria final: 9 projetos, 16 reservas, 0 issues.

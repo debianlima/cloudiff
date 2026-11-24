@@ -318,3 +318,27 @@ O Executor aceita `cloudif-p<NUM>-preview-web` somente como identidade genérica
 A restauração H preserva aliases internos de rede, mounts, rootfs e ambiente privado root-only. A bridge pública Wn não entra no snapshot; H recebe sua própria bridge/URL.
 
 Pré-flight live sem criar candidato: 7 projetos publicáveis `ready`; ambientes de Homologação válidos e sem variável obrigatória faltante. Auditoria noturna: 9 projetos atuais, 16 reservas excluídas, 0 issues, nenhuma mutação. Evidência: `docs/audits/homologation/20261123-preflight-summary.json`.
+
+## Fechamento global dos projetos — 23/11/2026
+
+Estado atual comprovado:
+
+- **9 projetos atuais** no catálogo canônico e **16 números públicos reservados** de projetos excluídos;
+- auditoria noturna: `issue_count=0`;
+- 7 projetos com Preview operacional: todos `healthy=true`, PHP/Node coerentes, Terminal pronto e `canSubmitHomologation=true`;
+- 6 Produções ativas: PHP/Node/Terminal coerentes com a identidade real do estágio;
+- CPUHub P2/P3 históricas realmente Offline;
+- nenhuma H rejeitada mantém container em execução; snapshots antigos remanescentes foram aposentados;
+- nenhum projeto `reserved-deleted` mantém container ou rota W/H/P;
+- MSHA: tenant Supabase pronto; aplicação permanece `source-incomplete`, sem fabricar W1;
+- PGHD Contexto: `draft-no-runtime` deliberado.
+
+O publisher v2 live foi promovido por canary para a release `20261123T000042Z-v18-npm-publisher-reserved-stage-cleanup-f6cc6860`, que remove stages W/H/P no `/unpublish`. O Nginx foi validado antes/depois.
+
+A janela de Publicações passou a buscar `release-flow` com `cache: no-store`; o asset live é `publication-release.js?v=20261123-release-nostore-v13`. Isso impede que uma falha antiga continue aparecendo depois de uma operação H mais recente bem-sucedida/rejeitada.
+
+O servidor Komodo `Local` apresentava drift de confiança com o Periphery, bloqueando criação de Terminal por container. A confiança foi reconciliada pela API oficial do Komodo, sem registrar ou exibir a chave. Depois da reconciliação, Terminal passou nos sete Previews e nas seis Produções ativas.
+
+Agenda W3 e LabHardware W1 tiveram ainda um fallback de status local seguro: quando o inventário de serviços do Core vem vazio, o agente aceita apenas containers `running` cujo label `com.docker.compose.project` corresponda exatamente ao stack. Nenhuma identidade é inferida apenas por nome.
+
+Evidência máquina-legível: `docs/audits/FINAL-PADRONIZACAO-PROJETOS-20261123.json`.

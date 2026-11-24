@@ -65,13 +65,14 @@ def canonical(value:Any)->bytes:
 
 def db()->sqlite3.Connection:
     DB_PATH.parent.mkdir(parents=True,exist_ok=True)
-    conn=sqlite3.connect(DB_PATH,timeout=20);conn.row_factory=sqlite3.Row
-    conn.execute('pragma busy_timeout=20000')
+    conn=sqlite3.connect(DB_PATH,timeout=60);conn.row_factory=sqlite3.Row
+    conn.execute('pragma busy_timeout=60000')
+    conn.execute('pragma synchronous=normal')
     return conn
 
 
 def init_db():
-    conn=db();conn.execute('pragma journal_mode=delete')
+    conn=db();conn.execute('pragma journal_mode=wal')
     conn.executescript('''
     create table if not exists deployments(
       deployment_id text primary key,
@@ -348,12 +349,13 @@ def publication_bridge_name(public_number:int,stage:str,number:int)->str:
     raise DeploymentError('invalid_publication_stage','Estágio de publicação inválido.',400)
 
 
-def _publication_bridge_config(status:dict)->str:
+def _publication_bridge_config(status:dict,runtime_host:str='')->str:
     services={str(item.get('service') or ''):int(item.get('port') or 0) for item in status.get('services') or []}
     routes=status.get('routes') or []
     if not services or not routes:raise DeploymentError('publication_bridge_contract_invalid','Deploy sem serviços ou rotas para publicação.',409)
     lines=['pid /tmp/nginx.pid;','worker_processes 1;','events { worker_connections 256; }','http {','  access_log off;','  error_log /dev/stderr warn;','  client_body_temp_path /tmp/client_temp;','  proxy_temp_path /tmp/proxy_temp;','  fastcgi_temp_path /tmp/fastcgi_temp;','  uwsgi_temp_path /tmp/uwsgi_temp;','  scgi_temp_path /tmp/scgi_temp;','  client_max_body_size 16m;','  server {','    listen 80;','    location = /__cloudif_bridge_health { default_type application/json; return 200 \'{"ok":true,"service":"cloudif-publication-bridge"}\'; }']
-    common=['      proxy_http_version 1.1;','      proxy_set_header Host $host;','      proxy_set_header X-Real-IP $remote_addr;','      proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;','      proxy_set_header X-Forwarded-Proto $http_x_forwarded_proto;','      proxy_set_header Upgrade $http_upgrade;','      proxy_set_header Connection "upgrade";']
+    host_value=runtime_host if runtime_host else '$host';forwarded_host_value=runtime_host if runtime_host else '$host'
+    common=['      proxy_http_version 1.1;',f'      proxy_set_header Host {host_value};','      proxy_set_header X-Real-IP $remote_addr;','      proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;','      proxy_set_header X-Forwarded-Proto $http_x_forwarded_proto;',f'      proxy_set_header X-Forwarded-Host {forwarded_host_value};','      proxy_set_header Upgrade $http_upgrade;','      proxy_set_header Connection "upgrade";']
     for route in sorted(routes,key=lambda item:len(str(item.get('pathPrefix') or '')),reverse=True):
         prefix=str(route.get('pathPrefix') or '');service=str(route.get('service') or '');strip=bool(route.get('stripPrefix',False));port=services.get(service,0)
         if not prefix.startswith('/') or service not in services or port<1:raise DeploymentError('publication_bridge_route_invalid','Rota de publicação inválida.',409)
@@ -366,16 +368,18 @@ def _publication_bridge_config(status:dict)->str:
 
 
 def ensure_publication_bridge(payload:Any)->dict:
-    if not isinstance(payload,dict) or set(payload)!={'project_slug','deployment_id','public_number','stage','number'}:raise DeploymentError('invalid_publication_bridge_request','Pedido de bridge inválido.',400)
-    slug=str(payload.get('project_slug') or '').strip().lower();deployment_id=str(payload.get('deployment_id') or '');stage=str(payload.get('stage') or '').strip().lower();public_number=int(payload.get('public_number') or 0);number=int(payload.get('number') or 0)
+    allowed={'project_slug','deployment_id','public_number','stage','number','runtime_host'}
+    if not isinstance(payload,dict) or not set(payload).issubset(allowed) or not {'project_slug','deployment_id','public_number','stage','number'}.issubset(payload):raise DeploymentError('invalid_publication_bridge_request','Pedido de bridge inválido.',400)
+    slug=str(payload.get('project_slug') or '').strip().lower();deployment_id=str(payload.get('deployment_id') or '');stage=str(payload.get('stage') or '').strip().lower();public_number=int(payload.get('public_number') or 0);number=int(payload.get('number') or 0);runtime_host=str(payload.get('runtime_host') or '').strip().lower()
     if not SLUG_RE.fullmatch(slug) or not DEPLOYMENT_RE.fullmatch(deployment_id):raise DeploymentError('invalid_publication_bridge_request','Pedido de bridge inválido.',400)
+    if runtime_host and (stage!='publication' or runtime_host!=f'{public_number}.cloudiff.duckdns.org'):raise DeploymentError('invalid_publication_runtime_host','Host interno do bridge inválido.',400)
     status=status_deployment(deployment_id)
     expected_environment='homologation' if stage=='homologation' else 'production' if stage=='publication' else ''
     if status.get('status')!='running' or status.get('project_slug')!=slug or status.get('environment')!=expected_environment:raise DeploymentError('publication_bridge_deployment_mismatch','Deploy não corresponde ao estágio de publicação.',409)
     image=inspect_image(PUBLICATION_BRIDGE_IMAGE_REF)
     if str(image.get('Id') or '')!=PUBLICATION_BRIDGE_IMAGE_ID:raise DeploymentError('publication_bridge_image_mismatch','Imagem do bridge diverge do digest homologado.',409)
-    name=publication_bridge_name(public_number,stage,number);network=network_name(deployment_id);root=PUBLICATION_BRIDGE_ROOT/name;config=root/'nginx.conf';root.mkdir(parents=True,exist_ok=True);config.write_text(_publication_bridge_config(status));os.chmod(config,0o644)
-    labels={'org.cloudiff.publication-bridge':'true','org.cloudiff.project':slug,'org.cloudiff.deployment':deployment_id,'org.cloudiff.public-number':str(public_number),'org.cloudiff.stage':stage,'org.cloudiff.stage-number':str(number)}
+    name=publication_bridge_name(public_number,stage,number);network=network_name(deployment_id);root=PUBLICATION_BRIDGE_ROOT/name;config=root/'nginx.conf';root.mkdir(parents=True,exist_ok=True);config.write_text(_publication_bridge_config(status,runtime_host));os.chmod(config,0o644)
+    labels={'org.cloudiff.publication-bridge':'true','org.cloudiff.project':slug,'org.cloudiff.deployment':deployment_id,'org.cloudiff.public-number':str(public_number),'org.cloudiff.stage':stage,'org.cloudiff.stage-number':str(number),'org.cloudiff.runtime-host':runtime_host}
     existing=docker('inspect',name,timeout=30,check=False)
     if existing.returncode==0:
         row=(json.loads(existing.stdout or '[]') or [{}])[0];current=(row.get('Config') or {}).get('Labels') or {}
@@ -541,9 +545,41 @@ def _snapshot_rootfs_image(snapshot_id:str,service:str,archive:Path,expected_sha
         if labels.get('org.cloudiff.snapshot')!=snapshot_id or labels.get('org.cloudiff.rootfs-sha256')!=expected_sha256:raise DeploymentError('compose_snapshot_image_conflict','Imagem local do snapshot diverge do artefato congelado.',409,{'service':service})
         return str(row.get('Id') or ''),tag
     change_snapshot=f'LABEL org.cloudiff.snapshot={snapshot_id}';change_digest=f'LABEL org.cloudiff.rootfs-sha256={expected_sha256}';change_service=f'LABEL org.cloudiff.service={service}'
-    result=docker('import','--change',change_snapshot,'--change',change_digest,'--change',change_service,str(archive),tag,timeout=1200)
-    image_id=result.stdout.strip();rows=_json_rows(docker('image','inspect',tag,timeout=30));row=rows[0] if rows else {}
+    command=['docker','import','--change',change_snapshot,'--change',change_digest,'--change',change_service,str(archive),tag]
+    process=subprocess.Popen(command,text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE,env=os.environ.copy())
+    deadline=time.time()+1200;row={}
+    try:
+        while True:
+            inspected=docker('image','inspect',tag,timeout=30,check=False)
+            if inspected.returncode==0:
+                rows=_json_rows(inspected);candidate=rows[0] if rows else {};labels=(candidate.get('Config') or {}).get('Labels') or {}
+                if (IMAGE_RE.fullmatch(str(candidate.get('Id') or '')) and labels.get('org.cloudiff.snapshot')==snapshot_id
+                        and labels.get('org.cloudiff.rootfs-sha256')==expected_sha256 and labels.get('org.cloudiff.service')==service):
+                    row=candidate
+                    if process.poll() is None:
+                        process.terminate()
+                        try:process.wait(timeout=10)
+                        except subprocess.TimeoutExpired:process.kill();process.wait(timeout=10)
+                    break
+            code=process.poll()
+            if code is not None:
+                stdout,stderr=process.communicate()
+                if code!=0:raise DeploymentError('compose_snapshot_image_import_failed','Root filesystem congelado não gerou imagem válida.',502,{'service':service,'error':(stderr or '')[-400:]})
+                inspected=docker('image','inspect',tag,timeout=30,check=False);rows=_json_rows(inspected);row=rows[0] if rows else {};break
+            if time.time()>=deadline:
+                process.terminate()
+                try:process.wait(timeout=10)
+                except subprocess.TimeoutExpired:process.kill();process.wait(timeout=10)
+                raise DeploymentError('compose_snapshot_image_import_timeout','Tempo excedido ao importar root filesystem congelado.',504,{'service':service})
+            time.sleep(2)
+    finally:
+        if process.poll() is None:
+            process.terminate()
+            try:process.wait(timeout=10)
+            except subprocess.TimeoutExpired:process.kill();process.wait(timeout=10)
     if not IMAGE_RE.fullmatch(str(row.get('Id') or '')):raise DeploymentError('compose_snapshot_image_import_failed','Root filesystem congelado não gerou imagem válida.',502,{'service':service})
+    labels=(row.get('Config') or {}).get('Labels') or {}
+    if labels.get('org.cloudiff.snapshot')!=snapshot_id or labels.get('org.cloudiff.rootfs-sha256')!=expected_sha256 or labels.get('org.cloudiff.service')!=service:raise DeploymentError('compose_snapshot_image_conflict','Imagem local do snapshot diverge do artefato congelado.',409,{'service':service})
     return str(row['Id']),tag
 
 
@@ -864,7 +900,7 @@ def create_preview_runtime_snapshot(payload:Any)->dict:
     try:
         for service,name,row,aliases in services:
             docker('pause',name,timeout=30);paused.append(name)
-        subprocess.run(['sync'],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=60)
+        subprocess.run(['sync'],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=300)
         for service,name,row,aliases in services:
             config=row.get('Config') or {};host=row.get('HostConfig') or {};env=[str(x) for x in (config.get('Env') or [])];mount_records=[];safe_mounts=[]
             for index,item in enumerate(row.get('Mounts') or []):
@@ -874,15 +910,20 @@ def create_preview_runtime_snapshot(payload:Any)->dict:
                 else:raise DeploymentError('preview_runtime_mount_unsupported','Mount do Preview não é publicável.',409,{'service':service,'type':kind,'destination':dest})
                 total+=archive.stat().st_size
                 if total>COMPOSE_SNAPSHOT_MAX_BYTES:raise DeploymentError('compose_snapshot_too_large','Snapshot do Preview excede o limite configurado.',409,{'bytes':total,'limit':COMPOSE_SNAPSHOT_MAX_BYTES})
-                mount_records.append({'type':kind,'source_ref':source_ref,'destination':dest,'rw':rw,'archive':str(archive.relative_to(tmp)),'source_name':source.name});safe_mounts.append({'type':kind,'sourceRef':source_ref,'destination':dest,'rw':rw,**_snapshot_archive_record(archive)})
+                mount_records.append({'type':kind,'source_ref':source_ref,'destination':dest,'rw':rw,'archive':str(archive.relative_to(tmp)),'source_name':source.name});safe_mounts.append({'type':kind,'sourceRef':source_ref,'destination':dest,'rw':rw,'file':archive.name,'bytes':archive.stat().st_size})
             rootfs_archive=tmp/'artifacts'/service/'rootfs.tar';_export_rootfs(name,rootfs_archive);total+=rootfs_archive.stat().st_size
             if total>COMPOSE_SNAPSHOT_MAX_BYTES:raise DeploymentError('compose_snapshot_too_large','Snapshot do Preview excede o limite configurado.',409,{'bytes':total,'limit':COMPOSE_SNAPSHOT_MAX_BYTES})
-            rootfs={'archive':str(rootfs_archive.relative_to(tmp)),'sha256':_sha_file(rootfs_archive),'bytes':rootfs_archive.stat().st_size}
+            rootfs={'archive':str(rootfs_archive.relative_to(tmp)),'sha256':'','bytes':rootfs_archive.stat().st_size}
             current_service=next((x for x in current.get('services') or [] if x.get('service')==service),{})
             spec={'service':service,'source_container':name,'network_aliases':aliases,'image_id':str(row.get('Image') or ''),'environment':env,'entrypoint':config.get('Entrypoint') or [],'cmd':config.get('Cmd') or [],'user':str(config.get('User') or ''),'working_dir':str(config.get('WorkingDir') or ''),'healthcheck':config.get('Healthcheck') or {},'cap_add':[str(x) for x in (host.get('CapAdd') or [])],'cap_drop':[str(x) for x in (host.get('CapDrop') or [])],'security_opt':[str(x) for x in (host.get('SecurityOpt') or [])],'read_only':bool(host.get('ReadonlyRootfs')),'pids_limit':host.get('PidsLimit'),'memory':int(host.get('Memory') or 0),'nano_cpus':int(host.get('NanoCpus') or 0),'shm_size':int(host.get('ShmSize') or 0),'tmpfs':host.get('Tmpfs') or {},'mounts':mount_records,'overlays':[],'rootfs':rootfs,'ports':_compose_tcp_ports(row),'requires_egress':bool(current_service.get('requires_egress'))}
-            private['services'].append(spec);safe={'service':service,'source_container':name,'network_aliases':aliases,'image_id':str(row.get('Image') or ''),'environment_digest':hashlib.sha256(canonical(sorted(env))).hexdigest(),'environment_names':sorted({x.split('=',1)[0] for x in env if '=' in x}),'mounts':safe_mounts,'rootfs_overlays':[],'rootfs':{'sha256':rootfs['sha256'],'bytes':rootfs['bytes']},'ports':_compose_tcp_ports(row),'port':int(current_service.get('port') or 0),'requires_egress':bool(current_service.get('requires_egress'))};safe['service_digest']=hashlib.sha256(canonical(safe)).hexdigest();safe_services.append(safe)
+            private['services'].append(spec);safe={'service':service,'source_container':name,'network_aliases':aliases,'image_id':str(row.get('Image') or ''),'environment_digest':hashlib.sha256(canonical(sorted(env))).hexdigest(),'environment_names':sorted({x.split('=',1)[0] for x in env if '=' in x}),'mounts':safe_mounts,'rootfs_overlays':[],'rootfs':{'sha256':'','bytes':rootfs['bytes']},'ports':_compose_tcp_ports(row),'port':int(current_service.get('port') or 0),'requires_egress':bool(current_service.get('requires_egress'))};safe_services.append(safe)
         for paused_name in reversed(paused):docker('unpause',paused_name,timeout=30)
         paused.clear()
+        safe_by_service={item['service']:item for item in safe_services}
+        for spec in private['services']:
+            safe=safe_by_service[str(spec['service'])]
+            for mount,safe_mount in zip(spec.get('mounts') or [],safe.get('mounts') or []):safe_mount['sha256']=_sha_file(tmp/str(mount['archive']))
+            rootfs_path=tmp/str((spec.get('rootfs') or {}).get('archive') or '');rootfs_sha=_sha_file(rootfs_path);spec['rootfs']['sha256']=rootfs_sha;safe['rootfs']['sha256']=rootfs_sha;safe['service_digest']=hashlib.sha256(canonical(safe)).hexdigest()
         private_path=tmp/'private-spec.json';private_path.write_text(json.dumps(private,ensure_ascii=False,separators=(',',':')));os.chmod(private_path,0o600);safe_services=sorted(safe_services,key=lambda x:x['service'])
         manifest={'project_slug':slug,'source_kind':'preview-runtime','public_number':public_number,'generation':generation,'source_digest':current['source_digest'],'source_commit':commit,'edge_service':'app','edge_port':int(current['edge_port']),'services':safe_services,'private_spec_sha256':_sha_file(private_path),'artifact_bytes':sum(int(x.get('bytes') or 0) for svc in safe_services for x in (svc.get('mounts') or []))+sum(int((svc.get('rootfs') or {}).get('bytes') or 0) for svc in safe_services)}
         snapshot_digest=hashlib.sha256(canonical(manifest)).hexdigest();(tmp/'manifest.json').write_text(json.dumps(manifest,ensure_ascii=False,sort_keys=True,indent=2)+'\n');os.chmod(tmp/'manifest.json',0o600)
@@ -901,7 +942,7 @@ def create_preview_runtime_snapshot(payload:Any)->dict:
 
 def _snapshot_safe_status(row:sqlite3.Row)->dict:
     manifest=json.loads(row['manifest_json'] or '{}');status=str(row['status'] or '')
-    return {'ok':status!='failed','source_kind':str(manifest.get('source_kind') or 'linked-compose'),'snapshot_id':row['snapshot_id'],'project_slug':row['project_slug'],'source_digest':row['source_digest'],'snapshot_digest':row['snapshot_digest'],'source_commit':row['source_commit'],'edge_service':row['edge_service'],'edge_port':int(row['edge_port']),'services':manifest.get('services') or [],'status':status,'errorCode':str(manifest.get('captureErrorCode') or ''),'created_at':int(row['created_at']),'cloneIncludesPrivateEnvironment':True,'cloneIncludesWritableVolumeData':True,'homologationCloneMode':'full-runtime-clone','productionPromotionMode':'same-homologated-deployment','secretValuesIncluded':False,'secretValuesPersistedRootOnly':True,'effectsExecuted':False}
+    return {'ok':status in {'capturing','ready'},'source_kind':str(manifest.get('source_kind') or 'linked-compose'),'snapshot_id':row['snapshot_id'],'project_slug':row['project_slug'],'source_digest':row['source_digest'],'snapshot_digest':row['snapshot_digest'],'source_commit':row['source_commit'],'edge_service':row['edge_service'],'edge_port':int(row['edge_port']),'services':manifest.get('services') or [],'status':status,'errorCode':str(manifest.get('captureErrorCode') or ''),'created_at':int(row['created_at']),'cloneIncludesPrivateEnvironment':status=='ready','cloneIncludesWritableVolumeData':status=='ready','homologationCloneMode':'full-runtime-clone','productionPromotionMode':'same-homologated-deployment','secretValuesIncluded':False,'secretValuesPersistedRootOnly':status=='ready','effectsExecuted':False}
 
 
 def compose_snapshot_status(snapshot_id:str)->dict:
@@ -909,6 +950,33 @@ def compose_snapshot_status(snapshot_id:str)->dict:
     connection=db();row=connection.execute('select * from compose_snapshots where snapshot_id=?',(snapshot_id,)).fetchone();connection.close()
     if not row:raise DeploymentError('compose_snapshot_not_found','Snapshot Compose não encontrado.',404)
     return _snapshot_safe_status(row)
+
+
+def remove_compose_snapshot(snapshot_id:str)->dict:
+    if not COMPOSE_SNAPSHOT_RE.fullmatch(str(snapshot_id or '')):raise DeploymentError('invalid_snapshot_id','snapshot_id inválido.',400)
+    connection=db();row=connection.execute('select * from compose_snapshots where snapshot_id=?',(snapshot_id,)).fetchone()
+    if not row:connection.close();raise DeploymentError('compose_snapshot_not_found','Snapshot Compose não encontrado.',404)
+    active=connection.execute("select deployment_id,status from deployments where snapshot_id=? and status='running' order by deployment_id",(snapshot_id,)).fetchall()
+    connection.close()
+    if active:raise DeploymentError('compose_snapshot_in_use','Snapshot ainda pertence a deployment ativo.',409,{'deployments':[str(x['deployment_id']) for x in active]})
+    ids=docker('ps','-aq','--filter',f'label=org.cloudiff.snapshot={snapshot_id}',timeout=30,check=False).stdout.splitlines()
+    if ids:raise DeploymentError('compose_snapshot_containers_exist','Snapshot ainda possui containers associados.',409,{'containerCount':len(ids)})
+    root=COMPOSE_SNAPSHOT_ROOT/snapshot_id;removed_bytes=0
+    if root.exists():
+        try:removed_bytes=_path_size(root)
+        except Exception:removed_bytes=0
+        shutil.rmtree(root,ignore_errors=False)
+    for tmp in COMPOSE_SNAPSHOT_ROOT.glob('.'+snapshot_id+'.tmp-*'):shutil.rmtree(tmp,ignore_errors=True)
+    image_ids=[]
+    listed=docker('images','--filter',f'label=org.cloudiff.snapshot={snapshot_id}','--format','{{.ID}}',timeout=60,check=False)
+    for image_id in sorted(set(x.strip() for x in listed.stdout.splitlines() if x.strip())):
+        result=docker('image','rm',image_id,timeout=300,check=False)
+        if result.returncode==0:image_ids.append(image_id)
+    try:manifest=json.loads(row['manifest_json'] or '{}')
+    except Exception:manifest={}
+    audit={'source_kind':str(manifest.get('source_kind') or 'linked-compose'),'captureStatus':'removed','artifactBytes':int(manifest.get('artifact_bytes') or removed_bytes),'serviceCount':len(manifest.get('services') or [])}
+    connection=db();connection.execute('update compose_snapshots set manifest_json=?,status=? where snapshot_id=?',(json.dumps(audit,ensure_ascii=False,separators=(',',':')),'removed',snapshot_id));connection.commit();saved=connection.execute('select * from compose_snapshots where snapshot_id=?',(snapshot_id,)).fetchone();connection.close()
+    safe=_snapshot_safe_status(saved);safe.update({'ok':True,'removed':True,'artifactBytesRemoved':removed_bytes,'imagesRemoved':len(image_ids),'secretValuesIncluded':False});return safe
 
 
 def _snapshot_archive_record(path:Path)->dict:
@@ -930,7 +998,7 @@ def create_compose_snapshot(slug:str,expected_source_digest:str,deployment_id:st
     try:
         for row in rows:
             name=str(row.get('Name') or '').lstrip('/');docker('pause',name,timeout=30);paused.append(name)
-        subprocess.run(['sync'],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=60)
+        subprocess.run(['sync'],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=300)
         for row in sorted(rows,key=lambda r:str(((r.get('Config') or {}).get('Labels') or {}).get('com.docker.compose.service') or '')):
             config=row.get('Config') or {};host=row.get('HostConfig') or {};labels=config.get('Labels') or {};service=str(labels.get('com.docker.compose.service') or '');name=str(row.get('Name') or '').lstrip('/')
             env=[str(x) for x in (config.get('Env') or [])];mount_records=[];safe_mounts=[];destinations=[]
@@ -1018,6 +1086,14 @@ def deploy_compose_snapshot(payload:Any)->dict:
     if not isinstance(variables,dict):raise DeploymentError('invalid_variables','Variáveis inválidas.',400)
     variables_digest=str(payload.get('variables_digest') or '')
     if not SHA_RE.fullmatch(variables_digest) or not hmac.compare_digest(hashlib.sha256(canonical(variables)).hexdigest(),variables_digest):raise DeploymentError('variables_digest_mismatch','As variáveis mudaram após o plano.',409)
+    stage_identity=payload.get('stage_identity') if isinstance(payload.get('stage_identity'),dict) else {}
+    if stage_identity:
+        if set(stage_identity)!={'public_number','stage','number'}:raise DeploymentError('invalid_stage_identity','Identidade pública do estágio inválida.',400)
+        try:stage_public_number=int(stage_identity.get('public_number') or 0);stage_number=int(stage_identity.get('number') or 0)
+        except Exception:raise DeploymentError('invalid_stage_identity','Identidade pública do estágio inválida.',400)
+        stage_name=str(stage_identity.get('stage') or '').strip().lower()
+        if not (1<=stage_public_number<=999999999 and 1<=stage_number<=999999 and stage_name=='homologation' and environment=='homologation'):raise DeploymentError('invalid_stage_identity','Identidade pública do estágio inválida.',400)
+    else:stage_public_number=0;stage_number=0;stage_name=''
     connection=db();existing=connection.execute('select * from deployments where deployment_id=?',(deployment_id,)).fetchone();connection.close()
     if existing:
         if str(existing['plan_digest'])==plan and str(existing['status'])=='running':result=status_deployment(deployment_id);result['idempotent']=True;return result
@@ -1054,7 +1130,11 @@ def deploy_compose_snapshot(payload:Any)->dict:
                 if '=' in str(item):key,value=str(item).split('=',1);env[key]=value
             approved=variables.get(service) or {}
             if not isinstance(approved,dict):raise DeploymentError('invalid_variables','Variáveis por serviço inválidas.',400,{'service':service})
-            env.update({str(k):str(v) for k,v in approved.items()});env.update({'CLOUDIF_PROJECT_SLUG':slug,'CLOUDIF_ENVIRONMENT':environment,'CLOUDIF_DEPLOYMENT_ID':deployment_id,'CLOUDIF_SERVICE':service,'CLOUDIF_COMPOSE_SNAPSHOT_ID':snapshot_id})
+            env.update({str(k):str(v) for k,v in approved.items()})
+            if slug=='paperclip' and environment=='homologation' and stage_public_number and stage_number:
+                h_host=f'{stage_public_number}-h{stage_number}-homologation.cloudiff.duckdns.org';stable_host=f'{stage_public_number}.cloudiff.duckdns.org'
+                env.pop('PAPERCLIP_PUBLIC_URL',None);env['PAPERCLIP_AUTH_BASE_URL_MODE']='auto';env['PAPERCLIP_ALLOWED_HOSTNAMES']=h_host+','+stable_host
+            env.update({'CLOUDIF_PROJECT_SLUG':slug,'CLOUDIF_ENVIRONMENT':environment,'CLOUDIF_DEPLOYMENT_ID':deployment_id,'CLOUDIF_SERVICE':service,'CLOUDIF_COMPOSE_SNAPSHOT_ID':snapshot_id})
             path=env_file(deployment_id,service,env)
             command=['create','--name',name,'--network',network,'--network-alias',service]
             for alias in sorted(set(str(x or '').strip() for x in (spec.get('network_aliases') or []))):
@@ -1084,7 +1164,7 @@ def deploy_compose_snapshot(payload:Any)->dict:
             command.append(snapshot_image_ref)
             if entry:command.extend(entry[1:])
             command.extend(cmd)
-            try:cid=docker(*command,timeout=180).stdout.strip()
+            try:cid=docker(*command,timeout=900).stdout.strip()
             finally:path.unlink(missing_ok=True)
             if spec.get('requires_egress'):docker('network','connect','--alias',service,egress,name,timeout=30)
             created.append(name);ports=[int(x) for x in (spec.get('ports') or []) if int(x)>0];port=int(snapshot['edge_port']) if service==snapshot['edge_service'] else (ports[0] if ports else 0);services.append({'service':service,'container_name':name,'container_id':cid,'image_id':snapshot_image_id,'source_image_id':str(spec.get('image_id') or ''),'snapshot_id':snapshot_id,'port':port,'healthcheck':'/','requires_egress':bool(spec.get('requires_egress')),'variable_names':sorted(env)})
@@ -1134,9 +1214,9 @@ def probe(port:int,path:str,deadline:float)->dict:
 def cleanup_resources(deployment_id:str,dependency_containers:list[str]|None=None)->dict:
     prefix='cloudif-'+deployment_id.replace('_','-')+'-';names=docker('ps','-a','--format','{{.Names}}',check=False).stdout.splitlines();removed=[];network=network_name(deployment_id)
     bridges=docker('ps','-a','--filter','label=org.cloudiff.publication-bridge=true','--filter',f'label=org.cloudiff.deployment={deployment_id}','--format','{{.Names}}',check=False).stdout.splitlines()
-    for bridge in bridges:docker('rm','-f',bridge,timeout=30,check=False);removed.append(bridge)
+    for bridge in bridges:docker('rm','-f',bridge,timeout=300,check=False);removed.append(bridge)
     for name in names:
-        if name.startswith(prefix):docker('rm','-f',name,timeout=30,check=False);removed.append(name)
+        if name.startswith(prefix):docker('rm','-f',name,timeout=300,check=False);removed.append(name)
     detached=0
     for name in sorted(set(dependency_containers or [])):
         result=docker('network','disconnect','-f',network,name,timeout=30,check=False)
@@ -1145,7 +1225,7 @@ def cleanup_resources(deployment_id:str,dependency_containers:list[str]|None=Non
     network_result=docker('network','rm',network,timeout=30,check=False)
     volumes=docker('volume','ls','-q','--filter',f'label=org.cloudiff.deployment={deployment_id}',timeout=30,check=False).stdout.splitlines();volumes_removed=0
     for volume in volumes:
-        if docker('volume','rm',volume,timeout=60,check=False).returncode==0:volumes_removed+=1
+        if docker('volume','rm',volume,timeout=300,check=False).returncode==0:volumes_removed+=1
     shutil.rmtree(COMPOSE_RUNTIME_ROOT/deployment_id,ignore_errors=True)
     return {'containersRemoved':len(removed),'dependencyContainersDetached':detached,'volumesRemoved':volumes_removed,'networkRemoved':network_result.returncode==0,'egressNetworkRemoved':egress_result.returncode==0}
 
@@ -1339,24 +1419,60 @@ def remove_deployment(deployment_id:str,reason:str='removed')->dict:
     return {'ok':True,'deployment_id':deployment_id,'status':reason,**cleanup,'removed_at':now}
 
 
+def _recover_completed_preview_snapshot(connection:sqlite3.Connection,row:sqlite3.Row)->bool:
+    snapshot_id=str(row['snapshot_id'] or '');root=COMPOSE_SNAPSHOT_ROOT/snapshot_id
+    manifest_path=root/'manifest.json';private_path=root/'private-spec.json'
+    if not root.is_dir() or not manifest_path.is_file() or not private_path.is_file():return False
+    try:manifest=json.loads(manifest_path.read_text())
+    except Exception:return False
+    if str(manifest.get('source_kind') or '')!='preview-runtime' or str(manifest.get('project_slug') or '')!=str(row['project_slug'] or ''):return False
+    private_sha=str(manifest.get('private_spec_sha256') or '')
+    if not re.fullmatch(r'[a-f0-9]{64}',private_sha) or _sha_file(private_path)!=private_sha:return False
+    total=0
+    for service in manifest.get('services') or []:
+        name=str(service.get('service') or '')
+        if not re.fullmatch(r'[A-Za-z0-9_.-]+',name):return False
+        rootfs=service.get('rootfs') or {};rootfs_path=root/'artifacts'/name/'rootfs.tar'
+        if not rootfs_path.is_file() or int(rootfs.get('bytes') or -1)!=rootfs_path.stat().st_size or _sha_file(rootfs_path)!=str(rootfs.get('sha256') or ''):return False
+        total+=rootfs_path.stat().st_size
+        for mount in service.get('mounts') or []:
+            filename=str(mount.get('file') or '')
+            if not re.fullmatch(r'mount-[0-9]+\.tar',filename):return False
+            archive=root/'artifacts'/name/filename
+            if not archive.is_file() or int(mount.get('bytes') or -1)!=archive.stat().st_size or _sha_file(archive)!=str(mount.get('sha256') or ''):return False
+            total+=archive.stat().st_size
+    if total!=int(manifest.get('artifact_bytes') or -1):return False
+    snapshot_digest=hashlib.sha256(canonical(manifest)).hexdigest()
+    connection.execute('update compose_snapshots set source_digest=?,snapshot_digest=?,source_commit=?,edge_service=?,edge_port=?,manifest_json=?,status=? where snapshot_id=?',(
+      str(manifest.get('source_digest') or row['source_digest'] or ''),snapshot_digest,str(manifest.get('source_commit') or row['source_commit'] or ''),str(manifest.get('edge_service') or row['edge_service'] or 'app'),int(manifest.get('edge_port') or row['edge_port'] or 0),json.dumps(manifest,ensure_ascii=False,separators=(',',':')),'ready',snapshot_id))
+    return True
+
+
 def recover_interrupted_preview_snapshots()->dict:
-    connection=db();rows=connection.execute("select snapshot_id,project_slug,manifest_json from compose_snapshots where status='capturing'").fetchall();projects={str(row['project_slug'] or '') for row in rows if str(row['project_slug'] or '')}
+    connection=db();rows=connection.execute("select * from compose_snapshots where status='capturing'").fetchall();projects={str(row['project_slug'] or '') for row in rows if str(row['project_slug'] or '')};completed=[];failed=[]
     for row in rows:
+        snapshot_id=str(row['snapshot_id'] or '')
+        try:done=_recover_completed_preview_snapshot(connection,row)
+        except Exception:done=False
+        if done:
+            completed.append(snapshot_id)
+            for tmp in COMPOSE_SNAPSHOT_ROOT.glob('.'+snapshot_id+'.tmp-*'):shutil.rmtree(tmp,ignore_errors=True)
+            continue
         try:manifest=json.loads(row['manifest_json'] or '{}')
         except Exception:manifest={}
         manifest.update({'source_kind':str(manifest.get('source_kind') or 'preview-runtime'),'services':[],'captureStatus':'failed','captureErrorCode':'executor_restarted_during_capture'})
-        connection.execute('update compose_snapshots set manifest_json=?,status=? where snapshot_id=?',(json.dumps(manifest,ensure_ascii=False,separators=(',',':')),'failed',row['snapshot_id']))
-        for tmp in COMPOSE_SNAPSHOT_ROOT.glob('.'+str(row['snapshot_id'])+'.tmp-*'):shutil.rmtree(tmp,ignore_errors=True)
+        connection.execute('update compose_snapshots set manifest_json=?,status=? where snapshot_id=?',(json.dumps(manifest,ensure_ascii=False,separators=(',',':')),'failed',snapshot_id));failed.append(snapshot_id)
+        for tmp in COMPOSE_SNAPSHOT_ROOT.glob('.'+snapshot_id+'.tmp-*'):shutil.rmtree(tmp,ignore_errors=True)
     connection.commit();connection.close();recovered=[]
     if projects:
         listed=docker('ps','-aq','--filter','status=paused',timeout=30,check=False)
         for cid in (listed.stdout or '').splitlines():
             inspect=_json_rows(docker('inspect',cid.strip(),timeout=30,check=False))
             if not inspect:continue
-            item=inspect[0];labels=(item.get('Config') or {}).get('Labels') or {};project=str(labels.get('org.cloudiff.project') or labels.get('cloudif.project') or '');stage=str(labels.get('org.cloudiff.stage') or labels.get('com.cloudiff.environment') or labels.get('cloudif.stage') or '')
+            item=inspect[0];labels=(item.get('Config') or {}).get('Labels') or {};project=str(labels.get('org.cloudiff.project') or labels.get('com.cloudiff.project') or labels.get('cloudif.project') or '');stage=str(labels.get('org.cloudiff.stage') or labels.get('com.cloudiff.environment') or labels.get('cloudif.stage') or '')
             if project in projects and stage in {'preview','restored-candidate'}:
                 name=str(item.get('Name') or '').lstrip('/');docker('unpause',name,timeout=30,check=False);recovered.append(name)
-    return {'failedCaptures':len(rows),'unpaused':sorted(recovered)}
+    return {'completedCaptures':sorted(completed),'failedCaptures':len(failed),'failedSnapshotIds':sorted(failed),'unpaused':sorted(recovered)}
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -1412,6 +1528,10 @@ class Handler(BaseHTTPRequestHandler):
         match=re.fullmatch(r'/v1/deployments/(dep_[a-f0-9]{24})',self.path)
         if match:
             try:return self.out(200,remove_deployment(match.group(1)))
+            except Exception as error:return self.error(error)
+        snapshot_match=re.fullmatch(r'/v1/compose-snapshots/(snap_[a-f0-9]{24})',self.path)
+        if snapshot_match:
+            try:return self.out(200,remove_compose_snapshot(snapshot_match.group(1)))
             except Exception as error:return self.error(error)
         return self.out(404,{'ok':False,'error':{'code':'not_found','message':'Rota não encontrada.'}})
 

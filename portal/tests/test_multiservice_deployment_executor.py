@@ -50,6 +50,13 @@ class MultiserviceDeploymentExecutorTests(unittest.TestCase):
             'org.cloudiff.toolchain-digest':'a'*64,'org.cloudiff.archive-sha256':'f'*64,'org.cloudiff.application-digest':digest,
         }}}
 
+    def test_executor_sqlite_uses_wal_and_long_busy_timeout(self):
+        con=self.module.db()
+        self.assertEqual(con.execute('pragma journal_mode').fetchone()[0].lower(),'wal')
+        self.assertGreaterEqual(int(con.execute('pragma busy_timeout').fetchone()[0]),60000)
+        self.assertEqual(int(con.execute('pragma synchronous').fetchone()[0]),1)
+        con.close()
+
     def test_normalization_binds_variable_values_by_digest(self):
         normalized=self.module.normalize_payload(self.payload())
         self.assertEqual(normalized['variables']['api']['DATABASE_URL'],'postgres://internal')

@@ -35,7 +35,8 @@
     const response = await fetch(url, {
       credentials: 'same-origin',
       redirect: 'manual',
-      headers: { Accept: 'application/json', ...(options.headers || {}) },
+      cache: 'no-store',
+      headers: { Accept: 'application/json', 'Cache-Control': 'no-store', ...(options.headers || {}) },
       ...options
     });
     if (response.type === 'opaqueredirect' || response.status === 0 || (response.status >= 300 && response.status < 400)) {

@@ -5539,7 +5539,7 @@ def _rd_runtime_info_with_reconcile(project, kind, environment='', user=None):
     if environment in {'preview','homologation','production'}:
         import cloudif_portal_publications as publications
         target=publications.runtime_diagnostic_target(project['slug'],user or {},environment)
-        payload.update({'environment':environment,'stage_code':str(target.get('stageCode') or ''),'public_number':int(target.get('publicNumber') or project.get('public_number') or 0),'container_candidates':target.get('containers') or [],'deployment_id':str(target.get('deploymentId') or ''),'stack_id':str(target.get('stackId') or '')})
+        payload.update({'environment':environment,'stage_code':str(target.get('stageCode') or ''),'public_number':int(target.get('publicNumber') or project.get('public_number') or 0),'container_candidates':target.get('containers') or [],'deployment_id':str(target.get('deploymentId') or ''),'stack_id':str(target.get('stackId') or ''),'legacy_backend_container':str(target.get('legacyBackendContainer') or '')})
         return _rd_agent('/komodo/project/runtime-info',payload,timeout=45)
     try:
         return _rd_agent('/komodo/project/runtime-info',payload,timeout=45)
@@ -6341,7 +6341,7 @@ if 'page' in globals() and not globals().get('_ui144_wrapped'):
 # CloudIF readable modern colors END
 
 # CloudIF W/H/P release wizard BEGIN
-_WHP_RELEASE_ASSETS='<script id="cloudif-whp-release-script" src="/cloudiff/portal/assets/publication-release.js?v=20261122-runtime-state-v12" defer></script>'
+_WHP_RELEASE_ASSETS='<script id="cloudif-whp-release-script" src="/cloudiff/portal/assets/publication-release.js?v=20261123-release-nostore-v13" defer></script>'
 if 'page' in globals() and not globals().get('_whp_release_wrapped'):
     _whp_release_prev_page=page
     def page(user,tab,body):

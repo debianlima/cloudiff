@@ -46,3 +46,7 @@ PHP, Node.js e Terminal devem resolver o mesmo `project + stageCode + runtime id
 ## Classificação final — draft-no-runtime — 23/11/2026
 
 Projeto atual 1028, deliberadamente sem repositório/runtime de aplicação. Não provisionar W/H/P até existir contrato e fonte executável.
+
+## Fechamento de padronização — 23/11/2026
+
+Classificação atual: `draft-no-runtime`. Estado: sem W/H/P por contrato. A norma PHP/Node/Terminal, read-model e lifecycle W/H/P está referenciada em `docs/audits/FINAL-PADRONIZACAO-PROJETOS-20261123.json`.

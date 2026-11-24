@@ -34,7 +34,7 @@ class HomologationPreviewRuntimeSelectionTests(unittest.TestCase):
         self.assertIn("'environment':env",block)
         self.assertIn("private-spec.json",block)
         self.assertIn("os.chmod(private_path,0o600)",block)
-        self.assertIn("snapshot_id='snap_'+secrets.token_hex(12)",block)
+        self.assertIn("snapshot_id=requested_snapshot or ('snap_'+secrets.token_hex(12))",block)
         self.assertIn("paused.clear()",block)
         self.assertNotIn("_compress_rootfs(rootfs_archive)",block)
         self.assertIn("for service,name,row,aliases in services",block)
@@ -48,6 +48,46 @@ class HomologationPreviewRuntimeSelectionTests(unittest.TestCase):
     def test_executor_gateway_allows_preview_runtime_snapshot(self):
         self.assertIn("_EXECUTOR_PROXY_PREFIX+'/v1/preview-runtime-snapshots'",KOMODO)
         self.assertIn("'/v1/preview-runtime-snapshots':1200",KOMODO)
+
+
+    def test_interrupted_capture_recovers_companion_project_labels(self):
+        block=EXEC[EXEC.index('def recover_interrupted_preview_snapshots'):EXEC.index('class Handler',EXEC.index('def recover_interrupted_preview_snapshots'))]
+        self.assertIn("labels.get('com.cloudiff.project')",block)
+        self.assertIn("stage in {'preview','restored-candidate'}",block)
+        self.assertIn("docker('unpause'",block)
+
+    def test_snapshot_capture_is_pollable_and_restart_safe(self):
+        block=EXEC[EXEC.index('def create_preview_runtime_snapshot'):EXEC.index('def _snapshot_safe_status',EXEC.index('def create_preview_runtime_snapshot'))]
+        self.assertIn("'snapshot_id'",block)
+        self.assertIn("'capturing'",block)
+        self.assertIn("'failed'",block)
+        self.assertIn("update compose_snapshots set",block)
+        self.assertIn("def recover_interrupted_preview_snapshots",EXEC)
+        self.assertIn("executor_restarted_during_capture",EXEC)
+        self.assertIn("recover_interrupted_preview_snapshots();ThreadingHTTPServer",EXEC)
+        self.assertIn("except (BrokenPipeError,ConnectionResetError)",EXEC)
+
+    def test_preview_unpauses_before_hashing_frozen_archives(self):
+        block=EXEC[EXEC.index('def create_preview_runtime_snapshot'):EXEC.index('def _snapshot_safe_status',EXEC.index('def create_preview_runtime_snapshot'))]
+        self.assertLess(block.index("paused.clear()"),block.index("rootfs_sha=_sha_file"))
+        self.assertIn("safe_mount['sha256']=_sha_file",block)
+        self.assertIn("spec['rootfs']['sha256']=rootfs_sha",block)
+
+    def test_portal_uses_known_snapshot_id_and_polls(self):
+        pblock=PUB[PUB.index('def _preview_runtime_snapshot'):PUB.index('def _create_preview_runtime_homologation_candidate')]
+        self.assertIn("snapshot_id=str(snapshot_id or '').strip() or ('snap_'+os.urandom(12).hex())",pblock)
+        self.assertIn("'snapshot_id':snapshot_id",pblock)
+        candidate=PUB[PUB.index('def _create_preview_runtime_homologation_candidate'):PUB.index('def _supersede_prior_homologations')]
+        self.assertIn("'|preview-runtime|'",candidate)
+        self.assertIn("'|H'+str(candidate)",candidate)
+        self.assertIn("source_commit).encode()).hexdigest()[:24]",candidate)
+        self.assertIn("timeout=12",pblock)
+        self.assertIn("'/v1/compose-snapshots/'+snapshot_id",pblock)
+        self.assertIn("state=='ready'",pblock)
+        self.assertIn("state=='failed'",pblock)
+
+    def test_broker_rejects_capture_that_is_not_ready(self):
+        self.assertIn("compose-snapshot-not-ready",BROKER)
 
     def test_compose_candidates_declare_same_instance_requirement(self):
         self.assertIn("'sameInstancePromotionRequired':True",PUB)

@@ -1,0 +1,60 @@
+{
+  "schema": "cloudiff-global-project-standardization/1",
+  "local_date": "2026-11-23",
+  "current_projects": 9,
+  "reserved_deleted_public_numbers": 16,
+  "nightly_audit_issue_count": 0,
+  "current_runtime_projects": [
+    {"public_number":1001,"slug":"laboratorio-de-hardware","preview":"W1","production":"P15","homologation_ready":true},
+    {"public_number":1002,"slug":"silvipro","preview":"W1","production":"P1","homologation_ready":true},
+    {"public_number":1020,"slug":"agenda-unica","preview":"W3","production":"P11","homologation_ready":true},
+    {"public_number":1021,"slug":"cpuhub","preview":"W1","production":"P5","homologation_ready":true},
+    {"public_number":1022,"slug":"cadales","preview":"W1","production":"P2","homologation_ready":true},
+    {"public_number":1025,"slug":"paperclip","preview":"W1","production":"P1","homologation_ready":true},
+    {"public_number":1026,"slug":"sgrep-v2","preview":"W1","production":null,"homologation_ready":true}
+  ],
+  "draft_projects": [
+    {"public_number":1027,"slug":"msha","state":"source-incomplete","tenant_ready":true,"preview":null},
+    {"public_number":1028,"slug":"pghd-contexto","state":"draft-no-runtime","preview":null}
+  ],
+  "preview_tools": {
+    "projects_checked":7,
+    "php_node_contract_ok":7,
+    "terminal_ok":7,
+    "all_can_submit_homologation":true
+  },
+  "production_tools": {
+    "active_productions_checked":6,
+    "php_node_contract_ok":6,
+    "terminal_ok":6
+  },
+  "inactive_productions": [
+    {"slug":"cpuhub","stage":"P3","state":"offline"},
+    {"slug":"cpuhub","stage":"P2","state":"offline"}
+  ],
+  "rejected_homologations": {
+    "containers_running":0,
+    "tracked_snapshots_remaining_ready":0
+  },
+  "deleted_project_residue": {
+    "runtime_containers":0,
+    "managed_stage_routes":0
+  },
+  "publisher_v2": {
+    "release_id":"20261123T000042Z-v18-npm-publisher-reserved-stage-cleanup-f6cc6860",
+    "source_commit":"f6cc6860dac1196d85920b79a6edaa8d4fe4cfd3",
+    "canary_passed":true,
+    "nginx_test_passed":true
+  },
+  "publication_ui": {
+    "release_flow_cache":"no-store",
+    "asset_version":"20261123-release-nostore-v13"
+  },
+  "komodo_periphery": {
+    "server":"Local",
+    "trust_reconciled_via_official_api":true,
+    "secret_values_included":false
+  },
+  "secrets_included": false,
+  "dwp": "DWP_NOT_ACTIVE"
+}

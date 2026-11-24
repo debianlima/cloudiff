@@ -31,8 +31,10 @@ class StageRuntimeToolsIdentityContractTests(unittest.TestCase):
 
     def test_legacy_active_production_terminal_uses_exact_versioned_container(self):
         pblock=PUB[PUB.rindex('def stage_terminal('):PUB.index('_v143_homologate_candidate',PUB.rindex('def stage_terminal('))]
-        self.assertIn("payload['container_candidates']=[f'cloudif-p{num}-p{publication}-publication-web']",pblock)
-        self.assertIn("terminalSource':'legacy_publication_container'",pblock)
+        self.assertIn("payload['container_candidates']=([legacy_backend_container] if legacy_backend_container else [])+[bridge]",pblock)
+        self.assertIn("payload['legacy_backend_container']=legacy_backend_container",pblock)
+        self.assertIn("legacy_publication_backend",pblock)
+        self.assertIn("legacy_publication_container",pblock)
         self.assertIn("stage_terminal_legacy_contract_invalid",pblock)
         kblock=RUNTIME[RUNTIME.rindex('def cloudif_stage_terminal('):RUNTIME.index('_v143_membership_reconcile',RUNTIME.rindex('def cloudif_stage_terminal('))]
         self.assertIn("legacy_publication_terminal_identity_invalid",kblock)

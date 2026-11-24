@@ -3114,6 +3114,39 @@ def _cloudif_v132_status_from_payload(payload):
                 if isinstance(container, dict) and str(container.get("state") or "").lower() == "running" and (stack_name in name or project in name):
                     running_container = dict(container)
                     break
+        if not running_container:
+            # Komodo can temporarily lose its service inventory while the Compose
+            # project is still running locally. Fall back only to containers with
+            # the exact Compose project label; never infer by name alone.
+            stack_name = str((stack or {}).get("name") or ("cloudif-" + project))
+            try:
+                ids = subprocess.check_output([
+                    "docker","ps","-q","--filter","label=com.docker.compose.project=" + stack_name
+                ], text=True, stderr=subprocess.DEVNULL, timeout=15).splitlines()
+            except Exception:
+                ids = []
+            local_services = []
+            for cid in ids[:64]:
+                try:
+                    rows = json.loads(subprocess.check_output([
+                        "docker","inspect",cid
+                    ], text=True, stderr=subprocess.DEVNULL, timeout=12) or "[]")
+                    item = rows[0] if rows else {}; state = item.get("State") or {}; labels = (item.get("Config") or {}).get("Labels") or {}
+                    if not state.get("Running") or str(labels.get("com.docker.compose.project") or "") != stack_name:
+                        continue
+                    name = str(item.get("Name") or "").lstrip("/"); service = str(labels.get("com.docker.compose.service") or "")
+                    health = str((state.get("Health") or {}).get("Status") or "")
+                    row = {"service":service,"container":{"name":name,"state":"running","health":health}}
+                    local_services.append(row)
+                except Exception:
+                    continue
+            if local_services:
+                runtime_services = local_services
+                db_like = {"db","database","postgres","postgresql","mysql","mariadb","mongo","mongodb","redis","valkey"}
+                preferred = next((x for x in local_services if str(x.get("service") or "").lower() not in db_like), local_services[0])
+                running_container = dict(preferred.get("container") or {})
+                running_container["service"] = preferred.get("service") or ""
+                running_container["local_compose_fallback"] = True
 
     runtime_running = bool(running_container)
     if repo_busy or stack_busy:
@@ -3776,7 +3809,7 @@ def cloudif_project_runtime_info(handler):
     project=safe_slug(payload.get("project") or "");kind=str(payload.get("kind") or "").strip().lower();environment=str(payload.get('environment') or '').strip().lower();stage_code=str(payload.get('stage_code') or '')
     try:public_number=int(payload.get('public_number') or 0)
     except Exception:public_number=0
-    stack_id=normalize_resource_id(payload.get("stack_id") or "");deployment_id=str(payload.get('deployment_id') or '').strip();service=str(payload.get("service") or "web")
+    stack_id=normalize_resource_id(payload.get("stack_id") or "");deployment_id=str(payload.get('deployment_id') or '').strip();legacy_backend_container=str(payload.get('legacy_backend_container') or '').strip();service=str(payload.get("service") or "web")
     if not project or kind not in {"php","node"}:return send(handler,400,{"ok":False,"error":"invalid_request"})
     if deployment_id and not re.fullmatch(r'dep_[a-f0-9]{24}',deployment_id):return send(handler,400,{"ok":False,"error":"invalid_deployment_id"})
     if stack_id and deployment_id:return send(handler,400,{"ok":False,"error":"ambiguous_runtime_identity"})
@@ -3830,8 +3863,12 @@ def cloudif_project_runtime_info(handler):
                 elif candidate.endswith('-preview-web') or candidate.endswith('-preview-web-1'):candidate_services[candidate]='web'
             elif environment=='production' and not stack_id and not deployment_id and public_number>0:
                 match=re.fullmatch(r'P([1-9][0-9]*)',stage_code.strip().upper());publication=int(match.group(1)) if match else 0;expected=f'cloudif-p{public_number}-p{publication}-publication-web' if publication else ''
-                if not expected or candidate!=expected:continue
-                candidate_services[candidate]='web'
+                is_bridge=bool(expected and candidate==expected);is_backend=bool(legacy_backend_container and candidate==legacy_backend_container and re.fullmatch(rf'cloudif-p{public_number}-d[1-9][0-9]*-(?:app|web)',candidate))
+                if not is_bridge and not is_backend:continue
+                if is_backend:
+                    if str(labels.get('cloudif.project') or '')!=project or not re.fullmatch(r'd[1-9][0-9]*',str(labels.get('cloudif.stage') or '')):continue
+                    candidate_services[candidate]='app' if candidate.endswith('-app') else 'web'
+                else:candidate_services[candidate]='web'
             if state.get('Running'):running.append(candidate)
         except Exception:continue
     if not running:return send(handler,422,{"ok":False,"error":"stage_containers_not_running","stageCode":stage_code,"environment":environment,"candidates":candidates})
@@ -4878,8 +4915,9 @@ def _cloudif_executor_proxy(handler,method):
         downstream=path[len(_EXECUTOR_PROXY_PREFIX):]
         timeout={'/v1/deployments':600,'/v1/preview-runtime-snapshots':1200,'/v1/compose-snapshots/deploy':1200,'/v1/compose-snapshots/rehydrate-historical':1200,'/v1/compose-source-preview-bridge':120,'/v1/publication-bridges':120,'/v1/publication-bridges/activate':60}[downstream]
     elif method=='DELETE' and not parsed.query:
-        deployment=re.fullmatch(r'/cloudif/executor/v1/deployments/(dep_[a-f0-9]{24})',path)
+        deployment=re.fullmatch(r'/cloudif/executor/v1/deployments/(dep_[a-f0-9]{24})',path);snapshot=re.fullmatch(r'/cloudif/executor/v1/compose-snapshots/(snap_[a-f0-9]{24})',path)
         if deployment:downstream='/v1/deployments/'+deployment.group(1);timeout=120
+        elif snapshot:downstream='/v1/compose-snapshots/'+snapshot.group(1);timeout=360
     if not downstream:return send(handler,404,{'ok':False,'error':'not_found'})
     authorized,token=_cloudif_executor_proxy_auth(handler)
     if not authorized:return send(handler,403,{'ok':False,'error':'forbidden'})
@@ -6300,21 +6338,25 @@ def cloudif_stage_terminal(handler):
         return send(handler,200,{'ok':True,'project':project,'public_number':num,'environment':environment,'stageCode':stage_code,'container':container,'service':service,'deployment_id':deployment_id,'server_id':server_id,'terminal':terminal,'target_mode':'container','terminalReady':True,'sameRuntimeAcrossPromotion':True,'secretValuesIncluded':False,'secretReferencesIncluded':False})
     legacy_candidates=payload.get('container_candidates') if isinstance(payload.get('container_candidates'),list) else []
     if environment=='production' and not deployment_id and bool(payload.get('legacy')) and publication>0 and legacy_candidates:
-        expected=f'cloudif-p{num}-p{publication}-publication-web'
-        if expected not in [str(x or '').strip() for x in legacy_candidates]:return send(handler,409,{'ok':False,'error':'legacy_publication_terminal_identity_invalid'})
+        expected=f'cloudif-p{num}-p{publication}-publication-web';backend=str(payload.get('legacy_backend_container') or '').strip();requested=[str(x or '').strip() for x in legacy_candidates]
+        if expected not in requested:return send(handler,409,{'ok':False,'error':'legacy_publication_terminal_identity_invalid'})
         releases=db_query("select * from stage_production_releases where project=? and public_number=? and publication_number=? and status='ready' and is_active=1",(project,num,publication))
         if not releases:return send(handler,409,{'ok':False,'error':'legacy_publication_not_active'})
-        inspected=subprocess.run(['docker','inspect',expected],stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,text=True,timeout=15)
+        selected=backend if backend and backend in requested else expected;service='app' if selected.endswith('-app') else 'web'
+        if selected!=expected:
+            if not re.fullmatch(rf'cloudif-p{num}-d{dep}-(?:app|web)',selected):return send(handler,409,{'ok':False,'error':'legacy_publication_backend_identity_invalid'})
+        inspected=subprocess.run(['docker','inspect',selected],stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,text=True,timeout=15)
         if inspected.returncode!=0:return send(handler,409,{'ok':False,'error':'legacy_publication_container_missing'})
         try:item=(json.loads(inspected.stdout or '[]') or [{}])[0]
         except Exception:item={}
-        state=item.get('State') or {};health=(state.get('Health') or {}).get('Status') or ''
+        labels=(item.get('Config') or {}).get('Labels') or {};state=item.get('State') or {};health=(state.get('Health') or {}).get('Status') or ''
+        if selected!=expected and (str(labels.get('cloudif.project') or '')!=project or str(labels.get('cloudif.stage') or '')!='d'+str(dep)):return send(handler,409,{'ok':False,'error':'legacy_publication_backend_labels_invalid'})
         if not state.get('Running') or health not in {'','healthy'}:return send(handler,409,{'ok':False,'error':'stage_container_not_healthy'})
         server_id=_cloudif_v143_server_id(project)
         if not server_id:return send(handler,422,{'ok':False,'error':'stage_server_missing'})
-        target=_cloudif_ensure_container_terminal(server_id,expected);terminal=str(target.get('terminal') or '')
+        target=_cloudif_ensure_container_terminal(server_id,selected);terminal=str(target.get('terminal') or '')
         if not target.get('ok') or not terminal:return send(handler,422,{'ok':False,'error':'stage_terminal_create_failed'})
-        return send(handler,200,{'ok':True,'project':project,'public_number':num,'environment':'production','stageCode':'P'+str(publication),'container':expected,'service':'web','server_id':server_id,'terminal':terminal,'target_mode':'container','legacyPublication':True,'terminalReady':True,'sameRuntimeAcrossPromotion':False,'secretValuesIncluded':False,'secretReferencesIncluded':False})
+        return send(handler,200,{'ok':True,'project':project,'public_number':num,'environment':'production','stageCode':'P'+str(publication),'container':selected,'service':service,'server_id':server_id,'terminal':terminal,'target_mode':'container','legacyPublication':True,'legacyBackend':selected!=expected,'terminalReady':True,'sameRuntimeAcrossPromotion':False,'secretValuesIncluded':False,'secretReferencesIncluded':False})
     _cloudif_v144_ensure_schema();row=None;stage_code=''
     if environment=='homologation':
         rows=db_query("select * from publication_runtimes where project=? and public_number=? and deploy_number=? and status='ready'",(project,num,dep))

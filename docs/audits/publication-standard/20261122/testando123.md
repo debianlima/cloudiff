@@ -52,3 +52,7 @@ Este registro não possui linha moderna suficiente em `projects`/ACL para autori
 ## Classificação final — reserved-deleted — 23/11/2026
 
 Este slug **não é projeto atual**. O registro `1018` existe somente em `project_public_ids` para preservar o número público após exclusão. Não criar Preview/H/P, não abrir Terminal e não reconstruir ACL a partir deste registro isolado. Uma recriação futura deve ser um novo onboarding humano explícito, preservando o histórico deste número.
+
+## Fechamento de padronização — 23/11/2026
+
+Classificação atual: `reserved-deleted`. O número público permanece reservado para rastreabilidade, mas não existe projeto atual em `projects`; não provisionar, não recriar Preview e não habilitar Terminal. A auditoria final confirmou ausência de runtime/rota residual.

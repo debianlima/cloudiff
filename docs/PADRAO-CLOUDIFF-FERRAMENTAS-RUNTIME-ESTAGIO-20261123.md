@@ -165,13 +165,13 @@ Quando houver variável real:
 Estado validado:
 
 - Preview W1;
-- Produção P14;
+- Produção P15;
 - Preview PHP: PHP 8.2.35 no `lab_hardware_app`;
 - Preview Node.js: não instalado, exibido como `available=false`;
 - Preview Terminal: `lab_hardware_app`, serviço `app`;
-- Produção PHP: `cloudif-dep-25a4c2f4b979a414f92153a6-app`;
+- Produção PHP: container `app` do deployment Compose ativo;
 - Produção Node.js: não instalado, sem erro de painel;
-- Produção Terminal: mesmo container `app` do deployment P14.
+- Produção Terminal: mesmo container `app` do deployment P15.
 
 Os seis IDs observados antes da correção foram comparados depois e permaneceram **idênticos**. Nenhum container do LabHardware foi recriado.
 
@@ -256,3 +256,7 @@ O Executor aceita `cloudif-p<NUM>-preview-web` somente como identidade genérica
 A restauração H preserva aliases internos de rede, mounts, rootfs e ambiente privado root-only. A bridge pública Wn não entra no snapshot; H recebe sua própria bridge/URL.
 
 Pré-flight live sem criar candidato: 7 projetos publicáveis `ready`; ambientes de Homologação válidos e sem variável obrigatória faltante. Auditoria noturna: 9 projetos atuais, 16 reservas excluídas, 0 issues, nenhuma mutação. Evidência: `docs/audits/homologation/20261123-preflight-summary.json`.
+
+## Estado atual do Paperclip — 23/11/2026
+
+A limitação histórica de “manifest composto pendente” foi superada pelo snapshot integral do Preview real. O fluxo atual congela app, volumes/binds autorizados e companions do mesmo projeto/estágio; H7 foi criada com sucesso e posteriormente rejeitada em teste. Rejeição remove runtime e snapshot. `canSubmitHomologation=true` para novo candidato.

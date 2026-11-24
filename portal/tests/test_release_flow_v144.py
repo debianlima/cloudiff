@@ -83,7 +83,7 @@ class ReleaseFlowV144Tests(unittest.TestCase):
         self.assertIn('authz_access_source',AGENT)
 
     def test_multiservice_preview_readmodel_falls_back_to_existing_generic_preview(self):
-        self.assertIn("fallbackFrom':'multiservice'",PORTAL)
+        self.assertIn("fallbackFrom':'multiservice-unhealthy'",PORTAL)
         self.assertIn("/komodo/project/preview/status",PORTAL)
         self.assertIn("'runtimeKind':'generic-preview'",PORTAL)
 

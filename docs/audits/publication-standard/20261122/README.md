@@ -56,3 +56,7 @@ O caminho quente da interface é o SQLite `/var/lib/cloudif/portal/cloudif-porta
 Norma: `docs/PADRAO-CLOUDIFF-FERRAMENTAS-RUNTIME-ESTAGIO-20261123.md`.
 
 PHP, Node.js e Terminal devem resolver o mesmo `project + stageCode + runtime identity` selecionado; não derivar `api/web/app` por convenção, não copiar Wn de outro projeto e não recriar URL/container para diagnóstico. Preview linked-compose usa stack real; H/P Compose usam `services/routes` do Executor; Preview composto usa par numerado app/web; P legada usa container versionado exato. Ausência de PHP/Node é `available=false`, não erro. Terminal nunca contorna ACL.
+
+## Fechamento de padronização — 23/11/2026
+
+Fechamento canônico: 9 projetos atuais, 16 números reservados de projetos excluídos, auditoria noturna 0 issues. Evidência: `docs/audits/FINAL-PADRONIZACAO-PROJETOS-20261123.json`.

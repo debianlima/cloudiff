@@ -59,3 +59,7 @@ W1/P14: PHP e Terminal resolvem `app`; Node ausente é exibido sem erro. IDs de 
 ## Homologação pelo runtime real — 23/11/2026
 
 LabHardware continua no caminho linked-compose W1 já validado; não houve recriação ou alteração de URL/container nesta auditoria.
+
+## Fechamento de padronização — 23/11/2026
+
+Classificação atual: `current-runtime`. Estado: W1 / P15. A norma PHP/Node/Terminal, read-model e lifecycle W/H/P está referenciada em `docs/audits/FINAL-PADRONIZACAO-PROJETOS-20261123.json`.

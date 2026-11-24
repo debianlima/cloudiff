@@ -420,13 +420,17 @@ def _deployment_executor_call(method,path,payload=None,timeout=300):
  except Exception:return 599,{'ok':False,'error':{'code':'deployment_executor_unavailable','message':'Executor de deploy indisponível.'}}
 
 def _publication_bridge(payload):
- if not isinstance(payload,dict) or set(payload)!={'project_slug','deployment_id','public_number','stage','number','trace_id'}:raise ValueError('invalid_publication_bridge_request')
- slug=str(payload.get('project_slug') or '').strip().lower();deployment_id=str(payload.get('deployment_id') or '').strip();stage=str(payload.get('stage') or '').strip().lower();public_number=int(payload.get('public_number') or 0);number=int(payload.get('number') or 0);trace=str(payload.get('trace_id') or '').strip()
+ allowed={'project_slug','deployment_id','public_number','stage','number','trace_id','runtime_host'}
+ if not isinstance(payload,dict) or not set(payload).issubset(allowed) or not {'project_slug','deployment_id','public_number','stage','number','trace_id'}.issubset(payload):raise ValueError('invalid_publication_bridge_request')
+ slug=str(payload.get('project_slug') or '').strip().lower();deployment_id=str(payload.get('deployment_id') or '').strip();stage=str(payload.get('stage') or '').strip().lower();public_number=int(payload.get('public_number') or 0);number=int(payload.get('number') or 0);trace=str(payload.get('trace_id') or '').strip();runtime_host=str(payload.get('runtime_host') or '').strip().lower()
  if not SLUG.fullmatch(slug) or not DEPLOYMENT_ID_RE.fullmatch(deployment_id) or stage not in {'homologation','publication'} or not (1<=public_number<=999999999 and 1<=number<=999999) or not trace:raise ValueError('invalid_publication_bridge_request')
+ if runtime_host and (stage!='publication' or runtime_host!=f'{public_number}.cloudiff.duckdns.org'):raise ValueError('invalid_publication_runtime_host')
  code,status=_deployment_executor_call('GET','/v1/deployments/'+urllib.parse.quote(deployment_id,safe=''),None,timeout=30)
  expected='homologation' if stage=='homologation' else 'production'
  if code!=200 or status.get('status')!='running' or status.get('project_slug')!=slug or status.get('environment')!=expected:raise ValueError('publication_bridge_deployment_mismatch')
- code,result=_deployment_executor_call('POST','/v1/publication-bridges',{'project_slug':slug,'deployment_id':deployment_id,'public_number':public_number,'stage':stage,'number':number},timeout=90)
+ bridge_payload={'project_slug':slug,'deployment_id':deployment_id,'public_number':public_number,'stage':stage,'number':number}
+ if runtime_host:bridge_payload['runtime_host']=runtime_host
+ code,result=_deployment_executor_call('POST','/v1/publication-bridges',bridge_payload,timeout=90)
  if isinstance(result,dict):result['trace_id']=trace;result['secretValuesIncluded']=False
  return code,result
 
@@ -481,17 +485,24 @@ def _compose_runtime_configuration(slug,environment):
 
 
 def _compose_publication_plan(payload,include_internal=False):
- allowed={'project_slug','environment','trace_id','source_kind','snapshot_id'}
+ allowed={'project_slug','environment','trace_id','source_kind','snapshot_id','stage_identity'}
  if not isinstance(payload,dict) or not set(payload).issubset(allowed) or not {'project_slug','environment','trace_id'}.issubset(payload):raise ValueError('invalid_request')
- slug=str(payload.get('project_slug') or '').strip().lower();environment=str(payload.get('environment') or '').strip().lower();trace=str(payload.get('trace_id') or '').strip();source_kind=str(payload.get('source_kind') or 'linked-compose').strip().lower();snapshot_id=str(payload.get('snapshot_id') or '').strip()
+ slug=str(payload.get('project_slug') or '').strip().lower();environment=str(payload.get('environment') or '').strip().lower();trace=str(payload.get('trace_id') or '').strip();source_kind=str(payload.get('source_kind') or 'linked-compose').strip().lower();snapshot_id=str(payload.get('snapshot_id') or '').strip();stage_identity=payload.get('stage_identity') if isinstance(payload.get('stage_identity'),dict) else {}
  if not SLUG.fullmatch(slug) or environment not in DEPLOY_ENVIRONMENTS or not trace or source_kind not in {'linked-compose','preview-runtime'}:raise ValueError('invalid_request')
  if snapshot_id and not re.fullmatch(r'snap_[a-f0-9]{24}',snapshot_id):raise ValueError('invalid_snapshot_id')
+ if stage_identity:
+  if set(stage_identity)!={'public_number','stage','number'}:raise ValueError('invalid_stage_identity')
+  try:stage_public_number=int(stage_identity.get('public_number') or 0);stage_number=int(stage_identity.get('number') or 0)
+  except Exception:raise ValueError('invalid_stage_identity')
+  stage_name=str(stage_identity.get('stage') or '').strip().lower()
+  if not (1<=stage_public_number<=999999999 and 1<=stage_number<=999999 and stage_name=='homologation' and environment=='homologation'):raise ValueError('invalid_stage_identity')
+  stage_identity={'public_number':stage_public_number,'stage':stage_name,'number':stage_number}
  config=_multiservice_configuration(slug);configuration=config.get('configuration') or {};state=_multiservice_reconciliation(slug);blockers=[]
  project=(config.get('project') or configuration.get('project') or {});services=configuration.get('services') or {};primary=str(project.get('primaryService') or '');primary_cfg=services.get(primary) if isinstance(services,dict) else None
  canonical_slug=str(project.get('slug') or '')
  if canonical_slug and canonical_slug!=slug:blockers.append('project-identity-mismatch')
  # Older configured manifests still get their explicit runtime contract validated. Current identity-only records rely on the live Compose source.
- if services and (str(project.get('type') or '')!='multi-service' or not isinstance(primary_cfg,dict) or str(primary_cfg.get('runtime') or '')!='compose'):blockers.append('linked-compose-runtime-required')
+ if source_kind=='linked-compose' and services and (str(project.get('type') or '')!='multi-service' or not isinstance(primary_cfg,dict) or str(primary_cfg.get('runtime') or '')!='compose'):blockers.append('linked-compose-runtime-required')
  configured=bool(config.get('configured')) and int(config.get('currentRevision') or 0)>=1
  runtime=None
  if configured:
@@ -505,6 +516,7 @@ def _compose_publication_plan(payload,include_internal=False):
   if code!=200 or not isinstance(snapshot,dict) or snapshot.get('ok') is not True:blockers.append('compose-snapshot-not-found');snapshot=None
   elif str(snapshot.get('project_slug') or '')!=slug:blockers.append('compose-snapshot-project-mismatch')
   elif str(snapshot.get('source_kind') or 'linked-compose')!=source_kind:blockers.append('compose-snapshot-source-kind-mismatch')
+  elif str(snapshot.get('status') or '')!='ready':blockers.append('compose-snapshot-not-ready')
   source=snapshot
  elif environment=='homologation':
   code,source=_compose_source_proxy(slug)
@@ -524,7 +536,7 @@ def _compose_publication_plan(payload,include_internal=False):
  routes=[{'pathPrefix':'/','service':edge_service,'stripPrefix':False}] if edge_service and edge_port else []
  if source and (not edge_service or not 1<=edge_port<=65535):blockers.append('compose-public-edge-invalid')
  public_runtime=(runtime or {}).get('publicRuntimeEnvironment') or {};variables_digest=hashlib.sha256(json.dumps(public_runtime,ensure_ascii=False,sort_keys=True,separators=(',',':')).encode()).hexdigest()
- material={'action':'deployment.compose-snapshot.deploy','source_kind':source_kind,'project_slug':slug,'environment':environment,'snapshot_id':snapshot_id,'snapshot_digest':snapshot_digest,'source_digest':source_digest,'source_commit':source_commit,'config_revision':config_revision,'config_digest':config_digest,'toolchain_digest':toolchain_digest,'environment_digest':str((runtime or {}).get('environmentDigest') or ''),'runtime_environment_digest':str((runtime or {}).get('runtimeEnvironmentDigest') or ''),'edge_service':edge_service,'edge_port':edge_port,'routes':routes,'variables_digest':variables_digest}
+ material={'action':'deployment.compose-snapshot.deploy','source_kind':source_kind,'project_slug':slug,'environment':environment,'snapshot_id':snapshot_id,'snapshot_digest':snapshot_digest,'source_digest':source_digest,'source_commit':source_commit,'config_revision':config_revision,'config_digest':config_digest,'toolchain_digest':toolchain_digest,'environment_digest':str((runtime or {}).get('environmentDigest') or ''),'runtime_environment_digest':str((runtime or {}).get('runtimeEnvironmentDigest') or ''),'edge_service':edge_service,'edge_port':edge_port,'routes':routes,'variables_digest':variables_digest,'stage_identity':stage_identity}
  plan_digest=hashlib.sha256(json.dumps(material,sort_keys=True,separators=(',',':')).encode()).hexdigest();blockers=sorted(set(blockers));artifact='sha256:'+snapshot_digest if SHA256_RE.fullmatch(snapshot_digest) else ''
  safe_services=[]
  for item in (source or {}).get('services') or []:
@@ -537,10 +549,11 @@ def _compose_publication_plan(payload,include_internal=False):
 
 
 def _compose_publication_execute(d,execution_id):
- allowed={'project_slug','environment','trace_id','source_kind','snapshot_id','deployment_plan_digest'}
+ allowed={'project_slug','environment','trace_id','source_kind','snapshot_id','deployment_plan_digest','stage_identity'}
  if not isinstance(d,dict) or not set(d).issubset(allowed) or not {'project_slug','environment','trace_id','deployment_plan_digest'}.issubset(d):raise ValueError('invalid_request')
  plan_payload={k:d[k] for k in ('project_slug','environment','trace_id')};plan_payload['source_kind']=str(d.get('source_kind') or 'linked-compose')
  if d.get('snapshot_id'):plan_payload['snapshot_id']=d['snapshot_id']
+ if isinstance(d.get('stage_identity'),dict) and d.get('stage_identity'):plan_payload['stage_identity']=d['stage_identity']
  plan=_compose_publication_plan(plan_payload,include_internal=True);digest=str(d.get('deployment_plan_digest') or '').lower()
  if not SHA256_RE.fullmatch(digest) or not hmac.compare_digest(digest,str(plan.get('deployment_plan_digest') or '')):raise ValueError('deployment_plan_digest_mismatch')
  if plan.get('execution_allowed') is not True:raise PermissionError('deployment_plan_blocked:'+','.join(plan.get('blockers') or []))
@@ -552,7 +565,7 @@ def _compose_publication_execute(d,execution_id):
  try:
   if any(bool(values) for values in refs.values() if isinstance(values,dict)):resolved=_resolve_runtime_secrets(plan['project_slug'],plan['environment'],refs)
   variables=_merge_runtime_variables(public,resolved);variables_digest=hashlib.sha256(json.dumps(variables,ensure_ascii=False,sort_keys=True,separators=(',',':')).encode()).hexdigest();op=plan['operation'];deployment_id=_deployment_id(execution_id)
-  payload={'deployment_id':deployment_id,'project_slug':plan['project_slug'],'environment':plan['environment'],'deployment_plan_digest':digest,'config_revision':op['config_revision'],'config_digest':op['config_digest'],'toolchain_digest':op['toolchain_digest'],'source_digest':op['source_digest'],'source_commit':op['source_commit'],'snapshot_id':op['snapshot_id'],'routes':op['routes'],'variables':variables,'variables_digest':variables_digest,'environment_digest':op['environment_digest'],'runtime_environment_digest':op['runtime_environment_digest']}
+  payload={'deployment_id':deployment_id,'project_slug':plan['project_slug'],'environment':plan['environment'],'deployment_plan_digest':digest,'config_revision':op['config_revision'],'config_digest':op['config_digest'],'toolchain_digest':op['toolchain_digest'],'source_digest':op['source_digest'],'source_commit':op['source_commit'],'snapshot_id':op['snapshot_id'],'routes':op['routes'],'variables':variables,'variables_digest':variables_digest,'environment_digest':op['environment_digest'],'runtime_environment_digest':op['runtime_environment_digest'],'stage_identity':op.get('stage_identity') or {}}
   idem_mark_effect(execution_id);code,result=_deployment_executor_call('POST','/v1/compose-snapshots/deploy',payload,timeout=1200)
  finally:resolved.clear()
  safe=dict(result) if isinstance(result,dict) else {'ok':False};safe.pop('variables',None);safe['variable_values_returned']=False;safe['secret_values_in_metadata']=False;safe['effect_started']=True;safe['deployment_plan_digest']=digest;safe['source_kind']=str(plan.get('source_kind') or d.get('source_kind') or 'linked-compose')

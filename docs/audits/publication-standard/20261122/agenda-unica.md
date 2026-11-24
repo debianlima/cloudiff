@@ -54,3 +54,7 @@ Agenda preserva Preview **W3** e Terminal resolve o serviço real `api`. W3 é i
 ## Homologação pelo runtime real — 23/11/2026
 
 Agenda continua no caminho linked-compose W3 próprio do projeto; W3 não é default global e nenhuma identidade foi alterada.
+
+## Fechamento de padronização — 23/11/2026
+
+Classificação atual: `current-runtime`. Estado: W3 / P11. A norma PHP/Node/Terminal, read-model e lifecycle W/H/P está referenciada em `docs/audits/FINAL-PADRONIZACAO-PROJETOS-20261123.json`.

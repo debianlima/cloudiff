@@ -54,3 +54,7 @@ Preview genérico W1 e Produção legada P2 passaram PHP/Node/Terminal. O Termin
 ## Homologação pelo runtime real — 23/11/2026
 
 Cadales W1 passou no preflight `preview-runtime` do container genérico real; nenhuma H foi criada pela auditoria.
+
+## Fechamento de padronização — 23/11/2026
+
+Classificação atual: `current-runtime`. Estado: W1 / P2. A norma PHP/Node/Terminal, read-model e lifecycle W/H/P está referenciada em `docs/audits/FINAL-PADRONIZACAO-PROJETOS-20261123.json`.

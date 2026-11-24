@@ -162,7 +162,9 @@ class ComposeSnapshotPublicationTests(unittest.TestCase):
         block=source[start:end]
         self.assertIn("probe=_compose_source_probe(slug);source_state=probe.get('source') or {}",block)
         self.assertIn("source_commit=str(source_state.get('source_commit') or '')",block)
-        self.assertIn("source_commit.startswith(preview_head)",block)
+        self.assertIn("re.fullmatch(r'[a-f0-9]{40,64}',preview_head)",block)
+        self.assertIn("hmac.compare_digest(source_commit[:len(preview_head)],preview_head)",block)
+        self.assertNotIn("source_commit.startswith(preview_head)",block)
         self.assertNotIn("source_commit=str((source.get('git') or {}).get('head') or '')",block)
 
     def test_portal_prepares_source_preview_bridge_before_external_validation(self):
