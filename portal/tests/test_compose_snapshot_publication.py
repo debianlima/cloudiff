@@ -117,18 +117,18 @@ class ComposeSnapshotPublicationTests(unittest.TestCase):
         self.assertEqual(code,409);self.assertEqual(data['error']['code'],'compose_source_not_running')
         call.assert_called_once()
 
-    def test_production_requires_existing_snapshot(self):
+    def test_production_requires_homologation_promotion(self):
         plan=self.plan('production')
         self.assertFalse(plan['execution_allowed'])
-        self.assertIn('compose-snapshot-required-for-production',plan['blockers'])
+        self.assertIn('compose-production-requires-homologation-promotion',plan['blockers'])
 
-    def test_production_reuses_same_snapshot_identity(self):
+    def test_production_snapshot_deploy_remains_blocked_even_with_snapshot(self):
         sid='snap_'+'7'*24
         plan=self.plan('production',sid)
-        self.assertTrue(plan['execution_allowed'],plan['blockers'])
+        self.assertFalse(plan['execution_allowed'])
+        self.assertIn('compose-production-requires-homologation-promotion',plan['blockers'])
         self.assertEqual(plan['operation']['snapshot_id'],sid)
         self.assertEqual(plan['operation']['snapshot_digest'],'8'*64)
-        self.assertEqual(plan['artifactImageId'],'sha256:'+'8'*64)
 
     def test_linked_preview_helper_refreshes_current_stack_without_reclone(self):
         source=(ROOT/'components/control-plane/srv/cloudif/lib/cloudif_git_komodo_module.py').read_text()

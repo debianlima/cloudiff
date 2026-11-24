@@ -510,7 +510,7 @@ def _compose_publication_plan(payload,include_internal=False):
   except (ValueError,RuntimeError) as error:blockers.append(str(error).replace('_','-'))
  else:runtime=_compose_snapshot_runtime_fallback(slug,environment)
  source=None;snapshot=None
- if environment=='production' and not snapshot_id:blockers.append('compose-snapshot-required-for-production')
+ if environment=='production':blockers.append('compose-production-requires-homologation-promotion')
  if snapshot_id:
   code,snapshot=_deployment_executor_call('GET','/v1/compose-snapshots/'+urllib.parse.quote(snapshot_id,safe=''),None,timeout=30)
   if code!=200 or not isinstance(snapshot,dict) or snapshot.get('ok') is not True:blockers.append('compose-snapshot-not-found');snapshot=None
@@ -570,6 +570,60 @@ def _compose_publication_execute(d,execution_id):
  finally:resolved.clear()
  safe=dict(result) if isinstance(result,dict) else {'ok':False};safe.pop('variables',None);safe['variable_values_returned']=False;safe['secret_values_in_metadata']=False;safe['effect_started']=True;safe['deployment_plan_digest']=digest;safe['source_kind']=str(plan.get('source_kind') or d.get('source_kind') or 'linked-compose')
  return code,safe
+
+
+def _compose_promotion_plan(payload):
+ allowed={'project_slug','deployment_id','snapshot_id','snapshot_digest','trace_id'}
+ if not isinstance(payload,dict) or set(payload)!=allowed:raise ValueError('invalid_request')
+ slug=str(payload.get('project_slug') or '').strip().lower();deployment_id=str(payload.get('deployment_id') or '').strip();snapshot_id=str(payload.get('snapshot_id') or '').strip();snapshot_digest=str(payload.get('snapshot_digest') or '').strip().lower();trace=str(payload.get('trace_id') or '').strip()
+ if not SLUG.fullmatch(slug) or not DEPLOYMENT_ID_RE.fullmatch(deployment_id) or not re.fullmatch(r'snap_[a-f0-9]{24}',snapshot_id) or not SHA256_RE.fullmatch(snapshot_digest) or not trace:raise ValueError('invalid_request')
+ blockers=[];code,status=_deployment_executor_call('GET','/v1/deployments/'+urllib.parse.quote(deployment_id,safe=''),None,timeout=30)
+ if code!=200 or not isinstance(status,dict) or status.get('ok') is not True:blockers.append('homologation-deployment-not-found');status={}
+ else:
+  if str(status.get('project_slug') or '')!=slug:blockers.append('homologation-project-mismatch')
+  if str(status.get('environment') or '') not in {'homologation','production'}:blockers.append('homologation-environment-mismatch')
+  if str(status.get('status') or '')!='running':blockers.append('homologation-not-running')
+  if str(status.get('snapshot_id') or '')!=snapshot_id:blockers.append('homologation-snapshot-mismatch')
+  if str(status.get('build_plan_digest') or '')!=snapshot_digest:blockers.append('homologation-snapshot-digest-mismatch')
+ code,snapshot=_deployment_executor_call('GET','/v1/compose-snapshots/'+urllib.parse.quote(snapshot_id,safe=''),None,timeout=30)
+ if code!=200 or not isinstance(snapshot,dict) or snapshot.get('ok') is not True:blockers.append('compose-snapshot-not-found');snapshot={}
+ else:
+  if str(snapshot.get('project_slug') or '')!=slug:blockers.append('compose-snapshot-project-mismatch')
+  if str(snapshot.get('snapshot_digest') or '')!=snapshot_digest:blockers.append('compose-snapshot-digest-mismatch')
+ source_commit=str(snapshot.get('source_commit') or '')
+ if source_commit and not re.fullmatch(r'[a-f0-9]{40,64}',source_commit):blockers.append('compose-source-commit-invalid')
+ material={'action':'deployment.compose-snapshot.promote-in-place','project_slug':slug,'deployment_id':deployment_id,'snapshot_id':snapshot_id,'snapshot_digest':snapshot_digest,'source_commit':source_commit,'from_environment':'homologation','to_environment':'production','same_deployment_required':True,'container_recreation_forbidden':True}
+ digest=hashlib.sha256(json.dumps(material,sort_keys=True,separators=(',',':')).encode()).hexdigest();blockers=sorted(set(blockers))
+ return {'ok':True,'side_effect_free':True,'project_slug':slug,'deployment_id':deployment_id,'snapshot_id':snapshot_id,'snapshot_digest':snapshot_digest,'promotion_plan_digest':digest,'operation':material,'blockers':blockers,'execution_allowed':not blockers,'approval_required':True,'sameDeploymentRequired':True,'containerRecreationForbidden':True,'alreadyPromoted':str(status.get('environment') or '')=='production','containers_created':False,'trace_id':trace,'secretValuesIncluded':False}
+
+
+def _compose_promotion_execute(payload,execution_id):
+ allowed={'project_slug','deployment_id','snapshot_id','snapshot_digest','trace_id','promotion_plan_digest'}
+ if not isinstance(payload,dict) or set(payload)!=allowed:raise ValueError('invalid_request')
+ plan=_compose_promotion_plan({k:payload[k] for k in ('project_slug','deployment_id','snapshot_id','snapshot_digest','trace_id')});digest=str(payload.get('promotion_plan_digest') or '').lower()
+ if not SHA256_RE.fullmatch(digest) or not hmac.compare_digest(digest,str(plan.get('promotion_plan_digest') or '')):raise ValueError('promotion_plan_digest_mismatch')
+ if plan.get('execution_allowed') is not True:raise PermissionError('promotion_plan_blocked:'+','.join(plan.get('blockers') or []))
+ idem_mark_effect(execution_id);code,result=_deployment_executor_call('POST','/v1/compose-deployments/promote',{'project_slug':plan['project_slug'],'deployment_id':plan['deployment_id'],'snapshot_id':plan['snapshot_id'],'snapshot_digest':plan['snapshot_digest']},timeout=180)
+ safe=dict(result) if isinstance(result,dict) else {'ok':False};safe['effect_started']=True;safe['promotion_plan_digest']=digest;safe['sameDeploymentRequired']=True;safe['containerRecreationForbidden']=True;safe['secretValuesIncluded']=False
+ return code,safe
+
+
+def _publication_bridge_deactivate(payload):
+ if not isinstance(payload,dict) or set(payload)!={'project_slug','deployment_id','stage','trace_id'}:raise ValueError('invalid_bridge_deactivation_request')
+ slug=str(payload.get('project_slug') or '').strip().lower();deployment_id=str(payload.get('deployment_id') or '').strip();stage=str(payload.get('stage') or '').strip();trace=str(payload.get('trace_id') or '').strip()
+ if not SLUG.fullmatch(slug) or not DEPLOYMENT_ID_RE.fullmatch(deployment_id) or stage not in {'homologation','publication'} or not trace:raise ValueError('invalid_bridge_deactivation_request')
+ code,result=_deployment_executor_call('POST','/v1/publication-bridges/deactivate',{'project_slug':slug,'deployment_id':deployment_id,'stage':stage},timeout=60)
+ if isinstance(result,dict):result['trace_id']=trace;result['secretValuesIncluded']=False
+ return code,result
+
+
+def _deployment_deactivate(payload):
+ if not isinstance(payload,dict) or set(payload)!={'project_slug','deployment_id','reason','trace_id'}:raise ValueError('invalid_deactivation_request')
+ slug=str(payload.get('project_slug') or '').strip().lower();deployment_id=str(payload.get('deployment_id') or '').strip();reason=str(payload.get('reason') or '').strip();trace=str(payload.get('trace_id') or '').strip()
+ if not SLUG.fullmatch(slug) or not DEPLOYMENT_ID_RE.fullmatch(deployment_id) or not reason or not trace:raise ValueError('invalid_deactivation_request')
+ code,result=_deployment_executor_call('POST','/v1/deployments/deactivate',{'project_slug':slug,'deployment_id':deployment_id,'reason':reason[:160]},timeout=120)
+ if isinstance(result,dict):result['trace_id']=trace;result['secretValuesIncluded']=False
+ return code,result
 
 
 def _deployment_id(execution_id):
@@ -878,6 +932,28 @@ class H(BaseHTTPRequestHandler):
    except RuntimeError as error:return send(self,503,idem_finish(execution_id,503,{'ok':False,'error':{'code':str(error)},'effect_started':False}))
    except Exception as error:return send(self,502,idem_finish(execution_id,502,{'ok':False,'error':{'code':'compose_snapshot_deployment_failed','message':'O deploy do snapshot Compose falhou.'},'error_type':type(error).__name__,'effect_started':True}))
    return send(self,code,idem_finish(execution_id,code,result))
+  if self.path=='/v1/compose-promotion-plan':
+   try:result=_compose_promotion_plan(d)
+   except ValueError as e:return send(self,422,{'ok':False,'error':{'code':str(e),'message':'Plano de promoção Compose inválido.'}})
+   return send(self,200,result)
+  if self.path=='/v1/compose-promotion-execute':
+   execution_id=str(d.pop('execution_id','') or '').strip();payload=dict(d)
+   try:istate=idem_begin(execution_id,'deployment.compose-promote',payload)
+   except ValueError as error:return send(self,400,{'ok':False,'error':{'code':str(error),'message':'execution_id inválido.'},'effect_started':False})
+   if (cached:=idem_response(istate)):return send(self,cached[0],cached[1])
+   try:code,result=_compose_promotion_execute(d,execution_id)
+   except PermissionError as error:return send(self,409,idem_finish(execution_id,409,{'ok':False,'error':{'code':'promotion_blocked','message':str(error)},'effect_started':False}))
+   except ValueError as error:return send(self,409,idem_finish(execution_id,409,{'ok':False,'error':{'code':str(error),'message':'O plano de promoção mudou ou é incompatível.'},'effect_started':False}))
+   except Exception as error:return send(self,502,idem_finish(execution_id,502,{'ok':False,'error':{'code':'compose_promotion_failed','message':'A promoção in-place falhou.'},'error_type':type(error).__name__,'effect_started':True}))
+   return send(self,code,idem_finish(execution_id,code,result))
+  if self.path=='/v1/multiservice-publication-deactivate':
+   try:code,result=_publication_bridge_deactivate(d)
+   except ValueError as e:return send(self,409,{'ok':False,'error':{'code':str(e),'message':'Desativação de bridge incompatível.'}})
+   return send(self,code,result)
+  if self.path=='/v1/multiservice-deactivate':
+   try:code,result=_deployment_deactivate(d)
+   except ValueError as e:return send(self,409,{'ok':False,'error':{'code':str(e),'message':'Desativação de deployment incompatível.'}})
+   return send(self,code,result)
   if self.path=='/v1/multiservice-plan':
    try:result=_multiservice_deployment_plan(d)
    except LookupError as e:return send(self,404,{'ok':False,'error':{'code':str(e),'message':'Configuração do projeto não encontrada.'}})

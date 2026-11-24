@@ -125,6 +125,17 @@ def init_db():
       created_at integer not null
     );
     create index if not exists idx_compose_snapshots_project on compose_snapshots(project_slug,created_at desc);
+    create table if not exists deployment_promotions(
+      id integer primary key autoincrement,
+      deployment_id text not null,
+      project_slug text not null,
+      from_environment text not null,
+      to_environment text not null,
+      snapshot_id text not null default '',
+      container_identity_digest text not null,
+      promoted_at integer not null
+    );
+    create index if not exists idx_deployment_promotions_deployment on deployment_promotions(deployment_id,promoted_at desc);
     ''')
     cols={row[1] for row in conn.execute('pragma table_info(deployments)')}
     if 'snapshot_id' not in cols:conn.execute("alter table deployments add column snapshot_id text not null default ''")
@@ -1290,12 +1301,89 @@ def reconfigure_compose_deployment(payload:Any)->dict:
         raise
 
 
+def _deployment_container_identity_digest(row:sqlite3.Row)->str:
+    services=json.loads(row['services_json'] or '[]');pairs=[]
+    for item in services:
+        name=str(item.get('container_name') or '')
+        rows=_json_rows(docker('inspect',name,timeout=30,check=False))
+        if not rows:raise DeploymentError('deployment_container_missing','Container do deployment não foi localizado.',409,{'container':name})
+        state=rows[0].get('State') or {}
+        if not state.get('Running'):raise DeploymentError('deployment_container_not_running','Container do deployment não está em execução.',409,{'container':name,'status':state.get('Status')})
+        health=(state.get('Health') or {}).get('Status')
+        if health and health!='healthy':raise DeploymentError('deployment_container_unhealthy','Container do deployment não está saudável.',409,{'container':name,'health':health})
+        pairs.append((name,str(rows[0].get('Id') or '')))
+    if not pairs:raise DeploymentError('deployment_services_missing','Deployment não possui containers para promoção.',409)
+    return hashlib.sha256(canonical(sorted(pairs))).hexdigest()
+
+
+def promote_compose_deployment(payload:Any)->dict:
+    if not isinstance(payload,dict) or set(payload)!={'project_slug','deployment_id','snapshot_id','snapshot_digest'}:raise DeploymentError('invalid_promotion_request','Pedido de promoção Compose inválido.',400)
+    slug=str(payload.get('project_slug') or '');deployment_id=str(payload.get('deployment_id') or '');snapshot_id=str(payload.get('snapshot_id') or '');snapshot_digest=str(payload.get('snapshot_digest') or '')
+    if not SLUG_RE.fullmatch(slug) or not DEPLOYMENT_RE.fullmatch(deployment_id) or not COMPOSE_SNAPSHOT_RE.fullmatch(snapshot_id) or not SHA_RE.fullmatch(snapshot_digest):raise DeploymentError('invalid_promotion_request','Identidade da promoção Compose inválida.',400)
+    connection=db();row=connection.execute('select * from deployments where deployment_id=?',(deployment_id,)).fetchone();connection.close()
+    if not row:raise DeploymentError('deployment_not_found','Homologação não encontrada.',404)
+    if str(row['project_slug'])!=slug or str(row['snapshot_id'] or '')!=snapshot_id or not hmac.compare_digest(str(row['build_plan_digest'] or ''),snapshot_digest):raise DeploymentError('promotion_identity_mismatch','Homologação não corresponde ao snapshot aprovado.',409)
+    snapshot=compose_snapshot_status(snapshot_id)
+    if not hmac.compare_digest(str(snapshot.get('snapshot_digest') or ''),snapshot_digest):raise DeploymentError('promotion_snapshot_digest_mismatch','Digest do snapshot homologado divergiu.',409)
+    if str(row['environment'])=='production' and str(row['status'])=='running':
+        digest=_deployment_container_identity_digest(row)
+        return {'ok':True,'deployment_id':deployment_id,'project_slug':slug,'from_environment':'homologation','environment':'production','snapshot_id':snapshot_id,'snapshot_digest':snapshot_digest,'containerIdentityDigest':digest,'containerIdsPreserved':True,'containersRecreated':False,'sameHomologatedDeployment':True,'idempotent':True,'secretValuesIncluded':False}
+    if str(row['environment'])!='homologation' or str(row['status'])!='running':raise DeploymentError('promotion_requires_running_homologation','Promoção exige a Homologação original em execução.',409,{'environment':row['environment'],'status':row['status']})
+    before=_deployment_container_identity_digest(row);now=int(time.time())
+    connection=db()
+    try:
+        connection.execute('begin immediate')
+        hstate=connection.execute('select * from runtime_states where project_slug=? and environment=?',(slug,'homologation')).fetchone()
+        updated=connection.execute("update deployments set environment='production',updated_at=? where deployment_id=? and environment='homologation' and status='running'",(now,deployment_id)).rowcount
+        if updated!=1:raise DeploymentError('promotion_concurrent_change','Homologação mudou durante a promoção.',409)
+        if hstate and str(hstate['deployment_id'])==deployment_id:
+            connection.execute("update runtime_states set status='promoted',updated_at=? where project_slug=? and environment='homologation'",(now,slug))
+            sql="insert into runtime_states(project_slug,environment,deployment_id,status,config_revision,config_digest,toolchain_digest,build_environment_digest,runtime_environment_digest,environment_digest,build_job_id,variable_names_json,updated_at) values(?,?,?,?,?,?,?,?,?,?,?,?,?) on conflict(project_slug,environment) do update set deployment_id=excluded.deployment_id,status=excluded.status,config_revision=excluded.config_revision,config_digest=excluded.config_digest,toolchain_digest=excluded.toolchain_digest,build_environment_digest=excluded.build_environment_digest,runtime_environment_digest=excluded.runtime_environment_digest,environment_digest=excluded.environment_digest,build_job_id=excluded.build_job_id,variable_names_json=excluded.variable_names_json,updated_at=excluded.updated_at"
+            connection.execute(sql,(slug,'production',deployment_id,'running',int(hstate['config_revision']),str(hstate['config_digest']),str(hstate['toolchain_digest']),str(hstate['build_environment_digest']),str(hstate['runtime_environment_digest']),str(hstate['environment_digest']),str(hstate['build_job_id']),str(hstate['variable_names_json']),now))
+        connection.execute('insert into deployment_promotions(deployment_id,project_slug,from_environment,to_environment,snapshot_id,container_identity_digest,promoted_at) values(?,?,?,?,?,?,?)',(deployment_id,slug,'homologation','production',snapshot_id,before,now))
+        connection.commit()
+    except Exception:
+        connection.rollback();connection.close();raise
+    connection.close();connection=db();after_row=connection.execute('select * from deployments where deployment_id=?',(deployment_id,)).fetchone();connection.close();after=_deployment_container_identity_digest(after_row)
+    if not hmac.compare_digest(before,after):raise DeploymentError('promotion_container_identity_changed','A promoção alterou a identidade dos containers homologados.',502)
+    return {'ok':True,'deployment_id':deployment_id,'project_slug':slug,'from_environment':'homologation','environment':'production','snapshot_id':snapshot_id,'snapshot_digest':snapshot_digest,'containerIdentityDigest':after,'containerIdsPreserved':True,'containersRecreated':False,'sameHomologatedDeployment':True,'promoted_at':now,'idempotent':False,'secretValuesIncluded':False}
+
+
+def deactivate_publication_bridges(payload:Any)->dict:
+    if not isinstance(payload,dict) or set(payload)!={'project_slug','deployment_id','stage'}:raise DeploymentError('invalid_bridge_deactivation_request','Pedido de desativação de bridge inválido.',400)
+    slug=str(payload.get('project_slug') or '');deployment_id=str(payload.get('deployment_id') or '');stage=str(payload.get('stage') or '')
+    if not SLUG_RE.fullmatch(slug) or not DEPLOYMENT_RE.fullmatch(deployment_id) or stage not in {'homologation','publication'}:raise DeploymentError('invalid_bridge_deactivation_request','Identidade do bridge inválida.',400)
+    names=docker('ps','-a','--filter','label=org.cloudiff.publication-bridge=true','--filter',f'label=org.cloudiff.project={slug}','--filter',f'label=org.cloudiff.deployment={deployment_id}','--filter',f'label=org.cloudiff.stage={stage}','--format','{{.Names}}',check=False).stdout.splitlines();stopped=[]
+    for name in names:
+        if docker('stop',name,timeout=30,check=False).returncode==0:stopped.append(name)
+    return {'ok':True,'project_slug':slug,'deployment_id':deployment_id,'stage':stage,'bridgesStopped':sorted(stopped),'containersRecreated':False,'secretValuesIncluded':False}
+
+
+def deactivate_deployment(payload:Any)->dict:
+    if not isinstance(payload,dict) or set(payload)!={'project_slug','deployment_id','reason'}:raise DeploymentError('invalid_deactivation_request','Pedido de desativação inválido.',400)
+    slug=str(payload.get('project_slug') or '');deployment_id=str(payload.get('deployment_id') or '');reason=str(payload.get('reason') or '')[:160]
+    if not SLUG_RE.fullmatch(slug) or not DEPLOYMENT_RE.fullmatch(deployment_id) or not reason:raise DeploymentError('invalid_deactivation_request','Identidade da desativação inválida.',400)
+    connection=db();row=connection.execute('select * from deployments where deployment_id=?',(deployment_id,)).fetchone();connection.close()
+    if not row:raise DeploymentError('deployment_not_found','Deployment não encontrado.',404)
+    if str(row['project_slug'])!=slug:raise DeploymentError('deployment_project_mismatch','Deployment pertence a outro projeto.',409)
+    if str(row['status'])=='inactive':return {'ok':True,'project_slug':slug,'deployment_id':deployment_id,'status':'inactive','idempotent':True,'resourcesPreserved':True,'secretValuesIncluded':False}
+    services=json.loads(row['services_json'] or '[]');bridges=docker('ps','-a','--filter','label=org.cloudiff.publication-bridge=true','--filter',f'label=org.cloudiff.deployment={deployment_id}','--format','{{.Names}}',check=False).stdout.splitlines();stopped_bridges=[];stopped_services=[]
+    for name in bridges:
+        if docker('stop',name,timeout=30,check=False).returncode==0:stopped_bridges.append(name)
+    for item in services:
+        name=str(item.get('container_name') or '')
+        if name and docker('stop',name,timeout=60,check=False).returncode==0:stopped_services.append(name)
+    now=int(time.time());connection=db();connection.execute("update deployments set status='inactive',error_json=?,updated_at=? where deployment_id=?",(json.dumps({'reason':reason},ensure_ascii=False,separators=(',',':')),now,deployment_id));connection.execute("update runtime_states set status='inactive',updated_at=? where deployment_id=?",(now,deployment_id));connection.commit();connection.close()
+    return {'ok':True,'project_slug':slug,'deployment_id':deployment_id,'status':'inactive','servicesStopped':sorted(stopped_services),'bridgesStopped':sorted(stopped_bridges),'resourcesPreserved':True,'volumesRemoved':0,'containersRemoved':0,'secretValuesIncluded':False}
+
+
 def deploy_compose_snapshot(payload:Any)->dict:
     if not isinstance(payload,dict):raise DeploymentError('invalid_request','Pedido Compose inválido.',400)
     required={'deployment_id','project_slug','environment','deployment_plan_digest','config_revision','config_digest','toolchain_digest','routes','variables','variables_digest'}
     if not required.issubset(payload):raise DeploymentError('required_field_missing','Campos obrigatórios estão ausentes.',400,{'missing':sorted(required-set(payload))})
     deployment_id=str(payload.get('deployment_id') or '');slug=str(payload.get('project_slug') or '');environment=str(payload.get('environment') or '');plan=str(payload.get('deployment_plan_digest') or '').lower();snapshot_id=str(payload.get('snapshot_id') or '');source_digest=str(payload.get('source_digest') or '');source_commit=str(payload.get('source_commit') or '')
     if not DEPLOYMENT_RE.fullmatch(deployment_id) or not SLUG_RE.fullmatch(slug) or environment not in ENVIRONMENTS or not SHA_RE.fullmatch(plan):raise DeploymentError('invalid_request','Identidade do deploy Compose inválida.',400)
+    if environment=='production':raise DeploymentError('compose_production_requires_homologation_promotion','Produção exige promoção da própria Homologação; o snapshot não pode ser recriado.',409)
     config_revision=int(payload.get('config_revision') or 0);config_digest=str(payload.get('config_digest') or '');toolchain_digest=str(payload.get('toolchain_digest') or '')
     if config_revision<1 or not SHA_RE.fullmatch(config_digest) or not SHA_RE.fullmatch(toolchain_digest):raise DeploymentError('invalid_digest','Configuração do deploy Compose inválida.',400)
     variables=payload.get('variables') or {}
@@ -1738,9 +1826,12 @@ class Handler(BaseHTTPRequestHandler):
             if self.path=='/v1/preview-runtime-snapshots':return self.out(201,create_preview_runtime_snapshot(self.body()))
             if self.path=='/v1/compose-snapshots/deploy':return self.out(201,deploy_compose_snapshot(self.body()))
             if self.path=='/v1/compose-deployments/reconfigure':return self.out(200,reconfigure_compose_deployment(self.body()))
+            if self.path=='/v1/compose-deployments/promote':return self.out(200,promote_compose_deployment(self.body()))
+            if self.path=='/v1/deployments/deactivate':return self.out(200,deactivate_deployment(self.body()))
             if self.path=='/v1/compose-source-preview-bridge':return self.out(201,ensure_source_preview_bridge(self.body()))
             if self.path=='/v1/publication-bridges':return self.out(201,ensure_publication_bridge(self.body()))
             if self.path=='/v1/publication-bridges/activate':return self.out(200,activate_publication_bridge(self.body()))
+            if self.path=='/v1/publication-bridges/deactivate':return self.out(200,deactivate_publication_bridges(self.body()))
             return self.out(404,{'ok':False,'error':{'code':'not_found','message':'Rota não encontrada.'}})
         except Exception as error:return self.error(error)
     def do_DELETE(self):
