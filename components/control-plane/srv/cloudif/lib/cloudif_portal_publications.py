@@ -202,7 +202,7 @@ def _create_linked_compose_homologation_candidate(slug,num,candidate,actor,progr
     if not re.fullmatch(r'[a-f0-9]{40,64}',source_commit):raise RuntimeError('A origem Compose não possui commit Forgejo completo válido.')
     preview_head=str((source.get('git') or {}).get('head') or '').strip().lower()
     if re.fullmatch(r'[a-f0-9]{40,64}',preview_head) and not hmac.compare_digest(source_commit[:len(preview_head)],preview_head):raise RuntimeError('O HEAD exibido no Preview diverge do commit Compose materializado; atualize o Preview e tente novamente.')
-    pc=_publication_config();summary=pc.environment_summary(slug,'homologation')
+    pc=_publication_config();summary=pc.clone_environment_configuration(slug,'preview','homologation',actor)
     if not summary.get('valid'):raise RuntimeError('O ambiente de Homologação possui variáveis obrigatórias pendentes.')
     notify('snapshot','Congelando stack Compose, volumes e configuração do Preview W1.')
     trace='portal-hc-'+hashlib.sha256((slug+source_commit+str(candidate)).encode()).hexdigest()[:20]
@@ -300,7 +300,7 @@ def _create_preview_runtime_homologation_candidate(slug,num,candidate,actor,user
     snapshot_id='snap_'+hashlib.sha256((slug+'|preview-runtime|'+str(num)+'|W'+str(generation)+'|H'+str(candidate)+'|'+source_commit).encode()).hexdigest()[:24]
     snapshot=_preview_runtime_snapshot(slug,num,generation,source_commit,app_container,source_checkout,snapshot_id);snapshot_id=str(snapshot['snapshot_id']);snapshot_digest=str(snapshot['snapshot_digest']);source_commit=str(snapshot.get('source_commit') or source_commit)
     if not re.fullmatch(r'[a-f0-9]{40,64}',source_commit):raise RuntimeError('O snapshot integral não possui commit Forgejo válido.')
-    pc=_publication_config();summary=pc.environment_summary(slug,'homologation')
+    pc=_publication_config();summary=pc.clone_environment_configuration(slug,'preview','homologation',actor)
     if not summary.get('valid'):raise RuntimeError('O ambiente de Homologação possui variáveis obrigatórias pendentes.')
     trace='portal-hpr-'+hashlib.sha256((slug+snapshot_id+str(candidate)).encode()).hexdigest()[:20]
     notify('deploying','Criando Homologação a partir do snapshot integral do Preview.')
@@ -1100,7 +1100,7 @@ def _create_multiservice_homologation_candidate(slug,num,candidate,actor,progres
     if not source_preview.get('configured') or not source_preview.get('healthy'):raise RuntimeError('Prepare um Preview W1 saudável antes de criar a Homologação.')
     build=_latest_multiservice_build(slug,'homologation');job=str(build['job_id'])
     if str(source_preview.get('archive_sha256') or '')!=str(build.get('archive_sha256') or ''):raise RuntimeError('O build de Homologação não corresponde ao código atualmente validado no Preview W1.')
-    pc=_publication_config();summary=pc.environment_summary(slug,'homologation')
+    pc=_publication_config();summary=pc.clone_environment_configuration(slug,'preview','homologation',actor)
     if not summary.get('valid'):raise RuntimeError('O ambiente de Homologação possui variáveis obrigatórias pendentes.')
     notify('deploying','Criando deployment multissserviço imutável de Homologação.')
     trace='portal-h-'+hashlib.sha256((slug+job+str(candidate)).encode()).hexdigest()[:20]
@@ -2273,6 +2273,10 @@ def homologate_candidate(slug,candidate_number,user,decision='approved',note='')
         cleanup['publisher']={'ok':pstatus//100==2 and pdata.get('ok') is not False,'status':pstatus}
     except Exception as exc:
         cleanup['publisher']={'ok':False,'error':type(exc).__name__}
+    try:
+        cleanup['configuration']=_publication_config().purge_environment_configuration(slug,'homologation',actor)
+    except Exception as exc:
+        cleanup['ok']=False;cleanup['configuration']={'ok':False,'error':type(exc).__name__}
     result['runtimeCleanup']=cleanup
     _rm.project_changed(slug,'homologation-rejected')
     return result

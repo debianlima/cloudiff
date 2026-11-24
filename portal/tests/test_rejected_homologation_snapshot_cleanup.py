@@ -11,8 +11,8 @@ class RejectedHomologationSnapshotCleanupTests(unittest.TestCase):
         self.assertIn("status='running'",block)
         self.assertIn('compose_snapshot_in_use',block)
         self.assertIn('compose_snapshot_containers_exist',block)
-        self.assertIn("status=?",block)
-        self.assertIn("'removed'",block)
+        self.assertIn("delete from compose_snapshots",block)
+        self.assertIn("idempotent",block)
         self.assertIn("docker('image','rm'",block)
     def test_removed_snapshot_is_not_usable(self):
         block=EXEC[EXEC.index('def _snapshot_safe_status'):EXEC.index('def compose_snapshot_status',EXEC.index('def _snapshot_safe_status'))]
@@ -21,9 +21,9 @@ class RejectedHomologationSnapshotCleanupTests(unittest.TestCase):
 
     def test_delete_response_reports_success_after_retirement(self):
         block=EXEC[EXEC.index('def remove_compose_snapshot'):EXEC.index('def _snapshot_archive_record',EXEC.index('def remove_compose_snapshot'))]
-        self.assertIn("safe.update({'ok':True,'removed':True",block)
-        self.assertIn("status=?",block)
-        self.assertIn("'removed'",block)
+        self.assertIn("safe.update({'ok':True,'status':'removed','removed':True",block)
+        self.assertIn("delete from compose_snapshots",block)
+        self.assertIn("idempotent",block)
     def test_delete_snapshot_is_exposed_through_executor_and_gateway(self):
         self.assertIn("remove_compose_snapshot(snapshot_match.group(1))",EXEC)
         self.assertIn("elif snapshot:downstream='/v1/compose-snapshots/'",GATEWAY)
@@ -32,5 +32,15 @@ class RejectedHomologationSnapshotCleanupTests(unittest.TestCase):
         self.assertLess(block.index("cleanup['runtime']=_remove_compose_runtime"),block.index("cleanup['snapshot']=_remove_compose_snapshot_artifact"))
         self.assertIn("runtime_meta.get('composeSnapshotId')",block)
         self.assertIn('def _remove_compose_snapshot_artifact',PUB)
+        self.assertIn("purge_environment_configuration(slug,'homologation',actor)",block)
+
+    def test_each_new_h_rebuilds_configuration_from_current_preview(self):
+        self.assertGreaterEqual(PUB.count("clone_environment_configuration(slug,'preview','homologation',actor)"),3)
+
+    def test_executor_removes_deployment_and_runtime_state_rows(self):
+        block=EXEC[EXEC.index('def remove_deployment'):EXEC.index('def _recover_completed_preview_snapshot',EXEC.index('def remove_deployment'))]
+        self.assertIn("delete from runtime_states where deployment_id=?",block)
+        self.assertIn("delete from deployments where deployment_id=?",block)
+        self.assertIn("idempotent",block)
 
 if __name__=='__main__':unittest.main()
