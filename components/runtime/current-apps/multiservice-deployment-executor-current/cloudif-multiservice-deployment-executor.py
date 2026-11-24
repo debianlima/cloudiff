@@ -180,10 +180,11 @@ def normalize_route(item:Any,index:int,services:set[str])->dict:
 
 def normalize_variables(value:Any,services:set[str])->dict[str,dict[str,str]]:
     if not isinstance(value,dict):raise DeploymentError('invalid_variables','variables deve ser um objeto por serviço.')
-    result={}
+    result={};global_values={}
     for service,raw in value.items():
-        if service not in services or not isinstance(raw,dict):raise DeploymentError('invalid_service_variables','Variáveis apontam para serviço inexistente.',detail={'service':service})
-        if len(raw)>128:raise DeploymentError('variable_limit_exceeded','Cada serviço aceita até 128 variáveis.')
+        service=str(service)
+        if (service!='' and service not in services) or not isinstance(raw,dict):raise DeploymentError('invalid_service_variables','Variáveis apontam para serviço inexistente.',detail={'service':service})
+        if len(raw)>128:raise DeploymentError('variable_limit_exceeded','Cada escopo aceita até 128 variáveis.')
         normalized={}
         for name,item in raw.items():
             name=str(name)
@@ -191,8 +192,12 @@ def normalize_variables(value:Any,services:set[str])->dict[str,dict[str,str]]:
             text=str(item)
             if len(text)>16384 or '\x00' in text or '\n' in text or '\r' in text:raise DeploymentError('invalid_variable_value','Valor de variável incompatível.',detail={'service':service,'name':name})
             normalized[name]=text
-        result[service]=normalized
-    for service in services:result.setdefault(service,{})
+        if service=='':global_values=normalized
+        else:result[service]=normalized
+    for service in services:
+        merged=dict(global_values);merged.update(result.get(service) or {})
+        if len(merged)>128:raise DeploymentError('variable_limit_exceeded','Cada serviço aceita até 128 variáveis efetivas.',detail={'service':service})
+        result[service]=merged
     return result
 
 
@@ -253,9 +258,11 @@ def normalize_payload(payload:Any)->dict:
     normalized_routes=[normalize_route(item,index,names) for index,item in enumerate(routes)]
     prefixes=[item['pathPrefix'] for item in normalized_routes]
     if len(prefixes)!=len(set(prefixes)) or '/' not in prefixes:raise DeploymentError('invalid_routes','Rotas duplicadas ou sem rota raiz.')
-    variables=normalize_variables(payload.get('variables'),names)
-    calculated=hashlib.sha256(canonical(variables)).hexdigest()
+    raw_variables=payload.get('variables')
+    if not isinstance(raw_variables,dict):raise DeploymentError('invalid_variables','variables deve ser um objeto por serviço.')
+    calculated=hashlib.sha256(canonical(raw_variables)).hexdigest()
     if not hmac.compare_digest(calculated,variables_digest):raise DeploymentError('variables_digest_mismatch','As variáveis mudaram após a aprovação.',409)
+    variables=normalize_variables(raw_variables,names)
     dependencies=normalize_dependencies(payload.get('dependencies'),names,variables)
     return {'deployment_id':deployment_id,'project_slug':slug,'environment':environment,'build_job_id':build_job,'deployment_plan_digest':plan,'build_plan_digest':build_plan,'config_revision':config_revision,'config_digest':config_digest,'toolchain_digest':toolchain_digest,'archive_sha256':archive,'applications':normalized,'routes':sorted(normalized_routes,key=lambda x:len(x['pathPrefix']),reverse=True),'dependencies':dependencies,'variables':variables,'variables_digest':variables_digest}
 
@@ -1088,6 +1095,201 @@ def _compose_container_ready(name:str)->tuple[bool,str]:
     return (status=='healthy',status) if status else (True,'running')
 
 
+def _compose_effective_variables(variables:dict,service:str)->dict[str,str]:
+    if not isinstance(variables,dict):raise DeploymentError('invalid_variables','Variáveis inválidas.',400)
+    global_values=variables.get('') or {};service_values=variables.get(service) or {}
+    if not isinstance(global_values,dict) or not isinstance(service_values,dict):raise DeploymentError('invalid_variables','Variáveis globais ou por serviço inválidas.',400,{'service':service})
+    merged={str(k):str(v) for k,v in global_values.items()}
+    merged.update({str(k):str(v) for k,v in service_values.items()})
+    for name in merged:
+        if not ENV_NAME_RE.fullmatch(name):raise DeploymentError('invalid_environment_name','Nome de variável de ambiente inválido.',400,{'service':service,'name':name})
+    return merged
+
+
+def _normalize_reconfigure_map(raw:Any,services:set[str],kind:str)->dict:
+    if raw is None:return {}
+    if not isinstance(raw,dict):raise DeploymentError('invalid_variables',kind+' inválido.',400)
+    out={}
+    for service,value in raw.items():
+        service=str(service)
+        if service!='' and service not in services:raise DeploymentError('invalid_service_name','Serviço de variável não pertence ao deployment.',400,{'service':service})
+        if kind=='values':
+            if not isinstance(value,dict):raise DeploymentError('invalid_variables','Valores por serviço inválidos.',400,{'service':service})
+            normalized={}
+            for name,item in value.items():
+                name=str(name)
+                if not ENV_NAME_RE.fullmatch(name):raise DeploymentError('invalid_environment_name','Nome de variável de ambiente inválido.',400,{'service':service,'name':name})
+                if isinstance(item,(dict,list,tuple,set)) or item is None:raise DeploymentError('invalid_variable_value','Valor de variável inválido.',400,{'service':service,'name':name})
+                normalized[name]=str(item)
+            out[service]=normalized
+        else:
+            if not isinstance(value,list):raise DeploymentError('invalid_variables','Nomes gerenciados por serviço inválidos.',400,{'service':service})
+            names=sorted(set(str(name) for name in value))
+            if any(not ENV_NAME_RE.fullmatch(name) for name in names):raise DeploymentError('invalid_environment_name','Nome de variável de ambiente inválido.',400,{'service':service})
+            out[service]=names
+    return out
+
+
+def _compose_reconfigure_create_from_inspect(deployment_id:str,service:str,old:dict,new_env:dict)->str:
+    config=old.get('Config') or {};host=old.get('HostConfig') or {};networks=((old.get('NetworkSettings') or {}).get('Networks') or {})
+    name=container_name(deployment_id,service);path=env_file(deployment_id,service,new_env);command=['create','--name',name]
+    primary=network_name(deployment_id)
+    if primary in networks:
+        command.extend(['--network',primary,'--network-alias',service])
+        aliases=[str(x) for x in (networks.get(primary,{}).get('Aliases') or [])]
+        for alias in sorted(set(x for x in aliases if x not in {service,name,deployment_id} and not re.fullmatch(r'[a-f0-9]{64}',x) and re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.-]{0,126}',x))):
+            command.extend(['--network-alias',alias])
+    restart=(host.get('RestartPolicy') or {}).get('Name') or 'unless-stopped';command.extend(['--restart',str(restart),'--env-file',str(path)])
+    for key,value in sorted((config.get('Labels') or {}).items()):
+        if value is not None:command.extend(['--label',str(key)+'='+str(value)])
+    if host.get('ReadonlyRootfs'):command.append('--read-only')
+    user=str(config.get('User') or '')
+    if user:command.extend(['--user',user])
+    workdir=str(config.get('WorkingDir') or '')
+    if workdir:command.extend(['--workdir',workdir])
+    for cap in host.get('CapAdd') or []:command.extend(['--cap-add',str(cap)])
+    for cap in host.get('CapDrop') or []:command.extend(['--cap-drop',str(cap)])
+    for opt in host.get('SecurityOpt') or []:
+        if str(opt):command.extend(['--security-opt',str(opt)])
+    pids=host.get('PidsLimit')
+    if pids not in (None,0,-1):command.extend(['--pids-limit',str(int(pids))])
+    memory=int(host.get('Memory') or 0)
+    if memory>0:command.extend(['--memory',str(memory)])
+    nano=int(host.get('NanoCpus') or 0)
+    if nano>0:command.extend(['--cpus',str(nano/1_000_000_000)])
+    shm=int(host.get('ShmSize') or 0)
+    if shm>0:command.extend(['--shm-size',str(shm)])
+    for tmp_path,tmp_value in (host.get('Tmpfs') or {}).items():
+        command.extend(['--tmpfs',str(tmp_path)+((':'+str(tmp_value)) if tmp_value else '')])
+    health=config.get('Healthcheck') or {}
+    if health:command.extend(_health_options(health))
+    for mount in old.get('Mounts') or []:
+        kind=str(mount.get('Type') or '');dest=str(mount.get('Destination') or '');rw=bool(mount.get('RW'))
+        if kind=='volume':
+            src=str(mount.get('Name') or '')
+            if src and dest:command.extend(['--mount',f'type=volume,src={src},dst={dest}'+('' if rw else ',readonly')])
+        elif kind=='bind':
+            src=str(mount.get('Source') or '')
+            if src and dest:command.extend(['--mount',f'type=bind,src={src},dst={dest}'+('' if rw else ',readonly')])
+    entry=[str(x) for x in (config.get('Entrypoint') or [])];cmd=[str(x) for x in (config.get('Cmd') or [])]
+    if entry:command.extend(['--entrypoint',entry[0]])
+    image=str(old.get('Image') or '')
+    if not IMAGE_RE.fullmatch(image):raise DeploymentError('compose_reconfigure_image_invalid','Imagem do container atual não é imutável.',409,{'service':service})
+    command.append(image)
+    if entry:command.extend(entry[1:])
+    command.extend(cmd)
+    try:cid=docker(*command,timeout=900).stdout.strip()
+    finally:path.unlink(missing_ok=True)
+    for network,info in networks.items():
+        if network==primary:continue
+        aliases=[str(x) for x in (info.get('Aliases') or [])]
+        args=['network','connect']
+        for alias in sorted(set(x for x in aliases if x not in {name,deployment_id} and not re.fullmatch(r'[a-f0-9]{64}',x) and re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.-]{0,126}',x))):
+            args.extend(['--alias',alias])
+        args.extend([network,name]);docker(*args,timeout=30)
+    return cid
+
+
+def _recover_compose_reconfigure_pair(deployment_id:str,service:str)->None:
+    final=container_name(deployment_id,service);backup=final+'-envbak'
+    backup_exists=docker('inspect',backup,timeout=20,check=False).returncode==0
+    if not backup_exists:return
+    final_exists=docker('inspect',final,timeout=20,check=False).returncode==0
+    if final_exists:
+        ready,_=_compose_container_ready(final)
+        if ready:
+            docker('rm','-f',backup,timeout=60,check=False);return
+        docker('rm','-f',final,timeout=60,check=False)
+    docker('rename',backup,final,timeout=30)
+    docker('start',final,timeout=60)
+
+
+def recover_interrupted_compose_reconfigurations()->dict:
+    recovered=[];cleaned=[]
+    listed=docker('ps','-a','--format','{{.Names}}',timeout=30,check=False)
+    for backup in sorted(x.strip() for x in listed.stdout.splitlines() if x.strip().endswith('-envbak')):
+        rows=_json_rows(docker('inspect',backup,timeout=20,check=False))
+        if not rows:continue
+        labels=(rows[0].get('Config') or {}).get('Labels') or {};deployment_id=str(labels.get('org.cloudiff.deployment') or '');service=str(labels.get('org.cloudiff.service') or '')
+        if not DEPLOYMENT_RE.fullmatch(deployment_id) or not SERVICE_RE.fullmatch(service):continue
+        final=container_name(deployment_id,service)
+        if docker('inspect',final,timeout=20,check=False).returncode==0:
+            ready,_=_compose_container_ready(final)
+            if ready:docker('rm','-f',backup,timeout=60,check=False);cleaned.append(backup);continue
+            docker('rm','-f',final,timeout=60,check=False)
+        docker('rename',backup,final,timeout=30);docker('start',final,timeout=60);recovered.append(final)
+    return {'recovered':recovered,'cleaned':cleaned}
+
+
+def reconfigure_compose_deployment(payload:Any)->dict:
+    if not isinstance(payload,dict):raise DeploymentError('invalid_request','Pedido de reconfiguração inválido.',400)
+    required={'deployment_id','project_slug','environment','values_by_service','managed_names_by_service','variables_digest','runtime_environment_digest','environment_digest'}
+    if not required.issubset(payload):raise DeploymentError('required_field_missing','Campos obrigatórios estão ausentes.',400,{'missing':sorted(required-set(payload))})
+    deployment_id=str(payload.get('deployment_id') or '');slug=str(payload.get('project_slug') or '');environment=str(payload.get('environment') or '')
+    if not DEPLOYMENT_RE.fullmatch(deployment_id) or not SLUG_RE.fullmatch(slug) or environment not in ENVIRONMENTS:raise DeploymentError('invalid_request','Identidade de reconfiguração inválida.',400)
+    connection=db();row=connection.execute('select * from deployments where deployment_id=?',(deployment_id,)).fetchone();state=connection.execute('select * from runtime_states where deployment_id=?',(deployment_id,)).fetchone();connection.close()
+    if not row or str(row['status'])!='running':raise DeploymentError('deployment_not_found','Deployment ativo não encontrado.',404)
+    if str(row['project_slug'])!=slug or str(row['environment'])!=environment:raise DeploymentError('deployment_identity_mismatch','Deployment pertence a outro projeto ou ambiente.',409)
+    snapshot_id=str(row['snapshot_id'] or '')
+    if not COMPOSE_SNAPSHOT_RE.fullmatch(snapshot_id):raise DeploymentError('compose_snapshot_required','Reconfiguração exige deployment baseado em snapshot.',409)
+    services=json.loads(row['services_json'] or '[]');service_names={str(x.get('service') or '') for x in services if isinstance(x,dict)}
+    if not service_names or '' in service_names:raise DeploymentError('compose_services_invalid','Deployment não possui serviços reconfiguráveis.',409)
+    values=_normalize_reconfigure_map(payload.get('values_by_service'),service_names,'values');managed=_normalize_reconfigure_map(payload.get('managed_names_by_service'),service_names,'names')
+    material={'managed_names_by_service':managed,'values_by_service':values};digest=str(payload.get('variables_digest') or '')
+    if not SHA_RE.fullmatch(digest) or not hmac.compare_digest(hashlib.sha256(canonical(material)).hexdigest(),digest):raise DeploymentError('variables_digest_mismatch','As variáveis mudaram durante a reconfiguração.',409)
+    runtime_digest=str(payload.get('runtime_environment_digest') or '');environment_digest=str(payload.get('environment_digest') or '')
+    if not SHA_RE.fullmatch(runtime_digest) or not SHA_RE.fullmatch(environment_digest):raise DeploymentError('invalid_digest','Digest do ambiente é inválido.',400)
+    if str(row['variables_digest'] or '')==digest and state and str(state['runtime_environment_digest'] or '')==runtime_digest and str(state['environment_digest'] or '')==environment_digest:
+        return {'ok':True,'deploymentId':deployment_id,'deployment_id':deployment_id,'environment':environment,'changedServices':[],'deploymentIdentityPreserved':True,'snapshotPreserved':True,'volumesPreserved':True,'containersRecreated':False,'idempotent':True,'secretValuesIncluded':False}
+    for service in sorted(service_names):_recover_compose_reconfigure_pair(deployment_id,service)
+    previous_names={}
+    if state:
+        try:previous_names=json.loads(state['variable_names_json'] or '{}')
+        except Exception:previous_names={}
+    global_previous=set(str(x) for x in (previous_names.get('') or []));global_new=set(str(x) for x in (managed.get('') or []))
+    old_inspects={};new_envs={}
+    for service in sorted(service_names):
+        name=container_name(deployment_id,service);rows=_json_rows(docker('inspect',name,timeout=30,check=False))
+        if not rows:raise DeploymentError('deployment_container_missing','Container do deployment não foi encontrado.',409,{'service':service})
+        old=rows[0];old_inspects[service]=old;current={}
+        for item in ((old.get('Config') or {}).get('Env') or []):
+            if '=' in str(item):key,value=str(item).split('=',1);current[key]=value
+        remove=global_previous|set(str(x) for x in (previous_names.get(service) or []))|global_new|set(str(x) for x in (managed.get(service) or []))
+        for key in remove:current.pop(key,None)
+        current.update(_compose_effective_variables(values,service));new_envs[service]=current
+    old_names={service:container_name(deployment_id,service) for service in service_names};backup_names={service:old_names[service]+'-envbak' for service in service_names};created=[]
+    try:
+        for service in sorted(service_names):
+            docker('stop','-t','30',old_names[service],timeout=60);docker('rename',old_names[service],backup_names[service],timeout=30)
+        new_ids={}
+        for service in sorted(service_names):
+            cid=_compose_reconfigure_create_from_inspect(deployment_id,service,old_inspects[service],new_envs[service]);created.append(old_names[service]);new_ids[service]=cid
+        for name in created:docker('start',name,timeout=60)
+        deadline=time.time()+900;pending=set(created);last={}
+        while pending and time.time()<deadline:
+            for name in list(pending):
+                ready,status=_compose_container_ready(name);last[name]=status
+                if ready:pending.remove(name)
+            if pending:time.sleep(2)
+        if pending:raise DeploymentError('compose_reconfigure_health_failed','Um ou mais serviços reconfigurados não ficaram saudáveis.',409,{'pending':sorted(pending),'status':last})
+        now=int(time.time());updated_services=[]
+        for item in services:
+            item=dict(item);service=str(item.get('service') or '');item['container_id']=new_ids[service];item['variable_names']=sorted(new_envs[service]);updated_services.append(item)
+        effective_names={service:sorted(_compose_effective_variables(values,service)) for service in sorted(service_names)}
+        connection=db();connection.execute('begin immediate')
+        connection.execute('update deployments set variables_digest=?,services_json=?,updated_at=? where deployment_id=?',(digest,json.dumps(updated_services,separators=(',',':')),now,deployment_id))
+        connection.execute('update runtime_states set runtime_environment_digest=?,environment_digest=?,variable_names_json=?,updated_at=? where deployment_id=?',(runtime_digest,environment_digest,json.dumps(effective_names,sort_keys=True,separators=(',',':')),now,deployment_id))
+        connection.commit();connection.close()
+        for service in sorted(service_names):docker('rm',backup_names[service],timeout=60,check=False)
+        return {'ok':True,'deploymentId':deployment_id,'deployment_id':deployment_id,'environment':environment,'changedServices':sorted(service_names),'deploymentIdentityPreserved':True,'snapshotPreserved':True,'volumesPreserved':True,'containersRecreated':True,'idempotent':False,'secretValuesIncluded':False}
+    except Exception:
+        for name in created:docker('rm','-f',name,timeout=60,check=False)
+        for service in sorted(service_names):
+            if docker('inspect',backup_names[service],timeout=20,check=False).returncode==0:
+                docker('rename',backup_names[service],old_names[service],timeout=30,check=False);docker('start',old_names[service],timeout=60,check=False)
+        raise
+
+
 def deploy_compose_snapshot(payload:Any)->dict:
     if not isinstance(payload,dict):raise DeploymentError('invalid_request','Pedido Compose inválido.',400)
     required={'deployment_id','project_slug','environment','deployment_plan_digest','config_revision','config_digest','toolchain_digest','routes','variables','variables_digest'}
@@ -1142,9 +1344,8 @@ def deploy_compose_snapshot(payload:Any)->dict:
             env={}
             for item in spec.get('environment') or []:
                 if '=' in str(item):key,value=str(item).split('=',1);env[key]=value
-            approved=variables.get(service) or {}
-            if not isinstance(approved,dict):raise DeploymentError('invalid_variables','Variáveis por serviço inválidas.',400,{'service':service})
-            env.update({str(k):str(v) for k,v in approved.items()})
+            approved=_compose_effective_variables(variables,service)
+            env.update(approved)
             if slug=='paperclip' and environment=='homologation' and stage_public_number and stage_number:
                 h_host=f'{stage_public_number}-h{stage_number}-homologation.cloudiff.duckdns.org';stable_host=f'{stage_public_number}.cloudiff.duckdns.org'
                 env.pop('PAPERCLIP_PUBLIC_URL',None);env['PAPERCLIP_AUTH_BASE_URL_MODE']='auto';env['PAPERCLIP_ALLOWED_HOSTNAMES']=h_host+','+stable_host
@@ -1194,7 +1395,8 @@ def deploy_compose_snapshot(payload:Any)->dict:
         now=int(time.time());safe_services=[{k:v for k,v in item.items() if k!='container_id'} for item in services]
         connection=db();connection.execute('insert into deployments(deployment_id,project_slug,environment,build_job_id,plan_digest,build_plan_digest,config_revision,config_digest,toolchain_digest,archive_sha256,variables_digest,status,services_json,routes_json,error_json,created_at,updated_at,snapshot_id) values(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',(deployment_id,slug,environment,snapshot_id,plan,snapshot['snapshot_digest'],config_revision,config_digest,toolchain_digest,snapshot['snapshot_digest'],variables_digest,'running',json.dumps(services,separators=(',',':')),json.dumps(routes,separators=(',',':')),'{}',now,now,snapshot_id));connection.commit();connection.close()
         runtime_configuration={'buildEnvironmentDigest':'','runtimeEnvironmentDigest':str(payload.get('runtime_environment_digest') or variables_digest),'environmentDigest':str(payload.get('environment_digest') or variables_digest),'buildJobId':snapshot_id}
-        _runtime_state_record({'project_slug':slug,'environment':environment,'deployment_id':deployment_id,'config_revision':config_revision,'config_digest':config_digest,'toolchain_digest':toolchain_digest,'build_job_id':snapshot_id,'variables':variables},runtime_configuration,'running')
+        effective_variables={str(spec.get('service') or ''):_compose_effective_variables(variables,str(spec.get('service') or '')) for spec in (private.get('services') or []) if str(spec.get('service') or '')}
+        _runtime_state_record({'project_slug':slug,'environment':environment,'deployment_id':deployment_id,'config_revision':config_revision,'config_digest':config_digest,'toolchain_digest':toolchain_digest,'build_job_id':snapshot_id,'variables':effective_variables},runtime_configuration,'running')
         return {'ok':True,'deployment_id':deployment_id,'project_slug':slug,'environment':environment,'source_kind':str(snapshot.get('source_kind') or 'linked-compose'),'snapshot_id':snapshot_id,'snapshot_digest':snapshot['snapshot_digest'],'artifact_image_id':'sha256:'+snapshot['snapshot_digest'],'source_commit':snapshot['source_commit'],'status':'running','services':safe_services,'routes':routes,'edge_service':snapshot['edge_service'],'edge_port':snapshot['edge_port'],'snapshotBacked':True,'sameSnapshotReusable':True,'secretValuesIncluded':False,'secretValuesPersistedRootOnly':True,'idempotent':False}
     except Exception as error:
         cleanup_resources(deployment_id);detail=error.as_dict() if isinstance(error,DeploymentError) else {'code':'compose_snapshot_deploy_failed','message':type(error).__name__}
@@ -1535,6 +1737,7 @@ class Handler(BaseHTTPRequestHandler):
             if self.path=='/v1/deployments':return self.out(201,create_deployment(self.body()))
             if self.path=='/v1/preview-runtime-snapshots':return self.out(201,create_preview_runtime_snapshot(self.body()))
             if self.path=='/v1/compose-snapshots/deploy':return self.out(201,deploy_compose_snapshot(self.body()))
+            if self.path=='/v1/compose-deployments/reconfigure':return self.out(200,reconfigure_compose_deployment(self.body()))
             if self.path=='/v1/compose-source-preview-bridge':return self.out(201,ensure_source_preview_bridge(self.body()))
             if self.path=='/v1/publication-bridges':return self.out(201,ensure_publication_bridge(self.body()))
             if self.path=='/v1/publication-bridges/activate':return self.out(200,activate_publication_bridge(self.body()))
@@ -1555,4 +1758,4 @@ class Handler(BaseHTTPRequestHandler):
 
 if __name__=='__main__':
     if not TOKEN:raise SystemExit('missing token')
-    init_db();recover_interrupted_preview_snapshots();ThreadingHTTPServer((HOST,PORT),Handler).serve_forever()
+    init_db();recover_interrupted_preview_snapshots();recover_interrupted_compose_reconfigurations();ThreadingHTTPServer((HOST,PORT),Handler).serve_forever()
