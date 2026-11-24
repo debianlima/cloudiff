@@ -4902,6 +4902,9 @@ def _cloudif_executor_proxy(handler,method):
         _EXECUTOR_PROXY_PREFIX+'/v1/preview-runtime-snapshots',
         _EXECUTOR_PROXY_PREFIX+'/v1/compose-snapshots/deploy',
         _EXECUTOR_PROXY_PREFIX+'/v1/compose-deployments/reconfigure',
+        _EXECUTOR_PROXY_PREFIX+'/v1/compose-deployments/promote',
+        _EXECUTOR_PROXY_PREFIX+'/v1/deployments/deactivate',
+        _EXECUTOR_PROXY_PREFIX+'/v1/publication-bridges/deactivate',
         _EXECUTOR_PROXY_PREFIX+'/v1/compose-snapshots/rehydrate-historical',
         _EXECUTOR_PROXY_PREFIX+'/v1/compose-source-preview-bridge',
         _EXECUTOR_PROXY_PREFIX+'/v1/publication-bridges',
@@ -4914,7 +4917,7 @@ def _cloudif_executor_proxy(handler,method):
         except Exception:return send(handler,400,{'ok':False,'error':'invalid_json'})
         if not isinstance(payload,dict):return send(handler,400,{'ok':False,'error':'invalid_request'})
         downstream=path[len(_EXECUTOR_PROXY_PREFIX):]
-        timeout={'/v1/deployments':600,'/v1/preview-runtime-snapshots':1200,'/v1/compose-snapshots/deploy':1200,'/v1/compose-deployments/reconfigure':600,'/v1/compose-snapshots/rehydrate-historical':1200,'/v1/compose-source-preview-bridge':120,'/v1/publication-bridges':120,'/v1/publication-bridges/activate':60}[downstream]
+        timeout={'/v1/deployments':600,'/v1/preview-runtime-snapshots':1200,'/v1/compose-snapshots/deploy':1200,'/v1/compose-deployments/reconfigure':600,'/v1/compose-deployments/promote':180,'/v1/deployments/deactivate':120,'/v1/publication-bridges/deactivate':60,'/v1/compose-snapshots/rehydrate-historical':1200,'/v1/compose-source-preview-bridge':120,'/v1/publication-bridges':120,'/v1/publication-bridges/activate':60}[downstream]
     elif method=='DELETE' and not parsed.query:
         deployment=re.fullmatch(r'/cloudif/executor/v1/deployments/(dep_[a-f0-9]{24})',path);snapshot=re.fullmatch(r'/cloudif/executor/v1/compose-snapshots/(snap_[a-f0-9]{24})',path)
         if deployment:downstream='/v1/deployments/'+deployment.group(1);timeout=120
