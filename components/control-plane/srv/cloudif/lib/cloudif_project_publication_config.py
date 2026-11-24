@@ -178,6 +178,33 @@ def clone_environment_configuration(slug:str,source_environment:str,target_envir
     if not summary.get('valid'):raise RuntimeError('cloned_environment_invalid')
     return {**summary,'sourceEnvironment':source,'targetEnvironment':target,'secretValuesIncluded':False}
 
+def purge_environment_configuration(slug:str,environment:str,actor:str='publication-reject')->dict:
+    target=_environment_name(environment)
+    if target!='homologation':raise ValueError('purge_only_allowed_for_homologation')
+    current=_environment_entries(slug,target);revision=int(current.get('revision') or 0)
+    entries=[x for x in (current.get('entries') or []) if isinstance(x,dict)]
+    internal=_effective(slug,True,target);refs=internal.get('secretRuntimeReferences') or {}
+    secret_base=CONFIG_URL+'/v1/projects/'+urllib.parse.quote(slug,safe='')+'/environment/secrets/'
+    revoked=[];already_inactive=[]
+    for service,values in sorted(refs.items()):
+        if not isinstance(values,dict):continue
+        for name,reference in sorted(values.items()):
+            code,plan=_json('POST',secret_base+'revoke/plan',_config_headers(),{'secretReference':str(reference),'expectedRevision':revision,'actor':actor,'reason':'Homologação rejeitada: remoção integral do estado transitório','ttlSeconds':900},30)
+            if code==200 and plan.get('ok') is True:
+                code,result=_json('POST',secret_base+'revoke/apply',_config_headers(),{'planDigest':str(plan.get('planDigest') or ''),'secretReference':str(reference),'expectedRevision':revision,'approved':True,'actor':actor},45)
+                if code!=200 or result.get('ok') is not True:raise RuntimeError('homologation_secret_revoke_failed')
+                revoked.append({'service':str(service),'name':str(name)})
+            elif code in {404,409,422}:
+                already_inactive.append({'service':str(service),'name':str(name)})
+            else:
+                raise RuntimeError('homologation_secret_revoke_plan_failed')
+    changes=[{'operation':'delete','service':str(x.get('service') or ''),'name':str(x.get('name') or '')} for x in entries if str(x.get('name') or '')]
+    if changes:revision=_controller_apply_change(slug,target,changes,revision,actor)
+    final=_environment_entries(slug,target)
+    if final.get('entries'):raise RuntimeError('homologation_environment_purge_incomplete')
+    return {'ok':True,'environment':target,'environmentRevision':int(final.get('revision') or revision),'removedEntries':len(changes),'revokedSecrets':len(revoked),'alreadyInactiveSecrets':len(already_inactive),'secretValuesIncluded':False}
+
+
 def execution_environment_services(slug:str,environment:str='production')->dict:
     environment=_environment_name(environment);data=_effective(slug,True,environment)
     revision=int(data.get('environmentRevision') or 0);digest_value=str(data.get('environmentDigest') or '')

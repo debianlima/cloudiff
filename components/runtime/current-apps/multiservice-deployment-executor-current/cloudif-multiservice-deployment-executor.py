@@ -970,7 +970,8 @@ def compose_snapshot_status(snapshot_id:str)->dict:
 def remove_compose_snapshot(snapshot_id:str)->dict:
     if not COMPOSE_SNAPSHOT_RE.fullmatch(str(snapshot_id or '')):raise DeploymentError('invalid_snapshot_id','snapshot_id inválido.',400)
     connection=db();row=connection.execute('select * from compose_snapshots where snapshot_id=?',(snapshot_id,)).fetchone()
-    if not row:connection.close();raise DeploymentError('compose_snapshot_not_found','Snapshot Compose não encontrado.',404)
+    if not row:
+        connection.close();return {'ok':True,'snapshot_id':snapshot_id,'status':'removed','removed':True,'idempotent':True,'secretValuesIncluded':False}
     active=connection.execute("select deployment_id,status from deployments where snapshot_id=? and status='running' order by deployment_id",(snapshot_id,)).fetchall()
     connection.close()
     if active:raise DeploymentError('compose_snapshot_in_use','Snapshot ainda pertence a deployment ativo.',409,{'deployments':[str(x['deployment_id']) for x in active]})
@@ -987,11 +988,9 @@ def remove_compose_snapshot(snapshot_id:str)->dict:
     for image_id in sorted(set(x.strip() for x in listed.stdout.splitlines() if x.strip())):
         result=docker('image','rm',image_id,timeout=300,check=False)
         if result.returncode==0:image_ids.append(image_id)
-    try:manifest=json.loads(row['manifest_json'] or '{}')
-    except Exception:manifest={}
-    audit={'source_kind':str(manifest.get('source_kind') or 'linked-compose'),'captureStatus':'removed','artifactBytes':int(manifest.get('artifact_bytes') or removed_bytes),'serviceCount':len(manifest.get('services') or [])}
-    connection=db();connection.execute('update compose_snapshots set manifest_json=?,status=? where snapshot_id=?',(json.dumps(audit,ensure_ascii=False,separators=(',',':')),'removed',snapshot_id));connection.commit();saved=connection.execute('select * from compose_snapshots where snapshot_id=?',(snapshot_id,)).fetchone();connection.close()
-    safe=_snapshot_safe_status(saved);safe.update({'ok':True,'removed':True,'artifactBytesRemoved':removed_bytes,'imagesRemoved':len(image_ids),'secretValuesIncluded':False});return safe
+    safe=_snapshot_safe_status(row)
+    connection=db();connection.execute('begin immediate');connection.execute('delete from compose_snapshots where snapshot_id=?',(snapshot_id,));connection.commit();connection.close()
+    safe.update({'ok':True,'status':'removed','removed':True,'idempotent':False,'artifactBytesRemoved':removed_bytes,'imagesRemoved':len(image_ids),'secretValuesIncluded':False});return safe
 
 
 def _snapshot_archive_record(path:Path)->dict:
@@ -1429,9 +1428,12 @@ def status_deployment(deployment_id:str)->dict:
 
 
 def remove_deployment(deployment_id:str,reason:str='removed')->dict:
-    status_deployment(deployment_id);connection=db();row=connection.execute('select services_json from deployments where deployment_id=?',(deployment_id,)).fetchone();connection.close();persisted=json.loads((row['services_json'] if row else '') or '[]');dependencies=[name for item in persisted for name in (item.get('dependency_containers') or [])];cleanup=cleanup_resources(deployment_id,dependencies);now=int(time.time())
-    conn=db();conn.execute('update deployments set status=?,updated_at=? where deployment_id=?',(reason,now,deployment_id));conn.execute('update runtime_states set status=?,updated_at=? where deployment_id=?',(reason,now,deployment_id));conn.commit();conn.close()
-    return {'ok':True,'deployment_id':deployment_id,'status':reason,**cleanup,'removed_at':now}
+    if not DEPLOYMENT_RE.fullmatch(str(deployment_id or '')):raise DeploymentError('invalid_deployment_id','deployment_id inválido.',400)
+    connection=db();row=connection.execute('select * from deployments where deployment_id=?',(deployment_id,)).fetchone();connection.close()
+    if not row:return {'ok':True,'deployment_id':deployment_id,'status':reason,'removed':True,'idempotent':True,'removed_at':int(time.time())}
+    persisted=json.loads((row['services_json'] or '') or '[]');dependencies=[name for item in persisted for name in (item.get('dependency_containers') or [])];cleanup=cleanup_resources(deployment_id,dependencies);now=int(time.time())
+    conn=db();conn.execute('begin immediate');conn.execute('delete from runtime_states where deployment_id=?',(deployment_id,));conn.execute('delete from deployments where deployment_id=?',(deployment_id,));conn.commit();conn.close()
+    return {'ok':True,'deployment_id':deployment_id,'status':reason,'removed':True,'idempotent':False,**cleanup,'removed_at':now}
 
 
 def _recover_completed_preview_snapshot(connection:sqlite3.Connection,row:sqlite3.Row)->bool:
