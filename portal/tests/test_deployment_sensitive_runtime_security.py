@@ -82,7 +82,7 @@ class DeploymentSecretInjectionSecurityTests(unittest.TestCase):
         self.assertIn("_EXECUTOR_PROXY_PREFIX+'/v1/deployments'",source)
         self.assertIn("re.fullmatch(r'/cloudif/executor/v1/compose-sources/([a-z0-9][a-z0-9-]{0,62})'",source)
         self.assertIn("re.fullmatch(r'/cloudif/executor/v1/compose-snapshots/(snap_[a-f0-9]{24})'",source)
-        for path in ('/v1/compose-snapshots/deploy','/v1/compose-source-preview-bridge','/v1/publication-bridges','/v1/publication-bridges/activate'):
+        for path in ('/v1/compose-snapshots/deploy','/v1/compose-deployments/reconfigure','/v1/compose-source-preview-bridge','/v1/publication-bridges','/v1/publication-bridges/activate'):
             self.assertIn("_EXECUTOR_PROXY_PREFIX+'"+path+"'",source)
         self.assertIn("return _cloudif_executor_proxy(self,'DELETE')",source)
         self.assertIn("hmac.compare_digest(expected,supplied)",source)
