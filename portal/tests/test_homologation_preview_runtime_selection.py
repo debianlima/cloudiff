@@ -64,6 +64,8 @@ class HomologationPreviewRuntimeSelectionTests(unittest.TestCase):
         self.assertIn("update compose_snapshots set",block)
         self.assertIn("def recover_interrupted_preview_snapshots",EXEC)
         self.assertIn("executor_restarted_during_capture",EXEC)
+        self.assertIn("compose_snapshot_archive_failed",PUB)
+        self.assertIn("compose_snapshot_archive_timeout",PUB)
         self.assertIn("recover_interrupted_preview_snapshots();ThreadingHTTPServer",EXEC)
         self.assertIn("except (BrokenPipeError,ConnectionResetError)",EXEC)
 

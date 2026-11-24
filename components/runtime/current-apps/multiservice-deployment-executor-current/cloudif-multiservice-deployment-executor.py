@@ -47,6 +47,8 @@ COMPOSE_RUNTIME_ROOT=Path(os.environ.get('CLOUDIF_COMPOSE_RUNTIME_ROOT',str(DB_P
 COMPOSE_SNAPSHOT_RE=re.compile(r'^snap_[a-f0-9]{24}$')
 COMPOSE_SNAPSHOT_MAX_BYTES=int(os.environ.get('CLOUDIF_COMPOSE_SNAPSHOT_MAX_BYTES',str(16*1024*1024*1024)))
 COMPOSE_EPHEMERAL_PREFIXES=('/run','/tmp','/var/run','/var/cache','/var/log')
+SNAPSHOT_ARCHIVE_ATTEMPTS=max(1,min(5,int(os.environ.get('CLOUDIF_SNAPSHOT_ARCHIVE_ATTEMPTS','3'))))
+SNAPSHOT_ARCHIVE_RETRY_DELAY_SECONDS=max(0.0,min(5.0,float(os.environ.get('CLOUDIF_SNAPSHOT_ARCHIVE_RETRY_DELAY_SECONDS','1.0'))))
 COMPOSE_DANGEROUS_CAPS={'SYS_ADMIN','SYS_MODULE','SYS_PTRACE','NET_ADMIN','DAC_READ_SEARCH','SYS_RAWIO'}
 
 
@@ -590,31 +592,44 @@ def _tar_contents(source:Path,target:Path)->None:
     os.chmod(target,0o600)
 
 
+def _archive_retry_sleep(attempt:int)->None:
+    if SNAPSHOT_ARCHIVE_RETRY_DELAY_SECONDS>0:
+        time.sleep(SNAPSHOT_ARCHIVE_RETRY_DELAY_SECONDS*max(1,int(attempt)))
+
+
 def _tar_container_path(container:str,source_path:str,target:Path)->None:
     if not container or not source_path.startswith('/') or '\x00' in container or '\x00' in source_path:raise DeploymentError('compose_snapshot_source_invalid','Origem do volume Compose inválida.',409)
     target.parent.mkdir(parents=True,exist_ok=True)
     source_path=source_path.rstrip('/') or '/'
-    command=['docker','cp',f'{container}:{source_path}/.','-']
-    try:
-        with target.open('wb') as output:
-            result=subprocess.run(command,stdout=output,stderr=subprocess.PIPE,timeout=900)
-    except subprocess.TimeoutExpired:
+    command=['docker','cp',f'{container}:{source_path}/.','-'];last_error=''
+    for attempt in range(1,SNAPSHOT_ARCHIVE_ATTEMPTS+1):
         target.unlink(missing_ok=True)
-        raise DeploymentError('compose_snapshot_archive_timeout','Tempo excedido ao congelar volume Compose.',504,{'container':container,'destination':source_path})
-    if result.returncode:
+        try:
+            with target.open('wb') as output:
+                result=subprocess.run(command,stdout=output,stderr=subprocess.PIPE,timeout=900)
+        except subprocess.TimeoutExpired:
+            target.unlink(missing_ok=True)
+            raise DeploymentError('compose_snapshot_archive_timeout','Tempo excedido ao congelar volume Compose.',504,{'container':container,'destination':source_path,'attempts':attempt})
+        if result.returncode==0 and target.is_file() and target.stat().st_size>0:
+            os.chmod(target,0o600);return
+        last_error=(result.stderr or b'').decode(errors='replace')[-400:] if result.returncode else 'empty_archive'
         target.unlink(missing_ok=True)
-        error=(result.stderr or b'').decode(errors='replace')[-400:]
-        raise DeploymentError('compose_snapshot_archive_failed','Não foi possível congelar um volume Compose pelo daemon Docker.',502,{'container':container,'destination':source_path,'error':error})
-    if not target.is_file() or target.stat().st_size<=0:raise DeploymentError('compose_snapshot_archive_failed','O daemon Docker não produziu o arquivo do volume Compose.',502,{'container':container,'destination':source_path})
-    os.chmod(target,0o600)
-
+        if attempt<SNAPSHOT_ARCHIVE_ATTEMPTS:_archive_retry_sleep(attempt)
+    raise DeploymentError('compose_snapshot_archive_failed','Não foi possível congelar um volume Compose pelo daemon Docker após retentativas seguras.',502,{'container':container,'destination':source_path,'attempts':SNAPSHOT_ARCHIVE_ATTEMPTS,'error':last_error})
 
 
 def _tar_path(source:Path,target:Path)->None:
-    target.parent.mkdir(parents=True,exist_ok=True)
-    result=subprocess.run(['tar','--numeric-owner','-C',str(source.parent),'-cpf',str(target),source.name],text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=900)
-    if result.returncode:raise DeploymentError('compose_snapshot_archive_failed','Não foi possível congelar um bind Compose.',502,{'source':str(source),'error':result.stderr[-400:]})
-    os.chmod(target,0o600)
+    target.parent.mkdir(parents=True,exist_ok=True);last_error=''
+    command=['tar','--numeric-owner','-C',str(source.parent),'-cpf',str(target),source.name]
+    for attempt in range(1,SNAPSHOT_ARCHIVE_ATTEMPTS+1):
+        target.unlink(missing_ok=True)
+        result=subprocess.run(command,text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=900)
+        if result.returncode==0 and target.is_file() and target.stat().st_size>0:
+            os.chmod(target,0o600);return
+        last_error=(result.stderr or '')[-400:] if result.returncode else 'empty_archive'
+        target.unlink(missing_ok=True)
+        if attempt<SNAPSHOT_ARCHIVE_ATTEMPTS:_archive_retry_sleep(attempt)
+    raise DeploymentError('compose_snapshot_archive_failed','Não foi possível congelar um bind Compose após retentativas seguras.',502,{'source':str(source),'attempts':SNAPSHOT_ARCHIVE_ATTEMPTS,'error':last_error})
 
 
 def _extract_tar(archive:Path,target:Path)->None:

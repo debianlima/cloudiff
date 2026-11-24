@@ -244,7 +244,12 @@ def execute(slug:str,plan_digest:str,approval_id:str,username:str,groups:list[st
     auth=authorization(slug,username,groups)
     if not auth['canWrite']:raise PermissionError('forbidden')
     if not re.fullmatch(r'[a-f0-9]{64}',plan_digest) or not re.fullmatch(r'apr_[a-f0-9]{20}',approval_id):raise ValueError('invalid_execution_binding')
-    plan=_plan(slug,plan_digest);approval=_approval_get(approval_id)
+    plan=_plan(slug,plan_digest)
+    target_environment=str(plan.get('targetEnvironment') or plan.get('environment') or '')
+    if target_environment in {'preview','homologation','production'}:
+        import cloudif_portal_publications as publications
+        publications.environment_runtime_target(slug,target_environment)
+    approval=_approval_get(approval_id)
     if not approval:raise LookupError('approval_not_found')
     try:metadata=json.loads(approval.get('metadata_json') or '{}')
     except Exception:raise ValueError('approval_metadata_invalid')
@@ -264,6 +269,12 @@ def execute(slug:str,plan_digest:str,approval_id:str,username:str,groups:list[st
             final_code,finalized=_approval_transition(approval_id,'finalize',{'reservation_id':reservation_id,'result':'success'})
             if final_code!=200 or finalized.get('status')!='consumed':raise RuntimeError('approval_finalize_failed')
         data['transaction']={'approvalId':approval_id,'reservationId':reservation_id,'executionId':execution_id,'approvalStatus':'consumed'}
+        environment=str(data.get('environment') or plan.get('targetEnvironment') or plan.get('environment') or '')
+        try:
+            import cloudif_portal_publications as publications
+            data['runtimeApply']=publications.apply_environment_to_runtime(slug,environment,str(username).strip().casefold())
+        except Exception as exc:
+            data['runtimeApply']={'ok':False,'environment':environment,'error':type(exc).__name__,'message':str(exc)[:300],'secretValuesIncluded':False}
         data['reconcile']=_enqueue_configuration_reconcile(slug,str(username).strip().casefold(),data)
         data['secretValuesIncluded']=False
         try:

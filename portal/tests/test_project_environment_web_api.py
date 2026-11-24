@@ -50,6 +50,18 @@ class ProjectEnvironmentWebAPITests(unittest.TestCase):
         code,data=self.module.handle_get('demo','',{},'unknown',[])
         self.assertEqual(code,403);self.assertEqual(data['error']['code'],'forbidden')
 
+    def test_get_environment_configuration_does_not_require_active_runtime(self):
+        calls=[]
+        self.module._config=lambda method,slug,suffix='',payload=None,query=None:(calls.append((method,query)) or (200,{'ok':True,'revision':6,'entries':[{'name':'APP_ENV','secret':False,'value':'production'}],'secretValuesIncluded':False}))
+        fake=types.SimpleNamespace(environment_runtime_target=lambda *a,**k:(_ for _ in ()).throw(AssertionError('read_must_not_require_runtime')))
+        sys.modules['cloudif_portal_publications']=fake
+        try:
+            code,data=self.module.handle_get('demo','',{'environment':'production','includePublicValues':'true'},'viewer',[])
+        finally:
+            sys.modules.pop('cloudif_portal_publications',None)
+        self.assertEqual(code,200);self.assertTrue(data['ok']);self.assertEqual(data['revision'],6)
+        self.assertEqual(calls,[('GET',{'environment':'production','includeValues':'true'})])
+
     def test_viewer_cannot_plan_or_execute(self):
         code,data=self.module.handle_post('demo','change/plan',{'environment':'preview','changes':[]},'viewer',[])
         self.assertEqual(code,403);self.assertEqual(data['error']['code'],'forbidden')
@@ -75,10 +87,19 @@ class ProjectEnvironmentWebAPITests(unittest.TestCase):
         self.module._approval_get=lambda aid:states.pop(0) if states else {**approval,'status':'consumed','reservation_id':reservation}
         transitions=[]
         self.module._approval_transition=lambda aid,op,payload:(transitions.append((op,payload)) or (200,{'status':'reserved' if op=='reserve' else 'consumed'}))
-        self.module._config=lambda method,slug,suffix='',payload=None,query=None:(200,{'ok':True,'revision':3,'secretValuesIncluded':False})
-        result=self.module.execute('demo','a'*64,'apr_'+'1'*20,'alice',[])
+        self.module._config=lambda method,slug,suffix='',payload=None,query=None:(200,{'ok':True,'revision':3,'environment':'preview','secretValuesIncluded':False})
+        runtime_calls=[]
+        fake=types.SimpleNamespace(
+            environment_runtime_target=lambda slug,env:(runtime_calls.append(('target',slug,env)) or {'environment':env}),
+            apply_environment_to_runtime=lambda slug,env,actor:(runtime_calls.append(('apply',slug,env,actor)) or {'ok':True,'environment':env,'secretValuesIncluded':False}),
+        )
+        sys.modules['cloudif_portal_publications']=fake
+        try:result=self.module.execute('demo','a'*64,'apr_'+'1'*20,'alice',[])
+        finally:sys.modules.pop('cloudif_portal_publications',None)
         self.assertEqual(result['revision'],3);self.assertEqual(result['transaction']['executionId'],execution)
         self.assertEqual([item[0] for item in transitions],['reserve','finalize'])
+        self.assertEqual(runtime_calls,[('target','demo','preview'),('apply','demo','preview','alice')])
+        self.assertTrue(result['runtimeApply']['ok'])
 
     def test_human_save_bypasses_approval_service_and_applies_runtime(self):
         calls=[]
@@ -124,8 +145,11 @@ class ProjectEnvironmentWebAPITests(unittest.TestCase):
         plan={'ok':True,'planDigest':'a'*64,'action':'change','sourceEnvironment':None,'targetEnvironment':'preview','expectedRevision':0}
         self.module._plan=lambda slug,digest:plan
         self.module._approval_get=lambda aid:{'status':'approved','project_slug':'demo','action':'project.environment.change','requested_by':'portal:other','approved_by':'admin','metadata_json':json.dumps({'environment_plan_digest':'a'*64,'environment_action':'change','source_environment':None,'target_environment':'preview','expected_revision':0,'content_stored':False,'secret_values_in_metadata':False})}
-        with self.assertRaisesRegex(PermissionError,'approval_binding_mismatch'):
-            self.module.execute('demo','a'*64,'apr_'+'1'*20,'alice',[])
+        sys.modules['cloudif_portal_publications']=types.SimpleNamespace(environment_runtime_target=lambda slug,env:{'environment':env})
+        try:
+            with self.assertRaisesRegex(PermissionError,'approval_binding_mismatch'):
+                self.module.execute('demo','a'*64,'apr_'+'1'*20,'alice',[])
+        finally:sys.modules.pop('cloudif_portal_publications',None)
 
     def test_coexist_routes_require_json_csrf_and_use_environment_module(self):
         source=COEXIST.read_text()

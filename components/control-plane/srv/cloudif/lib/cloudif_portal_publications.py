@@ -246,6 +246,9 @@ def _preview_runtime_snapshot(slug,num,generation,source_commit='',app_container
       'preview_runtime_mount_unsupported':'O Preview usa um mount ainda não publicável.',
       'preview_runtime_security_blocked':'O Preview usa configuração privilegiada que não pode ser promovida.',
       'compose_snapshot_too_large':'O snapshot integral do Preview excede o limite configurado.',
+      'compose_snapshot_archive_failed':'Falha ao congelar arquivos do Preview após retentativas seguras; verifique o runtime e tente novamente.',
+      'compose_snapshot_archive_timeout':'Tempo excedido ao congelar arquivos do Preview; verifique o runtime e tente novamente.',
+      'compose_rootfs_export_failed':'Falha ao congelar o filesystem do Preview; verifique o runtime e tente novamente.',
       'executor_restarted_during_capture':'O Executor reiniciou durante a captura; tente criar a Homologação novamente.',
     }
     if status and status//100!=2:
