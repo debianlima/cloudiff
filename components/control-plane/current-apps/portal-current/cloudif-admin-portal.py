@@ -2,6 +2,14 @@
 """CloudIFF portal launcher with canonical authorization and UI normalization."""
 from pathlib import Path
 import re
+import sys
+
+_CANONICAL_LIB = Path('/srv/cloudif/lib')
+if _CANONICAL_LIB.is_dir():
+    canonical = str(_CANONICAL_LIB)
+    if canonical in sys.path:
+        sys.path.remove(canonical)
+    sys.path.insert(0, canonical)
 
 _POLICY_OLD = "return bool(user.get('admin') or groups.intersection({'cloudif-tenants-admin'}))"
 _POLICY_NEW = "return bool(groups.intersection({'cloudif-tenants-admin','cloudif-professor'}))"
