@@ -37,6 +37,12 @@ class RejectedHomologationSnapshotCleanupTests(unittest.TestCase):
     def test_each_new_h_rebuilds_configuration_from_current_preview(self):
         self.assertGreaterEqual(PUB.count("clone_environment_configuration(slug,'preview','homologation',actor)"),3)
 
+    def test_rejected_candidate_is_not_rendered_as_active_homologation(self):
+        js=(ROOT/'portal/design/publication-release.js').read_text()
+        self.assertIn("['awaiting_homologation', 'homologated'].includes",js)
+        self.assertIn('const candidate = latestCandidate(data);',js)
+        self.assertNotIn("return ((model.data || {}).candidates || [])[0] || null;",js)
+
     def test_executor_removes_deployment_and_runtime_state_rows(self):
         block=EXEC[EXEC.index('def remove_deployment'):EXEC.index('def _recover_completed_preview_snapshot',EXEC.index('def remove_deployment'))]
         self.assertIn("delete from runtime_states where deployment_id=?",block)

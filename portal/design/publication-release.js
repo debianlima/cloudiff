@@ -80,8 +80,10 @@
     return publication ? ('P' + publication + '|' + deployment) : '';
   }
 
-  function latestCandidate() {
-    return ((model.data || {}).candidates || [])[0] || null;
+  function latestCandidate(data = model.data || {}) {
+    return (data.candidates || []).find(
+      item => ['awaiting_homologation', 'homologated'].includes(String(item.status || ''))
+    ) || null;
   }
 
   function activationFor(candidate) {
@@ -340,7 +342,7 @@
       const h = root.querySelector('[data-release-summary-h]');
       const p = root.querySelector('[data-release-summary-p]');
       const preview = data.preview || {};
-      const candidate = (data.candidates || [])[0];
+      const candidate = latestCandidate(data);
       const releases = data.releases || [];
       const release = releases.find(item => Number(item.is_active) === 1) || data.legacyProduction;
       const manager = root.closest('.publication-manager-resource');
