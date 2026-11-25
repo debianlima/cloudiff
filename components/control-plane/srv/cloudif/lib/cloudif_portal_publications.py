@@ -456,12 +456,13 @@ def _publish_linked_compose_homologated_candidate(slug,candidate,project,publica
     bridge=_multiservice_bridge(slug,deployment_id,num,'publication',publication,trace+'-bridge',runtime_host=runtime_host)
     _,_,npm_token=_clients();notify('https','Preparando URL P e domínio estável para a mesma instância homologada.')
     pstage,pdata=_post('http://10.62.91.3/stage',{'public_number':num,'stage':'publication','number':publication},npm_token,host='cloudif-publisher.internal',timeout=300)
-    if pstage//100!=2 or not pdata.get('ok'):raise RuntimeError(_publication_error('https',pdata))
+    if pstage//100!=2 or not pdata.get('ok'):raise RuntimeError('Publisher /stage (HTTPS da nova Produção): '+_publication_error('https',pdata))
     ident=_stage_identity(num,'publication',publication)
     if not _external_ok(ident['hostname']):raise RuntimeError('Validação HTTPS externa falhou para '+ident['hostname'])
-    activation=_multiservice_activate_bridge(slug,num,publication,trace+'-activate')
+    # Prepare HTTPS and legacy compatibility addresses before moving traffic.
     pstatus,publisher=_post('http://10.62.91.3/publish',{'public_number':num,'deploy_number':int(candidate['deploy_number']),'alias':alias},npm_token,host='cloudif-publisher.internal',timeout=300)
-    if pstatus//100!=2 or not publisher.get('ok'):raise RuntimeError(_publication_error('https',publisher))
+    if pstatus//100!=2 or not publisher.get('ok'):raise RuntimeError('Publisher /publish (HTTPS dos endereços de compatibilidade): '+_publication_error('https',publisher))
+    activation=_multiservice_activate_bridge(slug,num,publication,trace+'-activate')
     stable=f'{num}.cloudiff.duckdns.org'
     if not _external_ok(stable):raise RuntimeError('Validação da URL estável falhou após ativação.')
     h_number=int(candidate['candidate_number']);notify('cleanup','Retirando a rota de Homologação após validar a nova Produção.')
