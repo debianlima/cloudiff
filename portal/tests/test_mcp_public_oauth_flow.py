@@ -167,6 +167,18 @@ class MCPPublicOAuthFlowTest(unittest.TestCase):
         response = conn.getresponse(); raw = response.read(); returned_headers = dict(response.getheaders()); conn.close()
         return response.status, returned_headers, raw
 
+    def test_streamable_http_sse_probe_compatibility(self):
+        status,headers,raw=self.request('GET','/mcp',headers={'Accept':'text/event-stream'})
+        self.assertEqual(status,200,raw)
+        self.assertTrue(headers.get('Content-Type','').startswith('text/event-stream'))
+        self.assertEqual(headers.get('Cache-Control'),'no-store')
+        self.assertEqual(headers.get('X-Accel-Buffering'),'no')
+        self.assertIn(b'event: endpoint',raw)
+        self.assertIn(b'data: /cloudiff/mcp',raw)
+        status,headers,raw=self.request('GET','/mcp',headers={'Accept':'application/json'})
+        self.assertEqual(status,405,raw)
+        self.assertEqual(headers.get('Allow'),'POST')
+
     def oauth_credentials(self):
         verifier = 'a' * 64
         challenge = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).rstrip(b'=').decode()

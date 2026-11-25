@@ -2133,6 +2133,15 @@ class H(BaseHTTPRequestHandler):
         self.send_header('X-Content-Type-Options','nosniff');self.end_headers()
     def do_GET(self):
         parsed=urlparse(self.path);path=parsed.path
+        if path=='/mcp':
+            accept=self.headers.get('Accept','')
+            if 'text/event-stream' not in accept.lower():
+                self.send_response(405);self.send_header('Allow','POST');self.send_header('Cache-Control','no-store');self.send_header('Content-Length','0');self.end_headers();return
+            # Compatibility probe for clients which verify SSE reachability before
+            # using the stateless Streamable HTTP POST transport. No session is
+            # created and no application data or credentials are emitted.
+            raw=b'event: endpoint\ndata: /cloudiff/mcp\n\n'
+            self.send_response(200);self.send_header('Content-Type','text/event-stream; charset=utf-8');self.send_header('Cache-Control','no-store');self.send_header('X-Accel-Buffering','no');self.send_header('Content-Length',str(len(raw)));self.end_headers();self.wfile.write(raw);return
         if path in {'/.well-known/oauth-authorization-server','/cloudiff/mcp/.well-known/oauth-authorization-server','/oauth/.well-known/oauth-authorization-server'}:return self.sendj(200,_oauth_metadata())
         if path in {'/.well-known/oauth-protected-resource','/.well-known/oauth-protected-resource/cloudiff/mcp','/cloudiff/mcp/.well-known/oauth-protected-resource'}:return self.sendj(200,_oauth_metadata(True))
         if path=='/cloudiff/mcp/privacy':return self.sendhtml(200,_privacy_html())
