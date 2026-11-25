@@ -7,6 +7,8 @@
 #include <chrono>
 #include <cctype>
 #include <cstdlib>
+#include <cstdio>
+#include <memory>
 #include <fstream>
 #include <iomanip>
 #include <sstream>
@@ -24,6 +26,7 @@ using tcp = asio::ip::tcp;
 
 namespace {
 class ValidationError final : public std::runtime_error { using std::runtime_error::runtime_error; };
+class AcmeBusy final : public std::runtime_error { using std::runtime_error::runtime_error; };
 std::string env_or(const char* name,std::string fallback={}){const char* v=std::getenv(name);return v?std::string(v):std::move(fallback);}
 bool env_bool(const char* name,bool fallback){auto v=env_or(name);if(v.empty())return fallback;std::transform(v.begin(),v.end(),v.begin(),[](unsigned char c){return static_cast<char>(std::tolower(c));});return v=="1"||v=="true"||v=="yes"||v=="on";}
 int env_int(const char* name,int fallback){try{return std::stoi(env_or(name,std::to_string(fallback)));}catch(...){return fallback;}}
@@ -45,11 +48,14 @@ long long as_int(const nlohmann::json& value,const char* field){try{if(value.is_
 void validate_num(long long num,long long maximum,const char* field){if(num<1||num>maximum)throw ValidationError(std::string("invalid_")+field);}
 void ensure_maps(nlohmann::json& state){if(!state.is_object())state=nlohmann::json::object();for(const char* k:{"projects","aliases","stages","tenants"})if(!state.contains(k)||!state[k].is_object())state[k]=nlohmann::json::object();}
 
-void run_command(const std::vector<std::string>& command,int timeout_seconds){
+void run_command(const std::vector<std::string>& command,int timeout_seconds,bool classify_acme=false){
     if(command.empty())throw std::runtime_error("command_empty");
+    std::unique_ptr<FILE,decltype(&fclose)> diagnostics(classify_acme?tmpfile():nullptr,&fclose);
+    if(classify_acme&&!diagnostics)throw std::runtime_error("acme_diagnostics_unavailable");
     pid_t pid=fork();
     if(pid<0)throw std::runtime_error("fork_failed");
     if(pid==0){
+        if(diagnostics&&dup2(fileno(diagnostics.get()),STDERR_FILENO)<0)_exit(126);
         std::vector<char*> argv;argv.reserve(command.size()+1);
         for(const auto& part:command)argv.push_back(const_cast<char*>(part.c_str()));
         argv.push_back(nullptr);execvp(argv[0],argv.data());_exit(127);
@@ -63,7 +69,23 @@ void run_command(const std::vector<std::string>& command,int timeout_seconds){
         if(std::chrono::steady_clock::now()>=deadline){kill(pid,SIGKILL);(void)waitpid(pid,&status,0);throw std::runtime_error("command_timeout:"+command.front());}
         std::this_thread::sleep_for(std::chrono::milliseconds(20));
     }
-    if(!WIFEXITED(status)||WEXITSTATUS(status)!=0)throw std::runtime_error("command_failed:"+command.front()+":"+std::to_string(WIFEXITED(status)?WEXITSTATUS(status):-1));
+    std::string detail;
+    if(diagnostics){
+        rewind(diagnostics.get());
+        char chunk[4096];
+        while(detail.size()<65536){
+            const auto n=fread(chunk,1,sizeof(chunk),diagnostics.get());
+            if(!n)break;
+            detail.append(chunk,n);
+        }
+        // Preserve the existing service journal diagnostics, not the HTTP body.
+        if(!detail.empty())fwrite(detail.data(),1,detail.size(),stderr);
+    }
+    if(!WIFEXITED(status)||WEXITSTATUS(status)!=0){
+        if(classify_acme&&detail.find("Service busy; retry later.")!=std::string::npos)
+            throw AcmeBusy("acme_service_busy");
+        throw std::runtime_error("command_failed:"+command.front()+":"+std::to_string(WIFEXITED(status)?WEXITSTATUS(status):-1));
+    }
 }
 bool certificate_covers(const std::filesystem::path& cert,const std::vector<std::string>& domains){
     FILE* file=fopen(cert.c_str(),"r");if(!file)return false;
@@ -96,7 +118,20 @@ std::string NpmPublisherProvider::ensure_certificate(const std::string& name,con
     for(const auto& domain:domains){command.push_back("-d");command.push_back(domain);}
     command.insert(command.end(),{"--non-interactive","--agree-tos","--register-unsafely-without-email","--keep-until-expiring"});
     if(std::filesystem::exists(cert))command.push_back("--force-renewal");
-    run_command(command,300);
+    const auto deadline=std::chrono::steady_clock::now()+std::chrono::seconds(120);
+    for(int attempt=0;attempt<3;++attempt){
+        // Recover certificates already issued before an interrupted response.
+        if(std::filesystem::exists(cert)&&certificate_covers(cert,domains))return name;
+        const int remaining=static_cast<int>(std::chrono::duration_cast<std::chrono::seconds>(deadline-std::chrono::steady_clock::now()).count());
+        if(remaining<=0)throw AcmeBusy("acme_service_busy_retry_budget_exhausted");
+        try{run_command(command,remaining,true);break;}
+        catch(const AcmeBusy&){
+            if(std::filesystem::exists(cert)&&certificate_covers(cert,domains))return name;
+            const auto delay=std::chrono::seconds(attempt==0?5:15);
+            if(attempt==2||std::chrono::steady_clock::now()+delay>=deadline)throw;
+            std::this_thread::sleep_for(delay);
+        }
+    }
     if(!std::filesystem::exists(cert)||!certificate_covers(cert,domains))throw std::runtime_error("certificate_san_mismatch:"+name);
     return name;
 }
@@ -233,6 +268,7 @@ PublisherResponse NpmPublisherProvider::handle(std::string_view method,std::stri
         }else return {404,{{"ok",false},{"error","not_found"}}};
         render_locked();save_state_locked();return {200,std::move(result)};
     }catch(const ValidationError& e){state_=before;return {422,{{"ok",false},{"error","ValueError"},{"detail",error_detail(e)}}};}
+    catch(const AcmeBusy&){state_=before;return {503,{{"ok",false},{"error","acme_service_busy"},{"message","Autoridade certificadora temporariamente indisponível. Tente novamente mais tarde."}}};}
     catch(const std::exception& e){state_=before;return {422,{{"ok",false},{"error","RuntimeError"},{"detail",error_detail(e)}}};}
 }
 PublisherOptions publisher_options_from_environment(){PublisherOptions o;o.bind_address=env_or("CLOUDIFF_PUBLISHER_BIND","127.0.0.1");o.port=static_cast<unsigned short>(std::clamp(env_int("CLOUDIFF_PUBLISHER_PORT",18260),1,65535));o.token=env_or("CLOUDIFF_PUBLISHER_TOKEN");o.state_path=env_or("CLOUDIFF_PUBLISHER_STATE","/var/lib/cloudiff-v2/publisher-shadow/state.json");o.nginx_conf_path=env_or("CLOUDIFF_PUBLISHER_NGINX_CONF","/var/lib/cloudiff-v2/publisher-shadow/http.conf");o.dry_run=env_bool("CLOUDIFF_PUBLISHER_DRY_RUN",true);o.acme_enabled=env_bool("CLOUDIFF_PUBLISHER_ACME_ENABLED",false);o.certificate_root=env_or("CLOUDIFF_PUBLISHER_CERT_ROOT","/srv/cloudif/proxy/npm/letsencrypt/live");return o;}
