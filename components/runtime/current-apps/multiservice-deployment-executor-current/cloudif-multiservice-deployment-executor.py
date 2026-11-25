@@ -862,15 +862,19 @@ def _preview_runtime_services(slug:str,public_number:int,generation:int,app_name
 
 def _preview_runtime_bind_ref(source:Path,checkout:Path,public_number:int,generation:int,project_root:Path|None=None)->str:
     source=source.resolve();checkout=checkout.resolve();stage_root=Path(f'/srv/cloudif/stage-runtime/p{int(public_number)}/w{int(generation)}').resolve()
+    preview_data_base=Path(os.environ.get('CLOUDIF_PREVIEW_DATA_ROOT','/srv/cloudif/preview-data')).resolve()
+    preview_data_root=(preview_data_base/f'p{int(public_number)}'/f'w{int(generation)}').resolve()
     try:return 'checkout/'+str(source.relative_to(checkout))
     except ValueError:pass
     try:return 'stage-runtime/'+str(source.relative_to(stage_root))
+    except ValueError:pass
+    try:return 'preview-data/'+str(source.relative_to(preview_data_root))
     except ValueError:pass
     if project_root is not None:
         root=Path(project_root).resolve()
         try:return 'project-runtime/'+str(source.relative_to(root))
         except ValueError:pass
-    raise DeploymentError('preview_runtime_bind_outside_allowed_roots','Bind do Preview está fora do checkout/stage-runtime/projeto permitido.',409)
+    raise DeploymentError('preview_runtime_bind_outside_allowed_roots','Bind do Preview está fora do checkout/stage-runtime/preview-data/projeto permitido.',409)
 
 
 def _preview_runtime_edge_port(row:dict,public_number:int,generation:int)->int:
