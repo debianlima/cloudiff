@@ -4391,6 +4391,45 @@ def cloudif_publication_release_status(handler):
 
 
 
+
+def cloudif_publication_deactivate_legacy(handler):
+    if not _cloudif_pub_auth(handler):return send(handler,403,{'ok':False,'error':'forbidden'})
+    payload=_cloudif_pub_json(handler);project=safe_slug(payload.get('project') or '')
+    try:num=int(payload.get('public_number'));publication=int(payload.get('publication_number'))
+    except Exception:return send(handler,400,{'ok':False,'error':'invalid_release_request'})
+    if not project or not (1<=num<=999999999 and 1<=publication<=999999):return send(handler,400,{'ok':False,'error':'invalid_release_request'})
+    _cloudif_v144_ensure_schema()
+    rows=db_query("select * from stage_production_releases where project=? and public_number=? and publication_number=?",(project,num,publication))
+    if not rows:return send(handler,404,{'ok':False,'error':'legacy_production_release_not_found'})
+    row=rows[0];target=str(row.get('container') or '');expected=f'cloudif-p{num}-p{publication}-publication-web'
+    if target!=expected:return send(handler,409,{'ok':False,'error':'legacy_production_container_identity_invalid'})
+    inspected=subprocess.run(['docker','inspect',target],text=True,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,timeout=30)
+    dep=int(row.get('deploy_number') or 0)
+    if inspected.returncode!=0:
+        updates=[('update stage_production_releases set is_active=0,updated_at=? where project=? and public_number=? and publication_number=?',(now(),project,num,publication))]
+        if dep:updates.append(('update publication_runtimes set is_active=0,updated_at=? where project=? and public_number=? and deploy_number=?',(now(),project,num,dep)))
+        _cloudif_v144_atomic_updates(updates)
+        return send(handler,200,{'ok':True,'project':project,'public_number':num,'publication_number':publication,'container':target,'alreadyAbsent':True,'stopped':False,'resourcesPreserved':True,'containersRemoved':0,'volumesRemoved':0,'secretValuesIncluded':False})
+    try:item=(json.loads(inspected.stdout or '[]') or [{}])[0]
+    except Exception:return send(handler,409,{'ok':False,'error':'legacy_production_container_inspect_invalid'})
+    labels=(item.get('Config') or {}).get('Labels') or {};state=item.get('State') or {}
+    aliases=((((item.get('NetworkSettings') or {}).get('Networks') or {}).get('cloudif-publications') or {}).get('Aliases') or [])
+    if str(labels.get('cloudif.project') or '')!=project or str(labels.get('cloudif.stage') or '')!='publication' or str(labels.get('cloudif.stage-number') or '')!=str(publication):
+        return send(handler,409,{'ok':False,'error':'legacy_production_container_labels_invalid'})
+    active=f'cloudif-p{num}-active-web'
+    if active in aliases:return send(handler,409,{'ok':False,'error':'legacy_production_still_routed'})
+    stopped=False
+    if bool(state.get('Running')):
+        result=subprocess.run(['docker','stop','--time','20',target],text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=45)
+        if result.returncode!=0:return send(handler,422,{'ok':False,'error':'legacy_production_stop_failed'})
+        stopped=True
+        verify=subprocess.run(['docker','inspect',target,'--format','{{.State.Running}}'],text=True,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,timeout=20)
+        if verify.returncode!=0 or verify.stdout.strip()!='false':return send(handler,502,{'ok':False,'error':'legacy_production_stop_unverified'})
+    updates=[('update stage_production_releases set is_active=0,updated_at=? where project=? and public_number=? and publication_number=?',(now(),project,num,publication))]
+    if dep:updates.append(('update publication_runtimes set is_active=0,updated_at=? where project=? and public_number=? and deploy_number=?',(now(),project,num,dep)))
+    _cloudif_v144_atomic_updates(updates)
+    return send(handler,200,{'ok':True,'project':project,'public_number':num,'publication_number':publication,'container':target,'stopped':stopped,'alreadyInactive':not bool(state.get('Running')),'resourcesPreserved':True,'containersRemoved':0,'volumesRemoved':0,'secretValuesIncluded':False})
+
 def cloudif_publication_release_delete(handler):
     if not _cloudif_pub_auth(handler):return send(handler,403,{'ok':False,'error':'forbidden'})
     payload=_cloudif_pub_json(handler);project=safe_slug(payload.get('project') or '')
@@ -5080,6 +5119,8 @@ class H(BaseHTTPRequestHandler):
             return cloudif_publication_release_activate(self)
         if _cloudif_pub_path == "/komodo/publication/release/delete":
             return cloudif_publication_release_delete(self)
+        if _cloudif_pub_path == "/komodo/publication/deactivate-legacy":
+            return cloudif_publication_deactivate_legacy(self)
 
         _cloudif_v132_path = self.path.split("?", 1)[0]
         if _cloudif_v132_path in ["/komodo/project/status", "/komodo/status"]:
