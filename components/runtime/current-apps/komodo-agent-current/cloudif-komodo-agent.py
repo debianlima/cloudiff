@@ -6052,11 +6052,42 @@ def _cloudif_related_stack_ids(project,integration=None):
     except Exception:pass
     return list(dict.fromkeys(x for x in related if x))
 
+
+def _cloudif_v144_preview_persistent_mounts(base_dir,public_number):
+    base_dir=Path(base_dir);public_number=int(public_number)
+    manifest=base_dir/'.cloudif'/'runtime.json'
+    if not manifest.is_file():return []
+    try:data=json.loads(manifest.read_text(encoding='utf-8') or '{}')
+    except Exception as exc:raise ValueError('preview_runtime_manifest_invalid') from exc
+    preview=data.get('preview') or {}
+    if not isinstance(preview,dict):raise ValueError('preview_runtime_manifest_invalid')
+    entries=preview.get('persistentStorage') or []
+    if not entries:return []
+    if not isinstance(entries,list) or len(entries)>4:raise ValueError('preview_persistent_storage_invalid')
+    root=Path(os.environ.get('CLOUDIF_PREVIEW_DATA_ROOT','/srv/cloudif/preview-data'))
+    if not root.is_absolute() or root.is_symlink():raise ValueError('preview_persistent_storage_root_invalid')
+    root.mkdir(parents=True,exist_ok=True);root.chmod(0o700)
+    if not root.is_dir():raise ValueError('preview_persistent_storage_root_invalid')
+    stage=root/f'p{public_number}'/'w1';stage.mkdir(parents=True,exist_ok=True);stage.chmod(0o700)
+    seen=set();result=[]
+    for entry in entries:
+        if not isinstance(entry,dict) or set(entry)!={'name'}:raise ValueError('preview_persistent_storage_invalid')
+        name=str(entry.get('name') or '')
+        if not re.fullmatch(r'[a-z][a-z0-9-]{0,31}',name) or name in seen:raise ValueError('preview_persistent_storage_invalid')
+        seen.add(name);source=stage/name
+        if source.exists() and (source.is_symlink() or not source.is_dir()):raise ValueError('preview_persistent_storage_path_invalid')
+        source.mkdir(mode=0o700,exist_ok=True);source.chmod(0o700)
+        result.append({'name':name,'source':str(source),'target':'/var/lib/cloudif-data/'+name})
+    return result
+
 def _cloudif_v144_preview_stack(project,public_number,source_image,cfg,base_dir,env_path,launcher,apache):
     project=safe_slug(project);public_number=int(public_number)
     name=f'cloudif-p{public_number}-preview';container=f'cloudif-p{public_number}-preview-web'
     stack_dir=Path('/etc/komodo/stacks')/name;stack_dir.mkdir(parents=True,exist_ok=True);stack_dir.chmod(0o700)
     mounts=[('/var/www/html',str(base_dir),False),('/run/cloudif/runtime.env',str(env_path),True),('/opt/cloudif/preview-launcher.js',str(launcher),True)]
+    try:persistent=_cloudif_v144_preview_persistent_mounts(base_dir,public_number)
+    except ValueError as exc:return {'ok':False,'error':str(exc),'persistentStorage':[]}
+    mounts.extend((item['target'],item['source'],False) for item in persistent)
     try:
         apache_ok=subprocess.run(['docker','run','--rm','--entrypoint','sh',source_image,'-lc','test -d /etc/apache2/conf-enabled'],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=30).returncode==0
     except Exception:apache_ok=False
@@ -6084,7 +6115,7 @@ def _cloudif_v144_preview_stack(project,public_number,source_image,cfg,base_dir,
     deploy=_cloudif_v131_core_call('execute','DeployStack',{'stack':stack_id},timeout=60)
     if not deploy.get('ok'):return {'ok':False,'error':'preview_stack_deploy_failed','result':deploy}
     health=_cloudif_wait_health(container,75)
-    return {'ok':bool(health.get('ok')),'stack_id':stack_id,'stack_name':name,'container':container,'server_id':server_id,'health':health}
+    return {'ok':bool(health.get('ok')),'stack_id':stack_id,'stack_name':name,'container':container,'server_id':server_id,'health':health,'persistentStorage':persistent}
 
 _v143_preview_create=_cloudif_preview_create
 def _cloudif_preview_create(project,public_number,actor,environment_values,environment_revision,environment_digest,source='current'):
@@ -6134,7 +6165,11 @@ def cloudif_preview_request(handler,operation):
         if migrated:
             result=_cloudif_preview_create(project,num,payload.get('actor') or 'portal',values,env_rev,digest,'current');return send(handler,200 if result.get('ok') else 422,result)
         _cloudif_stage_write_environment(num,'w',1,values);old_head=str(row.get('git_head') or '');git=_cloudif_preview_git_sync(row.get('workspace_path') or '',True);new_head=str(git.get('head') or '')
-        restart=(int(row.get('environment_revision') or 0)!=env_rev or str(row.get('environment_digest') or '')!=digest or (old_head and new_head and old_head!=new_head))
+        source_changed=bool(old_head and new_head and old_head!=new_head)
+        if source_changed:
+            result=_cloudif_preview_create(project,num,payload.get('actor') or 'portal',values,env_rev,digest,'current')
+            return send(handler,200 if result.get('ok') else 422,result)
+        restart=(int(row.get('environment_revision') or 0)!=env_rev or str(row.get('environment_digest') or '')!=digest)
         if restart:subprocess.run(['docker','restart',expected],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=60)
         health=_cloudif_wait_health(expected,45)
         db_exec('update project_preview_state set status=?,git_sync_status=?,git_sync_message=?,git_head=?,environment_revision=?,environment_digest=?,updated_at=?,updated_by=? where project=?',('online' if health.get('ok') else 'unhealthy',str(git.get('status') or ''),str(git.get('message') or ''),new_head,env_rev,digest,now(),str(payload.get('actor') or 'portal')[:128],project))
