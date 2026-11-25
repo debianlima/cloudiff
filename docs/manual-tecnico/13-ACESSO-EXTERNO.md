@@ -147,7 +147,7 @@ https://iff1742962-laboratoriodehardware.cloudiff.duckdns.org/mcp
 
 Esse caminho pertence ao site do tenant e atualmente responde `404` no Next.js.
 
-O MCP usa `POST`. Um `GET /cloudiff/mcp` pode responder `404`, enquanto um `POST` sem credencial responde `401`, confirmando que a rota está publicada e protegida.
+O MCP usa `POST` para JSON-RPC. Para compatibilidade de descoberta, `GET /cloudiff/mcp` com `Accept: text/event-stream` responde um probe SSE sem sessão; outros GETs retornam `405`. O probe não carrega dados da aplicação nem credenciais.
 
 Rotas públicas relacionadas:
 
