@@ -5700,7 +5700,7 @@ if 'Portal' in globals() and not globals().get('_ap_portal_wrapped'):
                 log_action(user['username'],'pgh_pair_approve',policy_id,409,'policy_denied','')
                 return _cloudif_security_reject(self,'Política de pareamento ausente, revogada ou fora do escopo.',409)
             helper=_ap_cfg('CLOUDIF_PGH_PAIR_APPROVE_HELPER','/usr/local/libexec/cloudif-pgh-pair-approve.py')
-            rc,out,err=run([helper,pair_code],15)
+            rc,out,err=run([helper,policy_id,pair_code],15)
             if rc!=0:
                 state='pair_denied' if rc==13 else 'helper_failed'
                 log_action(user['username'],'pgh_pair_approve',policy_id,rc,state,'')
