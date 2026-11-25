@@ -137,6 +137,7 @@ int main(){
            "while [ $# -gt 0 ]; do case \"$1\" in --cert-name) name=\"$2\"; shift 2;; -d) [ -n \"$domain\" ] || domain=\"$2\"; shift 2;; *) shift;; esac; done\n"
            "[ -n \"$name\" ] && [ -n \"$domain\" ]\n"
            "n=0; [ ! -f \"$COUNT\" ] || n=$(cat \"$COUNT\"); echo $((n+1)) > \"$COUNT\"\n"
+           "if [ \"$name\" = cloudif-tenant-acmebusy ] && [ ! -f \"$ROOT/busy-once\" ]; then touch \"$ROOT/busy-once\"; echo 'Service busy; retry later.' >&2; exit 1; fi\n"
            "mkdir -p \"$ROOT/$name\"\n"
            "openssl req -x509 -nodes -newkey rsa:2048 -keyout \"$ROOT/$name/privkey.pem\" -out \"$ROOT/$name/fullchain.pem\" -days 1 -subj \"/CN=$domain\" -addext \"subjectAltName=DNS:$domain\" >/dev/null 2>&1\n";
     }
@@ -149,6 +150,14 @@ int main(){
     {std::ifstream in(acme_count);int count=0;in>>count;assert(count==1);}
     assert(std::filesystem::exists(acme_root/"cloudif-tenant-acmeunit"/"fullchain.pem"));
     assert(acme_provider.state_snapshot().at("tenants").contains("acmeunit"));
+
+    // Temporary ACME overload retries, succeeds, and reuses the issued certificate.
+    r=acme_provider.handle("POST","/tenant","unit-secret",R"({"tenant":"acmebusy"})");
+    assert(r.status==200);
+    {std::ifstream in(acme_count);int count=0;in>>count;assert(count==3);}
+    r=acme_provider.handle("POST","/tenant","unit-secret",R"({"tenant":"acmebusy"})");
+    assert(r.status==200);
+    {std::ifstream in(acme_count);int count=0;in>>count;assert(count==3);}
 
     // Certbot execution failure must fail closed before state/config commit.
     const auto fail_state=root/"acme-fail-state.json", fail_conf=root/"acme-fail-http.conf";
