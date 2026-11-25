@@ -5677,6 +5677,40 @@ if 'Portal' in globals() and not globals().get('_ap_portal_wrapped'):
         return _ap_prev_get(self)
     def _ap_post(self):
         path=urllib.parse.urlparse(self.path).path.rstrip('/')
+        if path.endswith('/action/pgh_pair_approve'):
+            if not _cloudif_security_valid_origin(self):return _cloudif_security_reject(self,'Origem da requisição não autorizada.')
+            length=int(self.headers.get('Content-Length','0') or '0')
+            if length<0 or length>200000:return _cloudif_security_reject(self,'Corpo da requisição inválido.',413)
+            form=urllib.parse.parse_qs(self.rfile.read(length).decode('utf-8','ignore'));val=lambda k,d='':(form.get(k) or [d])[0]
+            user=self.user()
+            if not _prod_csrf_equal(val('csrf_token'),_prod_csrf_token(user)):return _cloudif_security_reject(self,'Token CSRF inválido ou ausente.',403)
+            groups=set(user.get('groups') or [])
+            if not (user.get('admin') or 'CloudIF-Tenants-Admin' in groups):return _cloudif_security_reject(self,'A recuperação de pareamento PGH exige perfil administrador.',403)
+            policy_id=val('policy_id').strip();pair_code=val('pair_code').strip().upper()
+            if not re.fullmatch(r'[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{8}',pair_code):return _cloudif_security_reject(self,'Código de pareamento PGH inválido.',400)
+            try:
+                pcode,pdata=_ap_panel.request(_ap_cfg('CLOUDIF_APPROVAL_URL','http://127.0.0.1:18204'),_ap_cfg('CLOUDIF_APPROVAL_TOKEN',''),'GET','/v1/approval-policies?status=active')
+            except Exception:
+                pcode,pdata=503,{}
+            if pcode!=200 or not isinstance(pdata,dict) or not pdata.get('ok'):
+                log_action(user['username'],'pgh_pair_approve',policy_id,503,'policy_unavailable','')
+                return _cloudif_security_reject(self,'Política de pareamento indisponível; operação negada.',503)
+            slugs=_ap_slugs(user);policies=_ap_panel.filter_policies(pdata.get('policies') or [],slugs);policy=next((x for x in policies if x.get('policy_id')==policy_id),None)
+            if not policy or not policy.get('active') or policy.get('project_slug')!='pghd-contexto' or policy.get('action')!='pgh.device.pair' or policy.get('requested_by')!='principal:mobile.pghd_server_vps':
+                log_action(user['username'],'pgh_pair_approve',policy_id,409,'policy_denied','')
+                return _cloudif_security_reject(self,'Política de pareamento ausente, revogada ou fora do escopo.',409)
+            helper=_ap_cfg('CLOUDIF_PGH_PAIR_APPROVE_HELPER','/usr/local/libexec/cloudif-pgh-pair-approve.py')
+            rc,out,err=run([helper,pair_code],15)
+            if rc!=0:
+                state='pair_denied' if rc==13 else 'helper_failed'
+                log_action(user['username'],'pgh_pair_approve',policy_id,rc,state,'')
+                return _cloudif_security_reject(self,'Código expirado/usado ou canal de pareamento indisponível.' if rc==13 else 'Canal de pareamento PGH indisponível no Core.',409 if rc==13 else 503)
+            if 'PGH_PAIR_APPROVE=PASS principal=principal:mobile.pghd_server_vps access_manage=no' not in (out or ''):
+                log_action(user['username'],'pgh_pair_approve',policy_id,24,'invalid_helper_response','')
+                return _cloudif_security_reject(self,'Resposta de pareamento PGH inválida.',502)
+            log_action(user['username'],'pgh_pair_approve',policy_id,0,'approved_mobile_pghd_server_vps','')
+            _rm.invalidate('approvals');_rm.trigger_refresh()
+            self.send_response(303);self.send_header('Location','/cloudiff/portal/?tab=aprovacoes');self.send_header('Cache-Control','no-store');self.send_header('Pragma','no-cache');self.end_headers();return
         if path.endswith('/action/pgh_admin_session'):
             if not _cloudif_security_valid_origin(self):return _cloudif_security_reject(self,'Origem da requisição não autorizada.')
             length=int(self.headers.get('Content-Length','0') or '0')

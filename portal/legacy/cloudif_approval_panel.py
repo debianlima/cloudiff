@@ -73,19 +73,20 @@ def render(rows,csrf,can_decide,policies=None,actor_username='',history_total=No
   pair_note='';pair_controls='';pair_key=''
   if policy.get('action')=='pgh.device.pair':
    pair_note='<p class="small"><b>Recuperação PGHD — fluxo sem senha:</b> o Atlas persiste somente a confiança deste dispositivo e usa uma identidade técnica restrita para a sessão administrativa. Você não precisa receber, guardar ou digitar senha. Código e cookie de pareamento continuam efêmeros e não são armazenados.</p>'
-   key_file=os.environ.get('CLOUDIF_PGH_ATLAS_PUBLIC_KEY_FILE','/etc/cloudif/public-keys/pgh-atlas-access-admin-v1.pub')
+   key_file=os.environ.get('CLOUDIF_PGH_PAIR_PUBLIC_KEY_FILE','/etc/cloudif/public-keys/pgh-atlas-pairing-recovery-v1.pub')
    try:
     pub=open(key_file,encoding='utf-8').read().strip()
     if pub.startswith('ssh-ed25519 ') and len(pub)<2048:
-     pair_key='<details><summary>Chave pública Atlas para autorizar uma única vez no Core</summary><p class="small"><b>key_id:</b> <code>pgh-atlas-access-admin-v1</code></p><textarea readonly rows="4" style="width:100%">'+html.escape(pub)+'</textarea><p class="small">A privada permanece cifrada na VPS e não é exibida pelo Portal. A autorização desta pública é feita uma única vez pelo fluxo administrativo homologado; não forneça senha ao ChatGPT nem copie segredo para o Atlas.</p></details>'
+     pair_key='<details><summary>Chave pública Atlas — pairing-only</summary><p class="small"><b>key_id:</b> <code>pgh-atlas-pairing-recovery-v1</code></p><textarea readonly rows="4" style="width:100%">'+html.escape(pub)+'</textarea><p class="small">Esta identidade é separada do Access Admin: só pode aprovar pareamento para <code>principal:mobile.pghd_server_vps</code>. A privada permanece cifrada no Atlas e não é exibida; não forneça senha ao ChatGPT nem copie segredo para o Portal.</p></details>'
    except Exception:
-    pair_key='<p class="small"><b>Chave pública Atlas:</b> indisponível no runtime.</p>'
+    pair_key='<p class="small"><b>Chave pública Atlas pairing-only:</b> indisponível no runtime.</p>'
    core=os.environ.get('CLOUDIF_PGH_CORE_BASE_URL','').strip().rstrip('/')
+   pair_form='<form method="post" action="/cloudiff/portal/action/pgh_pair_approve"><input type="hidden" name="csrf_token" value="'+html.escape(csrf)+'"><input type="hidden" name="policy_id" value="'+html.escape(str(policy.get('policy_id') or ''))+'"><label class="small">Código efêmero do Core<input name="pair_code" required pattern="[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{8}" minlength="8" maxlength="8" autocomplete="off"></label><button class="btn" type="submit">Aprovar pareamento pelo Atlas</button></form>'
    if core:
     core_h=html.escape(core,quote=True)
-    pair_controls='<div class="backup-actions"><form method="post" action="'+core_h+'/dashboard/pair/start" target="_blank"><button class="btn" type="submit">Iniciar novo pareamento no Core</button></form><a class="btn btn-quiet" href="'+core_h+'/dashboard/access-admin" target="_blank" rel="noopener noreferrer">Abrir Access Admin</a></div>'
+    pair_controls='<div class="backup-actions"><form method="post" action="'+core_h+'/dashboard/pair/start" target="_blank"><button class="btn" type="submit">Iniciar novo pareamento no Core</button></form>'+pair_form+'<a class="btn btn-quiet" href="'+core_h+'/dashboard/access-admin" target="_blank" rel="noopener noreferrer">Abrir Access Admin (opcional)</a></div>'
    else:
-    pair_controls='<p class="small"><b>Launcher Core indisponível:</b> configure <code>CLOUDIF_PGH_CORE_BASE_URL</code> no runtime do Portal.</p>'
+    pair_controls=pair_form+'<p class="small"><b>Launcher Core indisponível:</b> configure <code>CLOUDIF_PGH_CORE_BASE_URL</code> no runtime do Portal.</p>'
   admin_controls='';admin_note=''
   admin_modes={'pgh.dashboard.session':('dashboard','Abrir Access Admin pelo Atlas — sem senha'),'pgh.vault.session':('vault','Abrir Vault Admin pelo Atlas — sem senha'),'pgh.openbao.session':('openbao','Abrir OpenBao pelo Atlas — sem senha')}
   if policy.get('action') in admin_modes:

@@ -30,6 +30,6 @@ class TestPGHAtlasAdminSession(unittest.TestCase):
  def test_pairing_card_remains_passwordless_and_public_key_only(self):
   p=PANEL.read_text()
   self.assertIn('Recuperação PGHD — fluxo sem senha:',p)
-  self.assertIn('pgh-atlas-access-admin-v1.pub',p)
+  self.assertIn('pgh-atlas-pairing-recovery-v1.pub',p)
   self.assertIn('não forneça senha ao ChatGPT',p)
 if __name__=='__main__':unittest.main()
