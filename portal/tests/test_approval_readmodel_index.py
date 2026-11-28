@@ -28,6 +28,25 @@ class ApprovalReadmodelIndexTests(unittest.TestCase):
         self.rm.DB=str(Path(self.temp.name)/'readmodel.db')
         self.panel=load('panel_t046_'+self.temp.name.replace('/','_').replace('\\','_'),PANEL_PATH)
 
+    def test_background_refresh_updates_approval_index(self):
+        from unittest import mock
+        source=ROOT/'components/control-plane/usr/local/sbin/cloudif-portal-refresh-cache.py'
+        with mock.patch.dict('os.environ',{'CLOUDIF_PORTAL_DB':str(Path(self.temp.name)/'portal.db')}):
+            refresh=load('approval_background_refresh_test',source)
+        rows=[row('a1','pending'),row('a2','consumed',created=2)]
+        refresh.cache_approval_rows(self.rm,200,{'ok':True,'approvals':rows})
+        self.assertEqual(self.rm.approval_index_counts(['teste-sofa']),{'pending':1,'approved':0,'history':1})
+        self.assertEqual(len(self.rm.get('approvals','rows',60)),2)
+
+    def test_background_refresh_failure_keeps_last_valid_index(self):
+        from unittest import mock
+        source=ROOT/'components/control-plane/usr/local/sbin/cloudif-portal-refresh-cache.py'
+        with mock.patch.dict('os.environ',{'CLOUDIF_PORTAL_DB':str(Path(self.temp.name)/'portal.db')}):
+            refresh=load('approval_background_refresh_failure_test',source)
+        refresh.cache_approval_rows(self.rm,200,{'ok':True,'approvals':[row('a1','pending')]})
+        refresh.cache_approval_rows(self.rm,503,{'ok':False})
+        self.assertEqual(self.rm.approval_index_counts(['teste-sofa'])['pending'],1)
+
     def test_counts_and_pagination_are_normalized(self):
         self.rm.approval_index_replace([
             row('a1','pending',created=10),row('a2','pending_second',created=20),
