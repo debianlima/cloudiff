@@ -34,17 +34,32 @@ class ApprovalReadmodelIndexTests(unittest.TestCase):
         with mock.patch.dict('os.environ',{'CLOUDIF_PORTAL_DB':str(Path(self.temp.name)/'portal.db')}):
             refresh=load('approval_background_refresh_test',source)
         rows=[row('a1','pending'),row('a2','consumed',created=2)]
-        refresh.cache_approval_rows(self.rm,200,{'ok':True,'approvals':rows})
+        refresh.cache_approval_rows(self.rm,200,{'ok':True,'approvals':rows},self.panel.sanitize)
         self.assertEqual(self.rm.approval_index_counts(['teste-sofa']),{'pending':1,'approved':0,'history':1})
         self.assertEqual(len(self.rm.get('approvals','rows',60)),2)
+
+    def test_background_refresh_does_not_index_unapproved_metadata(self):
+        from unittest import mock
+        source=ROOT/'components/control-plane/usr/local/sbin/cloudif-portal-refresh-cache.py'
+        with mock.patch.dict('os.environ',{'CLOUDIF_PORTAL_DB':str(Path(self.temp.name)/'portal.db')}):
+            refresh=load('approval_background_refresh_privacy_test',source)
+        raw=row('a3','consumed')
+        raw['metadata_json']=json.dumps({'commit_sha':'abc123','internal_note':'DO_NOT_INDEX_PRIVATE_MARKER'})
+        refresh.cache_approval_rows(self.rm,200,{'ok':True,'approvals':[raw]},self.panel.sanitize)
+        con=__import__('sqlite3').connect(self.rm.DB)
+        indexed=con.execute('select payload_json from approval_index').fetchone()[0]
+        con.close()
+        self.assertNotIn('DO_NOT_INDEX_PRIVATE_MARKER',indexed)
+        self.assertIn('abc123',indexed)
+        self.assertEqual(self.panel.filter_rows(self.rm.approval_index_page(['teste-sofa']),{'teste-sofa'})[0]['metadata']['commit_sha'],'abc123')
 
     def test_background_refresh_failure_keeps_last_valid_index(self):
         from unittest import mock
         source=ROOT/'components/control-plane/usr/local/sbin/cloudif-portal-refresh-cache.py'
         with mock.patch.dict('os.environ',{'CLOUDIF_PORTAL_DB':str(Path(self.temp.name)/'portal.db')}):
             refresh=load('approval_background_refresh_failure_test',source)
-        refresh.cache_approval_rows(self.rm,200,{'ok':True,'approvals':[row('a1','pending')]})
-        refresh.cache_approval_rows(self.rm,503,{'ok':False})
+        refresh.cache_approval_rows(self.rm,200,{'ok':True,'approvals':[row('a1','pending')]},self.panel.sanitize)
+        refresh.cache_approval_rows(self.rm,503,{'ok':False},self.panel.sanitize)
         self.assertEqual(self.rm.approval_index_counts(['teste-sofa'])['pending'],1)
 
     def test_counts_and_pagination_are_normalized(self):
