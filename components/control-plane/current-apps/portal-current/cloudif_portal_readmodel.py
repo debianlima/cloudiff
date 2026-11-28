@@ -53,6 +53,9 @@ def invalidate(namespace='',key=''):
         if namespace and key:con.execute('delete from portal_readmodel_cache where namespace=? and cache_key=?',(str(namespace),str(key)))
         elif namespace:con.execute('delete from portal_readmodel_cache where namespace=?',(str(namespace),))
         else:con.execute('delete from portal_readmodel_cache')
+        if not namespace or namespace=='approvals':
+            _approval_index_schema(con)
+            con.execute('delete from approval_index')
         con.commit()
     finally:con.close()
 

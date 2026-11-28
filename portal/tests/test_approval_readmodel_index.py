@@ -82,6 +82,20 @@ class ApprovalReadmodelIndexTests(unittest.TestCase):
         refresh.cache_approval_rows(self.rm,503,{'ok':False},self.panel.index_row)
         self.assertEqual(self.rm.approval_index_counts(['teste-sofa'])['pending'],1)
 
+    def test_approval_invalidation_clears_index_and_cache_together(self):
+        self.rm.approval_index_replace([row('a1','pending')])
+        self.rm.put('approvals','rows',[row('a1','pending')])
+        self.rm.put('projects','all',{'ok':True})
+        self.rm.invalidate('approvals')
+        self.assertFalse(self.rm.approval_index_available())
+        self.assertIsNone(self.rm.get('approvals','rows',60))
+        self.assertEqual(self.rm.get('projects','all',60),{'ok':True})
+
+    def test_unrelated_invalidation_keeps_approval_index(self):
+        self.rm.approval_index_replace([row('a1','pending')])
+        self.rm.invalidate('projects')
+        self.assertTrue(self.rm.approval_index_available())
+
     def test_counts_and_pagination_are_normalized(self):
         self.rm.approval_index_replace([
             row('a1','pending',created=10),row('a2','pending_second',created=20),
