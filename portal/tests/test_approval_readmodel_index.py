@@ -34,7 +34,7 @@ class ApprovalReadmodelIndexTests(unittest.TestCase):
         with mock.patch.dict('os.environ',{'CLOUDIF_PORTAL_DB':str(Path(self.temp.name)/'portal.db')}):
             refresh=load('approval_background_refresh_test',source)
         rows=[row('a1','pending'),row('a2','consumed',created=2)]
-        refresh.cache_approval_rows(self.rm,200,{'ok':True,'approvals':rows},self.panel.sanitize)
+        refresh.cache_approval_rows(self.rm,200,{'ok':True,'approvals':rows},self.panel.index_row)
         self.assertEqual(self.rm.approval_index_counts(['teste-sofa']),{'pending':1,'approved':0,'history':1})
         self.assertEqual(len(self.rm.get('approvals','rows',60)),2)
 
@@ -45,7 +45,7 @@ class ApprovalReadmodelIndexTests(unittest.TestCase):
             refresh=load('approval_background_refresh_privacy_test',source)
         raw=row('a3','consumed')
         raw['metadata_json']=json.dumps({'commit_sha':'abc123','internal_note':'DO_NOT_INDEX_PRIVATE_MARKER'})
-        refresh.cache_approval_rows(self.rm,200,{'ok':True,'approvals':[raw]},self.panel.sanitize)
+        refresh.cache_approval_rows(self.rm,200,{'ok':True,'approvals':[raw]},self.panel.index_row)
         con=__import__('sqlite3').connect(self.rm.DB)
         indexed=con.execute('select payload_json from approval_index').fetchone()[0]
         con.close()
@@ -53,13 +53,33 @@ class ApprovalReadmodelIndexTests(unittest.TestCase):
         self.assertIn('abc123',indexed)
         self.assertEqual(self.panel.filter_rows(self.rm.approval_index_page(['teste-sofa']),{'teste-sofa'})[0]['metadata']['commit_sha'],'abc123')
 
+    def test_portal_loader_indexes_only_sanitized_approval_rows(self):
+        source=(ROOT/'components/control-plane/current-apps/portal-current/cloudif-admin-portal-base.py').read_text()
+        loader=source.split('def _ap_raw():',1)[1].split('def _ap_raw_policies():',1)[0]
+        self.assertIn('_rm.approval_index_replace([_ap_panel.index_row(row) for row in rows])',loader)
+
+    def test_portal_loader_indexes_only_sanitized_approval_rows(self):
+        source=(ROOT/'components/control-plane/current-apps/portal-current/cloudif-admin-portal-base.py').read_text()
+        loader=source.split('def _ap_raw():',1)[1].split('def _ap_raw_policies():',1)[0]
+        self.assertIn('_rm.approval_index_replace([_ap_panel.index_row(row) for row in rows])',loader)
+
+    def test_index_row_preserves_allowed_metadata_only(self):
+        raw=row('a4','consumed')
+        raw['metadata_json']=json.dumps({'commit_sha':'abc123','internal_note':'DO_NOT_INDEX_PRIVATE_MARKER'})
+        safe=self.panel.index_row(raw)
+        self.assertEqual(safe['metadata_json'],'{"commit_sha":"abc123"}')
+        self.assertNotIn('DO_NOT_INDEX_PRIVATE_MARKER',json.dumps(safe))
+        self.rm.approval_index_replace([safe])
+        indexed=self.rm.approval_index_page(['teste-sofa'])[0]
+        self.assertEqual(self.panel.sanitize(indexed)['metadata']['commit_sha'],'abc123')
+
     def test_background_refresh_failure_keeps_last_valid_index(self):
         from unittest import mock
         source=ROOT/'components/control-plane/usr/local/sbin/cloudif-portal-refresh-cache.py'
         with mock.patch.dict('os.environ',{'CLOUDIF_PORTAL_DB':str(Path(self.temp.name)/'portal.db')}):
             refresh=load('approval_background_refresh_failure_test',source)
-        refresh.cache_approval_rows(self.rm,200,{'ok':True,'approvals':[row('a1','pending')]},self.panel.sanitize)
-        refresh.cache_approval_rows(self.rm,503,{'ok':False},self.panel.sanitize)
+        refresh.cache_approval_rows(self.rm,200,{'ok':True,'approvals':[row('a1','pending')]},self.panel.index_row)
+        refresh.cache_approval_rows(self.rm,503,{'ok':False},self.panel.index_row)
         self.assertEqual(self.rm.approval_index_counts(['teste-sofa'])['pending'],1)
 
     def test_counts_and_pagination_are_normalized(self):

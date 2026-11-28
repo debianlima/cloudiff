@@ -5877,7 +5877,7 @@ def _ap_raw():
         try:code,data=_ap_panel.request(_ap_cfg('CLOUDIF_APPROVAL_URL','http://127.0.0.1:18204'),_ap_cfg('CLOUDIF_APPROVAL_TOKEN',''),'GET','/v1/approvals?status=all')
         except Exception:return []
         rows=(data.get('approvals') or []) if code==200 and isinstance(data,dict) and data.get('ok') else []
-        try:_rm.approval_index_replace(rows)
+        try:_rm.approval_index_replace([_ap_panel.index_row(row) for row in rows])
         except Exception:pass
         return rows
     return _rm.stale_while_revalidate('approvals','rows',90,300,load)

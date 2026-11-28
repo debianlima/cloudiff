@@ -19,6 +19,10 @@ def sanitize(row):
  except Exception:meta={}
  safe_meta={k:meta[k] for k in META_KEYS if k in meta}
  return {k:row.get(k) for k in ('approval_id','project_slug','action','requested_by','requester_role','approved_by','approver_role','second_approved_by','second_approver_role','two_approvers_required','authorization_mode','rejected_by','cancelled_by','status','reason','created_at','expires_at','approved_at','rejected_at','cancelled_at','consumed_at','rejection_reason','cancellation_reason','trace_id')}|{'action_label':ACTION_LABELS.get(row.get('action'),row.get('action')),'metadata':safe_meta}
+def index_row(row):
+ safe=sanitize(row)
+ safe['metadata_json']=json.dumps(safe['metadata'],ensure_ascii=False,separators=(',',':'))
+ return safe
 def filter_rows(rows,slugs):return [sanitize(x) for x in rows if x.get('project_slug') in slugs]
 def sanitize_policy(row):
  return {k:row.get(k) for k in ('policy_id','project_slug','action','requested_by','created_by','creator_role','source_approval_id','created_at','revoked_at','revoked_by','revoke_reason')}|{'action_label':ACTION_LABELS.get(row.get('action'),row.get('action')),'active':not bool(row.get('revoked_at'))}

@@ -212,11 +212,7 @@ def cache_approval_rows(rm,code,data,sanitize):
     if code!=200 or not isinstance(data,dict) or not data.get('ok') or not isinstance(data.get('approvals'),list):
         return False
     rows=data['approvals']
-    indexed=[]
-    for row in rows:
-        safe=sanitize(row)
-        safe['metadata_json']=json.dumps(safe['metadata'],ensure_ascii=False,separators=(',',':'))
-        indexed.append(safe)
+    indexed=[sanitize(row) for row in rows]
     rm.approval_index_replace(indexed)
     rm.put('approvals','rows',rows,'timer')
     return True
@@ -259,7 +255,7 @@ def refresh_portal_readmodels():
         base=os.environ.get('CLOUDIF_ONBOARDING_URL','http://127.0.0.1:18208');token=os.environ.get('CLOUDIF_ONBOARDING_API_TOKEN','');rm.put('connectors','all',identities.fetch(base,token),'timer')
     except Exception as exc:print('WARN: connectors readmodel',type(exc).__name__)
     try:
-        base=os.environ.get('CLOUDIF_APPROVAL_URL','http://127.0.0.1:18204');token=os.environ.get('CLOUDIF_APPROVAL_TOKEN','');code,data=approvals.request(base,token,'GET','/v1/approvals?status=all');cache_approval_rows(rm,code,data,approvals.sanitize);code,data=approvals.request(base,token,'GET','/v1/approval-policies?status=active');rm.put('approvals','policies',(data.get('policies') or []) if code==200 and isinstance(data,dict) and data.get('ok') else [],'timer')
+        base=os.environ.get('CLOUDIF_APPROVAL_URL','http://127.0.0.1:18204');token=os.environ.get('CLOUDIF_APPROVAL_TOKEN','');code,data=approvals.request(base,token,'GET','/v1/approvals?status=all');cache_approval_rows(rm,code,data,approvals.index_row);code,data=approvals.request(base,token,'GET','/v1/approval-policies?status=active');rm.put('approvals','policies',(data.get('policies') or []) if code==200 and isinstance(data,dict) and data.get('ok') else [],'timer')
     except Exception as exc:print('WARN: approvals readmodel',type(exc).__name__)
     try:
         rm.record_event('background-refresh','',['projects','tenants','project-job-state','project-runtime-state','publication-project-context','connectors','approvals'])
